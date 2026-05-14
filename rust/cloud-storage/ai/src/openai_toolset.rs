@@ -3,7 +3,7 @@
 //! This module provides conversions to OpenAI's tool types for use with
 //! the `async-openai` crate.
 
-use ai_toolset::ToolSet;
+use ai_toolset::ToolCollection;
 use ai_toolset::tool_object::ToolObject;
 use async_openai::types::chat::{ChatCompletionTool, ChatCompletionTools, FunctionObject};
 
@@ -27,7 +27,7 @@ pub trait OpenAIToolSetExt {
     fn openai_chatcompletion_toolset(&self) -> Vec<ChatCompletionTools>;
 }
 
-impl<T> OpenAIToolSetExt for ToolSet<ToolObject<T>> {
+impl<T> OpenAIToolSetExt for ToolCollection<ToolObject<T>> {
     fn openai_chatcompletion_toolset(&self) -> Vec<ChatCompletionTools> {
         self.tools
             .values()

@@ -7,13 +7,13 @@ use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
 use super::DocumentRouterState;
+use crate::domain::create::{MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument};
 use crate::domain::models::{CreateTaskRequest, CreateTaskResponse, DocumentError};
 use crate::domain::ports::DocumentService;
+use crate::domain::ports::create::DocumentCreationService;
 
-/// Creates a task document with properties in a single call.
-///
-/// This endpoint creates task metadata and sets properties atomically.
-/// Task content should be set separately via the sync service.
+/// Creates a task document with properties and initialized markdown content in
+/// one backend-owned lifecycle.
 #[utoipa::path(
     tag = "document",
     post,
@@ -27,19 +27,37 @@ use crate::domain::ports::DocumentService;
     )
 )]
 #[tracing::instrument(skip(state, user_context, project), fields(user_id=?user_context.macro_user_id))]
-pub async fn create_task_handler<T: DocumentService, Svc: EntityAccessService>(
+pub async fn create_task_handler<
+    T: DocumentService + DocumentCreationService,
+    Svc: EntityAccessService,
+>(
     State(state): State<DocumentRouterState<T, Svc>>,
     user_context: MacroUserExtractor,
     project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateTaskRequest, Svc>,
 ) -> Result<Json<CreateTaskResponse>, DocumentError> {
     let req = project.into_inner();
-    let user_id = user_context.user_context.user_id.clone();
-    let macro_user_id = user_context.macro_user_id;
 
-    let response = state
-        .service
-        .create_task(macro_user_id, user_id, req)
+    let mut metadata = NewDocumentMetadata::builder(req.task_name.clone());
+    if let Some(project_id) = req.project_id {
+        metadata = metadata.project_id(project_id);
+    }
+
+    let created = state
+        .creator
+        .create_markdown_text(
+            user_context.macro_user_id,
+            NewMarkdownTextDocument {
+                metadata: metadata.build(),
+                markdown: req.markdown.unwrap_or_default(),
+                subtype: MarkdownSubtype::Task {
+                    property_values: req.property_values,
+                    share_with_team: req.share_with_team,
+                },
+            },
+        )
         .await?;
 
-    Ok(Json(response))
+    Ok(Json(CreateTaskResponse {
+        document_id: created.document_id().to_string(),
+    }))
 }

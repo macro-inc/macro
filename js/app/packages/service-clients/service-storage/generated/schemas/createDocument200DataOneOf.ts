@@ -8,5 +8,8 @@
 import type { CreateDocument200DataOneOfAllOf } from './createDocument200DataOneOfAllOf';
 import type { DocumentResponse } from './documentResponse';
 
+/**
+ * Create document response data with content lifecycle metadata.
+ */
 export type CreateDocument200DataOneOf = DocumentResponse &
   CreateDocument200DataOneOfAllOf;

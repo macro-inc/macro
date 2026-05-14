@@ -1,7 +1,9 @@
 import type { InputSnapshot } from '@channel/Input';
 import { toast } from '@core/component/Toast/Toast';
 import type { NewAttachment } from '@service-comms/generated/models/newAttachment';
+import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { type Accessor, createSignal } from 'solid-js';
+import { expandMentions } from '../Input/message-payload';
 import type { MessageData } from '../Message';
 import type { MessageEditState } from '../Thread/types';
 import {
@@ -14,12 +16,14 @@ type PatchMessageInput = {
   channelID: string;
   messageID: string;
   content: string;
+  mentions: SimpleMention[];
   attachmentIDsToDelete?: string[];
   attachmentsToAdd?: NewAttachment[];
 };
 
 type CreateMessageEditorOptions = {
   channelId: () => string;
+  participantIds: () => string[];
   patchMessage: (input: PatchMessageInput) => void;
 };
 
@@ -84,6 +88,7 @@ export function createMessageEditor(
       channelID: options.channelId(),
       messageID: message.id,
       content: nextContent,
+      mentions: expandMentions(snapshot.mentions, options.participantIds()),
       attachmentIDsToDelete,
       attachmentsToAdd: newAttachments.length > 0 ? newAttachments : undefined,
     });

@@ -77,6 +77,8 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
 macro_project_utils = { path = "../macro_project_utils" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+mcp_client = { path = "../mcp_client" }
+model-error-response = { path = "../model-error-response" }
 memory = { path = "../memory" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }

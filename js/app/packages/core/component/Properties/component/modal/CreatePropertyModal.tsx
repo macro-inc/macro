@@ -89,7 +89,7 @@ const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
               }}
               onKeyDown={(e) => handleKeyDown(e, option().id, option().value)}
               placeholder={props.placeholder}
-              class="flex-1 p-1.5 border border-edge-muted text-sm rounded-sm bg-input placeholder:text-ink-placeholder"
+              class="flex-1 p-1.5 border border-edge-muted text-sm rounded-sm bg-surface placeholder:text-ink-placeholder"
               data-option-id={option().id}
             />
             <button
@@ -412,7 +412,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     >
       <Surface depth={2} class="*:max-h-[75vh]">
         <div class="flex flex-col text-sm">
-          <div class="flex items-center justify-between gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
+          <div class="flex items-center justify-between gap-2 bg-surface px-2 h-10 border-b border-edge-muted shrink-0">
             <Dialog.Title class="pl-2 text-sm font-medium">
               Create New Property
             </Dialog.Title>
@@ -447,7 +447,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                   value={newPropertyName()}
                   onInput={(e) => setNewPropertyName(e.currentTarget.value)}
                   placeholder="Enter property name"
-                  class="w-full p-1.5 border border-edge-muted text-sm rounded-sm bg-input placeholder:text-ink-placeholder"
+                  class="w-full p-1.5 border border-edge-muted text-sm rounded-sm bg-surface placeholder:text-ink-placeholder"
                 />
               </div>
 

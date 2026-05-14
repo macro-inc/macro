@@ -415,8 +415,13 @@ impl IsEmpty for PropertyFilter {
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub struct ProjectFilters {
     /// Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects.
+    /// By default matches children of these projects; set `include_root` to also match the projects themselves.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub project_ids: Vec<String>,
+
+    /// When true, `project_ids` also matches the projects themselves in addition to their children.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub include_root: bool,
 
     /// Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -435,6 +440,7 @@ impl IsEmpty for ProjectFilters {
     fn is_empty(&self) -> bool {
         let ProjectFilters {
             project_ids,
+            include_root: _,
             owners,
             importance,
             notification_filters,

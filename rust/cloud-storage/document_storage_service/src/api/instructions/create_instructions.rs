@@ -1,10 +1,17 @@
 use crate::{
     api::context::ApiContext, model::response::instructions::CreateInstructionsDocumentResponse,
 };
-use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
-use macro_db_client::instructions::create::CreateInstructionsError;
-use model::response::{GenericErrorResponse, GenericResponse};
+use axum::{Json, extract::State};
+use documents_hex::domain::create::{NewDocumentMetadata, NewMarkdownTextDocument};
+use documents_hex::domain::models::DocumentError;
+use documents_hex::domain::ports::create::DocumentCreationService as _;
+use macro_db_client::instructions::create::{
+    CreateInstructionsError, insert_instructions_document,
+};
+use macro_db_client::instructions::get::get_instructions_document;
+use model::response::GenericErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
+use models_dcs::constants::INSTRUCTIONS_FILE_NAME;
 
 /// Creates an instructions document for the current user
 #[utoipa::path(
@@ -21,28 +28,71 @@ use model_user::axum_extractor::MacroUserExtractor;
 pub async fn create_instructions_handler(
     State(ctx): State<ApiContext>,
     user_context: MacroUserExtractor,
-) -> impl IntoResponse {
-    // Create the instructions document - database handles uniqueness constraint
-    match macro_db_client::instructions::create::create_instructions_document(
-        &ctx.db,
-        user_context.macro_user_id.clone(),
-    )
-    .await
+) -> Result<Json<CreateInstructionsDocumentResponse>, DocumentError> {
+    let user_id = user_context.macro_user_id;
+
+    if get_instructions_document(&ctx.db, user_id.clone())
+        .await
+        .map_err(DocumentError::Internal)?
+        .is_some()
     {
-        Ok(document_id) => {
-            let response_data = CreateInstructionsDocumentResponse { document_id };
-            (StatusCode::OK, Json(response_data)).into_response()
+        return Err(DocumentError::Conflict(
+            "User already has an instructions document".to_string(),
+        ));
+    }
+
+    let created = ctx
+        .documents_state
+        .creator
+        .create_markdown_text(
+            user_id.clone(),
+            NewMarkdownTextDocument::empty_note(NewDocumentMetadata::new(INSTRUCTIONS_FILE_NAME)),
+        )
+        .await?;
+    let document_id = created.document_id().to_string();
+
+    match insert_instructions_document_with_stale_cleanup(&ctx, user_id, &document_id).await {
+        Ok(()) => Ok(Json(CreateInstructionsDocumentResponse { document_id })),
+        Err(error) => {
+            ctx.documents_state
+                .service
+                .cleanup_created_document(&document_id)
+                .await;
+            Err(error)
         }
-        Err(CreateInstructionsError::UserAlreadyHasInstructions) => GenericResponse::builder()
-            .message("User already has an instructions document")
-            .is_error(true)
-            .send(StatusCode::CONFLICT),
-        Err(CreateInstructionsError::DatabaseError(err)) => {
-            tracing::error!(error=?err, user_id=%user_context.macro_user_id, "failed to create instructions document");
-            GenericResponse::builder()
-                .message("Failed to create instructions document")
-                .is_error(true)
-                .send(StatusCode::INTERNAL_SERVER_ERROR)
+    }
+}
+
+async fn insert_instructions_document_with_stale_cleanup(
+    ctx: &ApiContext,
+    user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+    document_id: &str,
+) -> Result<(), DocumentError> {
+    match insert_instructions_document(&ctx.db, user_id.clone(), document_id).await {
+        Ok(()) => Ok(()),
+        Err(CreateInstructionsError::UserAlreadyHasInstructions) => {
+            if get_instructions_document(&ctx.db, user_id.clone())
+                .await
+                .map_err(DocumentError::Internal)?
+                .is_some()
+            {
+                return Err(DocumentError::Conflict(
+                    "User already has an instructions document".to_string(),
+                ));
+            }
+
+            sqlx::query!(
+                r#"DELETE FROM "InstructionsDocuments" WHERE "userId" = $1"#,
+                user_id.as_ref()
+            )
+            .execute(&ctx.db)
+            .await
+            .map_err(|error| DocumentError::Internal(error.into()))?;
+
+            insert_instructions_document(&ctx.db, user_id, document_id)
+                .await
+                .map_err(|error| DocumentError::Internal(anyhow::anyhow!(error)))
         }
+        Err(error) => Err(DocumentError::Internal(anyhow::anyhow!(error))),
     }
 }

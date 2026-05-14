@@ -66,7 +66,7 @@ export const theme: EditorThemeClasses = {
     checklist: 'md-list md-check',
     listitemChecked: 'checked md-strike text-ink-extra-muted',
   },
-  link: 'text-accent-ink underline hover:underline cursor-default underline-offset-[0.15em]',
+  link: 'text-accent underline hover:underline cursor-default underline-offset-[0.15em]',
   quote: 'md-quote border-l-2 border-edge pl-4 py-2 italic text-ink-muted my-4',
   code: 'bg-message font-mono p-3 rounded block md-code-box before:text-ink-extra-muted/70 whitespace-pre mb-4',
   static: {

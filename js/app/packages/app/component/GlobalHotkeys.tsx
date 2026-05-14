@@ -7,7 +7,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { ValidHotkey } from '@core/hotkey/types';
 import {
   handleFolderSelect,
   openFilePicker,
@@ -20,25 +19,22 @@ import IconGear from '@macro-icons/macro-gear.svg';
 import { AiInstructionsIcon } from '@queries/storage/instructions-md';
 import { useMutationUndoContext } from '@queries/undo';
 import { debounce } from '@solid-primitives/scheduled';
+import { ThemeChips } from '@theme/components/ThemeChips';
+import type { ThemeV2 } from '@theme/types/themeTypes';
 import { registerHotkey } from 'core/hotkey/hotkeys';
-import { createMemo, onCleanup } from 'solid-js';
+import { type Component, createMemo, onCleanup } from 'solid-js';
 import {
-  monochromeIcons,
   setDarkModeTheme,
   setLightModeTheme,
-  setMonochromeIcons,
   setThemeShouldMatchSystem,
   themeShouldMatchSystem,
   themes,
 } from '../../theme/signals/themeSignals';
+
 import { applyTheme } from '../../theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
 import { CommandState } from './command';
-import {
-  CREATABLE_BLOCKS,
-  createMenuOpen,
-  setCreateMenuOpen,
-} from './Launcher';
+import { createMenuOpen, setCreateMenuOpen } from './Launcher';
 import { openMacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
 import { useSplitLayout } from './split-layout/layout';
 
@@ -111,7 +107,7 @@ export default function GlobalShortcuts() {
     CommandState.toggle();
   };
 
-  const createCommandScope = registerHotkey({
+  registerHotkey({
     hotkeyToken: TOKENS.global.createCommand,
     hotkey: 'c',
     scopeId: 'global',
@@ -129,34 +125,6 @@ export default function GlobalShortcuts() {
     displayPriority: 10,
     activateCommandScope: true,
   });
-
-  for (const block of CREATABLE_BLOCKS) {
-    registerHotkey({
-      hotkeyToken: block.hotkeyToken,
-      hotkey: block.hotkey,
-      scopeId: createCommandScope.commandScopeId,
-      description: block.description,
-      runWithInputFocused: true,
-      keyDownHandler: () => {
-        block.keyDownHandler();
-        return true;
-      },
-    });
-
-    if (block.altHotkeyToken) {
-      registerHotkey({
-        hotkeyToken: block.altHotkeyToken,
-        hotkey: `opt+${block.hotkey}` as ValidHotkey,
-        scopeId: createCommandScope.commandScopeId,
-        description: `${block.description} in new split`,
-        runWithInputFocused: true,
-        keyDownHandler: () => {
-          block.keyDownHandler();
-          return true;
-        },
-      });
-    }
-  }
 
   registerHotkey({
     hotkeyToken: TOKENS.global.commandMenu,
@@ -279,6 +247,15 @@ export default function GlobalShortcuts() {
     displayPriority: 10,
   });
 
+  const ThemeDisplay: Component<{ theme: ThemeV2 }> = (props) => (
+    <div class="flex items-center gap-2">
+      {props.theme.name}
+      <div class="px-1 ring ring-edge-muted rounded-xs">
+        <ThemeChips theme={props.theme} />
+      </div>
+    </div>
+  );
+
   themes().forEach((theme) => {
     registerHotkey({
       scopeId: setThemeScope.commandScopeId,
@@ -289,6 +266,7 @@ export default function GlobalShortcuts() {
         return true;
       },
       runWithInputFocused: true,
+      displayComponent: () => <ThemeDisplay theme={theme} />,
     });
   });
 
@@ -312,6 +290,7 @@ export default function GlobalShortcuts() {
         return true;
       },
       runWithInputFocused: true,
+      displayComponent: () => <ThemeDisplay theme={theme} />,
     });
   });
 
@@ -335,6 +314,7 @@ export default function GlobalShortcuts() {
         return true;
       },
       runWithInputFocused: true,
+      displayComponent: () => <ThemeDisplay theme={theme} />,
     });
   });
 
@@ -346,16 +326,6 @@ export default function GlobalShortcuts() {
     ),
     keyDownHandler: () => {
       setThemeShouldMatchSystem((prev) => !prev);
-      return true;
-    },
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    scopeId: 'global',
-    description: 'Toggle monochrome icons',
-    keyDownHandler: () => {
-      setMonochromeIcons(!monochromeIcons());
       return true;
     },
     runWithInputFocused: true,

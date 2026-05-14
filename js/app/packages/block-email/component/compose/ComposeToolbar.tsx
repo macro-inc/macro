@@ -4,7 +4,6 @@ import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import { fileSelector } from '@core/directive/fileSelector';
 import { isMobile } from '@core/mobile/isMobile';
@@ -18,7 +17,7 @@ import DotsThreeIcon from '@phosphor-icons/core/bold/dots-three-bold.svg?compone
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import PaperclipHorizontalIcon from '@phosphor-icons/core/regular/paperclip-horizontal.svg?component-solid';
-import { Button } from '@ui';
+import { Button, Tooltip } from '@ui';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,
@@ -75,7 +74,6 @@ export function EmailComposeToolbar(props: {
         <div class="flex flex-row w-full gap-2 items-center p-2 -ml-3">
           <FormatButtons
             selectionState={() => defaultSelectionData}
-            includeQuote
             onInlineFormat={(format) => {
               props.editor?.()?.dispatchCommand(FORMAT_TEXT_COMMAND, format);
             }}
@@ -154,9 +152,7 @@ export function EmailComposeToolbar(props: {
                 {ctx.isSavingDraft?.() ? 'Saving…' : 'Save Draft'}
               </Button>
             </Show>
-            <Tooltip
-              tooltip={ctx.sendTime() ? 'Send time is scheduled' : undefined}
-            >
+            <Tooltip label={ctx.sendTime() ? 'Send time is scheduled' : ''}>
               <button
                 disabled={
                   ctx.isSending() ||
@@ -172,7 +168,7 @@ export function EmailComposeToolbar(props: {
                   fallback={<Spinner class="size-6 animate-spin" />}
                 >
                   <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                    <ArrowUp class="group-hover:text-input! group-hover:fill-input! text-accent-ink! fill-accent! size-4 transition ease-in-out" />
+                    <ArrowUp class="group-hover:text-surface! group-hover:fill-surface! text-accent! fill-accent! size-4 transition ease-in-out" />
                   </div>
                 </Show>
               </button>
@@ -216,9 +212,7 @@ function MobileToolbar(props: {
             compact
           />
         </Show>
-        <Tooltip
-          tooltip={ctx.sendTime() ? 'Send time is scheduled' : undefined}
-        >
+        <Tooltip label={ctx.sendTime() ? 'Send time is scheduled' : ''}>
           <Show when={ctx.onSaveDraft}>
             <Button
               variant="base"

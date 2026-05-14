@@ -42,6 +42,7 @@ cookie = { workspace = true }
 document_storage_service_client = { path = "../document_storage_service_client" }
 doppleganger = { workspace = true }
 email_validator = { path = "../email_validator" }
+entity_access = { path = "../entity_access" }
 fusionauth = { path = "../fusionauth" }
 futures = { workspace = true }
 github = { path = "../github", default-features = false, features = [
@@ -68,7 +69,6 @@ macro_db_client = { path = "../macro_db_client", default-features = false, featu
   "team",
 ] }
 macro_entrypoint = { path = "../macro_entrypoint" }
-mobile_welcome_email_db_client = { path = "../mobile_welcome_email_db_client" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
@@ -76,12 +76,13 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "tracking",
   "user_permissions",
 ] }
-macro_tower_layers = { path = "../macro_tower_layers" }
 macro_service_urls = { path = "../macro_service_urls" }
+macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 maud = { version = "0.27.0" }
 miniserde = "0.1.45"
+mobile_welcome_email_db_client = { path = "../mobile_welcome_email_db_client" }
 mockall = { workspace = true }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
@@ -108,8 +109,8 @@ ses_client = { path = "../ses_client" }
 sha1 = "0.10.6"
 sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
-  "search",
   "email",
+  "search",
 ] }
 strum = { workspace = true }
 teams = { path = "../teams" }

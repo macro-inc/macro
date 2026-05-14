@@ -142,6 +142,7 @@ use utoipa::OpenApi;
         documents_hex::inbound::axum_router::get_document_handler,
         documents::get_document_version::handler,
         documents_hex::inbound::axum_router::create_document_handler,
+        documents_hex::inbound::axum_router::create_markdown_handler,
         documents_hex::inbound::axum_router::copy_document_handler,
         documents::save_document::save_document_handler,
         documents::pre_save::presave_document_handler,
@@ -270,6 +271,8 @@ use utoipa::OpenApi;
             CreateDocumentRequest,
             CreateDocumentResponse,
             CreateDocumentResponseData, // Create document
+            documents_hex::domain::models::CreateMarkdownDocumentRequest,
+            documents_hex::domain::models::CreateMarkdownDocumentResponse,
             documents_hex::domain::models::CreateTaskRequest,
             documents_hex::domain::models::CreateTaskResponse,
             documents_hex::domain::models::PropertyInput,

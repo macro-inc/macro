@@ -11,7 +11,7 @@ function Container(props: {
   footer?: JSX.Element;
 }) {
   return (
-    <div class="flex flex-col gap-2 w-full max-w-4xl p-4 bg-panel rounded-lg border border-edge min-h-100">
+    <div class="flex flex-col gap-2 w-full max-w-4xl p-4 bg-surface rounded-lg border border-edge min-h-100">
       <div class="flex flex-col gap-1">
         <label class="text-sm font-medium text-ink">{props.label}</label>
         {props.description && (

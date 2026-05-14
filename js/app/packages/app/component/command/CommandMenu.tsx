@@ -2,16 +2,16 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { Hotkey } from '@core/component/Hotkey';
 import { Tabs } from '@core/component/Tabs';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
+import type { RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
 import { type EntityData, InlineEntity } from '@entity';
 import ArrowLeft from '@icon/regular/arrow-left.svg';
 import Macro from '@macro-icons/macro-logo.svg';
-import { cn, Dialog, Panel } from '@ui';
+import { cn, Dialog, Hotkey, Panel } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,
@@ -261,7 +261,7 @@ export function CommandMenuInner(props: {
     CommandState.setQuery('');
   }
 
-  registerHotkey({
+  const navDownHotkey = registerHotkey({
     hotkey: ['arrowdown', 'ctrl+j'],
     scopeId: hotkeyScope,
     description: 'Move selection down',
@@ -275,7 +275,7 @@ export function CommandMenuInner(props: {
     hide: true,
   });
 
-  registerHotkey({
+  const navUpHotkey = registerHotkey({
     hotkey: ['arrowup', 'ctrl+k'],
     scopeId: hotkeyScope,
     description: 'Move selection up',
@@ -291,7 +291,7 @@ export function CommandMenuInner(props: {
     hide: true,
   });
 
-  registerHotkey({
+  const confirmHotkey = registerHotkey({
     hotkey: 'enter',
     scopeId: hotkeyScope,
     description: 'Select item',
@@ -306,7 +306,7 @@ export function CommandMenuInner(props: {
     runWithInputFocused: true,
   });
 
-  registerHotkey({
+  const confirmSplitHotkey = registerHotkey({
     hotkey: 'shift+enter',
     scopeId: hotkeyScope,
     description: 'Open in new split',
@@ -321,7 +321,7 @@ export function CommandMenuInner(props: {
     runWithInputFocused: true,
   });
 
-  registerHotkey({
+  const escapeHotkey = registerHotkey({
     hotkey: 'escape',
     scopeId: hotkeyScope,
     description: 'Close command menu',
@@ -341,7 +341,7 @@ export function CommandMenuInner(props: {
   });
 
   // Backspace when query is empty goes back from command scope
-  registerHotkey({
+  const backspaceHotkey = registerHotkey({
     hotkey: 'backspace',
     scopeId: hotkeyScope,
     description: 'Go back',
@@ -363,7 +363,7 @@ export function CommandMenuInner(props: {
     hide: true,
   });
 
-  registerHotkey({
+  const tabHotkey = registerHotkey({
     hotkey: 'tab',
     scopeId: hotkeyScope,
     description: 'Next category',
@@ -457,7 +457,7 @@ export function CommandMenuInner(props: {
       depth={props.depth}
       active
     >
-      <Panel.Header class="gap-2 px-2 bg-panel">
+      <Panel.Header class="gap-2 px-2 bg-surface">
         <Show
           when={isInCommandScope()}
           fallback={
@@ -476,7 +476,7 @@ export function CommandMenuInner(props: {
         </Show>
         <input
           type="text"
-          class="flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder/50"
+          class="flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder"
           placeholder={isEntityActionMode() ? 'Search actions...' : 'Search...'}
           value={CommandState.query()}
           onInput={(e) => CommandState.setQuery(e.currentTarget.value)}
@@ -486,7 +486,10 @@ export function CommandMenuInner(props: {
 
       <Show when={isEntityActionMode() || !isInCommandScope()}>
         <Panel.Toolbar
-          class={cn('bg-panel', isEntityActionMode() ? 'px-3 gap-2' : 'px-1.5')}
+          class={cn(
+            'bg-surface',
+            isEntityActionMode() ? 'px-3 gap-2' : 'px-1.5'
+          )}
         >
           <Show
             when={isEntityActionMode()}
@@ -511,7 +514,7 @@ export function CommandMenuInner(props: {
 
       <Panel.Body>
         <div
-          class="bg-panel overflow-hidden transition-[height] duration-60 ease-out"
+          class="bg-surface overflow-hidden transition-[height] duration-60 ease-out"
           style={{ height: `${resultsHeight()}px` }}
         >
           <Show
@@ -532,14 +535,14 @@ export function CommandMenuInner(props: {
         </div>
       </Panel.Body>
 
-      <Panel.Footer class="gap-4 px-4 bg-panel text-xs text-ink-extra-muted/80">
+      <Panel.Footer class="gap-4 px-4 bg-surface text-xs text-ink-extra-muted/80">
         <span class="flex items-center gap-1">
           <div class="flex gap-1">
             <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
-              <Hotkey shortcut="arrowup" class="space-x-1" />
+              <Hotkey shortcut={navUpHotkey.hotkey()} class="space-x-1" />
             </div>
             <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
-              <Hotkey shortcut="arrowdown" class="space-x-1" />
+              <Hotkey shortcut={navDownHotkey.hotkey()} class="space-x-1" />
             </div>
           </div>
           Navigate
@@ -547,34 +550,40 @@ export function CommandMenuInner(props: {
 
         <Switch>
           <Match when={isInCommandScope()}>
-            <HotkeyHint shortcut="enter" label="Run action" />
-            <HotkeyHint shortcut="escape" label="Back" />
+            <HotkeyHint command={confirmHotkey} label="Run action" />
+            <HotkeyHint command={backspaceHotkey} label="Back" />
           </Match>
           <Match when={selectedIsCommand() || isEntityActionMode()}>
-            <HotkeyHint shortcut="enter" label="Run action" />
+            <HotkeyHint command={confirmHotkey} label="Run action" />
           </Match>
           <Match when={selectedIsSearch()}>
-            <HotkeyHint shortcut="enter" label="Search" />
+            <HotkeyHint command={confirmHotkey} label="Search" />
             <Show when={canOpenInNewSplit()}>
-              <HotkeyHint shortcut="shift+enter" label="Search in new split" />
+              <HotkeyHint
+                command={confirmSplitHotkey}
+                label="Search in new split"
+              />
             </Show>
           </Match>
           <Match when={selectedIsEntity()}>
-            <HotkeyHint shortcut="enter" label="Open" />
+            <HotkeyHint command={confirmHotkey} label="Open" />
             <Show when={canOpenInNewSplit()}>
-              <HotkeyHint shortcut="shift+enter" label="Open in new split" />
+              <HotkeyHint
+                command={confirmSplitHotkey}
+                label="Open in new split"
+              />
             </Show>
           </Match>
         </Switch>
 
         <Show when={!isInCommandScope() && !isEntityActionMode()}>
-          <HotkeyHint shortcut="tab" label="Category" />
+          <HotkeyHint command={tabHotkey} label="Category" />
         </Show>
         <Show
           when={isInCommandScope()}
-          fallback={<HotkeyHint shortcut="escape" label="Close" />}
+          fallback={<HotkeyHint command={escapeHotkey} label="Close" />}
         >
-          <HotkeyHint shortcut="escape" label="Back" />
+          <HotkeyHint command={escapeHotkey} label="Back" />
         </Show>
       </Panel.Footer>
     </Panel>
@@ -592,9 +601,12 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
         {(entity) => {
           return (
             <div
-              class={cn('bg-edge px-2 py-1 truncate text-xs rounded-xs', {
-                'max-w-[50%]': props.entities.length === 2,
-              })}
+              class={cn(
+                'bg-hover border border-edge-muted px-2 py-1 truncate text-xs rounded-xs',
+                {
+                  'max-w-[50%]': props.entities.length === 2,
+                }
+              )}
             >
               <InlineEntity entity={entity} />
             </div>
@@ -661,11 +673,11 @@ function VirtualizedCommandList(props: {
   );
 }
 
-function HotkeyHint(props: { shortcut: string; label: string }) {
+function HotkeyHint(props: { command: RegisterHotkeyReturn; label: string }) {
   return (
     <span class="flex items-center gap-1">
       <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
-        <Hotkey shortcut={props.shortcut} class="space-x-1" />
+        <Hotkey shortcut={props.command.hotkey()} class="space-x-1" />
       </div>
       {props.label}
     </span>

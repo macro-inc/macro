@@ -167,7 +167,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
       <Switch>
         <Match when={mode() === 'search'}>
           <Show when={props.selectedDate}>
-            <div class="px-3 py-2 border-b border-edge-muted pattern pattern-edge-muted pattern-dot-4">
+            <div class="px-3 py-2 border-b border-edge-muted">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
                   <span class="text-xs text-ink-muted">Current:</span>

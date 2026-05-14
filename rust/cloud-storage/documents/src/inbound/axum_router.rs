@@ -6,6 +6,7 @@
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
 //! - `GET /{document_id}/branch_name` — get short ID + git branch name (when the document is a task)
 //! - `GET /{document_id}/short_id` — get document short ID
+//! - `POST /create_markdown` — create and initialize a markdown document
 //! - `DELETE /{document_id}` — soft-delete a document
 
 #[cfg(test)]
@@ -13,6 +14,8 @@ mod tests;
 
 mod copy_document;
 mod create_document;
+#[cfg(feature = "document_create")]
+mod create_markdown;
 mod create_task;
 mod delete_document;
 mod edit_document;
@@ -38,10 +41,14 @@ use sqlx::PgPool;
 
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
+#[cfg(feature = "document_create")]
+use crate::domain::ports::create::DocumentCreationService;
 
 // Re-export handlers and utoipa path types for external use (swagger, internal routes)
 pub use copy_document::*;
 pub use create_document::*;
+#[cfg(feature = "document_create")]
+pub use create_markdown::*;
 pub use create_task::*;
 pub use delete_document::*;
 pub use edit_document::*;
@@ -76,7 +83,15 @@ impl IntoResponse for DocumentError {
     }
 }
 
-/// Router state containing the document service, entity access service, and DB pool.
+/// Default backend-owned document creation use case for the document router.
+#[cfg(feature = "document_create_adapters")]
+pub type DefaultDocumentCreator<T> = crate::domain::create::DocumentCreator<
+    Arc<T>,
+    crate::outbound::markdown_init::LexicalSyncMarkdownInitializer,
+    crate::outbound::document_bytes_upload::ReqwestDocumentBytesUploader,
+>;
+
+/// Router state containing document router dependencies.
 pub struct DocumentRouterState<T, Svc> {
     /// The document service implementation.
     pub service: Arc<T>,
@@ -84,6 +99,9 @@ pub struct DocumentRouterState<T, Svc> {
     pub access_service: Arc<Svc>,
     /// The database pool (used by middleware for document lookups).
     pub pool: PgPool,
+    /// Backend-owned document creation use case.
+    #[cfg(feature = "document_create_adapters")]
+    pub creator: DefaultDocumentCreator<T>,
 }
 
 // Manual Clone impl so T and Svc don't need to be Clone (they're behind Arc).
@@ -93,6 +111,8 @@ impl<T, Svc> Clone for DocumentRouterState<T, Svc> {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
             pool: self.pool.clone(),
+            #[cfg(feature = "document_create_adapters")]
+            creator: self.creator.clone(),
         }
     }
 }
@@ -112,7 +132,7 @@ pub struct Params {
 /// Build the documents router with all endpoints.
 pub fn documents_router<T, Svc, S>(state: DocumentRouterState<T, Svc>) -> Router<S>
 where
-    T: DocumentService,
+    T: DocumentService + DocumentCreationService,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -139,20 +159,28 @@ where
         .route(
             "/{document_id}/copy",
             axum::routing::post(copy_document_handler::<T, Svc>),
-        )
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            ensure_document_exists,
-        ));
+        );
 
-    Router::new()
+    let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(
+        state.clone(),
+        ensure_document_exists,
+    ));
+
+    let router = Router::new()
         .merge(document_id_routes)
         .route("/", axum::routing::post(create_document_handler::<T, Svc>))
         .route(
             "/create_task",
             axum::routing::post(create_task_handler::<T, Svc>),
-        )
-        .with_state(state)
+        );
+
+    #[cfg(feature = "document_create")]
+    let router = router.route(
+        "/create_markdown",
+        axum::routing::post(create_markdown_handler::<T, Svc>),
+    );
+
+    router.with_state(state)
 }
 
 /// Path parameters for document endpoints.

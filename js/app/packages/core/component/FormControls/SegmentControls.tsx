@@ -1,8 +1,8 @@
-import { Tooltip } from '@core/component/Tooltip';
 import {
   SegmentedControl as KSegmentedControl,
   type SegmentedControlRootProps,
 } from '@kobalte/core/segmented-control';
+import { Tooltip } from '@ui';
 import {
   createEffect,
   createSignal,
@@ -92,28 +92,12 @@ export const SegmentedControl: ParentComponent<
                 >
                   <KSegmentedControl.ItemInput class="absolute inset-0 size-full! pointer-events-none" />
                   <KSegmentedControl.ItemLabel class="flex">
-                    {/* <div
-                    class="flex justify-center items-center border border-ink p-1 font-bold uppercase font-mono text-[11px]"
-                    classList={{
-                      // [`${sizeClass[props.size || 'Base']}`]: true,
-                      'bg-ink text-panel': value() === item,
-                      'text-ink': value() !== item,
-                      [`${props.itemLabelClass}`]: !!props.itemLabelClass,
-                      // 'animate-[flicker_50ms_2]': showFlicker(),
-                    }}
-                    // onAnimationEnd={() => {
-                    //   setShowFlicker(false);
-                    // }}
-                  >
-                    {item}
-                  </div> */}
                     <Switch>
                       <Match when={tooltip()}>
-                        <Tooltip tooltip={tooltip()}>
+                        <Tooltip label={tooltip() ?? ''}>
                           <ToggleButton
                             size={props.size}
                             pressed={value() === itemValue()}
-                            animateFlickerOnDeactivate={false}
                             tabIndex={-1}
                             as="div"
                             disabled={props.disabled}
@@ -126,7 +110,6 @@ export const SegmentedControl: ParentComponent<
                         <ToggleButton
                           size={props.size}
                           pressed={value() === itemValue()}
-                          animateFlickerOnDeactivate={false}
                           tabIndex={-1}
                           as="div"
                           disabled={props.disabled}

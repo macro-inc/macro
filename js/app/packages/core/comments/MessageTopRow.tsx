@@ -136,7 +136,7 @@ export function MessageTopRow(props: {
       hideBottomMargin={props.hideBottomMargin}
       isActive={props.isActive}
     >
-      <div class="absolute top-0 right-0 flex flex-row bg-menu border border-edge-muted p-1 rounded-sm z-user-highlight">
+      <div class="absolute top-0 right-0 flex flex-row bg-surface border border-edge-muted p-1 rounded-sm z-user-highlight">
         <Show when={props.copyLink}>
           <Button
             tooltip="Copy link to comment"

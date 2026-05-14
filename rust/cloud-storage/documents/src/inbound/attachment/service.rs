@@ -20,7 +20,9 @@ use model_entity::{Entity, EntityType};
 use model_file_type::{FileAssociation, FileType};
 use non_empty::NonEmpty;
 
-use crate::domain::{models::LocationQueryParams, ports::DocumentService};
+use crate::domain::{
+    models::LocationQueryParams, ports::DocumentService, response::LocationResponseV3,
+};
 
 use super::markdown;
 
@@ -220,9 +222,7 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> DocumentAttachmentService
             .map_err(|e| AttachmentError::Internal(e.into()))?;
 
         match location {
-            model::document::response::LocationResponseV3::PresignedUrl {
-                presigned_url, ..
-            } => Ok(presigned_url),
+            LocationResponseV3::PresignedUrl { presigned_url, .. } => Ok(presigned_url),
             _ => Err(AttachmentError::Internal(anyhow::anyhow!(
                 "unexpected location response for document"
             ))),

@@ -38,6 +38,8 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
+import { TaskListEntity } from '@app/component/next-soup/soup-view/views/tasks/TaskListEntity';
+import { ResponsiveTaskListHeader } from '@app/component/next-soup/soup-view/views/tasks/TaskListHeader';
 import {
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -61,10 +63,10 @@ import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { Resize } from '@core/component/Resize';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
@@ -88,7 +90,7 @@ import {
 } from '@queries/soup/normalized-cache';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
-import { Button, cn } from '@ui';
+import { Button, cn, Tooltip } from '@ui';
 import {
   type Accessor,
   batch,
@@ -107,6 +109,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
+import { Dynamic } from 'solid-js/web';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
@@ -175,7 +178,7 @@ type PersistedSoupViewState = {
   collapsedGroups: string[];
 };
 
-const PERSISTED_STATE_VERSION = 6;
+const PERSISTED_STATE_VERSION = 7;
 
 const listStateCache = new Map<
   string,
@@ -236,6 +239,7 @@ export const SoupView = (props: SoupViewProps) => {
 
   registerHotkey({
     hotkey: 'cmd+f',
+    hotkeyToken: TOKENS.soup.openSearch,
     scopeId: panel.splitHotkeyScope,
     registrationType: 'add',
     description: 'Search',
@@ -358,11 +362,7 @@ export const SoupView = (props: SoupViewProps) => {
                   )}
                   collapsed={() => (
                     <Show when={!narrowSearchExpanded()}>
-                      <Tooltip
-                        tooltip={
-                          <LabelAndHotKey label="Search" shortcut="⌘F" />
-                        }
-                      >
+                      <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
                         <Button
                           variant="ghost"
                           class="p-1 rounded-xs"
@@ -871,7 +871,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
             maxSize={previewVisible() ? 840 : undefined}
           >
             <div
-              class="@container/uList size-full unified-list-root flex flex-col"
+              class="@container/u-list size-full unified-list-root flex flex-col"
               classList={{
                 'border-r border-edge-muted':
                   soup.previewEntity() !== undefined,
@@ -903,6 +903,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                   </Match>
                   <Match when={rows().length}>
                     <ListLayoutProvider ref={localEntityListRef}>
+                      <Show when={currentView() === 'tasks' && !isMobile()}>
+                        <ResponsiveTaskListHeader class="shrink-0" />
+                      </Show>
                       <EntityRowProvider
                         container={localEntityListRef}
                         canSwipeLeft={(entityId) => {
@@ -978,7 +981,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                 </Show>
 
                                 <SoupEntityContextMenu entity={row.original}>
-                                  <ListEntity
+                                  <Dynamic
+                                    component={
+                                      currentView() === 'tasks'
+                                        ? TaskListEntity
+                                        : ListEntity
+                                    }
                                     entity={row.original}
                                     timestamp={timestamp()}
                                     highlighted={
@@ -994,10 +1002,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                       !soup.predicates.isActive('noise')
                                     }
                                     checked={row.isSelected()}
-                                    onChecked={(
-                                      next: boolean,
-                                      shiftKey: boolean
-                                    ) =>
+                                    onChecked={(next, shiftKey) =>
                                       handleMultiSelectChecked({
                                         entity: row.original,
                                         entityIndex: i(),
@@ -1005,7 +1010,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                         shiftKey: shiftKey ?? false,
                                       })
                                     }
-                                    onClick={(event: MouseEvent) => {
+                                    onClick={(event) => {
                                       onEntityClick({
                                         type: 'entity',
                                         entity: row.original,
@@ -1022,10 +1027,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                         location: undefined,
                                       });
                                     }}
-                                    onContentHitClick={(
-                                      e: PointerEvent | MouseEvent,
-                                      location?: SearchLocation
-                                    ) => {
+                                    onContentHitClick={(e, location) => {
                                       onEntityClick({
                                         type: 'entity',
                                         entity: row.original,
@@ -1036,7 +1038,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     entityRowConfig={{
                                       swipeLeftColor: 'bg-success',
                                       swipeLeftRevealedComponent: (
-                                        <CheckIcon class="size-8 text-panel" />
+                                        <CheckIcon class="size-8 text-surface" />
                                       ),
                                     }}
                                   />
@@ -1081,7 +1083,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
             </div>
           </Resize.Panel>
           <Show when={previewVisible()}>
-            <Resize.Panel id="soup-preview" minSize={300}>
+            <Resize.Panel
+              id="soup-preview"
+              minSize={300}
+              target={{ kind: 'percent', percent: 70 }}
+            >
               <PreviewPanel
                 selectedEntity={soup.focus.item()}
                 orchestrator={orchestrator}
@@ -1161,7 +1167,10 @@ const SoupList = (props: SoupListProps) => {
   return (
     <div
       ref={props.ref}
-      class={cn('unified-table-body size-full relative', props.class)}
+      class={cn(
+        'unified-table-body w-full flex-1 min-h-0 relative',
+        props.class
+      )}
     >
       <VList
         cache={props.cache}

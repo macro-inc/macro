@@ -1188,6 +1188,69 @@ async fn test_filter_by_project_ids(db: PgPool) -> anyhow::Result<()> {
     Ok(())
 }
 
+// Test filtering projects by specific project IDs with include_root=true
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_filter_by_project_ids_include_root(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{EntityFilters, ProjectFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    let entity_filters = EntityFilters {
+        project_filters: ProjectFilters {
+            project_ids: vec![
+                "11111111-1111-1111-1111-111111111111".to_string(),
+                "44444444-4444-4444-4444-444444444444".to_string(),
+            ],
+            include_root: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    let project_ids: HashSet<Uuid> = items
+        .iter()
+        .filter_map(|item| match item {
+            SoupItem::Project(p) => Some(p.id),
+            _ => None,
+        })
+        .collect();
+
+    let expected_ids: HashSet<Uuid> = [
+        "11111111-1111-1111-1111-111111111111", // Project A (self)
+        "22222222-2222-2222-2222-222222222222", // Project B (child of A)
+        "44444444-4444-4444-4444-444444444444", // Project D (self)
+    ]
+    .iter()
+    .map(|&s| Uuid::parse_str(s).unwrap())
+    .collect();
+
+    assert_eq!(
+        project_ids, expected_ids,
+        "include_root=true should match the projects themselves plus their direct children"
+    );
+
+    Ok(())
+}
+
 // Test combined filters across multiple entity types
 #[sqlx::test(
     fixtures(

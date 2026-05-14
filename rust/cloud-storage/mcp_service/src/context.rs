@@ -220,6 +220,7 @@ async fn build_tool_context(
         document_service,
         entity_access_service,
         lexical_client_for_tools,
+        sync_service_client.clone(),
     );
 
     let properties_service = properties::PropertiesServiceImpl::new(
@@ -282,7 +283,7 @@ async fn build_tool_context(
     let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
         chat::domain::service::ChatServiceImpl::new(
             chat::outbound::postgres::PgChatRepo::new(db.clone()),
-            Arc::new(ai_toolset::AsyncToolSet::new()),
+            Arc::new(ai_toolset::AsyncToolCollection::new()),
             (),
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
                 entity_access_management::outbound::PgRepository::new(db.clone()),

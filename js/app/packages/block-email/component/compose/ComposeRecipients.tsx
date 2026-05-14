@@ -48,9 +48,7 @@ function ComposeFieldRow(props: {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div class="text-sm w-7 shrink-0 text-ink-placeholder/70">
-        {props.label}
-      </div>
+      <div class="text-sm w-7 shrink-0 text-ink-placeholder">{props.label}</div>
       <div class="flex-1">{props.children}</div>
     </div>
   );

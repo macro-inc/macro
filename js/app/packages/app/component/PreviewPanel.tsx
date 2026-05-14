@@ -18,7 +18,6 @@ import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from './split-layout/context';
-import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 export const [PreviewPanelContext, useMaybePreviewPanel] =
   createContextProvider(
@@ -42,7 +41,6 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   props
 ) => {
   let scopedSplitPanelContextType: SplitPanelContextType = {} as any;
-  const splitPanelContext = useSplitPanelOrThrow();
   const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {
     ...props.splitPanelContext.layoutRefs,
   };
@@ -149,24 +147,19 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     >
       {/* Preview-specific toolbar slots so blocks can render the "share" bar (via SplitToolbarLeft/Right) */}
       <div
-        class="relative w-full flex items-center justify-between shrink-0 h-10 bg-panel px-2 border-b border-edge-muted"
-        classList={{
-          // In spotlight/fullscreen, avoid hugging the screen edge
-          'pl-2': splitPanelContext.handle.isSpotLight(),
-          'pl-1': !splitPanelContext.handle.isSpotLight(),
-        }}
+        class="relative w-full flex items-center justify-between shrink-0 h-10 bg-surface px-2 border-b border-edge-muted"
         data-preview-split-toolbar
       >
         <div
           // In preview mode, anchor left-side controls (e.g. file menu) to the top-left
           // so the dropdown doesn't feel like it's "hanging" from the middle of the bar.
-          class="flex h-full items-center"
+          class="flex h-full items-center gap-1"
           ref={(ref) => {
             scopedLayoutRefs.toolbarLeft = ref;
           }}
         />
         <div
-          class="flex h-full items-center"
+          class="flex h-full items-center gap-1"
           ref={(ref) => {
             scopedLayoutRefs.toolbarRight = ref;
           }}

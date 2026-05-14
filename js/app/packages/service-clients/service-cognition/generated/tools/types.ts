@@ -70,6 +70,19 @@ export type ContentType =
   | 'chat-message'
   | 'project';
 /**
+ * Where document content is, or is expected to be, read from.
+ */
+export type DocumentContentLocation =
+  | 'object_storage'
+  | 'sync_service'
+  | 'docx_bom_parts'
+  | 'converted_pdf'
+  | 'unknown';
+/**
+ * API-visible content lifecycle state derived from current document metadata.
+ */
+export type DocumentContentState = 'unknown' | 'pending' | 'ready';
+/**
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
  */
@@ -768,6 +781,16 @@ export interface CreateDocumentResponse {
    * The id of the document
    */
   documentId: string;
+}
+/**
+ * API-visible content lifecycle and location metadata.
+ */
+export interface DocumentContent {
+  /**
+   * The content location, when known.
+   */
+  location?: DocumentContentLocation | null;
+  state: DocumentContentState;
 }
 /**
  * Metadata for a document fetched from the database
@@ -1898,6 +1921,9 @@ export interface ReadContentResponse {
   comments: CommentThread[];
   content: Content;
 }
+/**
+ * Full document metadata plus content lifecycle metadata.
+ */
 export interface ReadDocumentMetadata {
   /**
    * If the document is a "task" the branch name of the document will be provided.
@@ -1913,6 +1939,7 @@ export interface ReadDocumentMetadata {
    * the file type
    */
   branchedFromVersionId?: number | null;
+  content: DocumentContent;
   /**
    * The time the document was created
    */

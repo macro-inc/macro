@@ -49,7 +49,7 @@ function MobileDockButton(props: MobileDockButtonProps) {
       onTouchMove={props.onTouchMove}
       onTouchEnd={props.onTouchEnd}
       class={cn(
-        'flex flex-col items-center justify-center flex-1 pt-3 pb-2 bg-panel border-t border-edge-muted',
+        'flex flex-col items-center justify-center flex-1 pt-3 pb-2 bg-surface border-t border-edge-muted',
         props.active && 'text-accent'
       )}
     >
@@ -80,7 +80,7 @@ function SearchDockButton(props: { active: boolean; onClick: () => void }) {
         props.onClick();
       }}
       class={cn(
-        'flex flex-col items-center justify-center flex-1 pt-3 pb-2 bg-panel border-t border-edge-muted',
+        'flex flex-col items-center justify-center flex-1 pt-3 pb-2 bg-surface border-t border-edge-muted',
         props.active && 'text-accent'
       )}
     >
@@ -120,7 +120,7 @@ export function MobileDock() {
   return (
     <Layer depth={1}>
       <div class="relative z-mobile-nav-bar flex flex-row justify-between">
-        <div class="-z-1 absolute inset-x-0 top-0 w-screen h-40 bg-panel" />
+        <div class="-z-1 absolute inset-x-0 top-0 w-screen h-40 bg-surface" />
         <MobileDockButton
           icon={AnimatedInboxIcon}
           active={isActive('inbox')}

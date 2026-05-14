@@ -38,18 +38,14 @@ export function MessageFlag(props: MessageFlagProps) {
         />
         <span
           class={cn(
-            'text-xs px-2',
-            props.highlightBelow ? 'text-accent' : 'text-ink-extra-muted'
+            'text-xs px-3 ring py-1.5 rounded-sm',
+            props.highlightBelow
+              ? 'text-accent ring-accent'
+              : 'text-ink-extra-muted ring-rail'
           )}
         >
           {props.text}
         </span>
-        <div
-          class={cn(
-            'flex-1 border-b border-rail',
-            props.highlightBelow && 'border-accent'
-          )}
-        />
       </div>
     </div>
   );

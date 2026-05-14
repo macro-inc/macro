@@ -4,5 +4,7 @@ pub mod ai_call_summarizer;
 pub mod livekit_rtc_client;
 /// Postgres-backed repository implementing [`CallRepository`](crate::domain::ports::CallRepository).
 pub mod pg_call_repo;
+/// Postgres-backed repository implementing [`VoiceRepository`](crate::domain::ports::VoiceRepository).
+pub mod pg_voice_repo;
 /// S3-backed recording storage implementing [`RecordingStorage`](crate::domain::ports::RecordingStorage).
 pub mod s3_recording_storage;

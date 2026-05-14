@@ -337,7 +337,7 @@ export function TableCellResizer() {
       const styles: Record<string, JSX.CSSProperties> = {
         bottom: {
           'background-color': 'transparent',
-          cursor: 'var(--cursor-row-resize)',
+          cursor: 'row-resize',
           height: `${zoneWidth}px`,
           left: `${cellRect.left}px`,
           top: `${cellRect.top + cellRect.height - zoneWidth / 2}px`,
@@ -346,7 +346,7 @@ export function TableCellResizer() {
         },
         right: {
           'background-color': 'transparent',
-          cursor: 'var(--cursor-col-resize)',
+          cursor: 'col-resize',
           height: `${cellRect.height}px`,
           left: `${cellRect.left + cellRect.width - zoneWidth / 2}px`,
           top: `${cellRect.top}px`,

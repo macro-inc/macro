@@ -140,13 +140,13 @@ export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
       >
         <For each={props.values}>
           {(optionId) => (
-            <div class="group relative h-6 px-1.5 text-xxs text-ink border border-edge bg-panel font-mono flex items-center">
+            <div class="group relative h-6 px-1.5 text-xxs text-ink border border-edge bg-surface font-mono flex items-center">
               <span class="whitespace-nowrap">{getDisplayValue(optionId)}</span>
               {/* X shows on hover, overlays the text */}
               <button
                 type="button"
                 onClick={() => handleRemoveValue(optionId)}
-                class="absolute inset-0 flex items-center justify-end pr-1 bg-linear-to-l from-panel via-panel to-transparent opacity-0 group-hover:opacity-100 hover:text-failure-ink"
+                class="absolute inset-0 flex items-center justify-end pr-1 bg-linear-to-l from-surface via-surface to-transparent opacity-0 group-hover:opacity-100 hover:text-failure-ink"
               >
                 <XIcon class="size-3" />
               </button>
@@ -183,7 +183,7 @@ export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
           />
           <div
             ref={dropdownRef}
-            class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-40 max-h-48 overflow-y-auto z-user-highlight"
+            class="absolute left-0 top-full mt-1 border border-edge bg-surface shadow-lg font-mono min-w-40 max-h-48 overflow-y-auto z-user-highlight"
           >
             <Show
               when={availableOptions().length > 0}

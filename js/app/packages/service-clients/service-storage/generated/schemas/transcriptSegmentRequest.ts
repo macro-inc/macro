@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { TranscriptSegmentRequestDiarizedSpeakerId } from './transcriptSegmentRequestDiarizedSpeakerId';
+import type { TranscriptSegmentRequestEmbedding } from './transcriptSegmentRequestEmbedding';
 import type { TranscriptSegmentRequestEndedAt } from './transcriptSegmentRequestEndedAt';
 import type { TranscriptSegmentRequestStreamStartedAt } from './transcriptSegmentRequestStreamStartedAt';
 
@@ -18,6 +19,11 @@ export interface TranscriptSegmentRequest {
 pass. Namespaced upstream by audio track so values are unique across all
 tracks in a call. `None` when the provider didn't return a speaker label. */
   diarizedSpeakerId?: TranscriptSegmentRequestDiarizedSpeakerId;
+  /** Speaker voice embedding computed by the transcription agent
+(e.g. a Resemblyzer 256-dim vector). When present, the server
+upserts a `voice` row and stores the resulting id on the transcript
+segment so the call-finished pipeline can match it to enrolled users. */
+  embedding?: TranscriptSegmentRequestEmbedding;
   /** When the speaker stopped talking for this segment. */
   endedAt?: TranscriptSegmentRequestEndedAt;
   /** Whether this is a final transcription (not interim). */

@@ -25,7 +25,7 @@ export const getNormalizationObjectKey = (
 
 let _normalizer: ReturnType<typeof createQueryNormalizer> | undefined;
 
-export function getSoupNormalizer() {
+export function getSoupNormalizer(): ReturnType<typeof createQueryNormalizer> {
   if (!_normalizer) {
     throw new Error(
       'soupNormalizer not initialized — call initSoupNormalizer() first'

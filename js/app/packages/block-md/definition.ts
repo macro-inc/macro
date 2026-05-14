@@ -5,107 +5,15 @@ import {
   loadResult,
 } from '@core/block';
 import { createLoroManager } from '@core/collab/manager';
-import { serializedStateFromBlob } from '@core/component/LexicalMarkdown/collaboration/utils';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
 import { isErr, ok } from '@core/util/maybeResult';
 import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
-import { rawMarkdownStateToLoroSnapshot } from '@lexical-core/markdown-loro-snapshot';
+import { waitForDocumentSyncServiceReady } from '@queries/storage/document-location';
 import { storageServiceClient } from '@service-storage/client';
-import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
-import { syncServiceClient } from '@service-sync/client';
 import { createSyncServiceSource } from '@service-sync/source';
-import { untrack } from 'solid-js';
-import { createStore } from 'solid-js/store';
 import MarkdownBlock from './component/Block';
 import type { MarkdownRewriteOutput } from './signal/rewriteSignal';
-
-/** 5 second cache timeout */
-const CACHE_THRESHOLD = 5000;
-const [existsCache, setExistsCache] = createStore<
-  Record<
-    string,
-    | {
-        exists: boolean;
-        fetchedAt: number;
-      }
-    | undefined
-  >
->({});
-
-const getExists = async (documentId: string): Promise<boolean> => {
-  const existsResult = await syncServiceClient.exists({
-    documentId,
-  });
-  if (isErr(existsResult)) return false;
-  const [, { exists: existsResultExists }] = existsResult;
-  return existsResultExists;
-};
-
-const prefetchExists = async (documentId: string) => {
-  const exists = await getExists(documentId);
-  setExistsCache(documentId, {
-    exists,
-    fetchedAt: Date.now(),
-  });
-};
-
-const fetchExists = async (documentId: string) => {
-  const cached = untrack(() => existsCache[documentId]);
-  if (cached && cached.fetchedAt + CACHE_THRESHOLD > Date.now()) {
-    setExistsCache(documentId, undefined);
-    return cached.exists;
-  }
-  const exists = await getExists(documentId);
-  return exists;
-};
-
-/**
- * Migrates a document from dss to the sync-service.
- * Should only be called if the document does not exist in the sync-service
- *
- * @param documentId - The document id to migrate
- **/
-const migrateToSyncService = async (documentId: string) => {
-  const maybeFullDocument = await loadResult(
-    storageServiceClient.getBinaryDocument({ documentId })
-  );
-
-  if (isErr(maybeFullDocument)) return maybeFullDocument;
-  const [, { blobUrl }] = maybeFullDocument;
-
-  const blobResult = await loadResult(fetchBinary(blobUrl, 'blob'));
-
-  if (isErr(blobResult)) return blobResult;
-
-  const [, blob] = blobResult;
-
-  const state = await serializedStateFromBlob(blob);
-
-  if (!state) {
-    console.error('Failed to parse blob as serialized state');
-    return LoadErrors.INVALID;
-  }
-
-  const snapshot = await rawMarkdownStateToLoroSnapshot(state as any);
-
-  if (!snapshot) {
-    console.error('Failed to create snapshot from blob');
-    return LoadErrors.INVALID;
-  }
-
-  let res = await syncServiceClient.initializeFromSnapshot({
-    snapshot: snapshot as any,
-    documentId: documentId,
-  });
-
-  if (isErr(res)) {
-    console.error('Failed to initialize from snapshot', res);
-    return LoadErrors.INVALID;
-  }
-
-  return ok(undefined);
-};
 
 export const definition = defineBlock({
   name: 'md',
@@ -120,16 +28,15 @@ export const definition = defineBlock({
     if (source.type === 'sync-service') {
       const documentId = source.id;
       if (intent === 'preload') {
-        await prefetchExists(documentId);
         return ok({
           type: 'preload',
           origin: source,
         });
       }
 
-      const [maybeDocument, exists, maybeToken] = await Promise.all([
+      const [maybeDocument, maybeLocation, maybeToken] = await Promise.all([
         loadResult(storageServiceClient.getDocumentMetadata({ documentId })),
-        fetchExists(documentId),
+        loadResult(storageServiceClient.getDocumentLocation({ documentId })),
         storageServiceClient.permissionsTokens.createPermissionToken({
           document_id: documentId,
         }),
@@ -142,15 +49,38 @@ export const definition = defineBlock({
       const [, { token }] = maybeToken;
 
       if (isErr(maybeDocument)) return maybeDocument;
+      if (isErr(maybeLocation)) return maybeLocation;
 
       const [, documentResult] = maybeDocument;
       const { documentMetadata, userAccessLevel } = documentResult;
+      let [, { data: location }] = maybeLocation;
 
-      // If the document does not exist in the sync-service,
-      // but it does exist in dss we should try and initialize it.
-      if (!exists) {
-        const migrationResult = await migrateToSyncService(documentId);
-        if (isErr(migrationResult)) return migrationResult;
+      if (
+        location.type === 'presignedUrl' &&
+        location.content.state === 'pending'
+      ) {
+        location = await waitForDocumentSyncServiceReady({
+          documentId,
+        }).catch((error) => {
+          console.error(
+            'Failed waiting for markdown sync-service location',
+            error
+          );
+          return location;
+        });
+      }
+
+      // Markdown initialization and lifecycle persistence are backend-owned.
+      // If a markdown document still resolves to object storage here, opening
+      // it would require a backend repair/backfill path rather than a frontend
+      // sync-service mutation that leaves DB content metadata inconsistent.
+      if (location.type !== 'syncServiceContent') {
+        console.error(
+          'Markdown document is not available in sync-service',
+          documentId,
+          location.content
+        );
+        return LoadErrors.INVALID;
       }
 
       const syncServiceResult = await createSyncServiceSource(source.id, token);

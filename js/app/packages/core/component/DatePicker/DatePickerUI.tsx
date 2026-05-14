@@ -234,7 +234,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
                   type="button"
                   class="size-8 transition-colors disabled:opacity-40"
                   classList={{
-                    'bg-accent text-dialog': isSelected(day!),
+                    'bg-accent text-surface': isSelected(day!),
                     'hover:bg-active': !isSelected(day!),
                     'ring-1 ring-accent': isToday(day!),
                   }}
@@ -279,7 +279,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
                 type="button"
                 class="px-3 py-2 hover:bg-active transition-colors"
                 classList={{
-                  'bg-accent text-dialog hover:bg-accent-ink':
+                  'bg-accent text-surface hover:bg-accent':
                     displayMonth() === index(),
                 }}
                 onClick={() => handleMonthSelect(index())}
@@ -305,7 +305,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
                   type="button"
                   class="px-3 py-2 hover:bg-active transition-colors"
                   classList={{
-                    'bg-accent text-dialog hover:bg-accent-ink':
+                    'bg-accent text-surface hover:bg-accent':
                       displayYear() === year,
                   }}
                   onClick={() => handleYearSelect(year)}
@@ -376,7 +376,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
               type="button"
               class="px-2 py-1 transition-colors"
               classList={{
-                'bg-accent text-dialog': period() === 'AM',
+                'bg-accent text-surface': period() === 'AM',
                 'hover:bg-active': period() !== 'AM',
               }}
               onClick={() => setPeriod('AM')}
@@ -387,7 +387,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
               type="button"
               class="px-2 py-1 transition-colors"
               classList={{
-                'bg-accent text-dialog': period() === 'PM',
+                'bg-accent text-surface': period() === 'PM',
                 'hover:bg-active': period() !== 'PM',
               }}
               onClick={() => setPeriod('PM')}
@@ -398,7 +398,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
           <button
             type="button"
             aria-label="Confirm scheduled time"
-            class="p-1 bg-dialog text-accent hover:bg-active transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            class="p-1 bg-surface text-accent hover:bg-active transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             disabled={isTimeInPast()}
             onClick={() => props.onChange(buildDateWithTime(selectedDate()))}
           >

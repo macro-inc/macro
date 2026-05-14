@@ -40,6 +40,9 @@ pub enum NameSearchError {
     /// Empty ids provided with ids only set to true
     #[error("empty ids provided with ids only set to true")]
     EmptyIdsWithIdsOnly,
+    /// Cursor variant doesn't match this search method.
+    #[error("incompatible cursor variant for name search")]
+    IncompatibleCursor,
 }
 
 /// Name search result match

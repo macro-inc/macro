@@ -16,9 +16,11 @@ use axum::{
 use axum_extra::extract::Cached;
 use comms_db_client::{
     activity::upsert_activity::upsert_activity,
+    entity_mentions::delete_entity_mentions_by_source::delete_entity_mentions_by_source,
     messages::add_attachments,
+    messages::create_message_mentions::{CreateMessageMentionOptions, create_message_mentions},
     messages::patch_message::{patch_message, patch_message_attachments},
-    model::{ActivityType, NewAttachment},
+    model::{ActivityType, NewAttachment, SimpleMention},
 };
 use macro_user_id::cowlike::CowLike;
 use serde::{Deserialize, Serialize};
@@ -28,6 +30,7 @@ use uuid::Uuid;
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PatchMessageRequest {
     pub content: Option<String>,
+    pub mentions: Option<Vec<SimpleMention>>,
     pub attachment_ids_to_delete: Option<Vec<String>>,
     pub attachments_to_add: Option<Vec<NewAttachment>>,
     pub nonce: Option<String>,
@@ -63,7 +66,7 @@ pub async fn patch_message_handler(
     Cached(MessageId(message_id)): Cached<MessageId>,
     Cached(ChannelParticipants(participants)): Cached<ChannelParticipants>,
     Path(params): Path<PatchMessageParams>,
-    extract::Json(req): extract::Json<PatchMessageRequest>,
+    extract::Json(mut req): extract::Json<PatchMessageRequest>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
     tracing::info!("patch_message");
 
@@ -95,6 +98,24 @@ pub async fn patch_message_handler(
                     "unable to patch message".to_string(),
                 )
             })?;
+
+        if let Some(mentions) = req.mentions.take() {
+            sync_message_mentions(
+                &app_state,
+                message_id,
+                mentions,
+                channel_id,
+                &message_sender.user_id,
+            )
+            .await
+            .map_err(|e| {
+                tracing::error!(error=?e, "unable to sync message mentions");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "unable to sync message mentions".to_string(),
+                )
+            })?;
+        }
 
         let participants = participants;
         let participants: Vec<_> = if let Some(thread_id) = message.thread_id.as_ref() {
@@ -170,6 +191,54 @@ pub async fn patch_message_handler(
     }
 
     Ok((StatusCode::OK, "message sent".to_string()))
+}
+
+#[tracing::instrument(skip(app_state, mentions, sender_id), err(Debug))]
+async fn sync_message_mentions(
+    app_state: &AppState,
+    message_id: Uuid,
+    mentions: Vec<SimpleMention>,
+    channel_id: Uuid,
+    sender_id: &str,
+) -> Result<(), anyhow::Error> {
+    let mut tx = app_state.db.begin().await?;
+
+    delete_entity_mentions_by_source(&mut *tx, vec![message_id.to_string()]).await?;
+    create_message_mentions(
+        &mut *tx,
+        CreateMessageMentionOptions {
+            message_id,
+            mentions: mentions.clone(),
+        },
+    )
+    .await?;
+
+    tx.commit().await?;
+
+    let items_to_share: Vec<(String, String)> = mentions
+        .into_iter()
+        .filter(|m| m.entity_type != "user")
+        .map(|m| (m.entity_id, m.entity_type))
+        .collect();
+
+    if !items_to_share.is_empty() {
+        let channel_id_str = channel_id.to_string();
+        let user_id = sender_id.to_owned();
+        let db = app_state.db.clone();
+        let entity_access_service = app_state.entity_access_service.clone();
+        tokio::spawn(async move {
+            super::post_message::update_channel_share_permissions_for_items(
+                &db,
+                &*entity_access_service,
+                &user_id,
+                &channel_id_str,
+                items_to_share,
+            )
+            .await;
+        });
+    }
+
+    Ok(())
 }
 
 #[tracing::instrument(skip(ctx, attachment_ids_to_delete, attachments, user_id), err(Debug))]

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM mcp_servers\n            WHERE user_id = $1 AND url = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "05c2cf10e578df97df70d5b372d6bd4d5a2baf8313799b21496ce399d3612b1b"
+}

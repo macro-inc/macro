@@ -41,7 +41,7 @@ export default function BlockCode() {
   return (
     <DocumentBlockContainer usesCenterBar>
       <Show when={!isNestedBlock} fallback={<CodeMarkdown />}>
-        <div class="size-full bg-panel select-none overscroll-none overflow-hidden flex flex-col items-end relative">
+        <div class="size-full bg-surface select-none overscroll-none overflow-hidden flex flex-col items-end relative">
           <ModalsProvider>
             <TopBar
               isHtmlFile={isHtmlFile()}

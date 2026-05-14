@@ -1,18 +1,17 @@
-use axum::{
-    Json,
-    extract::{Path, State},
-    http::StatusCode,
+use axum::{Json, extract::State, http::StatusCode};
+use entity_access::{
+    domain::{models::OwnerTeamRole, ports::EntityAccessService},
+    inbound::axum_extractors::MacroUserTeamExtractor,
 };
 use macro_user_id::{email::Email, lowercased::Lowercase};
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 
 use crate::domain::{
     model::{InviteUsersToTeamError, TeamUserTier},
     team_repo::TeamService,
 };
 
-use super::{TeamPathParam, TeamRouterState, middleware::TeamAccessRoleExtractor};
+use super::TeamRouterState;
 
 /// A single invite entry with email and tier
 #[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema, Clone)]
@@ -82,11 +81,8 @@ impl axum::response::IntoResponse for InviteToTeamError {
 /// Invites a user to a team.
 #[utoipa::path(
     post,
-    path = "/team/{team_id}/invite",
+    path = "/team/invite",
     operation_id = "invite_to_team",
-    params(
-        ("team_id" = String, Path, description = "The ID of the team to invite to")
-    ),
     request_body = InviteToTeamRequest,
     responses(
         (status = 201),
@@ -98,11 +94,9 @@ impl axum::response::IntoResponse for InviteToTeamError {
     ),
 )]
 #[tracing::instrument(skip_all, err)]
-pub async fn handler<T: TeamService>(
-    _access: TeamAccessRoleExtractor<super::middleware::OwnerRole, T>,
-    State(state): State<TeamRouterState<T>>,
-    user_context: MacroUserExtractor,
-    Path(TeamPathParam { team_id }): Path<TeamPathParam>,
+pub async fn handler<T: TeamService, Eas: EntityAccessService>(
+    access: MacroUserTeamExtractor<OwnerTeamRole, Eas>,
+    State(state): State<TeamRouterState<T, Eas>>,
     Json(req): Json<InviteToTeamRequest>,
 ) -> Result<StatusCode, InviteToTeamError> {
     let parsed: Vec<Result<(Email<Lowercase<'_>>, TeamUserTier), _>> = req
@@ -124,7 +118,7 @@ pub async fn handler<T: TeamService>(
 
     let team_invites = state
         .service
-        .invite_users_to_team(&team_id, &user_context.macro_user_id, invites)
+        .invite_users_to_team(access.entity_access_receipt, invites)
         .await
         .map_err(InviteToTeamError::InviteUsersToTeamError)?;
 

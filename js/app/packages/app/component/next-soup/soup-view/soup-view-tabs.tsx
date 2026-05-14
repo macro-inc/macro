@@ -10,8 +10,7 @@ import { isListViewID, type ListView } from '@app/constants/list-views';
 import { type TabItem, Tabs } from '@core/component/Tabs';
 import { useUserContext } from '@core/context/user';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Layer } from '@ui';
+import { Dropdown, Layer } from '@ui';
 import { batch, createMemo, For, Match, Switch } from 'solid-js';
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
@@ -161,17 +160,17 @@ export const CollapsedSoupViewTabs = () => {
   });
 
   return (
-    <DropdownMenu placement="bottom-start" gutter={4}>
-      <DropdownMenu.Trigger class="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xs border border-edge-muted hover:bg-ink/6 transition-colors">
+    <Dropdown placement="bottom-start" gutter={4}>
+      <Dropdown.Trigger class="flex items-center gap-1">
         <span class="truncate">{activeLabel()}</span>
         <ChevronDownIcon class="size-3 shrink-0" />
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
+      </Dropdown.Trigger>
+      <Dropdown.Portal>
         <Layer depth={2}>
-          <DropdownMenu.Content class="z-action-menu bg-page border border-edge-muted rounded-sm shadow-sm p-1">
+          <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-sm p-1">
             <For each={list()}>
               {(item) => (
-                <DropdownMenu.Item
+                <Dropdown.Item
                   class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
                   classList={{
                     'font-semibold': activeTab() === item.value,
@@ -182,13 +181,13 @@ export const CollapsedSoupViewTabs = () => {
                   }}
                 >
                   {item.label}
-                </DropdownMenu.Item>
+                </Dropdown.Item>
               )}
             </For>
-          </DropdownMenu.Content>
+          </Dropdown.Content>
         </Layer>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+      </Dropdown.Portal>
+    </Dropdown>
   );
 };
 
@@ -196,7 +195,7 @@ export const MobileSoupViewTabs = () => {
   const listView = useCurrentListView();
 
   return (
-    <div class="bg-panel border-t border-edge-muted h-11 px-1">
+    <div class="bg-surface border-t border-edge-muted h-11 px-1">
       <Switch>
         <For
           each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}

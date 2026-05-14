@@ -107,6 +107,7 @@ export * from './patchMessageRequest';
 export * from './patchMessageRequestAttachmentIdsToDelete';
 export * from './patchMessageRequestAttachmentsToAdd';
 export * from './patchMessageRequestContent';
+export * from './patchMessageRequestMentions';
 export * from './patchMessageRequestNonce';
 export * from './postActivityRequest';
 export * from './postMessageRequest';

@@ -152,7 +152,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       a.setAttribute('rel', 'noopener noreferrer');
     }
     messageDiv.style.userSelect = 'text';
-    messageDiv.style.cursor = 'var(--cursor-auto)';
+    messageDiv.style.cursor = 'auto';
     shadow.appendChild(messageDiv);
     return hostContainer;
   });
@@ -340,7 +340,9 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
               variant="ghost"
               size="icon-sm"
               onClick={() => setShowFullHTML(true)}
-              class={cn(props.isFocused ? 'hover:bg-panel' : 'hover:bg-active')}
+              class={cn(
+                props.isFocused ? 'hover:bg-surface' : 'hover:bg-active'
+              )}
             >
               <DotsThree />
             </Button>

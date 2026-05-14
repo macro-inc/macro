@@ -16,7 +16,9 @@ use model::document::{DocumentBasic, DocumentMetadata};
 use sqlx::PgPool;
 
 use model_entity::{Entity, EntityType};
+use sqlx::Row;
 
+use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
     Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs,
     Thread,
@@ -559,6 +561,86 @@ impl DocumentRepo for PgDocumentRepo {
         sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, document_id,)
             .execute(&self.pool)
             .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn mark_document_uploaded(&self, document_id: &str) -> Result<(), Self::Err> {
+        let result = sqlx::query(
+            r#"
+            UPDATE "Document"
+            SET "uploaded" = true,
+                "contentState" = 'ready',
+                "contentLocation" = COALESCE("contentLocation", 'unknown'),
+                "updatedAt" = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(document_id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_persisted_document_content(
+        &self,
+        document_id: &str,
+    ) -> Result<Option<DocumentContent>, Self::Err> {
+        let Some(row) = sqlx::query(
+            r#"
+            SELECT "contentState", "contentLocation"
+            FROM "Document"
+            WHERE id = $1
+            LIMIT 1
+            "#,
+        )
+        .bind(document_id)
+        .fetch_optional(&self.pool)
+        .await?
+        else {
+            return Ok(None);
+        };
+
+        let state: Option<String> = row.try_get("contentState")?;
+        let location: Option<String> = row.try_get("contentLocation")?;
+
+        Ok(state.and_then(|state| DocumentContent::from_db_columns(&state, location.as_deref())))
+    }
+
+    #[tracing::instrument(err, skip(self, content))]
+    async fn set_document_content(
+        &self,
+        document_id: &str,
+        content: DocumentContent,
+    ) -> Result<(), Self::Err> {
+        let uploaded = content.state == DocumentContentState::Ready;
+        let result = sqlx::query(
+            r#"
+            UPDATE "Document"
+            SET "uploaded" = $2,
+                "contentState" = $3,
+                "contentLocation" = $4,
+                "updatedAt" = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(document_id)
+        .bind(uploaded)
+        .bind(content.state_db_value())
+        .bind(content.location_db_value())
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(sqlx::Error::RowNotFound);
+        }
 
         Ok(())
     }

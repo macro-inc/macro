@@ -114,7 +114,7 @@ export const FilterPropertySelect: Component<FilterPropertySelectProps> = (
       <Show when={isDropdownOpen()}>
         <div
           ref={dropdownRef}
-          class="absolute inset-x-0 top-full mt-1 border border-edge bg-menu shadow-lg max-h-48 overflow-y-auto font-mono z-user-highlight"
+          class="absolute inset-x-0 top-full mt-1 border border-edge bg-surface shadow-lg max-h-48 overflow-y-auto font-mono z-user-highlight"
         >
           <Show
             when={filteredProperties().length > 0}

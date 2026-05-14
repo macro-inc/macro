@@ -476,7 +476,7 @@ export function MarkdownPopup(props: {
                   width={20}
                   height={20}
                   color="var(--color-accent)"
-                  class="text-accent-ink fill-accent!"
+                  class="text-accent fill-accent!"
                 />
               </button>
             </div>

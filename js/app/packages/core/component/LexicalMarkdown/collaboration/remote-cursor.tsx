@@ -283,7 +283,7 @@ function RemoteCursorsOverlay(props: RemoteCursorsOverlayProps) {
 
           const overlayColor = `var(--color-${startStyle.color})`;
           const tagName = `var(--color-${startStyle.color})`;
-          const textColor = `var(--color-panel)`;
+          const textColor = `var(--color-surface)`;
 
           const userTagHeight = 20;
 

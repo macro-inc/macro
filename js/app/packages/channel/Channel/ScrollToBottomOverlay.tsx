@@ -26,7 +26,7 @@ export function ScrollToBottomOverlay(props: ScrollToBottomOverlayProps) {
       <button
         type="button"
         class={cn(
-          'absolute top-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 text-xs bg-menu border border-edge-muted hover:bg-hover hover-transition-bg',
+          'absolute top-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 text-xs bg-surface border border-edge-muted hover:bg-hover hover-transition-bg',
           props.class
         )}
         onClick={() => {

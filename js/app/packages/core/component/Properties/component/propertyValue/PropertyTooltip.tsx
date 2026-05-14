@@ -78,14 +78,9 @@ const TooltipWrapper = (props: {
   return (
     <Show
       when={hasValue()}
-      fallback={
-        <div class="p-2 border border-edge-muted bg-panel text-xs">
-          No {props.property.displayName} set
-        </div>
-      }
+      fallback={<div class="text-xs">No {props.property.displayName} set</div>}
     >
       <div
-        class="p-2 border border-edge-muted bg-panel"
         classList={{
           'flex flex-row gap-2 items-center': singleSelect(),
           'min-w-48 max-w-72': !singleSelect(),
@@ -94,7 +89,7 @@ const TooltipWrapper = (props: {
         <div
           class="flex items-center gap-2 text-ink-muted"
           classList={{
-            'border-b border-edge-muted pb-1.5 mb-1.5': !singleSelect(),
+            'border-b border-edge pb-1.5 mb-1.5': !singleSelect(),
           }}
         >
           <PropertyDataTypeIcon
@@ -110,7 +105,7 @@ const TooltipWrapper = (props: {
 };
 
 const ValueContainer = (props: { children: JSX.Element }) => (
-  <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted size-fit">
+  <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted h-fit w-fit">
     {props.children}
   </div>
 );
@@ -313,7 +308,7 @@ const LinkValuePill = (props: { url: string }) => {
       href={props.url}
       target="_blank"
       rel="noopener noreferrer"
-      class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted size-fit"
+      class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted h-fit w-fit"
       title={props.url}
     >
       <Show

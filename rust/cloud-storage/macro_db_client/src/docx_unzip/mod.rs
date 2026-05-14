@@ -40,10 +40,20 @@ pub async fn update_uploaded_status(
     db: &sqlx::Pool<sqlx::Postgres>,
     document_id: &str,
 ) -> anyhow::Result<()> {
-    sqlx::query!(
-        r#"UPDATE "Document" SET "uploaded" = true WHERE id = $1"#,
-        document_id
+    sqlx::query(
+        r#"
+        UPDATE "Document"
+        SET "uploaded" = true,
+            "contentState" = CASE
+                WHEN "contentState" = 'ready' AND "contentLocation" = 'converted_pdf'
+                    THEN 'ready'
+                ELSE 'pending'
+            END,
+            "contentLocation" = 'converted_pdf'
+        WHERE id = $1
+        "#,
     )
+    .bind(document_id)
     .execute(db)
     .await?;
 
@@ -130,17 +140,18 @@ mod tests {
 
         let uploaded = sqlx::query!(
             r#"
-            SELECT uploaded
+            SELECT uploaded, "contentState", "contentLocation"
             FROM "Document"
             WHERE id = $1
             "#,
             "document-one"
         )
-        .map(|row| row.uploaded)
         .fetch_one(&pool)
         .await?;
 
-        assert!(uploaded);
+        assert!(uploaded.uploaded);
+        assert_eq!(uploaded.contentState, "pending");
+        assert_eq!(uploaded.contentLocation.as_deref(), Some("converted_pdf"));
 
         Ok(())
     }

@@ -28,14 +28,22 @@ call, write a concise, factual summary that captures:
 - Any notable context that would help someone who missed the call catch up.
 
 Rules:
-- Write in plain prose, using short paragraphs or bullet points where \
-  appropriate. No markdown headings.
+- The first sentence MUST jump straight into substance — a topic, a decision, \
+  a participant, or a concrete update. No scene-setting, no framing, no \
+  characterizing the meeting itself.
+- Forbidden openers include (but are not limited to) any sentence that \
+  describes what kind of call it was, who it was for, the tone of the call, \
+  or the transcript/recording itself. Examples of openers to NEVER produce: \
+  `This was a [standup/sync/intro/team] call...`, `This call was...`, \
+  `The meeting was...`, `This transcript...`, `The transcript...`, `The \
+  call...`, `In this call...`, `The recording...`, `[Team] held a...`, \
+  `[Team] met to discuss...`. Skip the throat-clearing and lead with the \
+  meat.
+- No markdown headings of any kind. That includes `#`/`##` headings AND \
+  bold-as-heading lines like `**Technical Updates**` or `**Action Items**` \
+  used to label a section. Use short paragraphs or bullet points only.
+- Write in plain prose.
 - Do not speculate or invent content that is not in the transcript.
-- Write directly about what was discussed in the call. Do NOT begin with a \
-  meta-reference to the transcript or recording itself such as `This \
-  transcript...`, `The transcript...`, `The call...`, `In this call...`, \
-  `The recording...`, or similar — start with the actual content (a topic, \
-  a decision, a participant).
 - If the transcript is empty, contains only fragmented or incoherent speech, \
   or otherwise has no useful information to summarize, respond with exactly \
   the single token `NULL` and nothing else. Do not produce a summary that \

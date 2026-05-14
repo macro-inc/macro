@@ -1,6 +1,6 @@
 #![recursion_limit = "256"]
 
-use ai_toolset::AsyncToolSet;
+use ai_toolset::AsyncToolCollection;
 use ai_toolset::schema::{CombinedToolSchemas, ToolSchemaGenerator};
 mod build_context;
 pub mod prompts;
@@ -26,7 +26,7 @@ pub use build_context::build_tool_service_context_from_env;
 pub use search::search_toolset;
 pub use tool_context::*;
 
-pub type AiToolSet = AsyncToolSet<ToolServiceContext>;
+pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
 
 pub struct ToolSetWithPrompt {
     pub toolset: Arc<AiToolSet>,
@@ -49,7 +49,7 @@ impl ToolSchemaGenerator for ToolSetWithPrompt {
 /// Toolset available to subagents — everything except email and the Subagent
 /// tool itself (subagents cannot create subagents).
 pub(crate) fn subagent_toolset() -> AiToolSet {
-    AsyncToolSet::new()
+    AsyncToolCollection::new()
         .add_toolset(search_toolset())
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
@@ -96,6 +96,6 @@ pub fn mcp_tools() -> ToolSetWithPrompt {
 pub fn no_tools() -> ToolSetWithPrompt {
     ToolSetWithPrompt {
         prompt: prompts::BASE_PROMPT,
-        toolset: Arc::new(AsyncToolSet::new()),
+        toolset: Arc::new(AsyncToolCollection::new()),
     }
 }

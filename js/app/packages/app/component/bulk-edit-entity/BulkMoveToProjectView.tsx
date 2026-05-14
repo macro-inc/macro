@@ -376,9 +376,12 @@ export const BulkMoveToProjectView = (props: {
           <For each={props.entities.slice(0, 2)}>
             {(entity) => (
               <div
-                class={cn('bg-edge px-2 py-1 truncate text-xs rounded-xs', {
-                  'max-w-[50%]': props.entities.length === 2,
-                })}
+                class={cn(
+                  'bg-hover border border-edge-muted px-2 py-1 truncate text-xs rounded-xs',
+                  {
+                    'max-w-[50%]': props.entities.length === 2,
+                  }
+                )}
               >
                 <InlineEntity entity={entity} />
               </div>
@@ -428,7 +431,7 @@ export const BulkMoveToProjectView = (props: {
                 finishEditing();
               }
             }}
-            class="w-full px-3 py-2 text-sm bg-menu text-ink focus:outline-none border-b border-edge-muted"
+            class="w-full px-3 py-2 text-sm bg-surface text-ink focus:outline-none border-b border-edge-muted"
           />
           <div class="h-64 overflow-auto" ref={listRef}>
             <For each={items()}>

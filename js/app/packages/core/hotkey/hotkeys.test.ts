@@ -5,6 +5,7 @@ import type { RegisterHotkeyReturn } from './types';
 const makeRegistration = (): RegisterHotkeyReturn => {
   const reg: RegisterHotkeyReturn = {
     dispose: vi.fn(),
+    hotkey: () => undefined,
     withGroup: (group) => {
       group.add(reg);
       return reg;

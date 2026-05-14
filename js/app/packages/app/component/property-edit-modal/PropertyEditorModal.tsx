@@ -1,4 +1,3 @@
-import { Hotkey } from '@core/component/Hotkey';
 import {
   type CombinedEntity,
   getEntityName,
@@ -29,7 +28,7 @@ import { type EntityData, InlineEntity } from '@entity';
 import { useEntityPropertiesQuery } from '@queries/properties/entity';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { mergeRefs } from '@solid-primitives/refs';
-import { cn, Dialog, Surface } from '@ui';
+import { cn, Dialog, Hotkey, Surface } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
@@ -76,7 +75,7 @@ function ListItem(props: {
       class={cn(
         'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 scroll-my-1',
         {
-          'bg-active': props.isSelected && !props.disabled,
+          'bg-hover': props.isSelected && !props.disabled,
           'opacity-50 cursor-not-allowed': props.disabled,
         }
       )}
@@ -153,7 +152,7 @@ export function PropertyEditorModal() {
       <Surface depth={2} active>
         <div class="*:max-h-[75vh]">
           <div class="flex flex-col max-h-108 overflow-hidden text-sm">
-            <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
+            <div class="flex items-center gap-2 bg-surface px-2 h-10 border-b border-edge-muted shrink-0">
               <span class="pl-2 pointer-events-none">❯</span>
               <SearchInput
                 placeHolder={placeholder() || defaultPlaceholder}
@@ -331,9 +330,12 @@ function EditingEntityPreview(props: { entities: EntityData[] }) {
         {(entity) => {
           return (
             <div
-              class={cn('bg-edge px-2 py-1 truncate text-xs rounded-xs', {
-                'max-w-[50%]': props.entities.length === 2,
-              })}
+              class={cn(
+                'bg-hover border border-edge-muted px-2 py-1 truncate text-xs rounded-xs',
+                {
+                  'max-w-[50%]': props.entities.length === 2,
+                }
+              )}
             >
               <InlineEntity entity={entity} />
             </div>

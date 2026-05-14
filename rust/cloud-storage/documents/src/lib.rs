@@ -15,5 +15,9 @@ pub mod domain;
 #[cfg(any(feature = "inbound", feature = "ai_tools", feature = "attachment"))]
 pub mod inbound;
 
-#[cfg(feature = "outbound")]
+#[cfg(any(
+    feature = "outbound",
+    feature = "markdown_init",
+    feature = "document_create_adapters"
+))]
 pub mod outbound;

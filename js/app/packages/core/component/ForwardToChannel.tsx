@@ -94,7 +94,7 @@ function MobileForwardToChannelLayout(
               <div
                 class={`size-4 border ${
                   !props.canSendAsGroup()
-                    ? 'border-edge peer-checked:bg-menu/20'
+                    ? 'border-edge peer-checked:bg-surface/20'
                     : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
                 }`}
               >
@@ -517,7 +517,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                     class={cn(
                       'size-4 border',
                       !canSendAsGroup()
-                        ? 'border-edge peer-checked:bg-menu/20'
+                        ? 'border-edge peer-checked:bg-surface/20'
                         : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
                     )}
                   >

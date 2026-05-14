@@ -360,14 +360,14 @@ const Root: Component<MessageRootProps> = (props) => {
           >
             <Show when={props.timestamp}>
               {(timestamp) => (
-                <div class="absolute top-0 -translate-y-full bg-panel pl-2 pt-2 text-xs text-ink-muted font-mono mb-0.5 select-text cursor-default">
+                <div class="absolute top-0 -translate-y-full bg-surface pl-2 pt-2 text-xs text-ink-muted font-mono mb-0.5 select-text cursor-default">
                   {formatDate(timestamp(), {
                     showTime: true,
                   })}
                 </div>
               )}
             </Show>
-            <div class="border border-edge bg-panel">
+            <div class="border border-edge bg-surface">
               {props.hoverActions?.()}
             </div>
           </div>
@@ -394,7 +394,7 @@ const Root: Component<MessageRootProps> = (props) => {
                     tabIndex={0}
                     class="text-ink-muted flex flex-row justify-center items-center relative p-0 hover:bg-transparent active:border-transparent active:bg-transparent active:text-inherit hover:opacity-100"
                   >
-                    <div class="border border-edge-muted bg-menu hover:bg-hover hover-transition-bg flex flex-row justify-center items-center mx-2 mb-2 size-(--user-icon-width) touch:min-h-(--user-icon-width) touch:min-w-(--user-icon-width)">
+                    <div class="border border-edge-muted bg-surface hover:bg-hover hover-transition-bg flex flex-row justify-center items-center mx-2 mb-2 size-(--user-icon-width) touch:min-h-(--user-icon-width) touch:min-w-(--user-icon-width)">
                       <IconPlus class="size-1/2" />
                     </div>
                   </Button>

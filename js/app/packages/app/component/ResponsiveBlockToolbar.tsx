@@ -1,4 +1,3 @@
-import { LabelAndHotKey } from '@core/component/Tooltip';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import type { ItemType } from '@service-storage/client';
@@ -40,20 +39,11 @@ export function ToolButton(props: { tool: BlockTool }) {
   return (
     <Button
       onClick={props.tool.action}
-      tooltip={
-        props.tool.hotkeyToken ? (
-          <LabelAndHotKey
-            label={label()}
-            hotkeyToken={props.tool.hotkeyToken}
-          />
-        ) : (
-          label()
-        )
-      }
+      label={label()}
+      hotkey={props.tool.hotkeyToken}
       class={cn(
         'px-1',
-        props.tool.isActive?.() &&
-          'bg-accent/20 hover:bg-accent/30 text-accent-ink'
+        props.tool.isActive?.() && 'bg-accent/20 hover:bg-accent/30 text-accent'
       )}
       size="icon-sm"
     >

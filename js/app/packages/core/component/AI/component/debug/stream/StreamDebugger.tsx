@@ -93,7 +93,7 @@ function StreamDebuggerInner(props: { stream: ChatMessageStream }) {
       data-chat-scroll
       class="size-full flex flex-col gap-y-2 overflow-y-auto"
     >
-      <div class="p-2 bg-menu border border-edge text-ink font-mono text-sm">
+      <div class="p-2 bg-surface border border-edge text-ink font-mono text-sm">
         <span>chunks: {props.stream.data().length}</span>
         {' | '}
         <span>isDone: {String(props.stream.isDone())}</span>

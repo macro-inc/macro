@@ -1525,6 +1525,60 @@ export const ReadMetadataResponse = z.object({
     branchName: z.union([z.string(), z.null()]).optional(),
     branchedFromId: z.union([z.string(), z.null()]).optional(),
     branchedFromVersionId: z.union([z.number().int(), z.null()]).optional(),
+    content: z.object({
+      location: z
+        .union([
+          z.any().superRefine((x, ctx) => {
+            const schemas = [
+              z.literal('object_storage'),
+              z.literal('sync_service'),
+              z.literal('docx_bom_parts'),
+              z.literal('converted_pdf'),
+              z.literal('unknown'),
+            ];
+            const errors = schemas.reduce<z.ZodError[]>(
+              (errors, schema) =>
+                ((result) =>
+                  result.error ? [...errors, result.error] : errors)(
+                  schema.safeParse(x)
+                ),
+              []
+            );
+            if (schemas.length - errors.length !== 1) {
+              ctx.addIssue({
+                path: ctx.path,
+                code: 'invalid_union',
+                unionErrors: errors,
+                message: 'Invalid input: Should pass single schema',
+              });
+            }
+          }),
+          z.null(),
+        ])
+        .optional(),
+      state: z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('unknown'),
+          z.literal('pending'),
+          z.literal('ready'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+    }),
     createdAt: z
       .union([z.string().datetime({ offset: true }), z.null()])
       .optional(),

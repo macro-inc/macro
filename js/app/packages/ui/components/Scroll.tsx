@@ -4,11 +4,12 @@ import type { JSX } from 'solid-js';
 const THUMB_WIDTH = 2;
 const HIDE_DELAY = 500;
 const GUTTER_WIDTH = 8;
-const THUMB_HEIGHT = 200;
+const MIN_THUMB_HEIGHT = 24;
 const THUMB_INSET = (GUTTER_WIDTH - THUMB_WIDTH) * 0.5;
 
 export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const [translateY, setTranslateY] = createSignal(THUMB_INSET);
+  const [thumbHeight, setThumbHeight] = createSignal(MIN_THUMB_HEIGHT);
   const [visible, setVisible] = createSignal(false);
 
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
@@ -31,8 +32,13 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
 
   function config() {
     const ch = scrollRef.clientHeight;
-    maxScroll = Math.max(0, scrollRef.scrollHeight - ch);
-    maxTop = Math.max(0, ch - THUMB_HEIGHT - THUMB_INSET * 2);
+    const sh = scrollRef.scrollHeight;
+    const trackHeight = Math.max(0, ch - THUMB_INSET * 2);
+    const ratio = sh > 0 ? ch / sh : 1;
+    const th = Math.max(MIN_THUMB_HEIGHT, Math.min(trackHeight, trackHeight * ratio));
+    setThumbHeight(th);
+    maxScroll = Math.max(0, sh - ch);
+    maxTop = Math.max(0, trackHeight - th);
     update();
   }
 
@@ -43,7 +49,7 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
 
   function seek(localY: number) {
     if (maxScroll <= 0 || maxTop <= 0) { return; }
-    scrollRef.scrollTop = Math.max(0, Math.min(maxTop, localY - THUMB_HEIGHT / 2 - THUMB_INSET)) / maxTop * maxScroll;
+    scrollRef.scrollTop = Math.max(0, Math.min(maxTop, localY - thumbHeight() / 2 - THUMB_INSET)) / maxTop * maxScroll;
     reveal();
   }
 
@@ -112,7 +118,7 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
             'transition': 'opacity 150ms ease-in-out',
             'border-radius': `${THUMB_WIDTH * 0.5}px`,
             'background-color': 'var(--c4)',
-            'height': `${THUMB_HEIGHT}px`,
+            'height': `${thumbHeight()}px`,
             'opacity': visible() ? 1 : 0,
             'right': `${THUMB_INSET}px`,
             'width': `${THUMB_WIDTH}px`,

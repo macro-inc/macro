@@ -130,11 +130,11 @@ pub fn comment_error_response(e: anyhow::Error, default_msg: &str) -> Result<Res
 /// Computes the recipient sets for each notification type, ensuring no user
 /// receives more than one notification per comment.
 ///
-/// Priority: mention > thread reply > document owner.
+/// Priority: mention > thread reply > task assignee > document owner.
 pub(crate) fn compute_notification_recipients(
     sender_id: Option<&MacroUserIdStr<'_>>,
     mentioned_user_ids: &[String],
-    thread_comment_owners: &[String],
+    thread_participant_ids: &[String],
     task_assignee_ids: &[String],
     document_owner: &MacroUserIdStr<'_>,
     is_reply: bool,
@@ -148,11 +148,14 @@ pub(crate) fn compute_notification_recipients(
         .collect();
     notified.extend(mention_recipients.iter().map(|id| id.as_ref().to_string()));
 
-    // 2. Thread reply recipients — only if this is a reply (>1 comments in thread)
+    // 2. Thread reply recipients — only if this is a reply (>1 comments in thread).
+    // Any user who has commented on the thread is a participant and should receive
+    // subsequent reply notifications, even when they are not the document owner or
+    // a task assignee.
     let mut thread_reply_recipients: HashSet<MacroUserIdStr<'static>> = HashSet::new();
     if is_reply {
-        for owner_str in thread_comment_owners {
-            if let Ok(parsed) = MacroUserIdStr::try_from(owner_str.clone()) {
+        for participant_str in thread_participant_ids {
+            if let Ok(parsed) = MacroUserIdStr::try_from(participant_str.clone()) {
                 let normalized = parsed.as_ref().to_string();
                 let is_sender = sender_id.is_some_and(|s| s.as_ref() == normalized);
                 if !is_sender && !notified.contains(&normalized) {

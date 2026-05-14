@@ -309,6 +309,9 @@ pub enum TeamError {
     /// The team invite does not exist
     #[error("The team invite does not exist")]
     TeamInviteDoesNotExist,
+    /// Underlying entity access error
+    #[error("Access error")]
+    AccessError(#[from] entity_access::domain::models::AccessError),
     /// Bad request
     #[error("Bad request: {0}")]
     BadRequest(String),

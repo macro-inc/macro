@@ -1,7 +1,6 @@
 use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::VersionIDWithTimeStamps;
-use model_file_type::FileType;
+use model::document::{FileType, VersionIDWithTimeStamps};
 use models_permissions::share_permission::SharePermissionV2;
 
 /// Inserts a record into the document table

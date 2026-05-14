@@ -5,7 +5,6 @@ import {
   showTabBarSignal,
 } from '@block-pdf/signal/placeables';
 import { isThreadPlaceable } from '@block-pdf/store/comments/freeComments';
-import { LabelAndHotKey } from '@core/component/Tooltip';
 import {
   useCanComment,
   useCanEdit,
@@ -89,20 +88,11 @@ export function MarkupToolbar() {
 
   return (
     <Show when={canComment()}>
-      <div
-        class="flex flex-row items-center"
-        on:click={(e) => {
-          e.stopPropagation();
-        }}
-      >
+      <div class="flex flex-row items-center">
         <Show when={canEdit()}>
           <Button
             size="icon-sm"
-            tooltip={
-              <LabelAndHotKey
-                label={showTabBar() ? 'Hide Tabs' : 'Show Tabs'}
-              />
-            }
+            label={showTabBar() ? 'Hide Tabs' : 'Show Tabs'}
             variant="ghost"
             onClick={() => {
               setShowTabBar(!showTabBar());
@@ -113,7 +103,7 @@ export function MarkupToolbar() {
           <div class="w-px h-5 bg-edge mx-2" />
           <Button
             size="icon-sm"
-            tooltip={<LabelAndHotKey label="Text Box" />}
+            label="Text Box"
             variant="ghost"
             onClick={() => {
               setMode(PayloadMode.FreeTextAnnotation);
@@ -123,7 +113,7 @@ export function MarkupToolbar() {
           </Button>
           <Button
             size="icon-sm"
-            tooltip={<LabelAndHotKey label="Signature" />}
+            label="Signature"
             variant="ghost"
             onClick={() => setMode(PayloadMode.Signature)}
           >
@@ -132,7 +122,7 @@ export function MarkupToolbar() {
         </Show>
         <Button
           size="icon-sm"
-          tooltip={<LabelAndHotKey label="Comment" />}
+          label="Comment"
           variant="ghost"
           onClick={() => {
             setMode(PayloadMode.Thread);

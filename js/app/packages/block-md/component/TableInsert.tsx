@@ -86,7 +86,7 @@ const TableGrid = ({
         {isHovering() && (
           <Portal>
             <div
-              class="fixed bg-dialog text-ink text-xs px-2 py-1 rounded pointer-events-none"
+              class="fixed bg-surface text-ink text-xs px-2 py-1 rounded pointer-events-none"
               style={{
                 left: `${cursorPos().x + 10}px`,
                 top: `${cursorPos().y + 10}px;`,
@@ -133,7 +133,7 @@ export function TableInsert(
   });
 
   return (
-    <div class="size-fit flex flex-col items-center justify-center rounded select-none border border-edge bg-dialog py-1 text-ink">
+    <div class="size-fit flex flex-col items-center justify-center rounded select-none border border-edge bg-surface py-1 text-ink">
       <div class="size-full mx-2 flex justify-center rounded">
         <TableGrid handleInsertTable={handleInsertTable} />
       </div>
@@ -153,7 +153,7 @@ export function TableInsert(
         <div class="w-18 h-10 p-1.5 text-ink">
           <input
             type="number"
-            class="size-full p-2 border border-edge bg-input text-sm rounded"
+            class="size-full p-2 border border-edge bg-surface text-sm rounded"
             placeholder="cols"
             value={`${cols()}`}
             onInput={(e) => setCols(Number(e.target.value))}

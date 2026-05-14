@@ -16,11 +16,10 @@ attachment = [
 ai_tools = [
   "dep:ai",
   "dep:async-trait",
-  "dep:lexical_client",
   "dep:model_file_type",
-  "dep:reqwest",
   "dep:schemars",
   "dep:sha2",
+  "document_create_adapters",
   "outbound",
   "ports",
 ]
@@ -32,8 +31,18 @@ axum = [
   "dep:utoipa",
   "entity_access/axum",
 ]
-default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
-inbound = ["axum", "ports"]
+default = ["ai_tools", "axum", "inbound", "outbound", "ports", "service"]
+document_create = [
+  "dep:base64",
+  "dep:sha2",
+  "ports",
+]
+document_create_adapters = [
+  "dep:reqwest",
+  "document_create",
+  "markdown_init",
+]
+inbound = ["axum", "document_create_adapters", "ports"]
 markdown_init = ["dep:lexical_client"]
 outbound = [
   "dep:aws-sdk-s3",
@@ -43,7 +52,8 @@ outbound = [
   "dep:sqlx",
   "ports",
 ]
-ports = ["dep:entity_access_management", "dep:tokio"]
+ports = ["dep:tokio"]
+service = ["dep:entity_access_management", "ports"]
 
 [dependencies]
 # Core

@@ -14,7 +14,7 @@ import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { constrainImageDimensions } from '@lexical-core/utils/media';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import { storageServiceClient } from '@service-storage/client';
+import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { Button, cn } from '@ui';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
@@ -55,9 +55,7 @@ const THEMES = {
 
 // NOTE: copied logic from block-image
 const getDssImageBlob = async (documentId: string) => {
-  const maybeDocument = await storageServiceClient.getBinaryDocument({
-    documentId,
-  });
+  const maybeDocument = await fetchBinaryDocumentData(documentId);
   const documentResult = maybeThrow(maybeDocument);
   // presigned url with expiry
   const { blobUrl } = documentResult;
@@ -74,7 +72,7 @@ function ImagePlaceholder(props: {
 }) {
   return (
     <div
-      class="flex items-center justify-center border border-edge rounded-2xl bg-menu"
+      class="flex items-center justify-center border border-edge rounded-2xl bg-surface"
       style={
         props.dims
           ? {
@@ -154,7 +152,7 @@ export function ImagePreview(props: ImagePreviewProps) {
     <Dialog modal={true}>
       <div class="flex group relative">
         <Show when={props.variant !== 'small'}>
-          <div class="group-hover:visible invisible absolute top-2 right-2 bg-button rounded-2xl border border-edge flex flex-row items-center gap-1 z-10">
+          <div class="group-hover:visible invisible absolute top-2 right-2 bg-surface rounded-2xl border border-edge flex flex-row items-center gap-1 z-10">
             <Dialog.Trigger disabled={props.isContext}>
               <Button variant="ghost" size="icon-md">
                 <ExpandIcon />

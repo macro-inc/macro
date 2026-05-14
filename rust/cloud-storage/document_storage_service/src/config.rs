@@ -53,6 +53,7 @@ env_var! {
         pub UploadStagingBucket,
         pub SyncServiceUrl,
         pub SyncServiceAuthKey,
+        pub LexicalServiceUrl,
         pub AuthenticationServiceUrl,
         pub AuthenticationServiceSecretKey,
         pub OpensearchUrl,

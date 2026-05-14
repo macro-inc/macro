@@ -1,5 +1,5 @@
 import { LIST_VIEW_ID } from '@app/constants/list-views';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+
 import ArrowLeft from '@icon/regular/arrow-left.svg';
 import ArrowRight from '@icon/regular/arrow-right.svg';
 import SplitIcon from '@icon/regular/square-half.svg';
@@ -15,7 +15,7 @@ export function SplitBackButton() {
     <Button
       variant="ghost"
       size="icon-md"
-      tooltip={<LabelAndHotKey label="Go Back" />}
+      label="Go Back"
       disabled={!context.handle.canGoBack()}
       onClick={context.handle.goBack}
     >
@@ -31,7 +31,7 @@ export function SplitForwardButton() {
     <Button
       variant="ghost"
       size="icon-md"
-      tooltip={<LabelAndHotKey label="Go Forward" />}
+      label="Go Forward"
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
     >
@@ -47,7 +47,7 @@ export function SplitCreateButton() {
     <Button
       variant="ghost"
       size="icon-md"
-      tooltip={<LabelAndHotKey label="Create new split" />}
+      label="Create new split"
       onClick={() => {
         context.manager.createNewSplit({
           content: {
@@ -70,7 +70,7 @@ export function SplitCloseButton() {
     <Button
       variant="ghost"
       size="icon-md"
-      tooltip={<LabelAndHotKey label="Close" />}
+      label="Close"
       onClick={context.handle.close}
     >
       <CloseIcon />

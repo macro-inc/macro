@@ -98,14 +98,13 @@ function Step(props: ButtonProps) {
   return (
     <button
       type="button"
-      class="relative flex items-stretch bg-accent text-dialog font-mono border-2 border-accent font-medium uppercase leading-none translate-y-0.5 transition py-1 px-2 disabled:cursor-not-allowed"
+      class="relative flex items-stretch bg-accent text-surface font-mono border-2 border-accent font-medium uppercase leading-none translate-y-0.5 transition py-1 px-2 disabled:cursor-not-allowed"
       disabled={props.disabled || props.completed}
       onClick={props.onClick}
       classList={{
-        'translate-y-full hover:glow-dialog bg-transparent border-2 border-accent border-current text-ink-disabled pattern-ink-disabled pattern-diagonal-2':
+        'translate-y-full bg-transparent border-2 border-accent border-current text-ink-disabled pattern-ink-disabled pattern-diagonal-2':
           props.disabled && !props.completed,
-        'hover:glow-accent starting:translate-y-full':
-          !props.disabled && !props.completed,
+        'starting:translate-y-full': !props.disabled && !props.completed,
         'bg-transparent text-accent! border-2 border-accent': props.completed,
       }}
     >

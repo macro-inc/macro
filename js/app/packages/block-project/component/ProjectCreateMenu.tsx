@@ -259,7 +259,7 @@ function MenuItem(props: MenuItemProps) {
   return (
     <DropdownMenu.Item
       class={cn(
-        'flex justify-between items-center gap-12 px-1.5 py-1 text-sm isolate transition-transform ease-click duration-200 text-ink-extra-muted outline-none data-highlighted:bg-active',
+        'flex justify-between items-center gap-12 px-1.5 py-1 text-sm isolate transition-transform ease-out duration-200 text-ink-extra-muted outline-none data-highlighted:bg-active',
         `data-highlighted:${selectedColor}`
       )}
       onSelect={props.action}
@@ -292,7 +292,7 @@ function MenuContent(props: { projectId: string }) {
   }));
 
   return (
-    <DropdownMenu.Content class="isolate relative flex flex-col gap-2 bg-dialog -mb-1 p-2 border-2 border-accent min-w-max">
+    <DropdownMenu.Content class="isolate relative flex flex-col gap-2 bg-surface -mb-1 p-2 border-2 border-accent min-w-max">
       <For each={items}>
         {(item, index) => <MenuItem {...item} index={index() + 1} />}
       </For>

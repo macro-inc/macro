@@ -37,6 +37,10 @@ on:
         required: true
       CACHIX_AUTH_TOKEN:
         required: true
+      AWS_ACCESS_KEY_ID:
+        required: false
+      SCCACHE_BUCKET:
+        required: false
 
 jobs:
   build-service-binaries:
@@ -55,6 +59,7 @@ jobs:
         uses: ./.github/actions/setup-cachix
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
 
       - name: Check prebuilt binaries config
         id: check-binaries
@@ -72,9 +77,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p prebuilt
-          cachix watch-store "$CACHIX_CACHE_NAME" &
-          cachix_pid=$!
-          trap 'kill "$cachix_pid" || true' EXIT
+          if command -v cachix >/dev/null 2>&1; then
+            cachix watch-store "$CACHIX_CACHE_NAME" &
+            cachix_pid=$!
+            trap 'kill "$cachix_pid" || true' EXIT
+          else
+            echo "::warning::Cachix is unavailable; skipping Cachix store uploads."
+          fi
 
           nix build ".#deploy-service-binaries-${SERVICE}"
           cp -r result/bin/* prebuilt/
@@ -93,8 +102,49 @@ jobs:
           path: prebuilt-binaries.tar.gz
           retention-days: 7
 
+  build-lambda-artifacts:
+    name: Build ${{ inputs.service-name }} Lambda artifacts
+    runs-on: linux-extra-beefy
+    outputs:
+      has_lambdas: ${{ steps.check-lambdas.outputs.has_lambdas }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.ref_name }}
+          clean: false
+
+      - name: Configure Cachix
+        uses: ./.github/actions/setup-cachix
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
+
+      - name: Check Lambda config
+        id: check-lambdas
+        env:
+          SERVICE: ${{ inputs.service-name }}
+        run: |
+          has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' .github/services-config.json)
+          echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
+
+      - name: Build Lambda artifacts
+        if: ${{ steps.check-lambdas.outputs.has_lambdas == 'true' }}
+        env:
+          SERVICE: ${{ inputs.service-name }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: .github/scripts/build-cloud-storage-lambdas.sh
+
+      - name: Upload Lambda artifacts
+        if: ${{ steps.check-lambdas.outputs.has_lambdas == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cloud-storage-lambdas-${{ inputs.service-name }}-${{ github.sha }}
+          path: lambda-artifacts.tar.gz
+          retention-days: 7
+
   deploy:
-    needs: build-service-binaries
+    needs: [build-service-binaries, build-lambda-artifacts]
     runs-on:
       [
         runs-on,
@@ -105,7 +155,7 @@ jobs:
         'run-id=${{github.run_id}}-${{ inputs.service-name }}',
       ]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.ref_name }}
       
@@ -123,6 +173,7 @@ jobs:
           pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           pulumi-service-name: ${{ inputs.pulumi-stack-name || steps.project-name.outputs.project-name }}
           prebuilt-binaries-artifact: ${{ needs.build-service-binaries.outputs.has_binaries == 'true' && format('cloud-storage-service-binaries-{0}-{1}', inputs.service-name, github.sha) || '' }}
+          lambda-artifacts: ${{ needs.build-lambda-artifacts.outputs.has_lambdas == 'true' && format('cloud-storage-lambdas-{0}-{1}', inputs.service-name, github.sha) || '' }}
           dd-app-key: ${{ secrets.DD_APP_KEY }}
           dd-api-key: ${{ secrets.DD_API_KEY }}
           use-docker: ${{ inputs.use-docker }}

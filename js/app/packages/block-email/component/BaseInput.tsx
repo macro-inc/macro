@@ -6,7 +6,7 @@ import {
   MACRO_EMAIL_SIGNATURE,
   MAX_ATTACHMENTS_BYTES_SIZE,
 } from '@block-email/constants';
-import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
+import { addUserMentionToCc } from '@block-email/util/mentionToCc';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import {
   applyInlineFormat,
@@ -25,7 +25,6 @@ import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/me
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import { useEmail, useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -80,7 +79,7 @@ import type {
   ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
-import { Button, cn } from '@ui';
+import { Button, cn, HoverCard, Tooltip } from '@ui';
 import {
   defaultSelectionData,
   lazyRegister,
@@ -327,19 +326,19 @@ function TruncatedRecipientList(props: {
         <For each={visibleRecipients()}>
           {(item, index) => (
             <>
-              <Tooltip
-                tooltip={
+              <HoverCard>
+                <HoverCard.Trigger>
+                  <span class="shrink-0">
+                    {item.prefix}
+                    {getRecipientDisplayName(item.recipient)}
+                  </span>
+                </HoverCard.Trigger>
+                <HoverCard.Content>
                   <div class="text-xs select-text cursor-text">
                     {item.recipient.data.email}
                   </div>
-                }
-                class="inline shrink-0"
-              >
-                <span class="shrink-0">
-                  {item.prefix}
-                  {getRecipientDisplayName(item.recipient)}
-                </span>
-              </Tooltip>
+                </HoverCard.Content>
+              </HoverCard>
               <Show
                 when={
                   index() < visibleRecipients().length - 1 || hiddenCount() > 0
@@ -610,6 +609,10 @@ export function BaseInput(props: {
           if (toRef()) {
             toRef()?.focus();
           }
+        }, 100);
+      } else if (rt === 'reply' || rt === 'reply-all') {
+        setTimeout(() => {
+          editor()?.focus();
         }, 100);
       }
     });
@@ -1055,40 +1058,14 @@ export function BaseInput(props: {
   };
 
   const handleUserMention = (mention: UserMentionRecord) => {
-    // Extract the email from the mention argument
-    const mentionEmail = mention.mentions[0].split('|')[1];
-
-    // Check if user already in To or CC
-    const isInTo = form()
-      .recipients()
-      .to.some((recipient: EmailRecipient) => {
-        const email = recipient.data.email;
-        if (!email) return false;
-        return email === mentionEmail;
-      });
-
-    const isInCc = form()
-      .recipients()
-      .cc.some((recipient: EmailRecipient) => {
-        const email = recipient.data.email;
-        if (!email) return false;
-        return email === mentionEmail;
-      });
-
-    // If not already in To or CC, add user to CC
-    if (!isInTo && !isInCc) {
-      // Find the user in recipient options, or construct from mention data
-      const userOption =
-        ctx.recipientOptions().find((recipient) => {
-          const email = recipient.data.email;
-          if (!email) return false;
-          return email === mentionEmail;
-        }) ?? convertContactInfoToEmailRecipient({ email: mentionEmail });
-
-      // Add to CC recipients
-      form().setRecipients('cc', [...form().recipients().cc, userOption]);
-      toast.success(`${mentionEmail} added to CC`);
-    }
+    addUserMentionToCc({
+      mention,
+      recipientOptions: ctx.recipientOptions(),
+      toRecipients: form().recipients().to,
+      ccRecipients: form().recipients().cc,
+      bccRecipients: form().recipients().bcc,
+      setCc: (next) => form().setRecipients('cc', next),
+    });
   };
 
   onMount(() => {
@@ -1153,18 +1130,22 @@ export function BaseInput(props: {
     }
   });
 
-  // Focus when external shouldFocus signal is set to true
+  // Focus when external shouldFocus signal is set to true. Gated on
+  // editor() so the effect re-runs once the Lexical editor is captured —
+  // when the input is freshly mounted (e.g. opening from BottomReplyButtons),
+  // shouldFocusInput is true before captureEditor fires.
   createEffect(() => {
-    if (form().shouldFocusInput()) {
-      if (!isMobile()) {
-        requestAnimationFrame(() => {
-          editor()?.focus();
-          form().setShouldFocusInput(false);
-        });
-      } else {
-        form().setShouldFocusInput(false);
-      }
+    if (!form().shouldFocusInput()) return;
+    if (isMobile()) {
+      form().setShouldFocusInput(false);
+      return;
     }
+    const ed = editor();
+    if (!ed) return;
+    requestAnimationFrame(() => {
+      ed.focus();
+      form().setShouldFocusInput(false);
+    });
   });
 
   const handleAddAttachments = (files: File[]) => {
@@ -1300,7 +1281,7 @@ export function BaseInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative flex flex-col flex-1 bg-input border border-edge rounded-md max-w-full"
+      class="relative flex flex-col flex-1 bg-surface border border-edge rounded-md max-w-full"
     >
       {/* Top Bar */}
       <div class="relative flex items-start gap-2 p-2">
@@ -1451,7 +1432,7 @@ export function BaseInput(props: {
             {/* Show to, cc, bcc buttons */}
             <div class="flex flex-row justify-end space-x-2 pt-2">
               <Show when={!showCc()}>
-                <Tooltip tooltip="Add cc recipients">
+                <Tooltip label="Add cc recipients">
                   <div
                     onclick={() => {
                       setShowCc(true);
@@ -1464,7 +1445,7 @@ export function BaseInput(props: {
                 </Tooltip>
               </Show>
               <Show when={!showBcc()}>
-                <Tooltip tooltip="Add bcc recipients">
+                <Tooltip label="Add bcc recipients">
                   <div
                     onclick={() => {
                       setShowBcc(true);
@@ -1503,7 +1484,6 @@ export function BaseInput(props: {
           <div class="flex flex-row w-full gap-2 items-center p-2">
             <FormatButtons
               selectionState={() => formatState}
-              includeQuote
               onInlineFormat={(format) => {
                 const editor_ = editor();
                 if (!editor_) return;
@@ -1677,7 +1657,7 @@ export function BaseInput(props: {
             </Button>
 
             <Tooltip
-              tooltip={
+              label={
                 form().replyAppended() ? 'Hide quoted text' : 'Show quoted text'
               }
             >
@@ -1730,9 +1710,7 @@ export function BaseInput(props: {
             </Button>
           </div>
 
-          <Tooltip
-            tooltip={form().sendTime() ? 'Send time is scheduled' : undefined}
-          >
+          <Tooltip label={form().sendTime() ? 'Send time is scheduled' : ''}>
             <button
               disabled={
                 uploadAttachmentMutation.isPending ||
@@ -1749,7 +1727,7 @@ export function BaseInput(props: {
                 }
               >
                 <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                  <ArrowUp class="group-hover:text-input! group-hover:fill-input! text-accent-ink! fill-accent! size-4 transition ease-in-out" />
+                  <ArrowUp class="group-hover:text-surface! group-hover:fill-surface! text-accent! fill-accent! size-4 transition ease-in-out" />
                 </div>
               </Show>
             </button>

@@ -1,5 +1,5 @@
 import { Lightbox, LightboxToolbar } from '@core/component/Lightbox';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+
 import * as stackingContext from '@core/constant/stackingContext';
 import { isMobile } from '@core/mobile/isMobile';
 import ChevronLeftIcon from '@icon/regular/caret-left.svg';
@@ -26,7 +26,7 @@ function VideoViewerContent(props: {
   navigationHidden?: boolean;
 }) {
   const navButtonClass =
-    'absolute top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-colors disabled:cursor-not-allowed disabled:opacity-50';
+    'absolute top-1/2 -translate-y-1/2 bg-surface backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-surface transition-colors disabled:cursor-not-allowed disabled:opacity-50';
 
   let swipeTouchStartX = 0;
   let swipeTouchEndX = 0;
@@ -72,14 +72,10 @@ function VideoViewerContent(props: {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      <Dialog.Content class="flex items-center justify-center bg-panel">
+      <Dialog.Content class="flex items-center justify-center bg-surface">
         <LightboxToolbar isVisible={true}>
           <Dialog.CloseButton>
-            <Button
-              variant="ghost"
-              size="icon-md"
-              tooltip={<LabelAndHotKey label="Close" />}
-            >
+            <Button variant="ghost" size="icon-md" label="Close">
               <XIcon />
             </Button>
           </Dialog.CloseButton>
@@ -87,7 +83,7 @@ function VideoViewerContent(props: {
 
         <Show when={props.indexLabel}>
           <div
-            class="absolute top-4 left-4 rounded-lg border border-edge bg-dialog px-3 py-1.5 shadow-md"
+            class="absolute top-4 left-4 rounded-lg border border-edge bg-surface px-3 py-1.5 shadow-md"
             style={{ 'z-index': stackingContext.zModal + 1 }}
           >
             <span class="text-sm font-medium text-ink">

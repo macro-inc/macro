@@ -23,7 +23,7 @@ jobs:
       should_run: ${{ steps.filter.outputs.should_run }}
       nextest_filter: ${{ steps.package-filter.outputs.nextest_filter }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           clean: false
           fetch-depth: 0
@@ -37,8 +37,9 @@ jobs:
               - 'flake.nix'
               - 'flake.lock'
               - '.github/actions/setup-cachix/**'
-              - '.github/actions/setup-nix-dev-shell/**'
               - '.github/actions/setup-sccache/**'
+              - '.github/services-config.json'
+              - '.github/scripts/build-cloud-storage-lambdas.sh'
               - .github/workflows/code-check-cloud-storage.yml
       - name: compute nextest package filter
         id: package-filter
@@ -62,7 +63,7 @@ jobs:
           printf '%s\n' "$changed_files" > /tmp/changed-files
 
           # Root cargo/toolchain/CI changes can affect the whole workspace, so run all tests.
-          if printf '%s\n' "$changed_files" | grep -qE '^(rust/rust-toolchain\.toml|flake\.nix|flake\.lock|rust/cloud-storage/Cargo\.(toml|lock)|rust/cloud-storage/\.cargo/.*|\.github/actions/(setup-rust|setup-cachix|setup-nix-dev-shell|setup-sccache)/.*|\.github/workflows/code-check-cloud-storage\.yml)$'; then
+          if printf '%s\n' "$changed_files" | grep -qE '^(rust/rust-toolchain\.toml|flake\.nix|flake\.lock|rust/cloud-storage/Cargo\.(toml|lock)|rust/cloud-storage/\.cargo/.*|\.github/actions/(setup-rust|setup-cachix|setup-sccache)/.*|\.github/workflows/code-check-cloud-storage\.yml)$'; then
             echo "Workspace-level change detected; running all tests"
             echo "nextest_filter=" >> "$GITHUB_OUTPUT"
             exit 0
@@ -168,36 +169,21 @@ jobs:
       RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=mold"
       RUSTDOCFLAGS: "-Dwarnings"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           clean: false
       - name: Setup Nix dev shell
-        uses: ./.github/actions/setup-nix-dev-shell
+        uses: ./.github/actions/setup-cachix
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          dev-shell: 'true'
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
         with:
           workspaces: rust/cloud-storage
           shared-key: cloud-storage-check
           cache-on-failure: true
           cache-targets: false
-      - name: Configure sccache S3 backend
-        env:
-          SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.cache/sccache"
-          {
-            echo "SCCACHE_DIR=$HOME/.cache/sccache"
-            echo "SCCACHE_CACHE_SIZE=5G"
-            echo "SCCACHE_BASEDIR=${GITHUB_WORKSPACE:-$PWD}"
-            if [ -n "${SCCACHE_BUCKET:-}" ]; then
-              echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
-              echo "SCCACHE_REGION=${SCCACHE_REGION:-us-east-1}"
-              echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX:-sccache/}"
-            fi
-          } >> "$GITHUB_ENV"
-          sccache --version
       - name: fmt
         run: cd rust/cloud-storage && cargo fmt --check
       - name: clippy
@@ -222,7 +208,7 @@ jobs:
       RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=mold"
     services:
       postgres:
-        image: postgres:16
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
@@ -230,57 +216,55 @@ jobs:
         ports:
           - 5432:5432
         # needed because the postgres container does not provide a healthcheck
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --shm-size 1g
       redis:
         image: redis:7
         ports:
           - 6379:6379
         options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           clean: false
       - name: Setup Nix dev shell
-        uses: ./.github/actions/setup-nix-dev-shell
+        uses: ./.github/actions/setup-cachix
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          dev-shell: 'true'
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
         with:
           workspaces: rust/cloud-storage
           shared-key: cloud-storage-test
           cache-on-failure: true
           cache-targets: false
-      - name: Configure sccache S3 backend
-        env:
-          SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.cache/sccache"
-          {
-            echo "SCCACHE_DIR=$HOME/.cache/sccache"
-            echo "SCCACHE_CACHE_SIZE=5G"
-            echo "SCCACHE_BASEDIR=${GITHUB_WORKSPACE:-$PWD}"
-            if [ -n "${SCCACHE_BUCKET:-}" ]; then
-              echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
-              echo "SCCACHE_REGION=${SCCACHE_REGION:-us-east-1}"
-              echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX:-sccache/}"
-            fi
-          } >> "$GITHUB_ENV"
-          sccache --version
       - name: configure postgres for concurrent tests
         run: |
-          postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "postgres:16" { print $1; exit }')"
+          postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg16" { print $1; exit }')"
           if [ -z "$postgres_container" ]; then
-            echo "postgres:16 service container not found" >&2
+            echo "pgvector/pgvector:pg16 service container not found" >&2
             docker ps
             exit 1
           fi
 
-          docker exec "$postgres_container" psql -U user -d macrodb -c "ALTER SYSTEM SET max_locks_per_transaction = 256;"
+          docker exec -i "$postgres_container" psql -U user -d macrodb <<'SQL'
+          ALTER SYSTEM SET fsync = off;
+          ALTER SYSTEM SET synchronous_commit = off;
+          ALTER SYSTEM SET full_page_writes = off;
+          ALTER SYSTEM SET max_wal_size = '4GB';
+          ALTER SYSTEM SET checkpoint_timeout = '30min';
+          ALTER SYSTEM SET max_locks_per_transaction = 8192;
+          SQL
           docker restart "$postgres_container"
           until docker exec "$postgres_container" pg_isready -U user -d macrodb; do
             sleep 1
           done
+          docker exec "$postgres_container" psql -U user -d macrodb -c "SHOW max_locks_per_transaction;"
       - name: prepare tests
         run: just rust/cloud-storage/setup_test_envs && just rust/cloud-storage/initialize_dbs
       - name: run tests
@@ -302,114 +286,12 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: sccache --show-stats || true
 
-  diff-check:
-    needs: path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    outputs:
-      docx-unzip-handler: ${{ steps.changes.outputs.docx-unzip-handler }}
-      worker-trigger: ${{ steps.changes.outputs.worker-trigger }}
-      document-text-extractor: ${{ steps.changes.outputs.document-text-extractor }}
-      organization_retention_trigger: ${{ steps.changes.outputs.organization_retention_trigger }}
-      organization_retention_handler: ${{ steps.changes.outputs.organization_retention_handler }}
-      delete_chat_handler: ${{ steps.changes.outputs.delete_chat_handler }}
-      search_upload_handler: ${{ steps.changes.outputs.search_upload_handler }}
-      upload_extractor_lambda_trigger: ${{ steps.changes.outputs.upload_extractor_lambda_trigger }}
-      upload_extractor_lambda_handler: ${{ steps.changes.outputs.upload_extractor_lambda_handler }}
-      email_suppression_handler: ${{ steps.changes.outputs.email_suppression_handler }}
-      deleted_item_poller: ${{ steps.changes.outputs.deleted_item_poller }}
-      email_refresh_handler: ${{ steps.changes.outputs.email_refresh_handler }}
-      email_scheduled_handler: ${{ steps.changes.outputs.email_scheduled_handler }}
-      email_sfs_delete_handler: ${{ steps.changes.outputs.email_sfs_delete_handler }}
-      user_link_cleanup_handler: ${{ steps.changes.outputs.user_link_cleanup_handler }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: whutchinson98/diff-checker-action@v1.0.2
-        id: changes
-        with:
-          token: ${{ GITHUB.TOKEN }}
-          diff: |
-            docx-unzip-handler: ./rust/cloud-storage/docx-unzip-handler/*
-            worker-trigger: ./rust/cloud-storage/worker-trigger/*
-            document-text-extractor: ./rust/cloud-storage/document-text-extractor/*
-            organization_retention_trigger: ./rust/cloud-storage/organization_retention_trigger/*
-            organization_retention_handler: ./rust/cloud-storage/organization_retention_handler/*
-            delete_chat_handler: ./rust/cloud-storage/delete_chat_handler/*
-            search_upload_handler: ./rust/cloud-storage/search_upload_handler/*
-            upload_extractor_lambda_trigger: ./rust/cloud-storage/upload_extractor_lambda_trigger/*
-            upload_extractor_lambda_handler: ./rust/cloud-storage/upload_extractor_lambda_handler/*
-            email_suppression_handler: ./rust/cloud-storage/email_suppression_handler/*
-            deleted_item_poller: ./rust/cloud-storage/deleted_item_poller/*
-            email_refresh_handler: ./rust/cloud-storage/email_refresh_handler/*
-            email_scheduled_handler: ./rust/cloud-storage/email_scheduled_handler/*
-            email_sfs_delete_handler: ./rust/cloud-storage/email_sfs_delete_handler/*
-            user_link_cleanup_handler: ./rust/cloud-storage/user_link_cleanup_handler/*
-            lambda_aggregate_frecency: ./rust/cloud-storage/lambda_aggregate_frecency/*
-
-  check-lambdas:
-    needs: diff-check
-    runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
-    strategy:
-      # we want to fail the particular item that failed not all of them.
-      fail-fast: false
-      matrix:
-        include:
-          - service: docx-unzip-handler
-          - service: worker-trigger
-          - service: document-text-extractor
-          - service: organization_retention_trigger
-          - service: organization_retention_handler
-          - service: delete_chat_handler
-          - service: search_upload_handler
-          - service: upload_extractor_lambda_trigger
-          - service: upload_extractor_lambda_handler
-          - service: email_suppression_handler
-          - service: deleted_item_poller
-          - service: email_refresh_handler
-          - service: email_scheduled_handler
-          - service: email_sfs_delete_handler
-          - service: user_link_cleanup_handler
-    steps:
-      - name: setup env var
-        shell: bash
-        run: |
-          echo "Check for ${{ matrix.service }}"
-          echo "SHOULD_RUN=${{ needs.diff-check.outputs[matrix.service] }}" >> $GITHUB_ENV
-      - uses: actions/checkout@v6
-        if: env.SHOULD_RUN == 'true'
-      - name: check if lambda is built
-        if: env.SHOULD_RUN == 'true'
-        run: |
-          echo "Checking diff to ensure bootstrap.zip is part of PR"
-          git fetch origin ${{ github.base_ref }}
-          if ! git diff --name-only --diff-filter=AM origin/${{ github.base_ref }} HEAD | grep "rust/cloud-storage/target/lambda/${{ matrix.service }}/bootstrap.zip" > /dev/null; then
-          echo "Code changes detected, but new bootstrap.zip for ${{matrix.service}} not found in PR. Please run: just rust/cloud-storage/${{matrix.service}}/build to build and commit bootstrap.zip. Alternatively you can run just rust/cloud-storage/build_lambads to build all lambdas."
-            exit 1
-          fi
-
-  check-no-bootstrap-deletions:
-    needs: path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: check for deleted bootstrap.zip files
-        run: |
-          git fetch origin ${{ github.base_ref }}
-          DELETED=$(git diff --name-only --diff-filter=D origin/${{ github.base_ref }} HEAD | grep "bootstrap\.zip" || true)
-          if [ -n "$DELETED" ]; then
-            echo "❌ bootstrap.zip files should never be deleted. The following bootstrap.zip files were removed in this PR:"
-            echo "$DELETED"
-            exit 1
-          fi
-          echo "✅ No bootstrap.zip files were deleted"
 
   # Collector job that always runs - use this as the required status check
   status-check:
     name: Cloud Storage Status Check
     if: always()
-    needs: [path-check, check, test, diff-check, check-lambdas, check-no-bootstrap-deletions]
+    needs: [path-check, check, test]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
@@ -417,17 +299,11 @@ jobs:
           echo "path-check: ${{ needs.path-check.result }}"
           echo "check: ${{ needs.check.result }}"
           echo "test: ${{ needs.test.result }}"
-          echo "diff-check: ${{ needs.diff-check.result }}"
-          echo "check-lambdas: ${{ needs.check-lambdas.result }}"
-          echo "check-no-bootstrap-deletions: ${{ needs.check-no-bootstrap-deletions.result }}"
 
           # Fail if any job failed (skipped and success are both OK)
           if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
              [[ "${{ needs.check.result }}" == "failure" ]] || \
-             [[ "${{ needs.test.result }}" == "failure" ]] || \
-             [[ "${{ needs.diff-check.result }}" == "failure" ]] || \
-             [[ "${{ needs.check-lambdas.result }}" == "failure" ]] || \
-             [[ "${{ needs.check-no-bootstrap-deletions.result }}" == "failure" ]]; then
+             [[ "${{ needs.test.result }}" == "failure" ]]; then
             echo "❌ One or more jobs failed"
             exit 1
           fi

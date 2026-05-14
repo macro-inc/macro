@@ -137,7 +137,7 @@ export class InternalPDFViewer {
     this._interceptLinks = popupViewer != null;
     this._popupViewer = popupViewer;
     const container = document.createElement('div');
-    container.className = 'pdfViewerContainer bg-panel';
+    container.className = 'pdfViewerContainer bg-surface';
     container.tabIndex = 0;
     const viewerDiv = document.createElement('div');
     viewerDiv.className = 'pdfViewer';
@@ -1426,7 +1426,7 @@ export class InternalPDFViewer {
     overlayElement.style.width = `${rect.width * 1.05}%`;
     overlayElement.style.height = `${rect.height * 1.1}%`;
     overlayElement.style.mixBlendMode = 'lighten';
-    overlayElement.style.cursor = 'var(--cursor-pointer)';
+    overlayElement.style.cursor = 'pointer';
     overlayElement.style.transition = 'all 0.3s ease-in-out';
     overlayElement.style.pointerEvents = 'auto';
     overlayElement.addEventListener('mouseenter', () => {

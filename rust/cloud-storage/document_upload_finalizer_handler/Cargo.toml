@@ -1,0 +1,37 @@
+[package]
+edition = "2024"
+name = "document_upload_finalizer_handler"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws_lambda_events = { workspace = true, features = ["eventbridge"] }
+aws-sdk-s3 = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+documents = { path = "../documents", default-features = false, features = [
+  "markdown_init",
+  "outbound",
+  "ports",
+] }
+lambda_runtime = { workspace = true }
+lexical_client = { path = "../lexical_client" }
+macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
+macro_entrypoint = { path = "../macro_entrypoint" }
+model = { path = "../model" }
+openssl = { workspace = true }
+s3_key = { path = "../s3_key" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, features = ["postgres", "runtime-tokio"] }
+sync_service_client = { path = "../sync_service_client" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing = { workspace = true }
+urlencoding = { workspace = true }
+
+[[bin]]
+name = "document_upload_finalizer_local_worker"
+path = "src/bin/local_worker.rs"
+
+[package.metadata.cargo-machete]
+ignored = ["openssl"]

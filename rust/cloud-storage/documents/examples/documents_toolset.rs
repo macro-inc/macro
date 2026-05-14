@@ -184,17 +184,22 @@ async fn main() {
             presigned_url_expiry_seconds: 840,
             browser_cache_expiry_seconds: 900,
         },
-        SyncServiceClient::new(sync_service_auth_key.clone(), sync_service_url),
+        SyncServiceClient::new(sync_service_auth_key.clone(), sync_service_url.clone()),
         s3_upload_adapter,
         NoOpTaskProperties,
         NoOpConnectionService,
         NoOpEntityAccessManagementService,
     );
 
-    let lexical_client = LexicalClient::new(sync_service_auth_key, lexical_service_url);
+    let lexical_client = LexicalClient::new(sync_service_auth_key.clone(), lexical_service_url);
 
-    let document_tool_context =
-        DocumentToolContext::new(documents_service, entity_access_service, lexical_client);
+    let sync_service_client = SyncServiceClient::new(sync_service_auth_key, sync_service_url);
+    let document_tool_context = DocumentToolContext::new(
+        documents_service,
+        entity_access_service,
+        lexical_client,
+        sync_service_client,
+    );
 
     let toolset = document_toolset();
 

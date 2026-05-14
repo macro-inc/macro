@@ -1,4 +1,3 @@
-import EditableField from '@core/component/EditableField';
 import { capitalize } from '@block-pdf/util/StringUtils';
 import { useHasPaidAccess } from '@core/auth/license';
 import { UserIcon } from '@core/component/UserIcon';
@@ -28,7 +27,14 @@ import IconUpload from '@macro-icons/macro-upload.svg';
 import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
 import { authServiceClient } from '@service-auth/client';
 import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
-import { createMemo, createResource, createSignal, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  type JSX,
+  Show,
+} from 'solid-js';
 import { usePermissions } from '@core/context/user';
 import { useSettingsState } from '@core/constant/SettingsState';
 import PaywallComponent from '../paywall/PaywallComponent';
@@ -175,19 +181,16 @@ export function Account() {
   };
 
   return (
-    <div
-      class="h-full overflow-y-auto p-2"
-      style="scrollbar-width: none;"
-    >
-      <div class="max-w-200 w-full mx-auto">
-        <Panel depth={2}>
+      <div class="h-full overflow-hidden flex justify-center p-2">
+        <div class="max-w-200 size-full">
+          <Panel depth={2} class="h-full overflow-hidden text-ink">
           <Panel.Header class="px-6">
             <div class="text-sm font-semibold">Account</div>
           </Panel.Header>
 
           <Panel.Toolbar class="h-full w-full">
             <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
-              <div class="bg-panel px-6 py-2 w-full">
+              <div class="px-4 py-2 w-full">
                 <PaywallComponent
                   hideCloseButton
                   cb={() => {}}
@@ -197,7 +200,7 @@ export function Account() {
             </Show>
           </Panel.Toolbar>
 
-          <Panel.Body class="text-ink">
+          <Panel.Body scroll class="text-ink">
             <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
               <Show when={ENABLE_PROFILE_PICTURES && userId()}>
                 <Row label="Profile Picture">
@@ -242,28 +245,24 @@ export function Account() {
               </Row>
 
               <Row label="First Name">
-                <EditableField
-                  class="ph-no-capture [&_span]:text-sm/normal [&_span]:text-ink-muted"
+                <NameInput
                   value={firstName()}
-                  onSave={(newValue: string) => {
+                  onSave={(newValue) => {
                     setUpdatedFirstName(newValue);
                     authServiceClient.putUserName({ first_name: newValue });
                   }}
                   placeholder="Enter First Name"
-                  allowEmpty={true}
                 />
               </Row>
 
               <Row label="Last Name">
-                <EditableField
-                  class="ph-no-capture [&_span]:text-sm/normal [&_span]:text-ink-muted"
+                <NameInput
                   value={lastName()}
-                  onSave={(newValue: string) => {
+                  onSave={(newValue) => {
                     setUpdatedLastName(newValue);
                     authServiceClient.putUserName({ last_name: newValue });
                   }}
                   placeholder="Enter Last Name"
-                  allowEmpty={true}
                 />
               </Row>
 
@@ -505,9 +504,65 @@ export function Account() {
 
 function Row(props: { label: string; children?: any }) {
   return (
-    <div class="bg-panel flex items-center justify-between h-15.25 px-6">
+    <div class="bg-surface flex items-center justify-between h-15.25 px-6">
       <div class="text-sm">{props.label}</div>
       <div class="text-right">{props.children}</div>
+    </div>
+  );
+}
+
+function NameInput(props: {
+  value?: string;
+  placeholder?: string;
+  onSave: (value: string) => void;
+}) {
+  const [inputValue, setInputValue] = createSignal(props.value ?? '');
+  const [isFocused, setIsFocused] = createSignal(false);
+
+  // Keep local input synced with external value, but don't clobber while typing.
+  createEffect(() => {
+    if (!isFocused()) {
+      setInputValue(props.value ?? '');
+    }
+  });
+
+  const commit = () => {
+    const next = inputValue();
+    if (next === (props.value ?? '')) return;
+    props.onSave(next);
+  };
+
+  const handleKeyDown: JSX.EventHandler<HTMLInputElement, KeyboardEvent> = (
+    e
+  ) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.currentTarget.blur();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setInputValue(props.value ?? '');
+      e.currentTarget.blur();
+    }
+  };
+
+  return (
+    <div class="ph-no-capture group relative flex items-center gap-1 rounded-sm h-7 mobile:h-9 px-2 border text-xs bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink">
+      <input
+        type="text"
+        class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-xs placeholder:text-ink-extra-muted"
+        value={inputValue()}
+        onInput={(e) => setInputValue(e.currentTarget.value)}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => {
+          setIsFocused(false);
+          commit();
+        }}
+        onKeyDown={handleKeyDown}
+        placeholder={props.placeholder}
+        autocomplete="off"
+        spellcheck={false}
+        data-1p-ignore
+      />
     </div>
   );
 }

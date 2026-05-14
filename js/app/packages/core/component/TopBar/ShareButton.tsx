@@ -45,13 +45,13 @@ import CheckIcon from '@icon/bold/check-bold.svg';
 import IconX from '@icon/bold/x-bold.svg';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import IconLink from '@icon/regular/link.svg';
+import IconShared from '@icon/regular/share.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import IconComment from '@macro-icons/wide/comment.svg';
 import WideCopy from '@macro-icons/wide/copy.svg';
 import IconEdit from '@macro-icons/wide/edit.svg';
 import IconEye from '@macro-icons/wide/eye.svg';
-import IconShared from '@macro-icons/wide/share.svg';
 import UserCircle from '@macro-icons/wide/user-circle.svg';
 import WideUsers from '@macro-icons/wide/users.svg';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -65,7 +65,7 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { Button, cn, Panel } from '@ui';
+import { Button, ButtonGroup, cn, Panel, Tooltip } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -87,7 +87,6 @@ import { CustomScrollbar } from '../CustomScrollbar';
 import { ForwardToChannel } from '../ForwardToChannel';
 import { Permissions } from '../SharePermissions';
 import { toast } from '../Toast/Toast';
-import { Tooltip } from '../Tooltip';
 import { ScrollIndicators } from '../VerticalScrollIndicators';
 import { openLoginModal } from './LoginButton';
 
@@ -248,10 +247,7 @@ function GroupChannelLabel(props: { channelId: string; fallbackName: string }) {
 
   return (
     <Show when={others().length > 0} fallback={props.fallbackName}>
-      <Tooltip
-        placement="bottom"
-        tooltip={<div class="text-xs whitespace-pre">{tooltipContent()}</div>}
-      >
+      <Tooltip placement="bottom" label={tooltipContent()}>
         <span>{label()}</span>
       </Tooltip>
     </Show>
@@ -487,7 +483,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                       class={cn(
                         'text-xs font-medium whitespace-nowrap',
                         props.publicAccessLevel != null
-                          ? 'text-accent-ink'
+                          ? 'text-accent'
                           : 'text-ink-extra-muted'
                       )}
                     >
@@ -1136,7 +1132,7 @@ export function ShareModal(props: ShareModalProps) {
                           class={cn(
                             'text-xs font-medium whitespace-nowrap',
                             publicAccessLevel() != null
-                              ? 'text-accent-ink'
+                              ? 'text-accent'
                               : 'text-ink-extra-muted'
                           )}
                         >
@@ -1254,30 +1250,26 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
     return 'Just me';
   });
 
+  const shareAccessTooltip = () =>
+    match(shareAccessLevelText())
+      .when(
+        (level) => level === 'Public',
+        () => 'Anyone with the link can access this item'
+      )
+      .when(
+        (level) => level === 'Shared',
+        () => 'Shared with specific people or channels'
+      )
+      .when(
+        (level) => level === 'Just me',
+        () => 'Only you can access this item'
+      )
+      .otherwise(() => 'This item has been shared with you');
+
   return (
-    <div class="border border-edge-muted flex ml-1 items-stretch rounded-xs">
-      <Tooltip
-        tooltip={
-          <div>
-            {match(shareAccessLevelText())
-              .when(
-                (level) => level === 'Public',
-                () => 'Anyone with the link can access this item'
-              )
-              .when(
-                (level) => level === 'Shared',
-                () => 'Shared with specific people or channels'
-              )
-              .when(
-                (level) => level === 'Just me',
-                () => 'Only you can access this item'
-              )
-              .otherwise(() => 'This item has been shared with you')}
-          </div>
-        }
-      >
-        <button
-          class="text-xs hover:bg-hover text-ink px-2 flex items-center gap-1 h-full"
+    <ButtonGroup variant="base" size="sm" class="bg-surface" depth={2}>
+      <Tooltip label={shareAccessTooltip()}>
+        <Button
           onClick={() => {
             if (!isAuthenticated()) {
               openLoginModal();
@@ -1286,24 +1278,24 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
               shareCtx.open();
             }
           }}
+          class="text-ink-muted"
         >
-          <IconShared class="size-3.5" />
+          <IconShared />
           Share
-        </button>
+        </Button>
       </Tooltip>
 
-      <div class="w-px bg-edge-muted" />
+      <ButtonGroup.Divider />
 
       <Button
         tooltip="Copy Share Link"
-        onClick={ShareLinkAction().action}
-        variant="ghost"
         size="icon-sm"
-        class="p-1"
+        onClick={ShareLinkAction().action}
+        class="text-ink-muted"
       >
-        <Dynamic component={ShareLinkAction().icon} />
+        <Dynamic component={ShareLinkAction().icon} class="size-3.5!" />
       </Button>
-    </div>
+    </ButtonGroup>
   );
 }
 

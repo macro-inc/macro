@@ -9,7 +9,7 @@ type Props = {
 export function StreamStatus(props: Props) {
   console.log('status');
   return (
-    <div class="p-2 bg-menu border border-edge text-ink font-mono space-y-2 text-sm">
+    <div class="p-2 bg-surface border border-edge text-ink font-mono space-y-2 text-sm">
       <Switch>
         <Match when={props.stream()}>
           {(stream) => (

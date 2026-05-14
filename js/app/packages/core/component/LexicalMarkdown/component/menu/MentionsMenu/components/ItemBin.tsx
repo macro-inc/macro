@@ -60,7 +60,7 @@ export function ItemBin(
             }}
           >
             <Show when={props.isSelected && showViewAllButton()}>
-              <div class="p-0.5 px-1 -my-2 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
+              <div class="p-0.5 px-1 -my-2 bg-surface text-ink border border-edge-muted rounded-xs text-xs">
                 →
               </div>
             </Show>

@@ -92,11 +92,15 @@ pub async fn create_comment_handler(
                     .as_ref()
                     .map(|m| m.users.as_slice())
                     .unwrap_or_default();
-                let thread_comment_owners: Vec<String> = res
+                let thread_participant_ids: Vec<String> = res
                     .comment_thread
                     .comments
                     .iter()
-                    .map(|c| c.owner.clone())
+                    // `sender` is the actual commenter when present; `owner` is the legacy
+                    // fallback. Use the commenter identity so anyone who comments on a thread
+                    // is auto-subscribed to subsequent replies, even if they are not the
+                    // document owner or a task assignee.
+                    .map(|c| c.sender.as_ref().unwrap_or(&c.owner).clone())
                     .collect();
 
                 let task_assignee_ids: Vec<String> = match properties_service
@@ -120,7 +124,7 @@ pub async fn create_comment_handler(
                 let recipients = compute_notification_recipients(
                     sender_id.as_ref(),
                     mentioned_user_ids,
-                    &thread_comment_owners,
+                    &thread_participant_ids,
                     &task_assignee_ids,
                     &document_context.owner,
                     is_reply,

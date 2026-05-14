@@ -149,6 +149,12 @@ pub struct TranscriptSegmentRequest {
     /// (it stamps egress bootstrap, not first audio frame).
     #[serde(default)]
     pub stream_started_at: Option<DateTime<Utc>>,
+    /// Speaker voice embedding computed by the transcription agent
+    /// (e.g. a Resemblyzer 256-dim vector). When present, the server
+    /// upserts a `voice` row and stores the resulting id on the transcript
+    /// segment so the call-finished pipeline can match it to enrolled users.
+    #[serde(default)]
+    pub embedding: Option<Vec<f32>>,
 }
 
 /// Edit call request

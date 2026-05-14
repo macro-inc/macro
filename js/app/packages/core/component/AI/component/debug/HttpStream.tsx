@@ -160,7 +160,7 @@ export default function HttpStreamDebug() {
               onInput={(e) => setMessageContent(e.currentTarget.value)}
               placeholder="Enter message..."
               rows={3}
-              class="w-full px-3 py-2 border border-edge rounded bg-panel resize-none"
+              class="w-full px-3 py-2 border border-edge rounded bg-surface resize-none"
             />
           </div>
           <div class="flex gap-2">
@@ -188,14 +188,14 @@ export default function HttpStreamDebug() {
 
         {/* Chat ID */}
         <Show when={chatId()}>
-          <div class="text-sm p-2 bg-panel rounded font-mono break-all">
+          <div class="text-sm p-2 bg-surface rounded font-mono break-all">
             Chat ID: {chatId()}
           </div>
         </Show>
 
         {/* Stream ID */}
         <Show when={streamId()}>
-          <div class="text-sm p-2 bg-panel rounded font-mono break-all">
+          <div class="text-sm p-2 bg-surface rounded font-mono break-all">
             Stream ID: {streamId()}
           </div>
         </Show>

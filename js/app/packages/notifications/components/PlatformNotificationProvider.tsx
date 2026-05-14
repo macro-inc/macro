@@ -80,6 +80,9 @@ function createBrowserNotication(
     onClick: (cb) => {
       notif.addEventListener('click', cb);
     },
+    onDismiss: (cb) => {
+      notif.addEventListener('close', cb);
+    },
     close: () => {
       notif.close();
     },

@@ -117,7 +117,7 @@ export function TemplateSelector(props: {
     <>
       <Show when={showTemplatePreviewSignal() && selectedTemplateSignal()}>
         <Portal mount={props.editorContainerRef}>
-          <div class="absolute inset-0 size-full text-ink-disabled bg-dialog overflow-hidden">
+          <div class="absolute inset-0 size-full text-ink-disabled bg-surface overflow-hidden">
             <StaticMarkdown
               markdown={`${previewMarkdown()}`}
               theme={{

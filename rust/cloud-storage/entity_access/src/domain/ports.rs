@@ -5,7 +5,7 @@
 use super::models::EntityType;
 use crate::domain::models::{
     AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, EntityAccessReceipt,
-    EntityPermission, RequiredPermission,
+    EntityPermission, RequiredPermission, UserTeamInfo,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use std::future::Future;
@@ -103,6 +103,16 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         &self,
         channel_id: &Uuid,
     ) -> impl Future<Output = Result<Option<CallChannelInfo>, AccessError>> + Send;
+
+    /// Look up the single team a user belongs to and the role they hold.
+    ///
+    /// Returns `None` if the user does not belong to any team. If the user is in
+    /// more than one team (which is not expected), the highest-privileged role
+    /// is returned.
+    fn get_user_team(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Option<UserTeamInfo>, AccessError>> + Send;
 }
 
 /// Service for checking entity access levels.
@@ -195,4 +205,12 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         &self,
         channel_id: &Uuid,
     ) -> impl Future<Output = Result<Option<CallChannelInfo>, AccessError>> + Send;
+
+    /// Look up the team a user belongs to and the role they hold in it.
+    ///
+    /// Returns `None` if the user has no team membership.
+    fn get_user_team(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Option<UserTeamInfo>, AccessError>> + Send;
 }

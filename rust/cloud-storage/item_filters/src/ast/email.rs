@@ -3,7 +3,7 @@ use macro_user_id::{cowlike::CowLike, email::EmailStr};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{EmailFilters, SharedEmailFilter, ast::ExpandErr};
+use crate::{EmailFilters, SharedEmailFilter, ast::ExpandErr, ast::date::DateLiteral};
 
 /// Possible email values in the ast
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,6 +41,12 @@ pub enum EmailLiteral {
     /// `.ics` calendar attachment (filename or `application/ics` mime type).
     /// When false, no constraint is applied.
     CalendarOnly(bool),
+    /// Filter by thread created_at timestamp
+    #[serde(rename = "ca")]
+    CreatedAt(DateLiteral),
+    /// Filter by thread updated_at timestamp (view-dependent field)
+    #[serde(rename = "ua")]
+    UpdatedAt(DateLiteral),
 }
 
 impl ExpandFrame<EmailLiteral> for EmailFilters {

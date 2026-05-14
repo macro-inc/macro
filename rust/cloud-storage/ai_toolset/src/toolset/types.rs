@@ -9,6 +9,18 @@ use serde::de::Deserialize;
 use std::collections::BTreeMap;
 use thiserror::Error;
 
+/// some tools need additional information
+#[derive(Debug)]
+pub enum ToolInfo {
+    /// An external (MCP) tool call
+    ExternalTool {
+        /// The name of the external service (MCP server)
+        service_name: String,
+        /// the name of the tool
+        tool_name: String,
+    },
+}
+
 /// Error type for failures when creating or adding tools to a toolset.
 #[derive(Debug, Error)]
 pub enum ToolSetCreationError {
@@ -32,9 +44,17 @@ pub enum ToolSetError {
 }
 
 /// Type alias for a toolset containing asynchronous tools.
-pub type AsyncToolSet<ToolSetContext> = ToolSet<AsyncToolObject<ToolSetContext>>;
+pub type AsyncToolCollection<ToolSetContext> = ToolCollection<AsyncToolObject<ToolSetContext>>;
 
-/// Represents the schema information for a tool.
+/// Schema for a tool's input, used when building provider requests.
+pub struct RequestSchema {
+    /// The name of the tool.
+    pub name: String,
+    /// The JSON schema for the tool's input parameters.
+    pub schema: Schema,
+}
+
+/// Represents the full schema information for a tool.
 pub struct ToolSchema {
     /// The name of the tool.
     pub name: String,
@@ -60,7 +80,7 @@ impl ToolSchema {
 /// `ToolSet` manages a set of tools, allowing you to add tools, merge toolsets,
 /// and invoke tools by name with JSON input.
 #[derive(Default)]
-pub struct ToolSet<T> {
+pub struct ToolCollection<T> {
     /// The tools in this toolset, keyed by name.
     /// This includes type-erased user tools
     pub tools: BTreeMap<String, T>,
@@ -68,7 +88,7 @@ pub struct ToolSet<T> {
     pub user_tools: BTreeMap<String, T>,
 }
 
-impl<T> ToolSet<T> {
+impl<T> ToolCollection<T> {
     /// Creates a new empty toolset.
     pub fn new() -> Self {
         Self {
@@ -78,11 +98,11 @@ impl<T> ToolSet<T> {
     }
 }
 
-impl<T> ToolSet<T> {
+impl<T> ToolCollection<T> {
     /// Merges another toolset into this one.
     ///
     /// Returns an error if any tool names conflict between the two toolsets.
-    pub fn add_toolset(mut self, toolset: ToolSet<T>) -> Self {
+    pub fn add_toolset(mut self, toolset: ToolCollection<T>) -> Self {
         for (name, _) in toolset.tools.iter() {
             if self.tools.contains_key(name) {
                 panic!("{}", ToolSetCreationError::NameConflict(name.clone()));
@@ -99,7 +119,7 @@ impl<T> ToolSet<T> {
     }
 }
 
-impl<ToolSetContext> AsyncToolSet<ToolSetContext>
+impl<ToolSetContext> AsyncToolCollection<ToolSetContext>
 where
     ToolSetContext: Sync + Send + 'static,
 {
@@ -160,7 +180,7 @@ where
     ///
     /// Returns an error if the tool is not found or if deserialization fails.
     #[tracing::instrument(err, skip(self, context, request_context))]
-    pub async fn try_tool_call(
+    pub(crate) async fn try_tool_call_internal(
         &self,
         context: ToolSetContext,
         request_context: RequestContext,
@@ -178,7 +198,7 @@ where
         Ok(tool.call(context, request_context).await)
     }
 
-    /// this isn't called in the tool loop it's calle by the user-facing API
+    /// this isn't called in the tool loop it's called by the user-facing API
     #[tracing::instrument(err, skip(self, context, request_context))]
     pub async fn try_user_tool_call(
         &self,
@@ -269,7 +289,7 @@ where
     /// assert!(parent_toolset.tools.contains_key("SubTool"));
     /// ```
     #[tracing::instrument(skip_all)]
-    pub fn add_subtoolset<SubContext>(mut self, subtoolset: AsyncToolSet<SubContext>) -> Self
+    pub fn add_subtoolset<SubContext>(mut self, subtoolset: AsyncToolCollection<SubContext>) -> Self
     where
         SubContext: FromRef<ToolSetContext> + Send + Sync + 'static,
     {
