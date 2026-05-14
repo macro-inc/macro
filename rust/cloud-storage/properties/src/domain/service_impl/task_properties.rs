@@ -206,6 +206,7 @@ where
                 let metadata = model_notifications::TaskAssignedMetadata {
                     task_id: task_id.to_string(),
                     task_name: task_name.clone(),
+                    sub_type: Some(model_notifications::NotificationDocumentSubType::Task),
                     assigned_by: assigned_by.clone(),
                     sender_profile_picture_url: sender_profile_picture_url.clone(),
                 };

@@ -6,6 +6,7 @@ fn check_ser_meta() -> Result<(), Box<dyn std::error::Error>> {
         document_name: "test".to_string(),
         owner: MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap(),
         file_type: None,
+        sub_type: None,
         mention_id: "xxx".to_string(),
         thread_id: 42,
         comment_id: 99,

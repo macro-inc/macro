@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use crate::{
-    api::annotations::{CommentNotifContext, compute_notification_recipients},
+    api::annotations::{
+        CommentNotifContext, compute_notification_recipients, notification_document_sub_type,
+    },
     service::conn_gateway::update_live_comment_state,
 };
 use axum::{
@@ -138,6 +140,7 @@ pub async fn create_comment_handler(
                     document_id: document_id.to_string(),
                     owner: document_context.owner.clone(),
                     file_type: document_context.file_type.clone(),
+                    sub_type: notification_document_sub_type(document_context.sub_type.clone()),
                     sender_id: sender_id.clone(),
                     sender_profile_picture_url,
                 };
