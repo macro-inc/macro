@@ -7,7 +7,7 @@ use axum::{
     routing::{get, post},
 };
 use chat::domain::service::ChatServiceImpl;
-use chat::inbound::{ChatRouterState, chat_create_router, chat_id_router};
+use chat::inbound::http::router::{ChatRouterState, chat_create_router, chat_id_router};
 use chat::outbound::postgres::PgChatRepo;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;

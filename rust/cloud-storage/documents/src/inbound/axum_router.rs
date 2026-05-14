@@ -39,6 +39,16 @@ use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use sqlx::PgPool;
 
+#[cfg(feature = "document_create")]
+use self::create_markdown::create_markdown_handler;
+use self::{
+    copy_document::copy_document_handler, create_document::create_document_handler,
+    create_task::create_task_handler, delete_document::delete_document_handler,
+    edit_document::edit_document_handler, get_branch_name::get_branch_name_handler,
+    get_document::get_document_handler, get_location::get_location_v3_handler,
+    get_short_id::get_short_id_handler,
+};
+
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
 #[cfg(feature = "document_create")]

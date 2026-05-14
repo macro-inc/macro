@@ -18,7 +18,9 @@ pub mod swagger;
 /// It does NOT include JWT decoding middleware - that should be applied by the host service.
 pub fn router(app_state: &AppState) -> Router<AppState> {
     Router::new()
-        .merge(comms::inbound::comms_router(app_state.comms_state.clone()))
+        .merge(comms::inbound::router::comms_router(
+            app_state.comms_state.clone(),
+        ))
         .route("/activity", post(post_activity::post_activity_handler))
         .nest("/channels", channels::router())
         .nest("/preview", preview::router())

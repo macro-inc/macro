@@ -28,8 +28,8 @@ use crate::api::preview::get_batch_preview::{GetBatchPreviewRequest, GetBatchPre
 use ai::types::{ModelMetadata, Provider};
 
 use chat::domain::models::{ChatResponse, GetChatResponse, WebCitation};
-use chat::inbound::{
-    self as chat_inbound, CallToolRequest, CallToolResponse, CreateChatRequest,
+use chat::inbound::http::router::{
+    self as chat_router, CallToolRequest, CallToolResponse, CreateChatRequest,
     GetChatPermissionsResponse, PatchChatRequest, RejectToolCallRequest, UpdateToolCallRequest,
     UpdateToolResponseRequest,
 };
@@ -60,18 +60,18 @@ use utoipa::OpenApi;
         ),
         paths(
             health::health_handler,
-            chat_inbound::get_chat_handler,
-            chat_inbound::create_chat_handler,
-            chat_inbound::copy_chat_handler,
-            chat_inbound::get_chat_permissions_handler,
-            chat_inbound::delete_chat_handler,
-            chat_inbound::permanently_delete_chat_handler,
-            chat_inbound::patch_chat_handler,
-            chat_inbound::revert_delete_handler,
-            chat_inbound::update_tool_call_handler,
-            chat_inbound::update_tool_response_handler,
-            chat_inbound::call_tool_handler,
-            chat_inbound::reject_tool_call_handler,
+            chat_router::get_chat_handler,
+            chat_router::create_chat_handler,
+            chat_router::copy_chat_handler,
+            chat_router::get_chat_permissions_handler,
+            chat_router::delete_chat_handler,
+            chat_router::permanently_delete_chat_handler,
+            chat_router::patch_chat_handler,
+            chat_router::revert_delete_handler,
+            chat_router::update_tool_call_handler,
+            chat_router::update_tool_response_handler,
+            chat_router::call_tool_handler,
+            chat_router::reject_tool_call_handler,
             get_models::get_models_handler,
             get_chats_for_attachment::get_chats_for_attachment_handler,
             citations::get_citation_handler,
