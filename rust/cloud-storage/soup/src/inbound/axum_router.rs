@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{
         FrecencyQueryInner, FrecencySoupItem, GroupMeta, GroupedSortRequest, IntoSoupReqAst,
-        SimpleQueryInner, SoupErr, SoupQuery, SoupRequest, SoupType, entity_type_labels,
+        SimpleQueryInner, SoupErr, SoupQuery, SoupRequest, SoupType, resolve_group_label_and_order,
     },
     ports::SoupService,
 };
@@ -37,7 +37,7 @@ use item_filters::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
-use models_grouping::{GroupByField, GroupingConfig, date_bucket_label, date_bucket_order};
+use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{
     CursorWithValAndFilter, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, SortMethod,
     TypeEraseCursor,
@@ -67,13 +67,6 @@ pub struct Params {
     /// Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.
     #[serde(default)]
     sort_method: Option<SoupApiSort>,
-    /// Field to group results by. When set, response includes group metadata.
-    #[serde(default)]
-    #[param(value_type = Option<String>)]
-    group_by: Option<ApiGroupByField>,
-    /// Filter to a specific group key (for "load more in group X").
-    #[serde(default)]
-    group_key: Option<String>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -96,6 +89,43 @@ impl SoupApiSort {
             SoupApiSort::Frecency => SortMethod::Advanced(Frecency),
         }
     }
+}
+
+/// Sort method for grouped queries (frecency not supported).
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum GroupedSoupSort {
+    ViewedAt,
+    CreatedAt,
+    UpdatedAt,
+    ViewedUpdated,
+}
+
+impl GroupedSoupSort {
+    fn into_simple_sort(self) -> SimpleSortMethod {
+        match self {
+            GroupedSoupSort::ViewedAt => SimpleSortMethod::ViewedAt,
+            GroupedSoupSort::CreatedAt => SimpleSortMethod::CreatedAt,
+            GroupedSoupSort::UpdatedAt => SimpleSortMethod::UpdatedAt,
+            GroupedSoupSort::ViewedUpdated => SimpleSortMethod::ViewedUpdated,
+        }
+    }
+}
+
+/// Parameters for grouped soup queries.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct GroupedParams {
+    /// Field to group results by (required).
+    pub group_by: ApiGroupByField,
+    /// Filter to a specific group key (for "load more in group X").
+    #[serde(default)]
+    pub group_key: Option<String>,
+    /// Sort method. Defaults to viewed_updated.
+    #[serde(default)]
+    pub sort_method: Option<GroupedSoupSort>,
+    /// Limit the number of items returned. Defaults to 20. Max 500.
+    #[serde(default)]
+    pub limit: Option<u16>,
 }
 
 /// Entity type for property lookups (API representation).
@@ -319,21 +349,18 @@ where
         &self,
         macro_user_id: MacroUserIdStr<'static>,
         filters: EntityFilterAst,
-        params: Params,
+        params: GroupedParams,
         cursor: Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst>>,
     ) -> Result<Json<GroupedSoupPage>, SoupHandlerErr> {
-        let group_by = params.group_by.ok_or(SoupHandlerErr::Expand)?;
         let limit = params.limit.unwrap_or(20).clamp(20, 500);
         let sort_method = params
             .sort_method
-            .map(|s| match s.into_sort_method() {
-                SortMethod::Simple(m) => m,
-                SortMethod::Advanced(_) => SimpleSortMethod::ViewedUpdated,
-            })
+            .map(|s| s.into_simple_sort())
             .unwrap_or(SimpleSortMethod::ViewedUpdated);
 
+        let group_by_field = GroupByField::from(params.group_by);
         let grouping = GroupingConfig {
-            field: GroupByField::from(group_by.clone()),
+            field: group_by_field.clone(),
             group_key: params.group_key.clone(),
             per_group_limit: None,
         };
@@ -353,29 +380,39 @@ where
 
         let items = self.service.get_user_soup_grouped(req).await?;
 
-        let (api_items, groups, page_cursor) = build_grouped_response_with_cursors(
+        let response = build_grouped_response_with_cursors(
             items,
-            &group_by,
+            &group_by_field,
             sort_method,
             params.group_key,
             filters,
         );
 
         Ok(Json(GroupedSoupPage {
-            items: api_items,
-            next_cursor: page_cursor,
-            groups: Some(groups),
+            items: response.items,
+            next_cursor: response.page_cursor,
+            groups: Some(response.groups),
         }))
     }
 }
 
+/// Result of building a grouped response with cursor metadata.
+struct GroupedResponseData {
+    /// Items in this page.
+    items: Vec<SoupApiItem>,
+    /// Group metadata for each group.
+    groups: Vec<ApiGroupMeta>,
+    /// Page-level cursor for loading more items.
+    page_cursor: Option<String>,
+}
+
 fn build_grouped_response_with_cursors(
     items: Vec<crate::domain::models::GroupedSoupItem>,
-    group_by: &ApiGroupByField,
+    group_by: &GroupByField,
     sort_method: SimpleSortMethod,
     requested_group_key: Option<String>,
     filters: EntityFilterAst,
-) -> (Vec<SoupApiItem>, Vec<ApiGroupMeta>, Option<String>) {
+) -> GroupedResponseData {
     use models_pagination::{Base64Str, CursorVal, CursorWithValAndFilter, Identify, SortOn};
     use std::collections::HashMap;
 
@@ -478,24 +515,10 @@ fn build_grouped_response_with_cursors(
         None
     };
 
-    (api_items, groups, page_cursor)
-}
-
-fn resolve_group_label_and_order(key: &str, group_by: &ApiGroupByField) -> (String, Option<i32>) {
-    match group_by {
-        ApiGroupByField::Date => (
-            date_bucket_label(key).to_string(),
-            Some(date_bucket_order(key)),
-        ),
-        ApiGroupByField::EntityType => (
-            entity_type_labels::label(key).to_string(),
-            Some(entity_type_labels::display_order(key)),
-        ),
-        ApiGroupByField::Project if key.is_empty() => ("No Project".to_string(), Some(i32::MAX)),
-        ApiGroupByField::Property { .. } if key.is_empty() => {
-            ("Not Set".to_string(), Some(i32::MAX))
-        }
-        _ => (key.to_string(), None),
+    GroupedResponseData {
+        items: api_items,
+        groups,
+        page_cursor,
     }
 }
 
@@ -509,6 +532,7 @@ where
         .route("/soup", get(get_soup_handler))
         .route("/soup", post(post_soup_handler))
         .route("/soup/ast", post(post_soup_ast_handler))
+        .route("/soup/ast/grouped", post(post_grouped_soup_ast_handler))
         .with_state(state)
 }
 
@@ -726,7 +750,7 @@ pub async fn post_soup_ast_handler<T, U>(
         params,
         email_view,
     }): Json<PostSoupAstRequest>,
-) -> Result<Either<Json<PaginatedOpaqueCursor<SoupApiItem>>, Json<GroupedSoupPage>>, SoupHandlerErr>
+) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
 where
     T: SoupService,
     U: EmailService,
@@ -749,18 +773,6 @@ where
         ),
     };
 
-    if params.group_by.is_some() {
-        // Extract simple cursor for grouped queries (frecency not supported for grouped)
-        let simple_cursor = match cursor {
-            axum_extra::either::Either::E1(c) => c,
-            axum_extra::either::Either::E2(_) => None,
-        };
-        return service
-            .handle_grouped(macro_user_id, filters, params, simple_cursor)
-            .await
-            .map(Either::E2);
-    }
-
     let link = match email_link {
         Ok(l) => Some(l.0.0),
         Err(EmailLinkErr::NotFound) => None,
@@ -778,7 +790,58 @@ where
             cursor,
         )
         .await
-        .map(Either::E1)
+}
+
+/// Request body for grouped soup queries with AST filters.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PostGroupedSoupAstRequest {
+    /// Filters to apply (AST format)
+    #[serde(default)]
+    filters: ApiEntityFilterAst,
+    /// Grouping parameters (required)
+    #[serde(flatten)]
+    params: GroupedParams,
+}
+
+/// Gets the items grouped by the specified field using AST filters
+#[utoipa::path(
+    post,
+    operation_id = "post_items_soup_ast_grouped",
+    path = "/items/soup/ast/grouped",
+    params(
+        ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value."),
+    ),
+    request_body = PostGroupedSoupAstRequest,
+    responses(
+        (status = 200, body=GroupedSoupPage),
+        (status = 500, body=ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn post_grouped_soup_ast_handler<T, U>(
+    State(service): State<SoupRouterState<T, U>>,
+    Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
+    cursor: Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, ApiEntityFilterAst>>,
+    Json(PostGroupedSoupAstRequest { filters, params }): Json<PostGroupedSoupAstRequest>,
+) -> Result<Json<GroupedSoupPage>, SoupHandlerErr>
+where
+    T: SoupService,
+    U: EmailService,
+{
+    let filters = filters
+        .into_entity_ast()
+        .map_err(|_| SoupHandlerErr::Expand)?;
+
+    // Convert cursor filter from ApiEntityFilterAst to EntityFilterAst
+    let simple_cursor = cursor
+        .map(|c| c.try_map_filter(|f| f.into_entity_ast()))
+        .transpose()
+        .map_err(|_| SoupHandlerErr::Expand)?;
+
+    service
+        .handle_grouped(macro_user_id, filters, params, simple_cursor)
+        .await
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

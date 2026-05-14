@@ -1,6 +1,24 @@
 //! Grouping utilities for soup queries.
 
+use models_grouping::{GroupByField, date_bucket_label, date_bucket_order};
 use serde::Serialize;
+
+/// Resolve label and display order for a group key based on the grouping field.
+pub fn resolve_group_label_and_order(key: &str, group_by: &GroupByField) -> (String, Option<i32>) {
+    match group_by {
+        GroupByField::Date => (
+            date_bucket_label(key).to_string(),
+            Some(date_bucket_order(key)),
+        ),
+        GroupByField::EntityType => (
+            entity_type_labels::label(key).to_string(),
+            Some(entity_type_labels::display_order(key)),
+        ),
+        GroupByField::Project if key.is_empty() => ("No Project".to_string(), Some(i32::MAX)),
+        GroupByField::Property { .. } if key.is_empty() => ("Not Set".to_string(), Some(i32::MAX)),
+        _ => (key.to_string(), None),
+    }
+}
 
 /// Metadata about a group of items.
 #[derive(Debug, Clone, Serialize)]

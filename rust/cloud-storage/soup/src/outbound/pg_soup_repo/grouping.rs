@@ -1,6 +1,7 @@
 //! SQL grouping expressions for soup queries.
 
 use models_grouping::GroupByField;
+use std::borrow::Cow;
 
 /// A single date bucket definition - source of truth for both SQL and Rust.
 struct DateBucket {
@@ -77,28 +78,28 @@ pub fn date_bucket_display_order(key: &str) -> i32 {
 }
 
 /// Build the group select expression for a field.
-pub fn group_select_expr(field: &GroupByField) -> String {
+pub fn group_select_expr(field: &GroupByField) -> Cow<'static, str> {
     match field {
-        GroupByField::Date => date_bucket_select_expr(),
-        GroupByField::EntityType => "item_type".to_string(),
-        GroupByField::Project => "COALESCE(project_id::text, '')".to_string(),
+        GroupByField::Date => Cow::Owned(date_bucket_select_expr()),
+        GroupByField::EntityType => Cow::Borrowed("item_type"),
+        GroupByField::Project => Cow::Borrowed("COALESCE(project_id::text, '')"),
         GroupByField::Property { .. } => {
             // For select options, value is an array of UUIDs like ["uuid1", "uuid2"]
             // Extract the first element as text
-            "COALESCE(ep_group.values->'value'->>0, '')".to_string()
+            Cow::Borrowed("COALESCE(ep_group.values->'value'->>0, '')")
         }
     }
 }
 
 /// Build the group order expression for a field.
-pub fn group_order_expr(field: &GroupByField) -> String {
+pub fn group_order_expr(field: &GroupByField) -> Cow<'static, str> {
     match field {
-        GroupByField::Date => date_bucket_order_expr(),
-        GroupByField::EntityType => "item_type".to_string(),
-        GroupByField::Project => "project_id NULLS LAST".to_string(),
+        GroupByField::Date => Cow::Owned(date_bucket_order_expr()),
+        GroupByField::EntityType => Cow::Borrowed("item_type"),
+        GroupByField::Project => Cow::Borrowed("project_id NULLS LAST"),
         GroupByField::Property { .. } => {
             // values->'value' is an array of UUID strings, extract first and lookup display_order
-            "COALESCE((SELECT po.display_order FROM property_options po WHERE po.id::text = (ep_group.values->'value'->>0)), 999999)".to_string()
+            Cow::Borrowed("COALESCE((SELECT po.display_order FROM property_options po WHERE po.id::text = (ep_group.values->'value'->>0)), 999999)")
         }
     }
 }
@@ -140,51 +141,4 @@ pub fn group_join_clause(field: &GroupByField) -> Option<GroupJoinClause> {
 }
 
 #[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn date_bucket_select_contains_all_keys() {
-        let expr = date_bucket_select_expr();
-        assert!(expr.contains("'today'"));
-        assert!(expr.contains("'yesterday'"));
-        assert!(expr.contains("'this_week'"));
-        assert!(expr.contains("'last_week'"));
-        assert!(expr.contains("'this_month'"));
-        assert!(expr.contains("'last_month'"));
-        assert!(expr.contains("'older'"));
-    }
-
-    #[test]
-    fn date_bucket_order_matches_display_order() {
-        assert_eq!(date_bucket_display_order("today"), 0);
-        assert_eq!(date_bucket_display_order("yesterday"), 1);
-        assert_eq!(date_bucket_display_order("this_week"), 2);
-        assert_eq!(date_bucket_display_order("older"), 6);
-        assert_eq!(date_bucket_display_order("unknown"), 6);
-    }
-
-    #[test]
-    fn entity_type_expr() {
-        let expr = group_select_expr(&GroupByField::EntityType);
-        assert_eq!(expr, "item_type");
-    }
-
-    #[test]
-    fn project_expr() {
-        let expr = group_select_expr(&GroupByField::Project);
-        assert!(expr.contains("project_id"));
-        assert!(expr.contains("COALESCE"));
-    }
-
-    #[test]
-    fn property_join_includes_definition_id() {
-        let field = GroupByField::Property {
-            property_definition_id: uuid::Uuid::nil(),
-            entity_type: None,
-        };
-        let join = group_join_clause(&field).unwrap();
-        assert!(join.contains("ep_group"));
-        assert!(join.contains(&uuid::Uuid::nil().to_string()));
-    }
-}
+mod test;
