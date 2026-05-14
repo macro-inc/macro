@@ -1356,7 +1356,12 @@ fn build_grouped_query<'a>(
             &[PropertyEntityType::Project],
         );
 
-    push_accessible_items_cte(&mut builder, include_documents, include_chats, include_projects);
+    push_accessible_items_cte(
+        &mut builder,
+        include_documents,
+        include_chats,
+        include_projects,
+    );
 
     // TopItems CTE: lightweight id + sort_ts + project_id with filters, cursor, and limit
     builder.push("TopItems AS (");

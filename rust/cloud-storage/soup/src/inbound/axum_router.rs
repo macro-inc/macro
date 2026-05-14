@@ -398,7 +398,13 @@ where
                 .map(SoupApiItem::from_frecency_soup_item)
                 .collect(),
             next_cursor: response.page_cursor,
-            groups: Some(response.groups.into_iter().map(ApiGroupMeta::from).collect()),
+            groups: Some(
+                response
+                    .groups
+                    .into_iter()
+                    .map(ApiGroupMeta::from)
+                    .collect(),
+            ),
         }))
     }
 }

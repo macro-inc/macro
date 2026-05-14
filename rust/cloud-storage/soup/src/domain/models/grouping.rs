@@ -118,16 +118,21 @@ pub fn build_grouped_response(
         .map(|(key, data)| {
             let has_more = data.page_count < data.total_count;
             let next_cursor = if has_more {
-                data.last_item_id.zip(data.last_cursor_val).map(|(id, val)| {
-                    let cursor: CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst> =
-                        CursorWithValAndFilter {
+                data.last_item_id
+                    .zip(data.last_cursor_val)
+                    .map(|(id, val)| {
+                        let cursor: CursorWithValAndFilter<
+                            Uuid,
+                            SimpleSortMethod,
+                            EntityFilterAst,
+                        > = CursorWithValAndFilter {
                             id,
                             limit: data.page_count as usize,
                             val,
                             filter: filters.clone(),
                         };
-                    Base64Str::encode_json(cursor).type_erase()
-                })
+                        Base64Str::encode_json(cursor).type_erase()
+                    })
             } else {
                 None
             };
