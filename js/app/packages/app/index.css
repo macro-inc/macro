@@ -408,10 +408,6 @@ html:not([data-touch-device="true"]) [data-message]:hover{
   @apply bg-ink/3 rounded-sm;
 }
 
-html:not([data-touch-device="true"]) [data-message] {
-  @apply mx-1;
-}
-
 /* Long-press animation */
 .long-press-animation [data-swipe-content],
 [data-message].long-press-animation{
