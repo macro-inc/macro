@@ -6,7 +6,6 @@ import {
 } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import CaretLeft from '@icon/regular/caret-left.svg';
@@ -60,7 +59,7 @@ function SplitForwardButton() {
   );
 }
 
-function SplitSpotlightButton() {
+function _SplitSpotlightButton() {
   const context = useContext(SplitPanelContext);
   const layout = useContext(SplitLayoutContext);
   if (!context || !layout) return '';
@@ -158,10 +157,6 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
   const panel = useContext(SplitPanelContext);
   if (!panel)
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
-  const layout = useContext(SplitLayoutContext);
-
-  const shouldShowRightmost = () =>
-    !isTouchDevice() && layout && canSpotlight(layout.manager);
 
   return (
     <div

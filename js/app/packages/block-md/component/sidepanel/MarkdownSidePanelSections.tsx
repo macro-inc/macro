@@ -550,4 +550,3 @@ function ReferencesSectionConditional(props: { documentId: string }) {
     </Show>
   );
 }
-

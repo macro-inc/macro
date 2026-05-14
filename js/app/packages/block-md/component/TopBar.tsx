@@ -1,10 +1,8 @@
-import { useAnalytics } from '@app/component/analytics-context';
 import {
   ChatWithAgentButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/component/ChatWithAgentButton';
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   type BlockTool,
   ResponsiveBlockToolbar,
@@ -25,18 +23,8 @@ import {
 import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useDownloadDocumentAsMarkdownText } from '@block-md/signal/save';
-import { useIsAuthenticated } from '@core/auth';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
-import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import {
-  NOTIFICATIONS_DRAWER_ID,
-  NotificationsButton,
-} from '@core/component/NotificationsModal';
-import {
-  REFERENCES_DRAWER_ID,
-  ReferencesButton,
-} from '@core/component/ReferencesModal';
 import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
@@ -47,46 +35,34 @@ import {
   ENABLE_HISTORY_COMPONENT,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
   ENABLE_MARKDOWN_SIDE_PANEL,
-  ENABLE_REFERENCES_MODAL,
 } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { useCanEdit } from '@core/signal/permissions';
-import type { EntityType } from '@core/types';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import SidePanelIcon from '@icon/fill/square-half-fill.svg';
-import Bell from '@icon/regular/bell.svg';
 import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
 import Download from '@icon/regular/download.svg';
 import GitBranch from '@icon/regular/git-branch.svg';
-import Info from '@icon/regular/info.svg';
 import IconLink from '@icon/regular/link.svg';
-import Quotes from '@icon/regular/quotes.svg';
-import TagIcon from '@icon/regular/tag.svg';
 import TerminalWindowIcon from '@icon/regular/terminal-window.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import { blockNameToItemType } from '@service-storage/client';
 import { Button, cn } from '@ui';
-import { createEffect, For, type JSX, on, onCleanup, Show } from 'solid-js';
+import { createEffect, For, on, onCleanup, Show } from 'solid-js';
 import { DispatchAgentButton } from './DispatchAgentMenu';
 import { HISTORY_DRAWER_ID } from './History';
-import { DRAWER_ID as PROPERTIES_DRAWER_ID } from './MarkdownPropertiesModal';
 
 export function TopBar() {
-  const analytics = useAnalytics();
-
-  const isAuth = useIsAuthenticated();
-
   const canEdit = useCanEdit();
   const blockName = useBlockName();
   const blockId = useBlockId();
   const scopeId = blockHotkeyScopeSignal.get;
   const name = useBlockDocumentName();
-  const notificationSource = useGlobalNotificationSource();
   const itemType = blockNameToItemType(blockName);
   if (!itemType)
     throw new Error('Using functionality in an unknown item type.');
@@ -94,10 +70,6 @@ export function TopBar() {
   const downloadAsMarkdownText = useDownloadDocumentAsMarkdownText();
 
   const historyControl = useDrawerControl(HISTORY_DRAWER_ID);
-  const notificationsControl = useDrawerControl(NOTIFICATIONS_DRAWER_ID);
-  const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
-  const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
-  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
   const shareCtx = useShareDialogContext();
   const blockAliasedName = useBlockAliasedName();
   const isTask = blockAliasedName === 'task';

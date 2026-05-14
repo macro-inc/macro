@@ -3,4 +3,3 @@ export type {
   SidePanelSectionEntry,
 } from './context';
 export { SidePanel, useHasSidePanel, useSidePanel } from './SidePanel';
-
