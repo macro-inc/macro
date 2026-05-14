@@ -1,6 +1,9 @@
 mod grouping;
 
-pub use grouping::{GroupMeta, entity_type_labels, resolve_group_label_and_order};
+pub use grouping::{
+    GroupMeta, GroupedResponse, build_grouped_response, entity_type_labels,
+    resolve_group_label_and_order,
+};
 
 use call::domain::models::GetCallRecordsRequest;
 use comms::domain::models::GetChannelsRequest;
