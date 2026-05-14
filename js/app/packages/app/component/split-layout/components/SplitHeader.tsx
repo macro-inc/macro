@@ -6,7 +6,6 @@ import {
 } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import CaretLeft from '@icon/regular/caret-left.svg';
@@ -60,7 +59,7 @@ function SplitForwardButton() {
   );
 }
 
-function SplitSpotlightButton() {
+function _SplitSpotlightButton() {
   const context = useContext(SplitPanelContext);
   const layout = useContext(SplitLayoutContext);
   if (!context || !layout) return '';
@@ -158,10 +157,6 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
   const panel = useContext(SplitPanelContext);
   if (!panel)
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
-  const layout = useContext(SplitLayoutContext);
-
-  const shouldShowRightmost = () =>
-    !isTouchDevice() && layout && canSpotlight(layout.manager);
 
   return (
     <div
@@ -170,7 +165,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
       ref={props.ref}
     >
       <div class="absolute inset-0 flex justify-start items-center bg-surface">
-        <div class="z-annotation-layer relative flex items-center bg-surface pl-2 mobile:pl-0 h-full">
+        <div class="relative flex items-center pl-2 mobile:pl-0 h-full">
           <div class="mobile:hidden">
             <SplitCloseButton />
           </div>
@@ -179,6 +174,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
             <SplitForwardButton />
           </Show>
         </div>
+
         <div
           class="relative min-w-0 h-full shrink pl-2 flex items-center gap-0.5"
           ref={(ref) => {
@@ -186,7 +182,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           }}
         />
 
-        <Show when={shouldShowRightmost()}>
+        {/*<Show when={shouldShowRightmost()}>
           <div
             class={
               'pl-2 z-annotation-layer relative flex items-center gap-0.5 h-full'
@@ -194,10 +190,10 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           >
             <SplitSpotlightButton />
           </div>
-        </Show>
+        </Show>*/}
 
         <div
-          class="min-w-4 h-full grow shrink flex items-center justify-end gap-0.5 pl-2 pr-2"
+          class="min-w-4 h-full grow shrink flex items-center justify-end gap-0.5 px-2"
           ref={(ref) => {
             panel.layoutRefs.headerRight = ref;
           }}

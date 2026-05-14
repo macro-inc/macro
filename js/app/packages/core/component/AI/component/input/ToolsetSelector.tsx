@@ -1,25 +1,6 @@
-import DropdownMenu from '@core/component/FormControls/DropdownMenu';
-import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import type { ToolSet } from '@service-cognition/generated/schemas';
+import { Dropdown, SegmentedControl } from '@ui';
 import { Show, type Signal } from 'solid-js';
-
-type ToolSetName = ToolSet['type'];
-
-const TOOLSETS = [
-  {
-    value: 'all' as const,
-    label: 'AGENT',
-    tooltip: 'Dynamically search Macro for useful context',
-  },
-] as const;
-
-const _TOOLSET_TO_DISPLAY = Object.fromEntries(
-  TOOLSETS.map((t) => [t.value, t.label])
-) as Record<ToolSetName, string>;
-
-const _TOOLSET_FROM_DISPLAY = Object.fromEntries(
-  TOOLSETS.map((t) => [t.label, { value: t.value, tooltip: t.tooltip }])
-) as Record<string, { value: ToolSetName; tooltip: string }>;
 
 export type Source = 'chat' | 'channel' | 'document' | 'email' | 'everything';
 
@@ -35,10 +16,6 @@ const SOURCE_TO_DISPLAY = Object.fromEntries(
   SOURCES.map((s) => [s.value, s.label])
 ) as Record<Source, string>;
 
-const SOURCE_FROM_DISPLAY = Object.fromEntries(
-  SOURCES.map((s) => [s.label, s.value])
-) as Record<string, Source>;
-
 export function ToolsetSelector(props: {
   toolset: Signal<ToolSet>;
   sources: Signal<Source>;
@@ -48,35 +25,26 @@ export function ToolsetSelector(props: {
 
   return (
     <div class="flex items-center gap-x-1">
-      {/*<SegmentedControl
-        size="SM"
-        defaultValue={TOOLSET_TO_DISPLAY[toolset().type]}
-        onChange={(s) => {
-          setToolset({
-            type: TOOLSET_FROM_DISPLAY[s as keyof typeof TOOLSET_FROM_DISPLAY]
-              .value,
-          });
-        }}
-        list={TOOLSETS.map((t) => ({
-          value: t.label,
-          label: t.label,
-          tooltip: t.tooltip,
-        }))}
-      />*/}
-
       <Show when={toolset().type === 'all'}>
         <div class="flex">
-          <DropdownMenu size="sm" triggerLabel={<span>SOURCE</span>}>
-            <SegmentedControl
-              defaultValue={SOURCE_TO_DISPLAY[source()]}
-              onChange={(s) => {
-                setSource(
-                  SOURCE_FROM_DISPLAY[s as keyof typeof SOURCE_FROM_DISPLAY]
-                );
-              }}
-              list={SOURCES.map((s) => s.label)}
-            />
-          </DropdownMenu>
+          <Dropdown>
+            <Dropdown.Trigger size="sm">
+              <span>SOURCE</span>
+            </Dropdown.Trigger>
+            <Dropdown.Portal>
+              <Dropdown.Content>
+                <SegmentedControl
+                  size="sm"
+                  value={source()}
+                  onChange={(s) => setSource(s)}
+                  options={SOURCES.map((s) => ({
+                    value: s.value,
+                    label: s.label,
+                  }))}
+                />
+              </Dropdown.Content>
+            </Dropdown.Portal>
+          </Dropdown>
           <span class="bg-edge-muted text-ink font-mono text-xs font-medium px-1 flex items-center">
             {SOURCE_TO_DISPLAY[source()]}
           </span>

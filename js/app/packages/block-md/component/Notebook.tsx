@@ -3,7 +3,6 @@ import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
   commentsStore,
   commentWidthSignal,
-  showCommentsPreference,
 } from '@block-md/comments/commentStore';
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
@@ -105,12 +104,7 @@ export function Notebook() {
     const observeCallback = () => {
       const { width, left } = notebookRef.getBoundingClientRect();
       setWidth(width);
-      let mode = widthToMode(width);
-      if (!hasComment()) {
-        mode = CommentLayoutMode.none;
-      } else if (!showCommentsPreference() && width > BreaksPoints.md) {
-        mode = CommentLayoutMode.sm;
-      }
+      const mode = hasComment() ? widthToMode(width) : CommentLayoutMode.none;
       setLayoutMode(mode);
       const leftFloat =
         contentRef.getBoundingClientRect().right - left + GapTargetWidth;
@@ -143,18 +137,6 @@ export function Notebook() {
   createEffect(() => {
     if (hasComment()) {
       setWideEnoughForComments(width() >= BreaksPoints.md);
-    }
-  });
-
-  createEffect(() => {
-    if (showCommentsPreference()) {
-      setLayoutMode(widthToMode(untrack(width)));
-    } else {
-      if (untrack(width) >= BreaksPoints.sm) {
-        setLayoutMode(CommentLayoutMode.sm);
-      } else {
-        setLayoutMode(CommentLayoutMode.xs);
-      }
     }
   });
 

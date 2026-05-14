@@ -189,10 +189,12 @@ impl DocumentRepo for PgDocumentRepo {
                 d."branchedFromVersionId" as "branched_from_version_id",
                 d."documentFamilyId" as "document_family_id",
                 d."fileType" as "file_type",
+                dt.sub_type as "sub_type?: DocumentSubType",
                 d."projectId" as "project_id",
                 d."deletedAt"::timestamptz as "deleted_at"
             FROM
                 "Document" d
+            LEFT JOIN document_sub_type dt ON dt.document_id = d.id
             WHERE
                 d.id = $1
             LIMIT 1
@@ -207,6 +209,7 @@ impl DocumentRepo for PgDocumentRepo {
                     .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
                     .into_owned(),
                 file_type: row.file_type,
+                sub_type: row.sub_type,
                 branched_from_id: row.branched_from_id,
                 branched_from_version_id: row.branched_from_version_id,
                 document_family_id: row.document_family_id,

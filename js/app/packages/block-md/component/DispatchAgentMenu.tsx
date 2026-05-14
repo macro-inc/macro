@@ -3,11 +3,14 @@ import { useBlockId } from '@core/block';
 import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
+import { TOKENS } from '@core/hotkey/tokens';
 import { macroIdToEmail, tryMacroId } from '@core/user';
+import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isOk } from '@core/util/maybeResult';
 import CaretDown from '@icon/regular/caret-down.svg';
 import CopyIcon from '@icon/regular/copy.svg';
+import GitBranch from '@icon/regular/git-branch.svg';
 import PlugIcon from '@icon/regular/plug.svg';
 import TerminalWindowIcon from '@icon/regular/terminal-window.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
@@ -218,6 +221,15 @@ export function DispatchAgentButton() {
             text={COPY_ACTION.name}
             icon={COPY_ACTION.icon}
             onClick={() => executeAction(COPY_ACTION)}
+          />
+          <MenuItem
+            text="Copy branch name"
+            icon={GitBranch}
+            hotkeyToken={TOKENS.entity.action.copyBranchName}
+            onClick={() => {
+              copyBranchNameToClipboard(blockId);
+              setOpen(false);
+            }}
           />
           <MenuItem
             text="MCP setup instructions"

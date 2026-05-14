@@ -30,6 +30,7 @@ export const ResizeZoneContext = createContext<ResizeZoneCtx>();
  * @property minSize - The zone-wide min size for a panel (in px). Individual panels can override.
  * @property class - Optional class name for the Zone.
  * @property id - Optional id for the Zone.
+ * @property resizable - Optional boolean indicating whether the zone is resizable. Defaults to true.
  */
 type ZoneProps = {
   direction: 'horizontal' | 'vertical';
@@ -38,6 +39,7 @@ type ZoneProps = {
   class?: string;
   id?: string;
   captureResizeCtx?: (ctx: ResizeZoneCtx) => void;
+  resizable?: boolean;
 };
 
 /**
@@ -142,6 +144,8 @@ function Zone(props: ParentProps<ZoneProps>) {
     props.captureResizeCtx?.(ctx);
   });
 
+  const gutterEnabled = () => Boolean(props.resizable ?? true);
+
   return (
     <div
       class={props.class ?? ''}
@@ -155,7 +159,7 @@ function Zone(props: ParentProps<ZoneProps>) {
     >
       <ResizeZoneContext.Provider value={ctx}>
         {props.children}
-        <Show when={visibleLayouts().length > 1}>
+        <Show when={gutterEnabled() && visibleLayouts().length > 1}>
           <Index each={visibleLayouts()}>
             {(panel, visibleIndex) => {
               const actualIndex = solver.order().indexOf(panel().id);

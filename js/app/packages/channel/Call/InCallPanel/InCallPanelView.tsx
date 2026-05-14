@@ -1,9 +1,8 @@
-import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { StackedAvatarsRow } from '@core/component/StackedAvatarsRow';
 import ArrowsOut from '@icon/regular/arrows-out.svg';
 import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
-import { cn, Surface, Tooltip } from '@ui';
+import { cn, Surface, ToggleSwitch, Tooltip } from '@ui';
 import { type Component, createMemo, Show } from 'solid-js';
 import { useCallContext } from '../CallContext';
 import type { CallControlsVariant } from '../CallControls/CallControls';
@@ -144,13 +143,10 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
                     )}
                     aria-hidden
                   />
-                  <MiniToggleSwitch
-                    checked={callCtx.isSharedWithTeam()}
+                  <ToggleSwitch
                     onChange={() => void handleToggleShareWithTeam()}
+                    checked={callCtx.isSharedWithTeam()}
                     disabled={callCtx.isConnecting()}
-                    size="SM"
-                    compact
-                    activeTrackClass="bg-ink-muted"
                   />
                 </div>
               </Tooltip>

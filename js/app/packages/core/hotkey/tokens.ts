@@ -249,6 +249,7 @@ export const TOKENS = {
   block: {
     share: 'block.share',
     focus: 'block.focus',
+    toggleSidePanel: 'block.toggleSidePanel',
   },
 
   // channel
