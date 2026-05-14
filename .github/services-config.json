@@ -53,6 +53,15 @@
         "contacts_service"
       ]
     },
+    "convert-service": {
+      "source_paths": [
+        "rust/cloud-storage/convert_service/**"
+      ],
+      "stack_path": "infra/stacks/convert-service/**",
+      "deploy_binaries": [
+        "convert_service"
+      ]
+    },
     "deleted-item-poller": {
       "source_paths": [
         "rust/cloud-storage/deleted_item_poller/**"
