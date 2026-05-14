@@ -39,7 +39,7 @@ use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{
-    CursorWithValAndFilter, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, SortMethod,
+    Cursor, CursorWithValAndFilter, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, SortMethod,
     TypeEraseCursor,
 };
 use models_soup::item::SoupItem;
@@ -755,24 +755,6 @@ where
     T: SoupService,
     U: EmailService,
 {
-    let filters = filters
-        .into_entity_ast()
-        .map_err(|_| SoupHandlerErr::Expand)?;
-
-    // Convert cursor filter from ApiEntityFilterAst to EntityFilterAst
-    let cursor: SoupCursor<EntityFilterAst> = match cursor {
-        axum_extra::either::Either::E1(c) => axum_extra::either::Either::E1(
-            c.map(|c| c.try_map_filter(|f| f.into_entity_ast()))
-                .transpose()
-                .map_err(|_| SoupHandlerErr::Expand)?,
-        ),
-        axum_extra::either::Either::E2(c) => axum_extra::either::Either::E2(
-            c.map(|c| c.try_map_filter(|f| f.into_entity_ast()))
-                .transpose()
-                .map_err(|_| SoupHandlerErr::Expand)?,
-        ),
-    };
-
     let link = match email_link {
         Ok(l) => Some(l.0.0),
         Err(EmailLinkErr::NotFound) => None,
@@ -798,6 +780,7 @@ where
 pub struct PostGroupedSoupAstRequest {
     /// Filters to apply (AST format)
     #[serde(default)]
+    #[schema(value_type = EntityFilterAst)]
     filters: ApiEntityFilterAst,
     /// Grouping parameters (required)
     #[serde(flatten)]
@@ -833,18 +816,32 @@ where
         .into_entity_ast()
         .map_err(|_| SoupHandlerErr::Expand)?;
 
-    // Convert cursor filter from ApiEntityFilterAst to EntityFilterAst
     let simple_cursor = cursor
-        .map(|c| c.try_map_filter(|f| f.into_entity_ast()))
-        .transpose()
-        .map_err(|_| SoupHandlerErr::Expand)?;
+        .map(
+            |Cursor {
+                 id,
+                 limit,
+                 val,
+                 filter,
+             }| {
+                Ok::<_, SoupHandlerErr>(Cursor {
+                    id,
+                    limit,
+                    val,
+                    filter: filter
+                        .into_entity_ast()
+                        .map_err(|_| SoupHandlerErr::Expand)?,
+                })
+            },
+        )
+        .transpose()?;
 
     service
         .handle_grouped(macro_user_id, filters, params, simple_cursor)
         .await
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct ApiEntityFilterAst {
     /// the filters that should be applied to the document entity
     #[serde(default, rename = "df")]
