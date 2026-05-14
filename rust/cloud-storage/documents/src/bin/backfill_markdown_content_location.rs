@@ -1,6 +1,6 @@
 //! CLI for markdown document content lifecycle backfill.
 
-use std::{env, future::Future, time::Duration};
+use std::{env, time::Duration};
 
 use anyhow::Context as _;
 use clap::Parser;
@@ -189,18 +189,16 @@ enum OptionalMarkdownObjectReader {
 }
 
 impl MarkdownObjectReader for OptionalMarkdownObjectReader {
-    fn read_markdown(
+    async fn read_markdown(
         &self,
         candidate: &documents::domain::markdown_backfill::MarkdownBackfillCandidate,
-    ) -> impl Future<Output = Result<String, MarkdownObjectReadError>> + Send {
-        async move {
-            match self {
-                Self::Disabled => Err(MarkdownObjectReadError::Read {
-                    key: "<disabled>".to_string(),
-                    error: "markdown object reader disabled".to_string(),
-                }),
-                Self::Enabled(reader) => reader.read_markdown(candidate).await,
-            }
+    ) -> Result<String, MarkdownObjectReadError> {
+        match self {
+            Self::Disabled => Err(MarkdownObjectReadError::Read {
+                key: "<disabled>".to_string(),
+                error: "markdown object reader disabled".to_string(),
+            }),
+            Self::Enabled(reader) => reader.read_markdown(candidate).await,
         }
     }
 }
@@ -212,21 +210,19 @@ enum OptionalMarkdownInitializer {
 }
 
 impl MarkdownInitializationPort for OptionalMarkdownInitializer {
-    fn initialize_existing_markdown(
+    async fn initialize_existing_markdown(
         &self,
         document_id: &str,
         markdown: &str,
-    ) -> impl Future<Output = Result<(), DocumentError>> + Send {
-        async move {
-            match self {
-                Self::Disabled => Err(DocumentError::Internal(anyhow::anyhow!(
-                    "markdown initializer disabled"
-                ))),
-                Self::Enabled(initializer) => {
-                    initializer
-                        .initialize_existing_markdown(document_id, markdown)
-                        .await
-                }
+    ) -> Result<(), DocumentError> {
+        match self {
+            Self::Disabled => Err(DocumentError::Internal(anyhow::anyhow!(
+                "markdown initializer disabled"
+            ))),
+            Self::Enabled(initializer) => {
+                initializer
+                    .initialize_existing_markdown(document_id, markdown)
+                    .await
             }
         }
     }
