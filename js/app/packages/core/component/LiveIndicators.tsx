@@ -45,7 +45,16 @@ export function BlockLiveIndicators() {
 
   return (
     <Show when={ENABLE_LIVE_INDICATORS}>
-      <LiveIndicators userIds={indicators() ?? []} currentUserId={userId()} />
+      <LiveIndicators
+        userIds={[
+          'macro|teo@macro.com',
+          'macro|eric@macro.com',
+          'macro|gab@macro.com',
+          'macro|rahul@macro.com',
+        ]}
+        currentUserId={userId()}
+      />
+      {/*<LiveIndicators userIds={indicators() ?? []} currentUserId={userId()} />*/}
     </Show>
   );
 }

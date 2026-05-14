@@ -180,6 +180,16 @@ function SidePanelOutlet(props: {
   openIds: Accessor<string[]>;
   setOpenIds: (ids: string[]) => void;
 }) {
+  // Sort by `order` ascending; sections without an explicit order go after
+  // ordered ones, preserving registration order via the stable sort.
+  const sortedSections = createMemo(() =>
+    [...props.sections()].sort((a, b) => {
+      const ao = a.order ?? Number.MAX_SAFE_INTEGER;
+      const bo = b.order ?? Number.MAX_SAFE_INTEGER;
+      return ao - bo;
+    })
+  );
+
   return (
     <Scroll class="flex flex-col min-h-0">
       <Accordion
@@ -189,7 +199,7 @@ function SidePanelOutlet(props: {
         onChange={(value) => props.setOpenIds(value as string[])}
         class="p-2 flex flex-col gap-2 min-h-0"
       >
-        <For each={props.sections()}>{(section) => section.component()}</For>
+        <For each={sortedSections()}>{(section) => section.component()}</For>
       </Accordion>
     </Scroll>
   );
@@ -207,8 +217,10 @@ function SidePanelOutlet(props: {
 function Section(
   props: ParentProps<{
     id: string;
-    title: string;
+    title: JSX.Element;
     defaultOpen?: boolean;
+    /** Render order — lower numbers appear first. */
+    order?: number;
   }>
 ) {
   const ctx = useContext(SidePanelContext);
@@ -221,6 +233,7 @@ function Section(
       id: props.id,
       title: props.title,
       defaultOpen: props.defaultOpen ?? false,
+      order: props.order,
       component: () => (
         <Accordion.Item value={props.id}>
           <Panel
@@ -275,18 +288,20 @@ function NarrowTabs(props: { contentLabel?: string; infoLabel?: string }) {
   if (!ctx) return null;
   return (
     <Show when={ctx.isNarrow() && ctx.hasSections()}>
-      <Layer depth={3}>
-        <div class="flex items-center shrink-0 gap-0.5">
-          <NarrowTab
-            active={!ctx.isOpen()}
-            label={props.contentLabel ?? 'Content'}
-            onClick={() => ctx.setIsOpen(false)}
-          />
-          <NarrowTab
-            active={ctx.isOpen()}
-            label={props.infoLabel ?? 'Info'}
-            onClick={() => ctx.setIsOpen(true)}
-          />
+      <Layer depth={0}>
+        <div class="flex items-center shrink-0 bg-edge-muted p-0.5 rounded-sm">
+          <Layer depth={3}>
+            <NarrowTab
+              active={!ctx.isOpen()}
+              label={props.contentLabel ?? 'Content'}
+              onClick={() => ctx.setIsOpen(false)}
+            />
+            <NarrowTab
+              active={ctx.isOpen()}
+              label={props.infoLabel ?? 'Info'}
+              onClick={() => ctx.setIsOpen(true)}
+            />
+          </Layer>
         </div>
       </Layer>
     </Show>
@@ -304,7 +319,7 @@ function NarrowTab(props: {
       aria-pressed={props.active}
       onClick={props.onClick}
       class={cn(
-        'text-xs px-2.5 py-0.5 rounded-full transition-colors',
+        'text-xs px-2.5 py-0.5 rounded-xs transition-colors',
         props.active ? 'bg-surface text-ink' : 'text-ink-muted hover:text-ink'
       )}
     >

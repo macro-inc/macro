@@ -2,8 +2,13 @@ import { type Accessor, createContext, type JSX } from 'solid-js';
 
 export type SidePanelSectionEntry = {
   id: string;
-  title: string;
+  title: JSX.Element;
   defaultOpen: boolean;
+  /**
+   * Render order — lower numbers appear first. Sections without an explicit
+   * order render after ordered ones, in their registration order.
+   */
+  order?: number;
   component: () => JSX.Element;
 };
 

@@ -22,10 +22,8 @@ import {
   BlockItemSplitLabel,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
-import {
-  setShowCommentsPreference,
-  showCommentsPreference,
-} from '@block-md/comments/commentStore';
+import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
+import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useDownloadDocumentAsMarkdownText } from '@block-md/signal/save';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
@@ -62,8 +60,6 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import SidePanelIcon from '@icon/fill/square-half-fill.svg';
 import Bell from '@icon/regular/bell.svg';
-import ShowComments from '@icon/regular/chat-circle-dots.svg';
-import HideComments from '@icon/regular/chat-circle-slash.svg';
 import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
 import Download from '@icon/regular/download.svg';
 import GitBranch from '@icon/regular/git-branch.svg';
@@ -75,7 +71,7 @@ import TerminalWindowIcon from '@icon/regular/terminal-window.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import { blockNameToItemType } from '@service-storage/client';
 import { Button, cn } from '@ui';
-import { createEffect, For, type JSX, on, Show } from 'solid-js';
+import { createEffect, For, type JSX, on, onCleanup, Show } from 'solid-js';
 import { DispatchAgentButton } from './DispatchAgentMenu';
 import { HISTORY_DRAWER_ID } from './History';
 import { DRAWER_ID as PROPERTIES_DRAWER_ID } from './MarkdownPropertiesModal';
@@ -139,11 +135,6 @@ export function TopBar() {
   }
 
   const ops: FileOperation[] = [
-    {
-      label: 'Details',
-      icon: Info,
-      action: detailsControl.toggle,
-    },
     { op: 'copy', divideAbove: true },
     { op: 'rename' },
     { op: 'moveToProject' },
@@ -166,6 +157,26 @@ export function TopBar() {
   ];
 
   const sidePanel = useSidePanel();
+  const splitPanel = useSplitPanel();
+
+  // Register at the split scope so `]` works from anywhere in the split
+  // (header, toolbar, drawer), but tie disposal to this TopBar so the
+  // registration disappears with the block.
+  if (splitPanel?.splitHotkeyScope) {
+    const reg = registerHotkey({
+      hotkey: ']',
+      scopeId: splitPanel.splitHotkeyScope,
+      hotkeyToken: TOKENS.block.toggleSidePanel,
+      description: 'Toggle Side Panel',
+      keyDownHandler: () => {
+        if (!sidePanel) return false;
+        if (!sidePanel.hasSections()) return false;
+        sidePanel.toggle();
+        return true;
+      },
+    });
+    onCleanup(() => reg.dispose());
+  }
 
   const tools: BlockTool[] = [
     {
@@ -178,65 +189,13 @@ export function TopBar() {
         ENABLE_HISTORY_COMPONENT &&
         canEdit(),
     },
-    {
-      label: 'Notifications',
-      icon: Bell,
-      action: notificationsControl.toggle,
-      condition: () => !!isAuth(),
-      buttonComponent: () => (
-        <NotificationsButton
-          entity={{ id: blockId, type: itemType as EntityType }}
-          notificationSource={notificationSource}
-          onOpenChange={(open) =>
-            open &&
-            analytics.track('notifications_panel_open', { blockType: 'md' })
-          }
-        />
-      ),
-    },
-    {
-      label: 'References',
-      icon: Quotes,
-      action: referencesControl.toggle,
-      condition: () => !!isAuth() && ENABLE_REFERENCES_MODAL,
-      buttonComponent: () => (
-        <ReferencesButton
-          documentId={blockId}
-          documentName={name()}
-          buttonSize="sm"
-          onOpenChange={(open) =>
-            open &&
-            analytics.track('references_panel_open', { blockType: 'md' })
-          }
-        />
-      ),
-    },
-    {
-      label: () =>
-        showCommentsPreference() ? 'Hide Comments' : 'Show Comments',
-      icon: (props: JSX.SvgSVGAttributes<SVGSVGElement>) => (
-        <Show
-          when={showCommentsPreference()}
-          fallback={<ShowComments {...props} />}
-        >
-          <HideComments {...props} />
-        </Show>
-      ),
-      action: () => setShowCommentsPreference(!showCommentsPreference()),
-    },
-    {
-      label: 'Copy Branch Name',
-      icon: GitBranch,
-      action: copyBranchName,
-      condition: () => isTask,
-      hotkeyToken: TOKENS.entity.action.copyBranchName,
-    },
-    {
-      label: 'Properties',
-      icon: TagIcon,
-      action: propertiesControl.toggle,
-      isActive: propertiesControl.isOpen,
-    },
+    // {
+    //   label: 'Copy Branch Name',
+    //   icon: GitBranch,
+    //   action: copyBranchName,
+    //   condition: () => isTask,
+    //   hotkeyToken: TOKENS.entity.action.copyBranchName,
+    // },
     {
       label: 'Dispatch to Agent',
       icon: TerminalWindowIcon,
@@ -300,6 +259,7 @@ export function TopBar() {
               tooltip={
                 sidePanel?.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'
               }
+              hotkey={TOKENS.block.toggleSidePanel}
               onClick={() => {
                 panel().toggle();
               }}
@@ -315,15 +275,7 @@ export function TopBar() {
   return (
     <>
       <SplitHeaderLeft>
-        <div
-          class="flex items-center gap-2 min-w-0 shrink"
-          onClick={() => {
-            if (sidePanel?.isNarrow()) sidePanel.toggle();
-          }}
-        >
-          <BlockItemSplitLabel />
-        </div>
-        <SidePanel.NarrowTabs />
+        <BlockItemSplitLabel />
       </SplitHeaderLeft>
 
       <SplitHeaderRight>
@@ -341,6 +293,9 @@ export function TopBar() {
         itemType={itemType}
         name={name()}
       />
+      <SplitToolbarLeft>
+        <SidePanel.NarrowTabs />
+      </SplitToolbarLeft>
     </>
   );
 }

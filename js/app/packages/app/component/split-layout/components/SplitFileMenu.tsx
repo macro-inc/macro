@@ -199,7 +199,7 @@ export function SplitFileMenu(props: {
       </ResponsiveDropdown.Trigger>
       <ResponsiveDropdown.Portal>
         <Layer depth={2}>
-          <ResponsiveDropdown.Content class="bg-surface w-fit p-1 border border-edge-muted rounded-xs shadow">
+          <ResponsiveDropdown.Content class="bg-surface w-fit p-1 border border-edge-muted rounded shadow">
             <For each={ops()}>
               {(op, i) => (
                 <>
