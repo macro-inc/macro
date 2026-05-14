@@ -59,7 +59,7 @@ export const SoupFiltersBar = () => {
 
   return (
     <Show when={!isMobile()}>
-      <div class="flex items-start gap-2 border-b border-edge-muted w-full p-2">
+      <div class="flex items-start gap-2 w-full p-2">
         <UnifiedFilterDropdown />
         <ActiveFilterChips
           filters={activeFiltersList()}
