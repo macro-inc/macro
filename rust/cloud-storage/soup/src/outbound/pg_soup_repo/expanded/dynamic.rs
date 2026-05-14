@@ -1257,6 +1257,9 @@ fn build_grouped_query<'a>(
 ) -> (QueryBuilder<'a, Postgres>, Option<String>) {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
+    // For grouped queries, we include all entity types
+    push_accessible_items_cte(&mut builder, true, true, true);
+
     // TopItems CTE: lightweight id + sort_ts with filters, cursor, and limit
     builder.push("TopItems AS (");
     builder.push("SELECT all_items.item_type, all_items.id, all_items.sort_ts FROM (");
