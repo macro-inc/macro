@@ -116,6 +116,61 @@ static PROJECT_TOP_CLAUSE: &str = r#"
                 WHERE p."deletedAt" IS NULL
 "#;
 
+// -- Grouped top clauses: include project_id for grouping support --
+
+static GROUPED_DOCUMENT_TOP_CLAUSE: &str = r#"
+                SELECT
+                    'document'::text as item_type,
+                    d.id,
+                    CASE $2
+                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", d."updatedAt")
+                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
+                        WHEN 'created_at' THEN d."createdAt"
+                        ELSE d."updatedAt"
+                    END::timestamptz as sort_ts,
+                    d."projectId"::text as project_id
+                FROM AccessibleItems ai
+                INNER JOIN "Document" d ON d.id = ai.item_id AND ai.item_type = 'document'
+                LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+"#;
+
+static GROUPED_CHAT_TOP_CLAUSE: &str = r#"
+                SELECT
+                    'chat'::text as item_type,
+                    c.id,
+                    CASE $2
+                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", c."updatedAt")
+                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
+                        WHEN 'created_at' THEN c."createdAt"
+                        ELSE c."updatedAt"
+                    END::timestamptz as sort_ts,
+                    c."projectId"::text as project_id
+                FROM AccessibleItems ai
+                INNER JOIN "Chat" c ON c.id = ai.item_id AND ai.item_type = 'chat'
+                LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
+                WHERE c."deletedAt" IS NULL
+"#;
+
+static GROUPED_PROJECT_TOP_CLAUSE: &str = r#"
+                SELECT
+                    'project'::text as item_type,
+                    p.id,
+                    CASE $2
+                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", p."updatedAt")
+                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
+                        WHEN 'created_at' THEN p."createdAt"
+                        ELSE p."updatedAt"
+                    END::timestamptz as sort_ts,
+                    p."parentId"::text as project_id
+                FROM AccessibleItems ai
+                INNER JOIN "Project" p ON p.id = ai.item_id AND ai.item_type = 'project'
+                LEFT JOIN "UserHistory" uh
+                    ON uh."itemId" = p.id
+                    AND uh."itemType" = 'project'
+                    AND uh."userId" = $1
+                WHERE p."deletedAt" IS NULL
+"#;
+
 // -- Detail clauses: full columns, joined back from TopItems --
 
 static DOCUMENT_DETAIL_CLAUSE: &str = r#"
@@ -1260,12 +1315,14 @@ fn build_grouped_query<'a>(
     // For grouped queries, we include all entity types
     push_accessible_items_cte(&mut builder, true, true, true);
 
-    // TopItems CTE: lightweight id + sort_ts with filters, cursor, and limit
+    // TopItems CTE: lightweight id + sort_ts + project_id with filters, cursor, and limit
     builder.push("TopItems AS (");
-    builder.push("SELECT all_items.item_type, all_items.id, all_items.sort_ts FROM (");
+    builder.push(
+        "SELECT all_items.item_type, all_items.id, all_items.sort_ts, all_items.project_id FROM (",
+    );
 
-    // Document top clause (lightweight)
-    builder.push(DOCUMENT_TOP_CLAUSE);
+    // Document top clause (with project_id for grouping)
+    builder.push(GROUPED_DOCUMENT_TOP_CLAUSE);
     if document_filter_needs_task_property_joins(filter_ast.document_filter.as_deref()) {
         builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
     }
@@ -1278,8 +1335,8 @@ fn build_grouped_query<'a>(
 
     builder.push(" UNION ALL ");
 
-    // Chat top clause (lightweight)
-    builder.push(CHAT_TOP_CLAUSE);
+    // Chat top clause (with project_id for grouping)
+    builder.push(GROUPED_CHAT_TOP_CLAUSE);
     builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
     builder.push(build_properties_filter(
         filter_ast.properties_filter.as_deref(),
@@ -1288,8 +1345,8 @@ fn build_grouped_query<'a>(
 
     builder.push(" UNION ALL ");
 
-    // Project top clause (lightweight)
-    builder.push(PROJECT_TOP_CLAUSE);
+    // Project top clause (with project_id for grouping)
+    builder.push(GROUPED_PROJECT_TOP_CLAUSE);
     builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
     builder.push(build_properties_filter(
         filter_ast.properties_filter.as_deref(),
