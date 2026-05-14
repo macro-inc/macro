@@ -1205,6 +1205,10 @@ fn build_grouped_query<'a>(
 
     // Document top clause (lightweight)
     builder.push(DOCUMENT_TOP_CLAUSE);
+    if document_filter_needs_task_property_joins(filter_ast.document_filter.as_deref()) {
+        builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
+    }
+    builder.push(DOCUMENT_TOP_WHERE_CLAUSE);
     builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
     builder.push(build_properties_filter(
         filter_ast.properties_filter.as_deref(),
