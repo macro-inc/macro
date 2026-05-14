@@ -21,14 +21,6 @@ export type GetItemsSoupParams = {
    */
   sort_method?: SoupApiSort;
   /**
-   * Field to group results by. When set, response includes group metadata.
-   */
-  group_by?: string;
-  /**
-   * Filter to a specific group key (for "load more in group X").
-   */
-  group_key?: string;
-  /**
    * Base64 encoded cursor value.
    */
   cursor?: string;

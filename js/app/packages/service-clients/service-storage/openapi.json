@@ -3999,24 +3999,6 @@
             }
           },
           {
-            "name": "group_by",
-            "in": "query",
-            "description": "Field to group results by. When set, response includes group metadata.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "group_key",
-            "in": "query",
-            "description": "Filter to a specific group key (for \"load more in group X\").",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "name": "cursor",
             "in": "query",
             "description": "Base64 encoded cursor value.",
@@ -6299,56 +6281,6 @@
           }
         }
       },
-      "ApiGroupByField": {
-        "oneOf": [
-          {
-            "type": "string",
-            "description": "Smart date buckets: Today, Yesterday, This Week, Last Week, This Month, Last Month, Older",
-            "enum": ["date"]
-          },
-          {
-            "type": "string",
-            "description": "Group by entity type (document, email, channel, etc.)",
-            "enum": ["entity_type"]
-          },
-          {
-            "type": "string",
-            "description": "Group by project",
-            "enum": ["project"]
-          },
-          {
-            "type": "object",
-            "description": "Group by a property value (e.g., status, priority, or custom properties)",
-            "required": ["property"],
-            "properties": {
-              "property": {
-                "type": "object",
-                "description": "Group by a property value (e.g., status, priority, or custom properties)",
-                "required": ["property_definition_id"],
-                "properties": {
-                  "entity_type": {
-                    "oneOf": [
-                      {
-                        "type": "null"
-                      },
-                      {
-                        "$ref": "#/components/schemas/ApiPropertyEntityType",
-                        "description": "Optional entity type filter for the property lookup"
-                      }
-                    ]
-                  },
-                  "property_definition_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "description": "The property definition UUID to group by"
-                  }
-                }
-              }
-            }
-          }
-        ],
-        "description": "API representation of group-by field."
-      },
       "ApiMessageAttachment": {
         "type": "object",
         "description": "An attachment on a message.",
@@ -6388,20 +6320,6 @@
         "type": "string",
         "description": "Participant role in a channel.",
         "enum": ["owner", "admin", "member"]
-      },
-      "ApiPropertyEntityType": {
-        "type": "string",
-        "description": "Entity type for property lookups (API representation).",
-        "enum": [
-          "CHANNEL",
-          "CHAT",
-          "COMPANY",
-          "DOCUMENT",
-          "PROJECT",
-          "TASK",
-          "THREAD",
-          "USER"
-        ]
       },
       "ApiResolvedChannelMessage": {
         "type": "object",
@@ -10272,21 +10190,6 @@
           "expand": {
             "type": ["boolean", "null"],
             "description": "Whether to expand projects. Defaults to true."
-          },
-          "group_by": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ApiGroupByField",
-                "description": "Field to group results by. When set, response includes group metadata."
-              }
-            ]
-          },
-          "group_key": {
-            "type": ["string", "null"],
-            "description": "Filter to a specific group key (for \"load more in group X\")."
           },
           "limit": {
             "type": ["integer", "null"],

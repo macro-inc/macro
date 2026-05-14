@@ -5,17 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ParamsExpand } from './paramsExpand';
-import type { ParamsGroupBy } from './paramsGroupBy';
-import type { ParamsGroupKey } from './paramsGroupKey';
 import type { ParamsLimit } from './paramsLimit';
 import type { ParamsSortMethod } from './paramsSortMethod';
 
 export interface Params {
   /** Whether to expand projects. Defaults to true. */
   expand?: ParamsExpand;
-  group_by?: ParamsGroupBy;
-  /** Filter to a specific group key (for "load more in group X"). */
-  group_key?: ParamsGroupKey;
   /**
    * Limit the number of items returned. Defaults to 20. Max 500.
    * @minimum 0

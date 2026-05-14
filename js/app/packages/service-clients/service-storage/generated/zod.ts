@@ -4264,16 +4264,6 @@ export const getItemsSoupQueryParams = zod.object({
     .describe(
       'Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.'
     ),
-  group_by: zod
-    .string()
-    .optional()
-    .describe(
-      'Field to group results by. When set, response includes group metadata.'
-    ),
-  group_key: zod
-    .string()
-    .optional()
-    .describe('Filter to a specific group key (for \"load more in group X\").'),
   cursor: zod.string().optional().describe('Base64 encoded cursor value.'),
 });
 
@@ -5936,66 +5926,6 @@ export const postItemsSoupBody = zod
         .boolean()
         .nullish()
         .describe('Whether to expand projects. Defaults to true.'),
-      group_by: zod
-        .union([
-          zod.null(),
-          zod
-            .union([
-              zod
-                .enum(['date'])
-                .describe(
-                  'Smart date buckets: Today, Yesterday, This Week, Last Week, This Month, Last Month, Older'
-                ),
-              zod
-                .enum(['entity_type'])
-                .describe(
-                  'Group by entity type (document, email, channel, etc.)'
-                ),
-              zod.enum(['project']).describe('Group by project'),
-              zod
-                .object({
-                  property: zod
-                    .object({
-                      entity_type: zod
-                        .union([
-                          zod.null(),
-                          zod
-                            .enum([
-                              'CHANNEL',
-                              'CHAT',
-                              'COMPANY',
-                              'DOCUMENT',
-                              'PROJECT',
-                              'TASK',
-                              'THREAD',
-                              'USER',
-                            ])
-                            .describe(
-                              'Entity type for property lookups (API representation).'
-                            ),
-                        ])
-                        .optional(),
-                      property_definition_id: zod
-                        .uuid()
-                        .describe('The property definition UUID to group by'),
-                    })
-                    .describe(
-                      'Group by a property value (e.g., status, priority, or custom properties)'
-                    ),
-                })
-                .describe(
-                  'Group by a property value (e.g., status, priority, or custom properties)'
-                ),
-            ])
-            .describe('API representation of group-by field.'),
-        ])
-        .optional(),
-      group_key: zod
-        .string()
-        .nullish()
-        .describe(
-          'Filter to a specific group key (for \"load more in group X\").'
-        ),
       limit: zod
         .number()
         .min(postItemsSoupBodyLimitMin)
@@ -7317,66 +7247,6 @@ export const postItemsSoupAstBody = zod
         .boolean()
         .nullish()
         .describe('Whether to expand projects. Defaults to true.'),
-      group_by: zod
-        .union([
-          zod.null(),
-          zod
-            .union([
-              zod
-                .enum(['date'])
-                .describe(
-                  'Smart date buckets: Today, Yesterday, This Week, Last Week, This Month, Last Month, Older'
-                ),
-              zod
-                .enum(['entity_type'])
-                .describe(
-                  'Group by entity type (document, email, channel, etc.)'
-                ),
-              zod.enum(['project']).describe('Group by project'),
-              zod
-                .object({
-                  property: zod
-                    .object({
-                      entity_type: zod
-                        .union([
-                          zod.null(),
-                          zod
-                            .enum([
-                              'CHANNEL',
-                              'CHAT',
-                              'COMPANY',
-                              'DOCUMENT',
-                              'PROJECT',
-                              'TASK',
-                              'THREAD',
-                              'USER',
-                            ])
-                            .describe(
-                              'Entity type for property lookups (API representation).'
-                            ),
-                        ])
-                        .optional(),
-                      property_definition_id: zod
-                        .uuid()
-                        .describe('The property definition UUID to group by'),
-                    })
-                    .describe(
-                      'Group by a property value (e.g., status, priority, or custom properties)'
-                    ),
-                })
-                .describe(
-                  'Group by a property value (e.g., status, priority, or custom properties)'
-                ),
-            ])
-            .describe('API representation of group-by field.'),
-        ])
-        .optional(),
-      group_key: zod
-        .string()
-        .nullish()
-        .describe(
-          'Filter to a specific group key (for \"load more in group X\").'
-        ),
       limit: zod
         .number()
         .min(postItemsSoupAstBodyLimitMin)
