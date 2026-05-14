@@ -19,7 +19,7 @@ export const [activeTabId, setActiveTabId] =
   createSignal<SettingsTab>('Appearance');
 
 export const useSettingsState = () => {
-  const { insertSplit } = useSplitLayout();
+  const { replaceOrInsertSplit } = useSplitLayout();
 
   const getSettingsSplit = () => {
     const splitManager = globalSplitManager();
@@ -37,7 +37,7 @@ export const useSettingsState = () => {
   const openSettings = (activeTabId?: SettingsTab) => {
     if (activeTabId) setActiveTabId(activeTabId);
     if (isOpen()) return; // Already open
-    insertSplit({ type: 'component', id: 'settings' });
+    replaceOrInsertSplit({ type: 'component', id: 'settings' });
   };
 
   const closeSettings = () => {
