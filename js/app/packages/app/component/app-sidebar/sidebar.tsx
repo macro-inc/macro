@@ -751,12 +751,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
               : undefined
           }
           onMouseLeave={() => setIsHovering(false)}
-          onClick={(e) => {
+          onMouseDown={(e) => {
+            if (e.button !== 0) return;
             analytics.track('sidebar_click', {
               view: props.id,
             });
-            // Middle mouse handling
-            if (e.button === 1) return;
 
             e.preventDefault();
             let currentContentHandle = layoutManager?.activeSplit();
