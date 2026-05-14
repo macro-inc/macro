@@ -491,7 +491,9 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                   </div>
                 </div>
                 <ToggleSwitch
-                  onChange={(checked) => props.setPublicPermissions(checked ? 'view' : null)}
+                  onChange={(checked) =>
+                    props.setPublicPermissions(checked ? 'view' : null)
+                  }
                   checked={props.publicAccessLevel != null}
                   labelClass="whitespace-nowrap"
                   label="Enable public link"
