@@ -1,13 +1,12 @@
 import { monochromeIcons, setMonochromeIcons, setTooltipsEnabled, tooltipsEnabled } from '@ui/signals/signals';
 import { ThemeEditorAdvanced } from '@theme/components/ThemeEditorAdvanced';
-import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { ThemeEditorBasic } from '@theme/components/ThemeEditorBasic';
 import ThemeTools from '@theme/components/ThemeTools';
 import ThemeList from '@theme/components/ThemeList';
 import { isMobile } from '@core/mobile/isMobile';
 import { createSignal, Show } from 'solid-js';
 import { Tabs } from '@core/component/Tabs';
-import { Panel } from '@ui';
+import { Panel, ToggleSwitch } from '@ui';
 
 type PanelA = 'basic' | 'advanced';
 type PanelB ='themes' | 'ui'
@@ -20,9 +19,6 @@ function UserInterface() {
         <ToggleSwitch
           onChange={setTooltipsEnabled}
           checked={tooltipsEnabled()}
-          falseLabel="Off"
-          trueLabel="On"
-          size="SM"
         />
       </div>
 
@@ -31,9 +27,6 @@ function UserInterface() {
         <ToggleSwitch
           onChange={setMonochromeIcons}
           checked={monochromeIcons()}
-          falseLabel="Off"
-          trueLabel="On"
-          size="SM"
         />
       </div>
     </div>

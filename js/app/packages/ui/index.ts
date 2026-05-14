@@ -12,6 +12,7 @@ export { Dialog  } from './components/Dialog';
 export { Button } from './components/Button';
 export { Hotkey } from './components/Hotkey';
 export { Scroll } from './components/Scroll';
+export { ToggleSwitch } from './components/ToggleSwitch';
 export { Panel  } from './components/Panel';
 export { Layer } from './components/Layer';
 
@@ -19,6 +20,7 @@ export { Layer } from './components/Layer';
 export type { AvatarSize, AvatarProps, AvatarGroupSize, AvatarGroupProps } from './components/Avatar';
 export type { ButtonProps } from './components/Button';
 export type { DialogProps } from './components/Dialog';
+export type { ToggleSwitchProps } from './components/ToggleSwitch';
 
 /* utils */
 export { cn } from './utils/classname';
