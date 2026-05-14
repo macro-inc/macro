@@ -74,7 +74,10 @@ async fn test_grouped_by_entity_type(pool: Pool<Postgres>) -> anyhow::Result<()>
         GroupedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 50,
-            cursor: Query::Sort(SimpleSortMethod::ViewedUpdated, EntityFilterAst::mock_empty()),
+            cursor: Query::Sort(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilterAst::mock_empty(),
+            ),
             exclude_frecency: false,
             grouping,
         },
@@ -94,7 +97,10 @@ async fn test_grouped_by_entity_type(pool: Pool<Postgres>) -> anyhow::Result<()>
 
     // Check that group_total_count is populated
     for item in &items {
-        assert!(item.group_total_count > 0, "group_total_count should be > 0");
+        assert!(
+            item.group_total_count > 0,
+            "group_total_count should be > 0"
+        );
     }
 
     Ok(())
@@ -120,7 +126,10 @@ async fn test_grouped_by_project(pool: Pool<Postgres>) -> anyhow::Result<()> {
         GroupedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 50,
-            cursor: Query::Sort(SimpleSortMethod::ViewedUpdated, EntityFilterAst::mock_empty()),
+            cursor: Query::Sort(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilterAst::mock_empty(),
+            ),
             exclude_frecency: false,
             grouping,
         },
@@ -156,7 +165,10 @@ async fn test_grouped_single_group_filter(pool: Pool<Postgres>) -> anyhow::Resul
         GroupedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 50,
-            cursor: Query::Sort(SimpleSortMethod::ViewedUpdated, EntityFilterAst::mock_empty()),
+            cursor: Query::Sort(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilterAst::mock_empty(),
+            ),
             exclude_frecency: false,
             grouping: GroupingConfig {
                 field: GroupByField::EntityType,
@@ -179,7 +191,10 @@ async fn test_grouped_single_group_filter(pool: Pool<Postgres>) -> anyhow::Resul
         GroupedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 50,
-            cursor: Query::Sort(SimpleSortMethod::ViewedUpdated, EntityFilterAst::mock_empty()),
+            cursor: Query::Sort(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilterAst::mock_empty(),
+            ),
             exclude_frecency: false,
             grouping: GroupingConfig {
                 field: GroupByField::EntityType,
