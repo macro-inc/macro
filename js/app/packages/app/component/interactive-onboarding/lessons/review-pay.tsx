@@ -4,6 +4,7 @@ import {
   PLAN_FEATURES,
   PLANS,
 } from '@app/component/paywall/plans';
+import { analytics } from '@app/lib/analytics/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/maybeResult';
@@ -12,7 +13,7 @@ import InfoIcon from '@icon/regular/info.svg';
 import LockIcon from '@icon/regular/lock.svg';
 import { invalidateUserTeams } from '@queries/team';
 import { authServiceClient } from '@service-auth/client';
-import { Button, cn } from '@ui';
+import { Button, cn, Tooltip } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { useOnboarding } from '../onboarding-context';
 import type { LessonContentProps, LessonDefinition } from '../types';
@@ -22,9 +23,6 @@ import {
   savePendingTeam,
   useOnboardingCheckoutMutation,
 } from '../use-onboarding-checkout';
-
-import { analytics } from '@app/lib/analytics/analytics';
-import { Tooltip } from '@ui';
 
 function ReviewPayContent() {
   return (
