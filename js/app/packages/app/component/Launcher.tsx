@@ -24,7 +24,7 @@ import {
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { isErr, ok } from '@core/util/maybeResult';
 import { Dialog } from '@kobalte/core/dialog';
-import PixelArrowRight from '@macro-icons/pixel/arrow-right.svg';
+import PixelArrowRight from '@phosphor-icons/core/regular/dice-five.svg?component-solid';
 import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
 import { AnimatedDiagramIcon } from '@macro-icons/wide/animating/diagram';
 import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
