@@ -1,5 +1,5 @@
+import FaviconBadgeSvg from '@macro-icons/macro-badge.svg?raw';
 import FaviconSvg from '@macro-icons/macro-macro.svg?raw';
-import FaviconBadgeSvg from '@macro-icons/macro-macro-badge.svg?raw';
 
 const FAVICON_SIZE = 48;
 
