@@ -10,8 +10,8 @@ import {
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
-import { registerHotkey } from '@core/hotkey/hotkeys';
-import { createMemo, createSignal, Match, Switch } from 'solid-js';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 
 type GroupOpenProps = {
   open: boolean;
@@ -20,18 +20,9 @@ type GroupOpenProps = {
 
 export const SoupViewContextGroup = () => {
   const panel = useSplitPanelOrThrow();
+  const groupByEnabled = useFeatureFlag('enable-soup-group-by');
 
   const [groupOpen, setGroupOpen] = createSignal(false);
-
-  registerHotkey({
-    hotkey: 'g',
-    scopeId: panel.splitHotkeyScope,
-    description: 'Open group menu',
-    keyDownHandler: () => {
-      setGroupOpen(true);
-      return true;
-    },
-  });
 
   const component = createMemo(() => {
     const content = panel.handle.content();
@@ -51,23 +42,25 @@ export const SoupViewContextGroup = () => {
   });
 
   return (
-    <Switch>
-      <Match when={isComponentListView('tasks')}>
-        <TasksGroup {...openProps()} />
-      </Match>
-      <Match when={isComponentListView('inbox')}>
-        <InboxGroup {...openProps()} />
-      </Match>
-      <Match when={isComponentListView('mail')}>
-        <MailGroup {...openProps()} />
-      </Match>
-      <Match when={isComponentListView('documents')}>
-        <DefaultGroup {...openProps()} />
-      </Match>
-      <Match when={isComponentListView('channels')}>
-        <DefaultGroup {...openProps()} />
-      </Match>
-    </Switch>
+    <Show when={groupByEnabled().enabled}>
+      <Switch>
+        <Match when={isComponentListView('tasks')}>
+          <TasksGroup {...openProps()} />
+        </Match>
+        <Match when={isComponentListView('inbox')}>
+          <InboxGroup {...openProps()} />
+        </Match>
+        <Match when={isComponentListView('mail')}>
+          <MailGroup {...openProps()} />
+        </Match>
+        <Match when={isComponentListView('documents')}>
+          <DefaultGroup {...openProps()} />
+        </Match>
+        <Match when={isComponentListView('channels')}>
+          <DefaultGroup {...openProps()} />
+        </Match>
+      </Switch>
+    </Show>
   );
 };
 
