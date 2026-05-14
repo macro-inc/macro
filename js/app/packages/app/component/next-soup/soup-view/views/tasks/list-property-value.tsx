@@ -223,9 +223,7 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
             <Show
               when={isSingleUser()}
               fallback={
-                <MultiUserValue
-                  userIds={entities().map((e) => e.entity_id)}
-                />
+                <MultiUserValue userIds={entities().map((e) => e.entity_id)} />
               }
             >
               <SingleUserValue userId={entities()[0].entity_id} />

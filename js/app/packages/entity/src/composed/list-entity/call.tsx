@@ -58,9 +58,7 @@ export function CallParticipants(props: { participantIds: string[] }) {
   return (
     <Show when={props.participantIds.length > 0}>
       <HoverCard
-        content={
-          <ParticipantsTooltip participantIds={props.participantIds} />
-        }
+        content={<ParticipantsTooltip participantIds={props.participantIds} />}
       >
         <UserGroup entities={entities()} maxUsers={2} />
       </HoverCard>
