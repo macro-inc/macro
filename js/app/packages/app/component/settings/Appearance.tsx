@@ -1,4 +1,6 @@
+import { monochromeIcons, setMonochromeIcons, setTooltipsEnabled, tooltipsEnabled } from '@ui/signals/signals';
 import { ThemeEditorAdvanced } from '@theme/components/ThemeEditorAdvanced';
+import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { ThemeEditorBasic } from '@theme/components/ThemeEditorBasic';
 import ThemeTools from '@theme/components/ThemeTools';
 import ThemeList from '@theme/components/ThemeList';
@@ -6,10 +8,37 @@ import { isMobile } from '@core/mobile/isMobile';
 import { createSignal, Show } from 'solid-js';
 import { Tabs } from '@core/component/Tabs';
 import { Panel } from '@ui';
-import { UI } from './UI';
 
 type PanelA = 'basic' | 'advanced';
 type PanelB ='themes' | 'ui'
+
+function UserInterface() {
+  return (
+    <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
+      <div class="bg-surface flex items-center justify-between h-15.25 px-6">
+        <div class="text-sm">Show tooltips</div>
+        <ToggleSwitch
+          onChange={setTooltipsEnabled}
+          checked={tooltipsEnabled()}
+          falseLabel="Off"
+          trueLabel="On"
+          size="SM"
+        />
+      </div>
+
+      <div class="bg-surface flex items-center justify-between h-15.25 px-6">
+        <div class="text-sm">Monochrome icons</div>
+        <ToggleSwitch
+          onChange={setMonochromeIcons}
+          checked={monochromeIcons()}
+          falseLabel="Off"
+          trueLabel="On"
+          size="SM"
+        />
+      </div>
+    </div>
+  );
+}
 
 export function Appearance() {
   const [activeTabA, setActiveTabA] = createSignal<PanelA>('basic');
@@ -76,7 +105,7 @@ export function Appearance() {
               <ThemeList />
             </Show>
             <Show when={activeTabB() === 'ui'}>
-              <UI />
+              <UserInterface />
             </Show>
           </Panel.Body>
         </Panel>
