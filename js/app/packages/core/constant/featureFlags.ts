@@ -347,5 +347,5 @@ export const ENABLE_CALLKIT = resolveFeatureFlag('ENABLE_CALLKIT', false);
 
 export const ENABLE_MARKDOWN_SIDE_PANEL = resolveFeatureFlag(
   'ENABLE_MARKDOWN_SIDE_PANEL',
-  false
+  true
 );

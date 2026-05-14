@@ -11,7 +11,7 @@ import {
   ResponsivePermissionsBadge,
   ToolButton,
 } from '@app/component/ResponsiveBlockToolbar';
-import { useSidePanel } from '@app/component/side-panel';
+import { SidePanel, useSidePanel } from '@app/component/side-panel';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
@@ -285,7 +285,8 @@ export function TopBar() {
       icon: SidePanelIcon,
       action: () => sidePanel?.toggle(),
       isActive: () => sidePanel?.isOpen() ?? false,
-      condition: () => ENABLE_MARKDOWN_SIDE_PANEL && !isMobile(),
+      condition: () =>
+        ENABLE_MARKDOWN_SIDE_PANEL && !(sidePanel?.isNarrow() ?? isMobile()),
       buttonComponent: () => (
         <Show when={sidePanel}>
           {(panel) => (
@@ -314,7 +315,15 @@ export function TopBar() {
   return (
     <>
       <SplitHeaderLeft>
-        <BlockItemSplitLabel />
+        <div
+          class="flex items-center gap-2 min-w-0 shrink"
+          onClick={() => {
+            if (sidePanel?.isNarrow()) sidePanel.toggle();
+          }}
+        >
+          <BlockItemSplitLabel />
+        </div>
+        <SidePanel.NarrowTabs />
       </SplitHeaderLeft>
 
       <SplitHeaderRight>
