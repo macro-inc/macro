@@ -3,7 +3,7 @@ import IconLightDark from '@macro-icons/macro-light-dark.svg';
 import { invertTheme, saveTheme } from '../utils/themeUtils';
 import { randomizeTheme } from './ThemeEditorBasic';
 import IconDice from '@phosphor-icons/core/regular/dice-five.svg?component-solid';
-import IconSave from '@macro-icons/macro-save.svg';
+import IconSave from '@phosphor-icons/core/regular/floppy-disk-back.svg?component-solid';
 import { createMemo, Show } from 'solid-js';
 import { Button, cn } from '@ui';
 

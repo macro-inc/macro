@@ -1,14 +1,11 @@
+import IconClipboard from '@phosphor-icons/core/regular/clipboard.svg?component-solid';
+import IconTrash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { deleteTheme, exportTheme } from '../utils/themeUtils';
 import { userThemes } from '../signals/themeSignals';
+import { createMemo, Show } from 'solid-js';
 import { Button } from '@ui';
 
-import { createMemo, Show } from 'solid-js';
-import IconClipboard from '@macro-icons/macro-clipboard.svg';
-import IconTrash from '@macro-icons/macro-trash.svg';
-
-interface ThemeCrudProps {
-  themeId: string;
-}
+interface ThemeCrudProps { themeId: string; }
 
 export function ThemeCrud(props: ThemeCrudProps) {
   const isUserTheme = createMemo(() =>
