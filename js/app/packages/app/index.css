@@ -405,13 +405,11 @@
 /* Suppressed on touch devices */
 html:not([data-touch-device="true"]) [data-message][data-highlighted],
 html:not([data-touch-device="true"]) [data-message]:hover{
-  @apply bg-accent/5 outline-1 outline-accent/20 -outline-offset-1;
+  @apply bg-ink/3 rounded-sm;
 }
 
-/* Keyboard selection accent bar can coexist with hover styles */
-/* Suppressed on touch devices */
-html:not([data-touch-device="true"]) [data-message][data-selected] > .message-accent-bar {
-  @apply opacity-100;
+html:not([data-touch-device="true"]) [data-message] {
+  @apply mx-1;
 }
 
 /* Long-press animation */

@@ -46,7 +46,7 @@ export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
     <div
       class={cn(
         'relative w-full flex items-center justify-between shrink-0',
-        hasContent() && 'min-h-10 border-b border-edge-muted',
+        hasContent() && 'min-h-10',
         preview() && 'hidden'
       )}
       data-split-toolbar

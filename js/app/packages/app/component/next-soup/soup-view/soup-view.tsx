@@ -285,13 +285,17 @@ export const SoupView = (props: SoupViewProps) => {
         <div class="size-full flex flex-col">
           <div class="flex flex-col w-full">
             <SplitHeaderLeft>
-              <div class="h-full flex gap-3 items-center shrink-0">
-                <Show when={!isMobile()}>
-                  <h1 class="font-semibold text-ink select-none text-sm shrink-0">
-                    {props.viewName}
-                  </h1>
-                </Show>
-                <Show when={!isComponentListView('search')}>
+              <div
+                class={cn('h-full flex gap-3 items-center', {
+                  'shrink-0': !narrowSearchExpanded(),
+                  'flex-1 min-w-0': narrowSearchExpanded(),
+                })}
+              >
+                <Show
+                  when={
+                    !narrowSearchExpanded() && !isComponentListView('search')
+                  }
+                >
                   <Show when={!isMobile()}>
                     <CollapsibleHeaderItem
                       id="tabs"
