@@ -291,11 +291,7 @@ export const SoupView = (props: SoupViewProps) => {
                     {props.viewName}
                   </h1>
                 </Show>
-                <Show
-                  when={
-                    !narrowSearchExpanded() && !isComponentListView('search')
-                  }
-                >
+                <Show when={!isComponentListView('search')}>
                   <Show when={!isMobile()}>
                     <CollapsibleHeaderItem
                       id="tabs"
