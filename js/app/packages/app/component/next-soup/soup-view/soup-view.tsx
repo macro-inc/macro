@@ -291,11 +291,6 @@ export const SoupView = (props: SoupViewProps) => {
                   'flex-1 min-w-0': narrowSearchExpanded(),
                 })}
               >
-                <Show when={!isMobile()}>
-                  <h1 class="font-semibold text-ink select-none text-sm shrink-0">
-                    {props.viewName}
-                  </h1>
-                </Show>
                 <Show
                   when={
                     !narrowSearchExpanded() && !isComponentListView('search')
