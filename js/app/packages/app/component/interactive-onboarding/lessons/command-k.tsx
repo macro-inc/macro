@@ -136,7 +136,11 @@ function CommandKDemo(props: LessonContentProps) {
   const soup = createSoupState({ wrapNavigation: true });
 
   createEffect(() => {
-    soup.setRows(filteredSandboxEntities().map((e) => soup.buildRow(e)));
+    soup.setRows(
+      filteredSandboxEntities().map((e, i) =>
+        soup.buildRow({ id: e.id, index: i, original: e })
+      )
+    );
   });
 
   return (
