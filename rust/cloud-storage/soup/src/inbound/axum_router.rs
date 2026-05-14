@@ -666,7 +666,7 @@ where
 #[serde(rename_all = "camelCase")]
 pub struct PostGroupedSoupAstRequest {
     /// Filters to apply (AST format)
-    #[serde(default)]
+    #[serde(default, flatten)]
     #[schema(value_type = EntityFilterAst)]
     filters: ApiEntityFilterAst,
     /// Grouping parameters (required)
