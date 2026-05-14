@@ -446,7 +446,7 @@ export const SoupViewContextProvider: FlowComponent<
           }).queryKey as readonly unknown[],
           queryFn: async (ctx: { pageParam: string | null }) => {
             const response = await throwOnErr(async () =>
-              storageServiceClient.getSoupAstItems({
+              storageServiceClient.getGroupedSoupAstItems({
                 params: {
                   cursor: ctx.pageParam ?? undefined,
                   group_by: serializeGroupByField(field),
