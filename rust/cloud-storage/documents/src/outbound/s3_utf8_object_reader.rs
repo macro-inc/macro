@@ -1,13 +1,16 @@
 //! Shared S3 UTF-8 object reader adapter.
 
 /// Error while reading an S3 object as UTF-8 text.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum S3Utf8ObjectReadError {
     /// The object does not exist at the requested key.
+    #[error("object missing")]
     Missing,
     /// The object read failed for a reason other than missing key.
+    #[error("failed to read object: {0}")]
     Read(String),
     /// The object bytes were not valid UTF-8.
+    #[error("object is not valid UTF-8: {0}")]
     InvalidUtf8(String),
 }
 
@@ -24,6 +27,7 @@ impl S3Utf8ObjectReader {
     }
 
     /// Read an S3 object body as UTF-8 text.
+    #[tracing::instrument(err, skip(self))]
     pub async fn read_utf8(
         &self,
         bucket: &str,

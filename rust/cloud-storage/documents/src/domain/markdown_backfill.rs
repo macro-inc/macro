@@ -56,10 +56,13 @@ pub trait MarkdownBackfillRepo: Send + Sync {
         limit: i64,
     ) -> impl Future<Output = anyhow::Result<Vec<MarkdownBackfillCandidate>>> + Send;
 
-    /// Mark documents as `ready / sync_service` in one batch update.
+    /// Mark inspected candidate documents as `ready / sync_service` in one
+    /// batch update. Implementations should use optimistic guards so rows are
+    /// updated only if the latest document instance and lifecycle still match
+    /// the inspected candidate values.
     fn mark_markdown_sync_service_ready(
         &self,
-        document_ids: &[String],
+        candidates: &[MarkdownBackfillCandidate],
     ) -> impl Future<Output = anyhow::Result<u64>> + Send;
 }
 
@@ -79,14 +82,16 @@ pub trait MarkdownObjectReader: Send + Sync {
 }
 
 /// Object-storage markdown read failure.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum MarkdownObjectReadError {
     /// The expected object-storage key does not exist.
+    #[error("markdown object missing: {key}")]
     Missing {
         /// Expected S3 key.
         key: String,
     },
     /// Object read failed for reasons other than missing key.
+    #[error("failed to read markdown object {key}: {error}")]
     Read {
         /// Expected S3 key.
         key: String,
@@ -94,6 +99,7 @@ pub enum MarkdownObjectReadError {
         error: String,
     },
     /// Object bytes were not valid UTF-8.
+    #[error("markdown object {key} is not valid UTF-8: {error}")]
     InvalidUtf8 {
         /// Expected S3 key.
         key: String,
@@ -237,15 +243,15 @@ where
                 .await;
 
             let mut batch_stats = MarkdownBackfillStats::default();
-            let mut ready_document_ids = Vec::new();
+            let mut ready_candidates = Vec::new();
             for outcome in outcomes {
-                record_outcome(outcome, &mut batch_stats, &mut ready_document_ids);
+                record_outcome(outcome, &mut batch_stats, &mut ready_candidates);
             }
 
-            if options.apply && !ready_document_ids.is_empty() {
+            if options.apply && !ready_candidates.is_empty() {
                 batch_stats.updated = self
                     .repo
-                    .mark_markdown_sync_service_ready(&ready_document_ids)
+                    .mark_markdown_sync_service_ready(&ready_candidates)
                     .await? as usize;
             }
 
@@ -366,7 +372,7 @@ struct CandidateOutcome {
 fn record_outcome(
     outcome: CandidateOutcome,
     stats: &mut MarkdownBackfillStats,
-    ready_document_ids: &mut Vec<String>,
+    ready_candidates: &mut Vec<MarkdownBackfillCandidate>,
 ) {
     stats.scanned += 1;
     let candidate = outcome.candidate;
@@ -379,7 +385,7 @@ fn record_outcome(
         }
         CandidateResult::SyncExists => {
             stats.sync_exists += 1;
-            ready_document_ids.push(candidate.id.clone());
+            ready_candidates.push(candidate.clone());
             tracing::debug!(document_id = %candidate.id, "markdown document exists in sync-service; will mark ready/sync_service");
         }
         CandidateResult::SyncMissing => {
@@ -394,7 +400,7 @@ fn record_outcome(
         CandidateResult::Initialized => {
             stats.sync_missing += 1;
             stats.initialized += 1;
-            ready_document_ids.push(candidate.id.clone());
+            ready_candidates.push(candidate.clone());
             tracing::debug!(document_id = %candidate.id, "markdown document initialized in sync-service; will mark ready/sync_service");
         }
         CandidateResult::ObjectMissing { key } => {
@@ -457,7 +463,7 @@ where
                 tracing::debug!(%document_id, attempt, attempts, timeout_secs = request_timeout.as_secs(), error = ?error, "sync-service exists request timed out; retrying");
             }
             Err(error) => {
-                return Err(anyhow::anyhow!(error)).with_context(|| {
+                return Err(error).with_context(|| {
                     format!(
                         "sync-service exists request timed out after {attempts} attempts of {}s",
                         request_timeout.as_secs()

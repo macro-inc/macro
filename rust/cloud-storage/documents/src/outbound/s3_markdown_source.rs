@@ -25,6 +25,7 @@ impl S3MarkdownObjectReader {
 }
 
 impl MarkdownObjectReader for S3MarkdownObjectReader {
+    #[tracing::instrument(err, skip(self))]
     async fn read_markdown(
         &self,
         candidate: &MarkdownBackfillCandidate,

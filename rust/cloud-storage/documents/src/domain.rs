@@ -2,6 +2,7 @@
 
 pub mod branch_name;
 pub mod content;
+#[cfg(feature = "ports")]
 pub mod markdown_backfill;
 
 #[cfg(feature = "document_create")]

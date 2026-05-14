@@ -98,8 +98,8 @@ async fn main() -> anyhow::Result<()> {
         concurrency = options.concurrency,
         exists_retries = options.exists_retries,
         exists_timeout_secs = options.exists_timeout.as_secs(),
-        limit = options.limit,
-        start_after = options.start_after,
+        limit = ?options.limit,
+        start_after = ?options.start_after,
         sync_service_url = %sync_service_url,
         "starting markdown content-location backfill"
     );
@@ -115,7 +115,7 @@ async fn main() -> anyhow::Result<()> {
         SyncServiceClient::new(sync_service_auth_key.clone(), sync_service_url.clone());
     let object_reader = build_object_reader(options.initialize_missing).await?;
     let markdown_initializer = build_markdown_initializer(
-        options.initialize_missing,
+        options.apply && options.initialize_missing,
         sync_service_auth_key,
         sync_service_url,
     )?;
