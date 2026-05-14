@@ -1,10 +1,10 @@
 use crate::domain::{
-    grouping::{GroupedResponse, group_items},
     models::{
-        AdvancedSortParams, FrecencyQueryInner, FrecencySoupItem, IntoSoupReqAst, SimpleQueryInner,
-        SimpleSortQuery, SimpleSortRequest, SoupErr, SoupQuery, SoupRequest, SoupType,
+        AdvancedSortParams, FrecencyQueryInner, FrecencySoupItem, GroupedSortRequest,
+        GroupedSoupItem, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery, SimpleSortRequest,
+        SoupErr, SoupQuery, SoupRequest, SoupType,
     },
-    ports::{GroupedSoupRequest, SoupOutput, SoupRepo, SoupService},
+    ports::{SoupOutput, SoupRepo, SoupService},
 };
 use call::domain::{models::GetCallRecordsRequest, ports::CallRecordQueryService};
 use comms::domain::{models::GetChannelsRequest, ports::ChannelsService};
@@ -98,12 +98,22 @@ where
                 .map_err(anyhow::Error::from)?,
         };
 
-        Ok(res
-            .into_iter()
-            .map(|item| FrecencySoupItem {
-                item,
-                frecency_score: None,
-            }))
+        Ok(res.into_iter().map(|item| FrecencySoupItem {
+            item,
+            frecency_score: None,
+        }))
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn handle_grouped_soup_request(
+        &self,
+        req: GroupedSortRequest<'_>,
+    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
+        self.soup_storage
+            .expanded_grouped_cursor_soup(req)
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(SoupErr::SoupDbErr)
     }
 
     #[tracing::instrument(skip(self, req))]
@@ -472,82 +482,10 @@ where
     }
 
     #[tracing::instrument(err, skip(self, req))]
-    async fn get_soup_grouped(&self, req: GroupedSoupRequest) -> Result<GroupedResponse, SoupErr> {
-        let GroupedSoupRequest {
-            soup_request,
-            grouping,
-            limits,
-            cursor,
-        } = req;
-
-        let limit = soup_request.limit.clamp(20, 500);
-
-        let email_request = soup_request.build_email_request();
-        let comms_request = soup_request.build_comms_request();
-        let call_request = soup_request.build_call_request();
-
-        let main_soup_fut = self.handle_simple_request(
-            soup_request.soup_type,
-            SimpleSortRequest {
-                limit,
-                cursor: SimpleSortQuery::from_entity_cursor(match soup_request.cursor {
-                    SoupQuery::Simple(SimpleQueryInner(c)) => c,
-                    SoupQuery::Frecency(_) => {
-                        return Err(SoupErr::SoupDbErr(anyhow::anyhow!(
-                            "Frecency sort not supported for grouped queries"
-                        )));
-                    }
-                }),
-                user_id: soup_request.user.copied(),
-            },
-        );
-
-        let email_soup_fut = self.handle_email_request(email_request);
-        let comms_soup_fut = self.handle_comms_request(comms_request);
-        let call_soup_fut = self.handle_call_request(call_request);
-
-        let (main_soup, email_soup, comms_soup, call_soup) =
-            tokio::join!(main_soup_fut, email_soup_fut, comms_soup_fut, call_soup_fut);
-
-        let mut all_items: Vec<FrecencySoupItem> = Vec::new();
-
-        match main_soup {
-            Ok(items) => all_items.extend(items),
-            Err(e) => {
-                tracing::warn!(error = ?e, "Failed to fetch DB items for grouped soup");
-            }
-        }
-
-        match email_soup {
-            Ok(iter) => all_items.extend(iter),
-            Err(e) => {
-                tracing::warn!(error = ?e, "Failed to fetch emails for grouped soup");
-            }
-        }
-
-        match comms_soup {
-            Ok(iter) => all_items.extend(iter),
-            Err(e) => {
-                tracing::warn!(error = ?e, "Failed to fetch channels for grouped soup");
-            }
-        }
-
-        match call_soup {
-            Ok(iter) => all_items.extend(iter),
-            Err(e) => {
-                tracing::warn!(error = ?e, "Failed to fetch calls for grouped soup");
-            }
-        }
-
-        // Note: Entity filtering is already applied at the query level for each source
-
-        // Sort all items by updated_at descending (grouping engine expects sorted input)
-        all_items.sort_by_key(|item| std::cmp::Reverse(item.item.updated_at()));
-
-        // Apply Rust grouping
-        let response = group_items(all_items, &grouping, cursor.as_ref(), limits)
-            .map_err(|e| SoupErr::SoupDbErr(anyhow::anyhow!("Grouping error: {}", e)))?;
-
-        Ok(response)
+    async fn get_user_soup_grouped(
+        &self,
+        req: GroupedSortRequest<'_>,
+    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
+        self.handle_grouped_soup_request(req).await
     }
 }
