@@ -1,5 +1,5 @@
-import { SegmentedControl, Dropdown } from '@ui';
 import type { ToolSet } from '@service-cognition/generated/schemas';
+import { Dropdown, SegmentedControl } from '@ui';
 import { Show, type Signal } from 'solid-js';
 
 export type Source = 'chat' | 'channel' | 'document' | 'email' | 'everything';
