@@ -11,6 +11,7 @@ import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-contex
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { ENABLE_SOUP_GROUP_BY_OVERRIDE } from '@core/constant/featureFlags';
 import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 
 type GroupOpenProps = {
@@ -20,7 +21,9 @@ type GroupOpenProps = {
 
 export const SoupViewContextGroup = () => {
   const panel = useSplitPanelOrThrow();
-  const groupByEnabled = useFeatureFlag('enable-soup-group-by');
+  const groupByEnabled = useFeatureFlag('enable-soup-group-by', {
+    enabledOverride: ENABLE_SOUP_GROUP_BY_OVERRIDE,
+  });
 
   const [groupOpen, setGroupOpen] = createSignal(false);
 
