@@ -588,17 +588,51 @@ fn push_accessible_items_cte(
         return;
     }
 
+    let entity_types = entity_types.join(", ");
     builder.push(format!(
         r#"AccessibleItems AS MATERIALIZED (
-        SELECT DISTINCT
-            ea.entity_id::text as item_id,
-            ea.entity_type as item_type
-        FROM entity_access ea
-        INNER JOIN user_source_ids usi ON usi.source_id = ea.source_id
-        WHERE ea.entity_type IN ({})
+        SELECT DISTINCT item_id, item_type
+        FROM (
+            SELECT
+                ea.entity_id::text as item_id,
+                ea.entity_type as item_type
+            FROM entity_access ea
+            WHERE ea.source_id = $1
+              AND ea.entity_type IN ({entity_types})
+
+            UNION ALL
+
+            SELECT
+                ea.entity_id::text as item_id,
+                ea.entity_type as item_type
+            FROM comms_channel_participants cp
+            CROSS JOIN LATERAL (
+                SELECT ea.entity_id, ea.entity_type
+                FROM entity_access ea
+                WHERE ea.source_id = cp.channel_id::text
+                  AND ea.entity_type IN ({entity_types})
+                OFFSET 0
+            ) ea
+            WHERE cp.user_id = $1
+              AND cp.left_at IS NULL
+
+            UNION ALL
+
+            SELECT
+                ea.entity_id::text as item_id,
+                ea.entity_type as item_type
+            FROM team_user t
+            CROSS JOIN LATERAL (
+                SELECT ea.entity_id, ea.entity_type
+                FROM entity_access ea
+                WHERE ea.source_id = t.team_id::text
+                  AND ea.entity_type IN ({entity_types})
+                OFFSET 0
+            ) ea
+            WHERE t.user_id = $1
+        ) accessible
     ),
-"#,
-        entity_types.join(", ")
+"#
     ));
 }
 
