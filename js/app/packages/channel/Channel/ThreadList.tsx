@@ -1,3 +1,4 @@
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import {
   createScrollIntentTracker,
   type ScrollDirection,
@@ -100,6 +101,7 @@ export function ThreadList(props: ThreadListProps) {
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
   const [isNearBottom, setIsNearBottom] = createSignal(true);
   const [didInitialScroll, setDidInitialScroll] = createSignal(false);
+  const [scrollEl, setScrollEl] = createSignal<HTMLDivElement>();
 
   let scrollRef: HTMLDivElement | undefined;
   let nearTopFired = false;
@@ -394,40 +396,47 @@ export function ThreadList(props: ThreadListProps) {
   };
 
   return (
-    <div
-      ref={scrollRef}
-      data-channel-scroll
-      {...scrollIntent.handlers}
-      style={{
-        width: '100%',
-        'overflow-y': 'auto',
-        'overflow-anchor': 'none',
-        height: '100%',
-        display: 'flex',
-        'flex-direction': 'column',
-      }}
-    >
-      <div style="flex-grow: 1" />
-      <Virtualizer
-        ref={(ref) => {
-          if (!ref) return;
-          setVirtualHandle(ref);
-          if (props.onNavigationReady) {
-            props.onNavigationReady(createNavigation(ref));
-          }
-          resetInitialScroll();
-          scrollOnMount(ref);
+    <>
+      <div
+        ref={(el) => {
+          scrollRef = el;
+          setScrollEl(el);
         }}
-        scrollRef={scrollRef}
-        itemSize={BASE_ITEM_SIZE}
-        bufferSize={BASE_BUFFER_SIZE}
-        data={props.keys()}
-        onScroll={handleScroll}
-        onScrollEnd={handleScrollEnd}
-        shift={props.shift?.() ?? false}
+        data-channel-scroll
+        class="scrollbar-hidden"
+        {...scrollIntent.handlers}
+        style={{
+          width: '100%',
+          'overflow-y': 'auto',
+          'overflow-anchor': 'none',
+          height: '100%',
+          display: 'flex',
+          'flex-direction': 'column',
+        }}
       >
-        {(key) => props.children({ id: key })}
-      </Virtualizer>
-    </div>
+        <div style="flex-grow: 1" />
+        <Virtualizer
+          ref={(ref) => {
+            if (!ref) return;
+            setVirtualHandle(ref);
+            if (props.onNavigationReady) {
+              props.onNavigationReady(createNavigation(ref));
+            }
+            resetInitialScroll();
+            scrollOnMount(ref);
+          }}
+          scrollRef={scrollRef}
+          itemSize={BASE_ITEM_SIZE}
+          bufferSize={BASE_BUFFER_SIZE}
+          data={props.keys()}
+          onScroll={handleScroll}
+          onScrollEnd={handleScrollEnd}
+          shift={props.shift?.() ?? false}
+        >
+          {(key) => props.children({ id: key })}
+        </Virtualizer>
+      </div>
+      <CustomScrollbar scrollContainer={scrollEl} />
+    </>
   );
 }
