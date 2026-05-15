@@ -1,7 +1,7 @@
 use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
 use teams::domain::model::{
     PatchTeamPlanRequest, PatchTeamRequest, PatchTeamUserRole, Team, TeamInviteDetails, TeamMember,
-    TeamRole, TeamWithMembers,
+    TeamPlan, TeamRole, TeamWithMembers,
 };
 use teams::inbound::axum_router::get_team_invites::TeamInvitesResponse as TeamTeamInvitesResponse;
 use teams::inbound::axum_router::get_user_invites::TeamInvitesResponse as UserTeamInvitesResponse;
@@ -184,6 +184,7 @@ use model::user::{
                         TeamRole,
                         TeamMember,
                         Team,
+                        TeamPlan,
                         TeamWithMembers,
                         TeamInviteDetails,
                         CreateTeamRequest,
