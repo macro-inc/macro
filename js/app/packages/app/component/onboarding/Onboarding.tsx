@@ -13,7 +13,7 @@ import { fetchToken } from '@core/util/fetchWithToken';
 import LogoIcon from '@macro-icons/macro-logo.svg';
 import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Button, cn, Layer } from '@ui';
+import { Button, cn, Layer, LogoProgress } from '@ui';
 import {
   createEffect,
   lazy,
@@ -181,39 +181,31 @@ function OnboardingInner() {
         >
           {/* Header */}
           <Show when={ctx.step() > 0}>
-            <div class="w-full flex items-center justify-between mb-10">
-              <Show
-                when={showBack()}
-                fallback={<LogoIcon class="size-5 text-accent" />}
-              >
-                <Button variant="ghost" size="sm" onClick={() => ctx.back()}>
-                  <ArrowLeftIcon class="size-4" />
-                  Back
-                </Button>
-              </Show>
-              <div class="flex items-center gap-3">
-                <StepIndicator
-                  current={ctx.step() - 1}
-                  total={STEP_LABELS.length - 1}
-                />
-                <Show when={import.meta.env.MODE === 'development'}>
-                  <Button variant="ghost" size="sm" onClick={() => ctx.next()}>
-                    Skip
-                  </Button>
-                </Show>
-              </div>
+            <div class="w-full flex items-center gap-3 mb-10">
+              <LogoProgress level={ctx.step()} total={STEP_LABELS.length - 1} class="w-7" />
+              <span class="text-xs font-mono text-ink-disabled">
+                {ctx.step()}/{STEP_LABELS.length - 1}
+              </span>
             </div>
           </Show>
 
           {/* Content */}
           <div
-            class="w-full"
+            class="w-full flex flex-col gap-2"
             style={{
               animation: 'onb-enter 400ms cubic-bezier(0.16, 1, 0.3, 1) both',
               'animation-delay': '50ms',
               '--onboarding-key': String(ctx.step()),
             }}
           >
+            <Show when={ctx.step() > 0 && showBack()}>
+              <div>
+                <Button variant="ghost" size="sm" onClick={() => ctx.back()}>
+                  <ArrowLeftIcon class="size-4" />
+                  Back
+                </Button>
+              </div>
+            </Show>
             <Switch>
               <Match when={ctx.step() === 0}>
                 <IntroStep />
@@ -231,28 +223,18 @@ function OnboardingInner() {
           </div>
         </div>
       </Layer>
+
+      <Show when={import.meta.env.MODE === 'development'}>
+        <div class="fixed bottom-4 right-4 z-50">
+          <Button variant="ghost" size="sm" onClick={() => ctx.next()}>
+            Skip step
+          </Button>
+        </div>
+      </Show>
     </div>
   );
 }
 
-function StepIndicator(props: { current: number; total: number }) {
-  return (
-    <div class="flex items-center gap-1.5">
-      {Array.from({ length: props.total }, (_, i) => (
-        <div
-          class={cn(
-            'h-1.5 rounded-full transition-all duration-200',
-            i === props.current
-              ? 'w-6 bg-accent'
-              : i < props.current
-                ? 'w-1.5 bg-accent/40'
-                : 'w-1.5 bg-edge'
-          )}
-        />
-      ))}
-    </div>
-  );
-}
 
 async function createPendingTeamOnReturn(): Promise<boolean> {
   const pendingTeam = getPendingTeam();
