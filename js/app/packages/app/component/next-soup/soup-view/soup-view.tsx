@@ -1029,10 +1029,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                           DefaultGroupHeader
                                         }
                                         group={group()}
-                                        highlighted={
-                                          panel.isPanelActive() &&
-                                          row.isFocused()
-                                        }
+                                        highlighted={row.isFocused()}
                                       />
                                     )}
                                   </Match>
@@ -1042,9 +1039,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     when={row.getIsLoadMore() && row.group}
                                   >
                                     {(group) => {
-                                      const highlighted = () =>
-                                        panel.isPanelActive() &&
-                                        row.isFocused();
+                                      const highlighted = () => row.isFocused();
                                       return (
                                         <button
                                           type="button"
@@ -1089,10 +1084,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                       <ListEntity
                                         entity={row.original}
                                         timestamp={timestamp()}
-                                        highlighted={
-                                          panel.isPanelActive() &&
-                                          row.isFocused()
-                                        }
+                                        highlighted={row.isFocused()}
                                         onMouseMove={() => {
                                           if (isKeypressActive()) return;
                                           if (soup.previewEntity()) return;
