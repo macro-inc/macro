@@ -14,7 +14,6 @@ import {
 import { Button, cn } from '@ui';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import { Layout } from '../core/Layout';
-import { Slot } from '../core/Slot';
 import type { EntityData } from '../types/entity';
 import { isNotificationUnread } from '../utils/notification';
 import { useNotificationActions } from './notification-actions';
@@ -103,24 +102,192 @@ function NotificationRowContent(props: {
   );
 }
 
+export type NotificationRowVariant = 'compact' | 'expanded';
+
 export interface NotificationRowProps {
   notification: UnifiedNotification;
   entity?: EntityData;
   onClick?: (e: PointerEvent | MouseEvent | KeyboardEvent) => void;
   /** Override the content slot (e.g. to show a fully custom body). */
   content?: JSX.Element;
-  /** Whether the "Mark done" affordance is available. Defaults to true except for `call-started`. */
+  /**
+   * Whether the "Mark done" affordance is available. Defaults to true except
+   * for `call-started`, which has no meaningful "done" state.
+   */
   showMarkDone?: boolean;
+  /**
+   * Visual variant. Both variants share the same fonts, colors, icon sizes,
+   * indicator, hover affordances, and mark-done behavior — they differ only
+   * in how content is laid out.
+   *
+   * - `compact` (default): single line, content truncated to one line.
+   *   Designed for dense lists (right-panel notifications card, soup).
+   * - `expanded`: same one-line header with content below as multi-line
+   *   markdown aligned under the description. For stand-alone display
+   *   (bell popover, inbox detail, toast).
+   */
+  variant?: NotificationRowVariant;
   class?: string;
+}
+
+interface BodyProps {
+  notification: UnifiedNotification;
+  unread: boolean;
+  canMarkDone: boolean;
+  onMarkAsDone: () => void;
+  contentOverride?: JSX.Element;
+  class?: string;
+}
+
+// Shared building blocks — every variant renders the SAME indicator, icon,
+// sender icon, description, timestamp, and mark-done button. The variants
+// only differ in how those pieces are arranged on the page.
+
+function UnreadDot(props: { unread: boolean }) {
+  return (
+    <span
+      class={cn('size-1.5 rounded-full shrink-0', {
+        'bg-accent': props.unread,
+        'bg-transparent': !props.unread,
+      })}
+    />
+  );
+}
+
+function HeaderLeading(props: { notification: UnifiedNotification; unread: boolean }) {
+  return (
+    <>
+      <UnreadDot unread={props.unread} />
+      <NotificationIcon
+        notification={props.notification}
+        class="size-3.5 shrink-0 text-ink-muted/60"
+      />
+      <NotificationSenderIcon notification={props.notification} size="sm" />
+      <span
+        class={cn(
+          'ph-no-capture truncate min-w-0 text-xs text-ink',
+          props.unread && 'font-medium'
+        )}
+      >
+        <NotificationDescription notification={props.notification} />
+      </span>
+    </>
+  );
+}
+
+function HeaderTrailing(props: {
+  notification: UnifiedNotification;
+  canMarkDone: boolean;
+  onMarkAsDone: () => void;
+}) {
+  return (
+    // h-5 locks this slot to the mark-done button's height so swapping
+    // between the timestamp and the button on hover does not change the row
+    // height. justify-end keeps the timestamp right-aligned within the slot.
+    <div class="shrink-0 ml-auto h-5 flex items-center justify-end">
+      <span
+        class={cn('text-ink-extra-muted text-xs tabular-nums', {
+          'group-hover/notif:hidden': props.canMarkDone,
+        })}
+      >
+        <NotificationTimestamp notification={props.notification} />
+      </span>
+      <Show when={props.canMarkDone}>
+        <Button
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onMarkAsDone();
+          }}
+          tooltip="Mark done"
+          class="rounded text-ink-muted hover:text-accent hover:bg-accent/10 hidden group-hover/notif:grid p-0 place-items-center size-5"
+        >
+          <CheckIcon class="size-3" />
+        </Button>
+      </Show>
+    </div>
+  );
+}
+
+// Indent under the description: indicator(6) + gap(10) + icon(14) + gap(10) +
+// sender-icon(16) + gap(10) = 66px ≈ pl-[3.625rem]. Keep in sync if the row
+// gap or icon sizes change.
+const CONTENT_INDENT = 'pl-[3.625rem]';
+
+function CompactBody(props: BodyProps) {
+  return (
+    <Layout
+      class={cn(
+        'group/notif @container/notif-row flex items-center gap-2.5 px-3 py-2 hover:bg-ink-muted/[0.06] min-w-0 overflow-hidden cursor-pointer',
+        props.class
+      )}
+    >
+      <HeaderLeading notification={props.notification} unread={props.unread} />
+      {/*
+        The content slot truncates to one line. At narrow widths it collapses
+        to "X...", which reads worse than just dropping it — the description
+        ("Gabriel mentioned you") + timestamp already tell the story. Hide
+        below the container's md breakpoint.
+      */}
+      <span class="hidden @md/notif-row:flex flex-1 min-w-0 ph-no-capture truncate text-xs text-ink-muted/60">
+        {props.contentOverride ?? (
+          <NotificationRowContent
+            notification={props.notification}
+            singleLine
+          />
+        )}
+      </span>
+      <HeaderTrailing
+        notification={props.notification}
+        canMarkDone={props.canMarkDone}
+        onMarkAsDone={props.onMarkAsDone}
+      />
+    </Layout>
+  );
+}
+
+function ExpandedBody(props: BodyProps) {
+  return (
+    <Layout
+      class={cn(
+        'group/notif flex flex-col px-4 py-3 hover:bg-ink-muted/[0.06] min-w-0 overflow-hidden cursor-pointer',
+        props.class
+      )}
+    >
+      <div class="flex items-center gap-2.5 min-w-0">
+        <HeaderLeading notification={props.notification} unread={props.unread} />
+        <span class="flex-1" />
+        <HeaderTrailing
+          notification={props.notification}
+          canMarkDone={props.canMarkDone}
+          onMarkAsDone={props.onMarkAsDone}
+        />
+      </div>
+      <div
+        class={cn(
+          'ph-no-capture min-w-0 text-xs text-ink-muted/80 pt-2 break-words',
+          CONTENT_INDENT
+        )}
+      >
+        {props.contentOverride ?? (
+          <NotificationRowContent notification={props.notification} />
+        )}
+      </div>
+    </Layout>
+  );
 }
 
 /**
  * A single, unstacked notification row.
  *
- * Visual structure mirrors `NotificationStackRow` but takes one notification,
- * uses the type-polymorphic notification extractors, and lets per-type content
- * render through a `Switch` inside the content slot — the same shape used by
- * the entity list-item layouts.
+ * Comes in two variants:
+ * - `compact` (default): one-line row used in dense lists (right-panel
+ *   notifications card). Mirrors `NotificationStackRow` layout.
+ * - `full`: header + body + multi-line content used when each notification gets
+ *   its own card (bell popover, inbox detail). Replaces the old
+ *   `NotificationRenderer mode="full"` rendering.
+ *
+ * Both variants share click handling, the context menu, and the mark-done
+ * affordance — opt out with `showMarkDone={false}`.
  */
 export function NotificationRow(props: NotificationRowProps) {
   const notificationSource = useGlobalNotificationSource();
@@ -156,8 +323,7 @@ export function NotificationRow(props: NotificationRowProps) {
     props.onClick?.(e);
   };
 
-  const handleMarkAsDone = (e?: PointerEvent | MouseEvent) => {
-    e?.stopPropagation();
+  const handleMarkAsDone = () => {
     markAsDone();
   };
 
@@ -171,15 +337,19 @@ export function NotificationRow(props: NotificationRowProps) {
     toast.success('Link copied to clipboard');
   };
 
+  const bodyProps = (): BodyProps => ({
+    notification: props.notification,
+    unread: unread(),
+    canMarkDone: canMarkDone(),
+    onMarkAsDone: handleMarkAsDone,
+    contentOverride: props.content,
+    class: props.class,
+  });
+
   return (
     <ContextMenu>
       <ContextMenu.Trigger class="size-full">
-        <Layout
-          class={cn(
-            'group/notif grid items-center gap-2.5 px-3 py-2 hover:bg-ink-muted/[0.06] min-w-0 overflow-hidden cursor-pointer',
-            'grid-cols-[auto_auto_auto_auto_minmax(0,1fr)_auto]',
-            props.class
-          )}
+        <div
           onClick={handleClick}
           role="button"
           tabIndex={0}
@@ -195,65 +365,12 @@ export function NotificationRow(props: NotificationRowProps) {
             }
           }}
         >
-          <Slot placement="indicator" class="flex items-center">
-            <span
-              class={cn('size-1.5 rounded-full shrink-0', {
-                'bg-accent': unread(),
-                'bg-transparent': !unread(),
-              })}
-            />
-          </Slot>
-          <Slot placement="icon" class="flex items-center">
-            <NotificationIcon
-              notification={props.notification}
-              class="size-3.5 shrink-0 text-ink-muted/60"
-            />
-          </Slot>
-          <Slot placement="sender" class="shrink-0 flex items-center">
-            <NotificationSenderIcon
-              notification={props.notification}
-              size="sm"
-            />
-          </Slot>
-          <Slot
-            placement="description"
-            class={cn(
-              'ph-no-capture truncate min-w-0 text-xs text-ink',
-              unread() && 'font-medium'
-            )}
-          >
-            <NotificationDescription notification={props.notification} />
-          </Slot>
-          <Slot
-            placement="content"
-            class="ph-no-capture truncate min-w-0 text-xs text-ink-muted/60 flex items-center"
-          >
-            {props.content ?? (
-              <NotificationRowContent
-                notification={props.notification}
-                singleLine
-              />
-            )}
-          </Slot>
-          <Slot placement="actions" class="shrink-0 ml-auto">
-            <span
-              class={cn('text-ink-extra-muted text-xs tabular-nums', {
-                'group-hover/notif:hidden': canMarkDone(),
-              })}
-            >
-              <NotificationTimestamp notification={props.notification} />
-            </span>
-            <Show when={canMarkDone()}>
-              <Button
-                onClick={handleMarkAsDone}
-                tooltip="Mark done"
-                class="rounded text-ink-muted hover:text-accent hover:bg-accent/10 hidden group-hover/notif:grid p-0 place-items-center size-5"
-              >
-                <CheckIcon class="size-3" />
-              </Button>
-            </Show>
-          </Slot>
-        </Layout>
+          <Switch fallback={<CompactBody {...bodyProps()} />}>
+            <Match when={props.variant === 'expanded'}>
+              <ExpandedBody {...bodyProps()} />
+            </Match>
+          </Switch>
+        </div>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
         <div onClick={(e) => e.stopPropagation()}>
