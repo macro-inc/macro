@@ -15,6 +15,7 @@ import {
   NotificationCount,
   NotificationDescription,
   NotificationIcon,
+  NotificationRow,
   NotificationSender,
   NotificationStackRow,
   NotificationStacks,
@@ -41,6 +42,7 @@ export const Entity = {
     ContentHits: ContentHits,
   },
   Notification: {
+    Row: NotificationRow,
     StackRow: NotificationStackRow,
     Stacks: NotificationStacks,
     MobileStacks: MobileNotificationStacks,

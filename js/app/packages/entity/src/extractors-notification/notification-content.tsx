@@ -22,7 +22,7 @@ interface NotificationContentProps {
   singleLine?: boolean;
 }
 
-function DocumentMentionPill(props: { notification: UnifiedNotification }) {
+export function DocumentMentionPill(props: { notification: UnifiedNotification }) {
   const notificationSource = useGlobalNotificationSource();
   const { markAsDone } = useNotificationActions({
     notification: props.notification,
@@ -212,27 +212,42 @@ export function NotificationContent(props: NotificationContentProps) {
     return '';
   };
 
+  const singleDocMention = () => {
+    if (!props.notification) return null;
+    if (props.notification.notification_metadata.tag !== 'document_mention') {
+      return null;
+    }
+    return props.notification as UnifiedNotification;
+  };
+
   return (
     <Show
       when={props.stack?.type === 'document_mention'}
       fallback={
-        <Show when={content()}>
-          {(text) => (
-            <Show
-              when={text().trim()}
-              fallback={
-                <span class="italic text-ink-disabled">Attached items</span>
-              }
-            >
-              {(trimmedContent) => (
-                <StaticMarkdown
-                  markdown={trimmedContent()}
-                  theme={unifiedListMarkdownTheme}
-                  singleLine={props.singleLine ?? true}
-                />
+        <Show
+          when={singleDocMention()}
+          fallback={
+            <Show when={content()}>
+              {(text) => (
+                <Show
+                  when={text().trim()}
+                  fallback={
+                    <span class="italic text-ink-disabled">Attached items</span>
+                  }
+                >
+                  {(trimmedContent) => (
+                    <StaticMarkdown
+                      markdown={trimmedContent()}
+                      theme={unifiedListMarkdownTheme}
+                      singleLine={props.singleLine ?? true}
+                    />
+                  )}
+                </Show>
               )}
             </Show>
-          )}
+          }
+        >
+          {(n) => <DocumentMentionPill notification={n()} />}
         </Show>
       }
     >
