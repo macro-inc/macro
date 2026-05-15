@@ -19,7 +19,7 @@ import {
   type SoupItemsQueryArgs,
   useSoupItemsQuery,
 } from '@queries/soup/items';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 
 import {
   DashboardEmptyState,
@@ -113,6 +113,28 @@ function TaskRow(props: { task: TaskEntity; onClick: () => void }) {
   );
 }
 
+function InfiniteScrollTrigger(props: { onIntersect: () => void }) {
+  let ref: HTMLDivElement | undefined;
+
+  createEffect(() => {
+    if (!ref) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          props.onIntersect();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(ref);
+    onCleanup(() => observer.disconnect());
+  });
+
+  return <div ref={ref} class="h-4 shrink-0" />;
+}
+
 function TasksContent(props: { limit: number; onLoadMore: () => void }) {
   const user = useUserContext();
   const { openWithSplit } = useSplitLayout();
@@ -182,13 +204,7 @@ function TasksContent(props: { limit: number; onLoadMore: () => void }) {
           )}
         </For>
         <Show when={hasMore()}>
-          <button
-            type="button"
-            onClick={props.onLoadMore}
-            class="mt-1 mb-3 mx-3 py-2 text-xs text-ink-muted bg-ink/5 hover:bg-ink/10 rounded-lg transition-colors"
-          >
-            Load more ({allTasks().length - props.limit} remaining)
-          </button>
+          <InfiniteScrollTrigger onIntersect={props.onLoadMore} />
         </Show>
       </div>
     </Show>

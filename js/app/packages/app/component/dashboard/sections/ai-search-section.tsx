@@ -1,7 +1,7 @@
 import { ChatWithAgentIcon } from '@app/component/ChatWithAgentButton';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import PaperPlaneRightIcon from '@icon/fill/paper-plane-right-fill.svg';
-import { Button, Surface } from '@ui';
+import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 
 interface AISearchSectionProps {
@@ -35,7 +35,7 @@ export function AISearchSection(props: AISearchSectionProps) {
 
   return (
     <form onSubmit={handleSubmit} class={props.class}>
-      <Surface depth={2} class="flex items-center gap-2 px-3 py-2">
+      <div class="flex items-center gap-2 px-3 py-2 bg-ink/5 rounded-lg">
         <div class="size-5 flex items-center justify-center shrink-0 text-chat">
           <ChatWithAgentIcon />
         </div>
@@ -55,7 +55,7 @@ export function AISearchSection(props: AISearchSectionProps) {
         >
           <PaperPlaneRightIcon class="size-4" />
         </Button>
-      </Surface>
+      </div>
     </form>
   );
 }

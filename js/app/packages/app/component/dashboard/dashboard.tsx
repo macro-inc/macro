@@ -1,24 +1,24 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserContext } from '@core/context/user';
 import { DisplayName } from '@entity';
 import BellIcon from '@icon/regular/bell.svg';
 import GearIcon from '@icon/regular/gear.svg';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import SignOutIcon from '@icon/regular/sign-out.svg';
-import UserCircleIcon from '@icon/regular/user-circle.svg';
 import { useUserNotificationsQuery } from '@queries/notification/user-notifications';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Dropdown } from '@ui';
 import { createMemo, Show } from 'solid-js';
 
+import { ActivityHeatmapSection } from './sections/activity-heatmap-section';
 import { ActivitySection } from './sections/activity-section';
 import { AISearchSection } from './sections/ai-search-section';
 import { ContactsSection } from './sections/contacts-section';
 import { DraftsSection } from './sections/drafts-section';
 import { QuickActionsSection } from './sections/quick-actions-section';
-import { RecentChatsSection } from './sections/recent-chats-section';
 import { RecentItemsSection } from './sections/recent-items-section';
+import { SmartDigestSection } from './sections/smart-digest-section';
+import { StatsBar } from './sections/stats-bar';
 import { TasksSection } from './sections/tasks-section';
 import { TeamSection } from './sections/team-section';
 
@@ -47,19 +47,30 @@ export function Dashboard() {
     return items.filter((n) => !n.done && !n.viewed_at).length;
   });
 
-  const handleSearch = () => {
-    openWithSplit({ type: 'component', id: 'search' });
-  };
-
   const handleNotifications = () => {
     openWithSplit({ type: 'component', id: 'inbox' });
   };
 
   return (
     <main class="h-full overflow-y-auto bg-page">
-      <div class="max-w-[1600px] mx-auto px-4 py-8 sm:px-6 lg:px-12">
-        {/* Header row */}
-        <header class="flex items-start justify-between gap-6 mb-10">
+      <div class="max-w-[1400px] mx-auto px-4 pt-8 sm:px-6 lg:px-10">
+        <div class="flex flex-col gap-6">
+        {/* Hero header with noise grid */}
+        <div class="relative rounded-xl px-6 py-6 overflow-hidden">
+          <div class="absolute inset-0 text-accent opacity-15">
+            <PcNoiseGrid
+              cellSize={28}
+              warp={0}
+              crunch={0.2}
+              freq={0.001}
+              size={[0, 0.3]}
+              rounding={0}
+              fill={0}
+              stroke={1}
+              speed={[0.05, 0.3]}
+            />
+          </div>
+          <header class="flex items-start justify-between gap-6">
           <div>
             <p class="text-xs text-ink-muted mb-1">{getFormattedDate()}</p>
             <h1 class="text-3xl font-semibold text-ink">
@@ -68,19 +79,12 @@ export function Dashboard() {
                 , <DisplayName id={user.userId()!} format="firstName" />
               </Show>
             </h1>
-            <div class="mt-5">
+            <div class="mt-5 flex items-center gap-3">
               <QuickActionsSection />
+              <AISearchSection class="flex-1 max-w-sm" />
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleSearch}
-              class="size-10 rounded-full flex items-center justify-center text-ink-muted hover:text-ink hover:bg-ink/5 transition-colors"
-              title="Search (⌘K)"
-            >
-              <SearchIcon class="size-5" />
-            </button>
             <button
               type="button"
               onClick={handleNotifications}
@@ -102,10 +106,6 @@ export function Dashboard() {
                 <DropdownMenu.Portal>
                   <DropdownMenu.Content class="z-action-menu bg-surface border border-edge-muted rounded-lg shadow-sm min-w-40 p-1">
                     <DropdownMenu.Item class="flex items-center gap-2 px-2.5 py-1.5 text-sm rounded hover:bg-ink/5 cursor-pointer">
-                      <UserCircleIcon class="size-4" />
-                      <span>Profile</span>
-                    </DropdownMenu.Item>
-                    <DropdownMenu.Item class="flex items-center gap-2 px-2.5 py-1.5 text-sm rounded hover:bg-ink/5 cursor-pointer">
                       <GearIcon class="size-4" />
                       <span>Settings</span>
                     </DropdownMenu.Item>
@@ -120,24 +120,29 @@ export function Dashboard() {
             </Show>
           </div>
         </header>
+        </div>
 
-        {/* Main 2-column layout */}
+        <SmartDigestSection />
+
+        <StatsBar />
+
+        {/* 2-column layout */}
         <div class="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6">
-          {/* Left column: AI, Chats, Tasks, Recents, Drafts */}
-          <div class="flex flex-col gap-6">
-            <AISearchSection />
-            <RecentChatsSection />
+          {/* Left column */}
+          <div class="flex flex-col gap-4 min-w-0">
             <TasksSection />
             <RecentItemsSection />
             <DraftsSection />
           </div>
 
-          {/* Right column: Team, Contacts, Activity */}
-          <div class="flex flex-col gap-6">
+          {/* Right column */}
+          <div class="flex flex-col gap-4 min-w-0">
+            <ActivityHeatmapSection />
             <TeamSection />
             <ContactsSection />
             <ActivitySection />
           </div>
+        </div>
         </div>
       </div>
     </main>

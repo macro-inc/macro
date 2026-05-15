@@ -1,6 +1,5 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { formatRelativeDate } from '@core/util/time';
-import PencilIcon from '@icon/regular/pencil-simple.svg';
 import EnvelopeIcon from '@icon/regular/envelope.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import { type EmailEntity, isEmailEntity } from '@entity';
@@ -34,7 +33,7 @@ export function DraftsSection(props: DraftsSectionProps) {
   return (
     <DashboardSection
       title="Email Drafts"
-      icon={<PencilIcon />}
+      icon={<EnvelopeIcon />}
       accent="warning"
       class={props.class}
       onSeeAll={handleSeeAll}

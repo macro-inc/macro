@@ -36,10 +36,10 @@ export function QuickActionsSection() {
   return (
     <div class="flex items-center gap-2">
       <Button
-        variant="base"
+        variant="primary"
         size="md"
         onClick={() => setCreateMenuOpen(true)}
-        class="gap-1.5 bg-ink/10"
+        class="gap-1.5"
       >
         <PlusIcon class="size-4" />
         <span>Create</span>

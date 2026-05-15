@@ -48,10 +48,10 @@ export function DashboardSection(props: DashboardSectionProps) {
             <button
               type="button"
               onClick={props.onSeeAll}
-              class="flex items-center gap-0.5 text-xs text-accent font-medium active:opacity-70 transition-opacity"
+              class="group flex items-center gap-0.5 text-xs text-accent font-medium hover:text-accent/80 active:opacity-70 transition-colors"
             >
-              See all
-              <CaretRightIcon class="size-3" />
+              <span class="group-hover:underline underline-offset-2">See all</span>
+              <CaretRightIcon class="size-3 transition-transform group-hover:translate-x-0.5" />
             </button>
           </Show>
         </div>
@@ -159,21 +159,47 @@ interface DashboardEmptyStateProps {
   compact?: boolean;
 }
 
+function FloatingDots() {
+  return (
+    <div class="absolute inset-0 overflow-hidden pointer-events-none">
+      <div
+        class="absolute size-1.5 rounded-full bg-ink/10 animate-[float_3s_ease-in-out_infinite]"
+        style={{ top: '20%', left: '25%', 'animation-delay': '0s' }}
+      />
+      <div
+        class="absolute size-1 rounded-full bg-ink/8 animate-[float_4s_ease-in-out_infinite]"
+        style={{ top: '60%', left: '15%', 'animation-delay': '1s' }}
+      />
+      <div
+        class="absolute size-2 rounded-full bg-ink/5 animate-[float_3.5s_ease-in-out_infinite]"
+        style={{ top: '30%', right: '20%', 'animation-delay': '0.5s' }}
+      />
+      <div
+        class="absolute size-1 rounded-full bg-ink/10 animate-[float_4.5s_ease-in-out_infinite]"
+        style={{ top: '70%', right: '25%', 'animation-delay': '1.5s' }}
+      />
+    </div>
+  );
+}
+
 export function DashboardEmptyState(props: DashboardEmptyStateProps) {
   return (
     <div
       class={cn(
-        'flex flex-col items-center justify-center text-center gap-1',
+        'relative flex flex-col items-center justify-center text-center gap-1',
         props.compact ? 'py-4' : 'py-8'
       )}
     >
+      <FloatingDots />
       <Show when={props.icon}>
         <div
           class={cn(
-            'rounded-full bg-ink/5 flex items-center justify-center text-ink-muted [&_svg]:size-5 mb-2',
+            'relative rounded-full bg-ink/5 flex items-center justify-center text-ink-muted [&_svg]:size-5 mb-2',
+            'animate-[breathe_3s_ease-in-out_infinite]',
             props.compact ? 'size-8 [&_svg]:size-4' : 'size-10'
           )}
         >
+          <div class="absolute inset-0 rounded-full bg-ink/5 animate-[pulse-ring_3s_ease-in-out_infinite]" />
           {props.icon}
         </div>
       </Show>
