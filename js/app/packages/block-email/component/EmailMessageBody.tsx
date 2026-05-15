@@ -295,7 +295,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
 
   return (
     <div
-      class="ph-no-capture flex flex-col pt-1"
+      class="ph-no-capture flex flex-col pt-1 max-sm:-ml-[calc(var(--user-icon-width)+var(--message-padding-x))]"
       onPointerDown={() => {
         if (!props.isBodyExpanded() && props.message.db_id) {
           props.setExpandedMessageBody(props.message.db_id);

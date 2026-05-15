@@ -1122,7 +1122,9 @@ export function BaseInput(props: {
           const msgEl = document.querySelector(
             `[data-message-body-id="${lastMsg.db_id}"]`
           ) as HTMLElement | null;
-          const focusable = msgEl?.closest('[tabindex="0"]') as HTMLElement | null;
+          const focusable = msgEl?.closest(
+            '[tabindex="0"]'
+          ) as HTMLElement | null;
           focusable?.focus();
           return true;
         },
@@ -1313,7 +1315,7 @@ export function BaseInput(props: {
       class="relative flex flex-col flex-1 bg-ink-muted/[0.025] border border-ink-muted/8 rounded-lg max-w-full"
     >
       {/* Top Bar */}
-      <div class="relative flex items-start gap-2 px-3 py-1.5 border-b border-ink-muted/8">
+      <div class="relative flex items-start gap-2 px-3 pt-1.5 pb-0.5">
         <DropdownMenu>
           <DropdownMenu.Trigger>
             <div class="px-1">
@@ -1531,7 +1533,7 @@ export function BaseInput(props: {
           </div>
         </Show>
         <div
-          class="max-h-80 overflow-y-scroll w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-4 py-2"
+          class="max-h-80 overflow-y-scroll w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-4 py-1"
           onclick={() => {
             editor()?.focus();
           }}
@@ -1751,9 +1753,7 @@ export function BaseInput(props: {
             >
               <Show
                 when={!sendMutation.isPending}
-                fallback={
-                  <Spinner class="size-4 animate-spin text-surface" />
-                }
+                fallback={<Spinner class="size-4 animate-spin text-surface" />}
               >
                 <ArrowUp class="text-surface! fill-surface! size-4" />
               </Show>

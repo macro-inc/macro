@@ -192,7 +192,6 @@ export function MessageContainer(props: MessageContainerProps) {
         <CollapsedMessage
           message={props.message}
           isFocused={props.isFocused}
-          isFirstMessage={props.isFirstMessage}
           onClick={handleExpand}
         />
       }
@@ -201,16 +200,16 @@ export function MessageContainer(props: MessageContainerProps) {
       <div class="shrink-0 flex justify-center w-full">
         <div class="macro-message-width macro-message-padding w-full">
           <div
-            class="relative rounded-lg border border-ink-muted/8 overflow-hidden px-1.5 py-1.5 [&>div]:!bg-transparent"
+            class="relative rounded-lg overflow-hidden pl-1 pr-1.5 py-2 ring-1 ring-inset [&>div]:!bg-transparent"
             classList={{
-              'bg-accent/5 outline-1 outline-accent/20 -outline-offset-1': props.isFocused,
-              'bg-ink-muted/[0.025]': !props.isFocused,
+              'bg-active/60 ring-edge': props.isFocused,
+              'bg-ink-muted/[0.025] ring-ink-muted/8': !props.isFocused,
             }}
           >
             <Message
               id={props.message.db_id ?? undefined}
               focused={false}
-              isFirstMessage={props.isFirstMessage}
+              isFirstMessage={true}
               isLastMessage={props.isLastMessage}
               senderId={senderMacroId()}
               isNewMessage={isNewMessage()}
@@ -259,7 +258,9 @@ export function MessageContainer(props: MessageContainerProps) {
                       id: a.sfs_id!,
                     }))}
                     variant="small"
-                    attachmentIds={imageAttachmentsWithSfs().map((a) => a.db_id!)}
+                    attachmentIds={imageAttachmentsWithSfs().map(
+                      (a) => a.db_id!
+                    )}
                   />
                 </div>
               </Show>

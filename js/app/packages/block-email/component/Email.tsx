@@ -217,7 +217,6 @@ function EmailContent(props: EmailViewProps) {
         );
         context.messages.setFocused(lastUnreadMessageId_!);
       } else {
-        // No unread message, scroll to last message without selecting
         scrollToLastMessage('instant', false);
       }
     }
@@ -298,9 +297,7 @@ function EmailContent(props: EmailViewProps) {
 
     if (!currentFocusedId) {
       const target =
-        dir === 'prev'
-          ? messages[messages.length - 1]
-          : messages[0];
+        dir === 'prev' ? messages[messages.length - 1] : messages[0];
       if (!target?.db_id) return false;
       performScrollToMessage(target.db_id, {
         behavior: 'smooth',

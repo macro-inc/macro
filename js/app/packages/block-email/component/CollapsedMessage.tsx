@@ -10,7 +10,6 @@ import { EmailUserTooltip } from './EmailUserTooltip';
 interface CollapsedMessageProps {
   message: ApiMessage;
   isFocused: boolean;
-  isFirstMessage: boolean;
   onClick: () => void;
 }
 
@@ -54,10 +53,10 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
       <div class="macro-message-width macro-message-padding w-full">
         <div
           class={cn(
-            'group/msg relative flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-ink-muted/8 cursor-pointer min-w-0',
+            'relative flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer min-w-0 ring-1 ring-inset',
             props.isFocused
-              ? 'bg-accent/5 outline-1 outline-accent/20 -outline-offset-1'
-              : 'bg-ink-muted/[0.025] hover:bg-ink-muted/[0.06]'
+              ? 'bg-active/60 ring-edge'
+              : 'bg-ink-muted/[0.025] ring-ink-muted/8 hover:bg-active/40 hover:ring-edge'
           )}
           data-message-body-id={props.message.db_id}
           tabIndex={0}
@@ -80,12 +79,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
           </div>
           <div class="shrink-0 min-w-0 max-w-28">
             <EmailUserTooltip recipient={props.message.from}>
-              <div
-                class={cn(
-                  'text-sm truncate cursor-default',
-                  props.isFocused ? 'text-ink font-medium' : 'text-ink font-medium'
-                )}
-              >
+              <div class="text-sm font-medium text-ink truncate cursor-default">
                 {senderDisplay()}
               </div>
             </EmailUserTooltip>

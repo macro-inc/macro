@@ -16,7 +16,6 @@ import {
 import {
   getRecipientDisplayName,
   getSenderDisplayName,
-  isMessageFromCurrentUser,
 } from '../util/emailUser';
 import { useEmailContext } from './EmailContext';
 import { EmailUserTooltip } from './EmailUserTooltip';
@@ -69,80 +68,66 @@ export function formatShortDate(date: DateValue): string {
   });
 }
 
-function RecipientRow(props: {
+function RecipientChip(props: { recipient: Recipient }): JSX.Element {
+  return (
+    <EmailUserTooltip recipient={props.recipient}>
+      <span class="cursor-default whitespace-nowrap">
+        <span class="text-ink">
+          {props.recipient.name ?? props.recipient.email}
+        </span>
+        <Show when={props.recipient.name && props.recipient.email}>
+          <span class="text-ink-extra-muted ml-1.5">
+            {props.recipient.email}
+          </span>
+        </Show>
+      </span>
+    </EmailUserTooltip>
+  );
+}
+
+function DetailRow(props: {
   label: string;
   recipients: Recipient[];
-  bold?: boolean;
 }): JSX.Element {
   return (
     <Show when={props.recipients.length > 0}>
-      <div class="flex flex-row gap-2">
-        <span class="text-ink-extra-muted min-w-10">{props.label}</span>
-        <span class="select-text cursor-text">
+      <div class="flex flex-row gap-3 text-sm">
+        <span class="text-ink-extra-muted shrink-0 w-10 text-xs uppercase tracking-wide font-medium pt-0.5">
+          {props.label}
+        </span>
+        <div class="flex flex-row flex-wrap gap-x-2 gap-y-1 select-text cursor-text min-w-0">
           <For each={props.recipients}>
             {(r, index) => (
               <>
-                <EmailUserTooltip recipient={r}>
-                  <span
-                    classList={{
-                      'font-medium': props.bold,
-                      'text-ink': true,
-                      'cursor-default': true,
-                    }}
-                  >
-                    {r.name ?? r.email}
-                    <Show when={r.name && r.email}>
-                      <span class="text-ink-extra-muted font-normal"> &lt;{r.email}&gt;</span>
-                    </Show>
-                  </span>
-                </EmailUserTooltip>
+                <RecipientChip recipient={r} />
                 <Show when={index() < props.recipients.length - 1}>
-                  <span class="text-ink-extra-muted">, </span>
+                  <span class="text-ink-extra-muted">,</span>
                 </Show>
               </>
             )}
           </For>
-        </span>
+        </div>
       </div>
     </Show>
   );
 }
 
-function ExpandedHeader(props: {
-  message: ApiMessage;
-  onClose: () => void;
-}): JSX.Element {
+function ExpandedDetails(props: { message: ApiMessage }): JSX.Element {
+  const fromRecipients = createMemo(() =>
+    props.message.from ? [props.message.from] : []
+  );
+
   return (
-    <div class="flex flex-col gap-1.5 text-sm select-children cursor-text">
-      <div class="flex flex-row gap-2">
-        <span class="text-ink-extra-muted min-w-10">From</span>
-        <span class="select-text cursor-text">
-          <EmailUserTooltip recipient={props.message.from}>
-            <span class="font-medium text-ink cursor-default">
-              {props.message.from?.name ?? props.message.from?.email}
-              <Show
-                when={props.message.from?.name && props.message.from?.email}
-              >
-                <span class="text-ink-extra-muted font-normal">
-                  {' '}
-                  &lt;{props.message.from?.email}&gt;
-                </span>
-              </Show>
-            </span>
-          </EmailUserTooltip>
-        </span>
-      </div>
-      <RecipientRow label="To" recipients={props.message.to} />
-      <RecipientRow label="Cc" recipients={props.message.cc} bold />
-      <RecipientRow label="Bcc" recipients={props.message.bcc} bold />
-      <div class="flex flex-row items-center gap-2 text-ink-extra-muted tabular-nums">
-        <Show when={props.message.internal_date_ts}>
-          <span class="text-xs">{formatFullDate(props.message.internal_date_ts!)}</span>
-        </Show>
-        <Button variant="ghost" size="icon-sm" onClick={props.onClose}>
-          <CaretUp />
-        </Button>
-      </div>
+    <div class="mt-2.5 py-3 border-y border-ink-muted/8 flex flex-col gap-1.5 text-sm">
+      <DetailRow label="From" recipients={fromRecipients()} />
+      <DetailRow label="To" recipients={props.message.to} />
+      <DetailRow label="Cc" recipients={props.message.cc} />
+      <DetailRow label="Bcc" recipients={props.message.bcc} />
+      <Show when={props.message.internal_date_ts}>
+        <div class="text-xs text-ink-extra-muted tabular-nums mt-1.5 select-text cursor-text">
+          {formatFullDate(props.message.internal_date_ts!)}
+        </div>
+      </Show>
     </div>
   );
 }
@@ -173,10 +158,11 @@ function CollapsedRecipientList(props: {
   );
 }
 
-function CollapsedHeader(props: {
+function HeaderTopRow(props: {
   senderName: string;
   isHovering: boolean;
-  onExpand: () => void;
+  isExpanded: boolean;
+  onToggle: () => void;
   message: ApiMessage;
   focused: boolean;
   setShowReply: Setter<boolean>;
@@ -206,20 +192,28 @@ function CollapsedHeader(props: {
         </span>
         <div
           classList={{
-            'opacity-0': !props.isHovering,
-            'opacity-100': props.isHovering,
+            'opacity-0': !props.isHovering && !props.isExpanded,
+            'opacity-100': props.isHovering || props.isExpanded,
           }}
         >
-          <Tooltip label="Expand Message Header">
+          <Tooltip
+            label={
+              props.isExpanded
+                ? 'Collapse Message Header'
+                : 'Expand Message Header'
+            }
+          >
             <Button
               variant="ghost"
               size="icon-sm"
               onClick={(e) => {
                 e.stopPropagation();
-                props.onExpand();
+                props.onToggle();
               }}
             >
-              <CaretDown />
+              <Show when={props.isExpanded} fallback={<CaretDown />}>
+                <CaretUp />
+              </Show>
             </Button>
           </Tooltip>
         </div>
@@ -233,9 +227,11 @@ function CollapsedHeader(props: {
           hiddenActions={props.hiddenActions}
         />
         <Show when={props.message.internal_date_ts}>
-          <div class="text-xs text-ink-extra-muted tabular-nums">
-            {formatShortDate(props.message.internal_date_ts!)}
-          </div>
+          <Tooltip label={formatFullDate(props.message.internal_date_ts!)}>
+            <div class="text-xs text-ink-extra-muted tabular-nums cursor-default">
+              {formatShortDate(props.message.internal_date_ts!)}
+            </div>
+          </Tooltip>
         </Show>
       </div>
     </div>
@@ -266,10 +262,6 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
     });
   };
 
-  const _isFromCurrentUser = createMemo(() =>
-    isMessageFromCurrentUser(props.message, userEmail())
-  );
-
   const senderName = createMemo(() =>
     getSenderDisplayName(props.message, userEmail())
   );
@@ -290,26 +282,22 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
 
   return (
     <div
-      class="ph-no-capture pr-3 flex items-center"
+      class="ph-no-capture pr-3 flex flex-col w-full"
       style={{ 'min-height': 'var(--user-icon-width)' }}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
       onClick={handleClick}
     >
       <Show when={props.isBodyExpanded()}>
-        <Show
-          when={!props.expandedHeader()}
-          fallback={
-            <ExpandedHeader
-              message={props.message}
-              onClose={() => toggleExpandedHeader(false)}
-            />
-          }
+        <div
+          class="flex items-center"
+          style={{ 'min-height': 'var(--user-icon-width)' }}
         >
-          <CollapsedHeader
+          <HeaderTopRow
             senderName={senderName()}
             isHovering={isHovering()}
-            onExpand={() => toggleExpandedHeader(true)}
+            isExpanded={props.expandedHeader()}
+            onToggle={() => toggleExpandedHeader(!props.expandedHeader())}
             message={props.message}
             focused={props.focused}
             setShowReply={props.setShowReply}
@@ -317,6 +305,9 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
             hiddenActions={props.hiddenActions}
             currentUserEmail={userEmail()}
           />
+        </div>
+        <Show when={props.expandedHeader()}>
+          <ExpandedDetails message={props.message} />
         </Show>
       </Show>
     </div>

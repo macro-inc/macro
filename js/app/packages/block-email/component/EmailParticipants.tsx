@@ -1,7 +1,7 @@
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { useEmail } from '@core/context/user';
 import { emailToMacroId } from '@core/user';
-import { createMemo, For } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { useEmailContext } from './EmailContext';
 import { EmailUserTooltip } from './EmailUserTooltip';
 
@@ -10,9 +10,12 @@ interface Participant {
   name?: string;
 }
 
+const DEFAULT_VISIBLE_COUNT = 5;
+
 export function EmailParticipants() {
   const context = useEmailContext();
   const currentUserEmail = useEmail();
+  const [expanded, setExpanded] = createSignal(false);
 
   const participants = createMemo(() => {
     const messages = context.messages.unfiltered();
@@ -43,6 +46,16 @@ export function EmailParticipants() {
     return Array.from(seen.values());
   });
 
+  const visibleParticipants = createMemo(() => {
+    const all = participants();
+    if (expanded() || all.length <= DEFAULT_VISIBLE_COUNT) return all;
+    return all.slice(0, DEFAULT_VISIBLE_COUNT);
+  });
+
+  const hiddenCount = createMemo(() =>
+    Math.max(0, participants().length - DEFAULT_VISIBLE_COUNT)
+  );
+
   const getDisplayName = (p: Participant) => {
     if (p.email === currentUserEmail()) return 'Me';
     if (p.name) return p.name.split(' ')[0];
@@ -57,7 +70,7 @@ export function EmailParticipants() {
 
   return (
     <div class="flex flex-wrap gap-1.5" role="list">
-      <For each={participants()}>
+      <For each={visibleParticipants()}>
         {(participant) => (
           <EmailUserTooltip
             recipient={{ email: participant.email, name: participant.name }}
@@ -79,6 +92,15 @@ export function EmailParticipants() {
           </EmailUserTooltip>
         )}
       </For>
+      <Show when={hiddenCount() > 0}>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          class="inline-flex items-center rounded-full border border-ink-muted/8 bg-ink-muted/[0.025] px-3 py-1 text-sm text-ink-muted hover:text-ink hover:bg-ink-muted/[0.06] tabular-nums"
+        >
+          {expanded() ? 'Show less' : `+${hiddenCount()} more`}
+        </button>
+      </Show>
     </div>
   );
 }
