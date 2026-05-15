@@ -28,7 +28,10 @@ const TEAM_PLANS: TeamPlan[] = [
 ];
 
 function planForSeatCount(seats: number): TeamPlan {
-  return TEAM_PLANS.find((p) => p.seats >= seats) ?? TEAM_PLANS[TEAM_PLANS.length - 1];
+  return (
+    TEAM_PLANS.find((p) => p.seats >= seats) ??
+    TEAM_PLANS[TEAM_PLANS.length - 1]
+  );
 }
 
 export function PaymentStep() {
@@ -113,9 +116,7 @@ export function PaymentStep() {
             </span>
             <span class="text-ink-muted text-sm pb-0.5">/mo</span>
           </div>
-          <span class="text-sm text-ink-muted">
-            Up to {plan().seats} seats
-          </span>
+          <span class="text-sm text-ink-muted">Up to {plan().seats} seats</span>
         </div>
 
         <div class="flex flex-col text-sm">

@@ -173,14 +173,20 @@ function OnboardingInner() {
       </div>
 
       <Layer depth={3}>
-        <div class={cn(
-          'w-full flex flex-col px-8 min-h-1/2',
-          ctx.step() === 0 ? 'max-w-3xl' : 'max-w-md'
-        )}>
+        <div
+          class={cn(
+            'w-full flex flex-col justify-center px-8 min-h-1/2',
+            ctx.step() === 0 ? 'max-w-3xl' : 'max-w-md'
+          )}
+        >
           {/* Header */}
           <Show when={ctx.step() > 0}>
             <div class="w-full flex items-center gap-3 mb-10">
-              <LogoProgress level={ctx.step()} total={STEP_LABELS.length - 1} class="w-7" />
+              <LogoProgress
+                level={ctx.step()}
+                total={STEP_LABELS.length - 1}
+                class="w-7"
+              />
               <span class="text-xs font-mono text-ink-disabled">
                 {ctx.step()}/{STEP_LABELS.length - 1}
               </span>
@@ -232,7 +238,6 @@ function OnboardingInner() {
     </div>
   );
 }
-
 
 async function createPendingTeamOnReturn(): Promise<boolean> {
   const pendingTeam = getPendingTeam();

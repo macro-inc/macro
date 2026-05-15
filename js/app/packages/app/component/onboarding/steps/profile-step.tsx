@@ -183,7 +183,6 @@ export function ProfileStep() {
           <ArrowRightIcon class="size-4" />
         </Button>
       </div>
-
     </div>
   );
 }
