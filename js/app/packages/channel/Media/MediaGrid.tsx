@@ -6,7 +6,7 @@ import { MediaImage } from './MediaImage';
 import { MediaVideo } from './MediaVideo';
 import type { MediaItem } from './media-items';
 
-const ATTACHMENT_TILE_SIZE = 92;
+const ATTACHMENT_TILE_SIZE = 106;
 const SINGLE_IMAGE_MAX_WIDTH = 400;
 const SINGLE_IMAGE_MAX_HEIGHT = 400;
 const MESSAGE_GALLERY_IMAGE_MAX_WIDTH = 200;
@@ -59,7 +59,7 @@ function AttachmentImageTile(props: { item: MediaItem; onOpen?: () => void }) {
       <MediaImage.Image
         src={props.item.src}
         class={cn(
-          'size-23 select-none rounded-2xl border border-edge object-cover',
+          'size-25.5 select-none rounded-2xl border border-edge object-cover',
           props.onOpen && 'hover:opacity-80'
         )}
         onOpen={props.onOpen}
@@ -140,7 +140,7 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
 
 function AttachmentVideoTile(props: { item: MediaItem; onOpen?: () => void }) {
   return (
-    <MediaVideo.Root class="size-23 group overflow-hidden border border-edge bg-surface">
+    <MediaVideo.Root class="size-25.5 group overflow-hidden border border-edge bg-surface">
       <MediaVideo.Preview
         src={props.item.src}
         class="size-full object-cover"

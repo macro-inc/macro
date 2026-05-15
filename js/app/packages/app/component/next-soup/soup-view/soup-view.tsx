@@ -1094,7 +1094,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                               onClick={() => group().loadMore()}
                                             >
                                               <CaretDownIcon class="size-2.5" />
-                                              Load more
+                                              Load More
                                             </Button>
                                           </Show>
                                         </div>

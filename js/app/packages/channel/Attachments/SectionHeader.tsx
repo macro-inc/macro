@@ -28,9 +28,10 @@ export function LoadMoreButton(props: {
 }) {
   return (
     <Button
-      variant="ghost"
+      variant="base"
       size="sm"
-      class="w-full"
+      depth={4}
+      class="justify-self-center mt-2 bg-surface"
       onClick={() => props.onLoadMore()}
       disabled={props.isFetching()}
     >
@@ -43,7 +44,7 @@ export function LoadMoreButton(props: {
           </>
         }
       >
-        Load more
+        Load More
       </Show>
     </Button>
   );
