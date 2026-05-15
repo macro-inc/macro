@@ -1,10 +1,6 @@
 import { GroupDropdown } from '@app/component/next-soup/soup-view/filters-bar/group-dropdown';
 import {
-  DEFAULT_GROUP_OPTIONS,
-  EMAIL_GROUP_OPTIONS,
-  type GroupOption,
   type GroupOptionId,
-  INBOX_GROUP_OPTIONS,
   TASK_GROUP_OPTIONS,
 } from '@app/component/next-soup/soup-view/group-options';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
@@ -12,15 +8,11 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ENABLE_SOUP_GROUP_BY_OVERRIDE } from '@core/constant/featureFlags';
-import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
-
-type GroupOpenProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-};
+import { createMemo, createSignal, Show } from 'solid-js';
 
 export const SoupViewContextGroup = () => {
   const panel = useSplitPanelOrThrow();
+  const { soup } = useSoupView();
   const groupByEnabled = useFeatureFlag('enable-soup-group-by', {
     enabledOverride: ENABLE_SOUP_GROUP_BY_OVERRIDE,
   });
@@ -29,46 +21,13 @@ export const SoupViewContextGroup = () => {
 
   const component = createMemo(() => {
     const content = panel.handle.content();
-
     if (content.type !== 'component') return;
-
     return content.id;
   });
 
   const isComponentListView = (listView: ListView) => {
     return component() === listView;
   };
-
-  const openProps = (): GroupOpenProps => ({
-    open: groupOpen(),
-    onOpenChange: setGroupOpen,
-  });
-
-  return (
-    <Show when={groupByEnabled().enabled}>
-      <Switch>
-        <Match when={isComponentListView('tasks')}>
-          <TasksGroup {...openProps()} />
-        </Match>
-        <Match when={isComponentListView('inbox')}>
-          <InboxGroup {...openProps()} />
-        </Match>
-        <Match when={isComponentListView('mail')}>
-          <MailGroup {...openProps()} />
-        </Match>
-        <Match when={isComponentListView('documents')}>
-          <DefaultGroup {...openProps()} />
-        </Match>
-        <Match when={isComponentListView('channels')}>
-          <DefaultGroup {...openProps()} />
-        </Match>
-      </Switch>
-    </Show>
-  );
-};
-
-const useGroupDropdown = (options: GroupOption[] = DEFAULT_GROUP_OPTIONS) => {
-  const { soup } = useSoupView();
 
   const value = createMemo(
     (): GroupOptionId =>
@@ -84,61 +43,17 @@ const useGroupDropdown = (options: GroupOption[] = DEFAULT_GROUP_OPTIONS) => {
     }
   };
 
-  return { value, onChange, options };
-};
-
-const DefaultGroup = (props: GroupOpenProps) => {
-  const group = useGroupDropdown();
-
   return (
-    <GroupDropdown
-      value={group.value}
-      onChange={group.onChange}
-      options={group.options}
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-    />
-  );
-};
-
-const TasksGroup = (props: GroupOpenProps) => {
-  const group = useGroupDropdown(TASK_GROUP_OPTIONS);
-
-  return (
-    <GroupDropdown
-      value={group.value}
-      onChange={group.onChange}
-      options={group.options}
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-    />
-  );
-};
-
-const MailGroup = (props: GroupOpenProps) => {
-  const group = useGroupDropdown(EMAIL_GROUP_OPTIONS);
-
-  return (
-    <GroupDropdown
-      value={group.value}
-      onChange={group.onChange}
-      options={group.options}
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-    />
-  );
-};
-
-const InboxGroup = (props: GroupOpenProps) => {
-  const group = useGroupDropdown(INBOX_GROUP_OPTIONS);
-
-  return (
-    <GroupDropdown
-      value={group.value}
-      onChange={group.onChange}
-      options={group.options}
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-    />
+    <Show when={groupByEnabled().enabled}>
+      <Show when={isComponentListView('tasks')}>
+        <GroupDropdown
+          value={value}
+          onChange={onChange}
+          options={TASK_GROUP_OPTIONS}
+          open={groupOpen()}
+          onOpenChange={setGroupOpen}
+        />
+      </Show>
+    </Show>
   );
 };
