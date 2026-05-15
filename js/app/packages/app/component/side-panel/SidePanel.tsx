@@ -27,7 +27,7 @@ import {
 
 const NARROW_THRESHOLD_PX = 720;
 const SIDE_MIN_PX = 320;
-const SIDE_MAX_PX = 440;
+const SIDE_MAX_PX = 380;
 const MAIN_MIN_PX = 320;
 
 /**

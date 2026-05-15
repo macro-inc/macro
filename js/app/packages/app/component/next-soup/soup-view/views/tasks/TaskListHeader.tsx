@@ -67,7 +67,7 @@ export function TaskListHeader(props: { class?: string }) {
       class={cn(
         'task-grid-row w-full grid items-center gap-2 px-2 h-10',
         'text-xs font-medium text-ink-extra-muted',
-        'bg-surface border-b border-edge-muted',
+        'bg-surface',
         props.class
       )}
       style={{

@@ -24,7 +24,6 @@ import {
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { isErr, ok } from '@core/util/maybeResult';
 import { Dialog } from '@kobalte/core/dialog';
-import PixelArrowRight from '@macro-icons/pixel/arrow-right.svg';
 import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
 import { AnimatedDiagramIcon } from '@macro-icons/wide/animating/diagram';
 import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
@@ -41,6 +40,7 @@ import WideFileMd from '@macro-icons/wide/file-md.svg';
 import WideFolder from '@macro-icons/wide/folder.svg';
 import WideStar from '@macro-icons/wide/star.svg';
 import WideTask from '@macro-icons/wide/task.svg';
+import PixelArrowRight from '@phosphor-icons/core/regular/dice-five.svg?component-solid';
 import { createProject } from '@queries/storage/projects';
 import { cn, Hotkey, Layer } from '@ui';
 import {

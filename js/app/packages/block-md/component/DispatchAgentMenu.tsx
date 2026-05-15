@@ -3,7 +3,6 @@ import { useBlockId } from '@core/block';
 import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
-import { TOKENS } from '@core/hotkey/tokens';
 import { macroIdToEmail, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
@@ -225,7 +224,6 @@ export function DispatchAgentButton() {
           <MenuItem
             text="Copy branch name"
             icon={GitBranch}
-            hotkeyToken={TOKENS.entity.action.copyBranchName}
             onClick={() => {
               copyBranchNameToClipboard(blockId);
               setOpen(false);

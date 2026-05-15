@@ -4,7 +4,7 @@ import {
   PropertyDataTypeIcon,
   toPropertyDefinitionDomain,
 } from '@core/component/Properties/utils';
-import MagnifyingGlassIcon from '@phosphor-icons/core/assets/regular/magnifying-glass.svg';
+import MagnifyingGlassIcon from '@icon/regular/magnifying-glass.svg';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import type { Component } from 'solid-js';
 import {

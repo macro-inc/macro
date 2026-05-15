@@ -63,6 +63,7 @@ impl ExtendedClient for AnthropicClient {
                     id: tool_call.id,
                     json: tool_call.input,
                     name: tool_call.name,
+                    mcp: None,
                 }))
             }
             AnthropicResponseExtension::WebSearchToolResponse(response) => {

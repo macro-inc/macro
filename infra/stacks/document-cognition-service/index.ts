@@ -11,7 +11,10 @@ import {
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
-import { DocumentCognitionService } from './document-cognition-service';
+import {
+  DocumentCognitionService,
+  SERVICE_DOMAIN_NAME,
+} from './document-cognition-service';
 
 const tags = {
   environment: stack,
@@ -297,6 +300,10 @@ const documentCognitionService = new DocumentCognitionService(
       {
         name: 'DD_ENV',
         value: stack,
+      },
+      {
+        name: 'DOCUMENT_COGNITION_SERVICE_URL',
+        value: `https://${SERVICE_DOMAIN_NAME}`,
       },
     ],
     isPrivate: false,

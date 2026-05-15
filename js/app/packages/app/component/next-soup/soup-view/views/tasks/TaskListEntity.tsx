@@ -125,15 +125,16 @@ export function TaskListEntity(props: TaskListEntityProps) {
       }}
       ref={mergeRefs(props.ref, draggable)}
       class={cn(
-        'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mx-1 relative group/narrow flex flex-col py-0.5',
+        'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mx-1 relative group/narrow flex flex-col py-0.5 rounded',
         {
           'min-h-10': !isMobile(),
-          'bg-ink/3 rounded-sm':
-            props.checked || (props.highlighted && !isMobile()),
-          'hover:bg-hover rounded-sm group-data-expanded/cm-trigger:bg-hover':
+          'bg-accent/8': props.checked,
+          'ring ring-accent/16 ring-inset': props.checked && props.highlighted,
+          'ring ring-edge bg-active/60 ring-inset':
+            props.highlighted && !props.checked,
+          'bg-active/40': props.hovered && !props.highlighted && !props.checked,
+          'hover:bg-active/40 group-data-expanded/cm-trigger:bg-active/40':
             !props.checked && !props.highlighted && !props.hovered,
-          'bg-hover rounded-sm':
-            props.hovered && !props.highlighted && !props.checked,
         }
       )}
       onMouseMove={props.onMouseMove}

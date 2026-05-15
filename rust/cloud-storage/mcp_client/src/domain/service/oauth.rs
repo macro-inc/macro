@@ -1,3 +1,4 @@
+use crate::domain::models::MCP_CLIENT_NAME;
 use crate::domain::models::{MacroUserIdStr, McpServerRecord, StoredCredentials};
 use crate::domain::ports::{McpServerStore, OAuthClient, OAuthStateStore, PendingAuth};
 use macro_user_id::cowlike::CowLike;
@@ -34,6 +35,7 @@ where
     R: OAuthStateStore,
     anyhow::Error: From<S::Err>,
 {
+    #[tracing::instrument(skip_all, err)]
     async fn start_authorization(
         &self,
         user_id: &MacroUserIdStr<'static>,
@@ -49,7 +51,7 @@ where
         auth_manager.set_credential_store(InMemoryCredentialStore::new());
 
         let client_config = auth_manager
-            .register_client("macro", &self.redirect_uri, &[])
+            .register_client(MCP_CLIENT_NAME, &self.redirect_uri, &[])
             .await?;
 
         let auth_url = auth_manager.get_authorization_url(&[]).await?;
@@ -74,6 +76,7 @@ where
         Ok(auth_url)
     }
 
+    #[tracing::instrument(skip_all, err)]
     async fn exchange_authorization_code(
         &self,
         code: &str,
@@ -141,6 +144,7 @@ where
     }
 }
 
+#[tracing::instrument(err)]
 fn extract_state_param(url: &str) -> anyhow::Result<String> {
     reqwest::Url::parse(url)?
         .query_pairs()

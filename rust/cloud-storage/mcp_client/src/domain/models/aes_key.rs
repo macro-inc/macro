@@ -12,6 +12,7 @@ impl AesKey {
 impl TryFrom<Vec<u8>> for AesKey {
     type Error = AesKeyError;
 
+    #[tracing::instrument(skip_all, err)]
     fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
         let bytes: [u8; 32] = bytes
             .try_into()
@@ -24,6 +25,7 @@ impl TryFrom<&str> for AesKey {
     type Error = AesKeyError;
 
     /// Decode a base64-encoded key string into an [`AesKey`].
+    #[tracing::instrument(skip_all, err)]
     fn try_from(b64: &str) -> Result<Self, Self::Error> {
         use base64::Engine;
         let bytes = base64::engine::general_purpose::STANDARD
