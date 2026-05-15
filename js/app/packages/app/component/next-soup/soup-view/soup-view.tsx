@@ -128,29 +128,40 @@ const DefaultGroupHeader = (
     <button
       type="button"
       class={cn(
-        'w-full px-3 py-3 flex items-center gap-2 text-sm font-medium text-text-muted bg-ink/5 hover:bg-hover relative',
+        'group/header w-[calc(100%-0.5rem)] mx-1 rounded pl-5 pr-3 py-2 flex items-center gap-2.5 text-[13px] font-semibold tracking-tight',
+        'text-text-muted bg-ink/5 hover:bg-ink/10 border-b border-edge-muted',
+        'relative transition-colors duration-100',
         {
-          'outline-1 outline-accent/20 -outline-offset-1': props.highlighted,
+          'ring ring-edge bg-active/60 ring-inset': props.highlighted,
         }
       )}
       onClick={() => props.group.toggle()}
     >
       <div
-        class={cn('absolute h-full w-0.75 left-0 top-0 bg-accent opacity-0', {
-          'opacity-100': props.highlighted,
-        })}
-      />
-      <ChevronRightIcon
-        class={cn('size-3 transition-transform', {
-          'rotate-90': props.group.isExpanded(),
-        })}
-      />
+        class={cn(
+          'flex items-center justify-center size-[18px] rounded-xs',
+          'bg-ink/5 group-hover/header:bg-ink/10 transition-colors duration-100'
+        )}
+      >
+        <ChevronRightIcon
+          class={cn('size-2.5 transition-transform duration-150 ease-out', {
+            'rotate-90': props.group.isExpanded(),
+          })}
+        />
+      </div>
       <PropertyValueIcon
         optionId={props.group.value as string}
         class="size-3.5"
       />
-      <span>{props.group.label}</span>
-      <span class="text-text-subtle">{props.group.count}</span>
+      <span class="truncate">{props.group.label}</span>
+      <span
+        class={cn(
+          'shrink-0 tabular-nums text-[11px] font-medium',
+          'px-1.5 py-px rounded-full bg-ink/10 text-text-subtle'
+        )}
+      >
+        {props.group.count}
+      </span>
     </button>
   );
 };
@@ -1046,37 +1057,38 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                         panel.isPanelActive() &&
                                         row.isFocused();
                                       return (
-                                        <button
-                                          type="button"
+                                        <div
                                           class={cn(
-                                            'w-full min-h-10 flex items-center justify-center gap-1.5 relative text-sm text-text-muted hover:bg-hover',
+                                            'w-[calc(100%-0.5rem)] mx-1 my-1 rounded min-h-9 flex items-center justify-center',
                                             {
-                                              'bg-accent/5 outline-1 outline-accent/20 -outline-offset-1':
+                                              'ring ring-edge bg-active/60 ring-inset':
                                                 highlighted(),
                                             }
                                           )}
-                                          onClick={() => group().loadMore()}
-                                          disabled={group().isLoading()}
                                         >
-                                          <div
-                                            class={cn(
-                                              'absolute h-full w-0.75 left-0 top-0 bg-accent opacity-0',
-                                              { 'opacity-100': highlighted() }
-                                            )}
-                                          />
                                           <Show
                                             when={!group().isLoading()}
                                             fallback={
-                                              <>
+                                              <Button
+                                                variant="ghost"
+                                                class="gap-1.5 text-[12px] text-text-muted"
+                                                disabled
+                                              >
                                                 <Spinner class="size-3 animate-spin" />
                                                 Loading...
-                                              </>
+                                              </Button>
                                             }
                                           >
-                                            <CaretDownIcon class="size-3" />
-                                            Load more
+                                            <Button
+                                              variant="ghost"
+                                              class="gap-1.5 text-[12px]"
+                                              onClick={() => group().loadMore()}
+                                            >
+                                              <CaretDownIcon class="size-2.5" />
+                                              Load more
+                                            </Button>
                                           </Show>
-                                        </button>
+                                        </div>
                                       );
                                     }}
                                   </Match>
