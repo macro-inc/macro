@@ -8,7 +8,7 @@ export function ChannelAttachmentsTab(props: { channelId: string }) {
       <div
         class="macro-message-width size-full"
         style={{
-          'grid-template-rows': 'auto minmax(0, 1fr)',
+          'grid-template-rows': 'minmax(0, 1fr) minmax(0, 1fr)',
           'grid-template-columns': '1fr',
           overflow: 'hidden',
           display: 'grid',
