@@ -984,9 +984,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     }
                                     entity={row.original}
                                     timestamp={timestamp()}
-                                    highlighted={
-                                      panel.isPanelActive() && row.isFocused()
-                                    }
+                                    highlighted={row.isFocused()}
                                     onMouseMove={() => {
                                       if (isKeypressActive()) return;
                                       if (soup.previewEntity()) return;
