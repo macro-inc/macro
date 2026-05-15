@@ -490,7 +490,10 @@ export function CommandMenuInner(props: {
 
       <Show when={isEntityActionMode() || !isInCommandScope()}>
         <Panel.Toolbar
-          class={cn('bg-surface px-1.5 border-0', isEntityActionMode() && 'gap-1.5')}
+          class={cn(
+            'bg-surface px-1.5 border-0',
+            isEntityActionMode() && 'gap-1.5'
+          )}
         >
           <Show
             when={isEntityActionMode()}
