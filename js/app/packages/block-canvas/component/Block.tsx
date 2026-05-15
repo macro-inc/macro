@@ -7,7 +7,7 @@ import {
 } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { blockFileSignal, blockHandleSignal } from '@core/signal/load';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import { storageServiceClient } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';

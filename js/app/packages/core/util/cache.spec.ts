@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cache } from './cache';
-import { err, type MaybeResult, ok } from './maybeResult';
+import { err, type AppResult, ok } from './result';
 
 describe('cache', () => {
   let mockFn: ReturnType<typeof vi.fn>;
@@ -78,7 +78,7 @@ describe('cache', () => {
   test('handle promises that resolve after expiration time', async () => {
     const slowMockFn = vi.fn(
       (_arg: string) =>
-        new Promise<MaybeResult<string, { data: string }>>((resolve) => {
+        new Promise<AppResult<string, { data: string }>>((resolve) => {
           setTimeout(() => resolve(ok({ data: 'slow test' })), 100);
         })
     );

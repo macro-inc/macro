@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import { useLeaveCallMutation } from '@queries/call/call';
 import { queryClient } from '@queries/client';
 import { callServiceClient } from '@service-call/client';

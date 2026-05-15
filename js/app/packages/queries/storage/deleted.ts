@@ -1,6 +1,6 @@
 import { buildFileTree } from '@core/component/FileList/buildFileTree';
 import { itemToSafeName } from '@core/constant/allBlocks';
-import { isOk } from '@core/util/maybeResult';
+import { isOk } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { useQuery } from '@tanstack/solid-query';

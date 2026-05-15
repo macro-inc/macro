@@ -3,7 +3,7 @@ import {
   getTextContent,
   initializeEditorWithState,
 } from '@core/component/LexicalMarkdown/utils';
-import { isOk } from '@core/util/maybeResult';
+import { isOk } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import { syncServiceClient } from '@service-sync/client';
 import { useQuery } from '@tanstack/solid-query';

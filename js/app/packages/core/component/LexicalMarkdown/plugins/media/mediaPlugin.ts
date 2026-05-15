@@ -4,7 +4,7 @@ import { heicConversionService } from '@core/heic/service';
 import type { FetchError } from '@core/service';
 import { createStaticFile } from '@core/util/create';
 import { contentHash } from '@core/util/hash';
-import { type MaybeResult, mapOk } from '@core/util/maybeResult';
+import { type AppResult, mapOk, ok } from '@core/util/result';
 import { mergeRegister } from '@lexical/utils';
 import {
   $createImageNode,
@@ -122,17 +122,17 @@ export async function getMediaUrl(src: {
   type: string;
   id: string;
   url: string;
-}): Promise<MaybeResult<FetchError | 'INVALID_DOCUMENT', string>> {
-  if (src.type === 'local' || src.type === 'url') return [null, src.url];
+}): Promise<AppResult<FetchError | 'INVALID_DOCUMENT', string>> {
+  if (src.type === 'local' || src.type === 'url') return ok(src.url);
   if (src.type === 'sfs') {
     const url = staticFileIdEndpoint(src.id);
-    return [null, url];
+    return ok(url);
   }
   if (src.type === 'dss') {
     return mapOk(await fetchBinaryDocumentData(src.id), (res) => res.blobUrl);
   }
   console.warn('Get media url failed for src:', src);
-  return [null, ''];
+  return ok('');
 }
 
 /**

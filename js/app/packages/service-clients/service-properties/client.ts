@@ -4,11 +4,11 @@ import {
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import {
-  type MaybeError,
-  type MaybeResult,
+  type AppErrorResult,
+  type AppResult,
   mapOk,
   type ObjectLike,
-} from '@core/util/maybeResult';
+} from '@core/util/result';
 import { registerClient } from '@core/util/mockClient';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { AddPropertyOptionRequest } from './generated/schemas/addPropertyOptionRequest';
@@ -71,17 +71,17 @@ const propertiesHost: string = SERVER_HOSTS['document-storage-service'];
 export function propertiesFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeError<FetchWithTokenErrorCode>>;
+): Promise<AppErrorResult<FetchWithTokenErrorCode>>;
 export function propertiesFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeResult<FetchWithTokenErrorCode, T>>;
+): Promise<AppResult<FetchWithTokenErrorCode, T>>;
 export function propertiesFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
-  | Promise<MaybeError<FetchWithTokenErrorCode>> {
+  | Promise<AppResult<FetchWithTokenErrorCode, T>>
+  | Promise<AppErrorResult<FetchWithTokenErrorCode>> {
   return fetchWithToken<T>(`${propertiesHost}${url}`, init);
 }
 

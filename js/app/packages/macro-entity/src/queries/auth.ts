@@ -6,7 +6,7 @@ import {
 } from '@tanstack/solid-query';
 import { SERVER_HOSTS } from 'core/constant/servers';
 import { fetchWithToken } from 'core/util/fetchWithToken';
-import { isOk } from 'core/util/maybeResult';
+import { isOk } from 'core/util/result';
 import { queryKeys } from './key';
 
 const authHost = SERVER_HOSTS['auth-service'];

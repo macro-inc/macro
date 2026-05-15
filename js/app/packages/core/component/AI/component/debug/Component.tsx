@@ -2,7 +2,7 @@ import { buildChatEditor } from '@core/component/AI/component/input/buildChatEdi
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import type { Model } from '@core/component/AI/types';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';

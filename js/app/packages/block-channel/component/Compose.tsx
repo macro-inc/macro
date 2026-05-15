@@ -29,7 +29,7 @@ import {
 } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import {
   chatRuleset,
   handleFileFolderDrop,

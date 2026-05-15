@@ -1,10 +1,11 @@
 import {
   err,
-  type MaybeResult,
+  errFromErrors,
+  type AppResult,
   type ObjectLike,
   ok,
   type ResultError,
-} from './maybeResult';
+} from './result';
 import { platformFetch } from './platformFetch';
 import { sleep } from './sleep';
 
@@ -83,7 +84,7 @@ export type TextResponse = { contentType: 'text/plain'; body: string };
  * @param {RequestInfo} input - The resource to fetch.
  * @param {SafeFetchInit} [init] - Custom settings to apply to the request, including retry configuration.
  * @param {ErrorResponseHandler<CustomErrorCode>} [errorResponseHandler] - Custom error response handler.
- * @returns {Promise<MaybeResult<BaseFetchErrorCode | CustomErrorCode, T>>} A promise that resolves to a MaybeResult.
+ * @returns {Promise<AppResult<BaseFetchErrorCode | CustomErrorCode, T>>} A promise that resolves to a AppResult.
  *
  * @example
  * // Basic usage
@@ -164,7 +165,7 @@ export async function safeFetch<
   input: RequestInfo,
   init?: SafeFetchInit,
   errorResponseHandler?: ErrorResponseHandler<CustomErrorCode>
-): Promise<MaybeResult<BaseFetchErrorCode | CustomErrorCode, T>> {
+): Promise<AppResult<BaseFetchErrorCode | CustomErrorCode, T>> {
   const { retry, ...fetchInit } = init || {};
   const maxTries = retry?.maxTries ?? 1;
   const delay = retry?.delay ?? 0;
@@ -190,7 +191,7 @@ export async function safeFetch<
       if (!response.ok) {
         if (errorResponseHandler) {
           const customError = await errorResponseHandler(response);
-          return [customError ? [customError] : [], null];
+          return errFromErrors(customError ? [customError] : []);
         }
 
         switch (response.status) {

@@ -2,7 +2,7 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { entityPropertyFromApi } from '@core/component/Properties/api/converters';
 import type { Property } from '@core/component/Properties/types';
 import { trackMention } from '@core/signal/mention';
-import { isErr, isOk } from '@core/util/maybeResult';
+import { isErr, isOk } from '@core/util/result';
 import type { HistoryItem as Item } from '@queries/history/history';
 import { fetchDocumentAsMarkdown } from '@queries/sync/markdownText';
 import { propertiesServiceClient } from '@service-properties/client';

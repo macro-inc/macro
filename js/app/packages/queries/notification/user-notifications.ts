@@ -1,5 +1,5 @@
 import type { Maybe } from '@core/types';
-import { type MaybeResult, throwOnErr } from '@core/util/maybeResult';
+import { type AppResult, throwOnErr } from '@core/util/result';
 import type { UnifiedNotification } from '@notifications/types';
 import {
   optimisticUpdateSoupItemUpdatedAt,
@@ -259,7 +259,7 @@ type NotificationsMutationCallbacks<T> = MutationCallbacks<
 >;
 
 type NotificationsMutationFn<T> = MutationFunction<
-  MaybeResult<string, T>,
+  AppResult<string, T>,
   NotificationsMutationParams
 >;
 

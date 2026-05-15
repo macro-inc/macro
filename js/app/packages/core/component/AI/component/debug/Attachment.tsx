@@ -1,5 +1,5 @@
 import type { Attachment, Model } from '@core/component/AI/types';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';

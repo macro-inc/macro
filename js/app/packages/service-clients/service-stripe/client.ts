@@ -1,4 +1,4 @@
-import { isOk } from '@core/util/maybeResult';
+import { isOk } from '@core/util/result';
 import { registerClient } from '@core/util/mockClient';
 import {
   authServiceClient,
@@ -97,7 +97,7 @@ export const stripeServiceClient = {
   },
   /**
    * Changes the current user's subscription tier. Returns a narrow discriminated union so
-   * callers get a type-checked error `code` without drilling into the MaybeResult tuple
+   * callers get a type-checked error `code` without drilling into the AppResult tuple
    * shape (`result[0]?.[0]?.code`), which would silently fall through to the default case
    * if the shape ever changes. Callers should invalidate the user info query on success.
    */
@@ -112,7 +112,7 @@ export const stripeServiceClient = {
     // UNAUTHORIZED, SERVER_ERROR, etc.) collapses to 'UNKNOWN'. `match` + the explicit
     // P.union of `PatchSubscriptionTierErrorCode` members means adding a new backend
     // code without widening this union is a compile error.
-    const code = match(result[0]?.code)
+    const code = match(result.error[0]?.code)
       .with(
         P.union(
           'TIER_UNCHANGED',

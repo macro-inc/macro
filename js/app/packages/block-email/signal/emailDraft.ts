@@ -1,4 +1,4 @@
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { logger } from '@observability/logger';
 import { emailClient } from '@service-email/client';
 import type {

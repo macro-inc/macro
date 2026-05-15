@@ -1,4 +1,4 @@
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { dcsCompletion } from '@service-cognition/client';
 import {
   type SolidMutationOptions,

@@ -22,7 +22,7 @@ import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { matches } from '@core/util/match';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import CollapseInlinePreview from '@icon/regular/arrows-in-line-horizontal.svg';
 import OpenIcon from '@icon/regular/arrows-out.svg';
 import ExpandInlinePreview from '@icon/regular/arrows-out-line-horizontal.svg';

@@ -4,11 +4,13 @@ import { logger } from '@observability';
 import { fetchWithAuth } from '@service-auth/fetch';
 import {
   err,
+  errFromErrors,
   isErr,
-  type MaybeError,
-  type MaybeResult,
+  ok,
+  type AppErrorResult,
+  type AppResult,
   type ObjectLike,
-} from './maybeResult';
+} from './result';
 import {
   type BaseFetchErrorCode,
   type SafeFetchInit,
@@ -20,17 +22,18 @@ export type FetchWithTokenErrorCode = BaseFetchErrorCode;
 function fetchWithCredentials<T extends ObjectLike>(
   input: RequestInfo,
   init?: SafeFetchInit
-): Promise<MaybeResult<BaseFetchErrorCode, T>> {
+): Promise<AppResult<BaseFetchErrorCode, T>> {
   return safeFetch<T>(input, {
     ...init,
     credentials: 'include',
   });
 }
 
-let tokenPromise: Promise<MaybeError<FetchWithTokenErrorCode>> | null = null;
+let tokenPromise: Promise<AppErrorResult<FetchWithTokenErrorCode>> | null =
+  null;
 
 export async function fetchToken(): Promise<
-  MaybeError<FetchWithTokenErrorCode>
+  AppErrorResult<FetchWithTokenErrorCode>
 > {
   if (tokenPromise == null) {
     tokenPromise = (async () => {
@@ -48,11 +51,10 @@ export async function fetchToken(): Promise<
         );
 
         if (isErr(result)) {
-          return [result[0]!];
-          // return [null, result[0]];
+          return errFromErrors(result.error);
         }
 
-        return [null];
+        return ok(undefined);
       } finally {
         tokenPromise = null;
       }
@@ -67,7 +69,7 @@ export async function fetchToken(): Promise<
  * @template T - The expected response data type.
  * @param {RequestInfo} input - The resource that you wish to fetch.
  * @param {SafeFetchInit} [init] - An options object containing any custom settings you want to apply to the request, including retry configuration.
- * @returns {Promise<MaybeResult<FetchWithTokenErrorCode, T>>} A promise that resolves to a MaybeResult containing either the response data or an error.
+ * @returns {Promise<AppResult<FetchWithTokenErrorCode, T>>} A promise that resolves to a AppResult containing either the response data or an error.
  *
  * @example
  * const result = await fetchWithToken<UserData>(
@@ -87,17 +89,14 @@ export async function fetchToken(): Promise<
 export async function fetchWithToken<T extends ObjectLike>(
   input: RequestInfo,
   init?: SafeFetchInit
-): Promise<MaybeResult<FetchWithTokenErrorCode, T>> {
+): Promise<AppResult<FetchWithTokenErrorCode, T>> {
   if (ENABLE_BEARER_TOKEN_AUTH) {
     const result = await fetchWithAuth<T>(input, init);
     if (isErr(result)) {
       logger.error('fetchWithToken: fetchWithAuth failed', {
         input,
         init,
-        cause: {
-          name: 'fetchWithAuthError',
-          ...result[0],
-        },
+        errors: result.error,
       });
     }
 
@@ -113,8 +112,7 @@ export async function fetchWithToken<T extends ObjectLike>(
       return err('UNAUTHORIZED', '');
     }
     if (isErr(tokenResult)) {
-      // Convert MaybeError to MaybeResult
-      return [tokenResult[0], null];
+      return errFromErrors(tokenResult.error);
     }
 
     // Retry the original request

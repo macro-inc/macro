@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { contentHash } from '@core/util/hash';
-import { isErr, throwOnErr, toHybridError } from '@core/util/maybeResult';
+import { isErr, throwOnErr, toHybridError } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { emailClient } from '@service-email/client';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';

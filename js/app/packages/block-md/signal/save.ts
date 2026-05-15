@@ -5,7 +5,7 @@ import {
   getSaveState,
 } from '@core/component/LexicalMarkdown/utils';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { utf8Encode } from '@core/util/string';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { refetchHistory } from '@queries/history/history';

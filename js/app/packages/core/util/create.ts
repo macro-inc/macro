@@ -28,7 +28,7 @@ import {
   isCodeEditorExtensionSupported,
   isCodeEditorLanguageSupported,
 } from './languageQuery';
-import { err, isErr, ok } from './maybeResult';
+import { err, isErr, ok } from './result';
 
 type CreateMarkdownFileArgs = {
   title?: string;

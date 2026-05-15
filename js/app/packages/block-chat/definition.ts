@@ -1,5 +1,5 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
-import { isErr, ok } from '@core/util/maybeResult';
+import { isErr, ok } from '@core/util/result';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { AllModels } from '@service-cognition/generated/schemas';
 import type { Entity } from '@service-cognition/generated/schemas/entity';

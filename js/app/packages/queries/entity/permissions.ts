@@ -1,8 +1,4 @@
-import {
-  catchToResult,
-  type MaybeResult,
-  throwOnErr,
-} from '@core/util/maybeResult';
+import { catchToResult, type AppResult, throwOnErr } from '@core/util/result';
 import { dssFetch } from '@service-storage/client';
 import type { EntityPermissionResponse } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
@@ -35,7 +31,7 @@ export function useEntityPermissions(
 export async function fetchEntityPermissions(
   entityType: string,
   entityId: string
-): Promise<MaybeResult<string, EntityPermissionResponse>> {
+): Promise<AppResult<string, EntityPermissionResponse>> {
   return await catchToResult(
     async () =>
       await queryClient.ensureQueryData(

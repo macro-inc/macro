@@ -1,7 +1,13 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
-import { catchToResult, isErr, ok, throwOnErr } from '@core/util/maybeResult';
+import {
+  catchToResult,
+  errFromErrors,
+  isErr,
+  ok,
+  throwOnErr,
+} from '@core/util/result';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
@@ -104,7 +110,7 @@ export async function fetchAndCacheThread(
   );
 
   if (isErr(result)) {
-    return result;
+    return errFromErrors(result.error as any);
   }
 
   data = result[1];

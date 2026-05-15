@@ -1,4 +1,4 @@
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
 import type { Component } from 'solid-js';

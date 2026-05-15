@@ -1,5 +1,5 @@
 import { filterSoupItemByRequestBody } from '@app/component/next-soup/filters/query-filters';
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import { soupKeys } from '@queries/soup/keys';
 import { mapSoupPageToEntityList } from '@queries/soup/transform-utils';

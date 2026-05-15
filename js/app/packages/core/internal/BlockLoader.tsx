@@ -26,7 +26,7 @@ import {
   blockUserAccessSignal,
 } from '../signal/load';
 import type { Source, SourcePreload } from '../source';
-import { err, isErr, type ObjectLike, ok } from '../util/maybeResult';
+import { err, isErr, type ObjectLike, ok } from '../util/result';
 
 export const blockDataSignal = createBlockSignal<unknown>();
 export const blockLiveTrackingEnabledSignal = createBlockSignal<boolean>();

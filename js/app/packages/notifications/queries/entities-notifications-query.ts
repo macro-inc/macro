@@ -1,5 +1,5 @@
 import type { Entity } from '@core/types';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { notificationServiceClient } from '@service-notification/client';
 import type { ApiUserNotification } from '@service-notification/generated/schemas';
 

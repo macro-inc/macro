@@ -1,4 +1,4 @@
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { type InferType, SyncDirection } from '@loro-mirror/packages/core/src';
 import { logger } from '@observability/logger';
 import { Mutex } from 'async-mutex';

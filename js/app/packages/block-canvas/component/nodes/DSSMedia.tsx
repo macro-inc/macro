@@ -2,7 +2,7 @@ import { clamp } from '@block-canvas/util/math';
 import { LoadErrors } from '@core/block';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { staticFileIdEndpoint } from '@core/constant/servers';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import PauseIcon from '@icon/regular/pause.svg';
 import PlayIcon from '@icon/regular/play.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';

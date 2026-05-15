@@ -4,7 +4,7 @@ import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useEmailLinks } from '@core/email-link';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
-import { isOk } from '@core/util/maybeResult';
+import { isOk } from '@core/util/result';
 import LogoIcon from '@macro-icons/macro-logo.svg';
 import { useUserInfo } from '@queries/auth';
 import {

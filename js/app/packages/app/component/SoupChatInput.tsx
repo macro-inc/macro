@@ -15,7 +15,7 @@ import { pressedKeys } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { isPaymentError } from '@core/util/handlePaymentError';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';

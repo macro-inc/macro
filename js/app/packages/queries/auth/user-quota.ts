@@ -1,4 +1,4 @@
-import { isOk } from '@core/util/maybeResult';
+import { isOk } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import type { UserQuota } from '@service-auth/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';

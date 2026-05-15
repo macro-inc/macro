@@ -1,5 +1,5 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
 import { emailClient } from '@service-email/client';

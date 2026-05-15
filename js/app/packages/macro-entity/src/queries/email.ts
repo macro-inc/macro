@@ -4,7 +4,7 @@ import { emailClient } from '@service-email/client';
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import type { PreviewsInboxCursorParams } from '@service-email/generated/schemas/previewsInboxCursorParams';
 import { useInfiniteQuery } from '@tanstack/solid-query';
-import { isErr } from 'core/util/maybeResult';
+import { isErr } from 'core/util/result';
 import { type Accessor, createMemo } from 'solid-js';
 import { createApiTokenQuery, withApiTokenRetry } from './auth';
 import { queryKeys } from './key';

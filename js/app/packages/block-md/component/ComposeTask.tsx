@@ -33,7 +33,7 @@ import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createTask } from '@core/util/create';
 import { filterMap } from '@core/util/list';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import ArrowSquareOutIcon from '@icon/regular/arrow-square-out.svg';

@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
-import { isOk } from '@core/util/maybeResult';
+import { isOk } from '@core/util/result';
 import { commsServiceClient } from '@service-comms/client';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { Accessor } from 'solid-js';

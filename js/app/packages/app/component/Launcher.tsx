@@ -22,7 +22,7 @@ import {
   createMarkdownFile,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { isErr, ok } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { Dialog } from '@kobalte/core/dialog';
 import PixelArrowRight from '@macro-icons/pixel/arrow-right.svg';
 import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
@@ -167,8 +167,7 @@ export function runCreateAction(
             title: 'New Canvas',
           });
           if ('error' in result) return;
-          const [_, id] = ok(result.documentId);
-          return id;
+          return result.documentId ?? undefined;
         },
         shouldInsert,
       });
@@ -222,8 +221,7 @@ export function runCreateAction(
             title: 'New Code File',
           });
           if (isErr(result)) return;
-          const [, id] = ok(result[1]?.documentId);
-          return id;
+          return result.value.documentId ?? undefined;
         },
         shouldInsert,
       });

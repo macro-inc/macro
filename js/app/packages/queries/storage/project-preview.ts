@@ -1,9 +1,4 @@
-import {
-  catchToResult,
-  isErr,
-  type MaybeResult,
-  ok,
-} from '@core/util/maybeResult';
+import { catchToResult, isErr, type AppResult, ok } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { ProjectPreviewData } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
@@ -73,7 +68,7 @@ export function useProjectPreviewQuery(projectId: Accessor<string>) {
  */
 export async function fetchAndCacheProjectPreview(
   projectId: string
-): Promise<MaybeResult<string, { project: ProjectPreviewData }>> {
+): Promise<AppResult<string, { project: ProjectPreviewData }>> {
   const result = await catchToResult(async () =>
     queryClient.ensureQueryData(projectPreviewQueryOptions(projectId))
   );

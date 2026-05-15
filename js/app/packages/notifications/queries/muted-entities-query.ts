@@ -1,4 +1,4 @@
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { notificationServiceClient } from '@service-notification/client';
 import { useQuery } from '@tanstack/solid-query';
 

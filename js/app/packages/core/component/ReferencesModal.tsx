@@ -1,7 +1,7 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import clickOutside from '@core/directive/clickOutside';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import Quotes from '@icon/regular/quotes.svg';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
 import { commsServiceClient } from '@service-comms/client';

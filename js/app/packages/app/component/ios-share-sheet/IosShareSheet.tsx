@@ -27,7 +27,7 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { invalidateContacts } from '@core/user/contactService';
 import { getDestinationFromOptions } from '@core/util/destination';
-import { isErr, throwOnErr } from '@core/util/maybeResult';
+import { isErr, throwOnErr } from '@core/util/result';
 import {
   chatRuleset,
   handleFileFolderDrop,

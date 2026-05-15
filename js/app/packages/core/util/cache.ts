@@ -1,7 +1,7 @@
-import { isErr, type MaybeResult, type ObjectLike } from './maybeResult';
+import { isErr, type AppResult, type ObjectLike } from './result';
 
 interface CacheEntry<E extends string, R extends ObjectLike> {
-  result: Promise<MaybeResult<E, R>>;
+  result: Promise<AppResult<E, R>>;
   expiresAt: number;
 }
 
@@ -26,7 +26,7 @@ type CachedFunction<Fn extends (...args: any[]) => Promise<any> | (() => any)> =
   };
 
 /**
- * Wraps a function that returns a Promise of MaybeResult with caching functionality.
+ * Wraps a function that returns a Promise of AppResult with caching functionality.
  * The arguments of the function are used as the key for the cache tied to this function.
  *
  * @param fn - The function to be cached
@@ -40,7 +40,7 @@ type CachedFunction<Fn extends (...args: any[]) => Promise<any> | (() => any)> =
  * }
  *
  * const cachedGetUser = cache(
- *   async (): Promise<MaybeResult<string, UserInfo>> => {
+ *   async (): Promise<AppResult<string, UserInfo>> => {
  *     const response = await fetchUser();
  *     if (!response.ok) {
  *       return err('FETCH_ERROR', 'Failed to fetch');

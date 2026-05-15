@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { err, ok } from '@core/util/maybeResult';
+import { err, ok } from '@core/util/result';
 import type { UnifiedNotification } from '@notifications/types';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';

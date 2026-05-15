@@ -1,4 +1,4 @@
-import { isOk } from '@core/util/maybeResult';
+import { isOk } from '@core/util/result';
 import { whenSettled } from '@core/util/whenSettled';
 import {
   checkPermissions,

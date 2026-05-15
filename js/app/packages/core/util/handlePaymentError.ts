@@ -1,7 +1,7 @@
-import { isErr, type MaybeError, type MaybeResult } from './maybeResult';
+import { isErr, type AppErrorResult, type AppResult } from './result';
 
 export function isPaymentError<T>(
-  result: MaybeResult<string, T> | MaybeError<string>
+  result: AppResult<string, T> | AppErrorResult<string>
 ): boolean {
   if (!isErr(result)) {
     return false;

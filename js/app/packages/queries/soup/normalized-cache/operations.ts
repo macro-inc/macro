@@ -1,5 +1,5 @@
 import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type {
   PostSoupRequest,

@@ -5,7 +5,7 @@ import {
   loadResult,
 } from '@core/block';
 import { blockAcceptedFileExtensionToMimeType } from '@core/constant/allBlocks';
-import { isErr, ok } from '@core/util/maybeResult';
+import { isErr, ok } from '@core/util/result';
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';

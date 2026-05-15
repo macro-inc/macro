@@ -2,7 +2,7 @@ import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/signal/location';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { useChannelsContext } from '@core/context/channels';
-import { isOk } from '@core/util/maybeResult';
+import { isOk } from '@core/util/result';
 import { getHistoryItems } from '@queries/history/history';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { validate as uuidValidate } from 'uuid';

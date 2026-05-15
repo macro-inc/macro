@@ -4,11 +4,11 @@ import {
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import {
-  type MaybeError,
-  type MaybeResult,
+  type AppErrorResult,
+  type AppResult,
   mapOk,
   type ObjectLike,
-} from '@core/util/maybeResult';
+} from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import { z } from 'zod';
 import type {
@@ -43,17 +43,17 @@ export type UnifiedNotification = Omit<ApiUserNotification, 'ownerId'> & {
 export function notificationFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeError<FetchWithTokenErrorCode>>;
+): Promise<AppErrorResult<FetchWithTokenErrorCode>>;
 export function notificationFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeResult<FetchWithTokenErrorCode, T>>;
+): Promise<AppResult<FetchWithTokenErrorCode, T>>;
 export function notificationFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
-  | Promise<MaybeError<FetchWithTokenErrorCode>> {
+  | Promise<AppResult<FetchWithTokenErrorCode, T>>
+  | Promise<AppErrorResult<FetchWithTokenErrorCode>> {
   return fetchWithToken<T>(`${notificationHost}${url}`, init);
 }
 export type Success = { success: boolean };

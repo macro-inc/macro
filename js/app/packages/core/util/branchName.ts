@@ -1,6 +1,6 @@
 import { analytics } from '@app/lib/analytics';
 import { toast } from '@core/component/Toast/Toast';
-import { isOk } from '@core/util/maybeResult';
+import { isOk } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 
 export const copyBranchNameToClipboard = async (documentId: string) => {

@@ -1,5 +1,5 @@
 import { useBlockId } from '@core/block';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { createStore, type SetStoreFunction, type Store } from 'solid-js/store';
@@ -21,11 +21,11 @@ async function fetchNewToken(blockId: string) {
     });
 
   if (isErr(token)) {
-    console.error('Failed to create permission token:', token);
+    console.error('Failed to create permission token:', token.error);
     return;
   }
 
-  return token[1].token;
+  return token.value.token;
 }
 
 function isTokenExpired(token: string) {

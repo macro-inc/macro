@@ -1,10 +1,5 @@
 import type { FetchError } from '@core/service';
-import {
-  err,
-  type MaybeResult,
-  type ObjectLike,
-  ok,
-} from '@core/util/maybeResult';
+import { err, type AppResult, type ObjectLike, ok } from '@core/util/result';
 import { platformFetch } from 'core/util/platformFetch';
 
 type ResultMap = {
@@ -38,7 +33,7 @@ export async function fetchPresigned<K extends keyof ResultMap>(
   url: string,
   responseType: K,
   init?: RequestInit
-): Promise<MaybeResult<FetchError, ResultMap[K]>> {
+): Promise<AppResult<FetchError, ResultMap[K]>> {
   try {
     const response = await platformFetch(url, init);
 
@@ -64,7 +59,7 @@ export async function fetchPresignedBlobWithProgress(
   url: string,
   onProgress: (progress: FetchProgress) => void,
   init?: RequestInit
-): Promise<MaybeResult<FetchError, Blob>> {
+): Promise<AppResult<FetchError, Blob>> {
   try {
     const response = await platformFetch(url, init);
 

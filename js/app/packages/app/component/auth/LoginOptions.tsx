@@ -8,7 +8,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { RedirectLocation } from '@core/util/authRedirect';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
-import { isOk } from '@core/util/maybeResult';
+import { isOk } from '@core/util/result';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import IconApple from '@macro-icons/macro-apple.svg';
 import IconGoogle from '@macro-icons/macro-google.svg';

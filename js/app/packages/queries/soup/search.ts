@@ -1,6 +1,6 @@
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import type { ChannelMessageEntity, EntityData, WithSearch } from '@entity';
 import { soupKeys } from '@queries/soup/keys';
 import {

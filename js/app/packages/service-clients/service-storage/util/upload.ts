@@ -3,7 +3,7 @@ import type { FileTypeString, MimeType } from '@core/block';
 import { blockAcceptedMimetypeToFileExtension } from '@core/constant/allBlocks';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { contentHash } from '@core/util/hash';
-import { isErr, type ResultError } from '@core/util/maybeResult';
+import { isErr, type ResultError } from '@core/util/result';
 import { toaster } from '@kobalte/core/toast';
 import { waitForDocumentContentReady } from '@queries/storage/document-location';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';

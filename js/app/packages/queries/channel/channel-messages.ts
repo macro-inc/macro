@@ -1,4 +1,4 @@
-import { MaybeResultError, throwOnErr } from '@core/util/maybeResult';
+import { ThrownResultError, throwOnErr } from '@core/util/result';
 import {
   type ApiChannelMessage,
   type ApiThreadReply,
@@ -58,7 +58,7 @@ type ChannelMessagesPageParam = {
 
 export function isMissingChannelMessageError(error: unknown): boolean {
   return (
-    error instanceof MaybeResultError &&
+    error instanceof ThrownResultError &&
     error.errors.some(({ code }) => code === 'NOT_FOUND' || code === 'GONE')
   );
 }

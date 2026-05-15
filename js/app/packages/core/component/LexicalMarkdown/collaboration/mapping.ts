@@ -1,6 +1,6 @@
 import type { LoroManager } from '@core/collab/manager';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import type { NodeIdMappings } from '@lexical-core';
 import { $getNodeByKey, type LexicalNode } from 'lexical';
 import { type ContainerID, LoroMap } from 'loro-crdt';

@@ -4,7 +4,7 @@ false && internalDrag;
 
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { maybeThrow } from '@core/util/maybeResult';
+import { unwrapOrThrow } from '@core/util/result';
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
 import ClipboardIcon from '@icon/regular/clipboard.svg';
 import ThreeDotsIcon from '@icon/regular/dots-three-vertical.svg';
@@ -56,11 +56,11 @@ const THEMES = {
 // NOTE: copied logic from block-image
 const getDssImageBlob = async (documentId: string) => {
   const maybeDocument = await fetchBinaryDocumentData(documentId);
-  const documentResult = maybeThrow(maybeDocument);
+  const documentResult = unwrapOrThrow(maybeDocument);
   // presigned url with expiry
   const { blobUrl } = documentResult;
   const blobResult = await fetchBinary(blobUrl, 'blob');
-  const blob = maybeThrow(blobResult);
+  const blob = unwrapOrThrow(blobResult);
   return blob;
 };
 

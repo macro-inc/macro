@@ -1,4 +1,4 @@
-import { err, type MaybeResult, ok } from '@core/util/maybeResult';
+import { err, type AppResult, ok } from '@core/util/result';
 import { platformFetch } from 'core/util/platformFetch';
 import type { DocumentMetadata } from '../generated/schemas/documentMetadata';
 import type { StorageError } from './storageError';
@@ -7,17 +7,17 @@ export async function fetchBinary(
   url: string,
   responseType: 'arraybuffer',
   init?: RequestInit
-): Promise<MaybeResult<StorageError, ArrayBuffer>>;
+): Promise<AppResult<StorageError, ArrayBuffer>>;
 export async function fetchBinary(
   url: string,
   responseType: 'blob',
   init?: RequestInit
-): Promise<MaybeResult<StorageError, Blob>>;
+): Promise<AppResult<StorageError, Blob>>;
 export async function fetchBinary<T extends ArrayBuffer | Blob>(
   url: string,
   responseType: 'arraybuffer' | 'blob',
   init?: RequestInit
-): Promise<MaybeResult<StorageError, T>> {
+): Promise<AppResult<StorageError, T>> {
   try {
     const response = await platformFetch(url, init);
 

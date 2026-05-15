@@ -1,5 +1,5 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
-import { isErr, ok } from '@core/util/maybeResult';
+import { isErr, ok } from '@core/util/result';
 import { fetchAndCacheThread } from '@queries/email/thread';
 import EmailBlock from './component/Block';
 

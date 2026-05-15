@@ -5,7 +5,7 @@ import {
   type TimeoutError,
 } from '@core/auth/channel';
 import { openEmailAuthPopup } from '@core/auth/email';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { emailClient } from '@service-email/client';
@@ -46,10 +46,9 @@ function initEmailLink(): ResultAsync<void, EmailInitError> {
   return ResultAsync.fromSafePromise(emailClient.init()).andThen(
     (initResult) => {
       if (isErr(initResult)) {
-        const [errors] = initResult;
-        const badRequestError = errors.find(
+        const badRequestError = initResult.error.find(
           // TODO: this is cope but seems like error.code not being set correctly
-          (e) => e.code === '400' || e.message.includes('400')
+          (e) => e.message.includes('400')
         );
         return err(
           badRequestError

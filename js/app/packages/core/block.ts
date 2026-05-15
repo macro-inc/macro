@@ -36,10 +36,12 @@ import { blockDataSignal } from './internal/BlockLoader';
 import type { Source, SourcePreload } from './source';
 import {
   err,
+  errFromErrors,
   isErr,
-  type MaybeResult,
+  ok,
+  type AppResult,
   type ObjectLike,
-} from './util/maybeResult';
+} from './util/result';
 
 /**
  * List of valid block types that can be used in the application.
@@ -179,34 +181,32 @@ export const LoadErrors = {
 type LoadErrorCodes = keyof typeof LoadErrors;
 
 /**
- * Converts a MaybeResult to a MaybeResult with a load error code.
+ * Converts a AppResult to a AppResult with a load error code.
  * @template T - The type of the input result value.
- * @param {MaybeResult<string, T>} maybeResult - The result to convert.
- * @returns {MaybeResult<keyof typeof LoadErrors, T>} A new MaybeResult with a load error code.
+ * @param {AppResult<string, T>} result - The result to convert.
+ * @returns {AppResult<keyof typeof LoadErrors, T>} A new AppResult with a load error code.
  */
 export function toLoadResult<E extends string, T extends ObjectLike>(
-  maybeResult: MaybeResult<E, T>
-): MaybeResult<keyof typeof LoadErrors, T> {
-  if (isErr(maybeResult, 'GONE')) return LoadErrors.GONE;
-  if (isErr(maybeResult, 'UNAUTHORIZED')) return LoadErrors.UNAUTHORIZED;
-  if (isErr(maybeResult, 'NOT_FOUND')) return LoadErrors.MISSING;
-  if (isErr(maybeResult)) return LoadErrors.INVALID;
-  return maybeResult;
+  result: AppResult<E, T>
+): AppResult<keyof typeof LoadErrors, T> {
+  if (isErr(result, 'GONE')) return LoadErrors.GONE;
+  if (isErr(result, 'UNAUTHORIZED')) return LoadErrors.UNAUTHORIZED;
+  if (isErr(result, 'NOT_FOUND')) return LoadErrors.MISSING;
+  if (isErr(result)) return LoadErrors.INVALID;
+  return result;
 }
 
 /**
  * Awaits a load result and returns a new load result with the same value or a load error.
  * @template T - The type of the input result value.
- * @param {Promise<MaybeResult<string, T>>} result - The result to await.
- * @returns {Promise<MaybeResult<keyof typeof LoadErrors, T>>} A new MaybeResult with the same value or a load error.
+ * @param {Promise<AppResult<string, T>>} result - The result to await.
+ * @returns {Promise<AppResult<keyof typeof LoadErrors, T>>} A new AppResult with the same value or a load error.
  */
 export async function loadResult<
-  T extends Promise<MaybeResult<string, ObjectLike>>,
+  T extends Promise<AppResult<string, ObjectLike>>,
 >(
   result: T
-): Promise<
-  MaybeResult<keyof typeof LoadErrors, ExtractSuccessType<Awaited<T>>>
-> {
+): Promise<AppResult<keyof typeof LoadErrors, ExtractSuccessType<Awaited<T>>>> {
   return toLoadResult(await result) as any; // any because TypeScript gets confused and loses the ObjectLike's specific type
 }
 
@@ -214,17 +214,17 @@ export async function loadResult<
  * Maps over an ok result, or passes through a load error.
  * @template T - The type of the input result value.
  * @template U - The type of the output result value.
- * @param {MaybeResult<string, T>} result - The result to map.
+ * @param {AppResult<string, T>} result - The result to map.
  * @param {(value: T) => U} fn - The function to apply to the ok value.
- * @returns {MaybeResult<LoadErrorCodes, U>} A new MaybeResult with the mapped value or a load error.
+ * @returns {AppResult<LoadErrorCodes, U>} A new AppResult with the mapped value or a load error.
  */
 export function mapLoadResult<T extends ObjectLike, U extends ObjectLike>(
-  result: MaybeResult<string, T>,
+  result: AppResult<string, T>,
   fn: (value: T) => U
-): MaybeResult<LoadErrorCodes, U> {
-  const [error, data] = toLoadResult(result);
-  if (error) return [error, null];
-  return [null, fn(data)];
+): AppResult<LoadErrorCodes, U> {
+  const loadResult = toLoadResult(result);
+  if (loadResult.isErr()) return errFromErrors(loadResult.error);
+  return ok(fn(loadResult.value));
 }
 
 // Magic type that when used at sites where generic types are inferred from, will prevent those sites from being involved in the inference.
@@ -252,18 +252,16 @@ export type LoadFunction<
 > = (
   source: NoInfer<S>,
   intent: Intent
-) => Promise<
-  MaybeResult<keyof typeof LoadErrors, S extends Source ? T | P : T>
->;
+) => Promise<AppResult<keyof typeof LoadErrors, S extends Source ? T | P : T>>;
 
-type ExtractSuccessType<T> = T extends [null, infer S]
+type ExtractSuccessType<T> = T extends readonly [null, infer S]
   ? Exclude<S, SourcePreload<{}>>
   : never;
 
 /**
  * Extracts the non-error, non-preload return type of a load function.
  *
- * This utility type unwraps the Promise, extracts the success type from MaybeResult,
+ * This utility type unwraps the Promise, extracts the success type from AppResult,
  * and excludes the SourcePreload type. It's useful for getting the actual data type
  * returned by a load function in the successful, non-preload case.
  *
@@ -274,7 +272,7 @@ type ExtractSuccessType<T> = T extends [null, infer S]
  * const definition = defineBlock({
  *   // ... other properties ...
  *   async load(source, intent) {
- *     // Implementation that returns Promise<MaybeResult<Error, Data | Preload>>
+ *     // Implementation that returns Promise<AppResult<Error, Data | Preload>>
  *   },
  * });
  *

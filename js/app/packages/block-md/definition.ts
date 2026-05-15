@@ -6,7 +6,7 @@ import {
 } from '@core/block';
 import { createLoroManager } from '@core/collab/manager';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
-import { isErr, ok } from '@core/util/maybeResult';
+import { isErr, ok } from '@core/util/result';
 import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
 import { waitForDocumentSyncServiceReady } from '@queries/storage/document-location';
 import { storageServiceClient } from '@service-storage/client';

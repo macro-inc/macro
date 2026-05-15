@@ -3,7 +3,7 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { toast } from '@core/component/Toast/Toast';
 import { invalidateContacts } from '@core/user/contactService';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { invalidateListChannels } from '@queries/channel/channels';
 import { commsServiceClient, type IdResponse } from '@service-comms/client';
 import type {

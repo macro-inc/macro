@@ -1,6 +1,6 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
-import { ok } from '@core/util/maybeResult';
+import { ok } from '@core/util/result';
 import { CallBlockAdapter } from './component/CallBlockAdapter';
 
 export const definition = defineBlock({

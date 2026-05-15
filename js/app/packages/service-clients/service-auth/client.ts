@@ -7,7 +7,7 @@ import {
   type ObjectLike,
   ok,
   resultError,
-} from '@core/util/maybeResult';
+} from '@core/util/result';
 import { registerClient } from '@core/util/mockClient';
 import { type SafeFetchInit, safeFetch } from '@core/util/safeFetch';
 import { logger } from '@observability';
@@ -164,17 +164,17 @@ export const authServiceClient = {
     );
   },
   async sessionLogin(args: { session_code: string }) {
-    const maybeResult = await authApiFetch<UserTokensResponse>(
+    const result = await authApiFetch<UserTokensResponse>(
       `/session/login/${args.session_code}`
     );
-    if (isOk(maybeResult)) {
+    if (isOk(result)) {
       setAccessTokenData({
-        accessToken: maybeResult[1].access_token,
-        refreshToken: maybeResult[1].refresh_token,
-        expiresAt: getExpiresAt(maybeResult[1].access_token),
+        accessToken: result[1].access_token,
+        refreshToken: result[1].refresh_token,
+        expiresAt: getExpiresAt(result[1].access_token),
       });
     }
-    return maybeResult;
+    return result;
   },
   async deleteUser() {
     setAccessTokenData(null);
@@ -195,7 +195,7 @@ export const authServiceClient = {
     });
   },
   async passwordlessCallback({ code, email }: { code: string; email: string }) {
-    const maybeResult = await safeFetch<UserTokensResponse>(
+    const result = await safeFetch<UserTokensResponse>(
       `${authHost}/oauth/passwordless/${code}?email=${encodeURIComponent(email)}&disable_redirect=true`,
       { cache: 'no-store', credentials: 'include' },
       async (response) => {
@@ -203,14 +203,14 @@ export const authServiceClient = {
         return resultError({ code: 'UNAUTHORIZED', message });
       }
     );
-    if (isOk(maybeResult)) {
+    if (isOk(result)) {
       setAccessTokenData({
-        accessToken: maybeResult[1].access_token,
-        refreshToken: maybeResult[1].refresh_token,
-        expiresAt: getExpiresAt(maybeResult[1].access_token),
+        accessToken: result[1].access_token,
+        refreshToken: result[1].refresh_token,
+        expiresAt: getExpiresAt(result[1].access_token),
       });
     }
-    return maybeResult;
+    return result;
   },
   async refreshToken(args: { accessToken: string; refreshToken: string }) {
     return authApiFetch<UserTokensResponse>('/jwt/refresh', {

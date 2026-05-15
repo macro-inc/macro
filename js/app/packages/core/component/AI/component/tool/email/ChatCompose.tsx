@@ -14,7 +14,7 @@ import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientC
 import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { useChatQuery } from '@queries/chat';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { cognitionApiServiceClient } from '@service-cognition/client';

@@ -1,4 +1,4 @@
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatResponse } from '@service-cognition/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';

@@ -3,7 +3,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { isErr, isOk } from './maybeResult';
+import { isErr, isOk } from './result';
 import { type BaseFetchErrorCode, safeFetch } from './safeFetch';
 
 let originalFetch = global.fetch;

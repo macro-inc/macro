@@ -1,5 +1,5 @@
 import { ENABLE_MENTION_TRACKING } from '@core/constant/featureFlags';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { commsServiceClient } from '@service-comms/client';
 import type { ItemType } from '@service-storage/client';
 import { getPermissionToken } from './token';

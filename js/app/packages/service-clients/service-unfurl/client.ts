@@ -1,6 +1,6 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
-import { mapOk } from '@core/util/maybeResult';
+import { mapOk } from '@core/util/result';
 import type { GetUnfurlBulkBody } from './generated/schemas/getUnfurlBulkBody';
 import type { GetUnfurlBulkResponse } from './generated/schemas/getUnfurlBulkResponse';
 import type { GetUnfurlParams } from './generated/schemas/getUnfurlParams';

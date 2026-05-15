@@ -37,9 +37,9 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import {
   isErr,
   isOk,
-  type MaybeError,
-  type MaybeResult,
-} from '@core/util/maybeResult';
+  type AppErrorResult,
+  type AppResult,
+} from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import IconX from '@icon/bold/x-bold.svg';
@@ -632,10 +632,10 @@ export function ShareModal(props: ShareModalProps) {
   });
 
   const recipients = createMemo(() => {
-    const maybeResult = permissionsResource.latest;
-    if (!maybeResult || isErr(maybeResult)) return;
+    const result = permissionsResource.latest;
+    if (!result || isErr(result)) return;
 
-    const [, sharePermission] = maybeResult;
+    const [, sharePermission] = result;
     return sharePermission.channelSharePermissions;
   });
 
@@ -720,7 +720,7 @@ export function ShareModal(props: ShareModalProps) {
     ) => {
       if (props.userPermissions !== Permissions.OWNER) return;
 
-      let result: MaybeResult<any, any> | MaybeError<any> | null = null;
+      let result: AppResult<any, any> | AppErrorResult<any> | null = null;
       if (props.itemType === 'chat') {
         result = await cognitionApiServiceClient.updateChatPermissions({
           sharePermission: {
@@ -1242,9 +1242,9 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
   }));
 
   const shareAccessLevelText = createMemo(() => {
-    const maybeResult = permissionsBlockResource[0].latest;
-    if (!maybeResult || isErr(maybeResult)) return '';
-    const [, sharePermission] = maybeResult;
+    const result = permissionsBlockResource[0].latest;
+    if (!result || isErr(result)) return '';
+    const [, sharePermission] = result;
     if (sharePermission.isPublic) return 'Public';
     if (sharePermission.channelSharePermissions?.length) return 'Shared';
     return 'Just me';

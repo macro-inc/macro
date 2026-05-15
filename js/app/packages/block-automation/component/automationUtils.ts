@@ -1,7 +1,7 @@
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import type { Model } from '@core/component/AI/types';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
-import { MaybeResultError } from '@core/util/maybeResult';
+import { ThrownResultError } from '@core/util/result';
 import type {
   AgentTask,
   CreateScheduledAction,
@@ -324,7 +324,7 @@ export function formatDateTime(value: string | null | undefined) {
 }
 
 export function getErrorMessage(error: unknown) {
-  if (error instanceof MaybeResultError) {
+  if (error instanceof ThrownResultError) {
     return error.errors.map((item) => item.message).join(', ');
   }
 

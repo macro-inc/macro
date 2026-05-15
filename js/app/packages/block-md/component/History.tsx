@@ -23,7 +23,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
 import { CommentNode, InlineSearchNode, peerIdPlugin } from '@lexical-core';
 import { storageServiceClient } from '@service-storage/client';

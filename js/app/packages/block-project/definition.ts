@@ -4,7 +4,7 @@ import {
   LoadErrors,
   loadResult,
 } from '@core/block';
-import { isErr, ok } from '@core/util/maybeResult';
+import { isErr, ok } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { GetProjectResponseData } from '@service-storage/generated/schemas/getProjectResponseData';
 import { ProjectType } from '@service-storage/generated/schemas/projectType';

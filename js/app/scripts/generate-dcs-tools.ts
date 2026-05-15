@@ -157,7 +157,7 @@ async function generateToolsFile(schema: CombinedSchema) {
 
   const contents = `${warning}
 
-import { err, type MaybeResult, ok } from 'core/util/maybeResult';
+import { err, type AppResult, ok } from 'core/util/result';
 import * as schemas from './schemas';
 import type * as types from './types';
 
@@ -208,7 +208,7 @@ export type NamedTool<
 function deserializeTool<T extends NamedTool>(
   tool: NamedRawTool,
   direction: 'call' | 'response'
-): MaybeResult<'parse_error' | 'not_found', T> {
+): AppResult<'parse_error' | 'not_found', T> {
   if (!(tool.name in toolParserMap)) {
     return err('not_found', \`tool name not found \${tool.name}\`);
   }
@@ -226,13 +226,13 @@ function deserializeTool<T extends NamedTool>(
 
 export function deserializeToolCall(
   tool: NamedRawTool
-): MaybeResult<'parse_error' | 'not_found', NamedTool<ToolName, 'call'>> {
+): AppResult<'parse_error' | 'not_found', NamedTool<ToolName, 'call'>> {
   return deserializeTool(tool, 'call');
 }
 
 export function deserializeToolResponse(
   tool: NamedRawTool
-): MaybeResult<'parse_error' | 'not_found', NamedTool<ToolName, 'response'>> {
+): AppResult<'parse_error' | 'not_found', NamedTool<ToolName, 'response'>> {
   return deserializeTool(tool, 'response');
 }
 `;

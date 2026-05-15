@@ -1,4 +1,4 @@
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { storageServiceClient } from '../client';
 
 // we expire slightly before the actual expiry to avoid race condition

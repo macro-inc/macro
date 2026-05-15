@@ -5,7 +5,7 @@ import {
 } from '@core/component/Properties/utils';
 import { ERROR_MESSAGES } from '@core/component/Properties/utils/errorHandling';
 import { toast } from '@core/component/Toast/Toast';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import MagnifyingGlassIcon from '@phosphor-icons/core/assets/regular/magnifying-glass.svg';
 import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
 import { propertiesServiceClient } from '@service-properties/client';

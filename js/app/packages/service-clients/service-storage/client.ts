@@ -23,11 +23,11 @@ import {
   err,
   isErr,
   isOk,
-  type MaybeError,
-  type MaybeResult,
+  type AppErrorResult,
+  type AppResult,
   mapOk,
   ok,
-} from '@core/util/maybeResult';
+} from '@core/util/result';
 import { registerClient } from '@core/util/mockClient';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
@@ -111,17 +111,17 @@ const dssHost = SERVER_HOSTS['document-storage-service'];
 export function dssFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeError<FetchWithTokenErrorCode>>;
+): Promise<AppErrorResult<FetchWithTokenErrorCode>>;
 export function dssFetch<T extends Record<string, any>>(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeResult<FetchWithTokenErrorCode, T>>;
+): Promise<AppResult<FetchWithTokenErrorCode, T>>;
 export function dssFetch<T extends Record<string, any> = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
-  | Promise<MaybeError<FetchWithTokenErrorCode>> {
+  | Promise<AppResult<FetchWithTokenErrorCode, T>>
+  | Promise<AppErrorResult<FetchWithTokenErrorCode>> {
   return fetchWithToken<T>(`${dssHost}${url}`, init);
 }
 
@@ -537,7 +537,7 @@ export const storageServiceClient = {
       }
     );
 
-    const result: MaybeResult<
+    const result: AppResult<
       FetchWithTokenErrorCode,
       DocumentResponseMetadataWithContent
     > = mapOk(copyResult, (result) => result.data.documentMetadata);
@@ -578,7 +578,7 @@ export const storageServiceClient = {
     documentId,
   }: {
     documentId: string;
-  }): Promise<MaybeResult<FetchWithTokenErrorCode, string>> {
+  }): Promise<AppResult<FetchWithTokenErrorCode, string>> {
     return mapOk(
       await dssFetch<{ shortId: string }>(`/documents/${documentId}/short_id`, {
         method: 'GET',
@@ -592,10 +592,7 @@ export const storageServiceClient = {
   }: {
     documentId: string;
   }): Promise<
-    MaybeResult<
-      FetchWithTokenErrorCode,
-      { shortId: string; branchName: string }
-    >
+    AppResult<FetchWithTokenErrorCode, { shortId: string; branchName: string }>
   > {
     return mapOk(
       await dssFetch<{ shortId: string; branchName: string }>(
@@ -883,7 +880,7 @@ export const storageServiceClient = {
     async function getDocxFile(
       args
     ): Promise<
-      MaybeResult<
+      AppResult<
         FetchError | 'INVALID_FILETYPE' | 'INVALID_DOCUMENT',
         GetDocxFileResponse
       >
@@ -899,7 +896,7 @@ export const storageServiceClient = {
             documentVersionId,
           }),
           args.withoutParts
-            ? (Promise.resolve([null, { presignedUrls: [] }]) as ReturnType<
+            ? (Promise.resolve(ok({ presignedUrls: [] })) as ReturnType<
                 typeof storageServiceClient.getWriterPartUrls
               >)
             : storageServiceClient.getWriterPartUrls({
@@ -913,7 +910,7 @@ export const storageServiceClient = {
         const [, { documentMetadata: metadata }] = metadataResult;
         const versionId = metadata.documentVersionId.toString();
         locationResult = args.withoutParts
-          ? await (Promise.resolve([null, { presignedUrls: [] }]) as ReturnType<
+          ? await (Promise.resolve(ok({ presignedUrls: [] })) as ReturnType<
               typeof storageServiceClient.getWriterPartUrls
             >)
           : await storageServiceClient.getWriterPartUrls({
@@ -995,7 +992,7 @@ export const storageServiceClient = {
   async getBinaryDocument(
     args
   ): Promise<
-    MaybeResult<
+    AppResult<
       FetchError | 'INVALID_DOCUMENT',
       GetDocumentResponseData & { blobUrl: string }
     >
@@ -1093,11 +1090,11 @@ export const storageServiceClient = {
       if (versionId != null)
         params.set('document_version_id', String(versionId));
 
-      const maybeResult = await dssFetch<LocationResponseV3>(
+      const result = await dssFetch<LocationResponseV3>(
         `/documents/${documentId}/location_v3?${params.toString()}`
       );
 
-      return mapOk(maybeResult, (result) => ({
+      return mapOk(result, (result) => ({
         data: normalizeLocationResponseV3(result),
       }));
     },
@@ -1215,7 +1212,7 @@ export const storageServiceClient = {
 
     async getUserAccessLevel({
       id,
-    }): Promise<MaybeResult<FetchWithTokenErrorCode, AccessLevel>> {
+    }): Promise<AppResult<FetchWithTokenErrorCode, AccessLevel>> {
       return await dssFetch<any>(`/projects/${id}/access_level`);
     },
 

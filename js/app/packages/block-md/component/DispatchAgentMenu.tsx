@@ -5,7 +5,7 @@ import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { macroIdToEmail, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { isOk } from '@core/util/maybeResult';
+import { isOk } from '@core/util/result';
 import CaretDown from '@icon/regular/caret-down.svg';
 import CopyIcon from '@icon/regular/copy.svg';
 import PlugIcon from '@icon/regular/plug.svg';

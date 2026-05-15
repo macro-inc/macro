@@ -6,7 +6,7 @@ import {
 } from '@app/component/paywall/plans';
 import { useIsAuthenticated } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import ArrowRightIcon from '@icon/regular/arrow-right.svg';
 import InfoIcon from '@icon/regular/info.svg';
 import LockIcon from '@icon/regular/lock.svg';

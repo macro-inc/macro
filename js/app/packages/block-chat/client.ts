@@ -1,7 +1,7 @@
 import type { BlockName } from '@core/block';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isPaymentError } from '@core/util/handlePaymentError';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 
 export function useOpenChatForAttachment() {

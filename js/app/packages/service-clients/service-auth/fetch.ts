@@ -1,12 +1,13 @@
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import {
   err,
-  type HybridResultError,
+  errFromErrors,
+  isErr,
+  type AppResult,
   type ObjectLike,
   ok,
   type ResultError,
-  toHybridError,
-} from '@core/util/maybeResult';
+} from '@core/util/result';
 import {
   type BaseFetchErrorCode,
   type ErrorResponseHandler,
@@ -74,24 +75,16 @@ type fetchWithAuthOptions<
   ) => Promise<ResultError<BaseFetchErrorCode | CustomErrorCode>>;
   headers?: AcceptHeader<T>;
 };
-type HybridMaybeResult<ErrorCode extends string, T> =
-  | [null, T]
-  | [HybridResultError<ErrorCode>, null];
-
 export async function fetchWithAuth<
   T extends ObjectLike | TextContentType = {},
   CustomErrorCode extends string = never,
 >(
   input: RequestInfo,
   init?: fetchWithAuthOptions<T, CustomErrorCode>
-): Promise<HybridMaybeResult<BaseFetchErrorCode | CustomErrorCode, T>> {
+): Promise<AppResult<BaseFetchErrorCode | CustomErrorCode, T>> {
   const apiToken = await getMacroApiToken();
   if (!apiToken) {
-    const [noTokenError] = err(
-      'UNAUTHORIZED',
-      'No access and/or refresh token found'
-    );
-    return [toHybridError(noTokenError), null];
+    return err('UNAUTHORIZED', 'No access and/or refresh token found');
   }
 
   const safeFetchInit = {
@@ -144,16 +137,15 @@ export async function fetchWithAuth<
   };
 
   // TODO: move safeFetch code to here
-  const [errors, result] = await safeFetch<SafeFetchT<T>, CustomErrorCode>(
+  const result = await safeFetch<SafeFetchT<T>, CustomErrorCode>(
     input,
     safeFetchInit,
     safeFetchErrorHandler
   );
 
-  // TODO: Refactor when backward compatibility is no longer needed
-  if (!!errors && errors.length > 0) {
-    return [toHybridError(errors), null];
+  if (isErr(result)) {
+    return errFromErrors(result.error);
   }
 
-  return ok(result as T);
+  return ok(result.value as T);
 }

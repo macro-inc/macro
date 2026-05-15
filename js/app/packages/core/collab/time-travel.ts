@@ -1,4 +1,4 @@
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { syncServiceClient } from '@service-sync/client';
 import {
   type Change,

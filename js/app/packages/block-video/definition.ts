@@ -6,7 +6,7 @@ import {
   type MimeType,
 } from '@core/block';
 import { ENABLE_VIDEO_BLOCK } from '@core/constant/featureFlags';
-import { isErr, ok } from '@core/util/maybeResult';
+import { isErr, ok } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { DocumentMetadataFileType } from '@service-storage/generated/schemas/documentMetadataFileType';
 import { getPresignedUrl } from '@service-storage/util/presignedUrl';

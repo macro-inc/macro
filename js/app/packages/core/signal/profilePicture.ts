@@ -1,5 +1,5 @@
 import { debounce } from '@core/util/debounce';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import {
   type Accessor,

@@ -8,12 +8,12 @@ import {
 import {
   err,
   isErr,
-  type MaybeError,
-  type MaybeResult,
+  type AppErrorResult,
+  type AppResult,
   mapOk,
   type ObjectLike,
   ok,
-} from '@core/util/maybeResult';
+} from '@core/util/result';
 import { platformFetch } from '@core/util/platformFetch';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { DocumentTextPart } from '@service-cognition/generated/schemas/documentTextPart';
@@ -48,17 +48,17 @@ type WithProjectId = { project_id: string };
 export function dcsFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeError<FetchWithTokenErrorCode>>;
+): Promise<AppErrorResult<FetchWithTokenErrorCode>>;
 export function dcsFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeResult<FetchWithTokenErrorCode, T>>;
+): Promise<AppResult<FetchWithTokenErrorCode, T>>;
 export function dcsFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
-  | Promise<MaybeError<FetchWithTokenErrorCode>> {
+  | Promise<AppResult<FetchWithTokenErrorCode, T>>
+  | Promise<AppErrorResult<FetchWithTokenErrorCode>> {
   return fetchWithToken<T>(`${dcsHost}${url}`, init);
 }
 export type Success = { success: boolean };
@@ -164,7 +164,7 @@ export const cognitionApiServiceClient = {
   },
   async deleteChat(args: WithChatId) {
     const { chat_id } = args;
-    const maybeResult = await dcsFetch(`/chats/${chat_id}`, {
+    const result = await dcsFetch(`/chats/${chat_id}`, {
       method: 'DELETE',
     });
 
@@ -173,9 +173,9 @@ export const cognitionApiServiceClient = {
     // delete chat returns a 200 with an empty body on success
     // which return INVALID_JSON error on response.json()
     // so we return no error instead to signal success
-    if (isErr(maybeResult, 'INVALID_JSON')) maybeResult;
+    if (isErr(result, 'INVALID_JSON')) result;
 
-    return maybeResult;
+    return result;
   },
   async getChatPermissions(args: { id: string }) {
     const { id } = args;
@@ -355,7 +355,7 @@ type DcsCompletionErrorCode = 'NETWORK_ERROR' | 'OPENAI_ERROR';
 export async function dcsCompletion(
   body: Omit<OpenAI.ChatCompletionCreateParamsNonStreaming, 'stream'>
 ): Promise<
-  MaybeResult<
+  AppResult<
     FetchWithTokenErrorCode | DcsCompletionErrorCode,
     OpenAI.ChatCompletion
   >

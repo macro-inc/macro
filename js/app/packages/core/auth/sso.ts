@@ -1,7 +1,7 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
-import { isOk } from '@core/util/maybeResult';
+import { isOk } from '@core/util/result';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';

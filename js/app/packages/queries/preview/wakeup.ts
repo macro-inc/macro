@@ -1,5 +1,5 @@
 import type { ItemLike } from '@core/constant/allBlocks';
-import { isErr } from '@core/util/maybeResult';
+import { isErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import { AsyncBatcher } from '@tanstack/pacer';
 import type { PreviewItem } from './types';

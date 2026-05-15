@@ -1,11 +1,12 @@
 import type { FlattenObject } from '@core/util/flatten';
 import {
   err,
+  errFromErrors,
   isErr,
-  type MaybeResult,
+  type AppResult,
   ok,
   type ResultError,
-} from '@core/util/maybeResult';
+} from '@core/util/result';
 import type { WithRequired } from '@core/util/withRequired';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
@@ -40,7 +41,7 @@ export type GetDocxFileResponse = FlattenObject<{
 
 export async function getDocxExpandedParts(
   docxFile: GetDocxFileResponse
-): Promise<MaybeResult<StorageError, DocxExpandedPart[]>> {
+): Promise<AppResult<StorageError, DocxExpandedPart[]>> {
   const { documentId, documentBom } = docxFile.metadata;
   let opfsDocumentStore;
   try {
@@ -149,11 +150,10 @@ export async function getDocxExpandedParts(
 
   settledResults.forEach((result) => {
     if (result.status === 'fulfilled') {
-      const [err, part] = result.value;
-      if (err) {
-        errors.push(...err);
+      if (result.value.isErr()) {
+        errors.push(...result.value.error);
       } else {
-        parts.push(...part);
+        parts.push(...result.value.value);
       }
     } else {
       errors.push({
@@ -164,7 +164,7 @@ export async function getDocxExpandedParts(
   });
 
   if (errors.length > 0) {
-    return [errors, null];
+    return errFromErrors(errors);
   }
 
   return ok(parts);

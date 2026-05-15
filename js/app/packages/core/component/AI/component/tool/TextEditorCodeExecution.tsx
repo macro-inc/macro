@@ -8,7 +8,7 @@ import {
   allSupportedExtensionSet,
   isCodeEditorExtensionSupported,
 } from '@core/util/languageQuery';
-import { isOk } from '@core/util/maybeResult';
+import { isOk } from '@core/util/result';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type {

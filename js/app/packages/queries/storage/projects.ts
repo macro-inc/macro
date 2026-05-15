@@ -1,7 +1,7 @@
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { compareDateDesc } from '@core/util/date';
-import { isOk } from '@core/util/maybeResult';
+import { isOk } from '@core/util/result';
 import {
   refetchHistory,
   useUpsertToHistoryMutation,
@@ -92,14 +92,14 @@ export async function createProject(params: {
   parentId?: string;
   sharePermission?: null;
 }): Promise<string | undefined> {
-  const maybeResult = await storageServiceClient.projects.create({
+  const result = await storageServiceClient.projects.create({
     name: params.name,
     projectParentId: params.parentId,
     sharePermission: params.sharePermission,
   });
 
-  if (isOk(maybeResult)) {
-    const projectId = maybeResult[1].id;
+  if (isOk(result)) {
+    const projectId = result[1].id;
     setPreviewOnCreate({
       itemId: projectId,
       itemType: 'project',
@@ -141,14 +141,14 @@ export function useCreateProjectMutation(
     mutationFn: async (
       params: CreateProjectParams
     ): Promise<string | undefined> => {
-      const maybeResult = await storageServiceClient.projects.create({
+      const result = await storageServiceClient.projects.create({
         name: params.name,
         projectParentId: params.parentId,
         sharePermission: params.sharePermission,
       });
 
-      if (isOk(maybeResult)) {
-        return maybeResult[1].id;
+      if (isOk(result)) {
+        return result[1].id;
       }
       return undefined;
     },
