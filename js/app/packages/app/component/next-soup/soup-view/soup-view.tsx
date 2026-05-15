@@ -139,9 +139,7 @@ const DefaultGroupHeader = (
         onClick={() => props.group.toggle()}
       >
         <Layer depth={3}>
-          <div
-            class="flex items-center justify-center size-4.5 rounded-xs bg-surface group-hover/header:bg-active"
-          >
+          <div class="flex items-center justify-center size-4.5 rounded-xs bg-surface group-hover/header:bg-active">
             <ChevronRightIcon
               class={cn('size-2.5', {
                 'rotate-90': props.group.isExpanded(),
@@ -1073,7 +1071,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                                 variant="base"
                                                 size="sm"
                                                 depth={2}
-                                                class={cn({ 'bg-surface': !highlighted(), 'border-transparent': highlighted() })}
+                                                class={cn({
+                                                  'bg-surface': !highlighted(),
+                                                  'border-transparent':
+                                                    highlighted(),
+                                                })}
                                                 disabled
                                               >
                                                 <Spinner class="size-3 animate-spin" />
@@ -1085,7 +1087,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                               variant="base"
                                               size="sm"
                                               depth={2}
-                                              class={cn({ 'bg-surface': !highlighted(), 'border-transparent': highlighted() })}
+                                              class={cn({
+                                                'bg-surface': !highlighted(),
+                                                'border-transparent':
+                                                  highlighted(),
+                                              })}
                                               onClick={() => group().loadMore()}
                                             >
                                               <CaretDownIcon class="size-2.5" />
