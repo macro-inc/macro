@@ -92,16 +92,16 @@ function DetailRow(props: {
   return (
     <Show when={props.recipients.length > 0}>
       <div class="flex flex-row gap-3 text-sm">
-        <span class="text-ink-extra-muted shrink-0 w-10 text-xs uppercase tracking-wide font-medium pt-0.5">
+        <span class="text-ink-extra-muted shrink-0 w-10 text-sm pt-0.5">
           {props.label}
         </span>
-        <div class="flex flex-row flex-wrap gap-x-2 gap-y-1 select-text cursor-text min-w-0">
+        <div class="flex flex-row flex-wrap gap-y-1 select-text cursor-text min-w-0">
           <For each={props.recipients}>
             {(r, index) => (
               <>
                 <RecipientChip recipient={r} />
                 <Show when={index() < props.recipients.length - 1}>
-                  <span class="text-ink-extra-muted">,</span>
+                  <span class="text-ink-extra-muted mr-2">,</span>
                 </Show>
               </>
             )}
