@@ -2,6 +2,7 @@ import CaretDown from '@icon/regular/caret-down.svg';
 import CaretUp from '@icon/regular/caret-up.svg';
 import MagnifyingGlass from '@icon/regular/magnifying-glass.svg';
 import X from '@icon/regular/x.svg';
+import { leading, throttle } from '@solid-primitives/scheduled';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
 import {
@@ -115,9 +116,27 @@ function FindBarSubmitButton() {
   );
 }
 
+// When the user holds a nav key and the page stalls (e.g. rendering an
+// expensive result), the OS buffers autorepeat keydowns and flushes them
+// in a burst once the main thread frees up. Without throttling, the
+// counter visibly skips dozens of indexes in one frame. Cap autorepeat
+// nav to ~8 results/sec; manual presses (e.repeat === false) always pass.
+const REPEAT_NAV_MIN_INTERVAL_MS = 120;
+
 function FindBarInput(props: { placeholder?: string; autofocus?: boolean }) {
   const { controller, direction } = useFindBarContext();
   let inputEl: HTMLInputElement | undefined;
+
+  const throttledNext = leading(
+    throttle,
+    () => controller.next(),
+    REPEAT_NAV_MIN_INTERVAL_MS
+  );
+  const throttledPrevious = leading(
+    throttle,
+    () => controller.previous(),
+    REPEAT_NAV_MIN_INTERVAL_MS
+  );
 
   onMount(() => {
     if (!inputEl) return;
@@ -126,6 +145,11 @@ function FindBarInput(props: { placeholder?: string; autofocus?: boolean }) {
   });
 
   onCleanup(() => controller.setInputEl(undefined));
+
+  const runNext = (e: KeyboardEvent) =>
+    e.repeat ? throttledNext() : controller.next();
+  const runPrevious = (e: KeyboardEvent) =>
+    e.repeat ? throttledPrevious() : controller.previous();
 
   const handleKeyDown: JSX.EventHandler<HTMLInputElement, KeyboardEvent> = (
     e
@@ -141,25 +165,24 @@ function FindBarInput(props: { placeholder?: string; autofocus?: boolean }) {
       e.stopPropagation();
       if (controller.hasUnsubmittedChanges() && !e.shiftKey) {
         controller.submit();
-      } else if (e.shiftKey) {
-        controller.previous();
-      } else {
-        controller.next();
+        return;
       }
+      if (e.shiftKey) runPrevious(e);
+      else runNext(e);
       return;
     }
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       e.stopPropagation();
-      if (direction() === 'desc') controller.previous();
-      else controller.next();
+      if (direction() === 'desc') runPrevious(e);
+      else runNext(e);
       return;
     }
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       e.stopPropagation();
-      if (direction() === 'desc') controller.next();
-      else controller.previous();
+      if (direction() === 'desc') runNext(e);
+      else runPrevious(e);
     }
   };
 
