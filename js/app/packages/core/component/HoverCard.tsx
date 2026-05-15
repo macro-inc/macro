@@ -67,6 +67,7 @@ export function HoverCard(props: HoverCardComponentProps) {
 
   const [nestedOpenCount, setNestedOpenCount] = createSignal(0);
   const [isHoverCardOpen, setIsHoverCardOpen] = createSignal(false);
+  let contentEl: HTMLElement | undefined;
 
   // Keep the internal open signal in sync with controlled `open` so the
   // nested-card tracking effect below still fires when consumers control state.
@@ -96,6 +97,28 @@ export function HoverCard(props: HoverCardComponentProps) {
 
   const shouldForceMount = () => nestedOpenCount() > 0;
 
+  // Dismiss on scroll outside the card content. Kobalte only listens for
+  // pointermove to detect leaving the trigger, so a static cursor during
+  // rapid scrolling never fires the close — leaving cards stranded as new
+  // triggers slide under the cursor.
+  createEffect(() => {
+    if (!isHoverCardOpen()) return;
+
+    const onScroll = (e: Event) => {
+      const target = e.target as Node | null;
+      if (contentEl && target && contentEl.contains(target)) return;
+      handleOpenChange(false);
+    };
+
+    window.addEventListener('scroll', onScroll, {
+      capture: true,
+      passive: true,
+    });
+    onCleanup(() => {
+      window.removeEventListener('scroll', onScroll, true);
+    });
+  });
+
   return (
     <KobalteHoverCard
       getAnchorRect={
@@ -121,7 +144,12 @@ export function HoverCard(props: HoverCardComponentProps) {
       </KobalteHoverCard.Trigger>
 
       <KobalteHoverCard.Portal>
-        <KobalteHoverCard.Content class={props.contentClass}>
+        <KobalteHoverCard.Content
+          ref={(el) => {
+            contentEl = el;
+          }}
+          class={props.contentClass}
+        >
           <HoverCardPortalNestedPreviewOpenContext.Provider
             value={{ count: nestedOpenCount, setCount: setNestedOpenCount }}
           >
