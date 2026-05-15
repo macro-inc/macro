@@ -128,11 +128,11 @@ const DefaultGroupHeader = (
     <button
       type="button"
       class={cn(
-        'group/header w-[calc(100%-0.5rem)] mx-1 rounded pl-5 pr-3 py-2 flex items-center gap-2.5 text-[13px] font-semibold tracking-tight',
-        'text-text-muted bg-ink/5 hover:bg-ink/10 border-b border-edge-muted',
-        'relative transition-colors duration-100',
+        'group/header w-[calc(100%-0.5rem)] mx-1 mb-1 rounded pl-5 pr-3 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
+        'text-text-muted bg-active/40 hover:bg-active border border-edge-muted',
+        'relative',
         {
-          'ring ring-edge bg-active/60 ring-inset': props.highlighted,
+          'ring ring-edge bg-active ring-inset': props.highlighted,
         }
       )}
       onClick={() => props.group.toggle()}
@@ -140,11 +140,11 @@ const DefaultGroupHeader = (
       <div
         class={cn(
           'flex items-center justify-center size-[18px] rounded-xs',
-          'bg-ink/5 group-hover/header:bg-ink/10 transition-colors duration-100'
+          'bg-ink/5 group-hover/header:bg-ink/10'
         )}
       >
         <ChevronRightIcon
-          class={cn('size-2.5 transition-transform duration-150 ease-out', {
+          class={cn('size-2.5', {
             'rotate-90': props.group.isExpanded(),
           })}
         />
@@ -156,7 +156,7 @@ const DefaultGroupHeader = (
       <span class="truncate">{props.group.label}</span>
       <span
         class={cn(
-          'shrink-0 tabular-nums text-[11px] font-medium',
+          'shrink-0 tabular-nums text-xs font-medium',
           'px-1.5 py-px rounded-full bg-ink/10 text-text-subtle'
         )}
       >
@@ -1059,19 +1059,20 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                       return (
                                         <div
                                           class={cn(
-                                            'w-[calc(100%-0.5rem)] mx-1 my-1 rounded min-h-9 flex items-center justify-center',
-                                            {
-                                              'ring ring-edge bg-active/60 ring-inset':
-                                                highlighted(),
-                                            }
+                                            'my-1 rounded min-h-9 flex items-center justify-center',
+                                            highlighted()
+                                              ? 'w-[calc(100%-0.5rem)] mx-1 ring ring-edge bg-active/60 ring-inset'
+                                              : 'mx-auto'
                                           )}
                                         >
                                           <Show
                                             when={!group().isLoading()}
                                             fallback={
                                               <Button
-                                                variant="ghost"
-                                                class="gap-1.5 text-[12px] text-text-muted"
+                                                variant="base"
+                                                size="sm"
+                                                depth={2}
+                                                class={cn({ 'bg-surface': !highlighted(), 'border-transparent': highlighted() })}
                                                 disabled
                                               >
                                                 <Spinner class="size-3 animate-spin" />
@@ -1080,8 +1081,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                             }
                                           >
                                             <Button
-                                              variant="ghost"
-                                              class="gap-1.5 text-[12px]"
+                                              variant="base"
+                                              size="sm"
+                                              depth={2}
+                                              class={cn({ 'bg-surface': !highlighted(), 'border-transparent': highlighted() })}
                                               onClick={() => group().loadMore()}
                                             >
                                               <CaretDownIcon class="size-2.5" />
