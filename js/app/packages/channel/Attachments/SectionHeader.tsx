@@ -11,7 +11,7 @@ export function AttachmentSection(props: {
 }) {
   return (
     <Panel depth={2} class={cn('h-auto', props.class)}>
-      <Panel.Header class="justify-between">
+      <Panel.Header class="justify-between px-6">
         <h3 class="text-sm font-medium text-ink">{props.label}</h3>
         <div class="shrink-0">{props.action}</div>
       </Panel.Header>
