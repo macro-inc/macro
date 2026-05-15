@@ -38,6 +38,19 @@ pub enum TeamPlan {
     Growth,
 }
 
+impl TeamPlan {
+    /// Get the seat cap associated with a team plan
+    pub fn seat_cap(&self) -> u32 {
+        match self {
+            TeamPlan::Idea => 3,
+            TeamPlan::PreSeed => 6,
+            TeamPlan::Seed => 10,
+            TeamPlan::SeriesA => 25,
+            TeamPlan::Growth => u32::MAX,
+        }
+    }
+}
+
 #[derive(
     Eq,
     PartialEq,
