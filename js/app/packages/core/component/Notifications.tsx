@@ -1,7 +1,7 @@
 import type { Entity as EntityRef } from '@core/types';
 import { compareDateDesc } from '@core/util/date';
 import { NotificationRow } from '@entity';
-import { type NotificationSource } from '@notifications';
+import type { NotificationSource } from '@notifications';
 import { createMemo, For, Show } from 'solid-js';
 
 export type NotificationsProps = {
