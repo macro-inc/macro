@@ -28,7 +28,7 @@ import {
   useComboboxContext,
 } from '@kobalte/core/combobox';
 import { debounce } from '@solid-primitives/scheduled';
-import { cn } from '@ui';
+import { cn, Layer } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
   type Accessor,
@@ -71,7 +71,7 @@ function RecipientChip(props: {
 }) {
   return (
     <div
-      class="flex flex-row shrink-0 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover"
+      class="flex flex-row shrink-0 py-1 pl-2 gap-1 pr-1 overflow-hidden items-center bg-active rounded-full"
       classList={{ 'cursor-grab active:cursor-grabbing': props.draggable }}
       draggable={props.draggable}
       onDragStart={props.onDragStart}
@@ -80,7 +80,7 @@ function RecipientChip(props: {
       <Show when={props.icon}>{props.icon}</Show>
       <p class="text-sm whitespace-nowrap">{truncateString(props.label, 20)}</p>
       <XIcon
-        class="size-5 hover:bg-hover hover-transition-bg p-1"
+        class="size-5 hover:bg-hover hover:text-failure p-1 rounded-full"
         onClick={props.onRemove}
       />
     </div>
@@ -180,8 +180,8 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
     <Combobox.Item
       item={props}
       class={cn(
-        'flex flex-row px-2 py-1 mb-1 justify-between items-center data-highlighted:bg-hover hover-transition-bg',
-        props.disabled && 'hover:bg-hover hover-transition-bg'
+        'flex flex-row p-2 mb-1 rounded-md justify-between items-center data-highlighted:bg-hover',
+        props.disabled && 'hover:bg-hover'
       )}
       onMouseEnter={props.disabled ? handleMouseEnter : undefined}
       onMouseLeave={props.disabled ? handleMouseLeave : undefined}
@@ -263,6 +263,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   onChipDragEnd?: (e: DragEvent) => void;
   horizontalScroll?: boolean;
   class?: string;
+  depth?: 0 | 1 | 2 | 3 | 4 | 5;
 };
 
 export function RecipientSelector<K extends CombinedRecipientKind>(
@@ -474,264 +475,270 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   };
 
   return (
-    <Combobox<CombinedRecipientItem>
-      multiple
-      virtualized
-      triggerMode={props.triggerMode ?? 'input'}
-      closeOnSelection={true}
-      open={isOpen()}
-      onOpenChange={setIsOpen}
-      disabled={props.disabled}
-      validationState={invalid() ? 'invalid' : 'valid'}
-      options={options() as CombinedRecipientItem[]}
-      optionLabel={getRecipientOptionLabel}
-      optionValue={getRecipientOptionValue}
-      optionTextValue={getRecipientOptionTextValue}
-      optionDisabled={getOptionDisabled}
-      value={props.selectedOptions as CombinedRecipientItem[]}
-      onChange={debouncedHandleChange}
-      onInputChange={onInputChange}
-      shouldFocusWrap
-      placeholder={
-        props.selectedOptions?.length === 0
-          ? (props.placeholder ?? placeholderText())
-          : undefined
-      }
-      class={cn(
-        'ph-no-capture w-full text-sm offset-2 bg-surface focus-within:bg-active',
-        !props.hideBorder && 'border border-edge',
-        !props.noPadding && 'py-2',
-        props.class
-      )}
-    >
-      <Combobox.Control<CombinedRecipientItem>>
-        {(state) => {
-          const context = useComboboxContext();
-          const [chipsScrollRef, setChipsScrollRef] =
-            createSignal<HTMLElement>();
-          return (
-            <div class="relative">
-              <div
-                ref={props.horizontalScroll ? setChipsScrollRef : undefined}
-                class={cn(
-                  'flex gap-1.5 text-ink scrollbar-hidden',
-                  props.horizontalScroll
-                    ? 'flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-hidden sm:max-h-37.5 sm:overflow-y-auto pb-0.5 sm:pb-0'
-                    : 'flex-wrap max-h-37.5 overflow-y-auto'
-                )}
+    <Layer depth={props.depth ?? 2}>
+      <Combobox<CombinedRecipientItem>
+        multiple
+        virtualized
+        triggerMode={props.triggerMode ?? 'input'}
+        closeOnSelection={true}
+        open={isOpen()}
+        onOpenChange={setIsOpen}
+        disabled={props.disabled}
+        validationState={invalid() ? 'invalid' : 'valid'}
+        options={options() as CombinedRecipientItem[]}
+        optionLabel={getRecipientOptionLabel}
+        optionValue={getRecipientOptionValue}
+        optionTextValue={getRecipientOptionTextValue}
+        optionDisabled={getOptionDisabled}
+        value={props.selectedOptions as CombinedRecipientItem[]}
+        onChange={debouncedHandleChange}
+        onInputChange={onInputChange}
+        shouldFocusWrap
+        placeholder={
+          props.selectedOptions?.length === 0
+            ? (props.placeholder ?? placeholderText())
+            : undefined
+        }
+        class={cn(
+          'ph-no-capture w-full text-sm offset-2 bg-surface rounded-xl',
+          !props.hideBorder && 'border border-edge',
+          !props.noPadding && 'p-2',
+          props.class
+        )}
+      >
+        <Combobox.Control<CombinedRecipientItem>>
+          {(state) => {
+            const context = useComboboxContext();
+            const [chipsScrollRef, setChipsScrollRef] =
+              createSignal<HTMLElement>();
+            return (
+              <div class="relative">
+                <div
+                  ref={props.horizontalScroll ? setChipsScrollRef : undefined}
+                  class={cn(
+                    'flex gap-1.5 text-ink scrollbar-hidden',
+                    props.horizontalScroll
+                      ? 'flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-hidden sm:max-h-37.5 sm:overflow-y-auto pb-0.5 sm:pb-0'
+                      : 'flex-wrap max-h-37.5 overflow-y-auto'
+                  )}
+                >
+                  <For each={state.selectedOptions()}>
+                    {(option) => {
+                      return (
+                        <Switch>
+                          <Match
+                            when={matches(
+                              option,
+                              (o) => o.kind === 'user' || o.kind === 'contact'
+                            )}
+                          >
+                            {(userOrContactOption) => {
+                              const opt = userOrContactOption();
+                              const name = getRecipientOptionName(opt);
+                              const email = getRecipientOptionEmail(opt);
+
+                              const displayText = () => name || email;
+
+                              return (
+                                <ChipWithUserTooltip
+                                  chip={
+                                    <RecipientChip
+                                      icon={
+                                        <UserIcon
+                                          id={opt.id}
+                                          size="sm"
+                                          isDeleted={false}
+                                          showTooltip={false}
+                                        />
+                                      }
+                                      label={displayText() ?? ''}
+                                      onRemove={() => state.remove(option)}
+                                      draggable={!!props.onChipDragStart}
+                                      onDragStart={(e) =>
+                                        props.onChipDragStart?.(
+                                          option as WithCustomUserInput<K>,
+                                          e
+                                        )
+                                      }
+                                      onDragEnd={props.onChipDragEnd}
+                                    />
+                                  }
+                                  renderTooltip={(close) => (
+                                    <UserTooltip
+                                      displayName={name || ''}
+                                      email={email}
+                                      id={opt.id}
+                                      isDeleted={false}
+                                      onClose={close}
+                                    />
+                                  )}
+                                />
+                              );
+                            }}
+                          </Match>
+                          <Match
+                            when={matches(option, (o) => o.kind === 'channel')}
+                          >
+                            {(channelOption) => {
+                              return (
+                                <RecipientChip
+                                  icon={<HashIcon class="size-4" />}
+                                  label={
+                                    channelOption().data.name ??
+                                    channelOption().id
+                                  }
+                                  onRemove={() => state.remove(option)}
+                                />
+                              );
+                            }}
+                          </Match>
+                          <Match
+                            when={matches(option, (o) => o.kind === 'custom')}
+                          >
+                            {(customOption) => {
+                              const email = customOption().data.email;
+
+                              return (
+                                <ChipWithUserTooltip
+                                  chip={
+                                    <RecipientChip
+                                      icon={
+                                        <UserIcon
+                                          id={email}
+                                          size="sm"
+                                          isDeleted={false}
+                                          showTooltip={false}
+                                        />
+                                      }
+                                      label={email}
+                                      onRemove={() => state.remove(option)}
+                                      draggable={!!props.onChipDragStart}
+                                      onDragStart={(e) =>
+                                        props.onChipDragStart?.(
+                                          option as WithCustomUserInput<K>,
+                                          e
+                                        )
+                                      }
+                                      onDragEnd={props.onChipDragEnd}
+                                    />
+                                  }
+                                  renderTooltip={(close) => (
+                                    <UserTooltip
+                                      displayName={email}
+                                      email={email}
+                                      isDeleted={false}
+                                      onClose={close}
+                                    />
+                                  )}
+                                />
+                              );
+                            }}
+                          </Match>
+                        </Switch>
+                      );
+                    }}
+                  </For>
+                  <Combobox.Input
+                    disabled={disabled()}
+                    ref={(el) => {
+                      setInputRef(el);
+                      props.inputRef?.(el);
+                    }}
+                    class="flex-1 min-h-7 p-1 min-w-50 outline-none placeholder:text-ink-placeholder"
+                    classList={{ 'ml-1': selectedLen() === 0 }}
+                    onKeyDown={(e) => {
+                      if (
+                        (e.key === 'a' && e.ctrlKey) ||
+                        (e.key === 'a' && e.metaKey)
+                      ) {
+                        setDisabled(true);
+                        queueMicrotask(() => setDisabled(false));
+                      }
+                      if (e.key === 'Escape') {
+                        if (inputValue().length === 0) {
+                          inputRef()?.blur();
+                        }
+                      }
+                    }}
+                    // use a non-delegated event here so that we can process it before Kobalte
+                    on:keydown={(e: KeyboardEvent) => {
+                      if (e.key === 'Tab' && context.isOpen()) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        inputRef()?.dispatchEvent(
+                          // We need to send `bubbles: true` because otherwise Kobalte ignores the event
+                          new KeyboardEvent('keydown', {
+                            bubbles: true,
+                            key: 'Enter',
+                          })
+                        );
+                      }
+                    }}
+                  />
+                </div>
+                <Show when={props.horizontalScroll}>
+                  <CustomScrollbar
+                    scrollContainer={chipsScrollRef}
+                    horizontal
+                    class="sm:hidden"
+                  />
+                </Show>
+              </div>
+            );
+          }}
+        </Combobox.Control>
+
+        <Combobox.Portal>
+          <Layer depth={2}>
+            <Combobox.Content class="z-modal-content bg-surface translate-y-1 border-edge p-1 rounded-lg shadow-lg shadow-drop-shadow ring ring-edge">
+              <Combobox.Listbox
+                ref={setListboxRef}
+                class="flex flex-col gap-1"
+                scrollToItem={scrollToItem()}
+                autoFocus="first"
               >
-                <For each={state.selectedOptions()}>
-                  {(option) => {
-                    return (
-                      <Switch>
-                        <Match
-                          when={matches(
-                            option,
-                            (o) => o.kind === 'user' || o.kind === 'contact'
-                          )}
-                        >
-                          {(userOrContactOption) => {
-                            const opt = userOrContactOption();
-                            const name = getRecipientOptionName(opt);
-                            const email = getRecipientOptionEmail(opt);
+                {(items) => {
+                  const arr = Array.from(items());
+                  const count = arr.length;
+                  const height = clamp(count, 0, 6) * 36;
 
-                            const displayText = () => name || email;
+                  const [handle, setHandle] =
+                    createSignal<VirtualizerHandle | null>(null);
 
-                            return (
-                              <ChipWithUserTooltip
-                                chip={
-                                  <RecipientChip
-                                    icon={
-                                      <UserIcon
-                                        id={opt.id}
-                                        size="sm"
-                                        isDeleted={false}
-                                        showTooltip={false}
-                                      />
-                                    }
-                                    label={displayText() ?? ''}
-                                    onRemove={() => state.remove(option)}
-                                    draggable={!!props.onChipDragStart}
-                                    onDragStart={(e) =>
-                                      props.onChipDragStart?.(
-                                        option as WithCustomUserInput<K>,
-                                        e
-                                      )
-                                    }
-                                    onDragEnd={props.onChipDragEnd}
-                                  />
-                                }
-                                renderTooltip={(close) => (
-                                  <UserTooltip
-                                    displayName={name || ''}
-                                    email={email}
-                                    id={opt.id}
-                                    isDeleted={false}
-                                    onClose={close}
-                                  />
-                                )}
-                              />
-                            );
-                          }}
-                        </Match>
-                        <Match
-                          when={matches(option, (o) => o.kind === 'channel')}
-                        >
-                          {(channelOption) => {
-                            return (
-                              <RecipientChip
-                                icon={<HashIcon class="size-4" />}
-                                label={
-                                  channelOption().data.name ??
-                                  channelOption().id
-                                }
-                                onRemove={() => state.remove(option)}
-                              />
-                            );
-                          }}
-                        </Match>
-                        <Match
-                          when={matches(option, (o) => o.kind === 'custom')}
-                        >
-                          {(customOption) => {
-                            const email = customOption().data.email;
-
-                            return (
-                              <ChipWithUserTooltip
-                                chip={
-                                  <RecipientChip
-                                    icon={
-                                      <UserIcon
-                                        id={email}
-                                        size="sm"
-                                        isDeleted={false}
-                                        showTooltip={false}
-                                      />
-                                    }
-                                    label={email}
-                                    onRemove={() => state.remove(option)}
-                                    draggable={!!props.onChipDragStart}
-                                    onDragStart={(e) =>
-                                      props.onChipDragStart?.(
-                                        option as WithCustomUserInput<K>,
-                                        e
-                                      )
-                                    }
-                                    onDragEnd={props.onChipDragEnd}
-                                  />
-                                }
-                                renderTooltip={(close) => (
-                                  <UserTooltip
-                                    displayName={email}
-                                    email={email}
-                                    isDeleted={false}
-                                    onClose={close}
-                                  />
-                                )}
-                              />
-                            );
-                          }}
-                        </Match>
-                      </Switch>
-                    );
-                  }}
-                </For>
-                <Combobox.Input
-                  disabled={disabled()}
-                  ref={(el) => {
-                    setInputRef(el);
-                    props.inputRef?.(el);
-                  }}
-                  class="flex-1 min-h-7 p-1 min-w-50 outline-none placeholder:text-ink-placeholder"
-                  classList={{ 'ml-1': selectedLen() === 0 }}
-                  onKeyDown={(e) => {
-                    if (
-                      (e.key === 'a' && e.ctrlKey) ||
-                      (e.key === 'a' && e.metaKey)
-                    ) {
-                      setDisabled(true);
-                      queueMicrotask(() => setDisabled(false));
-                    }
-                    if (e.key === 'Escape') {
-                      if (inputValue().length === 0) {
-                        inputRef()?.blur();
+                  setScrollToItem(() => (key: string) => {
+                    const virtualizerHandle = handle();
+                    if (virtualizerHandle) {
+                      const ndx = arr.findIndex((item) => item.key === key);
+                      if (ndx > -1) {
+                        virtualizerHandle.scrollToIndex(ndx, {
+                          align: 'nearest',
+                        });
                       }
                     }
-                  }}
-                  // use a non-delegated event here so that we can process it before Kobalte
-                  on:keydown={(e: KeyboardEvent) => {
-                    if (e.key === 'Tab' && context.isOpen()) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      inputRef()?.dispatchEvent(
-                        // We need to send `bubbles: true` because otherwise Kobalte ignores the event
-                        new KeyboardEvent('keydown', {
-                          bubbles: true,
-                          key: 'Enter',
-                        })
-                      );
-                    }
-                  }}
-                />
-              </div>
-              <Show when={props.horizontalScroll}>
-                <CustomScrollbar
-                  scrollContainer={chipsScrollRef}
-                  horizontal
-                  class="sm:hidden"
-                />
-              </Show>
-            </div>
-          );
-        }}
-      </Combobox.Control>
+                  });
 
-      <Combobox.Portal>
-        <Combobox.Content class="z-modal-content bg-surface border translate-y-1 border-edge p-1">
-          <Combobox.Listbox
-            ref={setListboxRef}
-            class="flex flex-col gap-1"
-            scrollToItem={scrollToItem()}
-            autoFocus="first"
-          >
-            {(items) => {
-              const arr = Array.from(items());
-              const count = arr.length;
-              const height = clamp(count, 0, 6) * 36;
-
-              const [handle, setHandle] =
-                createSignal<VirtualizerHandle | null>(null);
-
-              setScrollToItem(() => (key: string) => {
-                const virtualizerHandle = handle();
-                if (virtualizerHandle) {
-                  const ndx = arr.findIndex((item) => item.key === key);
-                  if (ndx > -1) {
-                    virtualizerHandle.scrollToIndex(ndx, { align: 'nearest' });
-                  }
-                }
-              });
-
-              return (
-                <VList
-                  data={arr}
-                  style={{
-                    height: `${height}px`,
-                  }}
-                  ref={setHandle}
-                >
-                  {(item) => {
-                    return <RecipientComboboxItem {...item} />;
-                  }}
-                </VList>
-              );
-            }}
-          </Combobox.Listbox>
-        </Combobox.Content>
-      </Combobox.Portal>
-      <Combobox.ErrorMessage class="text-xs text-failure mt-1">
-        *At least one participant is required
-      </Combobox.ErrorMessage>
-    </Combobox>
+                  return (
+                    <VList
+                      data={arr}
+                      style={{
+                        height: `${height}px`,
+                      }}
+                      ref={setHandle}
+                    >
+                      {(item) => {
+                        return <RecipientComboboxItem {...item} />;
+                      }}
+                    </VList>
+                  );
+                }}
+              </Combobox.Listbox>
+            </Combobox.Content>
+          </Layer>
+        </Combobox.Portal>
+        <Combobox.ErrorMessage class="text-xs text-failure mt-1">
+          *At least one participant is required
+        </Combobox.ErrorMessage>
+      </Combobox>
+    </Layer>
   );
 }

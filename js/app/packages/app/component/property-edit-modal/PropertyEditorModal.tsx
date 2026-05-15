@@ -73,10 +73,10 @@ function ListItem(props: {
       id={props.id}
       disabled={props.disabled}
       class={cn(
-        'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 scroll-my-1',
+        'rounded-md group w-full flex items-center h-10 px-2 gap-2 text-sm font-semibold relative scroll-m-1',
         {
-          'bg-hover': props.isSelected && !props.disabled,
-          'opacity-50 cursor-not-allowed': props.disabled,
+          'bg-active': props.isSelected,
+          'hover:bg-hover/50': !props.isSelected,
         }
       )}
       onClick={props.onClick}
@@ -299,7 +299,7 @@ function PropertyList(props: {
     >
       <div
         ref={containerRef}
-        class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden p-1"
+        class="max-h-52 overflow-y-auto overflow-x-hidden scrollbar-hidden p-1"
       >
         <For each={filteredProperties()}>
           {(property, index) => (
@@ -331,7 +331,7 @@ function EditingEntityPreview(props: { entities: EntityData[] }) {
           return (
             <div
               class={cn(
-                'bg-hover border border-edge-muted px-2 py-1 truncate text-xs rounded-xs',
+                'bg-active border border-edge-muted px-2 py-1 truncate text-xs rounded',
                 {
                   'max-w-[50%]': props.entities.length === 2,
                 }
@@ -486,7 +486,7 @@ function SelectPropertyEditor(props: {
   const selector = createSelector(props.selectedIndex);
 
   return (
-    <div class="p-1 max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
+    <div class="p-1 max-h-52 overflow-y-auto overflow-x-hidden scrollbar-hidden">
       <Show
         when={filteredOptions().length > 0}
         fallback={

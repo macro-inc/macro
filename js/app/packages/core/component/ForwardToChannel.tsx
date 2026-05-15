@@ -435,7 +435,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       <Show when={isAuthenticated()}>
         {/* Row 1: Recipient input + ShareOptions */}
         <div class="flex items-center">
-          <div class="min-w-0 flex-1 px-1 py-2 min-h-11">
+          <div class="min-w-0 flex-1 px-1 min-h-11">
             <RecipientSelector<'user' | 'contact' | 'channel'>
               placeholder="To: Email or group"
               setSelectedOptions={setSelectedOptions}
@@ -443,9 +443,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               triedToSubmit={triedToSubmit}
               options={destinationOptions}
               triggerMode="input"
-              class="border border-edge-muted p-1"
               focusOnMount
               horizontalScroll
+              hideBorder
             />
           </div>
           <Show
@@ -454,9 +454,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 Permissions.OWNER && !props.hideAccessLevelSelector
             }
           >
-            <div class="shrink-0 pr-2 flex items-center">
+            <div class="shrink-0 pr-2 flex items-center gap-2">
               <Show when={selectedOptions().length > 0}>
-                <span class="text-sm text-ink-muted pr-2">can</span>
+                <span class="text-sm text-ink-extra-muted">can</span>
               </Show>
               <ShareOptions
                 setPermissions={(accessLevel) =>

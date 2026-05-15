@@ -1,7 +1,7 @@
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
 import { TabsInset } from '@core/component/TabsInset';
 import { isMobile } from '@core/mobile/isMobile';
-import CaretRight from '@icon/fill/caret-right-fill.svg';
+import CaretRight from '@icon/regular/caret-right.svg';
 import { Accordion } from '@kobalte/core/accordion';
 import { Panel, Scroll } from '@ui';
 import {
@@ -240,8 +240,8 @@ function Section(
           <Panel depth={2} style={{ height: 'auto' }} class="rounded-lg">
             <Accordion.Header class="group">
               <Accordion.Trigger class="px-2 py-3 flex w-full items-center gap-2 text-sm hover:underline">
+                <CaretRight class="size-3 text-ink-muted transition-transform duration-90 group-data-expanded:rotate-90" />
                 <span>{props.title}</span>
-                <CaretRight class="size-2.5 text-ink-extra-muted transition-transform duration-90 group-data-expanded:rotate-90" />
               </Accordion.Trigger>
             </Accordion.Header>
             <Accordion.Content class="group/content overflow-hidden data-expanded:animate-accordion-down data-closed:animate-accordion-up">
