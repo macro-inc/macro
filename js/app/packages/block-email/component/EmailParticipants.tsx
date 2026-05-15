@@ -77,7 +77,7 @@ export function EmailParticipants() {
           >
             <div
               role="listitem"
-              class="inline-flex items-center gap-1.5 rounded-full border border-ink-muted/8 bg-ink-muted/[0.025] py-1 pr-2.5 pl-1 text-sm text-ink hover:bg-ink-muted/[0.06] cursor-default"
+              class="inline-flex items-center gap-1.5 rounded-full border border-ink-muted/8 bg-ink-muted/[0.025] py-1 pr-2.5 pl-1.5 text-sm text-ink hover:bg-ink-muted/[0.06] cursor-default"
             >
               <UserIcon
                 {...getIconProps(participant)}

@@ -1535,7 +1535,7 @@ export function BaseInput(props: {
           </div>
         </Show>
         <div
-          class="max-h-80 overflow-y-scroll w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-4 py-1"
+          class="max-h-80 overflow-y-scroll w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-4 py-1 [&_.text-ink-placeholder]:left-0 [&_.text-ink-placeholder>p]:my-0"
           onclick={() => {
             editor()?.focus();
           }}
