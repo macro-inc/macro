@@ -2,7 +2,8 @@ import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { startSsoLogin } from '@core/auth/sso';
 import { isTauri } from '@core/util/platform';
 import IconGoogle from '@macro-icons/macro-google.svg';
-import { Button, cn } from '@ui';
+import ArrowRightIcon from '@icon/regular/arrow-right.svg';
+import { cn } from '@ui';
 import { createSignal, onMount, Show } from 'solid-js';
 import { useOnboarding } from '../onboarding-context';
 
@@ -60,25 +61,27 @@ export function ProfileStep() {
 
   const inputClass = (hasError: boolean) =>
     cn(
-      'w-full px-3 py-2 text-sm rounded-sm border bg-surface text-ink placeholder:text-ink-placeholder',
-      'outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
+      'w-full px-2.5 h-9 text-sm rounded-sm border bg-transparent text-ink placeholder:text-ink-placeholder transition-colors',
+      'outline-none focus:border-edge',
       hasError
-        ? 'border-failure focus-visible:ring-failure'
-        : 'border-edge-muted focus-visible:ring-accent'
+        ? 'border-failure'
+        : 'border-edge-muted'
     );
 
   return (
-    <div class="flex flex-col gap-6 w-full">
+    <div class="flex flex-col gap-8 w-full">
       <div class="flex flex-col gap-1">
-        <h1 class="text-2xl font-semibold text-ink">Create your workspace</h1>
+        <h1 class="text-2xl font-semibold text-ink tracking-tight">
+          Create your workspace
+        </h1>
         <p class="text-sm text-ink-muted">
           Tell us about yourself and your team.
         </p>
       </div>
 
-      <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-5">
         <div class="flex gap-3">
-          <div class="flex-1 flex flex-col gap-1.5">
+          <div class="flex-1 flex flex-col gap-2">
             <label for="onb-first-name" class="text-sm font-medium text-ink">
               First name
             </label>
@@ -98,7 +101,7 @@ export function ProfileStep() {
               <p class="text-xs text-failure">{errors().firstName}</p>
             </Show>
           </div>
-          <div class="flex-1 flex flex-col gap-1.5">
+          <div class="flex-1 flex flex-col gap-2">
             <label for="onb-last-name" class="text-sm font-medium text-ink">
               Last name
             </label>
@@ -113,7 +116,7 @@ export function ProfileStep() {
           </div>
         </div>
 
-        <div class="flex flex-col gap-1.5">
+        <div class="flex flex-col gap-2">
           <label for="onb-email" class="text-sm font-medium text-ink">
             Email
           </label>
@@ -133,7 +136,7 @@ export function ProfileStep() {
           </Show>
         </div>
 
-        <div class="flex flex-col gap-1.5">
+        <div class="flex flex-col gap-2">
           <label for="onb-team-name" class="text-sm font-medium text-ink">
             Team name
           </label>
@@ -154,12 +157,12 @@ export function ProfileStep() {
         </div>
       </div>
 
-      <div class="flex flex-col gap-3 mt-2">
+      <div class="flex flex-col gap-3">
         <button
           type="button"
           onClick={handleGoogleAuth}
           disabled={authPending()}
-          class="w-full flex items-center justify-center gap-2.5 px-4 py-2.5 text-sm font-medium rounded-sm border border-edge-muted bg-surface text-ink hover:bg-hover disabled:opacity-30 disabled:cursor-not-allowed outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+          class="w-full flex items-center justify-center gap-2.5 h-9 text-sm font-medium rounded-sm border border-edge-muted bg-transparent text-ink hover:bg-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed outline-none focus:border-edge"
         >
           <IconGoogle />
           {authPending() ? 'Redirecting...' : 'Continue with Google'}
@@ -171,23 +174,23 @@ export function ProfileStep() {
           <div class="h-px flex-1 bg-edge-muted" />
         </div>
 
-        <Button
-          variant="base"
-          size="lg"
+        <button
+          type="button"
           onClick={handleContinueWithEmail}
-          class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface"
+          class="group w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-sm bg-accent text-surface border border-accent hover:bg-accent/90 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           Continue with email
-        </Button>
+          <ArrowRightIcon class="size-4 transition-transform group-hover:translate-x-0.5" />
+        </button>
       </div>
 
       <p class="text-xs text-ink-extra-muted text-center">
         By continuing, you agree to our{' '}
-        <a class="underline hover:text-ink-muted" href="/terms">
+        <a class="underline hover:text-ink-muted transition-colors" href="/terms">
           terms
         </a>{' '}
         and{' '}
-        <a class="underline hover:text-ink-muted" href="/privacy">
+        <a class="underline hover:text-ink-muted transition-colors" href="/privacy">
           privacy policy
         </a>
         .

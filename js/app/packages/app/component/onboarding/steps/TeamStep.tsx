@@ -1,6 +1,7 @@
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import UsersIcon from '@icon/regular/users.svg';
+import ArrowRightIcon from '@icon/regular/arrow-right.svg';
 import { Button, cn } from '@ui';
 import { createSignal, Index, Show } from 'solid-js';
 import { z } from 'zod';
@@ -23,7 +24,10 @@ export function TeamStep() {
   const [entries, setEntries] = createSignal<InviteEntry[]>(initialEntries());
   const [errors, setErrors] = createSignal<Record<number, string>>({});
 
-  const hasAnyEmail = () => entries().some((e) => e.email.trim() !== '');
+  const hasValidEmail = () =>
+    entries().some(
+      (e) => e.email.trim() !== '' && z.string().email().safeParse(e.email).success
+    );
 
   const emailPlaceholder = () => {
     const email = ctx.email();
@@ -99,16 +103,18 @@ export function TeamStep() {
   };
 
   return (
-    <div class="flex flex-col gap-6 w-full">
+    <div class="flex flex-col gap-8 w-full">
       <div class="flex flex-col gap-1">
-        <h1 class="text-2xl font-semibold text-ink">Invite your team</h1>
+        <h1 class="text-2xl font-semibold text-ink tracking-tight">
+          Invite your team
+        </h1>
         <p class="text-sm text-ink-muted">
-          Add teammates to <strong>{ctx.teamName()}</strong>. You can always
-          invite more later from Settings.
+          Add teammates to <strong class="text-ink font-medium">{ctx.teamName()}</strong>. You can always
+          invite more later.
         </p>
       </div>
 
-      <div class="flex flex-col gap-3">
+      <div class="flex flex-col gap-2">
         <Index each={entries()}>
           {(entry, index) => (
             <div class="flex flex-col gap-1">
@@ -121,11 +127,11 @@ export function TeamStep() {
                   onBlur={(e) => validateOnBlur(index, e.currentTarget.value)}
                   placeholder={emailPlaceholder()}
                   class={cn(
-                    'w-full px-3 py-2 pr-9 text-sm rounded-sm border bg-surface text-ink placeholder:text-ink-placeholder',
-                    'outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
+                    'w-full px-2.5 h-9 pr-9 text-sm rounded-sm border bg-transparent text-ink placeholder:text-ink-placeholder transition-colors',
+                    'outline-none focus:border-edge',
                     errors()[index]
-                      ? 'border-failure focus-visible:ring-failure'
-                      : 'border-edge-muted focus-visible:ring-accent'
+                      ? 'border-failure'
+                      : 'border-edge-muted'
                   )}
                 />
                 <Show when={entry().email.trim() !== ''}>
@@ -136,7 +142,7 @@ export function TeamStep() {
                         ? removeEntry(index)
                         : updateEmail(index, '')
                     }
-                    class="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-ink-disabled hover:text-ink-muted rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    class="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-ink-disabled hover:text-ink-muted rounded-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     <XIcon class="size-3.5" />
                   </button>
@@ -150,11 +156,14 @@ export function TeamStep() {
         </Index>
 
         <Show
-          when={hasAnyEmail()}
+          when={hasValidEmail()}
           fallback={
-            <div class="flex items-center gap-2 py-3 text-sm text-ink-muted">
-              <UsersIcon class="size-4 text-ink-disabled" />
-              No one invited yet
+            <div class="flex flex-col items-center gap-2 py-8 text-center">
+              <div class="size-10 rounded-full bg-accent-bg flex items-center justify-center">
+                <UsersIcon class="size-5 text-accent" />
+              </div>
+              <p class="text-sm text-ink-muted">It's quiet in here...</p>
+              <p class="text-xs text-ink-disabled">Add your first teammate above</p>
             </div>
           }
         >
@@ -170,14 +179,19 @@ export function TeamStep() {
         </Show>
       </div>
 
-      <Button
-        variant="base"
-        size="lg"
-        onClick={handleContinue}
-        class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface mt-2"
-      >
-        Continue
-      </Button>
+      <div class="flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={handleContinue}
+          class="group w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-sm bg-accent text-surface border border-accent hover:bg-accent/90 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        >
+          Continue
+          <ArrowRightIcon class="size-4 transition-transform group-hover:translate-x-0.5" />
+        </button>
+        <p class="text-xs text-ink-extra-muted text-center">
+          You can always invite more people later from Settings.
+        </p>
+      </div>
     </div>
   );
 }

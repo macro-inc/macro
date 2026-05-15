@@ -1,7 +1,6 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { analytics } from '@app/lib/analytics/analytics';
 import { initAndStartEmailSync } from '@core/email-link';
-import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { invalidateUserTeams } from '@queries/team';
@@ -11,7 +10,7 @@ import { fetchToken } from '@core/util/fetchWithToken';
 import LogoIcon from '@macro-icons/macro-logo.svg';
 import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Button, cn } from '@ui';
+import { Button, cn, Layer } from '@ui';
 import { createEffect, Match, on, onMount, Show, Switch } from 'solid-js';
 import {
   clearPendingTeam,
@@ -117,89 +116,90 @@ function OnboardingInner() {
   const showBack = () => ctx.step() > 1;
 
   return (
-    <div class="flex items-center justify-center size-full p-6 sm:p-8 overflow-hidden relative">
+    <div class="flex items-center justify-center size-full overflow-hidden relative">
       <style>
         {`
-        @keyframes onboarding-fade-up {
-          from { opacity: 0; transform: translateY(8px); }
+        @keyframes onb-enter {
+          from { opacity: 0; transform: translateY(12px); }
           to   { opacity: 1; transform: translateY(0); }
+        }
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus {
+          -webkit-box-shadow: 0 0 0 1000px var(--color-surface) inset;
+          -webkit-text-fill-color: var(--color-ink);
+          caret-color: var(--color-ink);
+          transition: background-color 5000s ease-in-out 0s;
         }
         `}
       </style>
 
-      <div class="inset-0 absolute text-edge bg-surface opacity-[0.07] -z-1">
-        <PcNoiseGrid
-          cellSize={30}
-          warp={0}
-          crunch={0.2}
-          freq={0.001}
-          size={[0, 0.3]}
-          rounding={0}
-          fill={0}
-          stroke={1}
-          speed={[0.017, 0.209]}
-        />
-      </div>
 
-      <div class={cn('w-full flex flex-col', ctx.step() === 0 ? 'max-w-2xl' : 'max-w-md')}>
-        {/* Header — hidden on intro step */}
-        <Show when={ctx.step() > 0}>
-          <div class="w-full flex items-center justify-between mb-8">
-            <Show
-              when={showBack()}
-              fallback={<LogoIcon class="size-6 text-accent" />}
-            >
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => ctx.back()}
+      <Layer depth={2}>
+        <div class={cn(
+          'w-full flex flex-col items-center px-8',
+          ctx.step() === 0 ? 'max-w-3xl' : 'max-w-md'
+        )}>
+          {/* Header */}
+          <Show when={ctx.step() > 0}>
+            <div class="w-full flex items-center justify-between mb-10">
+              <Show
+                when={showBack()}
+                fallback={<LogoIcon class="size-5 text-accent" />}
               >
-                <ArrowLeftIcon class="size-4" />
-                Back
-              </Button>
-            </Show>
-            <div class="flex items-center gap-3">
-              <StepIndicator
-                current={ctx.step() - 1}
-                total={STEP_LABELS.length - 1}
-              />
-              <Show when={import.meta.env.MODE === 'development'}>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => ctx.next()}
+                  onClick={() => ctx.back()}
                 >
-                  Skip
+                  <ArrowLeftIcon class="size-4" />
+                  Back
                 </Button>
               </Show>
+              <div class="flex items-center gap-3">
+                <StepIndicator
+                  current={ctx.step() - 1}
+                  total={STEP_LABELS.length - 1}
+                />
+                <Show when={import.meta.env.MODE === 'development'}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => ctx.next()}
+                  >
+                    Skip
+                  </Button>
+                </Show>
+              </div>
             </div>
-          </div>
-        </Show>
+          </Show>
 
-        {/* Content */}
-        <div
-          class="w-full flex flex-col"
-          style={{
-            animation: 'onboarding-fade-up 300ms ease-out both',
-            '--onboarding-key': String(ctx.step()),
-          }}
-        >
-          <Switch>
-            <Match when={ctx.step() === 0}>
-              <IntroStep />
-            </Match>
-            <Match when={ctx.step() === 1}>
-              <ProfileStep />
-            </Match>
-            <Match when={ctx.step() === 2}>
-              <TeamStep />
-            </Match>
-            <Match when={ctx.step() === 3}>
-              <PaymentStep />
-            </Match>
-          </Switch>
+          {/* Content */}
+          <div
+            class="w-full"
+            style={{
+              animation: 'onb-enter 400ms cubic-bezier(0.16, 1, 0.3, 1) both',
+              'animation-delay': '50ms',
+              '--onboarding-key': String(ctx.step()),
+            }}
+          >
+            <Switch>
+              <Match when={ctx.step() === 0}>
+                <IntroStep />
+              </Match>
+              <Match when={ctx.step() === 1}>
+                <ProfileStep />
+              </Match>
+              <Match when={ctx.step() === 2}>
+                <TeamStep />
+              </Match>
+              <Match when={ctx.step() === 3}>
+                <PaymentStep />
+              </Match>
+            </Switch>
+          </div>
         </div>
-      </div>
+      </Layer>
     </div>
   );
 }

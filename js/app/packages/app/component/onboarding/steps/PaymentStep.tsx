@@ -7,7 +7,7 @@ import ArrowRightIcon from '@icon/regular/arrow-right.svg';
 import InfoIcon from '@icon/regular/info.svg';
 import LockIcon from '@icon/regular/lock.svg';
 import SpinnerIcon from '@icon/regular/spinner.svg';
-import { Button, Tooltip } from '@ui';
+import { Tooltip } from '@ui';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import {
   savePendingTeam,
@@ -103,109 +103,108 @@ export function PaymentStep() {
   };
 
   return (
-    <div class="flex flex-col gap-6 w-full">
+    <div class="flex flex-col gap-8 w-full">
       <div class="flex flex-col gap-1">
-        <h1 class="text-2xl font-semibold text-ink">Review your plan</h1>
+        <h1 class="text-2xl font-semibold text-ink tracking-tight">
+          Review your plan
+        </h1>
         <p class="text-sm text-ink-muted">
           Confirm your subscription before checkout.
         </p>
       </div>
 
-      <Show when={hasTeam() && ctx.teamName()}>
-        <div>
-          <span class="text-xs text-ink-extra-muted uppercase tracking-wide">
-            Team
-          </span>
-          <p class="text-lg font-semibold text-ink -mt-0.5">
-            {ctx.teamName()}
-          </p>
-        </div>
-      </Show>
+      <div class="flex flex-col gap-5">
+        <Show when={hasTeam() && ctx.teamName()}>
+          <div>
+            <span class="text-xs font-medium text-ink-muted uppercase tracking-wide">
+              Team
+            </span>
+            <p class="text-lg font-semibold text-ink -mt-0.5">
+              {ctx.teamName()}
+            </p>
+          </div>
+        </Show>
 
-      <div class="pb-4 border-b border-edge-muted flex items-baseline justify-between">
-        <div class="flex items-end gap-1.5">
-          <span class="text-4xl font-bold text-ink leading-none">
-            ${hasTeam() ? ctx.totalCost() : ctx.userSeatCost()}
+        {/* Price header */}
+        <div class="flex items-baseline justify-between pb-4 border-b border-edge-muted">
+          <div class="flex items-end gap-1">
+            <span class="text-4xl font-bold text-ink leading-none tracking-tight">
+              ${hasTeam() ? ctx.totalCost() : ctx.userSeatCost()}
+            </span>
+            <span class="text-ink-muted text-sm pb-0.5">/mo</span>
+          </div>
+          <span class="px-2 py-0.5 rounded-sm bg-accent-bg text-accent text-xs font-mono">
+            {hasTeam() ? 'Team' : selectedPlan()?.name}
           </span>
-          <span class="text-ink-muted text-base pb-0.5">/month</span>
         </div>
-        <span class="px-2 py-0.5 rounded-sm bg-accent-bg text-accent text-xs font-medium">
-          {hasTeam() ? 'Team plan' : selectedPlan()?.name}
-        </span>
-      </div>
 
-      <div class="flex flex-col text-sm">
-        <div class="flex justify-between py-2 border-b border-edge-muted">
-          <span class="text-ink-muted">
-            Your seat · {selectedPlan()?.name}
-          </span>
-          <span>
-            <span class="text-ink">${ctx.userSeatCost()}</span>
-            <span class="text-ink-extra-muted"> /month</span>
-          </span>
-        </div>
-        <For each={teamByTier()}>
-          {(group) => (
-            <div class="flex justify-between py-2 border-b border-edge-muted">
-              <span class="text-ink-muted">
-                Team · {group.plan.name} × {group.count}
-              </span>
-              <Tooltip label="Charged when invite is accepted">
-                <span class="underline decoration-dotted underline-offset-4 italic cursor-help">
-                  <span class="text-ink">
+        {/* Line items */}
+        <div class="flex flex-col text-sm">
+          <div class="flex justify-between py-2.5 border-b border-edge-muted">
+            <span class="text-ink-muted">
+              Your seat · {selectedPlan()?.name}
+            </span>
+            <span class="font-mono text-ink">${ctx.userSeatCost()}</span>
+          </div>
+          <For each={teamByTier()}>
+            {(group) => (
+              <div class="flex justify-between py-2.5 border-b border-edge-muted">
+                <span class="text-ink-muted">
+                  Team · {group.plan.name} × {group.count}
+                </span>
+                <Tooltip label="Charged when invite is accepted">
+                  <span class="font-mono text-ink cursor-help underline decoration-dotted underline-offset-4 decoration-edge-muted">
                     ${group.plan.price * group.count}
                   </span>
-                  <span class="text-ink-extra-muted"> /month</span>
-                </span>
-              </Tooltip>
+                </Tooltip>
+              </div>
+            )}
+          </For>
+          <Show when={ctx.invitedMembers().length > 0}>
+            <div class="flex justify-between items-center py-2.5">
+              <span class="text-ink-muted flex items-center gap-1">
+                Total
+                <Tooltip label="Team charges begin when members accept their invite">
+                  <InfoIcon class="size-3.5 text-ink-disabled" />
+                </Tooltip>
+              </span>
+              <span class="font-mono text-ink font-medium">
+                ${ctx.totalCost()}
+              </span>
             </div>
-          )}
-        </For>
+          </Show>
+        </div>
+
+        {/* Invites */}
         <Show when={ctx.invitedMembers().length > 0}>
-          <div class="flex justify-between items-center py-2">
-            <span class="text-ink-muted flex items-center gap-1">
-              Total
-              <Tooltip label="Team charges begin when members accept their invite">
-                <InfoIcon class="size-3.5 text-ink-extra-muted" />
-              </Tooltip>
+          <div class="pt-2">
+            <span class="text-xs font-medium text-ink-muted uppercase tracking-wide">
+              Invites ({ctx.invitedMembers().length})
             </span>
-            <span>
-              <span class="text-ink font-medium">${ctx.totalCost()}</span>
-              <span class="text-ink-extra-muted"> /month</span>
-            </span>
+            <div class="flex flex-col gap-1 mt-2">
+              <For each={ctx.invitedMembers()}>
+                {(member) => (
+                  <div class="flex items-center justify-between text-sm py-1">
+                    <span class="text-ink-muted truncate mr-2 font-mono text-xs">
+                      {member.email}
+                    </span>
+                    <span class="text-xs text-ink-disabled shrink-0">
+                      {PLANS.find((p) => p.tier === member.tier)?.name}
+                    </span>
+                  </div>
+                )}
+              </For>
+            </div>
           </div>
         </Show>
       </div>
 
-      <Show when={ctx.invitedMembers().length > 0}>
-        <div class="border-t border-edge-muted pt-4">
-          <span class="text-xs text-ink-extra-muted uppercase tracking-wide">
-            Invites ({ctx.invitedMembers().length})
-          </span>
-          <div class="flex flex-col gap-1.5 mt-2">
-            <For each={ctx.invitedMembers()}>
-              {(member) => (
-                <div class="flex items-center justify-between text-sm">
-                  <span class="text-ink-muted truncate mr-2">
-                    {member.email}
-                  </span>
-                  <span class="text-xs text-ink-extra-muted shrink-0">
-                    {PLANS.find((p) => p.tier === member.tier)?.name}
-                  </span>
-                </div>
-              )}
-            </For>
-          </div>
-        </div>
-      </Show>
-
-      <div class="flex gap-3">
-        <Button
-          variant="base"
-          size="lg"
+      <div class="flex flex-col gap-3">
+        <button
+          type="button"
           onClick={handleCheckout}
           disabled={isPending()}
-          class="flex-1 bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface"
+          class="group w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-sm bg-accent text-surface border border-accent hover:bg-accent/90 transition-colors disabled:opacity-30 disabled:cursor-not-allowed outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           <Show
             when={!isPending()}
@@ -217,15 +216,15 @@ export function PaymentStep() {
             }
           >
             Continue to payment
-            <ArrowRightIcon class="size-4" />
+            <ArrowRightIcon class="size-4 transition-transform group-hover:translate-x-0.5" />
           </Show>
-        </Button>
-      </div>
+        </button>
 
-      <span class="text-xs text-ink-extra-muted flex items-center justify-center gap-1">
-        <LockIcon class="size-3" />
-        Secure checkout via Stripe
-      </span>
+        <span class="text-xs text-ink-disabled flex items-center justify-center gap-1.5">
+          <LockIcon class="size-3" />
+          Secure checkout via Stripe
+        </span>
+      </div>
     </div>
   );
 }
