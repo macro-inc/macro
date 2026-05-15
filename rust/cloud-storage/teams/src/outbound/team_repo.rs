@@ -93,8 +93,8 @@ impl TeamRepositoryImpl {
 
         let team = sqlx::query!(
             r#"
-            INSERT INTO team (id, name, owner_id)
-            VALUES ($1, $2, $3)
+            INSERT INTO team (id, name, owner_id, seat_count)
+            VALUES ($1, $2, $3, 1)
             RETURNING id, name, owner_id
             "#,
             &id,
@@ -1091,6 +1091,23 @@ impl TeamRepository for TeamRepositoryImpl {
         .await?;
 
         Ok(seat_count)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_plan(&self, team_id: &uuid::Uuid) -> Result<Option<TeamPlan>, TeamError> {
+        let plan = sqlx::query!(
+            r#"
+            SELECT plan as "plan?: TeamPlan"
+            FROM team
+            WHERE id = $1
+            "#,
+            team_id,
+        )
+        .map(|row| row.plan)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(plan)
     }
 
     #[tracing::instrument(skip(self), err)]

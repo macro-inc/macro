@@ -40,13 +40,13 @@ pub enum TeamPlan {
 
 impl TeamPlan {
     /// Get the seat cap associated with a team plan
-    pub fn seat_cap(&self) -> u32 {
+    pub fn seat_cap(&self) -> i32 {
         match self {
             TeamPlan::Idea => 3,
             TeamPlan::PreSeed => 6,
             TeamPlan::Seed => 10,
             TeamPlan::SeriesA => 25,
-            TeamPlan::Growth => u32::MAX,
+            TeamPlan::Growth => i32::MAX,
         }
     }
 }
@@ -140,6 +140,14 @@ pub struct PatchTeamRequest {
     pub name: Option<String>,
     /// Role updates to apply to team users
     pub user_role_updates: Option<Vec<PatchTeamUserRole>>,
+}
+
+/// Request to update the team plan
+#[derive(Debug, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct PatchTeamPlanRequest {
+    /// The new team plan
+    pub team_plan: TeamPlan,
 }
 
 /// Request to update a team user's role

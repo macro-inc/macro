@@ -9,7 +9,7 @@ use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr
 
 use crate::domain::model::{
     AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
-    PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
+    PatchTeamPlanRequest, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
     RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team, TeamError,
     TeamInvite, TeamInviteDetails, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
 };
@@ -216,6 +216,12 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<i32, TeamError>> + Send;
 
+    /// Gets the teams current plan
+    fn get_team_plan(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<TeamPlan>, TeamError>> + Send;
+
     /// Patches the teams current plan
     fn patch_team_plan(
         &self,
@@ -330,4 +336,11 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     ) -> impl Future<
         Output = Result<HashSet<roles_and_permissions::domain::model::PermissionId>, TeamError>,
     > + Send;
+
+    /// Updates the teams plan
+    fn update_team_plan(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
+        req: &PatchTeamPlanRequest,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
 }

@@ -777,6 +777,36 @@ async fn test_get_team_seat_count(pool: Pool<Postgres>) -> anyhow::Result<()> {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
+async fn test_get_team_plan(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    let plan = team_repo.get_team_plan(&team_id).await?;
+    assert_eq!(plan, None);
+
+    team_repo
+        .patch_team_plan(&team_id, TeamPlan::SeriesA)
+        .await?;
+
+    let plan = team_repo.get_team_plan(&team_id).await?;
+    assert_eq!(plan, Some(TeamPlan::SeriesA));
+
+    let missing_team_id = macro_uuid::string_to_uuid("63333333-3333-3333-3333-333333333333")?;
+    let err = team_repo
+        .get_team_plan(&missing_team_id)
+        .await
+        .err()
+        .unwrap();
+    assert!(err.to_string().contains("does not exist"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
 async fn test_patch_team_plan(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool.clone());
 

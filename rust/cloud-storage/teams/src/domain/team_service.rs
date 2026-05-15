@@ -5,6 +5,7 @@ mod test;
 
 use std::{collections::HashSet, sync::Arc};
 
+use anyhow::Context;
 use entity_access::domain::models::{
     AdminTeamRole, EntityAccessReceipt, MemberTeamRole, OwnerTeamRole,
 };
@@ -23,10 +24,10 @@ use notification::domain::{models::SendNotificationRequestBuilder, service::Noti
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, PatchTeamRequest,
-        RemoveTeamInviteError, RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
-        RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
-        TeamMember, TeamRole, TeamWithMembers,
+        CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
+        PatchTeamPlanRequest, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
+        RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
+        TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
     },
     team_repo::{TeamChannelsRepository, TeamRepository, TeamService},
 };
@@ -106,6 +107,62 @@ where
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
 {
+    /// Gets the teams subscription id
+    /// If the team doesn't have a subscription yet, it will convert the owners personal subscription into a team subscription
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_subscription(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<stripe::SubscriptionId, GetTeamSubscriptionError> {
+        let subscription_id = self
+            .team_repository
+            .get_team_subscription_id(team_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?;
+
+        // stripe subscription is already tracked for team
+        if let Some(subscription_id) = subscription_id {
+            return Ok(subscription_id);
+        }
+
+        tracing::info!("no subscription found for team");
+
+        // Get the team to get owner
+        let team = self
+            .team_repository
+            .get_team_by_id(team_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?;
+
+        let customer_id = self
+            .team_repository
+            .get_stripe_customer_id(&team.team.owner_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?
+            .context("expected customer id")?;
+
+        let customer_subscription_id = self
+            .customer_repository
+            .get_subscription_id_for_customer(&customer_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Customer)?;
+
+        // Convert the customer's subscription to a team subscription before storing it locally,
+        // so a customer failure cannot leave a local subscription_id pointing at an unconverted
+        // personal subscription.
+        self.customer_repository
+            .convert_subscription_to_team(&customer_subscription_id, team_id, &team.team.owner_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Customer)?;
+
+        self.team_repository
+            .update_team_subscription(team_id, &customer_subscription_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?;
+
+        Ok(customer_subscription_id)
+    }
+
     /// Sends an invite notification for a team invite
     #[tracing::instrument(skip(self), err)]
     async fn send_invite_notification(
@@ -130,6 +187,42 @@ where
             .map_err(|e| anyhow::anyhow!("failed to send notification: {}", e))?;
 
         Ok(())
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+enum GetTeamSubscriptionError {
+    #[error(transparent)]
+    Team(#[from] TeamError),
+    #[error(transparent)]
+    Customer(#[from] CustomerError),
+    #[error(transparent)]
+    Storage(#[from] anyhow::Error),
+}
+
+impl GetTeamSubscriptionError {
+    fn into_join_team_error(self) -> JoinTeamError {
+        match self {
+            Self::Team(e) => JoinTeamError::TeamError(e),
+            Self::Customer(e) => JoinTeamError::CustomerError(e),
+            Self::Storage(e) => JoinTeamError::StorageLayerError(e),
+        }
+    }
+
+    fn into_remove_user_from_team_error(self) -> RemoveUserFromTeamError {
+        match self {
+            Self::Team(e) => RemoveUserFromTeamError::TeamError(e),
+            Self::Customer(e) => RemoveUserFromTeamError::CustomerError(e),
+            Self::Storage(e) => RemoveUserFromTeamError::StorageLayerError(e),
+        }
+    }
+
+    fn into_team_error(self) -> TeamError {
+        match self {
+            Self::Team(e) => e,
+            Self::Customer(e) => TeamError::StorageLayerError(e.into()),
+            Self::Storage(e) => TeamError::StorageLayerError(e),
+        }
     }
 }
 
@@ -492,5 +585,69 @@ where
             .get_user_permissions(user_id)
             .await
             .map_err(|e| TeamError::StorageLayerError(e.into()))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn update_team_plan(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
+        req: &PatchTeamPlanRequest,
+    ) -> Result<(), TeamError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        let new_team_plan = req.team_plan;
+
+        // Ensure the user isn't trying to upgrade to growth plan
+        if new_team_plan == TeamPlan::Growth {
+            return Err(TeamError::BadRequest(
+                "cannot upgrade to growth plan automatically".to_string(),
+            ));
+        }
+
+        let team_seat_count = self.team_repository.get_team_seat_count(&team_id).await?;
+
+        let current_team_plan = self.team_repository.get_team_plan(&team_id).await?;
+
+        // Check if plans are equal
+        if let Some(current_team_plan) = current_team_plan
+            && new_team_plan == current_team_plan
+        {
+            return Err(TeamError::BadRequest(
+                "cannot change plan to same plan.".to_string(),
+            ));
+        }
+
+        // Check if the user has the seat capacity to downgrade
+        if team_seat_count > new_team_plan.seat_cap() {
+            return Err(TeamError::BadRequest(
+                "you have too many members to downgrade to this plan".to_string(),
+            ));
+        }
+
+        let subscription_id = match self.get_team_subscription(&team_id).await {
+            Ok(subscription_id) => subscription_id,
+            Err(e) => return Err(e.into_team_error()),
+        };
+
+        // Bump plan in db
+        self.team_repository
+            .patch_team_plan(&team_id, new_team_plan)
+            .await?;
+
+        if let Err(e) = self
+            .customer_repository
+            .update_team_plan(&subscription_id, current_team_plan, new_team_plan)
+            .await
+        {
+            if let Some(team_plan) = current_team_plan {
+                self.team_repository
+                    .patch_team_plan(&team_id, team_plan)
+                    .await?;
+            }
+            return Err(TeamError::StorageLayerError(e.into()));
+        }
+
+        Ok(())
     }
 }

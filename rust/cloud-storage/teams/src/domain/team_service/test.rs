@@ -338,6 +338,13 @@ impl TeamRepository for MockTeamRepository {
         async { unimplemented!() }
     }
 
+    fn get_team_plan(
+        &self,
+        _: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<TeamPlan>, TeamError>> + Send {
+        async { unimplemented!() }
+    }
+
     fn patch_team_plan(
         &self,
         _: &uuid::Uuid,
@@ -379,6 +386,15 @@ impl CustomerRepository for MockCustomerRepository {
     fn cancel_subscription(
         &self,
         _: &stripe::SubscriptionId,
+    ) -> impl Future<Output = Result<(), CustomerError>> + Send {
+        async { unimplemented!() }
+    }
+
+    fn update_team_plan(
+        &self,
+        _subscription_id: &stripe::SubscriptionId,
+        _current_team_plan: Option<TeamPlan>,
+        _team_plan: TeamPlan,
     ) -> impl Future<Output = Result<(), CustomerError>> + Send {
         async { unimplemented!() }
     }
