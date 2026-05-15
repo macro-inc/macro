@@ -112,7 +112,7 @@
   --color-overlay:         oklch(var(--b2) / 0.5);
   --color-edge-muted:      var(--b3);
   --color-edge:            var(--b4);
-  --color-rail:            color-mix(in oklch, var(--b4) 90%, var(--b0));
+  --color-rail:            color-mix(in oklch, var(--b0) 75%, var(--c0));
 
   --color-ink:             var(--c0);
   --color-ink-muted:       var(--c1);
