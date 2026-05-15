@@ -201,22 +201,6 @@ enum GetTeamSubscriptionError {
 }
 
 impl GetTeamSubscriptionError {
-    fn into_join_team_error(self) -> JoinTeamError {
-        match self {
-            Self::Team(e) => JoinTeamError::TeamError(e),
-            Self::Customer(e) => JoinTeamError::CustomerError(e),
-            Self::Storage(e) => JoinTeamError::StorageLayerError(e),
-        }
-    }
-
-    fn into_remove_user_from_team_error(self) -> RemoveUserFromTeamError {
-        match self {
-            Self::Team(e) => RemoveUserFromTeamError::TeamError(e),
-            Self::Customer(e) => RemoveUserFromTeamError::CustomerError(e),
-            Self::Storage(e) => RemoveUserFromTeamError::StorageLayerError(e),
-        }
-    }
-
     fn into_team_error(self) -> TeamError {
         match self {
             Self::Team(e) => e,

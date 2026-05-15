@@ -243,15 +243,24 @@ async fn main() -> anyhow::Result<()> {
     let customer_repo_impl = CustomerRepositoryImpl::new(
         stripe_client.clone(),
         teams::outbound::customer_repo::TeamStripePriceIds {
-            idea: "".to_string(),
-            pre_seed: "".to_string(),
-            seed: "".to_string(),
-            series_a: "".to_string(),
+            idea: config.team_stripe_price_ids.idea,
+            pre_seed: config.team_stripe_price_ids.pre_seed,
+            seed: config.team_stripe_price_ids.seed,
+            series_a: config.team_stripe_price_ids.series_a,
         },
         teams::outbound::customer_repo::LegacyStripePriceIds {
-            haiku: config.stripe_price_ids.stripe_price_id_haiku.to_string(),
-            sonnet: config.stripe_price_ids.stripe_price_id_sonnet.to_string(),
-            opus: config.stripe_price_ids.stripe_price_id_opus.to_string(),
+            haiku: config
+                .legacy_stripe_price_ids
+                .stripe_price_id_haiku
+                .to_string(),
+            sonnet: config
+                .legacy_stripe_price_ids
+                .stripe_price_id_sonnet
+                .to_string(),
+            opus: config
+                .legacy_stripe_price_ids
+                .stripe_price_id_opus
+                .to_string(),
         },
     );
     let team_channels_repo_impl = TeamChannelsRepositoryImpl::new(db.clone());
@@ -330,7 +339,7 @@ async fn main() -> anyhow::Result<()> {
                 },
             }),
             analytics_client: Arc::new(analytics_client),
-            stripe_price_ids: config.stripe_price_ids,
+            legacy_stripe_price_ids: config.legacy_stripe_price_ids,
         },
         config.port,
     )
