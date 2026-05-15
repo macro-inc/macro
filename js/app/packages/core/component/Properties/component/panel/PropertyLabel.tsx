@@ -154,7 +154,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
         open={deleteConfirmVisible()}
         onOpenChange={setDeleteConfirmVisible}
       >
-        <Surface depth={2} active>
+        <Surface depth={2} active class="rounded-xl">
           <div class="*:max-h-[75vh]">
             <div class="flex flex-col overflow-hidden text-sm">
               <div class="flex items-center justify-between gap-2 bg-surface px-2 h-10 border-b border-edge-muted shrink-0">

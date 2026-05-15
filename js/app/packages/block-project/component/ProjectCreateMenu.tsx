@@ -220,7 +220,7 @@ function ProjectCreateDialog(props: {
 
   return (
     <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
-      <Surface depth={2} active>
+      <Surface depth={2} active class="rounded-xl">
         <div class="*:max-h-[75vh]">
           <div class="p-2">
             <Dialog.Title class="text-md font-semibold text-ink pb-3">

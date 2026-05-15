@@ -456,7 +456,7 @@ export function CommandMenuInner(props: {
 
   return (
     <Panel
-      class={cn('max-h-[75vh]', props.class)}
+      class={cn('max-h-[75vh] rounded-xl', props.class)}
       ref={setCommandMenuRef}
       depth={props.depth}
       active

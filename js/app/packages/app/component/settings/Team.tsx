@@ -581,7 +581,7 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
         teamNameInputRef?.focus();
       }}
     >
-      <Panel depth={2} active class="max-h-[75vh] text-ink">
+      <Panel depth={2} active class="max-h-[75vh] text-ink rounded-xl">
         <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
             <XIcon />
@@ -1042,7 +1042,7 @@ function TeamManagement(props: {
         open={showDeleteTeamModal()}
         onOpenChange={handleDeleteTeamModalClose}
       >
-        <Panel depth={2} active class="max-h-[75vh] text-ink">
+        <Panel depth={2} active class="max-h-[75vh] text-ink rounded-xl">
           <Panel.Header class="px-2 gap-1">
             <Dialog.CloseButton
               as={Button}
@@ -1106,7 +1106,7 @@ function TeamManagement(props: {
         open={!!showRemoveModal()}
         onOpenChange={() => setShowRemoveModal(null)}
       >
-        <Panel depth={2} active class="max-h-[75vh] text-ink">
+        <Panel depth={2} active class="max-h-[75vh] text-ink rounded-xl">
           <Panel.Header class="px-2 gap-1">
             <Dialog.CloseButton
               as={Button}
@@ -1155,7 +1155,7 @@ function TeamManagement(props: {
         open={!!showCancelInviteModal()}
         onOpenChange={() => setShowCancelInviteModal(null)}
       >
-        <Panel depth={2} active class="max-h-[75vh] text-ink">
+        <Panel depth={2} active class="max-h-[75vh] text-ink rounded-xl">
           <Panel.Header class="px-2 gap-1">
             <Dialog.CloseButton
               as={Button}
@@ -1207,7 +1207,7 @@ function TeamManagement(props: {
         open={showInviteModal()}
         onOpenChange={handleInviteModalClose}
       >
-        <Panel depth={2} active class="max-h-[75vh] text-ink">
+        <Panel depth={2} active class="max-h-[75vh] text-ink rounded-xl">
           <Panel.Header class="px-2 gap-1">
             <Dialog.CloseButton
               as={Button}

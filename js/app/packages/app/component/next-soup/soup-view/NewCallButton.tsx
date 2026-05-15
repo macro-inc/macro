@@ -97,7 +97,7 @@ export function NewCallButton() {
         }}
         class="w-lg"
       >
-        <Surface depth={2} active>
+        <Surface depth={2} active class="rounded-xl">
           <div class="*:max-h-[75vh]">
             <div class="flex flex-col text-ink">
               <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">

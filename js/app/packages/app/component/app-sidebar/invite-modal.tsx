@@ -67,7 +67,7 @@ export const InviteModal = () => {
 
   return (
     <Dialog open={inviteModalOpen()} onOpenChange={(o) => !o && handleClose()}>
-      <Panel depth={2} active class="max-h-[75vh] text-ink">
+      <Panel depth={2} active class="max-h-[75vh] text-ink rounded-xl">
         <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
             <CloseIcon />
