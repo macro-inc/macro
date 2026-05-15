@@ -22,7 +22,7 @@ Both must be set together or both omitted. If only one is set the service will p
 It can be used with the [Slack Manifest API](https://api.slack.com/reference/manifests) to create
 or update the app programmatically.
 
-## Relevant Docs
+## Docs
 
 - [Slack MCP overview](https://docs.slack.dev/agents-and-apps/mcp-for-slack)
 - [Slack OAuth v2 user tokens](https://docs.slack.dev/authentication/installing-with-oauth)

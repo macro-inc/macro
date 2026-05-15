@@ -83,15 +83,11 @@ const PERPLEXITY_API_KEY = aws.secretsmanager
   .apply((secret) => secret.secretString);
 
 const SLACK_MCP_CLIENT_ID = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.get('slack-mcp-client-id') ?? '',
-  })
+  .getSecretVersionOutput({ secretId: 'slack-mcp-client-id' })
   .apply((secret) => secret.secretString);
 
 const SLACK_MCP_CLIENT_SECRET = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.get('slack-mcp-client-secret') ?? '',
-  })
+  .getSecretVersionOutput({ secretId: 'slack-mcp-client-secret' })
   .apply((secret) => secret.secretString);
 
 const AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME = config.require(
