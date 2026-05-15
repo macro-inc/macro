@@ -41,11 +41,12 @@ export function ParticipantsList(props: {
           bufferSize={500}
           data-participants-list-container
         >
-          {(participant) => (
+          {(participant, index) => (
             <ParticipantsListItem
               participant={participant}
               currentUserId={props.currentUserId}
               editable={props.editable}
+              isLast={index() === props.participants().length - 1}
               onClick={() => props.onParticipantClick(participant.user_id)}
               onRemove={() => props.onRemoveParticipant(participant.user_id)}
             />
