@@ -1,9 +1,8 @@
-import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { type EntityData, InlineEntity } from '@entity';
 import { Dialog } from '@kobalte/core/dialog';
 import { createBulkRenameDssEntityMutation } from '@macro-entity';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
-import { Button, cn } from '@ui';
+import { Button, cn, SegmentedControl } from '@ui';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 
 type RenameMode = 'total' | 'prepend' | 'append' | 'replace';
@@ -30,7 +29,7 @@ export const BulkRenameEntitiesView = (props: {
     multi() ? 'append' : 'total'
   );
 
-  const modeOptions = [
+  const modeOptions: { value: RenameMode; label: string }[] = [
     { value: 'prepend', label: 'Prepend' },
     { value: 'append', label: 'Append' },
     { value: 'replace', label: 'Replace' },
@@ -137,11 +136,11 @@ export const BulkRenameEntitiesView = (props: {
       <div class="p-3 flex flex-col gap-3">
         <Show when={multi()}>
           <SegmentedControl
-            label="Mode"
+            aria-label="Mode"
             value={mode()}
-            list={modeOptions}
-            onChange={(value) => setMode(value as RenameMode)}
-            size="SM"
+            options={modeOptions}
+            onChange={(value) => setMode(value)}
+            size="sm"
           />
         </Show>
 

@@ -30,8 +30,8 @@ import type {
   PasswordlessRequest,
   PasswordRequest,
   PatchSubscriptionTierRequest,
+  PatchTeamPlanRequest,
   PatchTeamRequest,
-  PatchTeamUserTierRequest,
   PatchUserGroupRequest,
   PatchUserOnboardingRequest,
   PatchUserTutorialRequest,
@@ -2252,6 +2252,75 @@ export const rejectInvitation = async (
 };
 
 /**
+ * @summary Updates a team plan.
+ */
+export type patchTeamPlanResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type patchTeamPlanResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type patchTeamPlanResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type patchTeamPlanResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type patchTeamPlanResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type patchTeamPlanResponseSuccess = patchTeamPlanResponse200 & {
+  headers: Headers;
+};
+export type patchTeamPlanResponseError = (
+  | patchTeamPlanResponse400
+  | patchTeamPlanResponse401
+  | patchTeamPlanResponse404
+  | patchTeamPlanResponse500
+) & {
+  headers: Headers;
+};
+
+export type patchTeamPlanResponse =
+  | patchTeamPlanResponseSuccess
+  | patchTeamPlanResponseError;
+
+export const getPatchTeamPlanUrl = () => {
+  return `/team/plan`;
+};
+
+export const patchTeamPlan = async (
+  patchTeamPlanRequest: PatchTeamPlanRequest,
+  options?: RequestInit
+): Promise<patchTeamPlanResponse> => {
+  const res = await fetch(getPatchTeamPlanUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(patchTeamPlanRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: patchTeamPlanResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as patchTeamPlanResponse;
+};
+
+/**
  * @summary Removes a user from a team.
  */
 export type removeUserFromTeamResponse200 = {
@@ -2311,75 +2380,6 @@ export const removeUserFromTeam = async (
     status: res.status,
     headers: res.headers,
   } as removeUserFromTeamResponse;
-};
-
-/**
- * @summary Updates a team.
- */
-export type patchTeamUserTierResponse200 = {
-  data: void;
-  status: 200;
-};
-
-export type patchTeamUserTierResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type patchTeamUserTierResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type patchTeamUserTierResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type patchTeamUserTierResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type patchTeamUserTierResponseSuccess = patchTeamUserTierResponse200 & {
-  headers: Headers;
-};
-export type patchTeamUserTierResponseError = (
-  | patchTeamUserTierResponse400
-  | patchTeamUserTierResponse401
-  | patchTeamUserTierResponse404
-  | patchTeamUserTierResponse500
-) & {
-  headers: Headers;
-};
-
-export type patchTeamUserTierResponse =
-  | patchTeamUserTierResponseSuccess
-  | patchTeamUserTierResponseError;
-
-export const getPatchTeamUserTierUrl = () => {
-  return `/team/tier`;
-};
-
-export const patchTeamUserTier = async (
-  patchTeamUserTierRequest: PatchTeamUserTierRequest,
-  options?: RequestInit
-): Promise<patchTeamUserTierResponse> => {
-  const res = await fetch(getPatchTeamUserTierUrl(), {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(patchTeamUserTierRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: patchTeamUserTierResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as patchTeamUserTierResponse;
 };
 
 /**

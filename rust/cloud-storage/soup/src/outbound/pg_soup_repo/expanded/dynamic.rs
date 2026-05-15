@@ -27,7 +27,12 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRo
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
+use crate::domain::models::GroupedSoupItem;
+use crate::outbound::pg_soup_repo::grouping::{
+    GroupJoinClause, group_join_clause, group_select_expr,
+};
 use crate::outbound::pg_soup_repo::{populate_properties, type_err};
+use models_grouping::{GroupByField, GroupingConfig, date_bucket_sql_order};
 
 static PREFIX: &str = r#"
     WITH user_source_ids AS (
@@ -53,7 +58,8 @@ static DOCUMENT_TOP_CLAUSE: &str = r#"
                         WHEN 'created_at' THEN d."createdAt"
                         ELSE d."updatedAt"
                     END::timestamptz as sort_ts
-                FROM "Document" d
+                FROM AccessibleItems ai
+                INNER JOIN "Document" d ON d.id = ai.item_id AND ai.item_type = 'document'
                 LEFT JOIN document_sub_type dt ON dt.document_id = d.id
 "#;
 
@@ -73,13 +79,6 @@ static DOCUMENT_TASK_PROPERTY_JOINS: &str = r#"
 static DOCUMENT_TOP_WHERE_CLAUSE: &str = r#"
                 LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
                 WHERE d."deletedAt" IS NULL
-                  AND EXISTS (
-                      SELECT 1
-                      FROM entity_access ea
-                      WHERE ea.entity_id::text = d.id
-                        AND ea.entity_type = 'document'
-                        AND ea.source_id IN (SELECT source_id FROM user_source_ids)
-                  )
 "#;
 
 static CHAT_TOP_CLAUSE: &str = r#"
@@ -92,16 +91,10 @@ static CHAT_TOP_CLAUSE: &str = r#"
                         WHEN 'created_at' THEN c."createdAt"
                         ELSE c."updatedAt"
                     END::timestamptz as sort_ts
-                FROM "Chat" c
+                FROM AccessibleItems ai
+                INNER JOIN "Chat" c ON c.id = ai.item_id AND ai.item_type = 'chat'
                 LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
                 WHERE c."deletedAt" IS NULL
-                  AND EXISTS (
-                      SELECT 1
-                      FROM entity_access ea
-                      WHERE ea.entity_id::text = c.id
-                        AND ea.entity_type = 'chat'
-                        AND ea.source_id IN (SELECT source_id FROM user_source_ids)
-                  )
 "#;
 
 static PROJECT_TOP_CLAUSE: &str = r#"
@@ -114,19 +107,68 @@ static PROJECT_TOP_CLAUSE: &str = r#"
                         WHEN 'created_at' THEN p."createdAt"
                         ELSE p."updatedAt"
                     END::timestamptz as sort_ts
-                FROM "Project" p
+                FROM AccessibleItems ai
+                INNER JOIN "Project" p ON p.id = ai.item_id AND ai.item_type = 'project'
                 LEFT JOIN "UserHistory" uh
                     ON uh."itemId" = p.id
                     AND uh."itemType" = 'project'
                     AND uh."userId" = $1
                 WHERE p."deletedAt" IS NULL
-                  AND EXISTS (
-                      SELECT 1
-                      FROM entity_access ea
-                      WHERE ea.entity_id::text = p.id
-                        AND ea.entity_type = 'project'
-                        AND ea.source_id IN (SELECT source_id FROM user_source_ids)
-                  )
+"#;
+
+// -- Grouped top clauses: include project_id for grouping support --
+
+static GROUPED_DOCUMENT_TOP_CLAUSE: &str = r#"
+                SELECT
+                    'document'::text as item_type,
+                    d.id,
+                    CASE $2
+                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", d."updatedAt")
+                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
+                        WHEN 'created_at' THEN d."createdAt"
+                        ELSE d."updatedAt"
+                    END::timestamptz as sort_ts,
+                    d."projectId"::text as project_id
+                FROM AccessibleItems ai
+                INNER JOIN "Document" d ON d.id = ai.item_id AND ai.item_type = 'document'
+                LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+"#;
+
+static GROUPED_CHAT_TOP_CLAUSE: &str = r#"
+                SELECT
+                    'chat'::text as item_type,
+                    c.id,
+                    CASE $2
+                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", c."updatedAt")
+                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
+                        WHEN 'created_at' THEN c."createdAt"
+                        ELSE c."updatedAt"
+                    END::timestamptz as sort_ts,
+                    c."projectId"::text as project_id
+                FROM AccessibleItems ai
+                INNER JOIN "Chat" c ON c.id = ai.item_id AND ai.item_type = 'chat'
+                LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
+                WHERE c."deletedAt" IS NULL
+"#;
+
+static GROUPED_PROJECT_TOP_CLAUSE: &str = r#"
+                SELECT
+                    'project'::text as item_type,
+                    p.id,
+                    CASE $2
+                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", p."updatedAt")
+                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
+                        WHEN 'created_at' THEN p."createdAt"
+                        ELSE p."updatedAt"
+                    END::timestamptz as sort_ts,
+                    p."parentId"::text as project_id
+                FROM AccessibleItems ai
+                INNER JOIN "Project" p ON p.id = ai.item_id AND ai.item_type = 'project'
+                LEFT JOIN "UserHistory" uh
+                    ON uh."itemId" = p.id
+                    AND uh."itemType" = 'project'
+                    AND uh."userId" = $1
+                WHERE p."deletedAt" IS NULL
 "#;
 
 // -- Detail clauses: full columns, joined back from TopItems --
@@ -249,6 +291,157 @@ static DETAIL_SUFFIX: &str = r#"
     SELECT * FROM Combined
     ORDER BY "sort_ts" DESC, "id" DESC
     LIMIT $3
+"#;
+
+// -- Grouped detail clauses: join from GroupedItems, include group columns --
+
+static GROUPED_DOCUMENT_DETAIL_CLAUSE: &str = r#"
+        SELECT
+            'document' as "item_type",
+            d.id as "id",
+            CAST(COALESCE(di.id, db.id) as TEXT) as "document_version_id",
+            d.owner as "user_id",
+            d.name as "name",
+            d."branchedFromId" as "branched_from_id",
+            d."branchedFromVersionId" as "branched_from_version_id",
+            d."documentFamilyId" as "document_family_id",
+            d."fileType" as "file_type",
+            d."createdAt"::timestamptz as "created_at",
+            d."updatedAt"::timestamptz as "updated_at",
+            d."projectId" as "project_id",
+            NULL as "is_persistent",
+            di.sha as "sha",
+            dt.sub_type as "sub_type",
+            uh."updatedAt"::timestamptz as "viewed_at",
+            gi.sort_ts as "sort_ts",
+            CASE
+                WHEN dt.sub_type = 'task'
+                    AND ep_status.values->'value' ? $6
+                THEN true
+                WHEN dt.sub_type = 'task'
+                THEN false
+                ELSE NULL
+            END as "is_completed",
+            d."deletedAt"::timestamptz as "deleted_at",
+            gi.group_key as "group_key",
+            gi.group_total_count as "group_total_count",
+            gi.row_in_group as "row_in_group"
+        FROM GroupedItems gi
+        INNER JOIN "Document" d ON d.id = gi.id
+        LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+        LEFT JOIN entity_properties ep_status
+            ON dt.sub_type = 'task'
+            AND ep_status.entity_id = d.id
+            AND ep_status.entity_type = 'TASK'
+            AND ep_status.property_definition_id = $7
+        LEFT JOIN "UserHistory" uh
+            ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
+        LEFT JOIN LATERAL (
+            SELECT b.id
+            FROM "DocumentBom" b
+            WHERE b."documentId" = d.id
+            ORDER BY b."createdAt" DESC
+            LIMIT 1
+        ) db ON true
+        LEFT JOIN LATERAL (
+            SELECT i.id, i.sha
+            FROM "DocumentInstance" i
+            WHERE i."documentId" = d.id
+            ORDER BY i."updatedAt" DESC
+            LIMIT 1
+        ) di ON true
+        WHERE gi.item_type = 'document'
+"#;
+
+static GROUPED_CHAT_DETAIL_CLAUSE: &str = r#"
+        SELECT
+            'chat' as "item_type",
+            c.id as "id",
+            NULL as "document_version_id",
+            c."userId" as "user_id",
+            c.name as "name",
+            NULL as "branched_from_id",
+            NULL as "branched_from_version_id",
+            NULL as "document_family_id",
+            NULL as "file_type",
+            c."createdAt"::timestamptz as "created_at",
+            c."updatedAt"::timestamptz as "updated_at",
+            c."projectId" as "project_id",
+            c."isPersistent" as "is_persistent",
+            NULL as "sha",
+            NULL as "sub_type",
+            uh."updatedAt"::timestamptz as "viewed_at",
+            gi.sort_ts as "sort_ts",
+            NULL as "is_completed",
+            c."deletedAt"::timestamptz as "deleted_at",
+            gi.group_key as "group_key",
+            gi.group_total_count as "group_total_count",
+            gi.row_in_group as "row_in_group"
+        FROM GroupedItems gi
+        INNER JOIN "Chat" c ON c.id = gi.id
+        LEFT JOIN "UserHistory" uh
+            ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
+        WHERE gi.item_type = 'chat'
+"#;
+
+static GROUPED_PROJECT_DETAIL_CLAUSE: &str = r#"
+        SELECT
+            'project' as "item_type",
+            p.id as "id",
+            NULL as "document_version_id",
+            p."userId" as "user_id",
+            p.name as "name",
+            NULL as "branched_from_id",
+            NULL as "branched_from_version_id",
+            NULL as "document_family_id",
+            NULL as "file_type",
+            p."createdAt"::timestamptz as "created_at",
+            p."updatedAt"::timestamptz as "updated_at",
+            p."parentId" as "project_id",
+            NULL as "is_persistent",
+            NULL as "sha",
+            NULL as "sub_type",
+            uh."updatedAt"::timestamptz as "viewed_at",
+            gi.sort_ts as "sort_ts",
+            NULL as "is_completed",
+            p."deletedAt"::timestamptz as "deleted_at",
+            gi.group_key as "group_key",
+            gi.group_total_count as "group_total_count",
+            gi.row_in_group as "row_in_group"
+        FROM GroupedItems gi
+        INNER JOIN "Project" p ON p.id = gi.id
+        LEFT JOIN "UserHistory" uh
+            ON uh."itemId" = p.id
+            AND uh."itemType" = 'project'
+            AND uh."userId" = $1
+        WHERE gi.item_type = 'project'
+"#;
+
+static GROUPED_EMPTY_COMBINED_CLAUSE: &str = r#"
+        SELECT
+            'document' as "item_type",
+            NULL::text as "id",
+            NULL::text as "document_version_id",
+            NULL::text as "user_id",
+            NULL::text as "name",
+            NULL::text as "branched_from_id",
+            NULL::bigint as "branched_from_version_id",
+            NULL::bigint as "document_family_id",
+            NULL::text as "file_type",
+            NULL::timestamptz as "created_at",
+            NULL::timestamptz as "updated_at",
+            NULL::text as "project_id",
+            NULL::boolean as "is_persistent",
+            NULL::text as "sha",
+            NULL::document_sub_type_value as "sub_type",
+            NULL::timestamptz as "viewed_at",
+            NULL::timestamptz as "sort_ts",
+            NULL::boolean as "is_completed",
+            NULL::timestamptz as "deleted_at",
+            NULL::text as "group_key",
+            NULL::bigint as "group_total_count",
+            NULL::bigint as "row_in_group"
+        WHERE false
 "#;
 
 fn build_notification_exists_clause(
@@ -438,6 +631,9 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectId(p)) => {
             format!(r#"p."parentId" = '{p}'"#)
         }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectIdSelf(p)) => {
+            format!(r#"p.id = '{p}'"#)
+        }
         filter_ast::ExprFrame::Literal(ProjectLiteral::Owner(o)) => {
             format!(r#"p."userId" = '{o}'"#)
         }
@@ -582,6 +778,75 @@ fn push_union_separator(builder: &mut QueryBuilder<'_, Postgres>, needs_separato
     *needs_separator = true;
 }
 
+fn push_accessible_items_cte(
+    builder: &mut QueryBuilder<'_, Postgres>,
+    include_documents: bool,
+    include_chats: bool,
+    include_projects: bool,
+) {
+    let mut entity_types = Vec::with_capacity(3);
+    if include_documents {
+        entity_types.push("'document'");
+    }
+    if include_chats {
+        entity_types.push("'chat'");
+    }
+    if include_projects {
+        entity_types.push("'project'");
+    }
+
+    if entity_types.is_empty() {
+        return;
+    }
+
+    let entity_types = entity_types.join(", ");
+    builder.push(format!(
+        r#"AccessibleItems AS MATERIALIZED (
+        SELECT DISTINCT item_id, item_type
+        FROM (
+            SELECT
+                ea.entity_id::text as item_id,
+                ea.entity_type as item_type
+            FROM entity_access ea
+            WHERE ea.source_id = $1
+              AND ea.entity_type IN ({entity_types})
+
+            UNION ALL
+
+            SELECT
+                ea.entity_id::text as item_id,
+                ea.entity_type as item_type
+            FROM comms_channel_participants cp
+            CROSS JOIN LATERAL (
+                SELECT ea.entity_id, ea.entity_type
+                FROM entity_access ea
+                WHERE ea.source_id = cp.channel_id::text
+                  AND ea.entity_type IN ({entity_types})
+                OFFSET 0
+            ) ea
+            WHERE cp.user_id = $1
+              AND cp.left_at IS NULL
+
+            UNION ALL
+
+            SELECT
+                ea.entity_id::text as item_id,
+                ea.entity_type as item_type
+            FROM team_user t
+            CROSS JOIN LATERAL (
+                SELECT ea.entity_id, ea.entity_type
+                FROM entity_access ea
+                WHERE ea.source_id = t.team_id::text
+                  AND ea.entity_type IN ({entity_types})
+                OFFSET 0
+            ) ea
+            WHERE t.user_id = $1
+        ) accessible
+    ),
+"#
+    ));
+}
+
 fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBuilder<'_, Postgres> {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
@@ -600,6 +865,13 @@ fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBui
             filter_ast.properties_filter.as_deref(),
             &[PropertyEntityType::Project],
         );
+
+    push_accessible_items_cte(
+        &mut builder,
+        include_documents,
+        include_chats,
+        include_projects,
+    );
 
     // TopItems CTE: lightweight id + sort_ts with filters, cursor, and limit
     builder.push("TopItems AS (");
@@ -950,6 +1222,358 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         .await?;
 
     populate_properties(db, &mut items).await?;
+
+    Ok(items)
+}
+
+// ============================================================================
+// Grouped Query Support
+// ============================================================================
+
+/// Arguments for grouped dynamic cursor soup queries.
+#[derive(Debug)]
+pub struct GroupedDynamicCursorArgs<'a> {
+    /// The user for which we are performing the query
+    pub user_id: MacroUserIdStr<'a>,
+    /// The limit of items we can return
+    pub limit: u16,
+    /// The Query that we are attempting to perform
+    pub cursor: Query<Uuid, SimpleSortMethod, EntityFilterAst>,
+    /// Whether or not the query should explicitly remove items that DO have frecency records
+    pub exclude_frecency: bool,
+    /// Grouping configuration
+    pub grouping: GroupingConfig,
+}
+
+/// Group metadata fields extracted from grouped query rows.
+struct GroupFields {
+    group_key: String,
+    group_total_count: i64,
+    row_in_group: i64,
+}
+
+impl GroupFields {
+    fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
+        Ok(GroupFields {
+            group_key: row.try_get("group_key")?,
+            group_total_count: row.try_get("group_total_count")?,
+            row_in_group: row.try_get("row_in_group")?,
+        })
+    }
+}
+
+/// Grouped row: reuses SoupRow for item data, adds group metadata.
+struct GroupedSoupRow {
+    item: SoupRow,
+    group: GroupFields,
+}
+
+impl<'a> FromRow<'a, PgRow> for GroupedSoupRow {
+    fn from_row(row: &'a PgRow) -> Result<Self, sqlx::Error> {
+        Ok(GroupedSoupRow {
+            item: SoupRow::from_row(row)?,
+            group: GroupFields::from_row(row)?,
+        })
+    }
+}
+
+/// Per-group limit for initial grouped queries.
+/// Each group will return at most this many items initially.
+const PER_GROUP_LIMIT: i32 = 10;
+
+/// Build the GroupedItems CTE based on the grouping configuration.
+/// Returns the entity_type value to bind at $10, if property grouping with entity_type filter.
+fn build_grouped_items_cte(
+    builder: &mut QueryBuilder<'_, Postgres>,
+    grouping: &GroupingConfig,
+) -> Option<String> {
+    let select_expr = group_select_expr(&grouping.field);
+
+    builder.push("GroupedItems AS (SELECT t.*, (");
+    builder.push(&select_expr);
+    builder.push(") as group_key, COUNT(*) OVER (PARTITION BY ");
+    builder.push(&select_expr);
+    builder.push(") as group_total_count, ROW_NUMBER() OVER (PARTITION BY ");
+    builder.push(&select_expr);
+    builder.push(" ORDER BY t.sort_ts DESC, t.id DESC) as row_in_group FROM TopItems t ");
+
+    let entity_type_bind = if let Some(GroupJoinClause {
+        sql,
+        entity_type_bind,
+    }) = group_join_clause(&grouping.field)
+    {
+        builder.push(&sql);
+        builder.push(" ");
+        entity_type_bind
+    } else {
+        None
+    };
+
+    if grouping.group_key.is_some() {
+        // Single group mode: fetch items for a specific group (for "load more")
+        // Uses $9 parameter for group_key to prevent SQL injection
+        builder.push("WHERE (");
+        builder.push(&select_expr);
+        builder.push(") = $9 ");
+    }
+
+    builder.push("), ");
+
+    // FilteredGroupedItems: apply per-group limit when not fetching a specific group
+    if grouping.group_key.is_none() {
+        builder.push("FilteredGroupedItems AS (SELECT * FROM GroupedItems WHERE row_in_group <= ");
+        builder.push(PER_GROUP_LIMIT.to_string());
+        builder.push("), ");
+    }
+
+    entity_type_bind
+}
+
+/// Build the grouped query with grouping CTE.
+/// Returns (QueryBuilder, entity_type_bind) where entity_type_bind is Some when
+/// property grouping with entity_type filter is used (bind at $10).
+fn build_grouped_query<'a>(
+    filter_ast: &'a EntityFilterAst,
+    exclude_frecency: bool,
+    grouping: &'a GroupingConfig,
+) -> (QueryBuilder<'a, Postgres>, Option<String>) {
+    let mut builder = sqlx::QueryBuilder::new(PREFIX);
+
+    // Determine which entity types to include based on filters (same logic as build_query)
+    let include_documents = !document_filter_is_impossible(filter_ast.document_filter.as_deref())
+        && properties_filter_can_apply_to(
+            filter_ast.properties_filter.as_deref(),
+            &[PropertyEntityType::Document, PropertyEntityType::Task],
+        );
+    let include_chats = !chat_filter_is_impossible(filter_ast.chat_filter.as_deref())
+        && properties_filter_can_apply_to(
+            filter_ast.properties_filter.as_deref(),
+            &[PropertyEntityType::Chat],
+        );
+    let include_projects = !project_filter_is_impossible(filter_ast.project_filter.as_deref())
+        && properties_filter_can_apply_to(
+            filter_ast.properties_filter.as_deref(),
+            &[PropertyEntityType::Project],
+        );
+
+    push_accessible_items_cte(
+        &mut builder,
+        include_documents,
+        include_chats,
+        include_projects,
+    );
+
+    // TopItems CTE: lightweight id + sort_ts + project_id with filters, cursor, and limit
+    builder.push("TopItems AS (");
+    builder.push(
+        "SELECT all_items.item_type, all_items.id, all_items.sort_ts, all_items.project_id FROM (",
+    );
+
+    let mut needs_separator = false;
+
+    if include_documents {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(GROUPED_DOCUMENT_TOP_CLAUSE);
+        if document_filter_needs_task_property_joins(filter_ast.document_filter.as_deref()) {
+            builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
+        }
+        builder.push(DOCUMENT_TOP_WHERE_CLAUSE);
+        builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
+        builder.push(build_properties_filter(
+            filter_ast.properties_filter.as_deref(),
+            "d.id",
+        ));
+    }
+
+    if include_chats {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(GROUPED_CHAT_TOP_CLAUSE);
+        builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
+        builder.push(build_properties_filter(
+            filter_ast.properties_filter.as_deref(),
+            "c.id",
+        ));
+    }
+
+    if include_projects {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(GROUPED_PROJECT_TOP_CLAUSE);
+        builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
+        builder.push(build_properties_filter(
+            filter_ast.properties_filter.as_deref(),
+            "p.id",
+        ));
+    }
+
+    // Fallback when all entity types are filtered out
+    if !needs_separator {
+        builder.push(
+            "SELECT 'document'::text as item_type, NULL::text as id, NULL::timestamptz as sort_ts, NULL::text as project_id WHERE false",
+        );
+    }
+
+    builder.push(") all_items ");
+
+    // Frecency exclusion join (only when exclude_frecency is true)
+    if exclude_frecency {
+        builder.push(
+            r#"LEFT JOIN frecency_aggregates fa
+                ON fa.entity_id = all_items.id
+                AND fa.entity_type = all_items.item_type
+                AND fa.user_id = $1
+            WHERE fa.id IS NULL AND ("#,
+        );
+    } else {
+        builder.push("WHERE ");
+    }
+
+    // Cursor condition
+    builder.push(
+        r#"($4::timestamptz IS NULL)
+            OR
+            (all_items.sort_ts, all_items.id::text) < ($4, $5)"#,
+    );
+
+    if exclude_frecency {
+        builder.push(")");
+    }
+
+    // Note: we don't limit TopItems here for grouped queries - limit is applied at the end
+    builder.push(" ORDER BY all_items.sort_ts DESC, all_items.id DESC");
+    builder.push("), ");
+
+    // GroupedItems CTE: adds group metadata (and FilteredGroupedItems if not single-group mode)
+    let entity_type_bind = build_grouped_items_cte(&mut builder, grouping);
+
+    // Combined CTE: full detail joins from GroupedItems (or FilteredGroupedItems)
+    // When fetching a specific group, use GroupedItems directly; otherwise use FilteredGroupedItems
+    let source_table = if grouping.group_key.is_some() {
+        "GroupedItems"
+    } else {
+        "FilteredGroupedItems"
+    };
+
+    builder.push("Combined AS (");
+
+    let mut combined_needs_separator = false;
+    if include_documents {
+        push_union_separator(&mut builder, &mut combined_needs_separator);
+        builder.push(
+            GROUPED_DOCUMENT_DETAIL_CLAUSE
+                .replace("GroupedItems gi", &format!("{} gi", source_table)),
+        );
+    }
+    if include_chats {
+        push_union_separator(&mut builder, &mut combined_needs_separator);
+        builder.push(
+            GROUPED_CHAT_DETAIL_CLAUSE.replace("GroupedItems gi", &format!("{} gi", source_table)),
+        );
+    }
+    if include_projects {
+        push_union_separator(&mut builder, &mut combined_needs_separator);
+        builder.push(
+            GROUPED_PROJECT_DETAIL_CLAUSE
+                .replace("GroupedItems gi", &format!("{} gi", source_table)),
+        );
+    }
+    if !combined_needs_separator {
+        builder.push(GROUPED_EMPTY_COMBINED_CLAUSE);
+    }
+    builder.push(") ");
+
+    // Final SELECT with group-aware ordering
+    builder.push("SELECT * FROM Combined ORDER BY ");
+
+    match &grouping.field {
+        GroupByField::Date => {
+            builder.push(date_bucket_sql_order("sort_ts"));
+        }
+        _ => {
+            builder.push("\"group_key\"");
+        }
+    }
+    builder.push(", \"sort_ts\" DESC, \"id\" DESC LIMIT $3");
+
+    (builder, entity_type_bind)
+}
+
+/// Execute a grouped dynamic cursor soup query.
+#[tracing::instrument(skip(db), err)]
+pub async fn expanded_dynamic_cursor_soup_grouped(
+    db: &PgPool,
+    args: GroupedDynamicCursorArgs<'_>,
+) -> Result<Vec<GroupedSoupItem>, sqlx::Error> {
+    let GroupedDynamicCursorArgs {
+        user_id,
+        limit,
+        cursor,
+        exclude_frecency,
+        grouping,
+    } = args;
+
+    let query_limit = limit as i64;
+    let sort_method_str = cursor.sort_method().to_string();
+    let (cursor_id, cursor_timestamp) = cursor.vals();
+    let cursor_id_str = cursor_id.as_ref().map(|u| u.to_string());
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
+
+    let (mut query_builder, entity_type_bind) =
+        build_grouped_query(cursor.filter(), exclude_frecency, &grouping);
+
+    let mut query = query_builder
+        .build()
+        .bind(user_id.as_ref())
+        .bind(sort_method_str)
+        .bind(query_limit)
+        .bind(cursor_timestamp)
+        .bind(cursor_id_str)
+        .bind(completed_option_id)
+        .bind(status_property_id)
+        .bind(assignees_property_id);
+
+    // Bind group_key as $9 when filtering by specific group
+    if let Some(ref key) = grouping.group_key {
+        query = query.bind(key.clone());
+    }
+
+    // Bind entity_type as $10 when property grouping with entity_type filter
+    if let Some(ref et) = entity_type_bind {
+        query = query.bind(et.clone());
+    }
+
+    let rows: Vec<GroupedSoupRow> = query
+        .try_map(|row| GroupedSoupRow::from_row(&row))
+        .fetch_all(db)
+        .await?;
+
+    // Convert rows to (SoupItem, GroupFields) pairs and unzip
+    let (mut soup_items, groups): (Vec<SoupItem>, Vec<GroupFields>) = rows
+        .into_iter()
+        .map(|row| {
+            let item = row.item.into_soup_item()?;
+            Ok((item, row.group))
+        })
+        .collect::<Result<Vec<_>, sqlx::Error>>()?
+        .into_iter()
+        .unzip();
+
+    populate_properties(db, &mut soup_items).await?;
+
+    let items = soup_items
+        .into_iter()
+        .zip(groups)
+        .map(|(item, group)| GroupedSoupItem {
+            item,
+            frecency_score: None,
+            group_key: group.group_key,
+            group_total_count: group.group_total_count as u32,
+            row_in_group: group.row_in_group as u32,
+            group_label: None,
+            group_display_order: None,
+        })
+        .collect();
 
     Ok(items)
 }

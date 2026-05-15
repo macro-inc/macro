@@ -14,6 +14,7 @@ import type {
   HotkeyRegistrationOptions,
   ValidHotkey,
 } from '@core/hotkey/types';
+import { isMobile } from '@core/mobile/isMobile';
 import {
   createCanvasFileFromJsonString,
   createChat,
@@ -22,8 +23,8 @@ import {
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { isErr, ok } from '@core/util/maybeResult';
+import ArrowRight from '@icon/bold/arrow-right-bold.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import PixelArrowRight from '@macro-icons/pixel/arrow-right.svg';
 import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
 import { AnimatedDiagramIcon } from '@macro-icons/wide/animating/diagram';
 import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
@@ -42,6 +43,7 @@ import WideStar from '@macro-icons/wide/star.svg';
 import WideTask from '@macro-icons/wide/task.svg';
 import { createProject } from '@queries/storage/projects';
 import { cn, Hotkey, Layer } from '@ui';
+import { getNormalizedKeyString } from '@ui/components/Hotkey';
 import {
   type Component,
   createEffect,
@@ -66,49 +68,47 @@ const createBlock = async (spec: {
 
   setCreateMenuOpen(false, false);
 
-  if (!loading) {
-    const id = await createFn();
-    if (!id) return;
+  // WORKAROUND: On mobile, the navigation interceptor in createMobileSwipeLayout
+  // consumes openWithSplit calls and returns undefined instead of a SplitHandle.
+  // This means we can't show a loading spinner then replace it via split.replace(),
+  // because we never get a handle back. Instead, on mobile we skip the loading state
+  // and navigate directly to the created block after the async creation completes.
+  // If the mobile navigation interceptor is refactored to return handles, this
+  // workaround can be removed and both paths can use the loading-then-replace flow.
+  const showLoadingFirst = loading && !isMobile();
 
-    analytics.track('create_entity', {
-      entityType: blockName,
-      source: 'launcher',
-    });
+  const split = showLoadingFirst
+    ? openWithSplit(
+        { type: 'component', id: 'loading' },
+        { referredFrom: 'launcher', preferNewSplit: spec.shouldInsert }
+      )
+    : undefined;
 
-    const block = { type: blockName, id };
-
-    openWithSplit(block, {
-      referredFrom: 'launcher',
-      preferNewSplit: spec.shouldInsert,
-    });
-
+  const id = await createFn();
+  if (!id) {
+    split?.goBack();
     return;
+  }
+
+  analytics.track('create_entity', {
+    entityType: blockName,
+    source: 'launcher',
+  });
+
+  if (split) {
+    split.replace({
+      next: { type: blockName, id },
+      mergeHistory: true,
+      referredFrom: 'launcher',
+    });
   } else {
-    const split = openWithSplit(
-      { type: 'component', id: 'loading' },
+    openWithSplit(
+      { type: blockName, id },
       {
         referredFrom: 'launcher',
         preferNewSplit: spec.shouldInsert,
       }
     );
-
-    const id = await createFn();
-    if (!id) {
-      split?.goBack();
-      return;
-    }
-
-    analytics.track('create_entity', {
-      entityType: blockName,
-      source: 'launcher',
-    });
-
-    if (split)
-      split.replace({
-        next: { type: blockName, id },
-        mergeHistory: true,
-        referredFrom: 'launcher',
-      });
   }
 };
 
@@ -387,10 +387,10 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
   const AnimatedIcon = props.creatableBlock.animatedIcon;
 
   return (
-    <Layer depth={2}>
+    <Layer depth={4}>
       <button
         class={cn(
-          ' size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-surface ring ring-edge-muted transition-transform ease-click duration-200 rounded-sm',
+          'size-28 shadow-sm shadow-drop-shadow relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-surface ring ring-edge transition-transform ease-click duration-200 rounded-sm',
           `create-menu-${props.creatableBlock.label.toLowerCase()}`,
           {
             '-translate-y-2 text-ink': props.focused,
@@ -406,24 +406,13 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
           buttonRef?.focus();
         }}
       >
-        <div
-          class={cn(
-            'absolute size-full inset-0 transition-transform origin-top ease duration-200',
-            getIconConfig(props.creatableBlock.blockName).background,
-            {
-              'opacity-0': !props.focused,
-              'opacity-20': props.focused,
-            }
-          )}
-        ></div>
-
         <div class="absolute top-1.5 left-2 z-user-highlight p-1 px-1.5 text-ink border border-edge-muted rounded-xs text-xs">
           <Hotkey token={props.creatableBlock.hotkeyToken} />
         </div>
 
         <div
           class={cn(
-            'absolute size-2 right-2 top-2 z-user-highlight transition-transform ease-click duration-200 transition-color border border-edge',
+            'absolute size-2 right-2 top-2 z-user-highlight transition-transform ease-out duration-200 transition-color border border-edge',
             textFg()
           )}
           style={{ background: props.focused ? 'currentColor' : 'transparent' }}
@@ -431,17 +420,25 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
         <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-user-highlight">
           <div class="text-sm font-bold">{props.creatableBlock.label}</div>
-          <div class="size-3">
-            <PixelArrowRight />
+          <div
+            class={cn(
+              'size-3 transition-[transform,opacity] ease duration-200',
+              {
+                'opacity-100': props.focused,
+                'opacity-0': !props.focused,
+              }
+            )}
+          >
+            <ArrowRight />
           </div>
         </div>
 
         <div
           class={cn(
-            'w-1/3 -translate-y-1 transition-all ease-click duration-200',
+            'w-1/3 -translate-y-1 transition-all ease-out duration-200',
             textFg(),
             {
-              'text-edge': !props.focused,
+              'text-ink-extra-muted': !props.focused,
               'scale-110': props.focused,
             }
           )}
@@ -686,20 +683,20 @@ export const LauncherInner = (props: LauncherInnerProps) => {
             }
           `}</style>
           Hold{' '}
-          <span class="relative inline-grid place-items-center my-1">
+          <span class="relative inline-flex place-items-center my-1">
             <span
               ref={shiftRippleRef}
               class="shift-ripple absolute inset-0 rounded-sm border border-accent pointer-events-none opacity-0"
             />
             <span
               class={cn(
-                'px-1 py-0.5 rounded-sm h-fit ring text-xs grid place-items-center transition-colors duration-150',
+                'ring text-xs px-1.5 py-0.5 rounded-sm transition-colors duration-150',
                 shiftHeld()
                   ? 'ring-accent text-accent bg-accent/10'
                   : 'ring-edge-muted'
               )}
             >
-              <Hotkey shortcut="shift" />
+              {getNormalizedKeyString({ shortcut: 'shift' })}
             </span>
           </span>
           to launch in new split
@@ -738,7 +735,7 @@ export const Launcher = (props: LauncherProps) => {
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"></Dialog.Overlay>
         <Dialog.Content>
-          <Layer depth={1}>
+          <Layer depth={3}>
             <div
               class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center"
               onClick={(e) => {

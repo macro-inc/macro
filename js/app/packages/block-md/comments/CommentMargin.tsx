@@ -4,7 +4,6 @@ import {
   commentWidthSignal,
   highlightedCommentIdSignal,
   highlightedCommentThreadsSignal,
-  showCommentsPreference,
   threadStore,
 } from '@block-md/comments/commentStore';
 import { useBlockId } from '@core/block';
@@ -116,9 +115,7 @@ export const CommentMargin = () => {
 
   const commentsContext = useCommentsContext();
 
-  const isMinimized = createMemo(() => {
-    return !(wideEnoughForComments() && showCommentsPreference());
-  });
+  const isMinimized = createMemo(() => !wideEnoughForComments());
 
   return (
     <CommentsContext.Provider value={commentsContext}>

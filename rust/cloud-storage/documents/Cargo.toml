@@ -4,6 +4,11 @@ name = "documents"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "backfill_markdown_content_location"
+path = "src/bin/backfill_markdown_content_location.rs"
+required-features = ["backfill_binary"]
+
 [features]
 attachment = [
     "dep:attachment",
@@ -42,6 +47,7 @@ document_create_adapters = [
   "document_create",
   "markdown_init",
 ]
+backfill_binary = ["dep:clap", "dep:macro_entrypoint", "markdown_init", "outbound", "ports"]
 inbound = ["axum", "document_create_adapters", "ports"]
 markdown_init = ["dep:lexical_client"]
 outbound = [
@@ -59,6 +65,7 @@ service = ["dep:entity_access_management", "ports"]
 # Core
 anyhow = { workspace = true }
 chrono = { workspace = true }
+clap = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -77,6 +84,7 @@ entity_access_management = { path = "../entity_access_management", default-featu
   "ports",
 ], optional = true }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
+macro_entrypoint = { path = "../macro_entrypoint", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }

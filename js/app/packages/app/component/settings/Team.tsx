@@ -1,5 +1,4 @@
 import { UserIcon } from '@core/component/UserIcon';
-import { PLAN_FEATURES } from '../paywall/plans';
 import PlusIcon from '@icon/regular/plus.svg';
 import UsersIcon from '@icon/regular/users.svg';
 import TrashIcon from '@icon/regular/trash.svg';
@@ -9,7 +8,6 @@ import XIcon from '@icon/regular/x.svg';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
 
-import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@ui';
 import { Button } from '@ui';
 import { Dialog, Panel } from '@ui';
@@ -26,7 +24,6 @@ import {
   Show,
   Suspense,
   Switch,
-  type ValidComponent,
 } from 'solid-js';
 import type { CollectionNode } from '@kobalte/core';
 import {
@@ -46,17 +43,11 @@ import {
   useJoinTeamMutation,
   useRejectInvitationMutation,
 } from '@queries/team/invitations';
-import {
-  useRemoveUserFromTeamMutation,
-  usePatchTeamUserTierMutation,
-} from '@queries/team/members';
+import { useRemoveUserFromTeamMutation } from '@queries/team/members';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
-import { TeamUserTier } from '@service-auth/generated/schemas/teamUserTier';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import { formatRelativeTimestamp } from '@entity';
-import { ENABLE_TEAM_INVITE_TIERS_OVERRIDE } from '@core/constant/featureFlags';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHasPaidAccess } from '@core/auth/license';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { z } from 'zod';
@@ -66,21 +57,6 @@ const roleOrder: Record<string, number> = {
   [TeamRole.admin]: 1,
   [TeamRole.member]: 2,
 };
-
-type TierOption = { value: TeamUserTier; label: string; description: string };
-
-const getTierDescription = (tier: 'haiku' | 'sonnet' | 'opus'): string => {
-  const aiAgent = PLAN_FEATURES.find((f) => f.label === 'AI Agent')?.values[tier] ?? '';
-  const aiCalls = PLAN_FEATURES.find((f) => f.label === 'AI tool calls')?.values[tier] ?? '';
-  const storage = PLAN_FEATURES.find((f) => f.label === 'Storage')?.values[tier] ?? '';
-  return `${aiAgent} · ${aiCalls} calls · ${storage}`;
-};
-
-const tierOptions: TierOption[] = [
-  { value: TeamUserTier.Haiku, label: 'Level 1', description: getTierDescription('haiku') },
-  { value: TeamUserTier.Sonnet, label: 'Level 2', description: getTierDescription('sonnet') },
-  { value: TeamUserTier.Opus, label: 'Level 3', description: getTierDescription('opus') },
-];
 
 type RoleOption = { value: TeamRole; label: string };
 
@@ -138,71 +114,17 @@ function RoleSelect(props: {
   );
 }
 
-function TierSelect(props: {
-  value: string;
-  onChange: (tier: TeamUserTier) => void;
-  triggerClass?: string;
-  triggerAs?: ValidComponent;
-}) {
-  const selectedOption = () =>
-    tierOptions.find((o) => o.value === props.value) ?? tierOptions[0];
-
-  return (
-    <Select<TierOption>
-      options={tierOptions}
-      value={selectedOption()}
-      onChange={(opt) => opt && props.onChange(opt.value)}
-      optionValue="value"
-      optionTextValue="label"
-      gutter={4}
-      placement="bottom-end"
-      itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
-        <Select.Item
-          item={itemProps.item}
-          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover outline-none data-highlighted:bg-hover"
-        >
-          <div class="flex flex-col">
-            <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
-            <span class="text-xs text-ink/50">{itemProps.item.rawValue.description}</span>
-          </div>
-          <Select.ItemIndicator>
-            <CheckIcon class="size-3" />
-          </Select.ItemIndicator>
-        </Select.Item>
-      )}
-    >
-      <Select.Trigger
-        as={props.triggerAs}
-        tabIndex={0}
-        class={props.triggerClass ?? 'rounded-xs px-2 py-1 text-xs data-expanded:bg-ink/10'}
-      >
-        <Select.Value<TierOption>>
-          {(state) => state.selectedOption().label}
-        </Select.Value>
-        <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
-      </Select.Trigger>
-      <Select.Portal>
-        <Select.Content class="z-50 bg-surface border border-edge rounded shadow-lg min-w-55 p-1">
-          <Select.Listbox />
-        </Select.Content>
-      </Select.Portal>
-    </Select>
-  );
-}
-
 const emailSchema = z.string().email();
 
-type InviteEntry = { email: string; tier: TeamUserTier };
+type InviteEntry = { email: string };
 
-const EMPTY_INVITE: InviteEntry = { email: '', tier: TeamUserTier.Haiku };
+const EMPTY_INVITE: InviteEntry = { email: '' };
 
 function InviteEntryRow(props: {
   entry: InviteEntry;
   onEmailChange: (email: string) => void;
   onBlur: () => void;
-  onTierChange: (tier: TeamUserTier) => void;
   onRemove: () => void;
-  showTier: boolean;
   showRemove: boolean;
   error?: string;
 }) {
@@ -222,13 +144,6 @@ function InviteEntryRow(props: {
               : 'border-edge-muted focus:border-accent/50'
           )}
         />
-        <Show when={props.showTier}>
-          <TierSelect
-            value={props.entry.tier}
-            onChange={props.onTierChange}
-            triggerClass="flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-surface text-ink outline-none focus:border-accent/50 shrink-0"
-          />
-        </Show>
         <Show when={props.showRemove}>
           <Tooltip label="Remove">
             <Button
@@ -280,13 +195,7 @@ function InviteEmailsInput(props: {
   onChange: (invites: InviteEntry[]) => void;
   errors: (string | undefined)[];
   onErrorsChange: (errors: (string | undefined)[]) => void;
-  defaultTier?: TeamUserTier;
 }) {
-  const tierFlag = useFeatureFlag('enable-team-invite-tiers', {
-    enabledOverride: ENABLE_TEAM_INVITE_TIERS_OVERRIDE,
-  });
-  const showTier = () => tierFlag().enabled;
-
   const existingEmails = () => props.invites.map((i) => i.email);
 
   const validateEmail = (index: number) => {
@@ -312,19 +221,10 @@ function InviteEmailsInput(props: {
     }
   };
 
-  const updateTier = (index: number, tier: TeamUserTier) => {
-    const updated = [...props.invites];
-    updated[index] = { ...updated[index], tier };
-    props.onChange(updated);
-  };
-
   let containerRef: HTMLDivElement | undefined;
 
   const addRow = () => {
-    props.onChange([
-      ...props.invites,
-      { email: '', tier: props.defaultTier ?? TeamUserTier.Haiku },
-    ]);
+    props.onChange([...props.invites, { email: '' }]);
     requestAnimationFrame(() => {
       const inputs = containerRef?.querySelectorAll('input[type="text"]');
       const lastInput = inputs?.[inputs.length - 1] as HTMLInputElement | undefined;
@@ -354,9 +254,7 @@ function InviteEmailsInput(props: {
                 entry={entry()}
                 onEmailChange={(email) => updateEmail(index, email)}
                 onBlur={() => validateEmail(index)}
-                onTierChange={(tier) => updateTier(index, tier)}
                 onRemove={() => removeRow(index)}
-                showTier={showTier()}
                 showRemove={props.invites.length > 1}
                 error={props.errors[index]}
               />
@@ -383,7 +281,6 @@ function MemberRow(props: {
   isOwner: boolean;
   isCurrentUser: boolean;
   onRemove: () => void;
-  onTierChange: (tier: TeamUserTier) => void;
   onRoleChange: (role: TeamRole) => void;
 }) {
   const [displayName] = useDisplayName(tryMacroId(props.member.user_id));
@@ -418,14 +315,6 @@ function MemberRow(props: {
         </div>
       </div>
       <div class="flex items-center gap-2 shrink-0">
-        <Show
-          when={props.isOwner}
-          fallback={
-            <span class="text-xs text-ink-muted py-1">{props.member.tier}</span>
-          }
-        >
-          <TierSelect value={props.member.tier} onChange={props.onTierChange} triggerAs={Button} />
-        </Show>
         <Show when={props.isOwner}>
           <Show
             when={!props.isCurrentUser && !isMemberOwner()}
@@ -668,7 +557,7 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
 
     const inviteEntries = invites()
       .filter((i) => i.email.trim() !== '')
-      .map((i) => ({ email: i.email.trim(), tier: i.tier }));
+      .map((i) => ({ email: i.email.trim() }));
 
     createTeamMutation.mutate(
       { name: result.data, invites: inviteEntries.length > 0 ? inviteEntries : undefined },
@@ -836,7 +725,6 @@ function TeamManagement(props: {
   const deleteInviteMutation = useDeleteTeamInviteMutation();
   const removeUserMutation = useRemoveUserFromTeamMutation();
   const patchTeamMutation = usePatchTeamMutation();
-  const patchTierMutation = usePatchTeamUserTierMutation();
   const inviteToTeamMutation = useInviteToTeamMutation();
   const deleteTeamMutation = useDeleteTeamMutation();
 
@@ -959,7 +847,7 @@ function TeamManagement(props: {
 
     const inviteEntries = currentInvites
       .filter((i) => i.email.trim() !== '')
-      .map((i) => ({ email: i.email.trim(), tier: i.tier }));
+      .map((i) => ({ email: i.email.trim() }));
 
     inviteToTeamMutation.mutate(
       { teamId: props.teamId, request: { invites: inviteEntries } },
@@ -1080,23 +968,6 @@ function TeamManagement(props: {
                       isOwner={isOwner()}
                       isCurrentUser={member.user_id === userId()}
                       onRemove={() => setShowRemoveModal(member)}
-                      onTierChange={(newTier) => {
-                        if (!props.teamId) return;
-                        void toast.promise(
-                          patchTierMutation.mutateAsync({
-                            teamId: props.teamId,
-                            request: {
-                              team_user_id: member.user_id,
-                              new_tier: newTier,
-                            },
-                          }),
-                          {
-                            loading: 'Updating member tier...',
-                            success: 'Member tier updated',
-                            error: 'Failed to update member tier',
-                          }
-                        );
-                      }}
                       onRoleChange={(newRole) => {
                         if (!props.teamId) return;
                         patchTeamMutation.mutate({

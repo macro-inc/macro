@@ -14,10 +14,13 @@ import type { ProjectFiltersImportance } from './projectFiltersImportance';
 export interface ProjectFilters {
   /** Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing. */
   importance?: ProjectFiltersImportance;
+  /** When true, `project_ids` also matches the projects themselves in addition to their children. */
+  include_root?: boolean;
   /** Filter by project notification state. */
   notification_filters?: NotificationFilters;
   /** Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners. */
   owners?: string[];
-  /** Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects. */
+  /** Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects.
+By default matches children of these projects; set `include_root` to also match the projects themselves. */
   project_ids?: string[];
 }

@@ -1,13 +1,11 @@
 import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
-import { Button } from '@ui';
-
 import IconLightDark from '@macro-icons/macro-light-dark.svg';
 import { invertTheme, saveTheme } from '../utils/themeUtils';
 import { randomizeTheme } from './ThemeEditorBasic';
-import IconDice from '@macro-icons/macro-dice.svg';
-import IconSave from '@macro-icons/macro-save.svg';
+import IconDice from '@phosphor-icons/core/regular/dice-five.svg?component-solid';
+import IconSave from '@phosphor-icons/core/regular/floppy-disk-back.svg?component-solid';
 import { createMemo, Show } from 'solid-js';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 
 export function ThemeTools(props: { class?: string }) {
   let themeName!: HTMLDivElement;

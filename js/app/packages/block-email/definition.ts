@@ -9,6 +9,7 @@ export const definition = defineBlock({
   component: EmailBlock,
   liveTrackingEnabled: true,
   syncServiceEnabled: false,
+  defaultFilename: '[No subject]',
 
   async load(source) {
     if (source.type === 'dss') {

@@ -3,7 +3,6 @@ import { useDrawerControl } from '@app/component/split-layout/components/SplitDr
 import clickOutside from '@core/directive/clickOutside';
 import { isErr } from '@core/util/maybeResult';
 import Quotes from '@icon/regular/quotes.svg';
-import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
 import { commsServiceClient } from '@service-comms/client';
 import type { ItemType } from '@service-storage/client';
 import { Button, Tooltip } from '@ui';
@@ -123,12 +122,10 @@ export function ReferencesModal(props: ReferencesModalProps) {
           onClick={drawerControl.toggle}
           role="button"
         >
-          <BracketLeft class="h-4 w-2 text-edge" />
           <Quotes class="size-4 text-ink" />
           <Suspense fallback={<div class="text-xs">0</div>}>
             <span class="text-xs">{referenceCount() ?? ''}</span>
           </Suspense>
-          <BracketLeft class="h-4 w-2 rotate-180 text-edge" />
         </div>
       </Tooltip>
       <SplitDrawer

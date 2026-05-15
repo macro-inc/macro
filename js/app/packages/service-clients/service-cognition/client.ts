@@ -18,6 +18,7 @@ import { platformFetch } from '@core/util/platformFetch';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { DocumentTextPart } from '@service-cognition/generated/schemas/documentTextPart';
 import type OpenAI from 'openai';
+import type { AddServerRequest } from './generated/schemas/addServerRequest';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
 import type { GetBatchPreviewResponse } from './generated/schemas/getBatchPreviewResponse';
@@ -27,9 +28,13 @@ import type { GetChatsForAttachmentResponse } from './generated/schemas/getChats
 import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
 import type { PatchChatRequest } from './generated/schemas/patchChatRequest';
 import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
+import type { ServerResponse } from './generated/schemas/serverResponse';
+import type { StartAuthRequest } from './generated/schemas/startAuthRequest';
+import type { StartAuthResponse } from './generated/schemas/startAuthResponse';
 import type { StopChatStreamRequest } from './generated/schemas/stopChatStreamRequest';
 import type { StopChatStreamResponse } from './generated/schemas/stopChatStreamResponse';
 import type { StringIDResponse } from './generated/schemas/stringIDResponse';
+import type { UpdateServerRequest } from './generated/schemas/updateServerRequest';
 import type * as toolTypes from './generated/tools/tool.ts';
 
 type ToolCallArgs = {
@@ -322,6 +327,49 @@ export const cognitionApiServiceClient = {
   async stopChatStream(args: StopChatStreamRequest) {
     return mapOk(
       await dcsFetch<StopChatStreamResponse>(`/stream/chat/message/stop`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      }),
+      (result) => result
+    );
+  },
+
+  async listMcpServers() {
+    return mapOk(
+      await dcsFetch<ServerResponse[]>(`/mcp/servers`, { method: 'GET' }),
+      (result) => result
+    );
+  },
+
+  async addMcpServer(args: AddServerRequest) {
+    return mapOk(
+      await dcsFetch<ServerResponse>(`/mcp/servers`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      }),
+      (result) => result
+    );
+  },
+
+  async updateMcpServer(args: UpdateServerRequest) {
+    return mapOk(
+      await dcsFetch<ServerResponse>(`/mcp/servers`, {
+        method: 'PUT',
+        body: JSON.stringify(args),
+      }),
+      (result) => result
+    );
+  },
+
+  async deleteMcpServer(args: { url: string }) {
+    return await dcsFetch(`/mcp/servers?url=${encodeURIComponent(args.url)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async startMcpAuth(args: StartAuthRequest) {
+    return mapOk(
+      await dcsFetch<StartAuthResponse>(`/mcp/servers/auth/start`, {
         method: 'POST',
         body: JSON.stringify(args),
       }),

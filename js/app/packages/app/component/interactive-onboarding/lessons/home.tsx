@@ -29,7 +29,11 @@ function HomeDemo() {
   });
 
   createEffect(() => {
-    soup.setRows(filteredSandboxEntities().map((e) => soup.buildRow(e)));
+    soup.setRows(
+      filteredSandboxEntities().map((e, i) =>
+        soup.buildRow({ id: e.id, index: i, original: e })
+      )
+    );
   });
 
   return (

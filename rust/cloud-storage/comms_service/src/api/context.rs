@@ -1,7 +1,7 @@
 use axum_macros::FromRef;
 use comms::{
     domain::service::ChannelServiceImpl,
-    inbound::CommsRouterState,
+    inbound::router::CommsRouterState,
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use connection_gateway_client::client::ConnectionGatewayClient;

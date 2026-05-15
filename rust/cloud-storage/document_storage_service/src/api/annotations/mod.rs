@@ -20,7 +20,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
 use model_entity::EntityType;
 use model_notifications::{
-    CommentedOnDocumentMetadata, MentionedInDocumentCommentMetadata,
+    CommentedOnDocumentMetadata, MentionedInDocumentCommentMetadata, NotificationDocumentSubType,
     RepliedToDocumentCommentThreadMetadata,
 };
 use notification::domain::models::SendNotificationRequestBuilder;
@@ -245,6 +245,7 @@ pub(crate) struct CommentNotifContext {
     pub document_id: String,
     pub owner: MacroUserIdStr<'static>,
     pub file_type: Option<String>,
+    pub sub_type: Option<NotificationDocumentSubType>,
     pub sender_id: Option<MacroUserIdStr<'static>>,
     pub sender_profile_picture_url: Option<String>,
 }
@@ -259,6 +260,7 @@ impl CommentNotifContext {
             document_name: self.document_name.clone(),
             owner: self.owner.clone(),
             file_type: self.file_type.clone(),
+            sub_type: self.sub_type.clone(),
             mention_id: mention_id.to_string(),
             comment_id: self.comment_id,
             thread_id: self.thread_id,
@@ -282,6 +284,7 @@ impl CommentNotifContext {
             document_name: self.document_name.clone(),
             owner: self.owner.clone(),
             file_type: self.file_type.clone(),
+            sub_type: self.sub_type.clone(),
             comment_id: self.comment_id,
             thread_id: self.thread_id,
             text: self.text.clone(),
@@ -301,6 +304,7 @@ impl CommentNotifContext {
             document_name: self.document_name.clone(),
             owner: self.owner.clone(),
             file_type: self.file_type.clone(),
+            sub_type: self.sub_type.clone(),
             comment_id: self.comment_id,
             thread_id: self.thread_id,
             text: self.text.clone(),

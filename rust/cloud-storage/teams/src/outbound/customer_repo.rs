@@ -6,12 +6,13 @@ use stripe::{CreateSubscription, CreateSubscriptionItems, UpdateSubscription};
 
 use crate::domain::{
     customer_repo::CustomerRepository,
-    model::{CreateSubscriptionArgs, CustomerError, TeamUserTier},
+    model::{CreateSubscriptionArgs, CustomerError, TeamPlan},
 };
 
 /// The stripe price ids for all tiers
+/// These are legacy stripe price ids for the old tier system
 #[derive(Clone)]
-pub struct StripePriceIds {
+pub struct LegacyStripePriceIds {
     /// haiku tier price id
     pub haiku: String,
     /// sonnet tier price id
@@ -20,14 +21,32 @@ pub struct StripePriceIds {
     pub opus: String,
 }
 
-impl StripePriceIds {
-    /// Convert the team user tier to the price id
-    fn price_id_for_tier(&self, team_user_tier: &TeamUserTier) -> &str {
-        match team_user_tier {
-            TeamUserTier::Haiku => &self.haiku,
-            TeamUserTier::Sonnet => &self.sonnet,
-            TeamUserTier::Opus => &self.opus,
-        }
+/// Team plan stripe price ids
+/// Note: there is not `growth` plan price id as growth plan is white glove.
+#[derive(Clone)]
+pub struct TeamStripePriceIds {
+    /// The idea price id
+    pub idea: String,
+    /// The pre-seed price id
+    pub pre_seed: String,
+    /// The seed price id
+    pub seed: String,
+    /// The series-a price id
+    pub series_a: String,
+}
+
+impl TeamStripePriceIds {
+    /// Tries to map the stripe price id for a team plan
+    fn try_get_price_id_for_team_plan(&self, value: TeamPlan) -> Result<String, CustomerError> {
+        let price_id = match value {
+            TeamPlan::Idea => self.idea.clone(),
+            TeamPlan::PreSeed => self.pre_seed.clone(),
+            TeamPlan::Seed => self.seed.clone(),
+            TeamPlan::SeriesA => self.series_a.clone(),
+            TeamPlan::Growth => return Err(anyhow::anyhow!("no price id for growth plan").into()),
+        };
+
+        Ok(price_id)
     }
 }
 
@@ -36,16 +55,23 @@ impl StripePriceIds {
 pub struct CustomerRepositoryImpl {
     /// The underlying stripe::Client connected to stripe.
     client: Arc<stripe::Client>,
-    /// The stripe price ids
-    stripe_price_ids: StripePriceIds,
+    /// The team plan stripe price ids
+    team_plan_stripe_price_ids: TeamStripePriceIds,
+    /// The legacy stripe price ids
+    legacy_stripe_price_ids: LegacyStripePriceIds,
 }
 
 impl CustomerRepositoryImpl {
     /// Creates a new instance of CustomerRepositoryImpl
-    pub fn new(stripe_client: stripe::Client, stripe_price_ids: StripePriceIds) -> Self {
+    pub fn new(
+        stripe_client: stripe::Client,
+        team_plan_stripe_price_ids: TeamStripePriceIds,
+        legacy_stripe_price_ids: LegacyStripePriceIds,
+    ) -> Self {
         Self {
             client: Arc::new(stripe_client),
-            stripe_price_ids,
+            team_plan_stripe_price_ids,
+            legacy_stripe_price_ids,
         }
     }
 }
@@ -59,7 +85,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         // Create the subscription
         let mut params = CreateSubscription::new(args.customer_id);
         params.items = Some(vec![CreateSubscriptionItems {
-            price: Some(self.stripe_price_ids.haiku.clone()),
+            price: Some(self.legacy_stripe_price_ids.haiku.clone()),
             quantity: Some(args.quantity),
             ..Default::default()
         }]);
@@ -71,140 +97,6 @@ impl CustomerRepository for CustomerRepositoryImpl {
             .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
 
         Ok(subscription.id)
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn increase_subscription_quantity(
-        &self,
-        subscription_id: &stripe::SubscriptionId,
-        team_user_tier: TeamUserTier,
-    ) -> Result<(), CustomerError> {
-        // Get existing subscription quantity
-        let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
-            .await
-            .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
-
-        match subscription.status {
-            stripe::SubscriptionStatus::Active => (),
-            _ => {
-                return Err(CustomerError::SubscriptionNotActive);
-            }
-        }
-
-        let tier_price_id = self.stripe_price_ids.price_id_for_tier(&team_user_tier);
-
-        // Find existing subscription item for this tier's price
-        let existing_item = subscription.items.data.iter().find(|item| {
-            item.price
-                .as_ref()
-                .map(|p| p.id == tier_price_id)
-                .unwrap_or(false)
-        });
-
-        let items = match existing_item {
-            // Tier line item exists — increment quantity
-            Some(item) => {
-                let current_quantity = item.quantity.unwrap_or(1);
-                vec![stripe::UpdateSubscriptionItems {
-                    id: Some(item.id.to_string()),
-                    quantity: Some(current_quantity + 1),
-                    ..Default::default()
-                }]
-            }
-            // Tier line item doesn't exist — create with quantity 1
-            None => {
-                vec![stripe::UpdateSubscriptionItems {
-                    price: Some(tier_price_id.to_string()),
-                    quantity: Some(1),
-                    ..Default::default()
-                }]
-            }
-        };
-
-        let update_params = UpdateSubscription {
-        items: Some(items),
-        proration_behavior: Some(
-            stripe::generated::billing::subscription::SubscriptionProrationBehavior::AlwaysInvoice,
-        ),
-        ..Default::default()
-        };
-
-        stripe::Subscription::update(&self.client, subscription_id, update_params)
-            .await
-            .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
-
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn decrease_subscription_quantity(
-        &self,
-        subscription_id: &stripe::SubscriptionId,
-        team_user_tier: TeamUserTier,
-    ) -> Result<(), CustomerError> {
-        let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
-            .await
-            .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
-
-        if subscription.status != stripe::SubscriptionStatus::Active {
-            return Err(CustomerError::SubscriptionNotActive);
-        }
-
-        let tier_price_id = self.stripe_price_ids.price_id_for_tier(&team_user_tier);
-
-        let item = subscription
-            .items
-            .data
-            .iter()
-            .find(|item| {
-                item.price
-                    .as_ref()
-                    .map(|p| p.id == tier_price_id)
-                    .unwrap_or(false)
-            })
-            .ok_or_else(|| {
-                CustomerError::StorageLayerError(anyhow::anyhow!(
-                    "No subscription item found for tier {:?}",
-                    team_user_tier
-                ))
-            })?;
-
-        let current_quantity = item.quantity.unwrap_or(1);
-
-        // If this is the last item across all tiers, cancel the subscription
-        if current_quantity <= 1 && subscription.items.data.len() == 1 {
-            return self.cancel_subscription(subscription_id).await;
-        }
-
-        let items = if current_quantity <= 1 {
-            // Last seat on this tier — delete the line item
-            vec![stripe::UpdateSubscriptionItems {
-                id: Some(item.id.to_string()),
-                deleted: Some(true),
-                ..Default::default()
-            }]
-        } else {
-            // Decrement quantity
-            vec![stripe::UpdateSubscriptionItems {
-                id: Some(item.id.to_string()),
-                quantity: Some(current_quantity - 1),
-                ..Default::default()
-            }]
-        };
-
-        let update_params = UpdateSubscription {
-        items: Some(items),
-        proration_behavior: Some(
-            stripe::generated::billing::subscription::SubscriptionProrationBehavior::AlwaysInvoice,
-        ),
-        ..Default::default()
-        };
-
-        stripe::Subscription::update(&self.client, subscription_id, update_params)
-            .await
-            .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
-
-        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -265,16 +157,16 @@ impl CustomerRepository for CustomerRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn update_subscription_tier(
+    async fn update_team_plan(
         &self,
         subscription_id: &stripe::SubscriptionId,
-        old_team_user_tier: TeamUserTier,
-        new_team_user_tier: TeamUserTier,
+        current_plan: Option<TeamPlan>,
+        team_plan: TeamPlan,
     ) -> Result<(), CustomerError> {
-        if old_team_user_tier == new_team_user_tier {
-            tracing::warn!("tried to update tier to the same tier");
-            return Ok(());
-        }
+        // Get new plan price id
+        let new_plan_price_id = self
+            .team_plan_stripe_price_ids
+            .try_get_price_id_for_team_plan(team_plan)?;
 
         let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
             .await
@@ -284,72 +176,45 @@ impl CustomerRepository for CustomerRepositoryImpl {
             return Err(CustomerError::SubscriptionNotActive);
         }
 
-        let old_price_id = self.stripe_price_ids.price_id_for_tier(&old_team_user_tier);
-        let new_price_id = self.stripe_price_ids.price_id_for_tier(&new_team_user_tier);
-
-        // Find old tier line item — must exist
-        let old_item = subscription
-            .items
-            .data
-            .iter()
-            .find(|item| {
-                item.price
-                    .as_ref()
-                    .map(|p| p.id == old_price_id)
-                    .unwrap_or(false)
-            })
-            .ok_or_else(|| {
-                CustomerError::StorageLayerError(anyhow::anyhow!(
-                    "No subscription item found for old tier {:?}",
-                    old_team_user_tier
-                ))
-            })?;
-
-        let old_quantity = old_item.quantity.unwrap_or(1);
-
-        // Find new tier line item — may or may not exist
-        let new_item = subscription.items.data.iter().find(|item| {
-            item.price
-                .as_ref()
-                .map(|p| p.id == new_price_id)
-                .unwrap_or(false)
-        });
-
         let mut items = Vec::with_capacity(2);
 
-        // Old tier: delete if last seat, otherwise decrement
-        if old_quantity <= 1 {
+        if let Some(current_team_plan) = current_plan {
+            let old_plan_price_id = self
+                .team_plan_stripe_price_ids
+                .try_get_price_id_for_team_plan(current_team_plan)?;
+
+            // The old item must exist
+            let old_item = subscription
+                .items
+                .data
+                .iter()
+                .find(|item| {
+                    item.price
+                        .as_ref()
+                        .map(|p| p.id == old_plan_price_id)
+                        .unwrap_or(false)
+                })
+                .ok_or_else(|| {
+                    CustomerError::StorageLayerError(anyhow::anyhow!(
+                        "No subscription item found for old tier {:?}",
+                        current_team_plan
+                    ))
+                })?;
+
+            // delete the current price id
             items.push(stripe::UpdateSubscriptionItems {
                 id: Some(old_item.id.to_string()),
                 deleted: Some(true),
                 ..Default::default()
             });
-        } else {
-            items.push(stripe::UpdateSubscriptionItems {
-                id: Some(old_item.id.to_string()),
-                quantity: Some(old_quantity - 1),
-                ..Default::default()
-            });
         }
 
-        // New tier: increment if exists, otherwise create with quantity 1
-        match new_item {
-            Some(item) => {
-                let current_quantity = item.quantity.unwrap_or(1);
-                items.push(stripe::UpdateSubscriptionItems {
-                    id: Some(item.id.to_string()),
-                    quantity: Some(current_quantity + 1),
-                    ..Default::default()
-                });
-            }
-            None => {
-                items.push(stripe::UpdateSubscriptionItems {
-                    price: Some(new_price_id.to_string()),
-                    quantity: Some(1),
-                    ..Default::default()
-                });
-            }
-        }
+        // Add the new item
+        items.push(stripe::UpdateSubscriptionItems {
+            price: Some(new_plan_price_id.to_string()),
+            quantity: Some(1),
+            ..Default::default()
+        });
 
         // Single atomic update — one prorated invoice for both changes
         let update_params = UpdateSubscription {

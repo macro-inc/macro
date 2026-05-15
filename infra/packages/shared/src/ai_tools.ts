@@ -78,6 +78,11 @@ export function getAiToolsInfra(): AiToolsInfra {
     .getSecretVersionOutput({ secretId: SYNC_SERVICE_AUTH_KEY_SECRET_NAME })
     .apply((s) => s.arn);
 
+  const MCP_CREDENTIALS_KEY_SECRET_NAME = `mcp-credentials-key-${stack}`;
+  const mcpCredentialsKeyArn: pulumi.Output<string> = aws.secretsmanager
+    .getSecretOutput({ name: MCP_CREDENTIALS_KEY_SECRET_NAME })
+    .apply((s) => s.arn);
+
   const INTERNAL_AUTH_KEY_SECRET_NAME = `document-storage-service-auth-key-${stack}`;
   const internalAuthKey: pulumi.Output<string> = aws.secretsmanager
     .getSecretVersionOutput({ secretId: INTERNAL_AUTH_KEY_SECRET_NAME })
@@ -110,6 +115,10 @@ export function getAiToolsInfra(): AiToolsInfra {
     },
     { name: 'SYNC_SERVICE_AUTH_KEY', value: SYNC_SERVICE_AUTH_KEY_SECRET_NAME },
     {
+      name: 'MCP_CREDENTIALS_KEY_SECRET_NAME',
+      value: MCP_CREDENTIALS_KEY_SECRET_NAME,
+    },
+    {
       name: 'DOCUMENT_STORAGE_BUCKET',
       value: pulumi.interpolate`${documentStorageBucketId}`,
     },
@@ -137,7 +146,11 @@ export function getAiToolsInfra(): AiToolsInfra {
 
   return {
     envVars,
-    secretArns: [syncServiceAuthKeyArn, cloudfrontPrivateKeySecretArn],
+    secretArns: [
+      syncServiceAuthKeyArn,
+      cloudfrontPrivateKeySecretArn,
+      mcpCredentialsKeyArn,
+    ],
     queueArns: [emailScheduledQueueArn],
     bucketArns: [documentStorageBucketArn, docxUploadBucketArn],
   };

@@ -1,91 +1,132 @@
-import CaretUp from '@icon/regular/caret-up.svg';
-import Stats from '@icon/regular/chart-bar.svg';
-import { Button, HoverCard } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import {
+  createContext,
+  type JSX,
+  type ParentProps,
+  Show,
+  useContext,
+} from 'solid-js';
 import type { Store } from 'solid-js/store';
 import type { WordcountStats } from '../../plugins';
 
-export function Wordcount(props: { stats: Store<WordcountStats> }) {
-  const [isExpanded, setIsExpanded] = createSignal(false);
+type WordcountContextValue = {
+  stats: Store<WordcountStats>;
+};
 
-  const simpleWordCount = () => {
-    if (props.stats.selectedWords === null) return props.stats.totalWords;
-    return props.stats.selectedWords;
-  };
+const WordcountContext = createContext<WordcountContextValue>();
 
-  const Words = () => {
-    if (props.stats.selectedWords === null)
-      return <span>{props.stats.totalWords.toLocaleString()}</span>;
-    return (
-      <>
-        <span>{props.stats.selectedWords.toLocaleString()}</span>
-        <span class="opacity-50">
-          {' '}
-          / {props.stats.totalWords.toLocaleString()}
-        </span>
-      </>
+function useWordcountContext(): WordcountContextValue {
+  const ctx = useContext(WordcountContext);
+  if (!ctx) {
+    throw new Error(
+      'Wordcount compound components must be used within <Wordcount.Root>'
     );
-  };
-  const Chars = () => {
-    if (props.stats.selectedCharacters === null)
-      return <span>{props.stats.totalCharacters.toLocaleString()}</span>;
-    return (
-      <>
-        <span>{props.stats.selectedCharacters.toLocaleString()}</span>
-        <span class="opacity-50">
-          {' '}
-          / {props.stats.totalCharacters.toLocaleString()}
-        </span>
-      </>
-    );
-  };
+  }
+  return ctx;
+}
 
-  const toggleExpanded = () => {
-    setIsExpanded(!isExpanded());
-  };
-
-  const Details = () => (
-    <div class="w-64 text-sm">
-      <div class="flex justify-between mb-1">
-        <span>Words</span>
-        <span>{Words()}</span>
-      </div>
-      <div class="flex justify-between">
-        <span>Characters</span>
-        <span>{Chars()}</span>
-      </div>
-    </div>
-  );
-
+function Root(props: ParentProps<{ stats: Store<WordcountStats> }>) {
   return (
-    <div class="relative flex w-fit gap-1 items-center p-1">
-      <Button
-        variant="ghost"
-        size="icon-md"
-        label="Wordcount"
-        onClick={toggleExpanded}
-      >
-        <Stats class=" size-5 opacity-50" />
-      </Button>
-
-      <Show when={isExpanded()}>
-        <HoverCard placement="top-start">
-          <HoverCard.Trigger>
-            <div class="text-sm text-ink-extra-muted flex w-32 justify-between h-7 rounded items-center hover:bg-hover hover-transition-bg p-1">
-              <span>
-                <span class="font-semibold">
-                  {simpleWordCount().toLocaleString()}
-                </span>{' '}
-                {simpleWordCount() === 1 ? 'word' : 'words'}
-              </span>
-              <CaretUp class="text-ink-extra-muted size-3" />
-            </div>
-          </HoverCard.Trigger>
-          <HoverCard.Content>
-            <Details />
-          </HoverCard.Content>
-        </HoverCard>
-      </Show>
-    </div>
+    <WordcountContext.Provider value={{ stats: props.stats }}>
+      {props.children}
+    </WordcountContext.Provider>
   );
 }
+
+/**
+ * Renders the word count, showing selected/total when text is selected.
+ */
+function Words(props: { class?: string }): JSX.Element {
+  const { stats } = useWordcountContext();
+
+  return (
+    <span class={props.class}>
+      <Show
+        when={stats.selectedWords !== null}
+        fallback={<span>{stats.totalWords.toLocaleString()}</span>}
+      >
+        <span>{stats.selectedWords?.toLocaleString()}</span>
+        <span class="opacity-50"> / {stats.totalWords.toLocaleString()}</span>
+      </Show>
+    </span>
+  );
+}
+
+/**
+ * Renders the character count, showing selected/total when text is selected.
+ */
+function Characters(props: { class?: string }): JSX.Element {
+  const { stats } = useWordcountContext();
+
+  return (
+    <span class={props.class}>
+      <Show
+        when={stats.selectedCharacters !== null}
+        fallback={<span>{stats.totalCharacters.toLocaleString()}</span>}
+      >
+        <span>{stats.selectedCharacters?.toLocaleString()}</span>
+        <span class="opacity-50">
+          {' '}
+          / {stats.totalCharacters.toLocaleString()}
+        </span>
+      </Show>
+    </span>
+  );
+}
+
+/**
+ * Simple word count value (selected if available, otherwise total).
+ */
+function SimpleWordCount(props: { class?: string }): JSX.Element {
+  const { stats } = useWordcountContext();
+  const count = () =>
+    stats.selectedWords !== null ? stats.selectedWords : stats.totalWords;
+
+  return <span class={props.class}>{count().toLocaleString()}</span>;
+}
+
+/**
+ * Renders "word" or "words" based on count (for labels).
+ */
+function WordLabel(): JSX.Element {
+  const { stats } = useWordcountContext();
+  const count = () =>
+    stats.selectedWords !== null ? stats.selectedWords : stats.totalWords;
+
+  return <>{count() === 1 ? 'word' : 'words'}</>;
+}
+
+/**
+ * Simple character count value (selected if available, otherwise total).
+ */
+function SimpleCharacterCount(props: { class?: string }): JSX.Element {
+  const { stats } = useWordcountContext();
+  const count = () =>
+    stats.selectedCharacters !== null
+      ? stats.selectedCharacters
+      : stats.totalCharacters;
+
+  return <span class={props.class}>{count().toLocaleString()}</span>;
+}
+
+/**
+ * Renders "character" or "characters" based on count (for labels).
+ */
+function CharacterLabel(): JSX.Element {
+  const { stats } = useWordcountContext();
+  const count = () =>
+    stats.selectedCharacters !== null
+      ? stats.selectedCharacters
+      : stats.totalCharacters;
+
+  return <>{count() === 1 ? 'character' : 'characters'}</>;
+}
+
+export const Wordcount = {
+  Root,
+  Words,
+  Characters,
+  SimpleWordCount,
+  WordLabel,
+  SimpleCharacterCount,
+  CharacterLabel,
+};

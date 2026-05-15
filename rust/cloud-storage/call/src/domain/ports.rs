@@ -288,10 +288,11 @@ pub trait CallRepository: Send + Sync + 'static {
 
     /// Apply auto-matched speaker assignments to `call_record_transcripts`
     /// rows, only where `custom_speaker IS NULL` (so manual overrides are
-    /// never clobbered). Each tuple is `(diarized_speaker_id, macro_user_id)`;
-    /// the canonical `User.id` is resolved inline via the `User` row whose
-    /// `macro_user_id` matches and stored in `custom_speaker`. Empty
-    /// `assignments` is a no-op.
+    /// never clobbered) and the matched macro user shares a team with at least
+    /// one call participant. Each tuple is `(diarized_speaker_id,
+    /// macro_user_id)`; the canonical `User.id` is resolved inline via the
+    /// `User` row whose `macro_user_id` matches and stored in
+    /// `custom_speaker`. Empty `assignments` is a no-op.
     fn patch_call_transcript_speakers_from_voice_match(
         &self,
         call_record_id: &Uuid,

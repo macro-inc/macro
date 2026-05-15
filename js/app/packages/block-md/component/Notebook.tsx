@@ -3,7 +3,6 @@ import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
   commentsStore,
   commentWidthSignal,
-  showCommentsPreference,
 } from '@block-md/comments/commentStore';
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
@@ -21,7 +20,6 @@ import {
   blockHotkeyScopeSignal,
 } from '@core/signal/blockElement';
 import { tempRedirectLocation } from '@core/signal/location';
-import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import {
@@ -33,7 +31,6 @@ import {
   Show,
   untrack,
 } from 'solid-js';
-import { FrontMatterProperties } from './FrontMatterProperties';
 import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
 import { TaskDiscussion } from './TaskDiscussion';
@@ -73,7 +70,6 @@ export function Notebook() {
   const blockElement = blockElementSignal.get;
   const setStore = mdStore.set;
   const setWideEnoughForComments = commentWidthSignal.set;
-  const canEdit = useCanEdit();
   const documentName = useBlockDocumentName();
   const scopeId = blockHotkeyScopeSignal.get;
   const isTask = useBlockAliasedName() === 'task';
@@ -108,12 +104,7 @@ export function Notebook() {
     const observeCallback = () => {
       const { width, left } = notebookRef.getBoundingClientRect();
       setWidth(width);
-      let mode = widthToMode(width);
-      if (!hasComment()) {
-        mode = CommentLayoutMode.none;
-      } else if (!showCommentsPreference() && width > BreaksPoints.md) {
-        mode = CommentLayoutMode.sm;
-      }
+      const mode = hasComment() ? widthToMode(width) : CommentLayoutMode.none;
       setLayoutMode(mode);
       const leftFloat =
         contentRef.getBoundingClientRect().right - left + GapTargetWidth;
@@ -146,18 +137,6 @@ export function Notebook() {
   createEffect(() => {
     if (hasComment()) {
       setWideEnoughForComments(width() >= BreaksPoints.md);
-    }
-  });
-
-  createEffect(() => {
-    if (showCommentsPreference()) {
-      setLayoutMode(widthToMode(untrack(width)));
-    } else {
-      if (untrack(width) >= BreaksPoints.sm) {
-        setLayoutMode(CommentLayoutMode.sm);
-      } else {
-        setLayoutMode(CommentLayoutMode.xs);
-      }
     }
   });
 
@@ -284,11 +263,7 @@ export function Notebook() {
     <div class={containerClasses()} ref={notebookRef}>
       <div class={contentDivClasses()} ref={contentRef}>
         <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
-        <FrontMatterProperties
-          canEdit={canEdit()}
-          documentName={documentName()}
-          fallback={<div class="h-6 w-full" />}
-        />
+        <div class="spacer h-6" />
         <ParamsProvider>
           <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
           <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>

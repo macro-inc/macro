@@ -4,7 +4,6 @@ import { authServiceClient } from '@service-auth/client';
 import type { CreateTeamRequest } from '@service-auth/generated/schemas/createTeamRequest';
 import type { PatchTeamRequest } from '@service-auth/generated/schemas/patchTeamRequest';
 import type { Team } from '@service-auth/generated/schemas/team';
-import type { TeamUserTier } from '@service-auth/generated/schemas/teamUserTier';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
@@ -151,7 +150,7 @@ export function useDeleteTeamMutation(callbacks?: DeleteTeamCallbacks) {
 
 type CreateTeamWithInvitesArgs = {
   name: string;
-  invites?: { email: string; tier: TeamUserTier }[];
+  invites?: { email: string }[];
 };
 type CreateTeamWithInvitesContext = { previousTeams: Team[] | undefined };
 type CreateTeamWithInvitesCallbacks = MutationCallbacks<

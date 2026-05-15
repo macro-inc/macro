@@ -3,9 +3,12 @@ use axum::{
     Router,
     routing::{delete, post},
 };
-pub use create_mention::*;
-pub use delete_mention::*;
-
+pub use create_mention::{
+    CreateEntityMentionRequest, CreateEntityMentionResponse, create_mention_handler,
+};
+pub use delete_mention::{
+    DeleteEntityMentionRequest, DeleteEntityMentionResponse, delete_mention_handler,
+};
 pub mod create_mention;
 pub mod delete_mention;
 mod mentions_middleware;

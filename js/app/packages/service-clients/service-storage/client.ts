@@ -267,6 +267,40 @@ export const storageServiceClient = {
     });
   },
 
+  async getGroupedSoupAstItems(args: {
+    params: {
+      cursor?: string | null;
+      group_by: unknown;
+      group_key?: string | null;
+    };
+    body: PostSoupAstRequest;
+  }) {
+    const params = new URLSearchParams();
+    if (args.params.cursor) params.set('cursor', args.params.cursor);
+    const searchParams = params.toString() ? `?${params.toString()}` : '';
+
+    const body: Record<string, unknown> = { ...args.body };
+    if (args.params.group_by) body.group_by = args.params.group_by;
+    if (args.params.group_key) body.group_key = args.params.group_key;
+
+    return await dssFetch<
+      SoupPage & {
+        groups?: {
+          key: string;
+          label: string;
+          display_order: number | null;
+          total_count: number;
+          page_count: number;
+          start_index: number;
+          next_cursor: string | null;
+        }[];
+      }
+    >(`/items/soup/ast/grouped${searchParams}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
   permissionsTokens: {
     // Uses SYNC_PERMISSION_TOKEN_DSS_HOST instead of dssFetch so that tokens are
     // always signed by the DSS whose JWT secret matches the sync service's secret.

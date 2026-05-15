@@ -11,8 +11,11 @@ mod object;
 mod tool_async;
 mod user_tool;
 
-pub use json_tool::*;
-pub use object::*;
-pub use tool_async::*;
-pub use user_tool::*;
-pub use util::*;
+pub use json_tool::JsonAsyncTool;
+pub use object::{SchemaRegistrar, ToolObject, ValidationError};
+pub use tool_async::{AsyncToolObject, ToolSetCallable};
+pub use user_tool::{UserTool, UserToolResponse};
+pub use util::{
+    MinimizedOutput, input_schema_generator, minimized_output_schema_generator,
+    output_schema_generator, validate_tool_schema,
+};

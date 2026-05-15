@@ -6,8 +6,7 @@ pub mod get_user_organization;
 pub mod get_user_permissions;
 
 mod get_legacy_user_info;
-pub use get_legacy_user_info::*;
-
+pub use get_legacy_user_info::{LegacyUserInfo, get_legacy_user_info};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use model::user::{UserInfo, UserInfoWithMacroUserId};
 

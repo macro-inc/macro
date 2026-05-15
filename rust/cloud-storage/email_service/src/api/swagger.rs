@@ -21,17 +21,22 @@ use crate::api::email::settings::patch::{PatchSettingsRequest, PatchSettingsResp
 use crate::api::email::threads::archived::ArchiveThreadRequest;
 use crate::api::{email, health};
 use ::email::inbound;
-use ::email::inbound::ListLabelsResponse as HexListLabelsResponse;
-use ::email::inbound::{
+use ::email::inbound::axum::api_types::{
     ApiDraftContactInfo, ApiDraftInput, ApiDraftOutput, ApiPaginatedThreadCursor, ApiSortMethod,
     ApiThread, CreateDraftRequest as HexCreateDraftRequest,
-    CreateDraftResponse as HexCreateDraftResponse, GetPreviewsCursorParams, GetThreadResponse,
+    CreateDraftResponse as HexCreateDraftResponse, GetThreadResponse,
     SendMessageRequest as HexSendMessageRequest, SendMessageResponse as HexSendMessageResponse,
 };
-use ::email::inbound::{
-    ApiEmailFilter, ListEmailFiltersResponse, UpdateThreadLabelRequest, UpdateThreadLabelsResponse,
-    UpdateThreadProjectRequest, UpdateThreadProjectResponse, UpsertEmailFilterRequest,
-    UpsertEmailFilterResponse,
+use ::email::inbound::axum::axum_impls::GetPreviewsCursorParams;
+use ::email::inbound::axum::email_filter_router::{
+    ApiEmailFilter, ListEmailFiltersResponse, UpsertEmailFilterRequest, UpsertEmailFilterResponse,
+};
+use ::email::inbound::axum::list_labels_router::ListLabelsResponse as HexListLabelsResponse;
+use ::email::inbound::axum::thread_labels_router::{
+    UpdateThreadLabelRequest, UpdateThreadLabelsResponse,
+};
+use ::email::inbound::axum::thread_project_router::{
+    UpdateThreadProjectRequest, UpdateThreadProjectResponse,
 };
 use model::response::EmptyResponse;
 use models_email::api::settings::Settings;
@@ -58,7 +63,7 @@ use utoipa::OpenApi;
         email::backfill::get::handler,
         email::backfill::get::active_handler,
         email::init::handler,
-        inbound::create_draft_handler,
+        inbound::axum::draft_router::create_draft_handler,
         email::drafts::delete::handler,
         email::drafts::scheduled::list::handler,
         email::drafts::scheduled::remove::handler,
@@ -70,21 +75,21 @@ use utoipa::OpenApi;
         email::messages::get::handler,
         email::messages::get::batch_handler,
         email::messages::labels::handler,
-        inbound::send_message_handler,
+        inbound::axum::send_router::send_message_handler,
         email::threads::seen::seen_handler,
         email::threads::get::get_thread_messages_handler,
         email::threads::archived::archived_handler,
-        inbound::update_thread_labels_handler,
-        inbound::cursor_handler,
-        inbound::get_thread_handler,
-        inbound::update_thread_project_handler,
+        inbound::axum::thread_labels_router::update_thread_labels_handler,
+        inbound::axum::previews_router::cursor_handler,
+        inbound::axum::get_thread_router::get_thread_handler,
+        inbound::axum::thread_project_router::update_thread_project_handler,
         email::links::list::list_links_handler,
         email::labels::create::handler,
         email::labels::delete::handler,
-        inbound::list_labels_handler,
-        inbound::upsert_email_filter_handler,
-        inbound::delete_email_filter_handler,
-        inbound::list_email_filters_handler,
+        inbound::axum::list_labels_router::list_labels_handler,
+        inbound::axum::email_filter_router::upsert_email_filter_handler,
+        inbound::axum::email_filter_router::delete_email_filter_handler,
+        inbound::axum::email_filter_router::list_email_filters_handler,
         email::contacts::list::list_contacts_handler,
         email::contacts::block_sender::handler,
         email::contacts::unblock_sender::handler,

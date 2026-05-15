@@ -295,7 +295,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
         chat::domain::service::ChatServiceImpl::new(
             chat::outbound::postgres::PgChatRepo::new(pool.clone()),
-            Arc::new(ai_toolset::AsyncToolSet::new()),
+            Arc::new(ai_toolset::AsyncToolCollection::new()),
             (),
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
                 entity_access_management::outbound::PgRepository::new(pool.clone()),
@@ -384,6 +384,22 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ai_stream_registry: crate::service::ai_stream_registry::AiStreamRegistry::new(Arc::new(
             redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"),
         )),
+        mcp_state: {
+            let redis_client =
+                Arc::new(redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"));
+            let mcp_key = mcp_client::domain::models::AesKey::try_from(vec![0u8; 32])
+                .expect("valid test key");
+            let mcp_repo =
+                mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key);
+            let mcp_state_store =
+                mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client);
+            let mcp_oauth = mcp_client::domain::service::OAuthService::new(
+                mcp_repo.clone(),
+                mcp_state_store,
+                "http://localhost/mcp/servers/auth/callback".to_string(),
+            );
+            mcp_client::inbound::McpRouterState::new(mcp_repo, mcp_oauth)
+        },
     };
     Arc::new(api_context)
 }

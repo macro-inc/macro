@@ -4,7 +4,7 @@ import { Portal } from 'solid-js/web';
 export function ToastRegion() {
   return (
     <Portal>
-      <div class="fixed bottom-23.5 sm:bottom-12 right-0 m-0 list-none outline-none pointer-events-none z-toast-region">
+      <div class="fixed bottom-2 right-2 m-0 list-none outline-none pointer-events-none z-toast-region">
         <Toast.Region
           regionId="toast-region"
           duration={Infinity}

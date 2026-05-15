@@ -51,6 +51,15 @@ where
         &self,
         document_context: &DocumentBasic,
     ) -> Result<DocumentContent, DocumentError> {
+        if let Some(content) = self
+            .repo
+            .get_persisted_document_content(&document_context.document_id)
+            .await
+            .map_err(|error| DocumentError::Internal(error.into()))?
+        {
+            return Ok(content);
+        }
+
         let file_type = document_context.try_file_type();
         let (_, uploaded) = if file_type
             .is_none_or(|file_type| file_type == FileType::Docx || file_type.is_static())

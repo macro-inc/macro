@@ -1884,6 +1884,68 @@
         }
       }
     },
+    "/team/plan": {
+      "patch": {
+        "tags": ["teams::inbound::axum_router::patch_team_plan"],
+        "summary": "Updates a team plan.",
+        "operationId": "patch_team_plan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchTeamPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/remove/{remove_user_id}": {
       "delete": {
         "tags": ["teams::inbound::axum_router::remove_user_from_team"],
@@ -1915,68 +1977,6 @@
             }
           },
           "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/team/tier": {
-      "patch": {
-        "tags": ["teams::inbound::axum_router::patch_team_user_tier"],
-        "summary": "Updates a team.",
-        "operationId": "patch_team_user_tier",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PatchTeamUserTierRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -2840,7 +2840,7 @@
     },
     "/user/stripe/checkout": {
       "post": {
-        "tags": ["user::stripe"],
+        "tags": ["user::stripe::create_checkout_session"],
         "summary": "Creates a Stripe checkout session for the user to subscribe.",
         "operationId": "create_checkout_session",
         "requestBody": {
@@ -2909,7 +2909,7 @@
     },
     "/user/stripe/portal": {
       "post": {
-        "tags": ["user::stripe"],
+        "tags": ["user::stripe::create_portal_session"],
         "summary": "Creates a Stripe billing portal session.",
         "operationId": "create_portal_session",
         "requestBody": {
@@ -2958,7 +2958,7 @@
     },
     "/user/stripe/subscription": {
       "patch": {
-        "tags": ["user::stripe"],
+        "tags": ["user::stripe::patch_subscription_tier"],
         "summary": "Updates the user's subscription tier, swapping both their RBAC role and Stripe subscription line item.",
         "operationId": "patch_subscription_tier",
         "requestBody": {
@@ -3386,10 +3386,6 @@
           "email": {
             "type": "string",
             "description": "The email of the user to invite"
-          },
-          "tier": {
-            "$ref": "#/components/schemas/TeamUserTier",
-            "description": "The tier for this user (defaults to Haiku if not provided)"
           }
         }
       },
@@ -3459,6 +3455,17 @@
           }
         }
       },
+      "PatchTeamPlanRequest": {
+        "type": "object",
+        "description": "Request to update the team plan",
+        "required": ["team_plan"],
+        "properties": {
+          "team_plan": {
+            "$ref": "#/components/schemas/TeamPlan",
+            "description": "The new team plan"
+          }
+        }
+      },
       "PatchTeamRequest": {
         "type": "object",
         "description": "Request to update a team",
@@ -3484,21 +3491,6 @@
           "role": {
             "$ref": "#/components/schemas/TeamRole",
             "description": "The new role of the team user"
-          },
-          "team_user_id": {
-            "type": "string",
-            "description": "The team user you are updating"
-          }
-        }
-      },
-      "PatchTeamUserTierRequest": {
-        "type": "object",
-        "description": "Request to update a team user's tier",
-        "required": ["team_user_id", "new_tier"],
-        "properties": {
-          "new_tier": {
-            "$ref": "#/components/schemas/TeamUserTier",
-            "description": "The new tier of the team user"
           },
           "team_user_id": {
             "type": "string",
@@ -3755,7 +3747,7 @@
       "TeamMember": {
         "type": "object",
         "description": "The team member struct",
-        "required": ["team_id", "user_id", "role", "tier"],
+        "required": ["team_id", "user_id", "role"],
         "properties": {
           "role": {
             "$ref": "#/components/schemas/TeamRole",
@@ -3766,25 +3758,21 @@
             "format": "uuid",
             "description": "The id of the team"
           },
-          "tier": {
-            "type": "string",
-            "description": "The tier of the team member"
-          },
           "user_id": {
             "type": "string",
             "description": "The user id of the team member"
           }
         }
       },
+      "TeamPlan": {
+        "type": "string",
+        "description": "Team plans",
+        "enum": ["idea", "pre_seed", "seed", "series_a", "growth"]
+      },
       "TeamRole": {
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["member", "admin", "owner"]
-      },
-      "TeamUserTier": {
-        "type": "string",
-        "description": "Ordered from lowest to highest tier top -> bottom",
-        "enum": ["Haiku", "Sonnet", "Opus"]
       },
       "TeamWithMembers": {
         "type": "object",

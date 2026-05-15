@@ -13,7 +13,7 @@ use utoipa::ToSchema;
 
 use super::{StripeOperationError, StripeProductTier};
 use crate::api::context::ApiContext;
-use crate::config::StripePriceIds;
+use crate::config::LegacyStripePriceIds;
 use model::response::ErrorResponse;
 use model::user::UserContext;
 
@@ -65,7 +65,7 @@ pub async fn patch_subscription_tier(
     }
 
     let new_tier = req.new_tier;
-    let new_price_id = price_id_for_tier(&ctx.stripe_price_ids, new_tier);
+    let new_price_id = price_id_for_tier(&ctx.legacy_stripe_price_ids, new_tier);
 
     let user_roles = ctx
         .user_roles_and_permissions_service
@@ -78,7 +78,7 @@ pub async fn patch_subscription_tier(
         return Err(StripeOperationError::TierUnchanged);
     }
 
-    let old_price_id = price_id_for_tier(&ctx.stripe_price_ids, old_tier);
+    let old_price_id = price_id_for_tier(&ctx.legacy_stripe_price_ids, old_tier);
     let old_role = tier_to_sub_role(old_tier);
     let new_role = tier_to_sub_role(new_tier);
 
@@ -172,7 +172,7 @@ fn tier_key_str(tier: StripeProductTier) -> &'static str {
 }
 
 /// Returns the Stripe price ID configured for the given tier.
-fn price_id_for_tier(price_ids: &StripePriceIds, tier: StripeProductTier) -> &str {
+fn price_id_for_tier(price_ids: &LegacyStripePriceIds, tier: StripeProductTier) -> &str {
     match tier {
         StripeProductTier::Haiku => price_ids.stripe_price_id_haiku.as_ref(),
         StripeProductTier::Sonnet => price_ids.stripe_price_id_sonnet.as_ref(),

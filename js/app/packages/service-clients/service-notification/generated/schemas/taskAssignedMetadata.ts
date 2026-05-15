@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { TaskAssignedMetadataSenderProfilePictureUrl } from './taskAssignedMetadataSenderProfilePictureUrl';
+import type { TaskAssignedMetadataSubType } from './taskAssignedMetadataSubType';
 import type { TaskAssignedMetadataTaskName } from './taskAssignedMetadataTaskName';
 
 /**
@@ -14,6 +15,7 @@ export interface TaskAssignedMetadata {
   /** The user who assigned the task */
   assignedBy: string;
   senderProfilePictureUrl?: TaskAssignedMetadataSenderProfilePictureUrl;
+  subType?: TaskAssignedMetadataSubType;
   /** The unique identifier of the task */
   taskId: string;
   /** The name of the task (optional) */

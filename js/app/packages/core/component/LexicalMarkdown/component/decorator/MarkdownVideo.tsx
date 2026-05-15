@@ -254,7 +254,8 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
         class={cn(
           'relative max-w-full my-4 grid place-items-center mx-auto',
           isSelectedAsNode() && 'ring-3 ring-edge-muted',
-          state() === 'error' && 'media-error min-h-44'
+          state() === 'error' &&
+            'pattern-edge-muted pattern-diagonal-8 min-h-44'
         )}
         style={{
           'max-height': `${videoDims() ? videoDims()[1] * scale() : 640}px`,

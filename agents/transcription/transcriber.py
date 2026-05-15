@@ -5,6 +5,7 @@ import os
 import uuid
 import warnings
 from collections import Counter, deque
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -46,6 +47,104 @@ logger = logging.getLogger("macro-transcriber")
 MACRO_API_URL = os.environ.get("MACRO_API_URL", "http://localhost:8080")
 INTERNAL_CALL_SECRET = os.environ.get("INTERNAL_CALL_SECRET", "")
 
+# Cosine distance threshold for in-call Resemblyzer speaker clustering.
+# Lower = stricter / more new diarized ids; higher = looser / more reuse.
+VOICE_CLUSTER_DISTANCE_THRESHOLD = 0.30
+# Keep this configurable because short utterances are common in calls, but
+# Resemblyzer embeddings become noisy when there is too little speech.
+VOICE_EMBEDDING_MIN_SECONDS = 1.0
+
+VOICE_EMBEDDING_BUFFER_SECONDS = 3.0
+
+
+@dataclass
+class _VoiceCluster:
+    diarized_speaker_id: str
+    centroid: np.ndarray
+    samples: int = 1
+
+
+class VoiceClusterResolver:
+    """Turn-level speaker clustering based on Resemblyzer embeddings.
+
+    Deepgram's live diarization labels can churn between finalized utterances.
+    This resolver keeps a per-track in-memory set of voice centroids and returns
+    the same diarized speaker id for turns whose embeddings are close enough.
+    """
+
+    def __init__(
+        self,
+        *,
+        channel_id: str,
+        participant_identity: str,
+        distance_threshold: float = VOICE_CLUSTER_DISTANCE_THRESHOLD,
+    ):
+        self.channel_id = channel_id
+        self.participant_identity = participant_identity
+        self.distance_threshold = distance_threshold
+        self._namespace = uuid.uuid4().hex
+        self._clusters: list[_VoiceCluster] = []
+
+    def resolve(self, embedding: list[float]) -> tuple[str, float | None, bool] | None:
+        """Return (diarized_speaker_id, nearest_distance, created_new)."""
+        vector = self._normalize(embedding)
+        if vector is None:
+            return None
+
+        best_index: int | None = None
+        best_distance: float | None = None
+        for idx, cluster in enumerate(self._clusters):
+            distance = self._cosine_distance(cluster.centroid, vector)
+            if best_distance is None or distance < best_distance:
+                best_index = idx
+                best_distance = distance
+
+        if (
+            best_index is not None
+            and best_distance is not None
+            and best_distance <= self.distance_threshold
+        ):
+            cluster = self._clusters[best_index]
+            self._update_centroid(cluster, vector)
+            return cluster.diarized_speaker_id, best_distance, False
+
+        cluster = _VoiceCluster(
+            diarized_speaker_id=self._new_cluster_id(len(self._clusters)),
+            centroid=vector,
+        )
+        self._clusters.append(cluster)
+        return cluster.diarized_speaker_id, best_distance, True
+
+    def _new_cluster_id(self, index: int) -> str:
+        seed = (
+            f"{self.channel_id}:{self.participant_identity}:"
+            f"{self._namespace}:voice-cluster:{index}"
+        )
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
+
+    @staticmethod
+    def _normalize(embedding: list[float]) -> np.ndarray | None:
+        vector = np.asarray(embedding, dtype=np.float32)
+        if vector.ndim != 1 or vector.size == 0 or not np.isfinite(vector).all():
+            return None
+        norm = float(np.linalg.norm(vector))
+        if norm <= 0.0:
+            return None
+        return vector / norm
+
+    @staticmethod
+    def _cosine_distance(a: np.ndarray, b: np.ndarray) -> float:
+        distance = 1.0 - float(np.dot(a, b))
+        return max(0.0, min(2.0, distance))
+
+    @staticmethod
+    def _update_centroid(cluster: _VoiceCluster, vector: np.ndarray) -> None:
+        updated = (cluster.centroid * cluster.samples) + vector
+        norm = float(np.linalg.norm(updated))
+        if norm > 0.0:
+            cluster.centroid = updated / norm
+        cluster.samples += 1
+
 
 class Transcriber(Agent):
     """STT-only agent bound to a single participant."""
@@ -73,8 +172,8 @@ class Transcriber(Agent):
                     "numerals": True,
                     "interim_results": True,
                     "no_delay": True,
-                    # Emit per-word speaker labels so we can attribute segments to
-                    # distinct voices even when one audio track carries multiple.
+                    # Keep provider speaker labels as a fallback for very short
+                    # turns where Resemblyzer cannot produce a stable embedding.
                     "diarize": True,
                 },
             ),
@@ -109,28 +208,57 @@ class Transcriber(Agent):
         # in FINAL-delivery lag.
         self._pending_first_word_offset: float | None = None
         self._pending_last_word_offset: float | None = None
+        # Resemblyzer-backed turn-level clustering is the primary source of
+        # diarizedSpeakerId. Deepgram's live speaker ints are kept only as a
+        # fallback for turns too short/noisy to embed and as a bridge once a
+        # provider speaker has been associated with a voice cluster.
+        self._voice_cluster_resolver = VoiceClusterResolver(
+            channel_id=channel_id,
+            participant_identity=participant_identity,
+        )
+        self._provider_speaker_cluster_ids: dict[int, str] = {}
         # Deepgram's speaker ints are only unique within one streaming session.
-        # Namespace them with a nonce regenerated per Transcriber so a reconnect
-        # doesn't silently merge two different humans under the same UUID.
-        self._speaker_namespace = uuid.uuid4().hex
-        self._speaker_uuids: dict[int, str] = {}
+        # Namespace fallback ids with a nonce regenerated per Transcriber so a
+        # reconnect doesn't silently merge two different humans under one UUID.
+        self._provider_speaker_namespace = uuid.uuid4().hex
+        self._provider_speaker_uuids: dict[int, str] = {}
 
-    def _resolve_diarized_speaker_id(self, dg_speaker: int) -> str:
-        cached = self._speaker_uuids.get(dg_speaker)
+    def _resolve_provider_diarized_speaker_id(self, provider_speaker: int) -> str:
+        cached = self._provider_speaker_uuids.get(provider_speaker)
         if cached is not None:
             return cached
         seed = (
             f"{self.channel_id}:{self.participant_identity}:"
-            f"{self._speaker_namespace}:{dg_speaker}"
+            f"{self._provider_speaker_namespace}:provider:{provider_speaker}"
         )
         value = str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
-        self._speaker_uuids[dg_speaker] = value
+        self._provider_speaker_uuids[provider_speaker] = value
         return value
 
-    # Keep at most ~3 seconds of audio in the rolling buffer per participant.
-    # Resemblyzer needs at least ~1.5s of speech for a useful embedding; the
-    # cap keeps memory bounded for long-running sessions.
-    _AUDIO_BUFFER_MAX_SECONDS = 3.0
+    def _resolve_embedding_diarized_speaker_id(
+        self, embedding: list[float] | None
+    ) -> str | None:
+        if not embedding:
+            return None
+        resolved = self._voice_cluster_resolver.resolve(embedding)
+        if resolved is None:
+            return None
+        diarized_speaker_id, nearest_distance, created_new = resolved
+        logger.debug(
+            "%s voice cluster diarizedSpeakerId=%s participant=%s "
+            "distance=%s threshold=%s",
+            "created" if created_new else "matched",
+            diarized_speaker_id,
+            self.participant_identity,
+            nearest_distance,
+            self._voice_cluster_resolver.distance_threshold,
+        )
+        return diarized_speaker_id
+
+    # Keep a bounded rolling audio buffer per participant. Resemblyzer needs
+    # enough speech for a useful embedding; the cap keeps memory bounded for
+    # long-running sessions.
+    _AUDIO_BUFFER_MAX_SECONDS = VOICE_EMBEDDING_BUFFER_SECONDS
 
     def _record_audio_frame(self, frame: rtc.AudioFrame) -> None:
         if self._audio_sample_rate is None:
@@ -139,13 +267,8 @@ class Transcriber(Agent):
         self._audio_frames.append(frame)
         self._audio_buffered_samples += frame.samples_per_channel
         if self._audio_sample_rate:
-            max_samples = int(
-                self._AUDIO_BUFFER_MAX_SECONDS * self._audio_sample_rate
-            )
-            while (
-                self._audio_buffered_samples > max_samples
-                and self._audio_frames
-            ):
+            max_samples = int(self._AUDIO_BUFFER_MAX_SECONDS * self._audio_sample_rate)
+            while self._audio_buffered_samples > max_samples and self._audio_frames:
                 dropped = self._audio_frames.popleft()
                 self._audio_buffered_samples -= dropped.samples_per_channel
 
@@ -166,9 +289,9 @@ class Transcriber(Agent):
         self._audio_buffered_samples = 0
         return pcm, sample_rate, num_channels
 
-    # Resemblyzer needs at least ~1s of speech for a usable embedding;
-    # shorter buffers produce noisy / unreliable vectors.
-    _MIN_EMBED_SECONDS = 1.0
+    # Resemblyzer needs enough speech for a usable embedding; shorter buffers
+    # produce noisy / unreliable vectors.
+    _MIN_EMBED_SECONDS = VOICE_EMBEDDING_MIN_SECONDS
 
     async def _compute_voice_embedding(self) -> list[float] | None:
         """Drain the audio buffer and embed it with Resemblyzer.
@@ -193,7 +316,9 @@ class Transcriber(Agent):
         pcm_bytes = pcm.tobytes()
 
         def _embed() -> list[float] | None:
-            samples = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+            samples = (
+                np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+            )
             if num_channels > 1:
                 samples = samples.reshape(-1, num_channels).mean(axis=1)
             try:
@@ -286,12 +411,8 @@ class Transcriber(Agent):
                 and first_word_offset is not None
                 and last_word_offset is not None
             ):
-                started_at = self._stream_t0_wall + timedelta(
-                    seconds=first_word_offset
-                )
-                ended_at = self._stream_t0_wall + timedelta(
-                    seconds=last_word_offset
-                )
+                started_at = self._stream_t0_wall + timedelta(seconds=first_word_offset)
+                ended_at = self._stream_t0_wall + timedelta(seconds=last_word_offset)
             else:
                 started_at = now
                 ended_at = now
@@ -308,10 +429,19 @@ class Transcriber(Agent):
             )
             segment_id = str(uuid.uuid5(uuid.NAMESPACE_URL, segment_seed))
 
-            diarized_speaker_id = None
+            dominant_speaker = None
             if pending_speakers:
                 dominant_speaker, _ = pending_speakers.most_common(1)[0]
-                diarized_speaker_id = self._resolve_diarized_speaker_id(dominant_speaker)
+
+            diarized_speaker_id = self._resolve_embedding_diarized_speaker_id(embedding)
+            if diarized_speaker_id is not None and dominant_speaker is not None:
+                self._provider_speaker_cluster_ids[dominant_speaker] = (
+                    diarized_speaker_id
+                )
+            elif dominant_speaker is not None:
+                diarized_speaker_id = self._provider_speaker_cluster_ids.get(
+                    dominant_speaker
+                ) or self._resolve_provider_diarized_speaker_id(dominant_speaker)
 
             segment = {
                 "segmentId": segment_id,
@@ -355,9 +485,7 @@ class Transcriber(Agent):
                     delay_seconds *= 2
                 except httpx.HTTPStatusError as exc:
                     status_code = exc.response.status_code if exc.response else None
-                    is_transient = (
-                        status_code is not None and 500 <= status_code < 600
-                    )
+                    is_transient = status_code is not None and 500 <= status_code < 600
                     if is_transient and attempt < max_attempts:
                         await asyncio.sleep(delay_seconds)
                         delay_seconds *= 2
@@ -389,19 +517,13 @@ class MultiUserTranscriber:
 
     def start(self):
         self.ctx.room.on("participant_connected", self.on_participant_connected)
-        self.ctx.room.on(
-            "participant_disconnected", self.on_participant_disconnected
-        )
+        self.ctx.room.on("participant_disconnected", self.on_participant_disconnected)
 
     async def aclose(self):
         await utils.aio.cancel_and_wait(*self._tasks)
-        await asyncio.gather(
-            *[self._close_session(s) for s in self._sessions.values()]
-        )
+        await asyncio.gather(*[self._close_session(s) for s in self._sessions.values()])
         self.ctx.room.off("participant_connected", self.on_participant_connected)
-        self.ctx.room.off(
-            "participant_disconnected", self.on_participant_disconnected
-        )
+        self.ctx.room.off("participant_disconnected", self.on_participant_disconnected)
 
     def on_participant_connected(self, participant: rtc.RemoteParticipant):
         if participant.identity in self._sessions:
@@ -429,9 +551,7 @@ class MultiUserTranscriber:
         self._tasks.add(task)
         task.add_done_callback(lambda t: self._tasks.discard(t))
 
-    async def _start_session(
-        self, participant: rtc.RemoteParticipant
-    ) -> AgentSession:
+    async def _start_session(self, participant: rtc.RemoteParticipant) -> AgentSession:
         session = AgentSession(vad=self.ctx.proc.userdata["vad"])
         is_first = len(self._sessions) == 0
         await session.start(

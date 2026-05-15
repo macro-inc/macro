@@ -5,6 +5,7 @@ import { authKeys } from './auth/keys';
 import { channelKeys } from './channel/keys';
 import { createPersistenceKey, type PersistScope } from './persistence';
 import { createPerQueryIDBStore } from './persistence/per-query-idb';
+import { soupKeys } from './soup/keys';
 
 const persistedChannelQueryPrefixes = [
   channelKeys.mentions._def,
@@ -41,6 +42,16 @@ export function createQueryPersistenceScopes(
     },
     ...(isNativeMobilePlatform()
       ? [
+          {
+            store: createPerQueryIDBStore({
+              dbName: createPersistenceKey('soup-list-queries', 1),
+            }),
+            maxAge: { value: 7, unit: 'd' },
+            buster,
+            shouldPersist: (queryKey: QueryKey) =>
+              partialMatchKey(queryKey, soupKeys.astItems._def),
+            shouldRestore: hasLoginCookie,
+          } satisfies PersistScope,
           {
             store: createPerQueryIDBStore({
               dbName: createPersistenceKey('user-info', 1),

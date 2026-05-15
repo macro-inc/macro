@@ -142,13 +142,51 @@ async fn test_dynamic_filter_by_project_ids(pool: PgPool) {
     let storage = FrecencyPgStorage::new(pool.clone());
     let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
 
-    let project_id_1 = Uuid::new_v4();
-    let project_id_2 = Uuid::new_v4();
+    let parent_project_id = Uuid::new_v4();
+    let child_project_id = Uuid::new_v4();
+    let unrelated_project_id = Uuid::new_v4();
     let doc_id_1 = Uuid::new_v4();
+    let macro_user_id = Uuid::new_v4();
+
+    sqlx::query(
+        r#"INSERT INTO "macro_user" ("id", "username", "email", "stripe_customer_id") VALUES ($1, $2, $3, $4)"#,
+    )
+    .bind(macro_user_id)
+    .bind("test@example.com")
+    .bind("test@example.com")
+    .bind("stripe_id")
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(r#"INSERT INTO "User" ("id", "email", "macro_user_id") VALUES ($1, $2, $3)"#)
+        .bind(test_user_id.as_ref())
+        .bind("test@example.com")
+        .bind(macro_user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    sqlx::query(
+        r#"
+        INSERT INTO "Project" ("id", "name", "userId", "parentId") VALUES
+            ($1, 'parent', $4, NULL),
+            ($2, 'child', $4, $1),
+            ($3, 'unrelated', $4, NULL)
+        "#,
+    )
+    .bind(parent_project_id.to_string())
+    .bind(child_project_id.to_string())
+    .bind(unrelated_project_id.to_string())
+    .bind(test_user_id.as_ref())
+    .execute(&pool)
+    .await
+    .unwrap();
 
     for (id, entity_type, score) in [
-        (project_id_1.to_string(), EntityType::Project, 100.0),
-        (project_id_2.to_string(), EntityType::Project, 80.0),
+        (parent_project_id.to_string(), EntityType::Project, 100.0),
+        (child_project_id.to_string(), EntityType::Project, 70.0),
+        (unrelated_project_id.to_string(), EntityType::Project, 80.0),
         (doc_id_1.to_string(), EntityType::Document, 90.0),
     ] {
         storage
@@ -170,7 +208,7 @@ async fn test_dynamic_filter_by_project_ids(pool: PgPool) {
 
     let filter = item_filters::ast::EntityFilterAst::new_from_filters(EntityFilters {
         project_filters: ProjectFilters {
-            project_ids: vec![project_id_1.to_string()],
+            project_ids: vec![parent_project_id.to_string()],
             ..Default::default()
         },
         ..Default::default()
@@ -188,12 +226,112 @@ async fn test_dynamic_filter_by_project_ids(pool: PgPool) {
         .await
         .unwrap();
 
-    // Should return filtered project (project_id_1) + all documents (doc_id_1)
+    // Default include_root=false: only the child of parent_project_id matches the project
+    // filter; doc_id_1 passes through since document_filters is unconstrained.
     assert_eq!(results.len(), 2);
-    assert_eq!(results[0].id.entity.entity_id, project_id_1.to_string());
-    assert_eq!(results[0].data.frecency_score, 100.0);
-    assert_eq!(results[1].id.entity.entity_id, doc_id_1.to_string());
-    assert_eq!(results[1].data.frecency_score, 90.0);
+    assert_eq!(results[0].id.entity.entity_id, doc_id_1.to_string());
+    assert_eq!(results[0].data.frecency_score, 90.0);
+    assert_eq!(results[1].id.entity.entity_id, child_project_id.to_string());
+    assert_eq!(results[1].data.frecency_score, 70.0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_dynamic_filter_by_project_ids_include_root(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    let parent_project_id = Uuid::new_v4();
+    let child_project_id = Uuid::new_v4();
+    let unrelated_project_id = Uuid::new_v4();
+    let macro_user_id = Uuid::new_v4();
+
+    sqlx::query(
+        r#"INSERT INTO "macro_user" ("id", "username", "email", "stripe_customer_id") VALUES ($1, $2, $3, $4)"#,
+    )
+    .bind(macro_user_id)
+    .bind("test@example.com")
+    .bind("test@example.com")
+    .bind("stripe_id")
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(r#"INSERT INTO "User" ("id", "email", "macro_user_id") VALUES ($1, $2, $3)"#)
+        .bind(test_user_id.as_ref())
+        .bind("test@example.com")
+        .bind(macro_user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    sqlx::query(
+        r#"
+        INSERT INTO "Project" ("id", "name", "userId", "parentId") VALUES
+            ($1, 'parent', $3, NULL),
+            ($2, 'child', $3, $1),
+            ($4, 'unrelated', $3, NULL)
+        "#,
+    )
+    .bind(parent_project_id.to_string())
+    .bind(child_project_id.to_string())
+    .bind(test_user_id.as_ref())
+    .bind(unrelated_project_id.to_string())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    for (id, score) in [
+        (parent_project_id.to_string(), 100.0),
+        (child_project_id.to_string(), 70.0),
+        (unrelated_project_id.to_string(), 80.0),
+    ] {
+        storage
+            .set_aggregate(AggregateFrecency {
+                id: AggregateId {
+                    entity: EntityType::Project.with_entity_string(id.clone()),
+                    user_id: test_user_id.clone(),
+                },
+                data: FrecencyData {
+                    event_count: 1,
+                    frecency_score: score,
+                    first_event: Utc::now(),
+                    recent_events: VecDeque::new(),
+                },
+            })
+            .await
+            .unwrap();
+    }
+
+    let filter = item_filters::ast::EntityFilterAst::new_from_filters(EntityFilters {
+        project_filters: ProjectFilters {
+            project_ids: vec![parent_project_id.to_string()],
+            include_root: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .unwrap()
+    .unwrap();
+
+    let results = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 10,
+            filters: Some(filter),
+        })
+        .await
+        .unwrap();
+
+    // include_root=true: parent itself + its child match; unrelated_project is filtered out.
+    assert_eq!(results.len(), 2);
+    let ids: std::collections::HashSet<String> = results
+        .iter()
+        .map(|r| r.id.entity.entity_id.to_string())
+        .collect();
+    assert!(ids.contains(&parent_project_id.to_string()));
+    assert!(ids.contains(&child_project_id.to_string()));
+    assert!(!ids.contains(&unrelated_project_id.to_string()));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

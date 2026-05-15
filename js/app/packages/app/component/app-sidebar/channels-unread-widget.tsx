@@ -71,8 +71,8 @@ function computeChannelLetters(groups: ChannelGroup[]): Map<string, string> {
 
 function ChannelLetterIcon(props: { letters: string }) {
   return (
-    <Avatar size="md">
-      <Avatar.Fallback>#{props.letters}</Avatar.Fallback>
+    <Avatar size="md" class="bg-ink-extra-muted/15 text-ink-muted">
+      <Avatar.Fallback>{props.letters}</Avatar.Fallback>
     </Avatar>
   );
 }
@@ -198,7 +198,9 @@ function ChannelGroupItem(props: {
         'opacity-0 -translate-y-2': !isVisible(),
         'opacity-100 translate-y-0': isVisible(),
       }}
-      onClick={(e) => {
+      onMouseDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
         navigateToLatestNotification(e.shiftKey);
       }}
     >

@@ -1,0 +1,73 @@
+name: Cancel Stuck Cloud Storage Deploys
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+    inputs:
+      max-age-minutes:
+        description: Cancel active runs older than this many minutes
+        required: false
+        default: '180'
+        type: string
+      dry-run:
+        description: Log what would be cancelled without doing it
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel-stuck:
+    name: Cancel runs stuck queued or in_progress past threshold
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      WORKFLOW_FILE: deploy-cloud-storage-on-push.yml
+      MAX_AGE_MINUTES: ${{ inputs.max-age-minutes || '180' }}
+      DRY_RUN: ${{ inputs.dry-run || 'false' }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Cancel runs older than threshold
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          threshold_seconds=$(( MAX_AGE_MINUTES * 60 ))
+          now=$(date -u +%s)
+
+          mapfile -t stuck < <(
+            gh api "repos/${GH_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=100" \
+              | jq -r --argjson now "$now" --argjson threshold "$threshold_seconds" '
+                  .workflow_runs[]
+                  | select(.status == "queued" or .status == "in_progress")
+                  | ($now - (.created_at | fromdateiso8601)) as $age
+                  | select($age > $threshold)
+                  | "\(.id)\t\($age)\t\(.html_url)"
+                '
+          )
+
+          if [[ ${#stuck[@]} -eq 0 ]]; then
+            echo "No stuck runs found."
+            exit 0
+          fi
+
+          echo "Found ${#stuck[@]} stuck run(s):"
+          for row in "${stuck[@]}"; do
+            IFS=$'\t' read -r run_id age url <<<"$row"
+            age_min=$(( age / 60 ))
+            echo "  run ${run_id} (age ${age_min}m): ${url}"
+            if [[ "$DRY_RUN" == "true" ]]; then
+              echo "    [dry-run] would cancel"
+            else
+              if gh api --method POST "repos/${GH_REPO}/actions/runs/${run_id}/cancel" >/dev/null 2>&1; then
+                echo "    cancelled"
+              else
+                echo "    cancel failed (may have already completed)"
+              fi
+            fi
+          done

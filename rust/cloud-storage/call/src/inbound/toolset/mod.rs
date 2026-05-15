@@ -7,7 +7,7 @@ mod read_call_record;
 mod test;
 
 use crate::domain::ports::{CallRecordQueryService, CallService};
-use ai::tool::AsyncToolSet;
+use ai::tool::AsyncToolCollection;
 use entity_access::domain::ports::EntityAccessService;
 use std::sync::Arc;
 
@@ -61,13 +61,13 @@ where
 }
 
 /// Create a call toolset.
-pub fn call_toolset<CSvc, QSvc, ESvc>() -> AsyncToolSet<CallToolContext<CSvc, QSvc, ESvc>>
+pub fn call_toolset<CSvc, QSvc, ESvc>() -> AsyncToolCollection<CallToolContext<CSvc, QSvc, ESvc>>
 where
     CSvc: CallService,
     QSvc: CallRecordQueryService,
     ESvc: EntityAccessService,
 {
-    AsyncToolSet::new()
+    AsyncToolCollection::new()
         .add_tool::<ListCallRecords, CallToolContext<CSvc, QSvc, ESvc>>()
         .add_tool::<ReadCallRecord, CallToolContext<CSvc, QSvc, ESvc>>()
 }

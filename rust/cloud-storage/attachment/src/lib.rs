@@ -3,7 +3,10 @@
 
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
-pub use models::*;
+pub use models::{
+    AttachmentContent, AttachmentError, AttachmentPart, Attachments, FormattedParts,
+    ResolutionError, TextOrImage,
+};
 use non_empty::NonEmpty;
 
 mod attachable;

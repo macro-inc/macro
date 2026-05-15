@@ -125,26 +125,20 @@ export function TaskListEntity(props: TaskListEntityProps) {
       }}
       ref={mergeRefs(props.ref, draggable)}
       class={cn(
-        'soup-list-entity @container/entity w-full relative group/narrow flex flex-col',
+        'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mx-1 relative group/narrow flex flex-col py-0.5 rounded',
         {
           'min-h-10': !isMobile(),
-          'bg-accent/5': props.checked,
-          'hover:bg-hover group-data-expanded/cm-trigger:bg-hover':
+          'bg-accent/8': props.checked,
+          'ring ring-accent/16 ring-inset': props.checked && props.highlighted,
+          'ring ring-edge bg-active/60 ring-inset':
+            props.highlighted && !props.checked,
+          'bg-active/40': props.hovered && !props.highlighted && !props.checked,
+          'hover:bg-active/40 hover:ring hover:ring-edge hover:ring-inset group-data-expanded/cm-trigger:bg-active/40':
             !props.checked && !props.highlighted && !props.hovered,
-          'bg-hover': props.hovered && !props.highlighted && !props.checked,
-          'bg-accent/5 outline-1 outline-accent/20 -outline-offset-1':
-            props.highlighted && !isMobile(),
         }
       )}
       onMouseMove={props.onMouseMove}
     >
-      <div
-        data-accent-bar
-        class={cn('absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0', {
-          'opacity-100': props.highlighted && !isMobile(),
-        })}
-      />
-
       <Switch>
         <Match when={isWide()}>
           <MaybeEntityRow

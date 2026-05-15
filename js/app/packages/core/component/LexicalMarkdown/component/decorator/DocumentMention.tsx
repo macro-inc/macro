@@ -411,7 +411,9 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   const resolvedBlockName = createMemo(() => {
     const i = item();
     if (!i.loading && i.access === 'access') {
-      return itemToBlockName(i) ?? props.blockName;
+      // NOTE: this is a hack around invalid "unknown" fallback
+      const resolved = itemToBlockName(i);
+      if (resolved && resolved !== 'unknown') return resolved;
     }
     return props.blockName;
   });

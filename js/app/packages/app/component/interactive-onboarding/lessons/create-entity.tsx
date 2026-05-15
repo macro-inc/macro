@@ -144,7 +144,11 @@ function CreateEntityDemo(props: LessonContentProps) {
 
   // Keep soup synced with sandbox store
   createEffect(() => {
-    soup.setRows(filteredSandboxEntities().map((e) => soup.buildRow(e)));
+    soup.setRows(
+      filteredSandboxEntities().map((e, i) =>
+        soup.buildRow({ id: e.id, index: i, original: e })
+      )
+    );
   });
 
   // Build sandbox versions of all creatable blocks

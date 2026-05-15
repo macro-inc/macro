@@ -1531,6 +1531,16 @@ impl CallRepository for PgCallRepo {
             WHERE t.call_record_id = $1
               AND t.diarized_speaker_id = a.diarized_speaker_id
               AND t.custom_speaker IS NULL
+              AND EXISTS (
+                  SELECT 1
+                  FROM team_user matched_user_team
+                  JOIN team_user participant_team
+                    ON participant_team.team_id = matched_user_team.team_id
+                  JOIN call_record_participants p
+                    ON p.user_id = participant_team.user_id
+                   AND p.call_record_id = $1
+                  WHERE matched_user_team.user_id = u.id
+              )
             "#,
             call_record_id,
             &diarized_ids as &[&str],

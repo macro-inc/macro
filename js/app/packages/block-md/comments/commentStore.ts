@@ -1,7 +1,5 @@
 import { createBlockSignal, createBlockStore } from '@core/block';
-import { makePersisted } from '@solid-primitives/storage';
 import type { NodeKey } from 'lexical';
-import { createSignal } from 'solid-js';
 import type { CommentStore, MarkStore, ThreadStore } from './commentType';
 
 interface PendingComment {
@@ -31,6 +29,3 @@ export const highlightedCommentThreadsSignal = createBlockSignal<number[]>([]);
 export const pendingCommentSignal = createBlockSignal<PendingComment[]>([]);
 
 export const commentWidthSignal = createBlockSignal(true);
-
-export const [showCommentsPreference, setShowCommentsPreference] =
-  makePersisted(createSignal(true), { name: 'showMdCommentsPreference' });

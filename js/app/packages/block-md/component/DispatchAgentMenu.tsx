@@ -4,10 +4,12 @@ import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { macroIdToEmail, tryMacroId } from '@core/user';
+import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isOk } from '@core/util/maybeResult';
 import CaretDown from '@icon/regular/caret-down.svg';
 import CopyIcon from '@icon/regular/copy.svg';
+import GitBranch from '@icon/regular/git-branch.svg';
 import PlugIcon from '@icon/regular/plug.svg';
 import TerminalWindowIcon from '@icon/regular/terminal-window.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
@@ -191,24 +193,15 @@ export function DispatchAgentButton() {
 
   return (
     <DropdownMenu open={open()} onOpenChange={setOpen}>
-      <ButtonGroup
-        variant="base"
-        size="icon-sm"
-        depth={2}
-        class="bg-surface text-ink-muted"
-      >
-        <Button
-          onClick={handlePrimaryClick}
-          tooltip={lastUsed().name}
-          class="text-ink-muted"
-        >
+      <ButtonGroup variant="base" size="icon-sm" depth={2} class="bg-surface">
+        <Button onClick={handlePrimaryClick} tooltip={lastUsed().name}>
           <Dynamic
             component={lastUsed().buttonIcon ?? lastUsed().icon}
             class="size-3!"
           />
         </Button>
         <ButtonGroup.Divider />
-        <DropdownMenu.Trigger as={Button} class="p-1 text-ink-muted">
+        <DropdownMenu.Trigger as={Button} class="p-1">
           <CaretDown class="size-3.5!" />
         </DropdownMenu.Trigger>
       </ButtonGroup>
@@ -218,6 +211,14 @@ export function DispatchAgentButton() {
             text={COPY_ACTION.name}
             icon={COPY_ACTION.icon}
             onClick={() => executeAction(COPY_ACTION)}
+          />
+          <MenuItem
+            text="Copy branch name"
+            icon={GitBranch}
+            onClick={() => {
+              copyBranchNameToClipboard(blockId);
+              setOpen(false);
+            }}
           />
           <MenuItem
             text="MCP setup instructions"

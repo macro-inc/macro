@@ -92,7 +92,6 @@ async fn main() {
     );
     let toolset = email_toolset();
 
-    #[expect(deprecated)]
     let context = RequestContext { user_id };
 
     let cli = Cli::new(

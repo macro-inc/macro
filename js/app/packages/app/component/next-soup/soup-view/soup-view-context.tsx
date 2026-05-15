@@ -1,6 +1,7 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   createSoupState,
+  type GroupMeta,
   type SoupEntity,
   type SoupRow,
   type SoupState,
@@ -11,15 +12,33 @@ import {
   type Query,
   type QueryStore,
 } from '@app/component/next-soup/filters/filter-store/query-store';
+import { createInfiniteQueries } from '@app/component/next-soup/soup-view/create-infinite-queries';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { type EntityData, isWithNotification } from '@entity';
+import { throwOnErr } from '@core/util/maybeResult';
+import {
+  type EntityData,
+  getPropertyOptionLabel,
+  isWithNotification,
+} from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import { useQueryClient } from '@queries/client';
+import {
+  parseGroupedSoupPage,
+  serializeGroupByField,
+} from '@queries/soup/grouped/api';
+import type {
+  GroupMeta as ApiGroupMeta,
+  GroupByField,
+  GroupedSoupPage,
+} from '@queries/soup/grouped/types';
 import { type SoupParams, useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
+import { mapSoupPageToEntityList } from '@queries/soup/transform-utils';
+import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import { storageServiceClient } from '@service-storage/client';
 import type { SoupPage } from '@service-storage/generated/schemas';
 import type { InfiniteData } from '@tanstack/solid-query';
 import {
@@ -163,6 +182,21 @@ export const SoupViewContextProvider: FlowComponent<
   const [assigneeFilter, setAssigneeFilter] = createSignal<string[]>([]);
   const [activeTab, setActiveTab] = createSignal<string | undefined>(undefined);
 
+  const groupByField = createMemo((): GroupByField | undefined => {
+    const id = soup.grouping.activeGroupId();
+    if (!id) return undefined;
+    if (id === 'date') return { type: 'date' };
+    if (id === 'entity_type') return { type: 'entity_type' };
+    if (id === 'project') return { type: 'project' };
+    if (id.startsWith('property:')) {
+      return {
+        type: 'property',
+        propertyDefinitionId: id.slice('property:'.length),
+      };
+    }
+    return undefined;
+  });
+
   // Clear sub-filters when task filter is deactivated
   createEffect(() => {
     if (!soup.predicates.isActive('task')) {
@@ -203,6 +237,7 @@ export const SoupViewContextProvider: FlowComponent<
     () => ({
       params: soupParams(),
       body: soupBody(),
+      groupBy: groupByField(),
     }),
     () => ({
       enabled: !search.isSearching(),
@@ -215,15 +250,21 @@ export const SoupViewContextProvider: FlowComponent<
 
       if (!searching) {
         const data = itemsQuery.data;
+
         if (!data) return prev;
-        const base = data.map((e) =>
+
+        const base = data.entities.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
         ) as SoupEntity[];
+
         const extras = props.additionalEntities?.() ?? [];
+
         if (extras.length === 0) return base;
+
         const extraEntities = extras.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
         ) as SoupEntity[];
+
         return [...extraEntities, ...base];
       }
 
@@ -292,17 +333,190 @@ export const SoupViewContextProvider: FlowComponent<
     const entityMap = new Map(base.map((e) => [e.id, e]));
     const featuredIdSet = new Set(featuredIds);
     const featured: SoupEntity[] = [];
+
     for (const id of featuredIds) {
       const e = entityMap.get(id);
       if (e) featured.push(e);
     }
+
     const rest = base.filter((e) => !featuredIdSet.has(e.id));
+
     return [...featured, ...rest];
   };
 
-  const rows = createMemo(() => {
-    return entities().map((e) => soup.buildRow(e));
+  const rows = createMemo((): SoupRow[] => {
+    const field = groupByField();
+    const groups = itemsQuery.data?.groups;
+
+    // Not grouped - build simple entity rows
+    if (!field || !groups) {
+      return entities().map((entity, index) =>
+        soup.buildRow({ id: entity.id, index, original: entity })
+      );
+    }
+
+    // Grouped - build header + entity + loadMore rows for each group
+    const result: SoupRow[] = [];
+    let globalIndex = 0;
+
+    for (const apiGroup of groups) {
+      const groupMeta = buildGroupMeta(apiGroup);
+      const isExpanded = soup.grouping.isExpanded(apiGroup.key);
+      const query = groupQueries().find((q) => q.key === apiGroup.key);
+      const groupEntities = query?.data() ?? [];
+
+      // Get first entity to use for header original
+      // If the group has no entities, we can skip it
+      const firstEntity = groupEntities[0];
+
+      if (!firstEntity) continue;
+
+      // Header row
+      result.push(
+        soup.buildRow({
+          id: `header:${apiGroup.key}`,
+          index: globalIndex++,
+          original: firstEntity,
+          group: groupMeta,
+          isGrouped: true,
+        })
+      );
+
+      // We skip building rows for entities that are
+      // not visible because the group is collapsed
+      if (!isExpanded) continue;
+
+      // Entity rows
+      for (const entity of groupEntities) {
+        result.push(
+          soup.buildRow({
+            id: entity.id,
+            index: globalIndex++,
+            original: entity,
+            group: groupMeta,
+          })
+        );
+      }
+
+      // We can stop here if the group has no more data
+      // that needs to be fetched
+      if (!groupMeta.hasMore()) continue;
+
+      const lastEntity = groupEntities[groupEntities.length - 1];
+
+      result.push(
+        soup.buildRow({
+          id: `loadmore:${apiGroup.key}`,
+          index: globalIndex++,
+          original: lastEntity,
+          group: groupMeta,
+          isLoadMore: true,
+        })
+      );
+    }
+
+    return result;
   });
+
+  const instructionsIdQuery = useInstructionsMdIdQuery();
+
+  const groupQueries = createInfiniteQueries<GroupedSoupPage, SoupEntity[]>(
+    () => {
+      const field = groupByField();
+      const groups = itemsQuery.data?.groups;
+      const items = itemsQuery.data?.items;
+
+      if (!field || !groups || !items) {
+        return [];
+      }
+
+      return groups.map((group) => {
+        const initialGroupItems = items.slice(
+          group.startIndex,
+          group.startIndex + group.pageCount
+        );
+
+        return {
+          key: group.key,
+          queryKey: soupKeys.groupedGroup({
+            params: soupParams(),
+            body: soupBody(),
+            groupBy: field,
+            groupKey: group.key,
+          }).queryKey as readonly unknown[],
+          queryFn: async (ctx: { pageParam: string | null }) => {
+            const response = await throwOnErr(async () =>
+              storageServiceClient.getGroupedSoupAstItems({
+                params: {
+                  cursor: ctx.pageParam ?? undefined,
+                  group_by: serializeGroupByField(field),
+                  group_key: group.key,
+                },
+                body: {
+                  ...soupBody(),
+                  ...soupParams(),
+                },
+              })
+            );
+            return parseGroupedSoupPage(response);
+          },
+          getNextPageParam: (lastPage: GroupedSoupPage): string | null => {
+            const meta = lastPage.groups.find((g) => g.key === group.key);
+            return meta?.nextCursor ?? null;
+          },
+          initialData: {
+            pages: [
+              {
+                items: initialGroupItems,
+                nextCursor: group.nextCursor,
+                groups: [group],
+              },
+            ],
+            pageParams: [null],
+          },
+          select: (pages: GroupedSoupPage[]): SoupEntity[] => {
+            const allItems = pages.flatMap((p) => p.items);
+            return mapSoupPageToEntityList(
+              { items: allItems, next_cursor: null },
+              { instructionsIdQuery }
+            ).map((e) => attachNotifications(e)) as SoupEntity[];
+          },
+          enabled: true,
+          staleTime: Infinity,
+        };
+      });
+    }
+  );
+
+  const loadMoreForGroup = async (groupKey: string): Promise<void> => {
+    const query = groupQueries().find((q) => q.key === groupKey);
+    await query?.fetchNextPage();
+  };
+
+  const isGroupLoadingMore = (groupKey: string) => {
+    const query = groupQueries().find((q) => q.key === groupKey);
+    return query?.isFetchingNextPage() ?? false;
+  };
+
+  const hasMoreForGroup = (groupKey: string) => {
+    const query = groupQueries().find((q) => q.key === groupKey);
+    return query?.hasNextPage() ?? false;
+  };
+
+  const buildGroupMeta = (group: ApiGroupMeta): GroupMeta => {
+    const resolvedLabel = getPropertyOptionLabel(group.key) ?? group.label;
+    return {
+      key: group.key,
+      value: group.key,
+      label: resolvedLabel,
+      count: group.totalCount,
+      isExpanded: () => soup.grouping.isExpanded(group.key),
+      toggle: () => soup.grouping.toggle(group.key),
+      hasMore: () => hasMoreForGroup(group.key),
+      loadMore: () => loadMoreForGroup(group.key),
+      isLoading: () => isGroupLoadingMore(group.key),
+    };
+  };
 
   const { searchQuery } = search;
 
