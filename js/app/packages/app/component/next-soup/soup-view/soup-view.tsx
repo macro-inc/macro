@@ -129,7 +129,7 @@ const DefaultGroupHeader = (
       <button
         type="button"
         class={cn(
-          'group/header w-[calc(100%-0.5rem)] mx-1 mb-1 rounded pl-5 pr-3 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
+          'group/header w-[calc(100%-0.5rem)] mx-1 mb-1 rounded px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
           'text-text-muted bg-surface hover:bg-active border border-edge-muted',
           'relative',
           {
