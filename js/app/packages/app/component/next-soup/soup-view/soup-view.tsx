@@ -122,6 +122,21 @@ import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 
+const SearchSectionHeader = (props: { label: string }) => {
+  return (
+    <Layer depth={2}>
+      <div
+        class={cn(
+          'w-[calc(100%-0.5rem)] mx-1 mb-1 rounded px-2 py-2 flex items-center text-xs font-semibold tracking-tight',
+          'text-text-muted bg-surface border border-edge-muted'
+        )}
+      >
+        <span class="truncate">{props.label}</span>
+      </div>
+    </Layer>
+  );
+};
+
 const DefaultGroupHeader = (
   props: GroupHeaderProps & { highlighted?: boolean }
 ) => {
@@ -1018,9 +1033,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                             return (
                               <>
                                 <Show when={i() === 0 && featuredCount() > 0}>
-                                  <div class="px-3 py-1.5 text-xs text-text-muted font-medium">
-                                    Featured Results
-                                  </div>
+                                  <SearchSectionHeader label="Featured Results" />
                                 </Show>
                                 <Show
                                   when={
@@ -1028,9 +1041,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     featuredCount() > 0
                                   }
                                 >
-                                  <div class="px-3 py-1.5 text-xs text-text-muted font-medium border-t border-edge-muted mt-1">
-                                    More Results
-                                  </div>
+                                  <SearchSectionHeader label="More Results" />
                                 </Show>
 
                                 <Switch>
