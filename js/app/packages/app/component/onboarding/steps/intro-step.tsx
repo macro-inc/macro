@@ -64,7 +64,7 @@ export function IntroStep() {
         variant="base"
         size="lg"
         onClick={() => ctx.next()}
-        class="px-8 bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface"
+        class="px-8 bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
       >
         Get started
         <ArrowRightIcon class="size-4" />

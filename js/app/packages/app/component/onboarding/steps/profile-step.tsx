@@ -161,7 +161,7 @@ export function ProfileStep() {
           size="lg"
           onClick={handleGoogleAuth}
           disabled={authPending()}
-          class="w-full"
+          class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface [&_svg]:size-6"
         >
           <IconGoogle />
           {authPending() ? 'Redirecting...' : 'Continue with Google'}
@@ -177,7 +177,7 @@ export function ProfileStep() {
           variant="base"
           size="lg"
           onClick={handleContinueWithEmail}
-          class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface"
+          class="w-full focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
         >
           Continue with email
           <ArrowRightIcon class="size-4" />
