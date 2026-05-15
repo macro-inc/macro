@@ -184,26 +184,44 @@ export function TeamStep() {
       </div>
 
       <div class="flex flex-col gap-2">
-        <Button
-          variant="base"
-          size="lg"
-          onClick={handleContinue}
-          class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+        <Show
+          when={hasValidEmail()}
+          fallback={
+            <Button
+              variant="base"
+              size="lg"
+              onClick={() => {
+                ctx.setInvitedMembers([]);
+                ctx.next();
+              }}
+              class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+            >
+              Maybe later
+              <ArrowRightIcon class="size-4" />
+            </Button>
+          }
         >
-          Continue
-          <ArrowRightIcon class="size-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="md"
-          onClick={() => {
-            ctx.setInvitedMembers([]);
-            ctx.next();
-          }}
-          class="w-full"
-        >
-          Invite later
-        </Button>
+          <Button
+            variant="base"
+            size="lg"
+            onClick={handleContinue}
+            class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+          >
+            Continue
+            <ArrowRightIcon class="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="md"
+            onClick={() => {
+              ctx.setInvitedMembers([]);
+              ctx.next();
+            }}
+            class="w-full"
+          >
+            Maybe later
+          </Button>
+        </Show>
       </div>
     </div>
   );
