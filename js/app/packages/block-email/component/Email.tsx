@@ -32,6 +32,7 @@ import { registerEmailHotkeys } from '../util/emailHotkeys';
 import { scrollToMessage } from '../util/scrollToMessage';
 import { BottomReplyButtons } from './BottomReplyButtons';
 import { EmailFormContextProvider } from './EmailFormContext';
+import { EmailParticipants } from './EmailParticipants';
 import { MessageList } from './MessageList';
 import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
@@ -216,8 +217,7 @@ function EmailContent(props: EmailViewProps) {
         );
         context.messages.setFocused(lastUnreadMessageId_!);
       } else {
-        // No unread message, scroll to last message
-        scrollToLastMessage('instant', true);
+        scrollToLastMessage('instant', false);
       }
     }
 
@@ -289,10 +289,22 @@ function EmailContent(props: EmailViewProps) {
   });
 
   const navigateMessage = createCallback((dir: 'prev' | 'next') => {
-    const currentFocusedId = context.messages.focusedID();
     const messages = context.messages.list();
     const list = context.messagesListRef();
-    if (!currentFocusedId || !messages || !list) return false;
+    if (!messages?.length || !list) return false;
+
+    const currentFocusedId = context.messages.focusedID();
+
+    if (!currentFocusedId) {
+      const target =
+        dir === 'prev' ? messages[messages.length - 1] : messages[0];
+      if (!target?.db_id) return false;
+      performScrollToMessage(target.db_id, {
+        behavior: 'smooth',
+        focus: true,
+      });
+      return true;
+    }
 
     const currentIndex = messages.findIndex(
       (m) => m.db_id === currentFocusedId
@@ -300,13 +312,18 @@ function EmailContent(props: EmailViewProps) {
     if (currentIndex < 0) return false;
 
     const delta = dir === 'prev' ? -1 : 1;
-
     const targetIndex = currentIndex + delta;
 
-    if (targetIndex < 0 || targetIndex >= messages.length) return false;
+    if (targetIndex < 0 || targetIndex >= messages.length) {
+      if (dir === 'next' && markdownDomRef) {
+        context.messages.setFocused(undefined);
+        markdownDomRef.focus();
+        return true;
+      }
+      return false;
+    }
 
     const targetMsg = messages[targetIndex];
-
     if (!targetMsg?.db_id) return false;
 
     performScrollToMessage(targetMsg.db_id, {
@@ -502,13 +519,16 @@ function EmailContent(props: EmailViewProps) {
                       <div
                         class="macro-message-width macro-message-padding w-full border-b"
                         classList={{
-                          'border-edge-muted': isScrolled(),
+                          'border-edge-muted/50': isScrolled(),
                           'border-transparent': !isScrolled(),
                         }}
                       >
-                        <h1 class="ph-no-capture text-3xl font-semibold text-ink pt-3 pb-2">
+                        <h1 class="ph-no-capture text-2xl font-semibold text-ink pt-3 pb-1.5 tracking-tight text-balance">
                           {props.title}
                         </h1>
+                        <div class="pb-2.5">
+                          <EmailParticipants />
+                        </div>
                       </div>
                     </div>
                   </Show>
@@ -530,7 +550,7 @@ function EmailContent(props: EmailViewProps) {
                   }
                 >
                   {(info) => (
-                    <div class="shrink-0 w-full pb-2">
+                    <div class="shrink-0 w-full pb-4">
                       <div class="relative w-full flex flex-row justify-center bg-surface macro-message-width macro-message-padding mx-auto">
                         <FloatingInputLoader
                           isLoading={context.query.isFetching}

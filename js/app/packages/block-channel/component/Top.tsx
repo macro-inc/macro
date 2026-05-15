@@ -3,7 +3,8 @@ import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHea
 import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import type { ChannelTabId } from '@channel/Channel/channel-tabs';
 import { useBlockId } from '@core/block';
-import { type TabItem, Tabs } from '@core/component/Tabs';
+import type { TabItem } from '@core/component/Tabs';
+import { TabsInset } from '@core/component/TabsInset';
 import { UserIcon } from '@core/component/UserIcon';
 import { useChannelName } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
@@ -101,8 +102,8 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
         <Show
           when={!isMobile()}
           fallback={
-            <div class="ph-no-capture flex items-center min-w-0 shrink-0 h-full">
-              <Tabs
+            <div class="ph-no-capture flex items-center min-w-0 shrink-0 h-full mx-2">
+              <TabsInset
                 list={iconTabList()}
                 value={props.activeTab}
                 onChange={(value) => props.onTabChange?.(value as ChannelTabId)}
@@ -113,16 +114,16 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
           <CollapsibleHeaderItem
             id="channel-tabs"
             priority={1}
-            containerClass="ph-no-capture min-w-0 shrink-0 h-full"
+            containerClass="ph-no-capture min-w-0 shrink-0 h-full mx-2"
             expanded={() => (
-              <Tabs
+              <TabsInset
                 list={[...(props.tabs ?? [])]}
                 value={props.activeTab}
                 onChange={(value) => props.onTabChange?.(value as ChannelTabId)}
               />
             )}
             collapsed={() => (
-              <Tabs
+              <TabsInset
                 list={iconTabList()}
                 value={props.activeTab}
                 onChange={(value) => props.onTabChange?.(value as ChannelTabId)}

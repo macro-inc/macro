@@ -5,11 +5,29 @@ import ArrowBendUpRight from '@icon/regular/arrow-bend-up-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
-import { Show } from 'solid-js';
+import { type Component, Show } from 'solid-js';
 import { isReplyAllEligible } from '../util/recipientConversion';
 import type { ReplyType } from '../util/replyType';
 import { useEmailContext } from './EmailContext';
 import { getEmailFormRegistry } from './EmailFormContext';
+
+function ReplyActionButton(props: {
+  icon: Component<{ class?: string }>;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      variant="base"
+      size="sm"
+      class="rounded-lg px-3 py-1.5 text-sm text-ink-muted hover:text-ink border border-ink-muted/8 bg-ink-muted/[0.025] hover:bg-ink-muted/[0.06]"
+      onClick={props.onClick}
+    >
+      <props.icon class="size-3.5" />
+      <span>{props.label}</span>
+    </Button>
+  );
+}
 
 export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
   const ctx = useEmailContext();
@@ -33,37 +51,25 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
     });
 
   return (
-    <div class="w-full border-t border-edge-muted pt-3 pb-2">
-      <div class="flex flex-row items-center gap-2 pl-[calc(var(--user-icon-width)+2*var(--message-padding-x))]">
-        <Button
-          variant="base"
-          size="md"
-          class="rounded-full px-4 py-1"
+    <div class="w-full pt-2 pb-1">
+      <div class="flex flex-row items-center gap-2">
+        <ReplyActionButton
+          icon={ArrowBendUpLeft}
+          label="Reply"
           onClick={open('reply')}
-        >
-          <ArrowBendUpLeft class="size-4" />
-          <span>Reply</span>
-        </Button>
+        />
         <Show when={shouldShowReplyAll()}>
-          <Button
-            variant="base"
-            size="md"
-            class="rounded-full px-4 py-1"
+          <ReplyActionButton
+            icon={ArrowBendDoubleUpLeft}
+            label="Reply all"
             onClick={open('reply-all')}
-          >
-            <ArrowBendDoubleUpLeft class="size-4" />
-            <span>Reply all</span>
-          </Button>
+          />
         </Show>
-        <Button
-          variant="base"
-          size="md"
-          class="rounded-full px-4 py-1"
+        <ReplyActionButton
+          icon={ArrowBendUpRight}
+          label="Forward"
           onClick={open('forward')}
-        >
-          <ArrowBendUpRight class="size-4" />
-          <span>Forward</span>
-        </Button>
+        />
       </div>
     </div>
   );

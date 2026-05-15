@@ -295,7 +295,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
 
   return (
     <div
-      class="ph-no-capture flex flex-col pt-2"
+      class="ph-no-capture flex flex-col pt-1 max-sm:-ml-[calc(var(--user-icon-width)+var(--message-padding-x))]"
       onPointerDown={() => {
         if (!props.isBodyExpanded() && props.message.db_id) {
           props.setExpandedMessageBody(props.message.db_id);
@@ -335,12 +335,13 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
           <Match when={true}>{host()}</Match>
         </Switch>
         <Show when={!showFullHTML() && hasHiddenReplyStructure()}>
-          <div class="flex items-center gap-2 mt-2">
+          <div class="flex items-center mt-1.5">
             <Button
               variant="ghost"
               size="icon-sm"
               onClick={() => setShowFullHTML(true)}
               class={cn(
+                'rounded-md text-ink-extra-muted hover:text-ink-muted',
                 props.isFocused ? 'hover:bg-surface' : 'hover:bg-active'
               )}
             >

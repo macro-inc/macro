@@ -74,6 +74,7 @@ import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard
 import { DocumentMention as DocumentMentionDecorator } from '../decorator/DocumentMention';
 import { Equation as EquationDecorator } from '../decorator/Equation';
 import { GroupMention as GroupMentionDecorator } from '../decorator/GroupMention';
+import { LazyDecorator } from '../decorator/LazyDecorator';
 import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
 import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
 import { Snapshot as SnapshotDecorator } from '../decorator/Snapshot';
@@ -267,18 +268,34 @@ const UserMention: RenderableEntity<UserMentionNode> = {
   ),
 };
 
+const MentionPlaceholder = () => (
+  <span class="pointer-events-none inline-block align-baseline opacity-60">
+    <span class="relative top-[0.125em] size-[1em] inline-block mx-1 bg-current/15 rounded-xs" />
+    <span class="inline-block w-12 h-[0.9em] align-baseline bg-current/10 rounded-sm" />
+  </span>
+);
+
 const DocumentMention: RenderableEntity<DocumentMentionNode> = {
   guard: (node: LexicalNode): node is DocumentMentionNode =>
     node.__type === 'document-mention',
-  render: (props) => (
-    <span class={getTextClassName(props.node, props.theme)}>
-      {DocumentMentionDecorator({
-        ...props.node.exportComponentProps(),
-        key: props.node.getKey(),
-        theme: props.theme,
-      })}
-    </span>
-  ),
+  render: (props) => {
+    const componentProps = props.node.exportComponentProps();
+    const key = props.node.getKey();
+    return (
+      <span class={getTextClassName(props.node, props.theme)}>
+        <LazyDecorator
+          placeholder={<MentionPlaceholder />}
+          render={() =>
+            DocumentMentionDecorator({
+              ...componentProps,
+              key,
+              theme: props.theme,
+            })
+          }
+        />
+      </span>
+    );
+  },
 };
 
 const ThemeMention: RenderableEntity<ThemeMentionNode> = {
@@ -840,6 +857,7 @@ export function StaticMarkdown(props: {
       return Document({
         rootNode: $getRoot(),
         theme: mergedTheme(),
+        rootRef: props.rootRef,
       });
     });
   });

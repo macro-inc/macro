@@ -397,6 +397,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 mcp_repo.clone(),
                 mcp_state_store,
                 "http://localhost/mcp/servers/auth/callback".to_string(),
+                mcp_client::domain::provider_registry::PreRegisteredProviders::from_env(),
             );
             mcp_client::inbound::McpRouterState::new(mcp_repo, mcp_oauth)
         },

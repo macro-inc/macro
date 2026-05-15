@@ -49,7 +49,7 @@ export function MessageActions(props: {
 
   return (
     <div
-      class="flex flex-row items-center gap-1 transition-opacity"
+      class="flex flex-row items-center gap-0.5"
       classList={{
         'opacity-0 pointer-events-none': !canShowActions(),
         'opacity-100': canShowActions(),
@@ -57,11 +57,11 @@ export function MessageActions(props: {
     >
       <Show when={!props.hiddenActions?.includes('reply')}>
         <Button
-          class="size-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
+          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/[0.08]"
           onClick={onChangeReplyType('reply')}
           tooltip="Reply"
         >
-          <ArrowBendUpLeft class="size-5" />
+          <ArrowBendUpLeft class="size-3.5" />
         </Button>
       </Show>
       <Show
@@ -70,20 +70,20 @@ export function MessageActions(props: {
         }
       >
         <Button
-          class="size-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
+          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/[0.08]"
           onClick={onChangeReplyType('reply-all')}
           tooltip="Reply all"
         >
-          <ArrowBendDoubleUpLeft class="size-5" />
+          <ArrowBendDoubleUpLeft class="size-3.5" />
         </Button>
       </Show>
       <Show when={!props.hiddenActions?.includes('forward')}>
         <Button
-          class="size-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
+          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/[0.08]"
           onClick={onChangeReplyType('forward')}
           tooltip="Forward"
         >
-          <ArrowBendUpRight class="size-5" />
+          <ArrowBendUpRight class="size-3.5" />
         </Button>
       </Show>
     </div>

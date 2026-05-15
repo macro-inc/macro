@@ -316,6 +316,7 @@ export function Channel(props: ChannelProps) {
     channelId: () => props.channelId,
     goToMessage,
     clearSelection,
+    isMessageLoaded: (id) => messageIndex.keys.includes(id),
   });
 
   const { messageListScopeId, attachMessageListRef, attachInputRef } =
@@ -450,6 +451,7 @@ export function Channel(props: ChannelProps) {
                                 channelId={() => props.channelId}
                                 isNewestThread={isNewestThread()}
                                 getMessageActions={getMessageActions}
+                                targetThreadId={targetMessageController.activeTargetMessageId()}
                                 targetReplyId={targetMessageController.pendingTargetReplyId()}
                                 selectedReplyId={targetMessageController.activeTargetMessageReplyId()}
                                 onTargetReplyScrolled={(replyId) => {

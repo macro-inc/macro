@@ -410,10 +410,13 @@ async fn main() -> anyhow::Result<()> {
     );
     let mcp_oauth_state_store =
         mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client.clone());
+    let mcp_pre_registered =
+        mcp_client::domain::provider_registry::PreRegisteredProviders::from_env();
     let mcp_oauth = mcp_client::domain::service::OAuthService::new(
         mcp_server_repo.clone(),
         mcp_oauth_state_store,
         mcp_redirect_uri,
+        mcp_pre_registered,
     );
     let mcp_state = mcp_client::inbound::McpRouterState::new(mcp_server_repo, mcp_oauth);
 

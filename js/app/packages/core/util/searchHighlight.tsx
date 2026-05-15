@@ -85,12 +85,127 @@ export function mergeAdjacentMacroEmTags(highlightedContent: string): string {
   return highlightedContent.replace(/<\/macro_em>(\s+)<macro_em>/g, '$1');
 }
 
+/** Escapes regex special characters in a string. */
+export function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Builds a case-insensitive global RegExp that matches any of the given
+ * terms as a single capture group. Returns `undefined` if `terms` is empty.
+ */
+export function buildTermsPattern(
+  terms: readonly string[]
+): RegExp | undefined {
+  if (terms.length === 0) return undefined;
+  return new RegExp(`(${terms.map(escapeRegex).join('|')})`, 'gi');
+}
+
 /** Wraps each occurrence of the given terms in `<macro_em>` tags (case-insensitive). */
 export function highlightTermsInText(text: string, terms: string[]): string {
-  if (!terms.length) return text;
-  const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const pattern = new RegExp(`(${escaped.join('|')})`, 'gi');
+  const pattern = buildTermsPattern(terms);
+  if (!pattern) return text;
   return text.replace(pattern, '<macro_em>$1</macro_em>');
+}
+
+/**
+ * Default attribute used to mark DOM highlight wrappers. The DOM helpers
+ * below use this to find and unwrap their own injected spans on the next
+ * pass without disturbing other spans in the subtree.
+ */
+const DOM_HIGHLIGHT_MARKER_ATTR = 'data-search-highlight';
+const DOM_HIGHLIGHT_DEFAULT_CLASS = 'md-mark search-match inline';
+
+type DomHighlightOptions = {
+  /** CSS classes applied to the injected `<span>` wrapper. */
+  className?: string;
+  /** Marker attribute name (used to find wrappers on cleanup). */
+  markerAttr?: string;
+};
+
+/**
+ * Removes previously-injected highlight spans from `root` (those carrying
+ * the marker attribute). Adjacent text nodes are merged via `normalize()`.
+ */
+export function unwrapDomHighlights(
+  root: HTMLElement,
+  options: DomHighlightOptions = {}
+): void {
+  const markerAttr = options.markerAttr ?? DOM_HIGHLIGHT_MARKER_ATTR;
+  const spans = root.querySelectorAll<HTMLElement>(`span[${markerAttr}]`);
+  if (spans.length === 0) return;
+  spans.forEach((s) => {
+    const text = s.ownerDocument.createTextNode(s.textContent ?? '');
+    s.parentNode?.replaceChild(text, s);
+  });
+  root.normalize();
+}
+
+/**
+ * Walks text nodes under `root` and wraps occurrences of `terms` (case-
+ * insensitive) in `<span>` elements carrying the marker attribute and CSS
+ * classes. Pure DOM mutation — does not touch any component tree, so it's
+ * safe to use when the rendered subtree is expensive to rebuild.
+ *
+ * Text nodes inside existing highlight wrappers are skipped so re-applying
+ * is idempotent when paired with {@link unwrapDomHighlights}.
+ */
+export function applyDomHighlights(
+  root: HTMLElement,
+  terms: readonly string[],
+  options: DomHighlightOptions = {}
+): void {
+  const pattern = buildTermsPattern(terms);
+  if (!pattern) return;
+
+  const markerAttr = options.markerAttr ?? DOM_HIGHLIGHT_MARKER_ATTR;
+  const className = options.className ?? DOM_HIGHLIGHT_DEFAULT_CLASS;
+
+  const targets: Text[] = [];
+  const walker = root.ownerDocument.createTreeWalker(
+    root,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode(node) {
+        const parent = node.parentElement;
+        if (parent?.hasAttribute(markerAttr)) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    }
+  );
+  while (true) {
+    const n = walker.nextNode();
+    if (!n) break;
+    targets.push(n as Text);
+  }
+
+  for (const tn of targets) {
+    const text = tn.nodeValue ?? '';
+    pattern.lastIndex = 0;
+    if (!pattern.test(text)) continue;
+    pattern.lastIndex = 0;
+
+    const doc = tn.ownerDocument;
+    const frag = doc.createDocumentFragment();
+    let lastIdx = 0;
+    for (const m of text.matchAll(pattern)) {
+      if (m.index > lastIdx) {
+        frag.appendChild(doc.createTextNode(text.slice(lastIdx, m.index)));
+      }
+      const span = doc.createElement('span');
+      span.className = className;
+      span.setAttribute(markerAttr, '1');
+      span.textContent = m[0];
+      frag.appendChild(span);
+      lastIdx = m.index + m[0].length;
+    }
+    if (lastIdx < text.length) {
+      frag.appendChild(doc.createTextNode(text.slice(lastIdx)));
+    }
+    tn.parentNode?.replaceChild(frag, tn);
+  }
 }
 
 /**

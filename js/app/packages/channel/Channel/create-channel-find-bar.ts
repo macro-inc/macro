@@ -8,6 +8,9 @@ import {
   isChannelMessageEntity,
   type WithSearch,
 } from '@entity';
+import { channelMessagesQueryOptions } from '@queries/channel/channel-messages';
+import { threadRepliesQueryOptions } from '@queries/channel/thread-replies';
+import { queryClient } from '@queries/client';
 import {
   useSearchChannelQuery,
   validateSearchServiceText,
@@ -23,11 +26,14 @@ import type { SearchHighlightTermsLookup } from '../Message/context';
 
 const FIND_BAR_PAGE_SIZE = 50;
 const FIND_BAR_PREFETCH_THRESHOLD = 10;
+const FIND_BAR_REPLY_PREFETCH_LOOKAHEAD = 2;
+const FIND_BAR_MESSAGES_PREFETCH_LOOKAHEAD = 2;
 
 type CreateChannelFindBarOptions = {
   channelId: Accessor<string>;
   goToMessage: (messageId: string, replyId?: string) => void;
   clearSelection: () => void;
+  isMessageLoaded: (messageId: string) => boolean;
 };
 
 export type ChannelFindBar = FindBarController & {
@@ -108,6 +114,61 @@ export function createChannelFindBar(
         if (!searchQuery.hasNextPage || searchQuery.isFetchingNextPage) return;
         if (rs.length - idx <= FIND_BAR_PREFETCH_THRESHOLD) {
           searchQuery.fetchNextPage();
+        }
+      });
+
+      // Prefetch /replies for the next few reply hits ahead of the cursor.
+      // ChannelThread fires the replies query only on mount with `targetReplyId`
+      // set, so the very first reply-nav into each thread always pays a round-trip.
+      // Warming the cache in advance hides that latency on rapid next/prev.
+      // `prefetchQuery` is a no-op when the cached entry is fresh (staleTime is
+      // Infinity for replies), so re-runs are cheap.
+      createEffect(() => {
+        const rs = results();
+        const idx = activeIndex();
+        if (idx === 0 || rs.length === 0) return;
+
+        const channelId = options.channelId();
+        const end = Math.min(
+          idx + FIND_BAR_REPLY_PREFETCH_LOOKAHEAD,
+          rs.length
+        );
+        for (let i = idx; i < end; i++) {
+          const threadId = rs[i].threadId;
+          if (!threadId) continue;
+          queryClient.prefetchQuery(
+            threadRepliesQueryOptions(channelId, threadId)
+          );
+        }
+      });
+
+      // Prefetch the load-around channel-messages window for the next few hits.
+      // When the user navigates to a result that's outside the current message
+      // window, tmc switches `loadAroundMessageId` to that id and `/messages?
+      // load_around_message_id=…` fetches a 50-row window centered on it. That
+      // round-trip is the dominant delay on rapid find-bar navigation through
+      // older messages. Skip hits that are already in the loaded window (we'd
+      // never actually fire an around-fetch for them) and dedupe so multiple
+      // replies to the same parent thread share one prefetch.
+      createEffect(() => {
+        const rs = results();
+        const idx = activeIndex();
+        if (idx === 0 || rs.length === 0) return;
+
+        const channelId = options.channelId();
+        const end = Math.min(
+          idx + FIND_BAR_MESSAGES_PREFETCH_LOOKAHEAD,
+          rs.length
+        );
+        const seen = new Set<string>();
+        for (let i = idx; i < end; i++) {
+          const aroundId = rs[i].threadId ?? rs[i].messageId;
+          if (seen.has(aroundId)) continue;
+          seen.add(aroundId);
+          if (options.isMessageLoaded(aroundId)) continue;
+          queryClient.prefetchInfiniteQuery(
+            channelMessagesQueryOptions(channelId, aroundId)
+          );
         }
       });
 
