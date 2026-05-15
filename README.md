@@ -4,7 +4,7 @@
   </a>
 
   <p>
-    Extremely fast email, messaging, tasks, docs, files, calls, and AI, linked together in one system.
+    Email, messaging, tasks, docs, files, calls, and AI in one linked workspace.
   </p>
 
   <p>
@@ -20,98 +20,51 @@
 
 # Why Macro
 
-Macro is the workspace for teams that move through information all day: email, chat, documents, files, tasks, calls, search, and AI in one fast surface.
+Macro is for teams whose work is scattered across email, chat, documents, files, tasks, calls, search, and AI.
 
-Everything in Macro is connected with bi-directional `@links`. Mention a doc in a channel, link a task from an email, drop a file into a canvas, or ask AI about the context around any object. The result is a workspace that keeps the thread intact instead of scattering work across tabs.
+The important part is the graph between those objects. Mention a doc in a channel, link a task from an email, drop a file into a canvas, or ask AI about the context around any object; Macro keeps the reference instead of losing it in another tab.
 
 # Features
 
 <table>
   <tr>
     <td width="50%">
-      <strong>Search Across Everything</strong>
-      <br />
-      <br />
+      <p>
+        <img src=".github/icons/search.svg" width="24" height="24" alt="" />
+        <strong>Search</strong>
+      </p>
       <img width="100%" alt="Macro unified search across workspace objects" src=".github/readme/search.png" />
       <br />
-      <br />
-      Macro's search is a command center for the whole workspace. Filter across emails, channels, documents, tasks, files, calls, and people, then jump straight into the object you need. The same surface also lets you ask AI questions over your workspace with <code>@mentions</code> for precise context.
+      Search spans emails, channels, docs, tasks, files, calls, and people. Filter to the object you need, or ask AI with <code>@mentions</code> for context.
     </td>
     <td width="50%">
-      <strong>Channels That Keep Context</strong>
-      <br />
-      <br />
+      <p>
+        <img src=".github/icons/channel.svg" width="24" height="24" alt="" />
+        <strong>Messaging</strong>
+      </p>
       <img width="100%" alt="Macro channel with linked messages, documents, and files" src=".github/readme/channels.png" />
       <br />
-      <br />
-      Channels are built for messy team work: messages, replies, attachments, docs, tasks, canvases, PDFs, and calls can all live in the same conversation. Every <code>@link</code> is bi-directional, so a reference in chat also becomes a path back from the thing being discussed.
+      Channels hold messages, replies, attachments, docs, tasks, canvases, PDFs, and calls in the same thread. Every <code>@link</code> points both ways.
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <strong>Calls With Memory</strong>
-      <br />
-      <br />
+      <p>
+        <img src=".github/icons/chat.svg" width="24" height="24" alt="" />
+        <strong>Calls</strong>
+      </p>
       <img width="100%" alt="Macro call recording with summary and participants" src=".github/readme/calls.png" />
       <br />
-      <br />
-      Calls in Macro do not disappear when the meeting ends. Recordings, participants, summaries, and transcripts stay connected to the rest of the workspace, so follow-ups can link back to the exact discussion that created them.
+      Recordings, participants, summaries, and transcripts stay connected to the workspace, so follow-ups can link back to the discussion that created them.
     </td>
     <td width="50%">
-      <strong>AI Agents For The Workspace</strong>
-      <br />
-      <br />
+      <p>
+        <img src=".github/icons/star.svg" width="24" height="24" alt="" />
+        <strong>Agents</strong>
+      </p>
       <img width="100%" alt="Macro AI agent gathering context across workspace activity" src=".github/readme/agents.png" />
       <br />
-      <br />
-      Macro's AI can read across your recent calls, channels, docs, tasks, and notifications to build a useful picture of what happened. Agents can search, filter, inspect transcripts, and gather context before answering, so workspace intelligence is grounded in the objects your team already uses.
-    </td>
-  </tr>
-</table>
-
-## More In The Box
-
-<table>
-  <tr>
-    <td width="50%">
-      <p><img src=".github/icons/email.svg" width="28" height="28" alt="Email" /></p>
-      <strong>Email</strong>
-      <br />
-      Full email client with keyboard-driven triage, instant search, and Gmail sync.
-    </td>
-    <td width="50%">
-      <p><img src=".github/icons/book.svg" width="28" height="28" alt="Docs" /></p>
-      <strong>Docs & Notes</strong>
-      <br />
-      Real-time collaborative documents using CRDTs and the same editor used across the app.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <p><img src=".github/icons/diagram.svg" width="28" height="28" alt="Canvas" /></p>
-      <strong>Canvas</strong>
-      <br />
-      2D diagramming with embedded links to tasks, files, emails, and documents.
-    </td>
-    <td width="50%">
-      <p><img src=".github/icons/file-md.svg" width="28" height="28" alt="Unified editor" /></p>
-      <strong>Unified Editor</strong>
-      <br />
-      One rich text surface for emails, notes, channel messages, tasks, and AI context.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <p><img src=".github/icons/folder.svg" width="28" height="28" alt="Files" /></p>
-      <strong>File Storage</strong>
-      <br />
-      Store and share videos, images, PDFs, and documents. Attachments are imported from emails and channels.
-    </td>
-    <td width="50%">
-      <p><img src=".github/icons/keyboard.svg" width="28" height="28" alt="Keyboard" /></p>
-      <strong>Keyboard First</strong>
-      <br />
-      Every action has a hotkey so you can navigate, triage, search, and execute without leaving the keyboard.
+      Agents can search, filter, read transcripts, and gather context across recent calls, channels, docs, tasks, and notifications before answering.
     </td>
   </tr>
 </table>
@@ -166,13 +119,3 @@ Have an idea, want to contribute, or want to work on Macro?
 - Feature requests: [contact@macro.com](mailto:contact@macro.com)
 - Contributions: [contribute@macro.com](mailto:contribute@macro.com)
 - Hiring: [teo@macro.com](mailto:teo@macro.com)
-
-# Star History
-
-<a href="https://www.star-history.com/?repos=macro-inc%2Fmacro&type=date&legend=top-left">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=macro-inc/macro&type=date&theme=dark&legend=top-left" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=macro-inc/macro&type=date&legend=top-left" />
-    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=macro-inc/macro&type=date&legend=top-left" />
-  </picture>
-</a>
