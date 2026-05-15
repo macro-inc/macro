@@ -20,6 +20,11 @@ const HoverCardPortalNestedPreviewOpenContext = createContext<
   NestedHoverCardContext | undefined
 >(undefined);
 
+// Top-level open cards. When a new card opens, close any already-open siblings
+// so only one card is visible at a time — Kobalte instances are independent
+// and a missed pointerleave (common during scroll) can leave multiple stranded.
+const openTopLevelHoverCards = new Set<() => void>();
+
 export type HoverCardComponentProps = {
   /** The trigger content to hover over */
   trigger: JSX.Element;
@@ -86,14 +91,34 @@ export function HoverCard(props: HoverCardComponentProps) {
     }
   });
 
+  const closeSelf = () => {
+    setIsHoverCardOpen(false);
+    props.onOpenChange?.(false);
+  };
+
+  const isTopLevel = parentNestedContext === undefined;
+
   const handleOpenChange = (open: boolean) => {
     if (!open && nestedOpenCount() > 0) {
       return;
     }
 
+    if (open && isTopLevel) {
+      for (const close of openTopLevelHoverCards) {
+        if (close !== closeSelf) close();
+      }
+      openTopLevelHoverCards.add(closeSelf);
+    } else if (!open && isTopLevel) {
+      openTopLevelHoverCards.delete(closeSelf);
+    }
+
     setIsHoverCardOpen(open);
     props.onOpenChange?.(open);
   };
+
+  onCleanup(() => {
+    if (isTopLevel) openTopLevelHoverCards.delete(closeSelf);
+  });
 
   const shouldForceMount = () => nestedOpenCount() > 0;
 
