@@ -41,6 +41,7 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
+import { TaskListEntity } from '@app/component/next-soup/soup-view/views/tasks/TaskListEntity';
 import { ResponsiveTaskListHeader } from '@app/component/next-soup/soup-view/views/tasks/TaskListHeader';
 import {
   openEntityInNewTab,
@@ -1103,7 +1104,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     <SoupEntityContextMenu
                                       entity={row.original}
                                     >
-                                      <ListEntity
+                                      <Dynamic
+                                        component={
+                                          currentView() === 'tasks'
+                                            ? TaskListEntity
+                                            : ListEntity
+                                        }
                                         entity={row.original}
                                         timestamp={timestamp()}
                                         highlighted={row.isFocused()}
