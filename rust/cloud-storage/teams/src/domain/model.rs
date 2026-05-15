@@ -22,7 +22,7 @@ use roles_and_permissions::domain::model::UserRolesAndPermissionsError;
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
     feature = "outbound",
-    sqlx(type_name = "\"team_paid_plan\"", rename_all = "snake_case")
+    sqlx(type_name = "\"team_plan\"", rename_all = "snake_case")
 )]
 #[serde(rename_all = "snake_case")]
 pub enum TeamPlan {

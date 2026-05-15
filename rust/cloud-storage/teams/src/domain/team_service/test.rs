@@ -37,7 +37,7 @@ use crate::domain::{
     model::{
         AcceptedTeamInvite, CreateSubscriptionArgs, CustomerError, PatchTeamRequest,
         PatchTeamUserRole, RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError,
-        TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamWithMembers,
+        TeamInvite, TeamInviteDetails, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
     },
     team_repo::{TeamChannelsRepository, TeamRepository},
 };
@@ -329,6 +329,21 @@ impl TeamRepository for MockTeamRepository {
             role,
         ));
         async { Ok(()) }
+    }
+
+    fn get_team_seat_count(
+        &self,
+        _: &uuid::Uuid,
+    ) -> impl Future<Output = Result<i32, TeamError>> + Send {
+        async { unimplemented!() }
+    }
+
+    fn patch_team_plan(
+        &self,
+        _: &uuid::Uuid,
+        _: TeamPlan,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send {
+        async { unimplemented!() }
     }
 }
 

@@ -755,6 +755,70 @@ async fn test_bump_seat_count_negative(pool: Pool<Postgres>) -> anyhow::Result<(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
+async fn test_get_team_seat_count(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let seat_count = team_repo.get_team_seat_count(&team_id).await?;
+    assert_eq!(seat_count, 3);
+
+    let missing_team_id = macro_uuid::string_to_uuid("63333333-3333-3333-3333-333333333333")?;
+    let err = team_repo
+        .get_team_seat_count(&missing_team_id)
+        .await
+        .err()
+        .unwrap();
+    assert!(err.to_string().contains("does not exist"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_patch_team_plan(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    team_repo.patch_team_plan(&team_id, TeamPlan::Seed).await?;
+
+    let row = sqlx::query!(
+        r#"SELECT plan::text AS "plan!" FROM team WHERE id = $1"#,
+        &team_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(row.plan, "seed");
+
+    team_repo
+        .patch_team_plan(&team_id, TeamPlan::Growth)
+        .await?;
+
+    let row = sqlx::query!(
+        r#"SELECT plan::text AS "plan!" FROM team WHERE id = $1"#,
+        &team_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(row.plan, "growth");
+
+    let missing_team_id = macro_uuid::string_to_uuid("63333333-3333-3333-3333-333333333333")?;
+    let err = team_repo
+        .patch_team_plan(&missing_team_id, TeamPlan::Idea)
+        .await
+        .err()
+        .unwrap();
+    assert!(err.to_string().contains("does not exist"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
 async fn test_get_team_member(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 

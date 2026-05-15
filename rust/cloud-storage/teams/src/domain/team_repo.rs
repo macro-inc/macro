@@ -11,7 +11,7 @@ use crate::domain::model::{
     AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
     PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
     RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team, TeamError,
-    TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamWithMembers,
+    TeamInvite, TeamInviteDetails, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
 };
 
 /// The TeamChannelsRepository defines a set of actions related to team channels
@@ -208,6 +208,19 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
         team_role: TeamRole,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Get the teams current seat count
+    fn get_team_seat_count(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<i32, TeamError>> + Send;
+
+    /// Patches the teams current plan
+    fn patch_team_plan(
+        &self,
+        team_id: &uuid::Uuid,
+        team_plan: TeamPlan,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 }
 
