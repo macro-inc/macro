@@ -12,6 +12,24 @@ export const TASK_STATUS_OPTIONS = [
   { value: PROPERTY_OPTION_IDS.STATUS.CANCELED, label: 'Canceled' },
 ] as const;
 
+export const TASK_PRIORITY_OPTIONS = [
+  { value: PROPERTY_OPTION_IDS.PRIORITY.URGENT, label: 'Urgent' },
+  { value: PROPERTY_OPTION_IDS.PRIORITY.HIGH, label: 'High' },
+  { value: PROPERTY_OPTION_IDS.PRIORITY.MEDIUM, label: 'Medium' },
+  { value: PROPERTY_OPTION_IDS.PRIORITY.LOW, label: 'Low' },
+] as const;
+
+const PROPERTY_OPTION_LABELS: Record<string, string> = {
+  ...Object.fromEntries(TASK_STATUS_OPTIONS.map((o) => [o.value, o.label])),
+  ...Object.fromEntries(TASK_PRIORITY_OPTIONS.map((o) => [o.value, o.label])),
+};
+
+export const getPropertyOptionLabel = (
+  optionId: string
+): string | undefined => {
+  return PROPERTY_OPTION_LABELS[optionId];
+};
+
 const getTaskPropertyByDefinitionId = (
   entity: TaskEntityWithProperties,
   definitionId: string

@@ -42,6 +42,7 @@ pub async fn tool_completion<T>(
                     id: tool_call.id.clone(),
                     json: serde_json::from_str(&tool_call.function.arguments)?,
                     name: tool_call.function.name.clone(),
+                    mcp: None,
                 }),
                 ChatCompletionMessageToolCalls::Custom(_) => Err(AiError::from(anyhow::anyhow!(
                     "Unexpected custom tool call"

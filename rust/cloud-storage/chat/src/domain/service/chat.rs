@@ -439,7 +439,7 @@ where
         match content {
             ChatMessageContent::AssistantMessageParts(parts) => {
                 let has_tool = parts.iter().any(|part| {
-                    matches!(part, AssistantMessagePart::ToolCall { id, .. } if id == tool_call_id)
+                    matches!(part, AssistantMessagePart::ToolCall { id, .. } | AssistantMessagePart::McpToolCall { id, .. } if id == tool_call_id)
                 });
                 if has_tool {
                     Ok(parts)
@@ -462,6 +462,9 @@ fn find_tool_call<'a>(
         AssistantMessagePart::ToolCall { id, name, json } if id == tool_call_id => {
             Some((name.as_str(), json))
         }
+        AssistantMessagePart::McpToolCall { id, name, json, .. } if id == tool_call_id => {
+            Some((name.as_str(), json))
+        }
         _ => None,
     })
 }
@@ -473,11 +476,15 @@ fn update_tool_call_args(
     new_args: serde_json::Value,
 ) {
     for part in parts.iter_mut() {
-        if let AssistantMessagePart::ToolCall { id, json, .. } = part
-            && id == tool_call_id
-        {
-            *json = new_args;
-            return;
+        match part {
+            AssistantMessagePart::ToolCall { id, json, .. }
+            | AssistantMessagePart::McpToolCall { id, json, .. }
+                if id == tool_call_id =>
+            {
+                *json = new_args;
+                return;
+            }
+            _ => {}
         }
     }
 }

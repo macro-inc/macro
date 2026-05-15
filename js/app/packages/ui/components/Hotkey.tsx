@@ -119,6 +119,44 @@ interface HotkeyProps extends JSX.HTMLAttributes<HTMLDivElement> {
  * @example
  * <Hotkey token={TOKENS.canvas.cut} />
  */
+/**
+ * Returns the hotkey as a plain string, handling the same props as Hotkey.
+ * @param props.token - The hotkey registry token to get the string for.
+ * @param props.shortcut - Or a direct shortcut string.
+ * @param props.lowercase - Whether to lowercase the key.
+ * @param props.showPlus - Whether to include '+' between parts.
+ * @example
+ * getNormalizedKeyString({ token: TOKENS.canvas.cut }) // "⌘X"
+ * getNormalizedKeyString({ shortcut: 'meta+shift+k', showPlus: true }) // "⌘ + ⇧ + K"
+ */
+export function getNormalizedKeyString(props: Pick<HotkeyProps, 'token' | 'shortcut' | 'lowercase' | 'showPlus'>): string {
+  const resolvedShortcut = props.token ? getPrettyHotkeyStringByToken(props.token) : props.shortcut;
+
+  if (!resolvedShortcut) return '';
+
+  const hotkey = breakApartHotkeyString(resolvedShortcut);
+
+  const normalizedKey = props.lowercase
+    ? typeof hotkey.key === 'string'
+      ? hotkey.key.toLowerCase()
+      : hotkey.key.map((k) => k.toLowerCase())
+    : typeof hotkey.key === 'string'
+      ? hotkey.key.toUpperCase()
+      : hotkey.key.map((k) => k.toUpperCase());
+
+  const modifierStrings = hotkey.modifiers.map(
+    (mod) => modifierMap[mod as keyof typeof modifierMap] || mod
+  );
+
+  const keyStrings = typeof normalizedKey === 'string'
+    ? (normalizedKey ? [normalizedKey] : [])
+    : normalizedKey;
+
+  const separator = props.showPlus ? ' + ' : '';
+
+  return [...modifierStrings, ...keyStrings].join(separator);
+}
+
 export function Hotkey(props: HotkeyProps){
   const [local, rest] = splitProps(props, [
     'lowercase',

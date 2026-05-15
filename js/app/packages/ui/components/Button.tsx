@@ -76,19 +76,27 @@ export const Button = (props: ButtonProps) => {
 
   const tooltipLabel = () => local.label ?? local.tooltip;
 
+  // Skip Layer when inside a ButtonGroup (the group already provides one)
+  // unless the button has its own explicit depth
+  const skipLayer = () => group !== undefined && local.depth === undefined;
+
+  const content = () => (
+    <Show when={tooltipLabel() !== undefined ? tooltipLabel() : false} fallback={button()}>
+      {(label) => (
+        <Tooltip
+          hotkey={local.hotkey}
+          placement={placement()}
+          label={label()}
+        >
+          {button()}
+        </Tooltip>
+      )}
+    </Show>
+  );
+
   return (
-    <Layer depth={local.depth ?? 0}>
-      <Show when={tooltipLabel() !== undefined ? tooltipLabel() : false} fallback={button()}>
-        {(label) => (
-          <Tooltip
-            hotkey={local.hotkey}
-            placement={placement()}
-            label={label()}
-          >
-            {button()}
-          </Tooltip>
-        )}
-      </Show>
-    </Layer>
+    <Show when={skipLayer()} fallback={<Layer depth={local.depth ?? 0}>{content()}</Layer>}>
+      {content()}
+    </Show>
   );
 };

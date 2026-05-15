@@ -193,24 +193,15 @@ export function DispatchAgentButton() {
 
   return (
     <DropdownMenu open={open()} onOpenChange={setOpen}>
-      <ButtonGroup
-        variant="base"
-        size="icon-sm"
-        depth={2}
-        class="bg-surface text-ink-muted"
-      >
-        <Button
-          onClick={handlePrimaryClick}
-          tooltip={lastUsed().name}
-          class="text-ink-muted"
-        >
+      <ButtonGroup variant="base" size="icon-sm" depth={2} class="bg-surface">
+        <Button onClick={handlePrimaryClick} tooltip={lastUsed().name}>
           <Dynamic
             component={lastUsed().buttonIcon ?? lastUsed().icon}
             class="size-3!"
           />
         </Button>
         <ButtonGroup.Divider />
-        <DropdownMenu.Trigger as={Button} class="p-1 text-ink-muted">
+        <DropdownMenu.Trigger as={Button} class="p-1">
           <CaretDown class="size-3.5!" />
         </DropdownMenu.Trigger>
       </ButtonGroup>

@@ -64,7 +64,11 @@ describe('createSoupState', () => {
       createRoot((dispose) => {
         const state = createSoupState();
         const entities = [createTestEntity('1'), createTestEntity('2')];
-        state.setRows(entities.map((e) => state.buildRow(e)));
+        state.setRows(
+          entities.map((e, i) =>
+            state.buildRow({ id: e.id, index: i, original: e })
+          )
+        );
 
         expect(state.rows().map((r) => r.original)).toEqual(entities);
         expect(state.items.count()).toBe(2);
@@ -80,7 +84,11 @@ describe('createSoupState', () => {
         const state = createSoupState();
         const entities = [createTestEntity('1'), createTestEntity('2')];
 
-        state.setRows(entities.map((e) => state.buildRow(e)));
+        state.setRows(
+          entities.map((e, i) =>
+            state.buildRow({ id: e.id, index: i, original: e })
+          )
+        );
 
         expect(state.rows().map((r) => r.original)).toEqual(entities);
 
@@ -95,7 +103,11 @@ describe('createSoupState', () => {
         const entity1 = createTestEntity('1');
         const entity2 = createTestEntity('2');
         const state = createSoupState();
-        state.setRows([entity1, entity2].map((e) => state.buildRow(e)));
+        state.setRows(
+          [entity1, entity2].map((e, i) =>
+            state.buildRow({ id: e.id, index: i, original: e })
+          )
+        );
 
         expect(state.items.get('1')?.original).toBe(entity1);
         expect(state.items.get('2')?.original).toBe(entity2);
@@ -109,7 +121,9 @@ describe('createSoupState', () => {
       createRoot((dispose) => {
         const entity1 = createTestEntity('1');
         const entity2 = createTestEntity('2');
-        const state = createSoupState({});
+        const state = createSoupState({
+          initialData: [entity1, entity2],
+        });
 
         expect(state.items.at(0)?.original).toBe(entity1);
         expect(state.items.at(1)?.original).toBe(entity2);

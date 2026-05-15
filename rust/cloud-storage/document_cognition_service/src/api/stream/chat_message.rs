@@ -388,7 +388,8 @@ fn resolve_pending_tool_calls(parts: Vec<AssistantMessagePart>) -> Vec<Assistant
     let mut pending: HashSet<String> = HashSet::new();
     for part in &parts {
         match part {
-            AssistantMessagePart::ToolCall { id, .. } => {
+            AssistantMessagePart::ToolCall { id, .. }
+            | AssistantMessagePart::McpToolCall { id, .. } => {
                 pending.insert(id.clone());
             }
             AssistantMessagePart::ToolCallResponseJson { id, .. }
@@ -404,7 +405,10 @@ fn resolve_pending_tool_calls(parts: Vec<AssistantMessagePart>) -> Vec<Assistant
     let mut out: Vec<AssistantMessagePart> = Vec::with_capacity(parts.len() + pending.len());
     for part in parts {
         let synthetic = match &part {
-            AssistantMessagePart::ToolCall { id, name, .. } if pending.contains(id) => {
+            AssistantMessagePart::ToolCall { id, name, .. }
+            | AssistantMessagePart::McpToolCall { id, name, .. }
+                if pending.contains(id) =>
+            {
                 Some(AssistantMessagePart::ToolCallErr {
                     name: name.clone(),
                     id: id.clone(),
@@ -561,10 +565,19 @@ fn stream_and_save_message(
                             }
                             AssistantMessagePart::Text { text: content }
                         }
-                        StreamPart::ToolCall(call) => AssistantMessagePart::ToolCall {
-                            name: call.name,
-                            json: call.json,
-                            id: call.id,
+                        StreamPart::ToolCall(call) => match call.mcp {
+                            Some(mcp) => AssistantMessagePart::McpToolCall {
+                                name: mcp.tool_name,
+                                service: mcp.service,
+                                display_name: mcp.display_name,
+                                json: call.json,
+                                id: call.id,
+                            },
+                            None => AssistantMessagePart::ToolCall {
+                                name: call.name,
+                                json: call.json,
+                                id: call.id,
+                            },
                         },
                         StreamPart::Usage(usage) => {
                             tracing::debug!(record=?usage, "usage");

@@ -51,6 +51,7 @@ pub struct McpServerRecord {
 }
 
 impl McpConnector for McpServerRecord {
+    #[tracing::instrument(skip_all, err)]
     async fn connect(&self) -> anyhow::Result<McpServer> {
         match &self.credentials {
             Some(credentials) => {

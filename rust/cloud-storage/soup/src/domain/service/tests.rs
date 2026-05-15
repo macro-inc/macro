@@ -1,6 +1,7 @@
 use crate::domain::models::FrecencySoupItem;
 use crate::domain::ports::MockSoupRepo;
 use chrono::Days;
+use chrono::{DateTime, Utc};
 use comms::domain::models::GetChannelsRequest;
 use cool_asserts::assert_matches;
 use email::domain::models::{EnrichedEmailThreadPreview, PreviewView};
@@ -17,7 +18,6 @@ use models_pagination::{
 use models_soup::document::{SoupDocument, SoupDocumentSubType};
 use ordered_float::OrderedFloat;
 use rootcause::Report;
-use sqlx::types::chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use super::*;

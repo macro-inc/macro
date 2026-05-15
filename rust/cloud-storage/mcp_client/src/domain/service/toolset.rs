@@ -1,8 +1,9 @@
-use crate::domain::models::{Error, McpServerRecord};
+use crate::domain::models::{Error, McpServer, McpServerRecord};
 use crate::domain::ports::McpConnector;
 use ai::openai_toolset::OpenAIToolSetExt;
 use ai_toolset::{
-    AsyncToolCollection, RequestContext, RequestSchema, ToolInfo, ToolResult, ToolSet, ToolSetError,
+    AsyncToolCollection, RequestContext, RequestSchema, ToolCallError, ToolInfo, ToolResult,
+    ToolSet, ToolSetError,
 };
 use async_openai::types::chat::{ChatCompletionTool, ChatCompletionTools, FunctionObject};
 use rmcp::RoleClient;
@@ -13,19 +14,23 @@ use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::Arc;
 
-const MANGLED_PREFIX: &str = "mcp_";
+const MANGLED_PREFIX: &str = "mcp__";
+const MANGLED_SEPARATOR: &str = "__";
 
-/// A mangled tool name in the format `mcp_<server>_<tool>`.
+/// A mangled tool name in the format `mcp__<server>__<tool>`.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct MangledName(String);
 
 impl MangledName {
     fn new(server_name: &str, tool_name: &str) -> Self {
-        Self(format!("{MANGLED_PREFIX}{server_name}_{tool_name}"))
+        Self(format!(
+            "{MANGLED_PREFIX}{server_name}{MANGLED_SEPARATOR}{tool_name}"
+        ))
     }
 
     fn parse(s: &str) -> Option<(&str, &str)> {
-        s.strip_prefix(MANGLED_PREFIX)?.split_once('_')
+        s.strip_prefix(MANGLED_PREFIX)?
+            .split_once(MANGLED_SEPARATOR)
     }
 
     fn as_str(&self) -> &str {
@@ -46,10 +51,12 @@ struct RegisteredTool {
 
 /// Dispatches tool calls to connected MCP servers using name-mangled routing.
 ///
-/// Every tool is exposed as `mcp_<server_name>_<tool_name>` to guarantee
+/// Every tool is exposed as `mcp__<server_name>__<tool_name>` to guarantee
 /// uniqueness across servers.
 pub struct McpToolSet {
     tools: BTreeMap<MangledName, RegisteredTool>,
+    /// Kept alive so the background transport tasks aren't cancelled.
+    _connections: Vec<McpServer>,
 }
 
 impl McpToolSet {
@@ -82,6 +89,7 @@ impl McpToolSet {
         let results = futures::future::join_all(futs).await;
 
         let mut tools = BTreeMap::new();
+        let mut connections = Vec::new();
         for (server_name, client, server_tools) in results.into_iter().flatten() {
             for tool in server_tools {
                 let mangled = MangledName::new(&server_name, &tool.name);
@@ -94,14 +102,18 @@ impl McpToolSet {
                 tools.insert(
                     mangled,
                     RegisteredTool {
-                        peer: client.clone(),
+                        peer: client.peer().clone(),
                         tool,
                     },
                 );
             }
+            connections.push(client);
         }
 
-        Self { tools }
+        Self {
+            tools,
+            _connections: connections,
+        }
     }
 
     /// Returns `true` when no tools were discovered.
@@ -109,6 +121,7 @@ impl McpToolSet {
         self.tools.is_empty()
     }
 
+    #[tracing::instrument(skip(self, arguments), err)]
     async fn call_tool(
         &self,
         name: &str,
@@ -146,10 +159,19 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for McpToolSet {
                 _ => serde_json::Map::new(),
             };
 
-            let result = self
-                .call_tool(tool_name, arguments)
-                .await
-                .map_err(|e| ToolSetError::NotFound(e.to_string()))?;
+            let result = match self.call_tool(tool_name, arguments).await {
+                Ok(result) => result,
+                Err(Error::UnknownTool(name)) => {
+                    return Err(ToolSetError::NotFound(name));
+                }
+                Err(e) => {
+                    let description = e.to_string();
+                    return Ok(Err(ToolCallError {
+                        internal_error: anyhow::anyhow!("{}", &description),
+                        description,
+                    }));
+                }
+            };
 
             let text = result
                 .content
@@ -158,12 +180,13 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for McpToolSet {
                 .collect::<Vec<_>>()
                 .join("");
 
-            let value = serde_json::Value::String(text);
-
             if result.is_error.unwrap_or(false) {
-                Err(ToolSetError::NotFound(value.to_string()))
+                Ok(Err(ToolCallError {
+                    internal_error: anyhow::anyhow!("{}", &text),
+                    description: text,
+                }))
             } else {
-                Ok(Ok(value))
+                Ok(Ok(serde_json::Value::String(text)))
             }
         })
     }
@@ -187,9 +210,15 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for McpToolSet {
 
     fn routing_description<'a>(&'a self, tool_name: &'a str) -> Option<ToolInfo> {
         let (server_name, original_name) = MangledName::parse(tool_name)?;
+        let key = MangledName(tool_name.to_owned());
+        let display_name = self
+            .tools
+            .get(&key)
+            .and_then(|entry| entry.tool.title.clone());
         Some(ToolInfo::ExternalTool {
             service_name: server_name.to_owned(),
             tool_name: original_name.to_owned(),
+            display_name,
         })
     }
 }

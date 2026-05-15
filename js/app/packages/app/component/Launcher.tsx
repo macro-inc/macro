@@ -23,6 +23,7 @@ import {
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { isErr, ok } from '@core/util/maybeResult';
+import ArrowRight from '@icon/bold/arrow-right-bold.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
 import { AnimatedDiagramIcon } from '@macro-icons/wide/animating/diagram';
@@ -40,9 +41,9 @@ import WideFileMd from '@macro-icons/wide/file-md.svg';
 import WideFolder from '@macro-icons/wide/folder.svg';
 import WideStar from '@macro-icons/wide/star.svg';
 import WideTask from '@macro-icons/wide/task.svg';
-import PixelArrowRight from '@phosphor-icons/core/regular/dice-five.svg?component-solid';
 import { createProject } from '@queries/storage/projects';
 import { cn, Hotkey, Layer } from '@ui';
+import { getNormalizedKeyString } from '@ui/components/Hotkey';
 import {
   type Component,
   createEffect,
@@ -389,10 +390,10 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
     <Layer depth={4}>
       <button
         class={cn(
-          'size-28 shadow-md shadow-drop-shadow relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-surface ring ring-edge transition-transform ease-click duration-200 rounded-sm',
+          'size-28 shadow-sm shadow-drop-shadow relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-surface ring ring-edge transition-transform ease-click duration-200 rounded-sm',
           `create-menu-${props.creatableBlock.label.toLowerCase()}`,
           {
-            '-translate-y-2 text-ink ring-2': props.focused,
+            '-translate-y-2 text-ink': props.focused,
             'text-ink-extra-muted': !props.focused,
           }
         )}
@@ -419,8 +420,16 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
         <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-user-highlight">
           <div class="text-sm font-bold">{props.creatableBlock.label}</div>
-          <div class="size-3">
-            <PixelArrowRight />
+          <div
+            class={cn(
+              'size-3 transition-[transform,opacity] ease duration-200',
+              {
+                'opacity-100': props.focused,
+                'opacity-0': !props.focused,
+              }
+            )}
+          >
+            <ArrowRight />
           </div>
         </div>
 
@@ -681,13 +690,13 @@ export const LauncherInner = (props: LauncherInnerProps) => {
             />
             <span
               class={cn(
-                'ring text-xs transition-colors duration-150',
+                'ring text-xs px-1.5 py-0.5 rounded-sm transition-colors duration-150',
                 shiftHeld()
                   ? 'ring-accent text-accent bg-accent/10'
                   : 'ring-edge-muted'
               )}
             >
-              <Hotkey shortcut="shift" />
+              {getNormalizedKeyString({ shortcut: 'shift' })}
             </span>
           </span>
           to launch in new split

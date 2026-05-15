@@ -157,6 +157,26 @@ impl From<ChatMessage> for Vec<ChatCompletionRequestMessage> {
                             );
                             pending_tool_calls.push(tool_call);
                         }
+                        AssistantMessagePart::McpToolCall {
+                            name,
+                            service,
+                            json,
+                            id,
+                            ..
+                        } => {
+                            let mangled = format!("mcp__{}__{}", service, name);
+                            let tool_call = ChatCompletionMessageToolCalls::Function(
+                                ChatCompletionMessageToolCall {
+                                    function: FunctionCall {
+                                        arguments: serde_json::to_string(&json)
+                                            .unwrap_or(String::new()),
+                                        name: mangled,
+                                    },
+                                    id: id.clone(),
+                                },
+                            );
+                            pending_tool_calls.push(tool_call);
+                        }
                         AssistantMessagePart::ToolCallResponseJson { json, id, .. } => {
                             // flush pending text and tool calls as an assistant message
                             flush_pending(

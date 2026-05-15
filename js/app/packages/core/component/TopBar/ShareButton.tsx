@@ -1277,7 +1277,6 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
               shareCtx.open();
             }
           }}
-          class="text-ink-muted"
         >
           <IconShared />
           Share
@@ -1290,7 +1289,6 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
         tooltip="Copy Share Link"
         size="icon-sm"
         onClick={ShareLinkAction().action}
-        class="text-ink-muted"
       >
         <Dynamic component={ShareLinkAction().icon} class="size-3.5!" />
       </Button>

@@ -10,5 +10,5 @@ export type AssistantMessagePartOneOfFiveType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AssistantMessagePartOneOfFiveType = {
-  toolCallResponseJson: 'toolCallResponseJson',
+  mcpToolCall: 'mcpToolCall',
 } as const;
