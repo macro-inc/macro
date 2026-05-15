@@ -190,8 +190,7 @@ export function applyDomHighlights(
     const doc = tn.ownerDocument;
     const frag = doc.createDocumentFragment();
     let lastIdx = 0;
-    let m: RegExpExecArray | null;
-    while ((m = pattern.exec(text)) !== null) {
+    for (const m of text.matchAll(pattern)) {
       if (m.index > lastIdx) {
         frag.appendChild(doc.createTextNode(text.slice(lastIdx, m.index)));
       }

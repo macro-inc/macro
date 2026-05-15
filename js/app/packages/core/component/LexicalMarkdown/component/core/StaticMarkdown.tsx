@@ -72,9 +72,9 @@ import { ContactMention as ContactMentionDecorator } from '../decorator/ContactM
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard';
 import { DocumentMention as DocumentMentionDecorator } from '../decorator/DocumentMention';
-import { LazyDecorator } from '../decorator/LazyDecorator';
 import { Equation as EquationDecorator } from '../decorator/Equation';
 import { GroupMention as GroupMentionDecorator } from '../decorator/GroupMention';
+import { LazyDecorator } from '../decorator/LazyDecorator';
 import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
 import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
 import { Snapshot as SnapshotDecorator } from '../decorator/Snapshot';

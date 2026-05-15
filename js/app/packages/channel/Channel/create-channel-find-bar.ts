@@ -129,7 +129,10 @@ export function createChannelFindBar(
         if (idx === 0 || rs.length === 0) return;
 
         const channelId = options.channelId();
-        const end = Math.min(idx + FIND_BAR_REPLY_PREFETCH_LOOKAHEAD, rs.length);
+        const end = Math.min(
+          idx + FIND_BAR_REPLY_PREFETCH_LOOKAHEAD,
+          rs.length
+        );
         for (let i = idx; i < end; i++) {
           const threadId = rs[i].threadId;
           if (!threadId) continue;
