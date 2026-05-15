@@ -22,7 +22,9 @@ interface NotificationContentProps {
   singleLine?: boolean;
 }
 
-export function DocumentMentionPill(props: { notification: UnifiedNotification }) {
+export function DocumentMentionPill(props: {
+  notification: UnifiedNotification;
+}) {
   const notificationSource = useGlobalNotificationSource();
   const { markAsDone } = useNotificationActions({
     notification: props.notification,

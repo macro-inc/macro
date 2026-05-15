@@ -374,8 +374,8 @@ function NotificationDetail(props: {
       <section class="mb-10">
         <h3 class="text-lg font-semibold text-ink mb-2">Compact Row</h3>
         <p class="text-xs text-ink-muted mb-4">
-          One-line variant used in the right-panel notifications card. Hover
-          for the mark-done button; right-click for the context menu.
+          One-line variant used in the right-panel notifications card. Hover for
+          the mark-done button; right-click for the context menu.
         </p>
         <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
           <NotificationRow notification={props.notification} />
@@ -383,9 +383,7 @@ function NotificationDetail(props: {
       </section>
 
       <section class="mb-10">
-        <h3 class="text-lg font-semibold text-ink mb-2">
-          Notifications Card
-        </h3>
+        <h3 class="text-lg font-semibold text-ink mb-2">Notifications Card</h3>
         <p class="text-xs text-ink-muted mb-4">
           What the right-panel card looks like when several notifications of
           this type land on the same entity.

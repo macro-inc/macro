@@ -17,7 +17,10 @@ import { Layout } from '../core/Layout';
 import type { EntityData } from '../types/entity';
 import { isNotificationUnread } from '../utils/notification';
 import { useNotificationActions } from './notification-actions';
-import { DocumentMentionPill, NotificationContent } from './notification-content';
+import {
+  DocumentMentionPill,
+  NotificationContent,
+} from './notification-content';
 import { NotificationDescription } from './notification-description';
 import { NotificationIcon } from './notification-icon';
 import { NotificationSenderIcon } from './notification-sender-icon';
@@ -42,7 +45,8 @@ function NotificationRowContent(props: {
   notification: UnifiedNotification;
   singleLine?: boolean;
 }) {
-  const tag = (): NotificationType => props.notification.notification_metadata.tag;
+  const tag = (): NotificationType =>
+    props.notification.notification_metadata.tag;
 
   return (
     <Switch
@@ -154,7 +158,10 @@ function UnreadDot(props: { unread: boolean }) {
   );
 }
 
-function HeaderLeading(props: { notification: UnifiedNotification; unread: boolean }) {
+function HeaderLeading(props: {
+  notification: UnifiedNotification;
+  unread: boolean;
+}) {
   return (
     <>
       <UnreadDot unread={props.unread} />
@@ -254,7 +261,10 @@ function ExpandedBody(props: BodyProps) {
       )}
     >
       <div class="flex items-center gap-2.5 min-w-0">
-        <HeaderLeading notification={props.notification} unread={props.unread} />
+        <HeaderLeading
+          notification={props.notification}
+          unread={props.unread}
+        />
         <span class="flex-1" />
         <HeaderTrailing
           notification={props.notification}
@@ -301,9 +311,7 @@ export function NotificationRow(props: NotificationRowProps) {
     notification: props.notification,
   });
 
-  const handleClick = async (
-    e: PointerEvent | MouseEvent | KeyboardEvent
-  ) => {
+  const handleClick = async (e: PointerEvent | MouseEvent | KeyboardEvent) => {
     const splitManager = globalSplitManager();
     if (!splitManager) return;
 
