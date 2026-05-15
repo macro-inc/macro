@@ -2,6 +2,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { analytics } from '@app/lib/analytics/analytics';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { initAndStartEmailSync } from '@core/email-link';
+import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { ENABLE_NEW_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
@@ -157,7 +158,21 @@ function OnboardingInner() {
         `}
       </style>
 
-      <Layer depth={2}>
+      <div class="inset-0 absolute text-edge bg-surface opacity-10 -z-1">
+        <PcNoiseGrid
+          cellSize={30}
+          warp={0}
+          crunch={0.2}
+          freq={0.001}
+          size={[0, 0.3]}
+          rounding={0}
+          fill={0}
+          stroke={1}
+          speed={[0.017, 0.209]}
+        />
+      </div>
+
+      <Layer depth={3}>
         <div
           class={cn(
             'w-full flex flex-col items-center px-8',

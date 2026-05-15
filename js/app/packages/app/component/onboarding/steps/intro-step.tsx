@@ -3,6 +3,7 @@ import ShieldCheckIcon from '@icon/regular/shield-check.svg';
 import LightningIcon from '@icon/regular/lightning.svg';
 import SquaresFourIcon from '@icon/regular/squares-four.svg';
 import ArrowRightIcon from '@icon/regular/arrow-right.svg';
+import { Button } from '@ui';
 import { For } from 'solid-js';
 import { useOnboarding } from '../onboarding-context';
 
@@ -35,8 +36,8 @@ export function IntroStep() {
           <h1 class="text-4xl font-semibold text-ink tracking-tight">
             Welcome to Macro
           </h1>
-          <p class="text-base text-ink-muted">
-            A unified system for work — built for speed and focus.
+          <p class="text-base text-ink-disabled">
+            The operating system for your startup — built for speed and focus.
           </p>
         </div>
       </div>
@@ -44,7 +45,7 @@ export function IntroStep() {
       <div class="grid grid-cols-3 gap-3 w-full">
         <For each={HIGHLIGHTS}>
           {(item) => (
-            <div class="group flex flex-col gap-2.5 p-4 rounded-sm border border-edge-muted text-left transition-colors hover:bg-accent-bg hover:border-accent hover:text-accent">
+            <div class="group flex flex-col gap-2.5 p-4 rounded-sm border border-ink/10 text-left transition-colors hover:bg-accent-bg hover:border-accent hover:text-accent">
               <div class="size-8 rounded-sm bg-accent-bg flex items-center justify-center">
                 <item.icon class="size-4 text-accent" />
               </div>
@@ -59,14 +60,15 @@ export function IntroStep() {
         </For>
       </div>
 
-      <button
-        type="button"
+      <Button
+        variant="base"
+        size="lg"
         onClick={() => ctx.next()}
-        class="group flex items-center gap-2 px-8 py-3 text-sm font-medium rounded-sm bg-accent text-surface border border-accent hover:bg-accent/90 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        class="px-8 bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface"
       >
         Get started
-        <ArrowRightIcon class="size-4 transition-transform group-hover:translate-x-0.5" />
-      </button>
+        <ArrowRightIcon class="size-4" />
+      </Button>
     </div>
   );
 }

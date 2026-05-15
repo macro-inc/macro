@@ -1,14 +1,12 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import type { PaidPlanTier } from '@app/component/paywall/plans';
-import { PLANS } from '@app/component/paywall/plans';
 import { useIsAuthenticated } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import ArrowRightIcon from '@icon/regular/arrow-right.svg';
-import InfoIcon from '@icon/regular/info.svg';
 import LockIcon from '@icon/regular/lock.svg';
 import SpinnerIcon from '@icon/regular/spinner.svg';
-import { Tooltip } from '@ui';
-import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
+import { Button } from '@ui';
+import { createSignal, For, Show } from 'solid-js';
 import {
   savePendingTeam,
   clearPendingTeam,
@@ -16,7 +14,22 @@ import {
 } from '../../interactive-onboarding/use-onboarding-checkout';
 import { useOnboarding } from '../onboarding-context';
 
-const DEFAULT_TIER: PaidPlanTier = 'opus';
+interface TeamPlan {
+  price: number;
+  seats: number;
+  tier: PaidPlanTier;
+}
+
+const TEAM_PLANS: TeamPlan[] = [
+  { price: 100, seats: 3, tier: 'haiku' },
+  { price: 500, seats: 6, tier: 'sonnet' },
+  { price: 2500, seats: 10, tier: 'opus' },
+  { price: 6000, seats: 25, tier: 'opus' },
+];
+
+function planForSeatCount(seats: number): TeamPlan {
+  return TEAM_PLANS.find((p) => p.seats >= seats) ?? TEAM_PLANS[TEAM_PLANS.length - 1];
+}
 
 export function PaymentStep() {
   const ctx = useOnboarding();
@@ -24,17 +37,14 @@ export function PaymentStep() {
   const isAuthenticated = useIsAuthenticated();
   const [isRedirecting, setIsRedirecting] = createSignal(false);
 
-  onMount(() => {
-    if (!ctx.selectedPlan()) {
-      ctx.setSelectedPlan(DEFAULT_TIER);
-    }
-  });
+  const teamSize = () => 1 + ctx.invitedMembers().length;
+  const plan = () => planForSeatCount(teamSize());
 
   const checkoutMutation = useOnboardingCheckoutMutation({
     onSuccess: (result) => {
       analytics.track('subscription_start', {
-        type: ctx.selectedPlan(),
-        seats: ctx.seatCount(),
+        type: plan().tier,
+        seats: teamSize(),
       });
       setIsRedirecting(true);
       window.location.href = result.checkoutUrl;
@@ -49,37 +59,8 @@ export function PaymentStep() {
 
   const isPending = () => checkoutMutation.isPending || isRedirecting();
 
-  const selectedPlan = () => {
-    const tier = ctx.selectedPlan();
-    return PLANS.find((p) => p.tier === tier);
-  };
-
-  const hasTeam = () =>
-    ctx.invitedMembers().length > 0 || ctx.teamName().trim() !== '';
-
-  const teamByTier = createMemo(() => {
-    const groups: Record<
-      string,
-      { plan: (typeof PLANS)[number]; count: number }
-    > = {};
-    const order: string[] = [];
-    for (const member of ctx.invitedMembers()) {
-      const plan = PLANS.find((p) => p.tier === member.tier);
-      if (plan) {
-        if (groups[member.tier]) {
-          groups[member.tier].count++;
-        } else {
-          groups[member.tier] = { plan, count: 1 };
-          order.push(member.tier);
-        }
-      }
-    }
-    return order.map((tier) => groups[tier]);
-  });
-
   const handleCheckout = () => {
-    const tier = ctx.selectedPlan();
-    if (!tier || isPending()) return;
+    if (isPending()) return;
 
     if (!isAuthenticated()) {
       toast.failure('Please sign in to continue');
@@ -90,8 +71,7 @@ export function PaymentStep() {
     const teamName = ctx.teamName();
     const members = ctx
       .invitedMembers()
-      .filter((m) => m.tier !== 'free')
-      .map((m) => ({ email: m.email, tier: m.tier as PaidPlanTier }));
+      .map((m) => ({ email: m.email, tier: plan().tier }));
 
     if (teamName) {
       savePendingTeam({ name: teamName, members });
@@ -99,7 +79,8 @@ export function PaymentStep() {
       clearPendingTeam();
     }
 
-    checkoutMutation.mutate({ tier: tier as PaidPlanTier });
+    ctx.setSelectedPlan(plan().tier);
+    checkoutMutation.mutate({ tier: plan().tier });
   };
 
   return (
@@ -108,13 +89,13 @@ export function PaymentStep() {
         <h1 class="text-2xl font-semibold text-ink tracking-tight">
           Review your plan
         </h1>
-        <p class="text-sm text-ink-muted">
-          Confirm your subscription before checkout.
+        <p class="text-sm text-ink-disabled">
+          Here's a summary of your workspace.
         </p>
       </div>
 
       <div class="flex flex-col gap-5">
-        <Show when={hasTeam() && ctx.teamName()}>
+        <Show when={ctx.teamName()}>
           <div>
             <span class="text-xs font-medium text-ink-muted uppercase tracking-wide">
               Team
@@ -125,86 +106,51 @@ export function PaymentStep() {
           </div>
         </Show>
 
-        {/* Price header */}
-        <div class="flex items-baseline justify-between pb-4 border-b border-edge-muted">
+        <div class="flex items-baseline justify-between pb-4 border-b border-ink/10">
           <div class="flex items-end gap-1">
             <span class="text-4xl font-bold text-ink leading-none tracking-tight">
-              ${hasTeam() ? ctx.totalCost() : ctx.userSeatCost()}
+              ${plan().price}
             </span>
             <span class="text-ink-muted text-sm pb-0.5">/mo</span>
           </div>
-          <span class="px-2 py-0.5 rounded-sm bg-accent-bg text-accent text-xs font-mono">
-            {hasTeam() ? 'Team' : selectedPlan()?.name}
+          <span class="text-sm text-ink-muted">
+            Up to {plan().seats} seats
           </span>
         </div>
 
-        {/* Line items */}
         <div class="flex flex-col text-sm">
-          <div class="flex justify-between py-2.5 border-b border-edge-muted">
-            <span class="text-ink-muted">
-              Your seat · {selectedPlan()?.name}
-            </span>
-            <span class="font-mono text-ink">${ctx.userSeatCost()}</span>
+          <div class="flex justify-between py-2.5 border-b border-ink/10">
+            <span class="text-ink-muted">You</span>
+            <span class="text-xs text-ink-disabled">{ctx.email()}</span>
           </div>
-          <For each={teamByTier()}>
-            {(group) => (
-              <div class="flex justify-between py-2.5 border-b border-edge-muted">
-                <span class="text-ink-muted">
-                  Team · {group.plan.name} × {group.count}
+          <For each={ctx.invitedMembers()}>
+            {(member) => (
+              <div class="flex justify-between py-2.5 border-b border-ink/10">
+                <span class="text-ink-muted font-mono text-xs truncate mr-2">
+                  {member.email}
                 </span>
-                <Tooltip label="Charged when invite is accepted">
-                  <span class="font-mono text-ink cursor-help underline decoration-dotted underline-offset-4 decoration-edge-muted">
-                    ${group.plan.price * group.count}
-                  </span>
-                </Tooltip>
+                <span class="text-xs text-ink-disabled shrink-0">Invited</span>
               </div>
             )}
           </For>
-          <Show when={ctx.invitedMembers().length > 0}>
-            <div class="flex justify-between items-center py-2.5">
-              <span class="text-ink-muted flex items-center gap-1">
-                Total
-                <Tooltip label="Team charges begin when members accept their invite">
-                  <InfoIcon class="size-3.5 text-ink-disabled" />
-                </Tooltip>
-              </span>
-              <span class="font-mono text-ink font-medium">
-                ${ctx.totalCost()}
-              </span>
-            </div>
-          </Show>
-        </div>
-
-        {/* Invites */}
-        <Show when={ctx.invitedMembers().length > 0}>
-          <div class="pt-2">
-            <span class="text-xs font-medium text-ink-muted uppercase tracking-wide">
-              Invites ({ctx.invitedMembers().length})
+          <div class="flex justify-between items-center py-2.5">
+            <span class="text-ink-muted">
+              {teamSize()} {teamSize() === 1 ? 'seat' : 'seats'} used
             </span>
-            <div class="flex flex-col gap-1 mt-2">
-              <For each={ctx.invitedMembers()}>
-                {(member) => (
-                  <div class="flex items-center justify-between text-sm py-1">
-                    <span class="text-ink-muted truncate mr-2 font-mono text-xs">
-                      {member.email}
-                    </span>
-                    <span class="text-xs text-ink-disabled shrink-0">
-                      {PLANS.find((p) => p.tier === member.tier)?.name}
-                    </span>
-                  </div>
-                )}
-              </For>
-            </div>
+            <span class="text-xs text-ink-disabled">
+              {plan().seats - teamSize()} remaining
+            </span>
           </div>
-        </Show>
+        </div>
       </div>
 
       <div class="flex flex-col gap-3">
-        <button
-          type="button"
+        <Button
+          variant="base"
+          size="lg"
           onClick={handleCheckout}
           disabled={isPending()}
-          class="group w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-sm bg-accent text-surface border border-accent hover:bg-accent/90 transition-colors disabled:opacity-30 disabled:cursor-not-allowed outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface"
         >
           <Show
             when={!isPending()}
@@ -216,9 +162,9 @@ export function PaymentStep() {
             }
           >
             Continue to payment
-            <ArrowRightIcon class="size-4 transition-transform group-hover:translate-x-0.5" />
+            <ArrowRightIcon class="size-4" />
           </Show>
-        </button>
+        </Button>
 
         <span class="text-xs text-ink-disabled flex items-center justify-center gap-1.5">
           <LockIcon class="size-3" />

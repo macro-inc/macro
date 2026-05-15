@@ -109,7 +109,7 @@ export function TeamStep() {
         <h1 class="text-2xl font-semibold text-ink tracking-tight">
           Invite your team
         </h1>
-        <p class="text-sm text-ink-muted">
+        <p class="text-sm text-ink-disabled">
           Add teammates to{' '}
           <strong class="text-ink font-medium">{ctx.teamName()}</strong>. You
           can always invite more later.
@@ -130,22 +130,24 @@ export function TeamStep() {
                   placeholder={emailPlaceholder()}
                   class={cn(
                     'w-full px-2.5 h-9 pr-9 text-sm rounded-sm border bg-transparent text-ink placeholder:text-ink-placeholder transition-colors',
-                    'outline-none focus:border-edge',
-                    errors()[index] ? 'border-failure' : 'border-edge-muted'
+                    'outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:ring-offset-surface',
+                    errors()[index] ? 'border-failure' : 'border-ink/10'
                   )}
                 />
                 <Show when={entry().email.trim() !== ''}>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={() =>
                       entries().length > 1
                         ? removeEntry(index)
                         : updateEmail(index, '')
                     }
-                    class="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-ink-disabled hover:text-ink-muted rounded-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    class="absolute right-1.5 top-1/2 -translate-y-1/2 text-ink-disabled not-disabled:hover:text-ink-muted"
+                    noTouchResize
                   >
                     <XIcon class="size-3.5" />
-                  </button>
+                  </Button>
                 </Show>
               </div>
               <Show when={errors()[index]}>
@@ -182,17 +184,26 @@ export function TeamStep() {
       </div>
 
       <div class="flex flex-col gap-2">
-        <button
-          type="button"
+        <Button
+          variant="base"
+          size="lg"
           onClick={handleContinue}
-          class="group w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-sm bg-accent text-surface border border-accent hover:bg-accent/90 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface"
         >
           Continue
-          <ArrowRightIcon class="size-4 transition-transform group-hover:translate-x-0.5" />
-        </button>
-        <p class="text-xs text-ink-extra-muted text-center">
-          You can always invite more people later from Settings.
-        </p>
+          <ArrowRightIcon class="size-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="md"
+          onClick={() => {
+            ctx.setInvitedMembers([]);
+            ctx.next();
+          }}
+          class="w-full"
+        >
+          Invite later
+        </Button>
       </div>
     </div>
   );

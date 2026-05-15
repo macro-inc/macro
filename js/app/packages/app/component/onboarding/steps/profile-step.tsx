@@ -3,7 +3,7 @@ import { startSsoLogin } from '@core/auth/sso';
 import { isTauri } from '@core/util/platform';
 import IconGoogle from '@macro-icons/macro-google.svg';
 import ArrowRightIcon from '@icon/regular/arrow-right.svg';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import { createSignal, onMount, Show } from 'solid-js';
 import { useOnboarding } from '../onboarding-context';
 
@@ -62,8 +62,8 @@ export function ProfileStep() {
   const inputClass = (hasError: boolean) =>
     cn(
       'w-full px-2.5 h-9 text-sm rounded-sm border bg-transparent text-ink placeholder:text-ink-placeholder transition-colors',
-      'outline-none focus:border-edge',
-      hasError ? 'border-failure' : 'border-edge-muted'
+      'outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:ring-offset-surface',
+      hasError ? 'border-failure' : 'border-ink/10'
     );
 
   return (
@@ -72,7 +72,7 @@ export function ProfileStep() {
         <h1 class="text-2xl font-semibold text-ink tracking-tight">
           Create your workspace
         </h1>
-        <p class="text-sm text-ink-muted">
+        <p class="text-sm text-ink-disabled">
           Tell us about yourself and your team.
         </p>
       </div>
@@ -156,15 +156,16 @@ export function ProfileStep() {
       </div>
 
       <div class="flex flex-col gap-3">
-        <button
-          type="button"
+        <Button
+          variant="base"
+          size="lg"
           onClick={handleGoogleAuth}
           disabled={authPending()}
-          class="w-full flex items-center justify-center gap-2.5 h-9 text-sm font-medium rounded-sm border border-edge-muted bg-transparent text-ink hover:bg-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed outline-none focus:border-edge"
+          class="w-full"
         >
           <IconGoogle />
           {authPending() ? 'Redirecting...' : 'Continue with Google'}
-        </button>
+        </Button>
 
         <div class="flex items-center gap-3 text-xs text-ink-extra-muted">
           <div class="h-px flex-1 bg-edge-muted" />
@@ -172,33 +173,17 @@ export function ProfileStep() {
           <div class="h-px flex-1 bg-edge-muted" />
         </div>
 
-        <button
-          type="button"
+        <Button
+          variant="base"
+          size="lg"
           onClick={handleContinueWithEmail}
-          class="group w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-sm bg-accent text-surface border border-accent hover:bg-accent/90 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface"
         >
           Continue with email
-          <ArrowRightIcon class="size-4 transition-transform group-hover:translate-x-0.5" />
-        </button>
+          <ArrowRightIcon class="size-4" />
+        </Button>
       </div>
 
-      <p class="text-xs text-ink-extra-muted text-center">
-        By continuing, you agree to our{' '}
-        <a
-          class="underline hover:text-ink-muted transition-colors"
-          href="/terms"
-        >
-          terms
-        </a>{' '}
-        and{' '}
-        <a
-          class="underline hover:text-ink-muted transition-colors"
-          href="/privacy"
-        >
-          privacy policy
-        </a>
-        .
-      </p>
     </div>
   );
 }
