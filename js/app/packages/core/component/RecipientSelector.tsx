@@ -71,7 +71,7 @@ function RecipientChip(props: {
 }) {
   return (
     <div
-      class="flex flex-row shrink-0 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover"
+      class="flex flex-row shrink-0 py-1 pl-2 gap-1 pr-1 overflow-hidden items-center bg-active rounded-full"
       classList={{ 'cursor-grab active:cursor-grabbing': props.draggable }}
       draggable={props.draggable}
       onDragStart={props.onDragStart}
@@ -80,7 +80,7 @@ function RecipientChip(props: {
       <Show when={props.icon}>{props.icon}</Show>
       <p class="text-sm whitespace-nowrap">{truncateString(props.label, 20)}</p>
       <XIcon
-        class="size-5 hover:bg-hover hover-transition-bg p-1"
+        class="size-5 hover:bg-hover hover:text-failure p-1 rounded-full"
         onClick={props.onRemove}
       />
     </div>
@@ -180,8 +180,8 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
     <Combobox.Item
       item={props}
       class={cn(
-        'flex flex-row px-2 py-1 mb-1 justify-between items-center data-highlighted:bg-hover hover-transition-bg',
-        props.disabled && 'hover:bg-hover hover-transition-bg'
+        'flex flex-row p-2 mb-1 rounded-md justify-between items-center data-highlighted:bg-hover',
+        props.disabled && 'hover:bg-hover'
       )}
       onMouseEnter={props.disabled ? handleMouseEnter : undefined}
       onMouseLeave={props.disabled ? handleMouseLeave : undefined}
