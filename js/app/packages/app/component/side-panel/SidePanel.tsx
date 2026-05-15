@@ -3,7 +3,7 @@ import { TabsInset } from '@core/component/TabsInset';
 import { isMobile } from '@core/mobile/isMobile';
 import CaretRight from '@icon/fill/caret-right-fill.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import { cn, Layer, Panel, Scroll } from '@ui';
+import { Panel, Scroll } from '@ui';
 import {
   type Accessor,
   children,
