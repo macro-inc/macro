@@ -341,13 +341,15 @@ export const SoupView = (props: SoupViewProps) => {
                   'flex-1 min-w-0': narrowSearchExpanded(),
                 })}
               >
+                <Show when={!isMobile() && !narrowSearchExpanded()}>
+                  <span class="text-base font-bold">{props.viewName}</span>
+                </Show>
                 <Show
                   when={
                     !narrowSearchExpanded() && !isComponentListView('search')
                   }
                 >
                   <Show when={!isMobile()}>
-                    <span class="text-base font-bold">{props.viewName}</span>
                     <CollapsibleHeaderItem
                       id="tabs"
                       priority={1}
