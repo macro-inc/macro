@@ -5,7 +5,6 @@ import type { Placement } from '@floating-ui/dom';
 import type { ParentProps } from 'solid-js';
 import { For, Show } from 'solid-js';
 import { Surface } from '@ui';
-import { tooltipsEnabled } from '../signals/signals';
 
 export type TooltipProps = ParentProps<{
   hotkey?: HotkeyToken | HotkeyToken[];
@@ -28,13 +27,13 @@ export function Tooltip(props: TooltipProps) {
   return (
     <KobalteTooltip
       placement={props.placement ?? 'bottom'}
+      ignoreSafeArea={true}
       overflowPadding={16}
       fitViewport={true}
-      closeDelay={250}
-      openDelay={250}
+      openDelay={400}
+      closeDelay={0}
       flip={true}
       gutter={4}
-      open={tooltipsEnabled() ? undefined : false}
     >
       <KobalteTooltip.Trigger
         class="inline-flex items-center"
