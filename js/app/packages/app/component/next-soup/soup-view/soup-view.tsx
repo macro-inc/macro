@@ -95,7 +95,7 @@ import {
 } from '@queries/soup/normalized-cache';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
-import { Button, cn, Tooltip } from '@ui';
+import { Button, cn, Layer, Tooltip } from '@ui';
 import {
   type Accessor,
   batch,
@@ -125,44 +125,45 @@ const DefaultGroupHeader = (
   props: GroupHeaderProps & { highlighted?: boolean }
 ) => {
   return (
-    <button
-      type="button"
-      class={cn(
-        'group/header w-[calc(100%-0.5rem)] mx-1 mb-1 rounded pl-5 pr-3 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
-        'text-text-muted bg-active/40 hover:bg-active border border-edge-muted',
-        'relative',
-        {
-          'ring ring-edge bg-active ring-inset': props.highlighted,
-        }
-      )}
-      onClick={() => props.group.toggle()}
-    >
-      <div
+    <Layer depth={2}>
+      <button
+        type="button"
         class={cn(
-          'flex items-center justify-center size-[18px] rounded-xs',
-          'bg-ink/5 group-hover/header:bg-ink/10'
+          'group/header w-[calc(100%-0.5rem)] mx-1 mb-1 rounded pl-5 pr-3 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
+          'text-text-muted bg-surface hover:bg-active border border-edge-muted',
+          'relative',
+          {
+            'ring ring-edge bg-active ring-inset': props.highlighted,
+          }
         )}
+        onClick={() => props.group.toggle()}
       >
-        <ChevronRightIcon
-          class={cn('size-2.5', {
-            'rotate-90': props.group.isExpanded(),
-          })}
+        <Layer depth={3}>
+          <div
+            class="flex items-center justify-center size-4.5 rounded-xs bg-surface group-hover/header:bg-active"
+          >
+            <ChevronRightIcon
+              class={cn('size-2.5', {
+                'rotate-90': props.group.isExpanded(),
+              })}
+            />
+          </div>
+        </Layer>
+        <PropertyValueIcon
+          optionId={props.group.value as string}
+          class="size-3.5"
         />
-      </div>
-      <PropertyValueIcon
-        optionId={props.group.value as string}
-        class="size-3.5"
-      />
-      <span class="truncate">{props.group.label}</span>
-      <span
-        class={cn(
-          'shrink-0 tabular-nums text-xs font-medium',
-          'px-1.5 py-px rounded-full bg-ink/10 text-text-subtle'
-        )}
-      >
-        {props.group.count}
-      </span>
-    </button>
+        <span class="truncate">{props.group.label}</span>
+        <span
+          class={cn(
+            'shrink-0 tabular-nums text-xs font-medium',
+            'px-1.5 py-px rounded-full bg-ink/10 text-text-subtle'
+          )}
+        >
+          {props.group.count}
+        </span>
+      </button>
+    </Layer>
   );
 };
 
