@@ -173,12 +173,10 @@ function OnboardingInner() {
       </div>
 
       <Layer depth={3}>
-        <div
-          class={cn(
-            'w-full flex flex-col items-center px-8',
-            ctx.step() === 0 ? 'max-w-3xl' : 'max-w-md'
-          )}
-        >
+        <div class={cn(
+          'w-full flex flex-col px-8 min-h-1/2',
+          ctx.step() === 0 ? 'max-w-3xl' : 'max-w-md'
+        )}>
           {/* Header */}
           <Show when={ctx.step() > 0}>
             <div class="w-full flex items-center gap-3 mb-10">
@@ -198,8 +196,8 @@ function OnboardingInner() {
               '--onboarding-key': String(ctx.step()),
             }}
           >
-            <Show when={ctx.step() > 0 && showBack()}>
-              <div>
+            <Show when={ctx.step() > 0}>
+              <div class={showBack() ? 'visible' : 'invisible'}>
                 <Button variant="ghost" size="sm" onClick={() => ctx.back()}>
                   <ArrowLeftIcon class="size-4" />
                   Back
