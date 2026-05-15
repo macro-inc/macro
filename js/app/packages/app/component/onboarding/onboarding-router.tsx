@@ -2,7 +2,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ENABLE_NEW_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
 import { lazy, Show, Suspense } from 'solid-js';
 
-const NewOnboarding = lazy(() => import('./Onboarding'));
+const NewOnboarding = lazy(() => import('./onboarding'));
 const OldOnboarding = lazy(
   () => import('../interactive-onboarding/InteractiveOnboarding')
 );

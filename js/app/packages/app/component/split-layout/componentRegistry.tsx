@@ -292,7 +292,7 @@ registerComponent('settings', () => <SettingsPanelComponentWrapper />);
 registerComponent('notification', () => <NotificationRoute />);
 registerComponent(
   'welcome',
-  lazy(() => import('@app/component/onboarding/OnboardingRouter'))
+  lazy(() => import('@app/component/onboarding/onboarding-router'))
 );
 
 if (LOCAL_ONLY) {

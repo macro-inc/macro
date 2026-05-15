@@ -91,7 +91,7 @@ import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 
 const OnboardingRouter = lazy(
-  () => import('./onboarding/OnboardingRouter')
+  () => import('./onboarding/onboarding-router')
 );
 
 import {
