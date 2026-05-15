@@ -109,7 +109,7 @@
   --color-message:         color-mix(in oklch, var(--b1) 50%, var(--b2));
   --color-hover:           var(--b2);
   --color-active:          var(--b1);
-  --color-overlay:         oklch(var(--b2) / 0.5);
+  --color-overlay:         oklch(var(--b1l) var(--b1c) var(--b1h) / 0.8);
   --color-edge-muted:      var(--b3);
   --color-edge:            var(--b4);
   --color-rail:            color-mix(in oklch, var(--b4) 90%, var(--b0));
