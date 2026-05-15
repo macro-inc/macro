@@ -38,6 +38,16 @@ export type FindBarControllerOptions = {
    * that must complete before downstream results-driven effects run.
    */
   onBeforeSubmit?: () => void;
+  /**
+   * When false, `previous()` stops at first result instead of wrapping to the last
+   * result. Defaults to true.
+   */
+  wrapPrevious?: boolean;
+  /**
+   * When false, `next()` stops at the last result instead of wrapping back to
+   * first result. Defaults to true.
+   */
+  wrapNext?: boolean;
 };
 
 export function createFindBarController<T>(
@@ -68,9 +78,13 @@ export function createFindBarController<T>(
     })
   );
 
+  const wrapNext = options.wrapNext ?? true;
+  const wrapPrevious = options.wrapPrevious ?? true;
+
   const next = () => {
     const rs = source.results();
     if (rs.length === 0) return;
+    if (activeIndex() >= rs.length && !wrapNext) return;
     const i = activeIndex() >= rs.length ? 1 : activeIndex() + 1;
     setActiveIndex(i);
     source.navigate(rs[i - 1]);
@@ -79,6 +93,7 @@ export function createFindBarController<T>(
   const previous = () => {
     const rs = source.results();
     if (rs.length === 0) return;
+    if (activeIndex() <= 1 && !wrapPrevious) return;
     const i = activeIndex() <= 1 ? rs.length : activeIndex() - 1;
     setActiveIndex(i);
     source.navigate(rs[i - 1]);

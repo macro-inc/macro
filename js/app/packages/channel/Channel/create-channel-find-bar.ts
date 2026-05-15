@@ -188,6 +188,7 @@ export function createChannelFindBar(
     },
     {
       onBeforeSubmit: () => options.clearSelection(),
+      wrapPrevious: false,
     }
   );
 
