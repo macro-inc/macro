@@ -177,6 +177,10 @@ export function createChannelFindBar(
         totalCount,
         isFetching: () => searchQuery.isFetching,
         validateText: validateSearchServiceText,
+        // Only wrap past the most recent result once every page is loaded —
+        // otherwise wrapping would jump to a "last" result that isn't truly
+        // the global oldest hit.
+        wrapPrevious: () => !searchQuery.hasNextPage,
         navigate: (result) => {
           if (result.threadId) {
             options.goToMessage(result.threadId, result.messageId);
@@ -188,7 +192,6 @@ export function createChannelFindBar(
     },
     {
       onBeforeSubmit: () => options.clearSelection(),
-      wrapPrevious: false,
     }
   );
 
