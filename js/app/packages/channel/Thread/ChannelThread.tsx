@@ -31,7 +31,8 @@ export function ChannelThread(props: ThreadProps) {
   // Targeted reply navigation needs the full reply list immediately so the
   // thread can resolve the reply index and complete the scroll.
   const fetchRepliesEnabled = () =>
-    !!props.targetReplyId || debouncedFetchRepliesEnabled();
+    (!!props.targetReplyId && props.targetThreadId === props.data().id) ||
+    debouncedFetchRepliesEnabled();
 
   const isSelected = () => props.selectedMessageId?.() === props.data().id;
 
