@@ -90,8 +90,8 @@ import { ReactiveFavicon } from './ReactiveFavicon';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 
-const OnboardingRouter = lazy(
-  () => import('./onboarding/onboarding-router')
+const Onboarding = lazy(
+  () => import('./onboarding/onboarding')
 );
 
 import {
@@ -347,7 +347,7 @@ const ROUTES: RouteDefinition[] = [
     path: '/welcome',
     component: () => (
       <div class="flex *:flex-1 size-full overflow-y-hidden">
-        <OnboardingRouter />
+        <Onboarding />
       </div>
     ),
   },
