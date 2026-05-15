@@ -3,12 +3,7 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import {
-  type AppErrorResult,
-  type AppResult,
-  mapOk,
-  type ObjectLike,
-} from '@core/util/result';
+import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import { platformFetch } from 'core/util/platformFetch';
 import type { FileMetadata } from './generated/schemas/fileMetadata';
@@ -38,21 +33,19 @@ type WithFileId = { file_id: string };
 
 export const staticFileClient = {
   async makePresignedUrl(args: PutFileRequest) {
-    return mapOk(
+    return (
       await staticFetch<PutFileResponse>('/api/file', {
         method: 'PUT',
         body: JSON.stringify(args),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async getMetadata(args: WithFileId) {
-    return mapOk(
+    return (
       await staticFetch<FileMetadata>(`/api/file/metadata/${args.file_id}`, {
         method: 'GET',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 
   async deleteFile(args: WithFileId) {

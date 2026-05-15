@@ -1,10 +1,11 @@
+import { ok } from 'neverthrow';
 import {
   defineBlock,
   type ExtractLoadType,
   LoadErrors,
   loadResult,
 } from '@core/block';
-import { isErr, ok } from '@core/util/result';
+
 import { storageServiceClient } from '@service-storage/client';
 import type { GetProjectResponseData } from '@service-storage/generated/schemas/getProjectResponseData';
 import { ProjectType } from '@service-storage/generated/schemas/projectType';
@@ -48,10 +49,10 @@ export const definition = defineBlock({
       const maybeProject = await loadResult(
         storageServiceClient.projects.getProject({ id: source.id })
       );
-      if (isErr(maybeProject)) {
+      if (maybeProject.isErr()) {
         return maybeProject;
       }
-      const [, project] = maybeProject;
+      const project = maybeProject.value;
 
       return ok(project);
     }

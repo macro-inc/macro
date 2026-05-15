@@ -1,3 +1,4 @@
+import { ok, err } from 'neverthrow';
 import {
   defineBlock,
   type ExtractLoadType,
@@ -5,7 +6,7 @@ import {
   loadResult,
 } from '@core/block';
 import { blockAcceptedFileExtensionToMimeType } from '@core/constant/allBlocks';
-import { isErr, ok } from '@core/util/result';
+
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
@@ -33,15 +34,15 @@ export const definition = defineBlock({
         });
       }
 
-      if (isErr(maybeDocument)) return maybeDocument;
-      const [, documentResult] = maybeDocument;
+      if (maybeDocument.isErr()) return err(maybeDocument.error);
+      const documentResult = maybeDocument.value;
       const { documentMetadata, blobUrl, userAccessLevel } = documentResult;
 
       const blobResult = await loadResult(fetchBinary(blobUrl, 'blob'));
 
-      if (isErr(blobResult)) return blobResult;
+      if (blobResult.isErr()) return err(blobResult.error);
 
-      const [, blob] = blobResult;
+      const blob = blobResult.value;
 
       const dssFile = await makeFileFromBlob({
         blob,

@@ -1,5 +1,6 @@
+import { err, ok } from 'neverthrow';
 import type { FetchError } from '@core/service';
-import { err, type AppResult, type ObjectLike, ok } from '@core/util/result';
+import type { AppResult, ObjectLike, ResultErrors } from '@core/util/result';
 import { platformFetch } from 'core/util/platformFetch';
 
 type ResultMap = {
@@ -9,24 +10,36 @@ type ResultMap = {
   json: ObjectLike;
 };
 
-function httpStatusToError(status: number) {
+function httpStatusToError(status: number): AppResult<FetchError, never> {
   switch (status) {
     case 404:
-      return err('NOT_FOUND', 'Resource not found');
+      return err<never, ResultErrors<FetchError>>([
+        { code: 'NOT_FOUND', message: 'Resource not found' },
+      ]);
     case 401:
-      return err('UNAUTHORIZED', 'Unauthorized access');
+      return err<never, ResultErrors<FetchError>>([
+        { code: 'UNAUTHORIZED', message: 'Unauthorized access' },
+      ]);
     case 500:
-      return err('SERVER_ERROR', 'Internal server error');
+      return err<never, ResultErrors<FetchError>>([
+        { code: 'SERVER_ERROR', message: 'Internal server error' },
+      ]);
     default:
-      return err('HTTP_ERROR', `HTTP error! status: ${status}`);
+      return err<never, ResultErrors<FetchError>>([
+        { code: 'HTTP_ERROR', message: `HTTP error! status: ${status}` },
+      ]);
   }
 }
 
-function fetchExceptionToError(error: unknown) {
+function fetchExceptionToError(error: unknown): AppResult<FetchError, never> {
   if (error instanceof TypeError && error.message === 'Failed to fetch') {
-    return err('NETWORK_ERROR', 'Network error occurred');
+    return err<never, ResultErrors<FetchError>>([
+      { code: 'NETWORK_ERROR', message: 'Network error occurred' },
+    ]);
   }
-  return err('UNKNOWN_ERROR', `An unknown error occurred: ${error}`);
+  return err<never, ResultErrors<FetchError>>([
+    { code: 'UNKNOWN_ERROR', message: `An unknown error occurred: ${error}` },
+  ]);
 }
 
 export async function fetchPresigned<K extends keyof ResultMap>(

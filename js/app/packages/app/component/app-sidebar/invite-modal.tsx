@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useReferralCode } from '@core/context/user';
-import { isOk } from '@core/util/result';
+
 import { getWebOrigin } from '@core/util/webOrigin';
 import ClipboardIcon from '@icon/regular/clipboard.svg';
 import CloseIcon from '@icon/regular/x.svg';
@@ -46,7 +46,7 @@ export const InviteModal = () => {
     setSending(true);
     for (const email of emails) {
       const result = await authServiceClient.sendReferralInvite(email);
-      if (isOk(result)) {
+      if (result.isOk()) {
         contactsClient.addContact(`macro|${email.toLowerCase()}`);
       }
     }

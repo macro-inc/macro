@@ -1,10 +1,11 @@
+import { ok, err } from 'neverthrow';
 import {
   defineBlock,
   type ExtractLoadType,
   LoadErrors,
   loadResult,
 } from '@core/block';
-import { isErr, ok } from '@core/util/result';
+
 import { storageServiceClient } from '@service-storage/client';
 import BlockUnknown from './component/Block';
 
@@ -25,9 +26,9 @@ export const definition = defineBlock({
         });
       }
 
-      if (isErr(maybeDocument)) return maybeDocument;
+      if (maybeDocument.isErr()) return err(maybeDocument.error);
 
-      const [, documentResult] = maybeDocument;
+      const documentResult = maybeDocument.value;
 
       const { documentMetadata, userAccessLevel } = documentResult;
 

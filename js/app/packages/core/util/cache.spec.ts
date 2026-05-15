@@ -1,6 +1,7 @@
+import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cache } from './cache';
-import { err, type AppResult, ok } from './result';
+import type { AppResult } from './result';
 
 describe('cache', () => {
   let mockFn: ReturnType<typeof vi.fn>;
@@ -36,7 +37,9 @@ describe('cache', () => {
   });
 
   test('not cache error results', async () => {
-    mockFn = vi.fn(() => Promise.resolve(err('ERROR', 'Test error')));
+    mockFn = vi.fn(() =>
+      Promise.resolve(err([{ code: 'ERROR', message: 'Test error' }]))
+    );
     const cachedFn = cache(mockFn, { minutes: 5 });
 
     await cachedFn('arg1', 'arg2');

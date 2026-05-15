@@ -1,10 +1,5 @@
-import {
-  isErr,
-  ok,
-  type AppResult,
-  type ResultType,
-  throwOnErr,
-} from '@core/util/result';
+import { ok } from 'neverthrow';
+import { type AppResult, type ResultType, throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import { DocumentContentState } from '@service-storage/generated/schemas/documentContentState';
 import { queryClient } from '../client';
@@ -200,5 +195,5 @@ export function isDocumentLocationReady(location: DocumentLocation) {
 export function isDocumentLocationResultReady(
   result: AppResult<string, { data: DocumentLocation }>
 ) {
-  return !isErr(result) && isDocumentLocationReady(result.value.data);
+  return !result.isErr() && isDocumentLocationReady(result.value.data);
 }

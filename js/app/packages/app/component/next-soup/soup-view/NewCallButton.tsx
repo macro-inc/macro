@@ -4,7 +4,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { getDestinationFromOptions } from '@core/util/destination';
-import { isErr } from '@core/util/result';
+
 import XIcon from '@icon/regular/x.svg';
 import PhoneCallIcon from '@macro-icons/wide/call.svg';
 import { commsServiceClient } from '@service-comms/client';
@@ -52,13 +52,13 @@ export function NewCallButton() {
                 recipients: destination.users,
               });
 
-        if (isErr(result)) {
+        if (result.isErr()) {
           toast.failure('Failed to create channel for call');
           setIsSubmitting(false);
           return;
         }
 
-        channelId = result[1].channel_id;
+        channelId = result.value.channel_id;
       }
 
       setIsOpen(false);

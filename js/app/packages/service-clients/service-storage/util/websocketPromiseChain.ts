@@ -1,4 +1,5 @@
-import { isErr, ok, type AppErrorResult, onlyErr } from '@core/util/result';
+import { ok, err } from 'neverthrow';
+import type { AppErrorResult } from '@core/util/result';
 import { v7 as uuid7 } from 'uuid';
 
 type PromiseHandler = Promise<any> & {
@@ -38,18 +39,20 @@ export function createWebsocketPromiseChain<
     response: any
   ): AppErrorResult<'INVALID_RESPONSE' | 'SERVICE_ERROR'> => {
     if (isJobSubmissionErrorResponse(response)) {
-      return onlyErr('SERVICE_ERROR', response.error);
+      return err([{ code: 'SERVICE_ERROR', message: response.error }]);
     }
 
     if (!isJobSubmissionSuccessResponse(response)) {
-      return onlyErr('INVALID_RESPONSE', 'Invalid response format');
+      return err([
+        { code: 'INVALID_RESPONSE', message: 'Invalid response format' },
+      ]);
     }
 
     if (
       isDocumentProcessResponse(response.data) &&
       isDocumentProcessResponseError(response.data)
     ) {
-      return onlyErr('SERVICE_ERROR', response.data.message);
+      return err([{ code: 'SERVICE_ERROR', message: response.data.message }]);
     }
 
     return ok(undefined);
@@ -87,7 +90,7 @@ export function createWebsocketPromiseChain<
         if (response?.macroRequestId !== requestId) return;
 
         const errorCheck = websocketErrorFilter(response);
-        if (isErr(errorCheck)) {
+        if (errorCheck.isErr()) {
           for (const [promise] of promiseHandlerListeners) {
             console.error(errorCheck.error);
             if (!promise.resolved) promise.resolve(undefined);

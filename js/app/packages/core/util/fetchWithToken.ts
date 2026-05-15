@@ -1,16 +1,9 @@
+import { err, ok } from 'neverthrow';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { logger } from '@observability';
 import { fetchWithAuth } from '@service-auth/fetch';
-import {
-  err,
-  errFromErrors,
-  isErr,
-  ok,
-  type AppErrorResult,
-  type AppResult,
-  type ObjectLike,
-} from './result';
+import type { AppErrorResult, AppResult, ObjectLike } from './result';
 import {
   type BaseFetchErrorCode,
   type SafeFetchInit,
@@ -50,8 +43,8 @@ export async function fetchToken(): Promise<
           }
         );
 
-        if (isErr(result)) {
-          return errFromErrors(result.error);
+        if (result.isErr()) {
+          return err(result.error);
         }
 
         return ok(undefined);
@@ -80,10 +73,10 @@ export async function fetchToken(): Promise<
  *   }
  * );
  *
- * if (isErr(result)) {
- *   console.error('Error:', result[0]);
+ * if ((result).isErr()) {
+ *   console.error('Error:', result.error);
  * } else {
- *   console.log('User data:', result[1]);
+ *   console.log('User data:', result.value);
  * }
  */
 export async function fetchWithToken<T extends ObjectLike>(
@@ -92,7 +85,7 @@ export async function fetchWithToken<T extends ObjectLike>(
 ): Promise<AppResult<FetchWithTokenErrorCode, T>> {
   if (ENABLE_BEARER_TOKEN_AUTH) {
     const result = await fetchWithAuth<T>(input, init);
-    if (isErr(result)) {
+    if (result.isErr()) {
       logger.error('fetchWithToken: fetchWithAuth failed', {
         input,
         init,
@@ -105,14 +98,20 @@ export async function fetchWithToken<T extends ObjectLike>(
 
   let result = await fetchWithCredentials<T>(input, init);
 
-  if (isErr(result, 'UNAUTHORIZED')) {
+  if (
+    result.isErr() &&
+    result.error.some((error) => error.code === 'UNAUTHORIZED')
+  ) {
     const tokenResult = await fetchToken();
-    if (isErr(tokenResult, 'HTTP_ERROR')) {
+    if (
+      tokenResult.isErr() &&
+      tokenResult.error.some((error) => error.code === 'HTTP_ERROR')
+    ) {
       // converting this most likely a bad request to unauthorized error
-      return err('UNAUTHORIZED', '');
+      return err([{ code: 'UNAUTHORIZED', message: '' }]);
     }
-    if (isErr(tokenResult)) {
-      return errFromErrors(tokenResult.error);
+    if (tokenResult.isErr()) {
+      return err(tokenResult.error);
     }
 
     // Retry the original request

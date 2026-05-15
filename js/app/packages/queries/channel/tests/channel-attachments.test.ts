@@ -1,4 +1,5 @@
-import { ok } from '@core/util/result';
+import { ok } from 'neverthrow';
+
 import { commsServiceClient } from '@service-comms/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {

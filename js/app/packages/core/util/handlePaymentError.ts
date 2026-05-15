@@ -1,14 +1,17 @@
-import { isErr, type AppErrorResult, type AppResult } from './result';
+import type { AppErrorResult, AppResult } from './result';
 
 export function isPaymentError<T>(
   result: AppResult<string, T> | AppErrorResult<string>
 ): boolean {
-  if (!isErr(result)) {
+  if (!result.isErr()) {
     return false;
   }
 
-  if (isErr(result, 'HTTP_ERROR')) {
-    const errorMessage = result[0][0].message;
+  if (
+    result.isErr() &&
+    result.error.some((error) => error.code === 'HTTP_ERROR')
+  ) {
+    const errorMessage = result.error[0].message;
     if (
       errorMessage.includes('402') ||
       errorMessage.includes('payment_required') ||

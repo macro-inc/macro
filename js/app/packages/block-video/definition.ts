@@ -1,3 +1,4 @@
+import { ok, err } from 'neverthrow';
 import {
   defineBlock,
   type ExtractLoadType,
@@ -6,7 +7,7 @@ import {
   type MimeType,
 } from '@core/block';
 import { ENABLE_VIDEO_BLOCK } from '@core/constant/featureFlags';
-import { isErr, ok } from '@core/util/result';
+
 import { storageServiceClient } from '@service-storage/client';
 import type { DocumentMetadataFileType } from '@service-storage/generated/schemas/documentMetadataFileType';
 import { getPresignedUrl } from '@service-storage/util/presignedUrl';
@@ -68,9 +69,9 @@ export const definition = defineBlock({
         });
       }
 
-      if (isErr(maybeDocument)) return maybeDocument;
+      if (maybeDocument.isErr()) return err(maybeDocument.error);
 
-      const [, documentResult] = maybeDocument;
+      const documentResult = maybeDocument.value;
 
       const { documentMetadata, userAccessLevel } = documentResult;
 
@@ -98,4 +99,6 @@ export const definition = defineBlock({
   },
 });
 
-export type VideoFileData = ExtractLoadType<(typeof definition)['load']>;
+export type VideoFileData = ExtractLoadType<(typeof definition)['load']> & {
+  videoUrl?: string;
+};

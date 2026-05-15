@@ -28,7 +28,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import type { Entity, EntityType } from '@core/types';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
-import { isErr } from '@core/util/result';
+
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import Plus from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
@@ -507,12 +507,12 @@ function ReferencesSectionConditional(props: { documentId: string }) {
         entity_id: id,
       });
 
-      if (isErr(response)) {
+      if (response.isErr()) {
         console.error(response);
         return [];
       }
 
-      return response[1].references;
+      return response.value.references;
     }
   );
 

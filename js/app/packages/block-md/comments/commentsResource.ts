@@ -5,7 +5,7 @@ import {
   useBlockName,
 } from '@core/block';
 import { compareDateAsc } from '@core/util/date';
-import { isErr } from '@core/util/result';
+
 import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
 import { storageServiceClient } from '@service-storage/client';
 import type { AnnotationIncrementalUpdate } from '@service-storage/generated/schemas/annotationIncrementalUpdate';
@@ -43,7 +43,7 @@ async function fetchComments() {
   const commentThreads = await storageServiceClient.annotations.getComments({
     documentId,
   });
-  return commentThreads[1]?.data ?? [];
+  return commentThreads.isOk() ? commentThreads.value.data : [];
 }
 
 function useHandleCreateComment() {
@@ -85,12 +85,12 @@ function useCreateComment() {
       body,
     });
 
-    if (isErr(result)) {
+    if (result.isErr()) {
       console.error('Unable to create comment');
       return null;
     }
 
-    const response = result[1];
+    const response = result.value;
 
     handleCreateComment(response);
 
@@ -135,12 +135,12 @@ export function useEditCommentResource() {
       body,
     });
 
-    if (isErr(result)) {
+    if (result.isErr()) {
       console.error('Unable to edit comment');
       return false;
     }
 
-    const [, response] = result;
+    const response = result.value;
 
     handleEditComment(response);
 
@@ -193,12 +193,12 @@ export function useDeleteCommentResource() {
       body,
     });
 
-    if (isErr(result)) {
+    if (result.isErr()) {
       console.error('Unable to delete comment');
       return;
     }
 
-    const [, response] = result;
+    const response = result.value;
 
     return handleDeleteComment(response);
   };

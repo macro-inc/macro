@@ -34,12 +34,7 @@ import {
 } from '@core/signal/permissions';
 import { idToEmail } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import {
-  isErr,
-  isOk,
-  type AppErrorResult,
-  type AppResult,
-} from '@core/util/result';
+import type { AppErrorResult, AppResult } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import IconX from '@icon/bold/x-bold.svg';
@@ -593,10 +588,10 @@ export function ShareModal(props: ShareModalProps) {
   const [channelNamesResource] = createResource(
     () => {
       const result = permissionsResource.latest;
-      if (!result || isErr(result)) {
+      if (!result || result.isErr()) {
         return;
       }
-      const [, sharePermission] = result;
+      const sharePermission = result.value;
       if (!sharePermission?.channelSharePermissions?.length) {
         return;
       }
@@ -612,11 +607,11 @@ export function ShareModal(props: ShareModalProps) {
   // Create a map of channel IDs to channel names
   const channelNameMap = createMemo(() => {
     const result = channelNamesResource.latest;
-    if (!result || isErr(result)) {
+    if (!result || result.isErr()) {
       return new Map();
     }
 
-    const [, data] = result;
+    const data = result.value;
     const map = new Map();
 
     data.previews.forEach((preview) => {
@@ -633,9 +628,9 @@ export function ShareModal(props: ShareModalProps) {
 
   const recipients = createMemo(() => {
     const result = permissionsResource.latest;
-    if (!result || isErr(result)) return;
+    if (!result || result.isErr()) return;
 
-    const [, sharePermission] = result;
+    const sharePermission = result.value;
     return sharePermission.channelSharePermissions;
   });
 
@@ -658,7 +653,7 @@ export function ShareModal(props: ShareModalProps) {
           ],
         },
       });
-      if (!isErr(result)) {
+      if (!result.isErr()) {
         refetch();
         toast.success(
           'Removed channel access',
@@ -680,7 +675,7 @@ export function ShareModal(props: ShareModalProps) {
           ],
         },
       });
-      if (!isErr(result)) {
+      if (!result.isErr()) {
         refetch();
         toast.success(
           'Removed channel access',
@@ -702,7 +697,7 @@ export function ShareModal(props: ShareModalProps) {
           ],
         },
       });
-      if (!isErr(result)) {
+      if (!result.isErr()) {
         refetch();
         toast.success('Removed folder access');
       } else {
@@ -775,7 +770,7 @@ export function ShareModal(props: ShareModalProps) {
         });
       }
 
-      if (result && isOk(result)) {
+      if (result && result.isOk()) {
         refetch();
         if (!hideSuccessToast) {
           toast.success(
@@ -792,11 +787,11 @@ export function ShareModal(props: ShareModalProps) {
 
   const publicAccessLevel = createMemo(() => {
     const currentPermissions = permissionsResource.latest;
-    if (!currentPermissions || isErr(currentPermissions)) {
+    if (!currentPermissions || currentPermissions.isErr()) {
       return;
     }
 
-    const [, sharePermission] = currentPermissions;
+    const sharePermission = currentPermissions.value;
     return sharePermission.publicAccessLevel;
   });
 
@@ -810,7 +805,7 @@ export function ShareModal(props: ShareModalProps) {
           },
           chat_id: props.id,
         });
-        if (!isErr(result)) {
+        if (!result.isErr()) {
           refetch();
 
           if (accessLevel === null) {
@@ -842,7 +837,7 @@ export function ShareModal(props: ShareModalProps) {
           },
           documentId: props.id,
         });
-        if (!isErr(result)) {
+        if (!result.isErr()) {
           refetch();
           if (accessLevel === null) {
             toast.success(
@@ -873,7 +868,7 @@ export function ShareModal(props: ShareModalProps) {
           },
           id: props.id,
         });
-        if (!isErr(result)) {
+        if (!result.isErr()) {
           refetch();
           if (accessLevel === null) {
             toast.success(
@@ -1243,8 +1238,8 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
 
   const shareAccessLevelText = createMemo(() => {
     const result = permissionsBlockResource[0].latest;
-    if (!result || isErr(result)) return '';
-    const [, sharePermission] = result;
+    if (!result || result.isErr()) return '';
+    const sharePermission = result.value;
     if (sharePermission.isPublic) return 'Public';
     if (sharePermission.channelSharePermissions?.length) return 'Shared';
     return 'Just me';

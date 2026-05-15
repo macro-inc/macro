@@ -1,5 +1,5 @@
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { isErr } from '@core/util/result';
+
 import ArrowLeft from '@icon/regular/arrow-left.svg';
 import ArrowRight from '@icon/regular/arrow-right.svg';
 import { authServiceClient } from '@service-auth/client';
@@ -20,8 +20,11 @@ const verifyCode = action(async (formData: FormData) => {
     code,
     email,
   });
-  if (isErr(result)) {
-    if (isErr(result, 'UNAUTHORIZED')) {
+  if (result.isErr()) {
+    if (
+      result.isErr() &&
+      result.error.some((error) => error.code === 'UNAUTHORIZED')
+    ) {
       throw new Error('Invalid code.');
     }
     throw new Error('Unable to perform verification.');

@@ -1,5 +1,6 @@
+import { ok } from 'neverthrow';
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
-import { isErr, ok } from '@core/util/result';
+
 import { fetchAndCacheThread } from '@queries/email/thread';
 import EmailBlock from './component/Block';
 
@@ -19,19 +20,25 @@ export const definition = defineBlock({
         return LoadErrors.MISSING;
       }
 
-      if (isErr(email)) {
-        if (isErr(email, 'MISSING')) {
+      if (email.isErr()) {
+        if (email.error.some((error) => error.code === 'NOT_FOUND')) {
           return LoadErrors.MISSING;
-        } else if (isErr(email, 'UNAUTHORIZED')) {
+        } else if (
+          email.isErr() &&
+          email.error.some((error) => error.code === 'UNAUTHORIZED')
+        ) {
           return LoadErrors.UNAUTHORIZED;
-        } else if (isErr(email, 'GONE')) {
+        } else if (
+          email.isErr() &&
+          email.error.some((error) => error.code === 'GONE')
+        ) {
           return LoadErrors.GONE;
         } else {
           return LoadErrors.INVALID;
         }
       }
 
-      const [, emailData] = email;
+      const emailData = email.value;
 
       return ok({
         ...emailData,

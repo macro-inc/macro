@@ -1,4 +1,4 @@
-import { isErr, type AppResult, type ObjectLike } from './result';
+import type { AppResult, ObjectLike } from './result';
 
 interface CacheEntry<E extends string, R extends ObjectLike> {
   result: Promise<AppResult<E, R>>;
@@ -80,7 +80,7 @@ export function cache<Fn extends (...args: any[]) => Promise<any>>(
     };
 
     result.then((value) => {
-      if (isErr(value)) {
+      if (value.isErr()) {
         cache.delete(key);
       }
     });

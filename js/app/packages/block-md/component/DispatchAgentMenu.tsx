@@ -5,7 +5,7 @@ import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { macroIdToEmail, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { isOk } from '@core/util/result';
+
 import CaretDown from '@icon/regular/caret-down.svg';
 import CopyIcon from '@icon/regular/copy.svg';
 import PlugIcon from '@icon/regular/plug.svg';
@@ -39,10 +39,10 @@ async function generateTaskPrompt(
   const result = await storageServiceClient.getDocumentBranchName({
     documentId,
   });
-  if (!isOk(result)) {
+  if (!result.isOk()) {
     throw new Error('Failed to fetch branch name');
   }
-  const { shortId, branchName } = result[1];
+  const { shortId, branchName } = result.value;
 
   const lines: string[] = [];
 

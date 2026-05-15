@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import { isErr } from '@core/util/result';
+
 import { logger } from '@observability';
 import { storageServiceClient } from '@service-storage/client';
 
@@ -7,8 +7,8 @@ export const makeAttachmentPublic = async (attachmentId: string) => {
   const permissions = await storageServiceClient.getDocumentPermissions({
     document_id: attachmentId,
   });
-  if (!isErr(permissions)) {
-    if (permissions[1].isPublic) {
+  if (!permissions.isErr()) {
+    if (permissions.value.isPublic) {
       return;
     }
   }
@@ -20,7 +20,7 @@ export const makeAttachmentPublic = async (attachmentId: string) => {
       publicAccessLevel: 'view',
     },
   });
-  if (!isErr(result)) {
+  if (!result.isErr()) {
     toast.success(
       'Recipients can now view this file',
       'File share permissions have been updated to public view-only'

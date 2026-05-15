@@ -1,3 +1,4 @@
+import { err, ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,7 +22,6 @@ vi.mock('@solid-primitives/rootless', () => ({
 
 import { storageServiceClient } from '@service-storage/client';
 import { getPermissionToken } from '../signal/token';
-import { err, ok } from '../util/result';
 
 describe('getPermissionToken', () => {
   beforeEach(() => {
@@ -101,7 +101,9 @@ describe('getPermissionToken', () => {
   it('should return undefined when token fetch fails', async () => {
     vi.mocked(
       storageServiceClient.permissionsTokens.createPermissionToken
-    ).mockResolvedValue(err('NETWORK_ERROR', 'Failed to create token'));
+    ).mockResolvedValue(
+      err([{ code: 'NETWORK_ERROR', message: 'Failed to create token' }])
+    );
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 

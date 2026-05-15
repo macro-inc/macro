@@ -1,5 +1,5 @@
 import { blockDataSignalAs, useBlockId } from '@core/block';
-import { isErr } from '@core/util/result';
+
 import {
   type FetchProgress,
   fetchPresigned,
@@ -40,11 +40,11 @@ export const useGetFileBlob = () => {
     const result = options?.onProgress
       ? await fetchPresignedBlobWithProgress(url, options.onProgress)
       : await fetchPresigned(url, 'blob');
-    if (isErr(result)) {
+    if (result.isErr()) {
       throw new Error('unable to fetch from presigned url');
     }
 
-    const [, blob] = result;
+    const blob = result.value;
     if (!blob) {
       throw new Error('no blob data');
     }

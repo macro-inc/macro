@@ -3,12 +3,7 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import {
-  type AppErrorResult,
-  type AppResult,
-  mapOk,
-  type ObjectLike,
-} from '@core/util/result';
+import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
 
 import type { SafeFetchInit } from '@core/util/safeFetch';
 
@@ -35,12 +30,11 @@ export function contactsFetch<T extends ObjectLike = never>(
 
 export const contactsClient = {
   async getContacts() {
-    return mapOk(
+    return (
       await contactsFetch<GetContactsResponse>(`/contacts`, {
         method: 'GET',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async addContact(userId: string) {
     return contactsFetch(`/contacts`, {

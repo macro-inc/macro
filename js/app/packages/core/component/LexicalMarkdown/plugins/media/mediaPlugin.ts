@@ -1,10 +1,11 @@
+import { ok } from 'neverthrow';
 import { blockNameToFileExtensionSet } from '@core/constant/allBlocks';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { heicConversionService } from '@core/heic/service';
 import type { FetchError } from '@core/service';
 import { createStaticFile } from '@core/util/create';
 import { contentHash } from '@core/util/hash';
-import { type AppResult, mapOk, ok } from '@core/util/result';
+import type { AppResult } from '@core/util/result';
 import { mergeRegister } from '@lexical/utils';
 import {
   $createImageNode,
@@ -129,7 +130,7 @@ export async function getMediaUrl(src: {
     return ok(url);
   }
   if (src.type === 'dss') {
-    return mapOk(await fetchBinaryDocumentData(src.id), (res) => res.blobUrl);
+    return (await fetchBinaryDocumentData(src.id)).map((res) => res.blobUrl);
   }
   console.warn('Get media url failed for src:', src);
   return ok('');

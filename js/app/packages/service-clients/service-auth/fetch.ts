@@ -1,13 +1,6 @@
+import { err, ok } from 'neverthrow';
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
-import {
-  err,
-  errFromErrors,
-  isErr,
-  type AppResult,
-  type ObjectLike,
-  ok,
-  type ResultError,
-} from '@core/util/result';
+import type { AppResult, ObjectLike, ResultError } from '@core/util/result';
 import {
   type BaseFetchErrorCode,
   type ErrorResponseHandler,
@@ -41,13 +34,11 @@ export async function getMacroApiToken() {
   }
 
   macroApiTokenPromise = new Promise((resolve, reject) =>
-    authServiceClient.macroApiToken().then(([err, result]) => {
-      if (err) {
-        reject(err);
-      } else if (result) {
-        resolve(result.macro_api_token);
+    authServiceClient.macroApiToken().then((result) => {
+      if (result.isErr()) {
+        reject(result.error);
       } else {
-        reject(new Error('No result from macroApiToken'));
+        resolve(result.value.macro_api_token);
       }
     })
   );
@@ -84,7 +75,9 @@ export async function fetchWithAuth<
 ): Promise<AppResult<BaseFetchErrorCode | CustomErrorCode, T>> {
   const apiToken = await getMacroApiToken();
   if (!apiToken) {
-    return err('UNAUTHORIZED', 'No access and/or refresh token found');
+    return err([
+      { code: 'UNAUTHORIZED', message: 'No access and/or refresh token found' },
+    ]);
   }
 
   const safeFetchInit = {
@@ -143,8 +136,8 @@ export async function fetchWithAuth<
     safeFetchErrorHandler
   );
 
-  if (isErr(result)) {
-    return errFromErrors(result.error);
+  if (result.isErr()) {
+    return err(result.error);
   }
 
   return ok(result.value as T);

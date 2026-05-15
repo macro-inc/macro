@@ -3,12 +3,7 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import {
-  type AppErrorResult,
-  type AppResult,
-  mapOk,
-  type ObjectLike,
-} from '@core/util/result';
+import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
 import { registerClient } from '@core/util/mockClient';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { AddPropertyOptionRequest } from './generated/schemas/addPropertyOptionRequest';
@@ -122,7 +117,7 @@ export const propertiesServiceClient = {
       }
     );
 
-    return mapOk(result, () => ({ success: true }));
+    return result.map(() => ({ success: true }));
   },
 
   getEntityProperties: async (args: GetEntityPropertiesArgs) => {
@@ -148,7 +143,7 @@ export const propertiesServiceClient = {
       body: JSON.stringify(args.body),
     });
 
-    return mapOk(result, () => ({ success: true }));
+    return result.map(() => ({ success: true }));
   },
 
   deleteEntityProperty: async (args: DeleteEntityPropertyArgs) => {
@@ -159,7 +154,7 @@ export const propertiesServiceClient = {
       }
     );
 
-    return mapOk(result, () => ({ success: true }));
+    return result.map(() => ({ success: true }));
   },
 
   getPropertyOptions: async (args: GetPropertyOptionsArgs) => {
@@ -189,7 +184,7 @@ export const propertiesServiceClient = {
       }
     );
 
-    return mapOk(result, () => ({ success: true }));
+    return result.map(() => ({ success: true }));
   },
 
   setPropertyStatusComplete: async (args: SetPropertyStatusCompleteArgs) => {
@@ -197,7 +192,7 @@ export const propertiesServiceClient = {
     const result = await propertiesFetch<{}>(url, {
       method: 'PATCH',
     });
-    return mapOk(result, () => ({ success: true }));
+    return result.map(() => ({ success: true }));
   },
 
   getBulkEntityProperties: async (args: GetBulkEntityPropertiesArgs) => {

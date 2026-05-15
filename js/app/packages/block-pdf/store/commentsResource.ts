@@ -8,7 +8,7 @@ import {
 } from '@core/block';
 import { useUserId } from '@core/context/user';
 import { compareDateAsc } from '@core/util/date';
-import { isErr } from '@core/util/result';
+
 import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
 import { storageServiceClient } from '@service-storage/client';
 import type { AnnotationIncrementalUpdate } from '@service-storage/generated/schemas/annotationIncrementalUpdate';
@@ -53,7 +53,7 @@ async function fetchComments() {
   const commentThreads = await storageServiceClient.annotations.getComments({
     documentId,
   });
-  return commentThreads[1]?.data ?? [];
+  return commentThreads.isOk() ? commentThreads.value.data : [];
 }
 
 async function fetchAnchors() {
@@ -61,7 +61,7 @@ async function fetchAnchors() {
   const anchors = await storageServiceClient.annotations.getAnchors({
     documentId,
   });
-  return anchors[1]?.data ?? [];
+  return anchors.isOk() ? anchors.value.data : [];
 }
 
 function useHandleCreateUnthreadedAnchor() {
@@ -82,12 +82,12 @@ function useCreateUnthreadedAnchor() {
       body,
     });
 
-    if (isErr(result)) {
+    if (result.isErr()) {
       console.error('Unable to create anchor');
       return false;
     }
 
-    const [, response] = result;
+    const response = result.value;
 
     handleCreateUnthreadedAnchor(response);
 
@@ -117,12 +117,12 @@ function useDeleteUnthreadedAnchor() {
       body,
     });
 
-    if (isErr(result)) {
+    if (result.isErr()) {
       console.error('Unable to delete anchor');
       return false;
     }
 
-    const [, response] = result;
+    const response = result.value;
 
     handleDeleteUnthreadedAnchor(response);
 
@@ -149,12 +149,12 @@ function useEditAnchor() {
       body,
     });
 
-    if (isErr(result)) {
+    if (result.isErr()) {
       console.error('Unable to edit anchor');
       return false;
     }
 
-    const [, response] = result;
+    const response = result.value;
 
     handleEditAnchor(response);
 
@@ -212,12 +212,12 @@ function useCreateComment() {
       body,
     });
 
-    if (isErr(result)) {
+    if (result.isErr()) {
       console.error('Unable to create comment');
       return null;
     }
 
-    const response = result[1];
+    const response = result.value;
 
     handleCreateComment(response);
 
@@ -262,12 +262,12 @@ export function useEditCommentResource() {
       body,
     });
 
-    if (isErr(result)) {
+    if (result.isErr()) {
       console.error('Unable to edit comment');
       return false;
     }
 
-    const [, response] = result;
+    const response = result.value;
 
     handleEditComment(response);
 
@@ -324,12 +324,12 @@ export function useDeleteCommentResource() {
       body,
     });
 
-    if (isErr(result)) {
+    if (result.isErr()) {
       console.error('Unable to delete comment');
       return false;
     }
 
-    const [, response] = result;
+    const response = result.value;
 
     handleDeleteComment(response);
 

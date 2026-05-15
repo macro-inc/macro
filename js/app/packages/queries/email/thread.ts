@@ -1,13 +1,8 @@
+import { err, ok } from 'neverthrow';
 import { useAnalytics } from '@app/component/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
-import {
-  catchToResult,
-  errFromErrors,
-  isErr,
-  ok,
-  throwOnErr,
-} from '@core/util/result';
+import { catchToResult, throwOnErr } from '@core/util/result';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
@@ -109,11 +104,11 @@ export async function fetchAndCacheThread(
       await queryClient.fetchInfiniteQuery(threadQueryOptions(threadId))
   );
 
-  if (isErr(result)) {
-    return errFromErrors(result.error as any);
+  if (result.isErr()) {
+    return err(result.error as any);
   }
 
-  data = result[1];
+  data = result.value;
 
   const thread = flattenThreadPages(data);
   return ok({ thread: thread! });
@@ -388,7 +383,7 @@ export async function blockSenderWithToast(senderEmail: string) {
     email_address: senderEmail,
   });
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     toast.failure('Failed to block sender', senderEmail);
     return;
   }
@@ -404,7 +399,7 @@ export async function blockSenderWithToast(senderEmail: string) {
           const undoResult = await emailClient.unblockSender({
             email_address: senderEmail,
           });
-          if (isErr(undoResult)) {
+          if (undoResult.isErr()) {
             toast.failure('Failed to unblock sender', senderEmail);
           } else {
             toast.success('Sender unblocked');
@@ -426,12 +421,12 @@ async function upsertSenderFilterWithToast(
     is_important: isImportant,
   });
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     toast.failure(`Failed to mark sender as ${label}`, senderEmail);
     return;
   }
 
-  const filterId = result[1].filter.id;
+  const filterId = result.value.filter.id;
   invalidateAllSoup();
 
   toast.success(
@@ -445,7 +440,7 @@ async function upsertSenderFilterWithToast(
           const undoResult = await emailClient.deleteEmailFilter({
             id: filterId,
           });
-          if (isErr(undoResult)) {
+          if (undoResult.isErr()) {
             toast.failure('Failed to undo', senderEmail);
           } else {
             invalidateAllSoup();

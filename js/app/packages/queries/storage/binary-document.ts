@@ -1,11 +1,6 @@
+import { err, ok } from 'neverthrow';
 import type { FetchError } from '@core/service';
-import {
-  err,
-  isErr,
-  type AppResult,
-  unwrapOrThrow,
-  ok,
-} from '@core/util/result';
+import { type AppResult, throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { GetDocumentResponseData } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
@@ -26,9 +21,9 @@ export async function fetchBinaryDocumentData(
   const maybeDocument = await storageServiceClient.getDocumentMetadata({
     documentId,
   });
-  if (isErr(maybeDocument)) return maybeDocument;
+  if (maybeDocument.isErr()) return err(maybeDocument.error);
 
-  const [, documentData] = maybeDocument;
+  const documentData = maybeDocument.value;
   const versionId = documentData.documentMetadata.documentVersionId;
 
   const location = await waitForDocumentPresignedUrlReady({
@@ -45,10 +40,12 @@ export async function fetchBinaryDocumentData(
     location.type !== 'presignedUrl' ||
     !location.presignedUrl
   ) {
-    return err(
-      'INVALID_DOCUMENT',
-      'Document location is not ready as a presigned URL'
-    );
+    return err([
+      {
+        code: 'INVALID_DOCUMENT',
+        message: 'Document location is not ready as a presigned URL',
+      },
+    ]);
   }
 
   return ok({
@@ -58,8 +55,7 @@ export async function fetchBinaryDocumentData(
 }
 
 async function fetchBinaryDocument(documentId: string): Promise<string> {
-  const result = await fetchBinaryDocumentData(documentId);
-  const data = unwrapOrThrow(result);
+  const data = await throwOnErr(() => fetchBinaryDocumentData(documentId));
   return data.blobUrl;
 }
 

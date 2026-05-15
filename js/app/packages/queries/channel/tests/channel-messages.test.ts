@@ -1,8 +1,9 @@
+import { err as resultErr } from 'neverthrow';
 /**
  * @vitest-environment jsdom
  */
 
-import { err as resultErr, ThrownResultError } from '@core/util/result';
+import { ThrownResultError } from '@core/util/result';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -44,7 +45,7 @@ describe('channelMessagesQueryOptions', () => {
     'GONE',
   ] as const)('throws missing load-around messages without retrying them for %s', async (code) => {
     mocks.getChannelMessages.mockResolvedValueOnce(
-      resultErr(code, 'Message unavailable')
+      resultErr([{ code, message: 'Message unavailable' }])
     );
 
     const options = channelMessagesQueryOptions('channel-1', 'message-missing');

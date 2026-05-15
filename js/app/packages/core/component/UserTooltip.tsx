@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { isOk } from '@core/util/result';
+
 import IconCheck from '@icon/regular/check.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
 import WideCopy from '@macro-icons/wide/copy.svg';
@@ -46,7 +46,7 @@ export function UserTooltip(props: UserTooltipProps) {
         const result = await commsServiceClient.getOrCreateDirectMessage({
           recipient_id: props.id,
         });
-        const channelId = isOk(result) && result[1]?.channel_id;
+        const channelId = result.isOk() && result.value?.channel_id;
         if (channelId) {
           openWithSplit(
             { type: 'channel', id: channelId },

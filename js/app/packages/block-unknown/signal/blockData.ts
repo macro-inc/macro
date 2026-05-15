@@ -1,5 +1,5 @@
 import { blockDataSignalAs, useBlockId } from '@core/block';
-import { isErr } from '@core/util/result';
+
 import { fetchPresigned } from '@service-storage/util/fetchPresigned';
 import { getPresignedUrl } from '@service-storage/util/presignedUrl';
 import { createMemo } from 'solid-js';
@@ -27,11 +27,11 @@ export const useGetFileBlob = () => {
 
   const fetchFromPresignedUrl = async (url: string) => {
     const result = await fetchPresigned(url, 'blob');
-    if (isErr(result)) {
+    if (result.isErr()) {
       throw new Error('unable to fetch from presigned url');
     }
 
-    const [, blob] = result;
+    const blob = result.value;
     if (!blob) {
       throw new Error('no blob data');
     }

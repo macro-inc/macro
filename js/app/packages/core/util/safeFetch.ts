@@ -1,10 +1,9 @@
-import {
-  err,
-  errFromErrors,
-  type AppResult,
-  type ObjectLike,
-  ok,
-  type ResultError,
+import { err, ok } from 'neverthrow';
+import type {
+  AppResult,
+  ObjectLike,
+  ResultError,
+  ResultErrors,
 } from './result';
 import { platformFetch } from './platformFetch';
 import { sleep } from './sleep';
@@ -93,12 +92,12 @@ export type TextResponse = { contentType: 'text/plain'; body: string };
  *     `https://localhost/users/${userId}`
  *   );
  *
- *   if (isErr(result)) {
- *     console.error('Error fetching user:', result[0]);
+ *   if ((result).isErr()) {
+ *     console.error('Error fetching user:', result.error);
  *     return;
  *   }
  *
- *   const user = result[1];
+ *   const user = result.value;
  *   console.log('User data:', user);
  * }
  *
@@ -117,8 +116,8 @@ export type TextResponse = { contentType: 'text/plain'; body: string };
  *     myErrorHandler
  *   );
  *
- *   if (isErr(result)) {
- *     const [errors] = result;
+ *   if ((result).isErr()) {
+ *     const errors = result.error;
  *     switch (errors[0].code) {
  *       case 'RATE_LIMITED':
  *         console.error('Rate limit reached:', errors[0].message);
@@ -134,7 +133,7 @@ export type TextResponse = { contentType: 'text/plain'; body: string };
  *     return;
  *   }
  *
- *   const user = result[1];
+ *   const user = result.value;
  *   console.log('User data:', user);
  * }
  *
@@ -149,12 +148,12 @@ export type TextResponse = { contentType: 'text/plain'; body: string };
  *     }
  *   );
  *
- *   if (isErr(result)) {
- *     console.error('Error fetching user:', result[0]);
+ *   if ((result).isErr()) {
+ *     console.error('Error fetching user:', result.error);
  *     return;
  *   }
  *
- *   const user = result[1];
+ *   const user = result.value;
  *   console.log('User data:', user);
  * }
  */
@@ -169,7 +168,10 @@ export async function safeFetch<
   const { retry, ...fetchInit } = init || {};
   const maxTries = retry?.maxTries ?? 1;
   const delay = retry?.delay ?? 0;
-  let lastError;
+  type ErrorCode = BaseFetchErrorCode | CustomErrorCode;
+  const fetchErr = (errors: ResultErrors<ErrorCode>) =>
+    err<T, ResultErrors<ErrorCode>>(errors);
+  let lastError: AppResult<ErrorCode, T> | undefined;
 
   for (let attempt = 1; attempt <= maxTries; attempt++) {
     try {
@@ -191,25 +193,38 @@ export async function safeFetch<
       if (!response.ok) {
         if (errorResponseHandler) {
           const customError = await errorResponseHandler(response);
-          return errFromErrors(customError ? [customError] : []);
+          return fetchErr(customError ? [customError] : []);
         }
 
         switch (response.status) {
           case 404:
-            return err('NOT_FOUND', 'Resource not found');
+            return fetchErr([
+              { code: 'NOT_FOUND', message: 'Resource not found' },
+            ]);
           case 401:
-            return err('UNAUTHORIZED', 'Unauthorized access');
+            return fetchErr([
+              { code: 'UNAUTHORIZED', message: 'Unauthorized access' },
+            ]);
           case 403:
-            return err('FORBIDDEN', 'Forbidden');
+            return fetchErr([{ code: 'FORBIDDEN', message: 'Forbidden' }]);
           case 409:
-            return err('CONFLICT', 'Resource conflict');
+            return fetchErr([
+              { code: 'CONFLICT', message: 'Resource conflict' },
+            ]);
           case 410:
-            return err('GONE', 'Resource deleted');
+            return fetchErr([{ code: 'GONE', message: 'Resource deleted' }]);
           case 500:
-            lastError = err('SERVER_ERROR', 'Internal server error');
+            lastError = fetchErr([
+              { code: 'SERVER_ERROR', message: 'Internal server error' },
+            ]);
             break;
           default:
-            return err('HTTP_ERROR', `HTTP error! status: ${response.status}`);
+            return fetchErr([
+              {
+                code: 'HTTP_ERROR',
+                message: `HTTP error! status: ${response.status}`,
+              },
+            ]);
         }
       } else {
         if (fetchInit.method === 'HEAD') return ok({} as T);
@@ -227,11 +242,20 @@ export async function safeFetch<
       }
     } catch (error) {
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        lastError = err('NETWORK_ERROR', 'Network error occurred');
+        lastError = fetchErr([
+          { code: 'NETWORK_ERROR', message: 'Network error occurred' },
+        ]);
       } else if (error instanceof SyntaxError) {
-        return err('INVALID_JSON', 'Invalid JSON in response');
+        return fetchErr([
+          { code: 'INVALID_JSON', message: 'Invalid JSON in response' },
+        ]);
       } else {
-        return err('UNKNOWN_ERROR', `An unknown error occurred: ${error}`);
+        return fetchErr([
+          {
+            code: 'UNKNOWN_ERROR',
+            message: `An unknown error occurred: ${error}`,
+          },
+        ]);
       }
     }
 
@@ -241,7 +265,13 @@ export async function safeFetch<
   }
 
   return (
-    lastError ?? err('UNKNOWN_ERROR', 'Retry failed for an unknown reason')
+    lastError ??
+    fetchErr([
+      {
+        code: 'UNKNOWN_ERROR',
+        message: 'Retry failed for an unknown reason',
+      },
+    ])
   );
 }
 function calculateDelay(

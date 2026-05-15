@@ -3,12 +3,7 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import {
-  type AppErrorResult,
-  type AppResult,
-  mapOk,
-  type ObjectLike,
-} from '@core/util/result';
+import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
 
 import type { SafeFetchInit } from '@core/util/safeFetch';
 
@@ -68,25 +63,23 @@ const buildSearchQuery = (params: SearchParams) => {
 export const searchClient = {
   async search(args: SearchArgs, init?: SafeFetchInit) {
     const url = `/search${buildSearchQuery(args.params)}`;
-    return mapOk(
+    return (
       await searchServiceFetch<UnifiedSearchResponse>(url, {
         method: 'POST',
         body: JSON.stringify(args.request),
         ...init,
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 
   async searchChannel(args: ChannelSearchArgs, init?: SafeFetchInit) {
     const url = `/search/channel${buildSearchQuery(args.params)}`;
-    return mapOk(
+    return (
       await searchServiceFetch<ChannelSearchResponse>(url, {
         method: 'POST',
         body: JSON.stringify(args.request),
         ...init,
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 };

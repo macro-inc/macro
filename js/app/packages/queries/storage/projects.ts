@@ -1,7 +1,7 @@
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { compareDateDesc } from '@core/util/date';
-import { isOk } from '@core/util/result';
+
 import {
   refetchHistory,
   useUpsertToHistoryMutation,
@@ -29,8 +29,8 @@ async function fetchProjects(): Promise<ProjectsQueryResponse> {
     storageServiceClient.projects.getPending(),
   ]);
 
-  const projects = isOk(projectsResult) ? projectsResult[1].data : [];
-  const pending = isOk(pendingResult) ? pendingResult[1].data : [];
+  const projects = projectsResult.isOk() ? projectsResult.value.data : [];
+  const pending = pendingResult.isOk() ? pendingResult.value.data : [];
 
   return { projects, pending };
 }
@@ -98,8 +98,8 @@ export async function createProject(params: {
     sharePermission: params.sharePermission,
   });
 
-  if (isOk(result)) {
-    const projectId = result[1].id;
+  if (result.isOk()) {
+    const projectId = result.value.id;
     setPreviewOnCreate({
       itemId: projectId,
       itemType: 'project',
@@ -147,8 +147,8 @@ export function useCreateProjectMutation(
         sharePermission: params.sharePermission,
       });
 
-      if (isOk(result)) {
-        return result[1].id;
+      if (result.isOk()) {
+        return result.value.id;
       }
       return undefined;
     },

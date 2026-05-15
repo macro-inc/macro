@@ -1,3 +1,4 @@
+import { err, ok } from 'neverthrow';
 // Usage:
 // bun run scripts/generate-dcs-tools.ts
 //
@@ -157,7 +158,8 @@ async function generateToolsFile(schema: CombinedSchema) {
 
   const contents = `${warning}
 
-import { err, type AppResult, ok } from 'core/util/result';
+import { err, ok } from 'neverthrow';
+import type { AppResult } from 'core/util/result';
 import * as schemas from './schemas';
 import type * as types from './types';
 
@@ -210,7 +212,7 @@ function deserializeTool<T extends NamedTool>(
   direction: 'call' | 'response'
 ): AppResult<'parse_error' | 'not_found', T> {
   if (!(tool.name in toolParserMap)) {
-    return err('not_found', \`tool name not found \${tool.name}\`);
+    return err([{ code: 'not_found', message: \`tool name not found \${tool.name}\` }]);
   }
   const parser = toolParserMap[tool.name as ToolName];
   const maybeToolCall = parser[direction].safeParse(tool.json);
@@ -221,7 +223,7 @@ function deserializeTool<T extends NamedTool>(
       data: maybeToolCall.data,
     } as T);
   }
-  return err('parse_error', 'tool parsing failed');
+  return err([{ code: 'parse_error', message: 'tool parsing failed' }]);
 }
 
 export function deserializeToolCall(

@@ -139,8 +139,8 @@ export function TopBar() {
   const downloadDocx = createCallback(async () => {
     if (!isAuth()) return openLoginModal();
 
-    const [_, data] = await storageServiceClient.exportDocument({ documentId });
-    if (!data) {
+    const data = await storageServiceClient.exportDocument({ documentId });
+    if (data.isErr()) {
       return toast.failure('Unable to download file');
     }
 
@@ -148,7 +148,7 @@ export function TopBar() {
 
     try {
       // Fetch the file from the presigned URL
-      const response = await platformFetch(data.presigned_url);
+      const response = await platformFetch(data.value.presigned_url);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }

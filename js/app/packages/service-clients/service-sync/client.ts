@@ -1,16 +1,11 @@
+import { err, ok } from 'neverthrow';
 import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
 import { getPermissionToken } from '@core/signal/token';
 import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import {
-  isErr,
-  type AppErrorResult,
-  type AppResult,
-  type ObjectLike,
-  ok,
-} from '@core/util/result';
+import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import type { SafeFetchInit } from '@core/util/safeFetch';
@@ -135,8 +130,11 @@ export const syncServiceClient = {
       method: 'HEAD',
     });
 
-    if (isErr(res)) {
-      if (isErr(res, 'NOT_FOUND')) {
+    if (res.isErr()) {
+      if (
+        res.isErr() &&
+        res.error.some((error) => error.code === 'NOT_FOUND')
+      ) {
         return ok({ exists: false });
       }
       return res;
@@ -175,13 +173,11 @@ export const syncServiceClient = {
         method: 'GET',
       }
     );
-    if (isErr(response)) {
-      if (isErr(response, 'NOT_FOUND')) {
-        return response;
-      }
+    if (response.isErr()) {
+      return err(response.error);
     }
 
-    return ok(response[1] as MetadataResponse);
+    return ok(response.value as MetadataResponse);
   },
   async getSnapshot(args: { documentId: string }) {
     const token = await getPermissionToken('document', args.documentId);

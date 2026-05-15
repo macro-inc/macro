@@ -1,4 +1,5 @@
-import { err, ok, type AppErrorResult } from '@core/util/result';
+import { err, ok } from 'neverthrow';
+import type { AppErrorResult } from '@core/util/result';
 import { platformFetch } from 'core/util/platformFetch';
 
 export async function uploadToPresignedUrl({
@@ -35,7 +36,7 @@ export async function uploadToPresignedUrl({
 
   if (!response.ok) {
     const message = await response.text();
-    return err('SERVER_ERROR', message);
+    return err([{ code: 'SERVER_ERROR', message: message }]);
   }
 
   return ok(undefined);

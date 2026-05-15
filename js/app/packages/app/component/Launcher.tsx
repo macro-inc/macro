@@ -22,7 +22,7 @@ import {
   createMarkdownFile,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { isErr } from '@core/util/result';
+
 import { Dialog } from '@kobalte/core/dialog';
 import PixelArrowRight from '@macro-icons/pixel/arrow-right.svg';
 import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
@@ -220,7 +220,7 @@ export function runCreateAction(
             extension: 'py',
             title: 'New Code File',
           });
-          if (isErr(result)) return;
+          if (result.isErr()) return;
           return result.value.documentId ?? undefined;
         },
         shouldInsert,

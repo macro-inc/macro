@@ -1,3 +1,4 @@
+import { err, ok } from 'neverthrow';
 import type { BlockCanvasProps } from '@block-canvas/component/Block';
 import type { BlockChannelProps } from '@block-channel/component/NewChannelBlockAdapter';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
@@ -34,14 +35,7 @@ import { createStore, type SetStoreFunction, type Store } from 'solid-js/store';
 import { ENABLE_PDF_MULTISPLIT } from './constant/featureFlags';
 import { blockDataSignal } from './internal/BlockLoader';
 import type { Source, SourcePreload } from './source';
-import {
-  err,
-  errFromErrors,
-  isErr,
-  ok,
-  type AppResult,
-  type ObjectLike,
-} from './util/result';
+import type { AppResult, ObjectLike, ResultErrors } from './util/result';
 
 /**
  * List of valid block types that can be used in the application.
@@ -172,10 +166,18 @@ export const ValidNestingCombinations: BlockCombinationRules = {
 };
 
 export const LoadErrors = {
-  UNAUTHORIZED: err('UNAUTHORIZED', 'Unauthorized access'),
-  MISSING: err('MISSING', 'Not found'),
-  INVALID: err('INVALID', 'Unable to load invalid document'),
-  GONE: err('GONE', 'Document no longer exists'),
+  UNAUTHORIZED: err<never, ResultErrors<'UNAUTHORIZED'>>([
+    { code: 'UNAUTHORIZED', message: 'Unauthorized access' },
+  ]),
+  MISSING: err<never, ResultErrors<'MISSING'>>([
+    { code: 'MISSING', message: 'Not found' },
+  ]),
+  INVALID: err<never, ResultErrors<'INVALID'>>([
+    { code: 'INVALID', message: 'Unable to load invalid document' },
+  ]),
+  GONE: err<never, ResultErrors<'GONE'>>([
+    { code: 'GONE', message: 'Document no longer exists' },
+  ]),
 } as const;
 
 type LoadErrorCodes = keyof typeof LoadErrors;
@@ -189,11 +191,23 @@ type LoadErrorCodes = keyof typeof LoadErrors;
 export function toLoadResult<E extends string, T extends ObjectLike>(
   result: AppResult<E, T>
 ): AppResult<keyof typeof LoadErrors, T> {
-  if (isErr(result, 'GONE')) return LoadErrors.GONE;
-  if (isErr(result, 'UNAUTHORIZED')) return LoadErrors.UNAUTHORIZED;
-  if (isErr(result, 'NOT_FOUND')) return LoadErrors.MISSING;
-  if (isErr(result)) return LoadErrors.INVALID;
-  return result;
+  if (result.isErr() && result.error.some((error) => error.code === 'GONE')) {
+    return err(LoadErrors.GONE.error);
+  }
+  if (
+    result.isErr() &&
+    result.error.some((error) => error.code === 'UNAUTHORIZED')
+  ) {
+    return err(LoadErrors.UNAUTHORIZED.error);
+  }
+  if (
+    result.isErr() &&
+    result.error.some((error) => error.code === 'NOT_FOUND')
+  ) {
+    return err(LoadErrors.MISSING.error);
+  }
+  if (result.isErr()) return err(LoadErrors.INVALID.error);
+  return ok(result.value);
 }
 
 /**
@@ -223,7 +237,7 @@ export function mapLoadResult<T extends ObjectLike, U extends ObjectLike>(
   fn: (value: T) => U
 ): AppResult<LoadErrorCodes, U> {
   const loadResult = toLoadResult(result);
-  if (loadResult.isErr()) return errFromErrors(loadResult.error);
+  if (loadResult.isErr()) return err(loadResult.error);
   return ok(fn(loadResult.value));
 }
 
@@ -254,9 +268,8 @@ export type LoadFunction<
   intent: Intent
 ) => Promise<AppResult<keyof typeof LoadErrors, S extends Source ? T | P : T>>;
 
-type ExtractSuccessType<T> = T extends readonly [null, infer S]
-  ? Exclude<S, SourcePreload<{}>>
-  : never;
+type ExtractSuccessType<T> =
+  T extends AppResult<any, infer S> ? Exclude<S, { type: 'preload' }> : never;
 
 /**
  * Extracts the non-error, non-preload return type of a load function.

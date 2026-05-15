@@ -1,5 +1,6 @@
+import { ok } from 'neverthrow';
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
-import { ok } from '@core/util/result';
+
 import { Automation } from './component/Automation';
 
 export const definition = defineBlock({

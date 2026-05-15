@@ -3,12 +3,7 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import {
-  type AppErrorResult,
-  type AppResult,
-  mapOk,
-  type ObjectLike,
-} from '@core/util/result';
+import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type {
   ActionExecutionRecord,
@@ -66,7 +61,7 @@ export const scheduledActionClient = {
       `/scheduled-actions/${args.scheduleId}`,
       { method: 'DELETE' }
     );
-    return mapOk(result, () => ({ success: true }));
+    return result.map(() => ({ success: true }));
   },
 
   runNow: async (args: { scheduleId: string }) =>

@@ -33,7 +33,7 @@ import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createTask } from '@core/util/create';
 import { filterMap } from '@core/util/list';
-import { isErr } from '@core/util/result';
+
 import { buildSimpleEntityUrl } from '@core/util/url';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import ArrowSquareOutIcon from '@icon/regular/arrow-square-out.svg';
@@ -290,10 +290,10 @@ export function ComposeTask(props: ComposeTaskProps) {
         scope: 'system',
         include_options: true,
       });
-      if (isErr(result)) {
+      if (result.isErr()) {
         throw new Error('Failed to fetch system properties');
       }
-      const [, data] = result;
+      const data = result.value;
       return data;
     },
     staleTime: 1000 * 60 * 10, // TODO (seamus) Ask daniel what might make us wanna refetch this

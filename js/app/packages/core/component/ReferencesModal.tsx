@@ -1,7 +1,7 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import clickOutside from '@core/directive/clickOutside';
-import { isErr } from '@core/util/result';
+
 import Quotes from '@icon/regular/quotes.svg';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
 import { commsServiceClient } from '@service-comms/client';
@@ -93,12 +93,12 @@ export function ReferencesModal(props: ReferencesModalProps) {
         entity_id: id,
       });
 
-      if (isErr(response)) {
+      if (response.isErr()) {
         console.error(response);
         return 0;
       }
 
-      return response[1].references.length;
+      return response.value.references.length;
     }
   );
 

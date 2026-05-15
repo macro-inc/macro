@@ -14,7 +14,7 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fetchToken } from '@core/util/fetchWithToken';
-import { isOk } from '@core/util/result';
+
 import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
 import InfoIcon from '@icon/regular/info.svg';
 import LogoIcon from '@macro-icons/macro-logo.svg';
@@ -66,15 +66,15 @@ export default function InteractiveOnboarding() {
 
     const result = await sendMobileWelcomeEmail.mutateAsync(email);
 
-    if (isOk(result)) {
-      if (result[1].sent) {
+    if (result.isOk()) {
+      if (result.value.sent) {
         setSubmittedEmail(email);
         setMobileWebStep('signup-sent');
       } else {
         toast.alert('Email already sent.');
       }
     } else {
-      const code = result[0]?.[0]?.code;
+      const code = result.error?.[0]?.code;
       if (code === 'RATE_LIMITED') {
         toast.failure('Rate limit exceeded.');
       } else if (code === 'INVALID_EMAIL') {

@@ -1,5 +1,6 @@
+import { ok } from 'neverthrow';
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
-import { isErr, ok } from '@core/util/result';
+
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { AllModels } from '@service-cognition/generated/schemas';
 import type { Entity } from '@service-cognition/generated/schemas/entity';
@@ -21,9 +22,13 @@ export const definition = defineBlock({
       // Fetch the chat from dcs
       const chatId = source.id;
       const res = await cognitionApiServiceClient.getChat({ chat_id: chatId });
-      if (isErr(res, 'UNAUTHORIZED')) return LoadErrors.INVALID;
-      if (isErr(res)) return LoadErrors.MISSING;
-      const [, chat] = res;
+      if (
+        res.isErr() &&
+        res.error.some((error) => error.code === 'UNAUTHORIZED')
+      )
+        return LoadErrors.INVALID;
+      if (res.isErr()) return LoadErrors.MISSING;
+      const chat = res.value;
 
       if (intent === 'preload') {
         return ok({

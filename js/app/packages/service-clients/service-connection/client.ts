@@ -1,5 +1,6 @@
+import { ok } from 'neverthrow';
 import type { EntityId } from '@core/types';
-import { ok } from '@core/util/result';
+
 import type { TrackEntityMessage } from './generated/schemas/trackEntityMessage';
 import { clearStream } from './stream';
 import { ws } from './websocket';

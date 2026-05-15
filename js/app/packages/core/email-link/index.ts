@@ -5,7 +5,7 @@ import {
   type TimeoutError,
 } from '@core/auth/channel';
 import { openEmailAuthPopup } from '@core/auth/email';
-import { isErr } from '@core/util/result';
+
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { emailClient } from '@service-email/client';
@@ -45,7 +45,7 @@ type EmailInitError =
 function initEmailLink(): ResultAsync<void, EmailInitError> {
   return ResultAsync.fromSafePromise(emailClient.init()).andThen(
     (initResult) => {
-      if (isErr(initResult)) {
+      if (initResult.isErr()) {
         const badRequestError = initResult.error.find(
           // TODO: this is cope but seems like error.code not being set correctly
           (e) => e.message.includes('400')
@@ -103,7 +103,7 @@ function stopEmailPolling() {
 function disconnectEmail(): ResultAsync<void, 'failed-to-disconnect'> {
   return ResultAsync.fromSafePromise(emailClient.stopSync()).andThen(
     (response) =>
-      isErr(response) ? err('failed-to-disconnect') : okAsync(void 0)
+      response.isErr() ? err('failed-to-disconnect') : okAsync(void 0)
   );
 }
 
