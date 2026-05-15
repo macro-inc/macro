@@ -22,6 +22,8 @@ pub mod join_team;
 pub mod middleware;
 /// Update a team.
 pub mod patch_team;
+/// Update team plan.
+pub mod patch_team_plan;
 /// Reject a team invitation.
 pub mod reject_invitation;
 /// Remove a user from a team.
@@ -88,6 +90,7 @@ where
         .route("/user/invites", get(get_user_invites::handler::<T, Eas>))
         .route("/", get(get_team::handler::<T, Eas>))
         .route("/", patch(patch_team::handler::<T, Eas>))
+        .route("/plan", patch(patch_team_plan::handler::<T, Eas>))
         .route("/", delete(delete_team::handler::<T, Eas>))
         .route("/invites", get(get_team_invites::handler::<T, Eas>))
         .route("/invite", post(invite_to_team::handler::<T, Eas>))
