@@ -62,6 +62,14 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
 
+    /// Compares the list of users you are trying to invite to ones already invited
+    /// to return a list of emails who will be newly invited
+    fn get_new_invites(
+        &self,
+        team_id: &uuid::Uuid,
+        invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+    ) -> impl Future<Output = Result<Vec<Email<Lowercase<'static>>>, InviteUsersToTeamError>> + Send;
+
     /// Marks the given team invites as sent by updating their last_sent_at timestamp.
     fn mark_invites_sent(
         &self,
