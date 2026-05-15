@@ -64,7 +64,7 @@ export const SelectValue: Component<PropertyValueProps> = (props) => {
           const isHovered = () => hoveredValue() === value;
           return (
             <div
-              class="relative inline-flex max-w-35 shrink-0"
+              class="relative inline-flex max-w-35 shrink-0 rounded-sm hover:bg-hover"
               onMouseEnter={() => setHoveredValue(value)}
               onMouseLeave={() => setHoveredValue(null)}
             >
@@ -82,11 +82,11 @@ export const SelectValue: Component<PropertyValueProps> = (props) => {
                 <span class="block truncate">{formatted}</span>
               </div>
               <Show when={!isReadOnly() && isHovered() && !isSaving()}>
-                <div class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-linear-to-r from-transparent to-hover to-40%">
+                <div class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-linear-to-r from-transparent to-hover to-40% rounded-r-sm">
                   <button
                     onClick={() => handleRemoveValue(value)}
                     disabled={isSaving()}
-                    class="size-4 p-0.5 flex items-center justify-center text-ink-muted hover:text-failure-ink"
+                    class="size-4 p-0.5 flex items-center justify-center text-ink-muted hover:text-failure-ink rounded-sm"
                   >
                     <DeleteIcon class="size-3" />
                   </button>
@@ -100,7 +100,7 @@ export const SelectValue: Component<PropertyValueProps> = (props) => {
         when={!isReadOnly()}
         fallback={
           <Show when={displayValues.length === 0}>
-            <div class="text-ink-muted px-2 py-0.5 border border-edge-muted bg-transparent inline-block shrink-0">
+            <div class="text-ink-muted px-2 py-0.5 bg-transparent inline-block shrink-0 rounded-sm">
               <EmptyValue />
             </div>
           </Show>

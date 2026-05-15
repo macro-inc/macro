@@ -51,29 +51,26 @@ export const DateValue: Component<PropertyValueProps> = (props) => {
 
   return (
     <div
-      class="relative inline-flex max-w-full shrink-0"
+      class={cn('relative inline-flex max-w-full shrink-0 rounded-sm', {
+        'hover:bg-hover': props.canEdit,
+      })}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       <button
         onClick={handleClick}
-        class={cn(
-          'inline-flex items-center leading-none shrink-0 p-1.5 h-6.5 transition-colors border border-edge-muted',
-          {
-            'hover:border-edge-muted hover:bg-hover': props.canEdit,
-          }
-        )}
+        class="inline-flex items-center leading-none shrink-0 p-1.5 h-6.5 transition-colors"
       >
         <Show when={displayValue} fallback={<EmptyValue />}>
           <span class="block truncate max-w-full">{displayValue}</span>
         </Show>
       </button>
       <Show when={!isReadOnly() && isHovered() && displayValue && !isSaving()}>
-        <div class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-linear-to-r from-transparent to-hover to-40%">
+        <div class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-linear-to-r from-transparent to-hover to-40% rounded-r-sm">
           <button
             onClick={handleDelete}
             disabled={isSaving()}
-            class="size-4 p-0.5 flex items-center justify-center text-ink-muted hover:text-failure-ink"
+            class="size-4 p-0.5 flex items-center justify-center text-ink-muted hover:text-failure-ink rounded-sm"
           >
             <DeleteIcon class="size-3" />
           </button>

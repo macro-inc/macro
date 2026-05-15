@@ -105,7 +105,7 @@ const TooltipWrapper = (props: {
 };
 
 const ValueContainer = (props: { children: JSX.Element }) => (
-  <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted h-fit w-fit">
+  <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted h-fit w-fit rounded-sm">
     {props.children}
   </div>
 );
@@ -308,7 +308,7 @@ const LinkValuePill = (props: { url: string }) => {
       href={props.url}
       target="_blank"
       rel="noopener noreferrer"
-      class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted h-fit w-fit"
+      class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted h-fit w-fit rounded-sm"
       title={props.url}
     >
       <Show

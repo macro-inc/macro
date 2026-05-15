@@ -136,7 +136,7 @@ export const LinkValue: Component<PropertyValueProps> = (props) => {
         }}
         placeholder="Enter URL..."
         disabled={isSaving()}
-        class="text-left px-2 py-0.5 border border-edge-muted bg-transparent focus:outline-none focus:border-accent text-ink inline-block shrink-0"
+        class="text-left px-2 py-0.5 bg-transparent focus:outline-none text-ink inline-block shrink-0 rounded-sm"
       />
       <Show when={error()}>
         <div class="text-failure-ink mt-1 w-full">{error()}</div>
@@ -164,7 +164,7 @@ export const LinkValue: Component<PropertyValueProps> = (props) => {
         when={!isReadOnly()}
         fallback={
           <Show when={linkValues.length === 0}>
-            <div class="text-ink-muted px-2 py-0.5 border border-edge-muted bg-transparent inline-block shrink-0">
+            <div class="text-ink-muted px-2 py-0.5 bg-transparent inline-block shrink-0 rounded-sm">
               <EmptyValue />
             </div>
           </Show>
@@ -235,13 +235,13 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
 
   return (
     <div
-      class="relative inline-flex max-w-50 shrink-0"
+      class="relative inline-flex max-w-50 shrink-0 rounded-sm hover:bg-hover"
       onMouseEnter={() => props.setHoveredLink(props.url)}
       onMouseLeave={() => props.setHoveredLink(null)}
     >
       <button
         onClick={handleLinkClick}
-        class="text-left px-2 py-0.5 border border-edge-muted bg-transparent text-ink inline-flex items-center gap-2 w-full cursor-default"
+        class="text-left px-2 py-0.5 bg-transparent text-ink inline-flex items-center gap-2 w-full cursor-default"
         title={props.url}
         disabled={props.isRemoving}
       >
@@ -270,11 +270,11 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
         <span class="truncate flex-1 text-ink">{title()}</span>
       </button>
       <Show when={props.canEdit && isHovered() && !props.isRemoving}>
-        <div class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-linear-to-r from-transparent to-hover to-40%">
+        <div class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-linear-to-r from-transparent to-hover to-40% rounded-r-sm">
           <button
             onClick={handleRemoveClick}
             disabled={props.isRemoving}
-            class="size-4 p-0.5 flex items-center justify-center text-ink-muted hover:text-failure-ink"
+            class="size-4 p-0.5 flex items-center justify-center text-ink-muted hover:text-failure-ink rounded-sm"
           >
             <DeleteIcon class="size-3" />
           </button>

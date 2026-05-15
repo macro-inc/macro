@@ -32,7 +32,7 @@ export type PropertyValueProps = {
 /** CSS classes for common property value UI patterns */
 const STYLES = {
   addButton:
-    'text-ink-muted hover:text-ink hover:bg-hover px-2 py-0.5 border border-edge-muted inline-block shrink-0',
+    'text-ink-muted hover:text-ink hover:bg-hover px-2 py-0.5 inline-block shrink-0 rounded-sm',
 } as const;
 
 /**
@@ -80,7 +80,7 @@ export const PropertyValueButton: Component<{
       disabled={props.disabled}
       title={props.title}
       class={twMerge(
-        'text-left px-2 py-0.5 border border-edge-muted bg-transparent cursor-default',
+        'text-left px-2 py-0.5 bg-transparent cursor-default rounded-sm',
         props.class
       )}
       classList={{

@@ -237,11 +237,7 @@ function Section(
       order: props.order,
       component: () => (
         <Accordion.Item value={props.id}>
-          <Panel
-            depth={2}
-            style={{ height: 'auto' }}
-            class="rounded-lg shadow-md shadow-drop-shadow"
-          >
+          <Panel depth={2} style={{ height: 'auto' }} class="rounded-lg">
             <Accordion.Header class="group">
               <Accordion.Trigger class="px-2 py-3 flex w-full items-center gap-2 text-sm hover:underline">
                 <span>{props.title}</span>

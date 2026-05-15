@@ -49,9 +49,9 @@ export const CondensedPropertyValue: Component<CondensedPropertyValueProps> = (
     <HoverCard content={<PropertyTooltip property={props.property} />}>
       <div
         class={cn(
-          'inline-flex items-center text-xs leading-none text-ink-muted shrink-0 p-1.5 h-6.5 transition-colors',
+          'inline-flex items-center text-xs leading-none text-ink-muted shrink-0 p-1.5 h-6.5 transition-colors rounded-sm',
           {
-            'hover:border-edge-muted hover:bg-hover': props.canEdit,
+            'hover:bg-hover': props.canEdit,
             'opacity-50': !validValue(),
           }
         )}

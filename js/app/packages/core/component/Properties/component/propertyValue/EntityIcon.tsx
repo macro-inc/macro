@@ -58,12 +58,12 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
   return (
     <div
       ref={containerRef}
-      class="relative inline-flex max-w-35 shrink-0"
+      class="relative inline-flex max-w-35 shrink-0 rounded-sm hover:bg-hover"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        class="px-2 py-0.5 border border-edge-muted hover:bg-hover bg-transparent text-ink inline-flex items-center w-full"
+        class="px-2 py-0.5 bg-transparent text-ink inline-flex items-center w-full"
         onClick={handleClick}
         role={props.canEdit && props.onEdit ? 'button' : undefined}
         tabIndex={props.canEdit && props.onEdit ? 0 : undefined}
@@ -75,14 +75,14 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
           }
         >
           <div
-            class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-linear-to-r from-transparent to-hover to-40%"
+            class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-linear-to-r from-transparent to-hover to-40% rounded-r-sm"
             onClick={(e: MouseEvent) => e.stopPropagation()}
           >
             <Show when={props.onRemove}>
               <button
                 onClick={() => props.onRemove!()}
                 disabled={props.isSaving}
-                class="size-4 p-0.5 flex items-center justify-center text-ink-muted hover:text-failure-ink"
+                class="size-4 p-0.5 flex items-center justify-center text-ink-muted hover:text-failure-ink rounded-sm"
               >
                 <DeleteIcon class="size-3" />
               </button>
