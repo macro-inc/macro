@@ -37,12 +37,14 @@ export function Layer(props: LayerProps) {
         '--color-overlay':         'oklch(from var(--b2) l c h / 0.5)',
         '--color-edge-muted':      'var(--b3)',
         '--color-edge':            'var(--b4)',
+        '--color-rail':            'color-mix(in oklch, var(--b0) 75%, var(--c0))',
 
         '--color-ink':             'var(--c0)',
         '--color-ink-muted':       'var(--c1)',
         '--color-ink-extra-muted': 'var(--c2)',
         '--color-ink-disabled':    'var(--c3)',
         '--color-ink-placeholder': 'oklch(var(--c4) / 0.5))',
+
       }}
     >
       {props.children}

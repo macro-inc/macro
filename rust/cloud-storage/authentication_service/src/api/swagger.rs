@@ -1,7 +1,7 @@
 use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
 use teams::domain::model::{
-    PatchTeamRequest, PatchTeamUserRole, PatchTeamUserTierRequest, Team, TeamInviteDetails,
-    TeamMember, TeamRole, TeamUserTier, TeamWithMembers,
+    PatchTeamPlanRequest, PatchTeamRequest, PatchTeamUserRole, Team, TeamInviteDetails, TeamMember,
+    TeamPlan, TeamRole, TeamWithMembers,
 };
 use teams::inbound::axum_router::get_team_invites::TeamInvitesResponse as TeamTeamInvitesResponse;
 use teams::inbound::axum_router::get_user_invites::TeamInvitesResponse as UserTeamInvitesResponse;
@@ -120,7 +120,7 @@ use model::user::{
                 teams::inbound::axum_router::invite_to_team::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::get_team_invites::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::patch_team::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::patch_team_user_tier::handler::<crate::api::context::TeamsServiceType>,
+                teams::inbound::axum_router::patch_team_plan::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::reject_invitation::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::get_user_invites::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::get_user_teams::handler::<crate::api::context::TeamsServiceType>,
@@ -184,16 +184,16 @@ use model::user::{
                         TeamRole,
                         TeamMember,
                         Team,
+                        TeamPlan,
                         TeamWithMembers,
                         TeamInviteDetails,
                         CreateTeamRequest,
                         InviteToTeamRequest,
                         PatchTeamRequest,
+                        PatchTeamPlanRequest,
                         PatchTeamUserRole,
                         TeamTeamInvitesResponse,
                         UserTeamInvitesResponse,
-                        PatchTeamUserTierRequest,
-                        TeamUserTier,
 
                         // Mobile welcome email
                         mobile_welcome_email::SendMobileWelcomeEmailRequest,

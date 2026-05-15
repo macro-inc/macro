@@ -112,7 +112,7 @@
   --color-overlay:         oklch(var(--b1l) var(--b1c) var(--b1h) / 0.8);
   --color-edge-muted:      var(--b3);
   --color-edge:            var(--b4);
-  --color-rail:            color-mix(in oklch, var(--b4) 90%, var(--b0));
+  --color-rail:            color-mix(in oklch, var(--b0) 75%, var(--c0));
 
   --color-ink:             var(--c0);
   --color-ink-muted:       var(--c1);
@@ -405,7 +405,7 @@
 /* Suppressed on touch devices */
 html:not([data-touch-device="true"]) [data-message][data-highlighted],
 html:not([data-touch-device="true"]) [data-message]:hover{
-  @apply bg-ink/3 rounded-sm;
+  @apply bg-ink/3 rounded-sm ring ring-edge ring-inset;
 }
 
 /* Long-press animation */

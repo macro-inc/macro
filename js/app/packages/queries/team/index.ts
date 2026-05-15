@@ -11,10 +11,7 @@ export {
   useTeamInvitesQuery,
 } from './invites';
 export { teamKeys } from './keys';
-export {
-  usePatchTeamUserTierMutation,
-  useRemoveUserFromTeamMutation,
-} from './members';
+export { useRemoveUserFromTeamMutation } from './members';
 export {
   invalidateTeam,
   invalidateUserTeams,

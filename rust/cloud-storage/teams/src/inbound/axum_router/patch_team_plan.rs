@@ -6,18 +6,18 @@ use entity_access::{
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
-    model::{PatchTeamUserTierRequest, TeamError},
+    model::{PatchTeamPlanRequest, TeamError},
     team_repo::TeamService,
 };
 
 use super::TeamRouterState;
 
-/// Updates a team.
+/// Updates a team plan.
 #[utoipa::path(
     patch,
-    path = "/team/tier",
-    operation_id = "patch_team_user_tier",
-    request_body = PatchTeamUserTierRequest,
+    path = "/team/plan",
+    operation_id = "patch_team_plan",
+    request_body = PatchTeamPlanRequest,
     responses(
         (status = 200),
         (status = 400, body = ErrorResponse),
@@ -30,11 +30,11 @@ use super::TeamRouterState;
 pub async fn handler<T: TeamService, Eas: EntityAccessService>(
     access: MacroUserTeamExtractor<OwnerTeamRole, Eas>,
     State(state): State<TeamRouterState<T, Eas>>,
-    Json(req): Json<PatchTeamUserTierRequest>,
+    Json(req): Json<PatchTeamPlanRequest>,
 ) -> Result<(), TeamError> {
     state
         .service
-        .patch_team_user_tier(access.entity_access_receipt, &req)
+        .update_team_plan(access.entity_access_receipt, &req)
         .await?;
     Ok(())
 }

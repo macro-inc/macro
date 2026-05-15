@@ -191,7 +191,7 @@ export function ListEntity(props: ListEntityProps) {
           'ring ring-edge bg-active/60 ring-inset':
             props.highlighted && !props.checked,
           'bg-active/40': props.hovered && !props.highlighted && !props.checked,
-          'hover:bg-active/40 group-data-expanded/cm-trigger:bg-active/40':
+          'hover:bg-active/40 hover:ring hover:ring-edge hover:ring-inset group-data-expanded/cm-trigger:bg-active/40':
             !props.checked && !props.highlighted && !props.hovered,
         }
       )}

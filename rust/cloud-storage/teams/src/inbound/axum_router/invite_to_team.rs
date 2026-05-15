@@ -6,10 +6,7 @@ use entity_access::{
 use macro_user_id::{email::Email, lowercased::Lowercase};
 use model_error_response::ErrorResponse;
 
-use crate::domain::{
-    model::{InviteUsersToTeamError, TeamUserTier},
-    team_repo::TeamService,
-};
+use crate::domain::{model::InviteUsersToTeamError, team_repo::TeamService};
 
 use super::TeamRouterState;
 
@@ -18,9 +15,6 @@ use super::TeamRouterState;
 pub struct InviteEntry {
     /// The email of the user to invite
     pub email: String,
-    /// The tier for this user (defaults to Haiku if not provided)
-    #[serde(default)]
-    pub tier: TeamUserTier,
 }
 
 /// The request body to invite a user to a team
@@ -99,12 +93,10 @@ pub async fn handler<T: TeamService, Eas: EntityAccessService>(
     State(state): State<TeamRouterState<T, Eas>>,
     Json(req): Json<InviteToTeamRequest>,
 ) -> Result<StatusCode, InviteToTeamError> {
-    let parsed: Vec<Result<(Email<Lowercase<'_>>, TeamUserTier), _>> = req
+    let parsed: Vec<Result<Email<Lowercase<'_>>, _>> = req
         .invites
         .iter()
-        .map(|entry| {
-            Email::parse_from_str(&entry.email).map(|email| (email.lowercase(), entry.tier))
-        })
+        .map(|entry| Email::parse_from_str(&entry.email).map(|email| email.lowercase()))
         .collect();
 
     if parsed.iter().any(|e| e.is_err()) {

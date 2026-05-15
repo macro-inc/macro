@@ -32,7 +32,6 @@ import type { InviteToTeamRequest } from './generated/schemas/inviteToTeamReques
 import type { MacroApiTokenResponse } from './generated/schemas/macroApiTokenResponse';
 import type { PasswordRequest } from './generated/schemas/passwordRequest';
 import type { PatchTeamRequest } from './generated/schemas/patchTeamRequest';
-import type { PatchTeamUserTierRequest } from './generated/schemas/patchTeamUserTierRequest';
 import type { PatchUserGroupRequest } from './generated/schemas/patchUserGroupRequest';
 import type { PatchUserOnboardingRequest } from './generated/schemas/patchUserOnboardingRequest';
 import type { PostGetNamesRequestBody } from './generated/schemas/postGetNamesRequestBody';
@@ -652,16 +651,6 @@ export const authServiceClient = {
   async patchTeam(args: PatchTeamRequest) {
     return mapOk(
       await fetchWithAuth<{}>(`${authHost}/team`, {
-        method: 'PATCH',
-        body: JSON.stringify(args),
-      }),
-      () => undefined
-    );
-  },
-
-  async patchTeamUserTier(args: PatchTeamUserTierRequest) {
-    return mapOk(
-      await fetchWithAuth<{}>(`${authHost}/team/tier`, {
         method: 'PATCH',
         body: JSON.stringify(args),
       }),

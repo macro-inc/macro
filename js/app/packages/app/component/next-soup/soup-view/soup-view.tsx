@@ -95,7 +95,7 @@ import {
 } from '@queries/soup/normalized-cache';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
-import { Button, cn, Tooltip } from '@ui';
+import { Button, cn, Layer, Tooltip } from '@ui';
 import {
   type Accessor,
   batch,
@@ -125,33 +125,43 @@ const DefaultGroupHeader = (
   props: GroupHeaderProps & { highlighted?: boolean }
 ) => {
   return (
-    <button
-      type="button"
-      class={cn(
-        'w-full px-3 py-3 flex items-center gap-2 text-sm font-medium text-text-muted bg-ink/5 hover:bg-hover relative',
-        {
-          'outline-1 outline-accent/20 -outline-offset-1': props.highlighted,
-        }
-      )}
-      onClick={() => props.group.toggle()}
-    >
-      <div
-        class={cn('absolute h-full w-0.75 left-0 top-0 bg-accent opacity-0', {
-          'opacity-100': props.highlighted,
-        })}
-      />
-      <ChevronRightIcon
-        class={cn('size-3 transition-transform', {
-          'rotate-90': props.group.isExpanded(),
-        })}
-      />
-      <PropertyValueIcon
-        optionId={props.group.value as string}
-        class="size-3.5"
-      />
-      <span>{props.group.label}</span>
-      <span class="text-text-subtle">{props.group.count}</span>
-    </button>
+    <Layer depth={2}>
+      <button
+        type="button"
+        class={cn(
+          'group/header w-[calc(100%-0.5rem)] mx-1 mb-1 rounded px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
+          'text-text-muted bg-surface hover:bg-active border border-edge-muted',
+          'relative',
+          {
+            'ring ring-edge bg-active ring-inset': props.highlighted,
+          }
+        )}
+        onClick={() => props.group.toggle()}
+      >
+        <Layer depth={3}>
+          <div class="flex items-center justify-center size-4.5 rounded-xs bg-surface group-hover/header:bg-active">
+            <ChevronRightIcon
+              class={cn('size-2.5', {
+                'rotate-90': props.group.isExpanded(),
+              })}
+            />
+          </div>
+        </Layer>
+        <PropertyValueIcon
+          optionId={props.group.value as string}
+          class="size-3.5"
+        />
+        <span class="truncate">{props.group.label}</span>
+        <span
+          class={cn(
+            'shrink-0 tabular-nums text-xs font-medium',
+            'px-1.5 py-px rounded-full bg-ink/10 text-text-subtle'
+          )}
+        >
+          {props.group.count}
+        </span>
+      </button>
+    </Layer>
   );
 };
 
@@ -1029,10 +1039,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                           DefaultGroupHeader
                                         }
                                         group={group()}
-                                        highlighted={
-                                          panel.isPanelActive() &&
-                                          row.isFocused()
-                                        }
+                                        highlighted={row.isFocused()}
                                       />
                                     )}
                                   </Match>
@@ -1042,41 +1049,51 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     when={row.getIsLoadMore() && row.group}
                                   >
                                     {(group) => {
-                                      const highlighted = () =>
-                                        panel.isPanelActive() &&
-                                        row.isFocused();
+                                      const highlighted = () => row.isFocused();
                                       return (
-                                        <button
-                                          type="button"
+                                        <div
                                           class={cn(
-                                            'w-full min-h-10 flex items-center justify-center gap-1.5 relative text-sm text-text-muted hover:bg-hover',
-                                            {
-                                              'bg-accent/5 outline-1 outline-accent/20 -outline-offset-1':
-                                                highlighted(),
-                                            }
+                                            'my-1 rounded min-h-9 flex items-center justify-center',
+                                            highlighted()
+                                              ? 'w-[calc(100%-0.5rem)] mx-1 ring ring-edge bg-active/60 ring-inset'
+                                              : 'mx-auto'
                                           )}
-                                          onClick={() => group().loadMore()}
-                                          disabled={group().isLoading()}
                                         >
-                                          <div
-                                            class={cn(
-                                              'absolute h-full w-0.75 left-0 top-0 bg-accent opacity-0',
-                                              { 'opacity-100': highlighted() }
-                                            )}
-                                          />
                                           <Show
                                             when={!group().isLoading()}
                                             fallback={
-                                              <>
+                                              <Button
+                                                variant="base"
+                                                size="sm"
+                                                depth={2}
+                                                class={cn({
+                                                  'bg-surface': !highlighted(),
+                                                  'border-transparent':
+                                                    highlighted(),
+                                                })}
+                                                disabled
+                                              >
                                                 <Spinner class="size-3 animate-spin" />
                                                 Loading...
-                                              </>
+                                              </Button>
                                             }
                                           >
-                                            <CaretDownIcon class="size-3" />
-                                            Load more
+                                            <Button
+                                              variant="base"
+                                              size="sm"
+                                              depth={2}
+                                              class={cn({
+                                                'bg-surface': !highlighted(),
+                                                'border-transparent':
+                                                  highlighted(),
+                                              })}
+                                              onClick={() => group().loadMore()}
+                                            >
+                                              <CaretDownIcon class="size-2.5" />
+                                              Load more
+                                            </Button>
                                           </Show>
-                                        </button>
+                                        </div>
                                       );
                                     }}
                                   </Match>
@@ -1089,10 +1106,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                       <ListEntity
                                         entity={row.original}
                                         timestamp={timestamp()}
-                                        highlighted={
-                                          panel.isPanelActive() &&
-                                          row.isFocused()
-                                        }
+                                        highlighted={row.isFocused()}
                                         onMouseMove={() => {
                                           if (isKeypressActive()) return;
                                           if (soup.previewEntity()) return;
