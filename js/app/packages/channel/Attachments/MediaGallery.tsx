@@ -16,8 +16,8 @@ export function MediaGallery(props: {
   const hasMedia = () => props.items.length > 0;
 
   return (
-    <AttachmentSection label="Photos and videos">
-      <div class="grid p-3">
+    <AttachmentSection label="Photos and Videos">
+      <div class="grid py-2 px-6">
         <Show when={!hasMedia()}>
           <div class="py-3 text-sm text-ink-faint">
             No photos or videos in this channel yet.
