@@ -23,6 +23,8 @@ export type FindBarController = {
   hasUnsubmittedChanges: Accessor<boolean>;
   isPending: Accessor<boolean>;
   resultsCount: Accessor<number>;
+  canNext: Accessor<boolean>;
+  canPrevious: Accessor<boolean>;
   open: () => void;
   close: () => void;
   submit: () => void;
@@ -134,6 +136,16 @@ export function createFindBarController<T>(
     hasUnsubmittedChanges: () => query().trim() !== submittedQuery(),
     isPending: () => !!submittedQuery() && source.isFetching(),
     resultsCount: () => source.totalCount?.() ?? source.results().length,
+    canNext: () => {
+      const len = source.results().length;
+      if (len === 0) return false;
+      return wrapNext || activeIndex() < len;
+    },
+    canPrevious: () => {
+      const len = source.results().length;
+      if (len === 0) return false;
+      return wrapPrevious || activeIndex() > 1;
+    },
     open,
     close,
     submit,
