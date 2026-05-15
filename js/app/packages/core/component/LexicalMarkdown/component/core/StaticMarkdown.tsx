@@ -840,6 +840,7 @@ export function StaticMarkdown(props: {
       return Document({
         rootNode: $getRoot(),
         theme: mergedTheme(),
+        rootRef: props.rootRef,
       });
     });
   });
