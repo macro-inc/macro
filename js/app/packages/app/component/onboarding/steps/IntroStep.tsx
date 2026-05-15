@@ -38,17 +38,17 @@ export function IntroStep() {
         </p>
       </div>
 
-      <div class="flex gap-3 w-full">
+      <div class="grid grid-cols-3 gap-3 w-full">
         <For each={HIGHLIGHTS}>
           {(item) => (
-            <div class="flex-1 flex flex-col gap-3 p-3 rounded-sm border border-edge-muted bg-hover/30 text-left">
-              <div class="flex items-center gap-2.5">
-                <div class="shrink-0 size-7 rounded-sm bg-accent-bg flex items-center justify-center">
-                  <item.icon class="size-4 text-accent" />
-                </div>
-                <span class="text-sm font-medium text-ink">{item.title}</span>
+            <div class="flex flex-col gap-2 p-3 rounded-sm border border-edge-muted bg-hover/30 text-left">
+              <div class="size-7 rounded-sm bg-accent-bg flex items-center justify-center">
+                <item.icon class="size-4 text-accent" />
               </div>
-              <span class="text-sm text-ink-muted leading-snug">{item.description}</span>
+              <div class="flex flex-col gap-0.5">
+                <span class="text-sm font-medium text-ink">{item.title}</span>
+                <span class="text-xs text-ink-muted leading-relaxed">{item.description}</span>
+              </div>
             </div>
           )}
         </For>
