@@ -3,7 +3,7 @@ import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHea
 import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import type { ChannelTabId } from '@channel/Channel/channel-tabs';
 import { useBlockId } from '@core/block';
-import { type TabItem, Tabs } from '@core/component/Tabs';
+import type { TabItem } from '@core/component/Tabs';
 import { TabsInset } from '@core/component/TabsVariant';
 import { UserIcon } from '@core/component/UserIcon';
 import { useChannelName } from '@core/context/channels';
