@@ -26,13 +26,11 @@ export function MediaGallery(props: {
 
         <Show when={hasMedia()}>
           <div>
-            <div
-              aria-label="Photos and videos gallery"
-              class="flex flex-row flex-wrap gap-1.5"
-            >
+            <div aria-label="Photos and videos gallery">
               <MediaGrid
                 items={props.items}
                 variant="attachments"
+                class="justify-center"
                 onOpen={(index) => {
                   setLightboxIndex(index);
                   setViewerOpen(true);
