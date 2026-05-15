@@ -490,10 +490,7 @@ export function CommandMenuInner(props: {
 
       <Show when={isEntityActionMode() || !isInCommandScope()}>
         <Panel.Toolbar
-          class={cn(
-            'bg-surface',
-            isEntityActionMode() ? 'px-3 gap-2' : 'px-1.5'
-          )}
+          class={cn('bg-surface px-1.5', isEntityActionMode() && 'gap-1.5')}
         >
           <Show
             when={isEntityActionMode()}
@@ -606,7 +603,7 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
           return (
             <div
               class={cn(
-                'bg-hover border border-edge-muted px-2 py-1 truncate text-xs rounded-xs',
+                'bg-active border border-edge-muted px-2 py-1 truncate text-xs rounded',
                 {
                   'max-w-[50%]': props.entities.length === 2,
                 }
