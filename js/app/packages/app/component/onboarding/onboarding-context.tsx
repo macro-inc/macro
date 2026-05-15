@@ -100,6 +100,7 @@ export function OnboardingProvider(props: ParentProps) {
 
 export function useOnboarding() {
   const ctx = useContext(OnboardingContext);
-  if (!ctx) throw new Error('useOnboarding must be used within OnboardingProvider');
+  if (!ctx)
+    throw new Error('useOnboarding must be used within OnboardingProvider');
   return ctx;
 }

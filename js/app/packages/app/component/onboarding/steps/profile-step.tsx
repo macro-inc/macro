@@ -63,9 +63,7 @@ export function ProfileStep() {
     cn(
       'w-full px-2.5 h-9 text-sm rounded-sm border bg-transparent text-ink placeholder:text-ink-placeholder transition-colors',
       'outline-none focus:border-edge',
-      hasError
-        ? 'border-failure'
-        : 'border-edge-muted'
+      hasError ? 'border-failure' : 'border-edge-muted'
     );
 
   return (
@@ -186,11 +184,17 @@ export function ProfileStep() {
 
       <p class="text-xs text-ink-extra-muted text-center">
         By continuing, you agree to our{' '}
-        <a class="underline hover:text-ink-muted transition-colors" href="/terms">
+        <a
+          class="underline hover:text-ink-muted transition-colors"
+          href="/terms"
+        >
           terms
         </a>{' '}
         and{' '}
-        <a class="underline hover:text-ink-muted transition-colors" href="/privacy">
+        <a
+          class="underline hover:text-ink-muted transition-colors"
+          href="/privacy"
+        >
           privacy policy
         </a>
         .

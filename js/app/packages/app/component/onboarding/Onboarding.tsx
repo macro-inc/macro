@@ -13,7 +13,16 @@ import LogoIcon from '@macro-icons/macro-logo.svg';
 import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Button, cn, Layer } from '@ui';
-import { createEffect, lazy, Match, on, onMount, Show, Suspense, Switch } from 'solid-js';
+import {
+  createEffect,
+  lazy,
+  Match,
+  on,
+  onMount,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import {
   clearPendingTeam,
   getPendingTeam,
@@ -148,12 +157,13 @@ function OnboardingInner() {
         `}
       </style>
 
-
       <Layer depth={2}>
-        <div class={cn(
-          'w-full flex flex-col items-center px-8',
-          ctx.step() === 0 ? 'max-w-3xl' : 'max-w-md'
-        )}>
+        <div
+          class={cn(
+            'w-full flex flex-col items-center px-8',
+            ctx.step() === 0 ? 'max-w-3xl' : 'max-w-md'
+          )}
+        >
           {/* Header */}
           <Show when={ctx.step() > 0}>
             <div class="w-full flex items-center justify-between mb-10">
@@ -161,11 +171,7 @@ function OnboardingInner() {
                 when={showBack()}
                 fallback={<LogoIcon class="size-5 text-accent" />}
               >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => ctx.back()}
-                >
+                <Button variant="ghost" size="sm" onClick={() => ctx.back()}>
                   <ArrowLeftIcon class="size-4" />
                   Back
                 </Button>
@@ -176,11 +182,7 @@ function OnboardingInner() {
                   total={STEP_LABELS.length - 1}
                 />
                 <Show when={import.meta.env.MODE === 'development'}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => ctx.next()}
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => ctx.next()}>
                     Skip
                   </Button>
                 </Show>

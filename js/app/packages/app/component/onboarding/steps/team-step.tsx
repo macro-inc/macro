@@ -26,7 +26,8 @@ export function TeamStep() {
 
   const hasValidEmail = () =>
     entries().some(
-      (e) => e.email.trim() !== '' && z.string().email().safeParse(e.email).success
+      (e) =>
+        e.email.trim() !== '' && z.string().email().safeParse(e.email).success
     );
 
   const emailPlaceholder = () => {
@@ -109,8 +110,9 @@ export function TeamStep() {
           Invite your team
         </h1>
         <p class="text-sm text-ink-muted">
-          Add teammates to <strong class="text-ink font-medium">{ctx.teamName()}</strong>. You can always
-          invite more later.
+          Add teammates to{' '}
+          <strong class="text-ink font-medium">{ctx.teamName()}</strong>. You
+          can always invite more later.
         </p>
       </div>
 
@@ -129,9 +131,7 @@ export function TeamStep() {
                   class={cn(
                     'w-full px-2.5 h-9 pr-9 text-sm rounded-sm border bg-transparent text-ink placeholder:text-ink-placeholder transition-colors',
                     'outline-none focus:border-edge',
-                    errors()[index]
-                      ? 'border-failure'
-                      : 'border-edge-muted'
+                    errors()[index] ? 'border-failure' : 'border-edge-muted'
                   )}
                 />
                 <Show when={entry().email.trim() !== ''}>
@@ -163,7 +163,9 @@ export function TeamStep() {
                 <UsersIcon class="size-5 text-accent" />
               </div>
               <p class="text-sm text-ink-muted">It's quiet in here...</p>
-              <p class="text-xs text-ink-disabled">Add your first teammate above</p>
+              <p class="text-xs text-ink-disabled">
+                Add your first teammate above
+              </p>
             </div>
           }
         >

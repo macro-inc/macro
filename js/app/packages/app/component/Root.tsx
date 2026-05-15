@@ -90,9 +90,7 @@ import { ReactiveFavicon } from './ReactiveFavicon';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 
-const Onboarding = lazy(
-  () => import('./onboarding/onboarding')
-);
+const Onboarding = lazy(() => import('./onboarding/onboarding'));
 
 import {
   AnalyticsContextProvider,
