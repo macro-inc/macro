@@ -3,7 +3,7 @@ import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import { formatDate } from '@core/util/date';
-import { Entity } from '@entity';
+import { NotificationRow } from '@entity';
 import { Button } from '@ui';
 import {
   type Component,
@@ -378,7 +378,7 @@ function NotificationDetail(props: {
           for the mark-done button; right-click for the context menu.
         </p>
         <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
-          <Entity.Notification.Row notification={props.notification} />
+          <NotificationRow notification={props.notification} />
         </div>
       </section>
 
@@ -393,7 +393,7 @@ function NotificationDetail(props: {
         <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
           <div class="divide-y divide-ink-muted/8">
             <For each={props.siblings.slice(0, 5)}>
-              {(n) => <Entity.Notification.Row notification={n} />}
+              {(n) => <NotificationRow notification={n} />}
             </For>
           </div>
         </div>
@@ -406,7 +406,7 @@ function NotificationDetail(props: {
           multi-line markdown aligned under the description.
         </p>
         <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
-          <Entity.Notification.Row
+          <NotificationRow
             notification={props.notification}
             variant="expanded"
           />
@@ -422,7 +422,7 @@ function NotificationDetail(props: {
           check button is suppressed and the timestamp stays put on hover.
         </p>
         <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
-          <Entity.Notification.Row
+          <NotificationRow
             notification={props.notification}
             variant="expanded"
             showMarkDone={false}
@@ -445,7 +445,7 @@ function NotificationDetail(props: {
               compact
             </div>
             <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
-              <Entity.Notification.Row notification={props.notification} />
+              <NotificationRow notification={props.notification} />
             </div>
           </div>
           <div>
@@ -453,7 +453,7 @@ function NotificationDetail(props: {
               expanded
             </div>
             <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
-              <Entity.Notification.Row
+              <NotificationRow
                 notification={props.notification}
                 variant="expanded"
               />

@@ -1,6 +1,6 @@
 import type { Entity as EntityRef } from '@core/types';
 import { compareDateDesc } from '@core/util/date';
-import { Entity } from '@entity';
+import { NotificationRow } from '@entity';
 import { type NotificationSource } from '@notifications';
 import { createMemo, For, Show } from 'solid-js';
 
@@ -32,9 +32,7 @@ export function Notifications(props: NotificationsProps) {
       <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
         <div class="divide-y divide-ink-muted/8">
           <For each={notifications()}>
-            {(notification) => (
-              <Entity.Notification.Row notification={notification} />
-            )}
+            {(notification) => <NotificationRow notification={notification} />}
           </For>
         </div>
       </div>
