@@ -1,139 +1,115 @@
 <div align="center">
-<a target="_blank" href="https://macro.com">
-<img width="1414" height="314" alt="Frame 2 (1)" src="https://github.com/user-attachments/assets/48250880-b1cf-4e18-bcaf-f314be1d1bfb" />
-</a>
+  <a target="_blank" href="https://macro.com">
+    <img width="1414" height="314" alt="Macro" src="https://github.com/user-attachments/assets/48250880-b1cf-4e18-bcaf-f314be1d1bfb" />
+  </a>
 
+  <p>
+    Extremely fast email, messaging, tasks, docs, files, calls, and AI, linked together in one system.
+  </p>
 
-  
-<p align="center">
-  Extremely fast email, messaging, tasks and docs @linked together in one system.
+  <p>
+    <a href="https://macro.com">Website</a>
+    ·
+    <a href="mailto:contact@macro.com">Feature requests</a>
+    ·
+    <a href="mailto:contribute@macro.com">Contribute</a>
+    ·
+    <a href="mailto:teo@macro.com">Hiring</a>
+  </p>
 </div>
 
+# Why Macro
 
-##  Features
-<div>
+Macro is the workspace for teams that move through information all day: email, chat, documents, files, tasks, calls, search, and AI in one fast surface.
+
+Everything in Macro is connected with bi-directional `@links`. Mention a doc in a channel, link a task from an email, drop a file into a canvas, or ask AI about the context around any object. The result is a workspace that keeps the thread intact instead of scattering work across tabs.
+
+# Features
+
+## Search Across Everything
+
+Macro's search is a command center for the whole workspace. Filter across emails, channels, documents, tasks, files, calls, and people, then jump straight into the object you need. The same surface also lets you ask AI questions over your workspace with `@mentions` for precise context.
+
+<img width="100%" alt="Macro unified search across workspace objects" src=".github/readme/search.png" />
+
+## Channels That Keep Context
+
+Channels are built for messy team work: messages, replies, attachments, docs, tasks, canvases, PDFs, and calls can all live in the same conversation. Every `@link` is bi-directional, so a reference in chat also becomes a path back from the thing being discussed.
+
+<img width="100%" alt="Macro channel with linked messages, documents, and files" src=".github/readme/channels.png" />
+
+## Calls With Memory
+
+Calls in Macro do not disappear when the meeting ends. Recordings, participants, summaries, and transcripts stay connected to the rest of the workspace, so follow-ups can link back to the exact discussion that created them.
+
+<img width="100%" alt="Macro call recording with summary and participants" src=".github/readme/calls.png" />
+
+## AI Agents For The Workspace
+
+Macro's AI can read across your recent calls, channels, docs, tasks, and notifications to build a useful picture of what happened. Agents can search, filter, inspect transcripts, and gather context before answering, so workspace intelligence is grounded in the objects your team already uses.
+
+<img width="100%" alt="Macro AI agent gathering context across workspace activity" src=".github/readme/agents.png" />
+
+## More In The Box
+
 <table>
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/email.svg" width="32" height="32" alt="email">
-</td>
-<td>
-<strong>Email</strong><br>
-Full email client with keyboard-driven triage, instant search, and Gmail sync.
-</td>
-</tr>
-
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/channel.svg" width="32" height="32" alt="channel">
-</td>
-<td>
-<strong>Channels & Groups</strong><br>
-Team messaging with bi-directional @links. Mention a doc or task to create a reference you can trace back.
-</td>
-</tr>
-
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/book.svg" width="32" height="32" alt="docs">
-</td>
-<td>
-<strong>Docs & Notes</strong><br>
-Real-time collaborative documents using CRDT. @link to any message, task, or file in the system.
-</td>
-</tr>
-
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/diagram.svg" width="32" height="32" alt="canvas">
-</td>
-<td>
-<strong>Canvas</strong><br>
-2D diagramming with embedded @links to tasks, files, and emails. Embeds update automatically.
-</td>
-</tr>
-
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/file-md.svg" width="32" height="32" alt="editor">
-</td>
-<td>
-<strong>Unified Editor</strong><br>
-Same rich text editor across emails, notes, channels, and tasks. One surface, everywhere.
-</td>
-</tr>
-
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/ai.svg" width="32" height="32" alt="ai">
-</td>
-<td>
-<strong>AI Chat</strong><br>
-Query your emails, messages, docs, and the web. @mention anything for context. Agent mode for autonomous search.
-</td>
-</tr>
-
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/search.svg" width="32" height="32" alt="search">
-</td>
-<td>
-<strong>Unified Search</strong><br>
-Search and query everything: <code>type:email inbox:true</code>, <code>type:task due:[1 week]</code>, <code>type:file "contract"</code>
-</td>
-</tr>
-
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/folder.svg" width="32" height="32" alt="folder">
-</td>
-<td>
-<strong>File Storage</strong><br>
-Store and share videos, images, and documents. Auto-imports attachments from emails and channels.
-</td>
-</tr>
-
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/pdf.svg" width="32" height="32" alt="pdf">
-</td>
-<td>
-<strong>PDF Viewer</strong><br>
-Intelligent parsing with text extraction. Full-text search over PDF contents.
-</td>
-</tr>
-
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/keyboard.svg" width="32" height="32" alt="keyboard">
-</td>
-<td>
-<strong>Keyboard First</strong><br>
-Every action has a hotkey. Navigate, triage, search, and execute from anywhere without touching the mouse.
-</td>
-</tr>
-
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/user.svg" width="32" height="32" alt="permissions">
-</td>
-<td>
-<strong>Intuitive Permissions</strong><br>
-Permissions inherit from channels. Send a document to someone and they can access it.
-</td>
-</tr>
+  <tr>
+    <td width="50%">
+      <p><img src=".github/icons/email.svg" width="28" height="28" alt="Email" /></p>
+      <strong>Email</strong>
+      <br />
+      Full email client with keyboard-driven triage, instant search, and Gmail sync.
+    </td>
+    <td width="50%">
+      <p><img src=".github/icons/book.svg" width="28" height="28" alt="Docs" /></p>
+      <strong>Docs & Notes</strong>
+      <br />
+      Real-time collaborative documents using CRDTs and the same editor used across the app.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <p><img src=".github/icons/diagram.svg" width="28" height="28" alt="Canvas" /></p>
+      <strong>Canvas</strong>
+      <br />
+      2D diagramming with embedded links to tasks, files, emails, and documents.
+    </td>
+    <td width="50%">
+      <p><img src=".github/icons/file-md.svg" width="28" height="28" alt="Unified editor" /></p>
+      <strong>Unified Editor</strong>
+      <br />
+      One rich text surface for emails, notes, channel messages, tasks, and AI context.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <p><img src=".github/icons/folder.svg" width="28" height="28" alt="Files" /></p>
+      <strong>File Storage</strong>
+      <br />
+      Store and share videos, images, PDFs, and documents. Attachments are imported from emails and channels.
+    </td>
+    <td width="50%">
+      <p><img src=".github/icons/keyboard.svg" width="28" height="28" alt="Keyboard" /></p>
+      <strong>Keyboard First</strong>
+      <br />
+      Every action has a hotkey so you can navigate, triage, search, and execute without leaving the keyboard.
+    </td>
+  </tr>
 </table>
 
-</p>
-<h1 style="border-bottom: none">
-</h1>
-</div>
+# Stack
 
-## Directory Structure
+- TypeScript and Rust
+- SolidJS, Tauri, Vite, Lexical, and CRDT-backed collaboration
+- Bun workspaces, Biome, Vitest, and Playwright
+- PostgreSQL, OpenSearch, WebSockets, and AWS
+- Pulumi infrastructure
+
+# Repository Layout
 
 While we're not accepting contributions yet, we encourage you to explore the codebase. This overview should help you navigate.
 
-```
+```txt
 macro/
 ├── js/app/                      # Frontend (SolidJS + Tauri)
 │   ├── packages/
@@ -162,26 +138,22 @@ macro/
 └── scripts/                     # Build and utility scripts
 ```
 
-## Feature Requests
+# Community
 
-For feature requests, please email contact@macro.com
+Macro is licensed under the Business Source License. See `LICENSE.md` for details.
 
-## Hiring
+Have an idea, want to contribute, or want to work on Macro?
 
-We're hiring! If you're interested in working on macro, please email teo@macro.com
+- Feature requests: [contact@macro.com](mailto:contact@macro.com)
+- Contributions: [contribute@macro.com](mailto:contribute@macro.com)
+- Hiring: [teo@macro.com](mailto:teo@macro.com)
 
-
-## CONTRIBUTIONS
-
-Email contribute@macro.com to join the community.
-
-
-## Star History
+# Star History
 
 <a href="https://www.star-history.com/?repos=macro-inc%2Fmacro&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=macro-inc/macro&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=macro-inc/macro&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=macro-inc/macro&type=date&legend=top-left" />
- </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=macro-inc/macro&type=date&theme=dark&legend=top-left" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=macro-inc/macro&type=date&legend=top-left" />
+    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=macro-inc/macro&type=date&legend=top-left" />
+  </picture>
 </a>
