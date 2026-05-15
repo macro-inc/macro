@@ -154,7 +154,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     >
       <div
         class={cn(
-          'group w-full relative flex items-center gap-1 rounded-sm h-7 mobile:h-9 pl-2 pr-1 mobile:min-w-35 border text-xs',
+          'group w-full relative flex items-center gap-1 rounded-md h-7 mobile:h-9 pl-2 pr-1 mobile:min-w-35 border text-xs',
           variantStyles[props.variant ?? 'secondary']
         )}
       >

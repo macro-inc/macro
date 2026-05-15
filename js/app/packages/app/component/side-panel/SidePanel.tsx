@@ -1,4 +1,5 @@
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
+import { TabsInset } from '@core/component/TabsInset';
 import { isMobile } from '@core/mobile/isMobile';
 import CaretRight from '@icon/fill/caret-right-fill.svg';
 import { Accordion } from '@kobalte/core/accordion';
@@ -286,45 +287,20 @@ function useSidePanel() {
 function NarrowTabs(props: { contentLabel?: string; infoLabel?: string }) {
   const ctx = useContext(SidePanelContext);
   if (!ctx) return null;
+
+  const value = () => (ctx.isOpen() ? 'info' : 'content');
+
   return (
     <Show when={ctx.isNarrow() && ctx.hasSections()}>
-      <Layer depth={0}>
-        <div class="flex items-center shrink-0 bg-edge-muted p-0.5 rounded-sm">
-          <Layer depth={3}>
-            <NarrowTab
-              active={!ctx.isOpen()}
-              label={props.contentLabel ?? 'Content'}
-              onClick={() => ctx.setIsOpen(false)}
-            />
-            <NarrowTab
-              active={ctx.isOpen()}
-              label={props.infoLabel ?? 'Info'}
-              onClick={() => ctx.setIsOpen(true)}
-            />
-          </Layer>
-        </div>
-      </Layer>
+      <TabsInset
+        list={[
+          { value: 'content', label: props.contentLabel ?? 'Content' },
+          { value: 'info', label: props.infoLabel ?? 'Info' },
+        ]}
+        value={value()}
+        onChange={(v) => ctx.setIsOpen(v === 'info')}
+      />
     </Show>
-  );
-}
-
-function NarrowTab(props: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={props.active}
-      onClick={props.onClick}
-      class={cn(
-        'text-xs px-2.5 py-0.5 rounded-xs transition-colors',
-        props.active ? 'bg-surface text-ink' : 'text-ink-muted hover:text-ink'
-      )}
-    >
-      {props.label}
-    </button>
   );
 }
 
