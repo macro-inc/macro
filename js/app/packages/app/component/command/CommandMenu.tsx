@@ -3,6 +3,7 @@ import { getSearchSplit } from '@app/component/next-soup/soup-view/search-contro
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { Tabs } from '@core/component/Tabs';
+import { TabsInset } from '@core/component/TabsInset';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import type { RegisterHotkeyReturn } from '@core/hotkey/types';
@@ -491,14 +492,15 @@ export function CommandMenuInner(props: {
       <Show when={isEntityActionMode() || !isInCommandScope()}>
         <Panel.Toolbar
           class={cn(
-            'bg-surface',
+            'bg-surface border-0',
             isEntityActionMode() ? 'px-3 gap-2' : 'px-1.5'
           )}
         >
           <Show
             when={isEntityActionMode()}
             fallback={
-              <Tabs
+              <TabsInset
+                depth={1}
                 list={categoryTabs}
                 value={CommandState.categoryFilter()}
                 onChange={(value) => {

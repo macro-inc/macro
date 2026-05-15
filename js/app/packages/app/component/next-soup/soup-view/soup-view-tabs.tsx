@@ -8,6 +8,8 @@ import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-contex
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { type TabItem, Tabs } from '@core/component/Tabs';
+import { TabsInset } from '@core/component/TabsInset';
+import { TabsVariant } from '@core/component/TabsVariant';
 import { useUserContext } from '@core/context/user';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import { Dropdown, Layer } from '@ui';
@@ -133,7 +135,7 @@ const ViewTabs = (props: { view: TabbedListView }) => {
   const list = () => VIEW_TAB_LISTS[props.view];
 
   return (
-    <Tabs
+    <TabsInset
       list={list()}
       value={activeTab()}
       defaultValue={VIEW_TAB_PRESETS[props.view].default}
