@@ -1884,6 +1884,68 @@
         }
       }
     },
+    "/team/plan": {
+      "patch": {
+        "tags": ["teams::inbound::axum_router::patch_team_plan"],
+        "summary": "Updates a team plan.",
+        "operationId": "patch_team_plan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchTeamPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/remove/{remove_user_id}": {
       "delete": {
         "tags": ["teams::inbound::axum_router::remove_user_from_team"],
@@ -3393,6 +3455,17 @@
           }
         }
       },
+      "PatchTeamPlanRequest": {
+        "type": "object",
+        "description": "Request to update the team plan",
+        "required": ["team_plan"],
+        "properties": {
+          "team_plan": {
+            "$ref": "#/components/schemas/TeamPlan",
+            "description": "The new team plan"
+          }
+        }
+      },
       "PatchTeamRequest": {
         "type": "object",
         "description": "Request to update a team",
@@ -3690,6 +3763,11 @@
             "description": "The user id of the team member"
           }
         }
+      },
+      "TeamPlan": {
+        "type": "string",
+        "description": "Team plans",
+        "enum": ["idea", "pre_seed", "seed", "series_a", "growth"]
       },
       "TeamRole": {
         "type": "string",

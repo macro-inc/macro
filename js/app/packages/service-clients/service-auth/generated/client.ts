@@ -30,6 +30,7 @@ import type {
   PasswordlessRequest,
   PasswordRequest,
   PatchSubscriptionTierRequest,
+  PatchTeamPlanRequest,
   PatchTeamRequest,
   PatchUserGroupRequest,
   PatchUserOnboardingRequest,
@@ -2248,6 +2249,75 @@ export const rejectInvitation = async (
     status: res.status,
     headers: res.headers,
   } as rejectInvitationResponse;
+};
+
+/**
+ * @summary Updates a team plan.
+ */
+export type patchTeamPlanResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type patchTeamPlanResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type patchTeamPlanResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type patchTeamPlanResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type patchTeamPlanResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type patchTeamPlanResponseSuccess = patchTeamPlanResponse200 & {
+  headers: Headers;
+};
+export type patchTeamPlanResponseError = (
+  | patchTeamPlanResponse400
+  | patchTeamPlanResponse401
+  | patchTeamPlanResponse404
+  | patchTeamPlanResponse500
+) & {
+  headers: Headers;
+};
+
+export type patchTeamPlanResponse =
+  | patchTeamPlanResponseSuccess
+  | patchTeamPlanResponseError;
+
+export const getPatchTeamPlanUrl = () => {
+  return `/team/plan`;
+};
+
+export const patchTeamPlan = async (
+  patchTeamPlanRequest: PatchTeamPlanRequest,
+  options?: RequestInit
+): Promise<patchTeamPlanResponse> => {
+  const res = await fetch(getPatchTeamPlanUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(patchTeamPlanRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: patchTeamPlanResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as patchTeamPlanResponse;
 };
 
 /**
