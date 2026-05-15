@@ -26,29 +26,48 @@ Everything in Macro is connected with bi-directional `@links`. Mention a doc in 
 
 # Features
 
-## Search Across Everything
-
-Macro's search is a command center for the whole workspace. Filter across emails, channels, documents, tasks, files, calls, and people, then jump straight into the object you need. The same surface also lets you ask AI questions over your workspace with `@mentions` for precise context.
-
-<img width="100%" alt="Macro unified search across workspace objects" src=".github/readme/search.png" />
-
-## Channels That Keep Context
-
-Channels are built for messy team work: messages, replies, attachments, docs, tasks, canvases, PDFs, and calls can all live in the same conversation. Every `@link` is bi-directional, so a reference in chat also becomes a path back from the thing being discussed.
-
-<img width="100%" alt="Macro channel with linked messages, documents, and files" src=".github/readme/channels.png" />
-
-## Calls With Memory
-
-Calls in Macro do not disappear when the meeting ends. Recordings, participants, summaries, and transcripts stay connected to the rest of the workspace, so follow-ups can link back to the exact discussion that created them.
-
-<img width="100%" alt="Macro call recording with summary and participants" src=".github/readme/calls.png" />
-
-## AI Agents For The Workspace
-
-Macro's AI can read across your recent calls, channels, docs, tasks, and notifications to build a useful picture of what happened. Agents can search, filter, inspect transcripts, and gather context before answering, so workspace intelligence is grounded in the objects your team already uses.
-
-<img width="100%" alt="Macro AI agent gathering context across workspace activity" src=".github/readme/agents.png" />
+<table>
+  <tr>
+    <td width="50%">
+      <strong>Search Across Everything</strong>
+      <br />
+      <br />
+      <img width="100%" alt="Macro unified search across workspace objects" src=".github/readme/search.png" />
+      <br />
+      <br />
+      Macro's search is a command center for the whole workspace. Filter across emails, channels, documents, tasks, files, calls, and people, then jump straight into the object you need. The same surface also lets you ask AI questions over your workspace with <code>@mentions</code> for precise context.
+    </td>
+    <td width="50%">
+      <strong>Channels That Keep Context</strong>
+      <br />
+      <br />
+      <img width="100%" alt="Macro channel with linked messages, documents, and files" src=".github/readme/channels.png" />
+      <br />
+      <br />
+      Channels are built for messy team work: messages, replies, attachments, docs, tasks, canvases, PDFs, and calls can all live in the same conversation. Every <code>@link</code> is bi-directional, so a reference in chat also becomes a path back from the thing being discussed.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <strong>Calls With Memory</strong>
+      <br />
+      <br />
+      <img width="100%" alt="Macro call recording with summary and participants" src=".github/readme/calls.png" />
+      <br />
+      <br />
+      Calls in Macro do not disappear when the meeting ends. Recordings, participants, summaries, and transcripts stay connected to the rest of the workspace, so follow-ups can link back to the exact discussion that created them.
+    </td>
+    <td width="50%">
+      <strong>AI Agents For The Workspace</strong>
+      <br />
+      <br />
+      <img width="100%" alt="Macro AI agent gathering context across workspace activity" src=".github/readme/agents.png" />
+      <br />
+      <br />
+      Macro's AI can read across your recent calls, channels, docs, tasks, and notifications to build a useful picture of what happened. Agents can search, filter, inspect transcripts, and gather context before answering, so workspace intelligence is grounded in the objects your team already uses.
+    </td>
+  </tr>
+</table>
 
 ## More In The Box
 
