@@ -316,6 +316,7 @@ export function Channel(props: ChannelProps) {
     channelId: () => props.channelId,
     goToMessage,
     clearSelection,
+    isMessageLoaded: (id) => messageIndex.keys.includes(id),
   });
 
   const { messageListScopeId, attachMessageListRef, attachInputRef } =
