@@ -2,11 +2,9 @@ import type {
   GroupOption,
   GroupOptionId,
 } from '@app/component/next-soup/soup-view/group-options';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import StackSimpleIcon from '@icon/regular/stack-simple.svg';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Button, Layer } from '@ui';
+import { Dropdown, Layer, Tooltip } from '@ui';
 import { type Component, For, Show } from 'solid-js';
 
 export interface GroupDropdownProps {
@@ -19,28 +17,24 @@ export interface GroupDropdownProps {
 
 export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
   return (
-    <DropdownMenu
+    <Dropdown
       open={props.open}
       onOpenChange={props.onOpenChange}
       placement="bottom-start"
       gutter={4}
     >
-      <DropdownMenu.Trigger
-        as={Button}
-        variant="ghost"
-        size="sm"
-        class="whitespace-nowrap rounded-xs [&_svg]:size-4 px-1"
-      >
-        <StackSimpleIcon />
-        <ChevronDownIcon class="size-4" />
-      </DropdownMenu.Trigger>
-
-      <DropdownMenu.Portal>
+      <Tooltip label="Group">
+        <Dropdown.Trigger depth={2} class="bg-surface">
+          <StackSimpleIcon />
+          <span>Group</span>
+        </Dropdown.Trigger>
+      </Tooltip>
+      <Dropdown.Portal>
         <Layer depth={2}>
-          <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-sm min-w-35 p-1">
+          <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-sm min-w-35 p-1">
             <For each={props.options}>
               {(option) => (
-                <DropdownMenu.Item
+                <Dropdown.Item
                   class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
                   onSelect={() => props.onChange(option.value)}
                 >
@@ -58,12 +52,12 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
                       <CheckIcon class="size-3 text-accent" />
                     </Show>
                   </span>
-                </DropdownMenu.Item>
+                </Dropdown.Item>
               )}
             </For>
-          </DropdownMenu.Content>
+          </Dropdown.Content>
         </Layer>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+      </Dropdown.Portal>
+    </Dropdown>
   );
 };
