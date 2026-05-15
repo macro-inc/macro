@@ -1,5 +1,6 @@
 use crate::domain::models::{
-    AdvancedSortParams, FrecencySoupItem, IntoSoupReqAst, SimpleSortRequest, SoupErr, SoupRequest,
+    AdvancedSortParams, FrecencySoupItem, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
+    SimpleSortRequest, SoupErr, SoupRequest,
 };
 use either::Either;
 use models_pagination::{Frecency, PaginatedCursor, SimpleSortMethod};
@@ -34,6 +35,12 @@ pub trait SoupRepo: Send + Sync + 'static {
         &self,
         items: &mut [SoupItem],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Fetches expanded soup items with group metadata.
+    fn expanded_grouped_cursor_soup<'a>(
+        &self,
+        req: GroupedSortRequest<'a>,
+    ) -> impl Future<Output = Result<Vec<GroupedSoupItem>, Self::Err>> + Send;
 }
 
 /// type alias which represents the posible outputs of soup
@@ -55,4 +62,9 @@ pub trait SoupService: Send + Sync + 'static {
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send;
+
+    fn get_user_soup_grouped(
+        &self,
+        req: GroupedSortRequest<'_>,
+    ) -> impl Future<Output = Result<Vec<GroupedSoupItem>, SoupErr>> + Send;
 }

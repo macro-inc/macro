@@ -2,7 +2,6 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -47,7 +46,7 @@ import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { debounce } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
-import { Button, Hotkey } from '@ui';
+import { Button, Hotkey, ToggleSwitch } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
@@ -720,12 +719,11 @@ export function ComposeTask(props: ComposeTaskProps) {
 
       <div class="w-full border-b border-edge-muted" />
       <div class="shrink-0 flex justify-between items-center p-2 gap-2">
-        <MiniToggleSwitch
-          size="SM"
-          label="Create More"
-          labelClass="text-ink-muted font-normal"
-          checked={createMore()}
+        <ToggleSwitch
+          labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
           onChange={setCreateMore}
+          checked={createMore()}
+          label="Create More"
         />
         <Button
           onClick={handleCreateTask}

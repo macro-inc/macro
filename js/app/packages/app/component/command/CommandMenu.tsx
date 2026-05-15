@@ -52,8 +52,9 @@ const CATEGORIES: { id: CategoryFilter; label: string }[] = [
 ];
 
 const VIRTUAL_ITEM_HEIGHT = 40; // tailwind h-10
-const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8;
-const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5;
+const LIST_PADDING = 16; // p-2 = 8px top + 8px bottom
+const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8 + LIST_PADDING;
+const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5 + LIST_PADDING;
 
 export function CommandMenu() {
   const splitManager = globalSplitManager();
@@ -442,7 +443,10 @@ export function CommandMenuInner(props: {
   const resultsHeight = () => {
     const count = filteredItems().length;
     if (count === 0) return EMPTY_STATE_HEIGHT;
-    return Math.min(MAX_LIST_HEIGHT, count * VIRTUAL_ITEM_HEIGHT);
+    return Math.min(
+      MAX_LIST_HEIGHT,
+      count * VIRTUAL_ITEM_HEIGHT + LIST_PADDING
+    );
   };
 
   const categoryTabs = CATEGORIES.map((c) => ({
@@ -658,7 +662,7 @@ function VirtualizedCommandList(props: {
       }}
       data={props.items}
       style={{ height: '100%' }}
-      class="scrollbar-hidden"
+      class="scrollbar-hidden p-2"
     >
       {(item, index) => (
         <CommandItem

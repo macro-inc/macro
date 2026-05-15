@@ -27,8 +27,8 @@ use item_filters::ast::EntityFilterAst;
 use crate::{
     domain::{
         models::{
-            FrecencyQueryInner, IntoSoupReqAst, SimpleQueryInner, SoupErr, SoupQuery, SoupRequest,
-            SoupType,
+            FrecencyQueryInner, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
+            SimpleQueryInner, SoupErr, SoupQuery, SoupRequest, SoupType,
         },
         ports::{SoupOutput, SoupService},
     },
@@ -99,6 +99,13 @@ impl SoupService for MockSoup {
             filter,
             expanded_filter,
         });
+        Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn get_user_soup_grouped(
+        &self,
+        _req: GroupedSortRequest<'_>,
+    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
         Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
     }
 }

@@ -65,52 +65,52 @@ export function ReactionChip(props: ReactionChipProps) {
       placement="top"
     >
       <Popover.Anchor>
-        <HoverCard placement="top">
-          <HoverCard.Trigger>
-            <Button
-              data-message-reaction-chip
-              data-emoji={props.emoji}
-              noTouchResize
-              ref={(el) =>
-                touchHandler(el, () => ({
-                  onLongPress: () => {
-                    setShowReactors(true);
-                  },
-                  stopTouchStartPropagation: true,
-                }))
-              }
-              size="sm"
-              variant="base"
-              class={cn(
-                'flex flex-row items-center h-7 min-w-7 gap-2 rounded-sm',
-                {
-                  'border-edge-muted hover:bg-hover hover:scale-105':
-                    props.interactive,
-                  'border-edge-muted': !props.selected && !props.interactive,
-                  'text-accent border-accent hover:bg-accent-hover':
-                    props.selected,
-                  'pointer-events-auto': !props.interactive,
-                }
-              )}
-              disabled={!props.interactive}
-              onClick={(event) => {
-                event.stopPropagation();
-                props.onClick?.(event);
-              }}
-            >
-              <span class="text-lg leading-0">{props.emoji}</span>
-              <Show when={props.count > 1}>
-                <span class="text-xs">{props.count}</span>
-              </Show>
-            </Button>
-          </HoverCard.Trigger>
-          <HoverCard.Content>
+        <HoverCard
+          placement="top"
+          content={
             <ReactionTooltipContent
               users={props.users}
               currentUserId={props.currentUserId}
               emoji={props.emoji}
             />
-          </HoverCard.Content>
+          }
+        >
+          <Button
+            data-message-reaction-chip
+            data-emoji={props.emoji}
+            noTouchResize
+            ref={(el) =>
+              touchHandler(el, () => ({
+                onLongPress: () => {
+                  setShowReactors(true);
+                },
+                stopTouchStartPropagation: true,
+              }))
+            }
+            size="sm"
+            variant="base"
+            class={cn(
+              'flex flex-row items-center h-7 min-w-7 gap-2 rounded-sm',
+              {
+                'border-edge-muted hover:bg-hover hover:scale-105':
+                  props.interactive,
+                'border-edge-muted': !props.selected && !props.interactive,
+                'text-accent border-accent hover:bg-accent-hover':
+                  props.selected,
+                'pointer-events-auto': !props.interactive,
+              }
+            )}
+            disabled={!props.interactive}
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onClick?.(event);
+            }}
+          >
+            <span class="text-lg leading-0">{props.emoji}</span>
+            <Show when={props.count > 1}>
+              <span class="text-xs">{props.count}</span>
+            </Show>
+          </Button>
         </HoverCard>
       </Popover.Anchor>
       <Popover.Portal>

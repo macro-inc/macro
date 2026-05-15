@@ -7,5 +7,5 @@ pub use ai_toolset::{
     ToolCallError, ToolCollection, ToolInfo, ToolResult, ToolSchema, ToolSet, ToolSetCreationError,
     ToolSetError,
 };
-pub use stream::{AiStream, ChatCompletionStream, StreamPart, ToolCall, ToolResponse};
+pub use stream::{AiStream, ChatCompletionStream, McpInfo, StreamPart, ToolCall, ToolResponse};
 pub(crate) use stream::{ExtendedPartStream, PartOrExt, PartialToolCall};

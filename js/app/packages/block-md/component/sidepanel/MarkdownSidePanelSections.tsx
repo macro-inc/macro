@@ -44,7 +44,6 @@ import {
   createMemo,
   createResource,
   createSignal,
-  For,
   onCleanup,
   Show,
   Suspense,
@@ -75,25 +74,27 @@ export function MarkdownSidePanelSections(
 
   return (
     <>
-      <SidePanel.Section id="details" title="Details" defaultOpen>
+      <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
         <DetailsSectionContent />
       </SidePanel.Section>
-      <SidePanel.Section id="properties" title="Properties" defaultOpen>
+      <SidePanel.Section
+        id="properties"
+        title="Properties"
+        defaultOpen
+        order={20}
+      >
         <PropertiesSectionContent
           canEdit={props.canEdit}
           documentName={props.documentName}
         />
       </SidePanel.Section>
       <Show when={!isTask()}>
-        <SidePanel.Section id="stats" title="Stats">
+        <SidePanel.Section id="stats" title="Stats" order={30}>
           <StatsSectionContent />
         </SidePanel.Section>
       </Show>
       <NotificationsSectionConditional entity={entity()} />
       <ReferencesSectionConditional documentId={blockId} />
-      <SidePanel.Section id="debug" title="Debug (Scroll Test)">
-        <DebugSectionContent />
-      </SidePanel.Section>
     </>
   );
 }
@@ -469,14 +470,19 @@ function NotificationsSectionConditional(props: { entity: Entity }) {
     () => notifications().filter((n) => !n.viewed_at).length
   );
 
-  const title = createMemo(() => {
-    const unread = unreadCount();
-    return unread > 0 ? `Notifications (${unread})` : 'Notifications';
-  });
+  const title = () => (
+    <>
+      Notifications
+      <Show when={unreadCount() > 0}>
+        {' '}
+        <span class="text-ink-extra-muted">({unreadCount()})</span>
+      </Show>
+    </>
+  );
 
   return (
     <Show when={count() > 0}>
-      <SidePanel.Section id="notifications" title={title()}>
+      <SidePanel.Section id="notifications" title={title()} order={40}>
         <Suspense
           fallback={
             <div class="flex justify-center py-8">
@@ -518,14 +524,19 @@ function ReferencesSectionConditional(props: { documentId: string }) {
 
   const count = createMemo(() => references()?.length ?? 0);
 
-  const title = createMemo(() => {
-    const c = count();
-    return c > 0 ? `References (${c})` : 'References';
-  });
+  const title = () => (
+    <>
+      References
+      <Show when={count() > 0}>
+        {' '}
+        <span class="text-ink-extra-muted">({count()})</span>
+      </Show>
+    </>
+  );
 
   return (
     <Show when={count() > 0}>
-      <SidePanel.Section id="references" title={title()}>
+      <SidePanel.Section id="references" title={title()} order={50}>
         <Suspense
           fallback={
             <div class="flex justify-center py-8">
@@ -537,20 +548,5 @@ function ReferencesSectionConditional(props: { documentId: string }) {
         </Suspense>
       </SidePanel.Section>
     </Show>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Debug Section (for scroll testing)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function DebugSectionContent() {
-  const items = Array.from({ length: 50 }, (_, i) => i + 1);
-  return (
-    <div class="flex flex-col gap-2 text-xs text-ink-muted">
-      <For each={items}>
-        {(i) => <div class="p-2 bg-surface-muted rounded">Debug item {i}</div>}
-      </For>
-    </div>
   );
 }

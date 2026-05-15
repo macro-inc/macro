@@ -1,6 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { RenderTool } from '@core/component/AI/component/tool/handler';
+import { McpToolCall } from '@core/component/AI/component/tool/McpToolCall';
 import { useChatContext } from '@core/component/AI/context';
 import { replaceCitations } from '@core/component/LexicalMarkdown/citationsUtils';
 import { ENABLE_TTFT } from '@core/constant/featureFlags';
@@ -333,6 +334,28 @@ function AssistantMessageParts(props: {
                     message_id={props.message.id}
                     part_index={i()}
                     isComplete={isCompleteSelector(toolCall().id)}
+                    renderContext={{
+                      renderContext: {
+                        isStreaming: props.isStreaming,
+                      },
+                    }}
+                  />
+                );
+              })()}
+            </Match>
+            <Match when={type() === 'mcpToolCall'}>
+              {(() => {
+                const mcpCall = () =>
+                  currentPart() as Extract<
+                    AssistantMessagePart,
+                    { type: 'mcpToolCall' }
+                  >;
+                return (
+                  <McpToolCall
+                    name={mcpCall().name}
+                    service={mcpCall().service}
+                    display_name={mcpCall().display_name ?? undefined}
+                    isComplete={isCompleteSelector(mcpCall().id)}
                     renderContext={{
                       renderContext: {
                         isStreaming: props.isStreaming,

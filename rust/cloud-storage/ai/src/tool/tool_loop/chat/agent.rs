@@ -2,11 +2,13 @@ use super::MAX_RECURSIONS;
 use crate::openai_toolset::OpenAIToolSetExt;
 use crate::tool::types::{ChatCompletionStream, ExtendedPartStream, PartOrExt, ToolResponse};
 use crate::tool::types::{
-    PartialToolCall, RequestContext, StreamPart, ToolCall, ToolResult, ToolSet,
+    McpInfo, PartialToolCall, RequestContext, StreamPart, ToolCall, ToolInfo, ToolResult, ToolSet,
 };
 use crate::types::openai::message::convert_message;
 use crate::types::traits::{ExtendedOpenAIStream, ExtendedOpenAIStreamItem};
-use crate::types::{ChatCompletionRequest, ChatMessage, ChatMessages};
+use crate::types::{
+    AssistantMessagePart, ChatCompletionRequest, ChatMessage, ChatMessageContent, ChatMessages,
+};
 use crate::types::{ExtendedClient, Result};
 use async_openai::types::chat::{
     ChatCompletionMessageToolCall, ChatCompletionMessageToolCalls,
@@ -81,7 +83,44 @@ where
             .map(|msg| convert_message(msg.clone(), Some(&self.tool_call_id_name_mapping)))
             .collect::<Vec<_>>()
             .into();
-        messages.0
+        messages
+            .0
+            .into_iter()
+            .map(|msg| self.rewrite_mcp_tool_calls(msg))
+            .collect()
+    }
+
+    fn rewrite_mcp_tool_calls(&self, mut msg: ChatMessage) -> ChatMessage {
+        if let ChatMessageContent::AssistantMessageParts(parts) = msg.content {
+            let parts = parts
+                .into_iter()
+                .map(|part| {
+                    let AssistantMessagePart::ToolCall { ref name, .. } = part else {
+                        return part;
+                    };
+                    let Some(ToolInfo::ExternalTool {
+                        service_name,
+                        tool_name,
+                        display_name,
+                    }) = self.toolset.routing_description(name)
+                    else {
+                        return part;
+                    };
+                    let AssistantMessagePart::ToolCall { json, id, .. } = part else {
+                        unreachable!()
+                    };
+                    AssistantMessagePart::McpToolCall {
+                        name: tool_name,
+                        service: service_name,
+                        display_name,
+                        json,
+                        id,
+                    }
+                })
+                .collect();
+            msg.content = ChatMessageContent::AssistantMessageParts(parts);
+        }
+        msg
     }
 }
 
@@ -119,12 +158,14 @@ where
                         let part_or_ext = item.unwrap();
                         match part_or_ext {
                             ref part @ PartOrExt::Part(ref p) => {
-                                yield Ok(p.to_owned());
+                                let enriched = self.enrich_stream_part(p);
+                                yield Ok(enriched);
                                 stream_parts.push(part.to_owned());
                             }
                             ref part @ PartOrExt::Ext(ref e) => {
                                 if let Some(p) = self.client.handle_extension_item(e.to_owned()) {
-                                    yield Ok(p);
+                                    let enriched = self.enrich_stream_part(&p);
+                                    yield Ok(enriched);
                                 }
                                 stream_parts.push(part.to_owned());
                             }
@@ -324,6 +365,32 @@ where
             },
             ..Default::default()
         })
+    }
+
+    fn enrich_stream_part(&self, part: &StreamPart) -> StreamPart {
+        match part {
+            StreamPart::ToolCall(call) => {
+                let mcp = self
+                    .toolset
+                    .routing_description(&call.name)
+                    .map(|info| match info {
+                        ToolInfo::ExternalTool {
+                            service_name,
+                            tool_name,
+                            display_name,
+                        } => McpInfo {
+                            service: service_name,
+                            tool_name,
+                            display_name,
+                        },
+                    });
+                StreamPart::ToolCall(ToolCall {
+                    mcp,
+                    ..call.clone()
+                })
+            }
+            other => other.clone(),
+        }
     }
 
     fn map_stream<'a>(

@@ -172,7 +172,7 @@ export function BlockItemSplitLabel(props: {
   });
 
   return (
-    <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 w-screen max-w-full h-full shrink">
+    <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
       <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
       <Show when={props.badges}>{props.badges}</Show>
       <SplitLabel

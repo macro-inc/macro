@@ -13,7 +13,6 @@ import {
   useBlockName,
 } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { DropdownMenuContent } from '@core/component/Menu';
 import { type TabItem, Tabs } from '@core/component/Tabs';
 import { UserIcon } from '@core/component/UserIcon';
@@ -60,7 +59,7 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { Button, ButtonGroup, cn, Panel, Tooltip } from '@ui';
+import { Button, ButtonGroup, cn, Panel, ToggleSwitch, Tooltip } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -486,13 +485,13 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                     </span>
                   </div>
                 </div>
-                <MiniToggleSwitch
-                  size="Base"
-                  label="Enable public link"
-                  checked={props.publicAccessLevel != null}
+                <ToggleSwitch
                   onChange={(checked) =>
                     props.setPublicPermissions(checked ? 'view' : null)
                   }
+                  checked={props.publicAccessLevel != null}
+                  labelClass="whitespace-nowrap"
+                  label="Enable public link"
                 />
               </div>
               <Show when={props.publicAccessLevel != null}>
@@ -1135,9 +1134,9 @@ export function ShareModal(props: ShareModalProps) {
                         </span>
                       </div>
                     </div>
-                    <MiniToggleSwitch
-                      size="Base"
+                    <ToggleSwitch
                       label="Enable public link"
+                      labelClass="whitespace-nowrap"
                       checked={publicAccessLevel() != null}
                       onChange={(on) =>
                         setPublicPermissions(on ? 'view' : null)
@@ -1273,7 +1272,6 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
               shareCtx.open();
             }
           }}
-          class="text-ink-muted"
         >
           <IconShared />
           Share
@@ -1286,7 +1284,6 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
         tooltip="Copy Share Link"
         size="icon-sm"
         onClick={ShareLinkAction().action}
-        class="text-ink-muted"
       >
         <Dynamic component={ShareLinkAction().icon} class="size-3.5!" />
       </Button>

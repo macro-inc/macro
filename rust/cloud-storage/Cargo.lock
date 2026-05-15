@@ -3789,6 +3789,7 @@ dependencies = [
  "model-entity",
  "model-error-response",
  "model_user",
+ "models_grouping",
  "models_pagination",
  "non_empty",
  "recursion",
@@ -7158,6 +7159,15 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "sqlx",
+]
+
+[[package]]
+name = "models_grouping"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "uuid",
 ]
 
 [[package]]
@@ -10791,6 +10801,7 @@ dependencies = [
  "model-entity",
  "model-error-response",
  "model_user",
+ "models_grouping",
  "models_pagination",
  "models_properties",
  "models_soup",

@@ -19,6 +19,7 @@ impl RedisOAuthStateStore {
 }
 
 impl OAuthStateStore for RedisOAuthStateStore {
+    #[tracing::instrument(skip_all, err)]
     async fn save(&self, csrf_token: &str, pending: PendingAuth) -> anyhow::Result<()> {
         let key = format!("{KEY_PREFIX}{csrf_token}");
         let value = serde_json::to_string(&pending)?;
@@ -31,6 +32,7 @@ impl OAuthStateStore for RedisOAuthStateStore {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, err)]
     async fn take(&self, csrf_token: &str) -> anyhow::Result<Option<PendingAuth>> {
         let key = format!("{KEY_PREFIX}{csrf_token}");
         let mut conn = self

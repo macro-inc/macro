@@ -39,13 +39,8 @@ export function SharedBadgeSmall(props: { ownerId: string }) {
   };
 
   return (
-    <HoverCard>
-      <HoverCard.Trigger>
-        <div class="text-ink-extra-muted/50 p-1">
-          <UserPlus class="size-4" />
-        </div>
-      </HoverCard.Trigger>
-      <HoverCard.Content>
+    <HoverCard
+      content={
         <div class="flex items-center gap-1.5 text-xs">
           <UserIcon
             id={props.ownerId}
@@ -55,7 +50,11 @@ export function SharedBadgeSmall(props: { ownerId: string }) {
           />
           <span>{name()()} shared this with you</span>
         </div>
-      </HoverCard.Content>
+      }
+    >
+      <div class="text-ink-extra-muted/50 p-1">
+        <UserPlus class="size-4" />
+      </div>
     </HoverCard>
   );
 }
@@ -72,13 +71,8 @@ export function CreatedByBadgeSmall(props: { ownerId: string }) {
   };
 
   return (
-    <HoverCard>
-      <HoverCard.Trigger>
-        <div class="text-ink-extra-muted/50 p-1">
-          <UserPlus class="size-4" />
-        </div>
-      </HoverCard.Trigger>
-      <HoverCard.Content>
+    <HoverCard
+      content={
         <div class="flex items-center gap-1.5 text-xs">
           <UserIcon
             id={props.ownerId}
@@ -88,7 +82,11 @@ export function CreatedByBadgeSmall(props: { ownerId: string }) {
           />
           <span>Created by {name()()}</span>
         </div>
-      </HoverCard.Content>
+      }
+    >
+      <div class="text-ink-extra-muted/50 p-1">
+        <UserPlus class="size-4" />
+      </div>
     </HoverCard>
   );
 }

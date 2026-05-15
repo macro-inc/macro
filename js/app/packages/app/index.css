@@ -109,7 +109,7 @@
   --color-message:         color-mix(in oklch, var(--b1) 50%, var(--b2));
   --color-hover:           var(--b2);
   --color-active:          var(--b1);
-  --color-overlay:         oklch(var(--b2) / 0.5);
+  --color-overlay:         oklch(var(--b1l) var(--b1c) var(--b1h) / 0.8);
   --color-edge-muted:      var(--b3);
   --color-edge:            var(--b4);
   --color-rail:            color-mix(in oklch, var(--b4) 90%, var(--b0));
@@ -405,13 +405,7 @@
 /* Suppressed on touch devices */
 html:not([data-touch-device="true"]) [data-message][data-highlighted],
 html:not([data-touch-device="true"]) [data-message]:hover{
-  @apply bg-accent/5 outline-1 outline-accent/20 -outline-offset-1;
-}
-
-/* Keyboard selection accent bar can coexist with hover styles */
-/* Suppressed on touch devices */
-html:not([data-touch-device="true"]) [data-message][data-selected] > .message-accent-bar {
-  @apply opacity-100;
+  @apply bg-ink/3 rounded-sm;
 }
 
 /* Long-press animation */

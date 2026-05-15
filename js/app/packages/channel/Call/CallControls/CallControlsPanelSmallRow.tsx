@@ -1,18 +1,17 @@
-import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { DropdownMenuContent, MENU_ITEM_CLASS } from '@core/component/Menu';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Info from '@icon/regular/info.svg';
 import Microphone from '@icon/regular/microphone.svg';
 import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
 import Screencast from '@icon/regular/screencast.svg';
+import ShareNetwork from '@icon/regular/share-network.svg';
 import VideoCamera from '@icon/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
 import VideoConference from '@icon/regular/video-conference.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
-import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
-import { cn, Tooltip } from '@ui';
+import { cn, ToggleSwitch, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { useCallContext } from '../CallContext';
@@ -183,11 +182,9 @@ export function CallControlsPanelSmallRow(
                   <span class="text-xs text-ink-muted">
                     {noiseSuppressionModeLabel()}
                   </span>
-                  <MiniToggleSwitch
+                  <ToggleSwitch
                     checked={callCtx.isNoiseSuppressed()}
-                    size="SM"
-                    compact
-                    switchRootClass="pointer-events-none"
+                    class="pointer-events-none"
                   />
                 </div>
               </div>
@@ -280,12 +277,9 @@ export function CallControlsPanelSmallRow(
                     : 'Share with team'}
                 </span>
                 <div class="ml-auto flex items-center gap-1.5 shrink-0">
-                  <MiniToggleSwitch
+                  <ToggleSwitch
                     checked={callCtx.isSharedWithTeam()}
-                    size="SM"
-                    compact
-                    activeTrackClass="bg-ink-muted"
-                    switchRootClass="pointer-events-none"
+                    class="pointer-events-none"
                   />
                   <Tooltip
                     placement="left"

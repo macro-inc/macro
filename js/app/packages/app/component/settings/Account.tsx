@@ -23,7 +23,7 @@ import {
   type ProfilePictureItem,
   useProfilePictureUrl,
 } from '@core/signal/profilePicture';
-import IconUpload from '@macro-icons/macro-upload.svg';
+import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
 import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
 import { authServiceClient } from '@service-auth/client';
 import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';

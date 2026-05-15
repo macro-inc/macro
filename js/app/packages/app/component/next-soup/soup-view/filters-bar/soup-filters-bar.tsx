@@ -1,5 +1,6 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { ActiveFilterChips } from '@app/component/next-soup/soup-view/filters-bar/active-filter-chips';
+import { SoupViewContextGroup } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-group';
 import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
@@ -59,7 +60,7 @@ export const SoupFiltersBar = () => {
 
   return (
     <Show when={!isMobile()}>
-      <div class="flex items-start gap-2 border-b border-edge-muted w-full p-2">
+      <div class="flex items-start gap-2 w-full p-2">
         <UnifiedFilterDropdown />
         <ActiveFilterChips
           filters={activeFiltersList()}
@@ -76,6 +77,7 @@ export const SoupFiltersBar = () => {
         </Tooltip>
         <Show when={!isSearchView()}>
           <SoupViewContextSort />
+          <SoupViewContextGroup />
         </Show>
       </div>
     </Show>
