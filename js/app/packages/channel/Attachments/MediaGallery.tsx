@@ -54,7 +54,7 @@ export function MediaGallery(props: {
         </Show>
       }
     >
-      <div class="flex flex-col">
+      <div class="grid p-3">
         <Show when={!hasMedia()}>
           <div class="py-3 text-sm text-ink-faint">
             No photos or videos in this channel yet.
