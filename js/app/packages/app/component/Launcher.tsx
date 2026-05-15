@@ -669,7 +669,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   };
 
   return (
-    <div class="bg-surface ring-1 ring-edge-muted rounded-sm">
+    <div class="bg-surface ring-1 ring-edge-muted rounded-xl">
       <div class="flex items-center justify-between p-2 px-6 border-b border-edge-muted">
         <h1 class="font-bold text-ink-muted">Create New</h1>
         <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">

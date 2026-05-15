@@ -10,31 +10,11 @@ import {
 } from '@queries/channel/participants';
 import { commsServiceClient } from '@service-comms/client';
 import { ChannelType } from '@service-comms/generated/models/channelType';
-import { cn } from '@ui';
+import { Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { ParticipantsAddPanel } from './ParticipantsAddPanel';
 import { ParticipantsList } from './ParticipantsList';
 import { ParticipantsSearchInput } from './ParticipantsSearchInput';
-
-function ParticipantsSection(props: {
-  title: string;
-  children: import('solid-js').JSX.Element;
-  class?: string;
-  contentClass?: string;
-}) {
-  return (
-    <div
-      class={cn(
-        'rounded-sm border border-edge-muted bg-surface py-3',
-        props.class
-      )}
-    >
-      <div class="px-3 pb-3 text-sm font-medium text-ink">{props.title}</div>
-      <div class="border-b border-edge-muted" />
-      <div class={cn('px-3 pt-3', props.contentClass)}>{props.children}</div>
-    </div>
-  );
-}
 
 export function ChannelParticipantsTab(props: { channelId: string }) {
   const { replaceOrInsertSplit } = useSplitLayout();
@@ -96,36 +76,41 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
   };
 
   return (
-    <div class="relative flex-1 min-h-0 overflow-hidden">
-      <div class="macro-message-width macro-message-padding mx-auto flex size-full min-h-0 flex-col gap-6 py-4">
-        <Show when={canAddParticipants()}>
-          <ParticipantsSection title="Add participants">
-            <ParticipantsAddPanel
-              participants={participants}
-              onAddParticipants={addParticipants}
+    <div class="h-full overflow-hidden flex justify-center p-2">
+      <div class="max-w-200 size-full">
+        <Panel depth={2} class="h-full overflow-hidden text-ink">
+          <Panel.Header class="px-6">
+            <div class="text-sm font-semibold">Participants</div>
+          </Panel.Header>
+          <Panel.Toolbar class="h-15.25 px-2">
+            <ParticipantsSearchInput
+              value={searchQuery()}
+              onInput={setSearchQuery}
             />
-          </ParticipantsSection>
-        </Show>
-        <ParticipantsSection
-          title="Participants"
-          class="flex flex-1 min-h-0 flex-col md:flex-none"
-          contentClass="flex flex-1 min-h-0 flex-col"
-        >
-          <ParticipantsSearchInput
-            value={searchQuery()}
-            onInput={setSearchQuery}
-          />
-          <div class="min-h-0 flex-1 pt-2">
-            <ParticipantsList
-              participants={filteredParticipants}
-              searchQuery={searchQuery}
-              currentUserId={userId() ?? undefined}
-              editable={canManageParticipants()}
-              onParticipantClick={openDirectMessage}
-              onRemoveParticipant={removeParticipant}
-            />
-          </div>
-        </ParticipantsSection>
+          </Panel.Toolbar>
+          <Panel.Body>
+            <div class="flex h-full flex-col">
+              <Show when={canAddParticipants()}>
+                <div class="px-6 py-3 border-b border-edge-muted shrink-0">
+                  <ParticipantsAddPanel
+                    participants={participants}
+                    onAddParticipants={addParticipants}
+                  />
+                </div>
+              </Show>
+              <div class="relative min-h-0 flex-1">
+                <ParticipantsList
+                  participants={filteredParticipants}
+                  searchQuery={searchQuery}
+                  currentUserId={userId() ?? undefined}
+                  editable={canManageParticipants()}
+                  onParticipantClick={openDirectMessage}
+                  onRemoveParticipant={removeParticipant}
+                />
+              </div>
+            </div>
+          </Panel.Body>
+        </Panel>
       </div>
     </div>
   );

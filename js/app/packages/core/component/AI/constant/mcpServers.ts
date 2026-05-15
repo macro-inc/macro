@@ -3,7 +3,6 @@ import IconGrafana from '@macro-icons/mcp-grafana.svg';
 import IconLinear from '@macro-icons/mcp-linear.svg';
 import IconNotion from '@macro-icons/mcp-notion.svg';
 import IconPostHog from '@macro-icons/mcp-posthog.svg';
-import IconSlack from '@macro-icons/mcp-slack.svg';
 import type { Component, JSX } from 'solid-js';
 
 export type SvgIcon = Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
@@ -14,12 +13,11 @@ export const QUICK_CONNECT_SERVERS = [
     url: 'https://mcp.linear.app/mcp',
     icon: IconLinear as SvgIcon,
   },
-
-  {
-    server_name: 'Slack',
-    url: 'https://mcp.slack.com/mcp',
-    icon: IconSlack as SvgIcon,
-  },
+  // {
+  //   server_name: 'Slack',
+  //   url: 'https://mcp.slack.com/mcp',
+  //   icon: IconSlack as SvgIcon,
+  // },
   {
     server_name: 'Notion',
     url: 'https://mcp.notion.com/mcp',

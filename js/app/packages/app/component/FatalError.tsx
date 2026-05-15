@@ -16,7 +16,7 @@ export function FatalError(props: FatalErrorProps) {
 
   return (
     <Dialog open position="center" class="w-120">
-      <Surface active depth={2}>
+      <Surface active depth={2} class="rounded-xl">
         <div class="p-6 sm:p-8 font-sans">
           <div class="text-center">
             <h1 class="text-ink text-lg/7 font-semibold mb-4">

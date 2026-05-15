@@ -1,4 +1,6 @@
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { UserIcon } from '@core/component/UserIcon';
+import { VList } from 'virtua/solid';
 import PlusIcon from '@icon/regular/plus.svg';
 import UsersIcon from '@icon/regular/users.svg';
 import TrashIcon from '@icon/regular/trash.svg';
@@ -280,6 +282,7 @@ function MemberRow(props: {
   member: TeamMember;
   isOwner: boolean;
   isCurrentUser: boolean;
+  isLast?: boolean;
   onRemove: () => void;
   onRoleChange: (role: TeamRole) => void;
 }) {
@@ -287,7 +290,11 @@ function MemberRow(props: {
   const isMemberOwner = () => props.member.role === TeamRole.owner;
 
   return (
-    <div class="flex items-center justify-between py-2 px-6 border-b border-edge-muted last:border-b-0 gap-2">
+    <div
+      class="flex items-center justify-between py-2 px-6 gap-2 bg-surface hover:bg-hover"
+      classList={{ 'border-b': !props.isLast }}
+      style={{ 'border-color': 'var(--b3)' }}
+    >
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="shrink-0">
           <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
@@ -574,7 +581,7 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
         teamNameInputRef?.focus();
       }}
     >
-      <Panel depth={2} active class="max-h-[75vh] text-ink">
+      <Panel depth={2} active class="max-h-[75vh] text-ink rounded-xl">
         <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
             <XIcon />
@@ -744,6 +751,18 @@ function TeamManagement(props: {
     string | undefined
   >(undefined);
 
+  const [memberListWrapperRef, setMemberListWrapperRef] =
+    createSignal<HTMLDivElement>();
+  const memberListScrollContainer = () => {
+    const el = memberListWrapperRef();
+    if (!el) return undefined;
+    return (
+      (el.querySelector(
+        '[data-team-members-list-container]'
+      ) as HTMLElement | null) ?? undefined
+    );
+  };
+
   const hasValidInvites = () => {
     const inv = invites();
     const hasNonEmptyEmail = inv.some((i) => i.email.trim() !== '');
@@ -897,7 +916,8 @@ function TeamManagement(props: {
           </Show>
         </Panel.Header>
 
-        <Panel.Body scroll>
+        <Panel.Body>
+         <div class="flex h-full flex-col">
           <div class="flex items-center px-2 h-15.25 border-b border-edge-muted shrink-0">
             <div class="flex items-center justify-between w-full border border-edge rounded-sm px-4 py-2">
               <span class="text-sm text-ink-muted">Name</span>
@@ -952,21 +972,33 @@ function TeamManagement(props: {
             </div>
           </div>
 
-        <div class="flex flex-col">
-          <section class="flex flex-col">
+          <div class="relative min-h-0 flex-1">
             <Show
               when={!teamQuery.isLoading}
               fallback={
                 <div class="animate-pulse bg-ink-extra-muted rounded h-16" />
               }
             >
-              <div>
-                <For each={members()}>
-                  {(member) => (
+              <div
+                ref={setMemberListWrapperRef}
+                class="relative h-full min-h-0"
+              >
+                <VList
+                  data={members()}
+                  class="h-full scrollbar-hidden"
+                  style={{
+                    height: '100%',
+                    width: '100%',
+                  }}
+                  bufferSize={500}
+                  data-team-members-list-container
+                >
+                  {(member, index) => (
                     <MemberRow
                       member={member}
                       isOwner={isOwner()}
                       isCurrentUser={member.user_id === userId()}
+                      isLast={index() === members().length - 1}
                       onRemove={() => setShowRemoveModal(member)}
                       onRoleChange={(newRole) => {
                         if (!props.teamId) return;
@@ -981,13 +1013,14 @@ function TeamManagement(props: {
                       }}
                     />
                   )}
-                </For>
+                </VList>
+                <CustomScrollbar scrollContainer={memberListScrollContainer} />
               </div>
             </Show>
-          </section>
+          </div>
 
           <Show when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
-            <section class="px-6 py-4 border-t border-edge-muted">
+            <section class="px-6 py-4 border-t border-edge-muted shrink-0">
               <h3 class="text-sm font-medium mb-2">Pending Invites</h3>
               <div class="border border-edge rounded-sm px-3">
                 <For each={invitesQuery.data?.invites ?? []}>
@@ -1002,14 +1035,14 @@ function TeamManagement(props: {
               </div>
             </section>
           </Show>
-        </div>
+         </div>
       </Panel.Body>
 
       <Dialog
         open={showDeleteTeamModal()}
         onOpenChange={handleDeleteTeamModalClose}
       >
-        <Panel depth={2} active class="max-h-[75vh] text-ink">
+        <Panel depth={2} active class="max-h-[75vh] text-ink rounded-xl">
           <Panel.Header class="px-2 gap-1">
             <Dialog.CloseButton
               as={Button}
@@ -1073,7 +1106,7 @@ function TeamManagement(props: {
         open={!!showRemoveModal()}
         onOpenChange={() => setShowRemoveModal(null)}
       >
-        <Panel depth={2} active class="max-h-[75vh] text-ink">
+        <Panel depth={2} active class="max-h-[75vh] text-ink rounded-xl">
           <Panel.Header class="px-2 gap-1">
             <Dialog.CloseButton
               as={Button}
@@ -1122,7 +1155,7 @@ function TeamManagement(props: {
         open={!!showCancelInviteModal()}
         onOpenChange={() => setShowCancelInviteModal(null)}
       >
-        <Panel depth={2} active class="max-h-[75vh] text-ink">
+        <Panel depth={2} active class="max-h-[75vh] text-ink rounded-xl">
           <Panel.Header class="px-2 gap-1">
             <Dialog.CloseButton
               as={Button}
@@ -1174,7 +1207,7 @@ function TeamManagement(props: {
         open={showInviteModal()}
         onOpenChange={handleInviteModalClose}
       >
-        <Panel depth={2} active class="max-h-[75vh] text-ink">
+        <Panel depth={2} active class="max-h-[75vh] text-ink rounded-xl">
           <Panel.Header class="px-2 gap-1">
             <Dialog.CloseButton
               as={Button}

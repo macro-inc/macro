@@ -149,7 +149,7 @@ export function PropertyEditorModal() {
       onOpenChange={togglePropertyEditor}
       contentRef={mergeRefs(attach, setDialogRef)}
     >
-      <Surface depth={2} active>
+      <Surface depth={2} active class="rounded-xl">
         <div class="*:max-h-[75vh]">
           <div class="flex flex-col max-h-108 overflow-hidden text-sm">
             <div class="flex items-center gap-2 bg-surface px-2 h-10 border-b border-edge-muted shrink-0">

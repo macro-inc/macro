@@ -200,6 +200,11 @@ function FindBarPreviousButton() {
       size="icon-sm"
       variant="ghost"
       aria-label={direction() === 'desc' ? 'Next match' : 'Previous match'}
+      disabled={
+        direction() === 'desc'
+          ? !controller.canNext()
+          : !controller.canPrevious()
+      }
       onClick={() =>
         direction() === 'desc' ? controller.next() : controller.previous()
       }
@@ -216,6 +221,11 @@ function FindBarNextButton() {
       size="icon-sm"
       variant="ghost"
       aria-label={direction() === 'desc' ? 'Previous match' : 'Next match'}
+      disabled={
+        direction() === 'desc'
+          ? !controller.canPrevious()
+          : !controller.canNext()
+      }
       onClick={() =>
         direction() === 'desc' ? controller.previous() : controller.next()
       }

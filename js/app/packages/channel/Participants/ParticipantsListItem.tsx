@@ -4,11 +4,13 @@ import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler'
 import IconX from '@icon/regular/x.svg';
 import type { ChannelParticipant } from '@queries/channel/types';
 import { Button } from '@ui';
+import { Show } from 'solid-js';
 
 export function ParticipantsListItem(props: {
   participant: ChannelParticipant;
   currentUserId?: string;
   editable: boolean;
+  isLast?: boolean;
   onClick: () => void | Promise<void>;
   onRemove: () => void;
 }) {
@@ -24,42 +26,52 @@ export function ParticipantsListItem(props: {
   );
 
   return (
-    <div class="flex items-center gap-2 min-h-10 p-2 text-sm w-full border-b border-edge-muted last:border-b-0 hover:bg-hover">
+    <div
+      class="flex items-center justify-between gap-2 py-2 px-6 text-sm w-full bg-surface hover:bg-hover"
+      classList={{ 'border-b': !props.isLast }}
+      style={{ 'border-color': 'var(--b3)' }}
+    >
       <button
         {...navigationHandlers}
         type="button"
-        class="flex min-w-0 flex-1 items-center gap-2 rounded-xs px-2 py-1 text-left focus:outline-none"
+        class="flex min-w-0 flex-1 items-center gap-3 rounded-xs text-left focus:outline-none"
       >
-        <div class="shrink-0 flex items-center">
+        <div class="shrink-0">
           <UserIcon
             id={props.participant.user_id}
-            size="sm"
+            size="lg"
             isDeleted={false}
           />
         </div>
-        <span class="ph-no-capture font-semibold truncate flex-1 text-ink">
-          {idToEmail(props.participant.user_id)}
-        </span>
+        <div class="min-w-0 flex-1">
+          <div class="ph-no-capture text-sm font-medium text-ink truncate">
+            {idToEmail(props.participant.user_id)}
+          </div>
+          <div class="text-xs text-ink-muted capitalize">
+            {props.participant.role}
+          </div>
+        </div>
       </button>
-      <span class="text-xs font-mono text-ink-extra-muted uppercase font-light shrink-0">
-        {props.participant.role}
-      </span>
-      <div class="shrink-0">
-        <Button
-          label={canRemove ? 'Remove participant' : 'Cannot remove participant'}
-          variant="ghost"
-          size="icon-sm"
-          disabled={!canRemove}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            if (!canRemove) return;
-            props.onRemove();
-          }}
-        >
-          <IconX />
-        </Button>
-      </div>
+      <Show when={props.editable}>
+        <div class="shrink-0">
+          <Button
+            label={
+              canRemove ? 'Remove participant' : 'Cannot remove participant'
+            }
+            variant="ghost"
+            size="icon-sm"
+            disabled={!canRemove}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (!canRemove) return;
+              props.onRemove();
+            }}
+          >
+            <IconX />
+          </Button>
+        </div>
+      </Show>
     </div>
   );
 }

@@ -15,7 +15,7 @@ export function AttachmentSection(props: {
         <h3 class="text-sm font-medium text-ink">{props.label}</h3>
         <div class="shrink-0">{props.action}</div>
       </Panel.Header>
-      <Panel.Body class={cn('p-3', props.contentClass)}>
+      <Panel.Body scroll class={props.contentClass}>
         {props.children}
       </Panel.Body>
     </Panel>
