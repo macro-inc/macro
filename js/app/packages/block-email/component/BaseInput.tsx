@@ -1107,6 +1107,8 @@ export function BaseInput(props: {
         condition: () => {
           const ed = editor();
           if (!ed) return false;
+          const rootEl = ed.getRootElement();
+          if (!rootEl || !rootEl.contains(document.activeElement)) return false;
           return ed.read(() => {
             const text = $getRoot().getTextContent();
             return text.trim().length === 0;

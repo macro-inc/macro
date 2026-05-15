@@ -200,7 +200,7 @@ export function MessageContainer(props: MessageContainerProps) {
       <div class="shrink-0 flex justify-center w-full">
         <div class="macro-message-width macro-message-padding w-full">
           <div
-            class="relative rounded-lg overflow-hidden pl-1 pr-1.5 py-2 ring-1 ring-inset [&>div]:!bg-transparent"
+            class="relative rounded-lg overflow-hidden pl-1 pr-1.5 py-2 ring-1 ring-inset [&>div]:bg-transparent!"
             classList={{
               'bg-active/60 ring-edge': props.isFocused,
               'bg-ink-muted/[0.025] ring-ink-muted/8': !props.isFocused,
@@ -326,7 +326,7 @@ export function MessageContainer(props: MessageContainerProps) {
             </Message>
             <Show when={(showReply() || draftChild()) && !props.isLastMessage}>
               <Show when={context.permissions().isOwner}>
-                <div class="border-t border-ink-muted/8 -mx-1.5 px-1.5 pt-2 pb-1 [&>*>div]:!border-0 [&>*>div]:!bg-transparent [&>*>div]:!rounded-none">
+                <div class="border-t border-ink-muted/8 -mx-1.5 px-1.5 pt-2 pb-1 [&>*>div]:border-0! [&>*>div]:bg-transparent! [&>*>div]:rounded-none!">
                   <EmailInput
                     replyingTo={() => props.message}
                     setShowReply={setShowReply}
