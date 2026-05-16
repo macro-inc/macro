@@ -20,54 +20,15 @@
 
 # Why Macro
 
-Macro is for teams whose work is scattered across email, chat, documents, files, tasks, calls, search, and AI.
+Macro is a unified system for teams. We built it for our startup. Email, tasks, calls, messages, agents, docs, diagrams, (soon, crm) in one @linked together with team-level memory. Inspired by, and replaces — or integrates with — Slack, Linear, Notion, HubSpot, Superhuman, etc.
 
-The important part is the graph between those objects. Mention a doc in a channel, link a task from an email, drop a file into a canvas, or ask AI about the context around any object; Macro keeps the reference instead of losing it in another tab.
+# About
+
+Macro has raised $30m led by a16z. We are based in NYC. 
 
 # Features
 
-<table>
-  <tr>
-    <td width="50%">
-      <p>
-        <img src=".github/icons/search.svg" width="24" height="24" alt="" />
-        <strong>Search</strong>
-      </p>
-      <img width="100%" alt="Macro unified search across workspace objects" src=".github/readme/search.png" />
-      <br />
-      Search spans emails, channels, docs, tasks, files, calls, and people. Filter to the object you need, or ask AI with <code>@mentions</code> for context.
-    </td>
-    <td width="50%">
-      <p>
-        <img src=".github/icons/channel.svg" width="24" height="24" alt="" />
-        <strong>Messaging</strong>
-      </p>
-      <img width="100%" alt="Macro channel with linked messages, documents, and files" src=".github/readme/channels.png" />
-      <br />
-      Channels hold messages, replies, attachments, docs, tasks, canvases, PDFs, and calls in the same thread. Every <code>@link</code> points both ways.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <p>
-        <img src=".github/icons/chat.svg" width="24" height="24" alt="" />
-        <strong>Calls</strong>
-      </p>
-      <img width="100%" alt="Macro call recording with summary and participants" src=".github/readme/calls.png" />
-      <br />
-      Recordings, participants, summaries, and transcripts stay connected to the workspace, so follow-ups can link back to the discussion that created them.
-    </td>
-    <td width="50%">
-      <p>
-        <img src=".github/icons/star.svg" width="24" height="24" alt="" />
-        <strong>Agents</strong>
-      </p>
-      <img width="100%" alt="Macro AI agent gathering context across workspace activity" src=".github/readme/agents.png" />
-      <br />
-      Agents can search, filter, read transcripts, and gather context across recent calls, channels, docs, tasks, and notifications before answering.
-    </td>
-  </tr>
-</table>
+<img width="100%" alt="Macro feature grid" src=".github/readme/CRM Feature Grid Request.png" />
 
 # Stack
 
