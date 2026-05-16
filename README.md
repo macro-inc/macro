@@ -44,7 +44,7 @@ Core contributors: [@whutchinson98](https://github.com/whutchinson98), [@gbirman
 
 # Stack
 
-<img width="100%" alt="Macro feature grid" src=".github/readme/CRM Feature Grid Request.png" />
+<img width="100%" alt="Macro stack diagram" src=".github/readme/CRM Feature Grid Request (1).png" />
 
 # Security
 
