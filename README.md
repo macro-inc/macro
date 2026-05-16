@@ -1,11 +1,7 @@
 <div align="center">
   <a target="_blank" href="https://macro.com">
-    <img width="1414" height="314" alt="Macro" src="https://github.com/user-attachments/assets/48250880-b1cf-4e18-bcaf-f314be1d1bfb" />
+    <img width="100%" alt="Macro, built for high-output teams" src=".github/readme/Hero Image from Figma.png" />
   </a>
-
-  <p>
-    Email, messaging, tasks, docs, files, calls, and AI in one linked workspace.
-  </p>
 
   <p>
     <a href="https://macro.com">Website</a>
