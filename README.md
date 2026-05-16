@@ -4,6 +4,10 @@
   </a>
 
   <p>
+    <a href="https://macro.com/app">Sign up</a>
+    ·
+    <a href="https://cal.com/team/macro/macro-demo-call?metadata%5Bfbp%5D=fb.1.1778954074516.817396687896036613">Book demo</a>
+    ·
     <a href="https://macro.com">Website</a>
     ·
     <a href="mailto:contact@macro.com">Feature requests</a>
@@ -18,13 +22,21 @@
 
 Macro is a unified system for teams. We built it for our startup. Email, tasks, calls, messages, agents, docs, diagrams, (soon, crm) in one @linked together with team-level memory. Inspired by, and replaces — or integrates with — Slack, Linear, Notion, HubSpot, Superhuman, etc.
 
-# About
+We built Macro because we wanted a single unified system. There are many good products, but nothing works together. So, we rebuilt everything from scratch, from first principles, in SolidJS and Rust, to work together as one. We've been dogfooding it for two years and now we've opened it up so you can use it too.
 
-Macro has raised $30m led by a16z. We are based in NYC. 
+[Sign up](https://macro.com/app) · [Book demo](https://cal.com/team/macro/macro-demo-call?metadata%5Bfbp%5D=fb.1.1778954074516.817396687896036613)
 
 # Features
 
 <img width="100%" alt="Macro feature grid" src=".github/readme/CRM Feature Grid Request.png" />
+
+# About
+
+Macro has raised $30m led by a16z. We are based in NYC.
+
+Core contributors: [@whutchinson98](https://github.com/whutchinson98), [@gbirman](https://github.com/gbirman), [@synoet](https://github.com/synoet), [@sedson](https://github.com/sedson), [@evanhutnik](https://github.com/evanhutnik), [@peterchinman](https://github.com/peterchinman), [@ehayes2000](https://github.com/ehayes2000), [@seanaye](https://github.com/seanaye), [@dev-rb](https://github.com/dev-rb), [@danielkweon](https://github.com/danielkweon), and [@aquaductape](https://github.com/aquaductape).
+
+<iframe width="100%" height="405" src="https://www.youtube.com/embed/hZRin23hRKc?start=35" title="Macro demo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
 
 # Stack
 
