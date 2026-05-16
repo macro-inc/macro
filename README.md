@@ -44,19 +44,13 @@ Core contributors: [@whutchinson98](https://github.com/whutchinson98), [@gbirman
 
 # Stack
 
-- TypeScript and Rust
-- SolidJS, Tauri, Vite, Lexical, and CRDT-backed collaboration
-- Bun workspaces, Biome, Vitest, and Playwright
-- PostgreSQL, OpenSearch, WebSockets, and AWS
-- Pulumi infrastructure
+Macro is a TypeScript and Rust monorepo. The app is built with SolidJS, Vite, Tauri, Lexical, CodeMirror, TanStack Solid Query, Tailwind, and Loro CRDTs, with LiveKit used for calls and Bun used for package management and scripts. The desktop and mobile shell is Tauri 2, with custom plugins for navigation, bundle updates, notifications, auth, haptics, safe areas, and platform integration. The backend is a Rust workspace with Axum and Tokio services for documents, email, comms, search, authentication, contacts, notifications, MCP, file conversion, and connection gateway. Data lives in PostgreSQL through SQLx-backed service clients, OpenSearch for search, S3 for files, DynamoDB for connection tracking, Redis for caching, and SQS/SNS/Lambda for async processing. Infrastructure is defined in TypeScript with Pulumi over AWS, with Datadog wired through the infra workspace. The codebase is checked with Biome, TypeScript, Vitest, Playwright, Cargo, SQLx offline query metadata, and service-level Rust tests.
 
 # Security
 
-<img width="360" alt="ISO 27001 and SOC 2 Type II badges" src=".github/readme/security-badges.svg" />
+<img width="520" alt="ISO 27001 and SOC 2 Type II badges" src=".github/readme/security-badges.svg" />
 
-Enterprise-grade security. Zero data retention with model providers, including no training on customer data. SOC 2 Type II certified.
-
-We welcome responsible security reports and pay bounties in accordance with severity and impact. Send reports to [security@macro.com](mailto:security@macro.com).
+Enterprise-grade security. Zero data retention with model providers, including no training on customer data. SOC 2 Type II certified. We welcome responsible security reports and pay bounties in accordance with severity and impact. Send reports to [security@macro.com](mailto:security@macro.com).
 
 # License
 
