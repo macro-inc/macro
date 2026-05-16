@@ -39,7 +39,7 @@ Macro has raised $30m led by a16z. We are based in NYC.
 Core contributors: [@whutchinson98](https://github.com/whutchinson98), [@gbirman](https://github.com/gbirman), [@synoet](https://github.com/synoet), [@sedson](https://github.com/sedson), [@evanhutnik](https://github.com/evanhutnik), [@peterchinman](https://github.com/peterchinman), [@ehayes2000](https://github.com/ehayes2000), [@seanaye](https://github.com/seanaye), [@dev-rb](https://github.com/dev-rb), [@danielkweon](https://github.com/danielkweon), and [@aquaductape](https://github.com/aquaductape).
 
 <a href="https://www.youtube.com/watch?v=hZRin23hRKc&t=35s">
-  <img width="100%" alt="Watch the Macro demo" src="https://img.youtube.com/vi/hZRin23hRKc/maxresdefault.jpg" />
+  <img width="100%" alt="Watch the Macro demo" src=".github/readme/video-placeholder.svg" />
 </a>
 
 # Stack
@@ -49,6 +49,14 @@ Core contributors: [@whutchinson98](https://github.com/whutchinson98), [@gbirman
 - Bun workspaces, Biome, Vitest, and Playwright
 - PostgreSQL, OpenSearch, WebSockets, and AWS
 - Pulumi infrastructure
+
+# Security
+
+<img width="360" alt="ISO 27001 and SOC 2 Type II badges" src=".github/readme/security-badges.svg" />
+
+Enterprise-grade security. Zero data retention with model providers, including no training on customer data. SOC 2 Type II certified.
+
+We welcome responsible security reports and pay bounties in accordance with severity and impact. Send reports to [security@macro.com](mailto:security@macro.com).
 
 # License
 

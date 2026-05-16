@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="96" viewBox="0 0 360 96" role="img" aria-labelledby="title desc">
+  <title id="title">ISO 27001 and SOC 2 Type II badges</title>
+  <desc id="desc">Security compliance badges for ISO 27001 and AICPA SOC 2 Type II.</desc>
+  <rect width="360" height="96" fill="none" />
+  <g fill="#f26a1b">
+    <circle cx="48" cy="48" r="30" fill="none" stroke="#f26a1b" stroke-width="4" />
+    <path d="M48 16c-7.53 0-14.44 2.63-19.91 6.98A32 32 0 0 0 16 48c0 9.23 3.94 17.53 10.21 23.38A31.83 31.83 0 0 0 48 80c17.67 0 32-14.33 32-32S65.67 16 48 16Zm0 5c3.29 0 6.6 2.95 9.12 8.29.32.68.63 1.4.92 2.15A30.14 30.14 0 0 1 48 33.25c-3.53 0-6.9-.65-10.04-1.79.29-.75.6-1.48.93-2.17C41.41 23.95 44.72 21 48 21Zm-20.53 7.77a35.16 35.16 0 0 0 8.2 4.61A48.87 48.87 0 0 0 33.8 45.5H21.14a26.9 26.9 0 0 1 6.33-16.73Zm47.39 16.73H62.2a48.85 48.85 0 0 0-1.87-12.12 35.16 35.16 0 0 0 8.2-4.61 26.9 26.9 0 0 1 6.33 16.73ZM48 38.25c3.84 0 7.51-.71 10.92-1.96A43.71 43.71 0 0 1 60 45.5H36a43.7 43.7 0 0 1 1.08-9.21A32.84 32.84 0 0 0 48 38.25Zm-26.86 12.25H33.8a48.88 48.88 0 0 0 1.87 12.12 35.16 35.16 0 0 0-8.2 4.61 26.9 26.9 0 0 1-6.33-16.73Zm14.86 0h24a43.7 43.7 0 0 1-1.08 9.21A32.84 32.84 0 0 0 48 57.75c-3.84 0-7.51.71-10.92 1.96A43.71 43.71 0 0 1 36 50.5Zm26.2 0h12.66a26.9 26.9 0 0 1-6.33 16.73 35.16 35.16 0 0 0-8.2-4.61A48.87 48.87 0 0 0 62.2 50.5ZM48 62.75c3.53 0 6.9.65 10.04 1.79-.29.75-.6 1.48-.93 2.17C54.59 72.05 51.28 75 48 75s-6.6-2.95-9.12-8.29c-.32-.68-.63-1.4-.92-2.15A30.14 30.14 0 0 1 48 62.75Z" opacity=".35" />
+    <text x="48" y="45" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700">ISO</text>
+    <text x="48" y="59" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="11" font-weight="700">27001</text>
+  </g>
+  <g fill="#f26a1b" transform="translate(144 0)">
+    <circle cx="48" cy="48" r="30" fill="none" stroke="#f26a1b" stroke-width="4" />
+    <path d="M28 46.75h40v2.5H28z" opacity=".35" />
+    <text x="48" y="41" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">AICPA</text>
+    <text x="48" y="56" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700">SOC 2</text>
+  </g>
+  <g font-family="Inter, Arial, sans-serif" fill="#111827">
+    <text x="96" y="41" font-size="16" font-weight="700">ISO 27001</text>
+    <text x="96" y="62" font-size="13" fill="#6b7280">Security controls</text>
+    <text x="240" y="41" font-size="16" font-weight="700">SOC 2 Type II</text>
+    <text x="240" y="62" font-size="13" fill="#6b7280">Certified</text>
+  </g>
+</svg>
