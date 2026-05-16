@@ -28,6 +28,8 @@ We built Macro because we wanted a single unified system. There are many good pr
 
 # Features
 
+Email inspired by Superhuman, with better AI. Tasks inspired by Linear, deeply integrated into channels. Channels like Slack, with Reddit-style threading for focused technical discussions. And AI to separate #random pings from important ones. CRM that "just works". Video calls logged to team-level memory. A unified inbox for all of this, in one place, and much more.
+
 <img width="100%" alt="Macro feature grid" src=".github/readme/CRM Feature Grid Request.png" />
 
 # About
@@ -36,7 +38,9 @@ Macro has raised $30m led by a16z. We are based in NYC.
 
 Core contributors: [@whutchinson98](https://github.com/whutchinson98), [@gbirman](https://github.com/gbirman), [@synoet](https://github.com/synoet), [@sedson](https://github.com/sedson), [@evanhutnik](https://github.com/evanhutnik), [@peterchinman](https://github.com/peterchinman), [@ehayes2000](https://github.com/ehayes2000), [@seanaye](https://github.com/seanaye), [@dev-rb](https://github.com/dev-rb), [@danielkweon](https://github.com/danielkweon), and [@aquaductape](https://github.com/aquaductape).
 
-<iframe width="100%" height="405" src="https://www.youtube.com/embed/hZRin23hRKc?start=35" title="Macro demo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+<a href="https://www.youtube.com/watch?v=hZRin23hRKc&t=35s">
+  <img width="100%" alt="Watch the Macro demo" src="https://img.youtube.com/vi/hZRin23hRKc/maxresdefault.jpg" />
+</a>
 
 # Stack
 
@@ -46,42 +50,15 @@ Core contributors: [@whutchinson98](https://github.com/whutchinson98), [@gbirman
 - PostgreSQL, OpenSearch, WebSockets, and AWS
 - Pulumi infrastructure
 
-# Repository Layout
+# License
 
-While we're not accepting contributions yet, we encourage you to explore the codebase. This overview should help you navigate.
+Macro is licensed under the Business Source License with AGPL conversion. See `LICENSE.md` for details. The short version is that non-production use is allowed, and each released version converts to AGPL after its change date. Production commercial use before that conversion requires a commercial license.
 
-```txt
-macro/
-├── js/app/                      # Frontend (SolidJS + Tauri)
-│   ├── packages/
-│   │   ├── app/                 # Web/Desktop app entry point
-│   │   ├── core/                # Core shared logic and components
-│   │   ├── lexical-core/        # Core text editor (Lexical-based)
-│   │   ├── block-*/             # UI block components (email, chat, canvas, etc.)
-│   │   └── service-*/           # API clients for backend services
-│   └── src-tauri/               # Tauri Rust backend for desktop
-│
-├── rust/cloud-storage/          # Backend services (Rust)
-│   ├── document-storage-service/    # Document storage API
-│   ├── email_service/               # Email processing
-│   ├── comms_service/               # Messaging
-│   ├── search_service/              # Full-text search
-│   ├── authentication_service/      # Auth
-│   ├── connection_gateway/          # WebSocket gateway
-│   ├── macro_db_client/             # PostgreSQL client
-│   └── ...                          # Other services and shared crates
-│
-├── infra/                       # Infrastructure (Pulumi + AWS)
-│   ├── stacks/                  # Pulumi deployment stacks
-│   ├── lambda/                  # Lambda function configs
-│   └── resources/               # Reusable AWS resource definitions
-│
-└── scripts/                     # Build and utility scripts
-```
+You can self-host Macro for development and evaluation. If you want to run Macro in production, contact [self-host@macro.com](mailto:self-host@macro.com) so we can work through licensing and operational requirements.
+
+We strongly recommend the hosted version for most teams. Macro gets better when it can connect teams to each other, and the managed service is where you get the latest features, Google Workspace integrations, SOC 2 controls, Apple App Store distribution, LiveKit-backed calls, and the sublicenses needed for production video. If you are in the military, government, or another environment where managed hosting is not possible, email us and we can talk through a deployment that fits.
 
 # Community
-
-Macro is licensed under the Business Source License. See `LICENSE.md` for details.
 
 Have an idea, want to contribute, or want to work on Macro?
 
