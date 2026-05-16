@@ -39,7 +39,7 @@ Macro has raised $30m led by a16z. We are based in NYC.
 Core contributors: [@whutchinson98](https://github.com/whutchinson98), [@gbirman](https://github.com/gbirman), [@synoet](https://github.com/synoet), [@sedson](https://github.com/sedson), [@evanhutnik](https://github.com/evanhutnik), [@peterchinman](https://github.com/peterchinman), [@ehayes2000](https://github.com/ehayes2000), [@seanaye](https://github.com/seanaye), [@dev-rb](https://github.com/dev-rb), [@danielkweon](https://github.com/danielkweon), and [@aquaductape](https://github.com/aquaductape).
 
 <a href="https://www.youtube.com/watch?v=hZRin23hRKc&t=35s">
-  <img width="100%" alt="Watch the Macro demo" src=".github/readme/video-placeholder.svg" />
+  <img width="100%" alt="Watch the Macro demo" src="https://img.youtube.com/vi/hZRin23hRKc/maxresdefault.jpg" />
 </a>
 
 # Stack
