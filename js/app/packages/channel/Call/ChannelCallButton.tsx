@@ -1,6 +1,5 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import PhoneIcon from '@icon/wide-call.svg';
 import PhoneDisconnectIcon from '@icon/wide-call-disconnect.svg';
 import { useActiveCallQuery } from '@queries/call/call';
@@ -24,6 +23,12 @@ export function ChannelCallButton(props: { channelId: string }) {
   const tooltip = () => {
     if (call.isInThisChannel()) return 'Leave Call';
     if (isCallInProgress()) return 'Join Call';
+    return 'Start Call';
+  };
+
+  const label = () => {
+    if (call.isInThisChannel()) return 'Leave';
+    if (isCallInProgress()) return 'Join';
     return 'Call';
   };
 
@@ -47,7 +52,7 @@ export function ChannelCallButton(props: { channelId: string }) {
       disabled={isPending()}
       tooltip={tooltip()}
       variant="base"
-      size={isTouchDevice() ? 'icon-md' : 'icon-sm'}
+      size="sm"
       depth={2}
       class={cn(
         'bg-surface',
@@ -58,6 +63,7 @@ export function ChannelCallButton(props: { channelId: string }) {
       <Show when={call.isInThisChannel()} fallback={<PhoneIcon />}>
         <PhoneDisconnectIcon />
       </Show>
+      <span>{label()}</span>
     </Button>
   );
 }
