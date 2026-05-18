@@ -1,4 +1,4 @@
-import { catchToResult, type AppResult, throwOnErr } from '@core/util/result';
+import { type AppResult, catchToResult, throwOnErr } from '@core/util/result';
 import { dssFetch } from '@service-storage/client';
 import type { EntityPermissionResponse } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';

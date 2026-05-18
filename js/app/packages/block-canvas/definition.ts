@@ -1,4 +1,3 @@
-import { ok, err } from 'neverthrow';
 import {
   defineBlock,
   type ExtractLoadType,
@@ -6,10 +5,10 @@ import {
   loadResult,
 } from '@core/block';
 import { blockAcceptedFileExtensionToMimeType } from '@core/constant/allBlocks';
-
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
+import { err, ok } from 'neverthrow';
 import CanvasBlock from './component/Block';
 import type { Canvas } from './model/CanvasModel';
 

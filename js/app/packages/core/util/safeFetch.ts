@@ -1,11 +1,11 @@
 import { err, ok } from 'neverthrow';
+import { platformFetch } from './platformFetch';
 import type {
   AppResult,
   ObjectLike,
   ResultError,
   ResultErrors,
 } from './result';
-import { platformFetch } from './platformFetch';
 import { sleep } from './sleep';
 
 /**

@@ -1,4 +1,3 @@
-import { ok } from 'neverthrow';
 import { blockNameToFileExtensionSet } from '@core/constant/allBlocks';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { heicConversionService } from '@core/heic/service';
@@ -35,6 +34,7 @@ import {
   type LexicalEditor,
   type NodeKey,
 } from 'lexical';
+import { ok } from 'neverthrow';
 import { $insertNodesAndSplitList } from '../../utils';
 import { mapRegisterDelete } from '../shared';
 

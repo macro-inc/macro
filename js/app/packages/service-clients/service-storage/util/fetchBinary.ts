@@ -1,6 +1,6 @@
-import { err, ok } from 'neverthrow';
 import type { AppResult } from '@core/util/result';
 import { platformFetch } from 'core/util/platformFetch';
+import { err, ok } from 'neverthrow';
 import type { DocumentMetadata } from '../generated/schemas/documentMetadata';
 import type { StorageError } from './storageError';
 

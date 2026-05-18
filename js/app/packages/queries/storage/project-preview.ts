@@ -1,8 +1,8 @@
-import { err, ok } from 'neverthrow';
-import { catchToResult, type AppResult } from '@core/util/result';
+import { type AppResult, catchToResult } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { ProjectPreviewData } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
+import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { projectsKeys } from './keys';

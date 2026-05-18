@@ -1,10 +1,9 @@
-import { ok } from 'neverthrow';
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
-
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { AllModels } from '@service-cognition/generated/schemas';
 import type { Entity } from '@service-cognition/generated/schemas/entity';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
+import { ok } from 'neverthrow';
 import BlockChat from './component/Block';
 
 export const DEFAULT_CHAT_NAME = 'New Chat';

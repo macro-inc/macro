@@ -1,6 +1,5 @@
-import { ok } from 'neverthrow';
-
 import { commsServiceClient } from '@service-comms/client';
+import { ok } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   channelAttachmentsQueryOptions,

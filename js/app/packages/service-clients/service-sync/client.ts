@@ -1,15 +1,15 @@
-import { err, ok } from 'neverthrow';
 import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
 import { getPermissionToken } from '@core/signal/token';
 import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
+import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { SerializedEditorState } from 'lexical';
+import { err, ok } from 'neverthrow';
 import { InitializeFromSnapshotRequest } from './generated/schema';
 
 const SYNC_SERVICE_WORKER_URL = `${SYNC_SERVICE_HOSTS['worker']}`;

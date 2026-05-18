@@ -2,8 +2,8 @@
  * *DO NOT EDIT MANUALLY*
  */
 
-import { err, ok } from 'neverthrow';
 import type { AppResult } from 'core/util/result';
+import { err, ok } from 'neverthrow';
 import * as schemas from './schemas';
 import type * as types from './types';
 

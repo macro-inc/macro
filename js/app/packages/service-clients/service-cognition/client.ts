@@ -1,4 +1,3 @@
-import { err, ok } from 'neverthrow';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { setCachedInputStore } from '@core/store/cacheChatInput';
 import { cache } from '@core/util/cache';
@@ -6,10 +5,11 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
 import { platformFetch } from '@core/util/platformFetch';
+import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { DocumentTextPart } from '@service-cognition/generated/schemas/documentTextPart';
+import { err, ok } from 'neverthrow';
 import type OpenAI from 'openai';
 import type { AddServerRequest } from './generated/schemas/addServerRequest';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
@@ -317,9 +317,9 @@ export const cognitionApiServiceClient = {
   },
 
   async listMcpServers() {
-    return (await dcsFetch<ServerResponse[]>(`/mcp/servers`, { method: 'GET' })).map(
-      (result) => result
-    );
+    return (
+      await dcsFetch<ServerResponse[]>(`/mcp/servers`, { method: 'GET' })
+    ).map((result) => result);
   },
 
   async addMcpServer(args: AddServerRequest) {

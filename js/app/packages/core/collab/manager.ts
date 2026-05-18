@@ -1,4 +1,3 @@
-import { err, ok } from 'neverthrow';
 import type { AppErrorResult, AppResult } from '@core/util/result';
 import {
   type InferType,
@@ -15,6 +14,7 @@ import {
   type Side,
   type VersionVector,
 } from 'loro-crdt';
+import { err, ok } from 'neverthrow';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 import type { GenericRootSchema, LoroRawUpdate } from './shared';
 

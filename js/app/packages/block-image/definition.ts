@@ -1,14 +1,13 @@
-import { ok, err } from 'neverthrow';
 import {
   defineBlock,
   type ExtractLoadType,
   LoadErrors,
   loadResult,
 } from '@core/block';
-
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
+import { err, ok } from 'neverthrow';
 import { lazy } from 'solid-js';
 
 export const definition = defineBlock({

@@ -1,4 +1,3 @@
-import { err, ok } from 'neverthrow';
 import { useAnalytics } from '@app/component/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
@@ -18,6 +17,7 @@ import {
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
+import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { optimisticUpdateSoupEntity } from '../soup/cache';

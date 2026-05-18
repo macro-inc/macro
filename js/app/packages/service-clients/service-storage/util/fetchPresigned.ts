@@ -1,7 +1,7 @@
-import { err, ok } from 'neverthrow';
 import type { FetchError } from '@core/service';
 import type { AppResult, ObjectLike, ResultErrors } from '@core/util/result';
 import { platformFetch } from 'core/util/platformFetch';
+import { err, ok } from 'neverthrow';
 
 type ResultMap = {
   arraybuffer: ArrayBuffer;

@@ -3,8 +3,8 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
 import { registerClient } from '@core/util/mockClient';
+import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { AddPropertyOptionRequest } from './generated/schemas/addPropertyOptionRequest';
 import type { BulkEntityPropertiesRequest } from './generated/schemas/bulkEntityPropertiesRequest';

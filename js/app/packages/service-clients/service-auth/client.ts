@@ -1,12 +1,12 @@
-import { ok } from 'neverthrow';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
-import type { ObjectLike } from '@core/util/result';
 import { registerClient } from '@core/util/mockClient';
+import type { ObjectLike } from '@core/util/result';
 import { type SafeFetchInit, safeFetch } from '@core/util/safeFetch';
 import { logger } from '@observability';
 import { makePersisted } from '@solid-primitives/storage';
+import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
@@ -625,7 +625,6 @@ export const authServiceClient = {
       })
     ).map(() => undefined);
   },
-
 
   async inviteToTeam(args: InviteToTeamRequest) {
     return (

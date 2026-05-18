@@ -1,4 +1,3 @@
-import { err, ok } from 'neverthrow';
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import type { AppResult, ObjectLike, ResultError } from '@core/util/result';
 import {
@@ -8,6 +7,7 @@ import {
   safeFetch,
   type TextResponse,
 } from '@core/util/safeFetch';
+import { err, ok } from 'neverthrow';
 import { authServiceClient } from './client';
 
 function isExpired(token: string) {

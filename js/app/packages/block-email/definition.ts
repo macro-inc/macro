@@ -1,7 +1,6 @@
-import { ok } from 'neverthrow';
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
-
 import { fetchAndCacheThread } from '@queries/email/thread';
+import { ok } from 'neverthrow';
 import EmailBlock from './component/Block';
 
 export const definition = defineBlock({

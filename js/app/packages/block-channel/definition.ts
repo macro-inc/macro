@@ -1,5 +1,5 @@
-import { ok } from 'neverthrow';
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
+import { ok } from 'neverthrow';
 
 import { NewChannelBlockAdapter } from './component/NewChannelBlockAdapter';
 

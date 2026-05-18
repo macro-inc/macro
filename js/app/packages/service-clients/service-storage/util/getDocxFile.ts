@@ -1,9 +1,9 @@
-import { err, ok } from 'neverthrow';
 import type { FlattenObject } from '@core/util/flatten';
 import type { AppResult, ResultError } from '@core/util/result';
 import type { WithRequired } from '@core/util/withRequired';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
+import { err, ok } from 'neverthrow';
 import { fetchBinary } from './fetchBinary';
 import { getOPFSDocumentStore } from './opfs';
 import type { StorageError } from './storageError';

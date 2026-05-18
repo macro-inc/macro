@@ -1,8 +1,8 @@
-import { err, ok } from 'neverthrow';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { logger } from '@observability';
 import { fetchWithAuth } from '@service-auth/fetch';
+import { err, ok } from 'neverthrow';
 import type { AppErrorResult, AppResult, ObjectLike } from './result';
 import {
   type BaseFetchErrorCode,
