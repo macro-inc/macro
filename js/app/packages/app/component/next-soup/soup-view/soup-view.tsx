@@ -67,15 +67,15 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import { UserIcon } from '@core/component/UserIcon';
-import { useDisplayName } from '@core/user/displayName';
-import type { MacroId } from '@core/user/macroId';
 import { Resize } from '@core/component/Resize';
+import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { useDisplayName } from '@core/user/displayName';
+import type { MacroId } from '@core/user/macroId';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
   type EntityData,
