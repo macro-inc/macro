@@ -44,7 +44,7 @@ import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
 import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
 import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
 import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
+
 import { useNotificationSettings } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
 import { useLocation } from '@solidjs/router';
@@ -631,13 +631,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
             icon={() => <BellIcon class="size-4" />}
           />
         </Show>
-        <SidebarActionButton
-          label="Invite"
-          isSlim={isSlim}
-          onClick={() => setInviteModalOpen(true)}
-          icon={AnimatedUsersIcon}
-        />
-
         <SidebarActionButton
           label="New Split"
           hotkeyToken={TOKENS.global.createNewSplit}
