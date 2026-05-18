@@ -16,7 +16,7 @@ export function SendAction(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <Button
       variant="ghost"
-      size="icon-md"
+      size="icon-sm"
       tooltip="Send message"
       aria-label="Send message"
       data-input-action="send"
