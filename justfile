@@ -111,15 +111,15 @@ run_local *ARGS:
     docker compose up
   fi
 
-# Reset and seed deterministic data used by the local Playwright smoke suite.
+# Reset and seed deterministic data used by local E2E tests.
 local-e2e-seed:
   just run_dbs -d
   just rust/cloud-storage/macro_db_client/create_db
   just rust/cloud-storage/macro_db_client/migrate_db
   cd rust/cloud-storage/seed_cli && just local-e2e-smoke
 
-# Start only the services needed by the local Playwright smoke suite. Avoid
-# unrelated local services with extra env/dependency requirements blocking E2E.
+# Start only the services needed by the local E2E suites. Avoid unrelated
+# local services with extra env/dependency requirements blocking E2E.
 local-e2e-services := "authentication-service connection_gateway contacts_service document_storage_service email_service static_file_service static_file_cdn sync_service websocket_service"
 
 # Start the local stack, seed deterministic data, and run the Playwright smoke suite.
@@ -127,6 +127,21 @@ local-e2e *ARGS:
   AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
   COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml just run_local -d --wait {{ local-e2e-services }}
   just local-e2e-seed
+  cd js/app && LOCAL_E2E=true bunx playwright test {{ ARGS }}
+
+# Start the local stack, seed deterministic data, and run ignored Rust local E2E integration tests.
+local-e2e-rust *ARGS:
+  AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
+  COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml just run_local -d --wait {{ local-e2e-services }}
+  just local-e2e-seed
+  cd rust/cloud-storage && SQLX_OFFLINE=true cargo test -p local_e2e_integration_tests -- --ignored --nocapture {{ ARGS }}
+
+# Start the local stack once, seed deterministic data, and run Rust + Playwright local E2E tests.
+local-e2e-all *ARGS:
+  AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
+  COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml just run_local -d --wait {{ local-e2e-services }}
+  just local-e2e-seed
+  cd rust/cloud-storage && SQLX_OFFLINE=true cargo test -p local_e2e_integration_tests -- --ignored --nocapture
   cd js/app && LOCAL_E2E=true bunx playwright test {{ ARGS }}
 
 # Start the local stack, seed deterministic data, and open Playwright UI mode.

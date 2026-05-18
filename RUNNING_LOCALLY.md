@@ -61,5 +61,20 @@ and refuses any `DATABASE_URL` that is not the local Docker database
 `postgres://user:...@(localhost|127.0.0.1|postgres):5432/macrodb`.
 
 Shared fixture data lives under `rust/cloud-storage/seed_cli/seed`; local users
-are in `local_e2e/users.json`, and Playwright tests can read the same data via
-`js/app/tests/e2e/fixtures/local-e2e-seed.ts`.
+are in `local_e2e/users.json`, Playwright tests can read the same data via
+`js/app/tests/e2e/fixtures/local-e2e-seed.ts`, and Rust tests can use
+`local_e2e_test_support`. The Rust helper also rejects non-local service URLs
+for mutating tests.
+
+To run the ignored Rust integration tests against the same local stack:
+
+```bash
+just local-e2e-rust
+```
+
+To run both Rust integration tests and Playwright tests after one stack startup
+and seed pass:
+
+```bash
+just local-e2e-all
+```

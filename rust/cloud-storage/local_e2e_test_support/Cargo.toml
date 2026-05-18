@@ -1,0 +1,13 @@
+[package]
+edition = "2024"
+name = "local_e2e_test_support"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+dotenvy = { workspace = true }
+macro_auth = { path = "../macro_auth" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }
