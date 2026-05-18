@@ -8,8 +8,8 @@ import { truncateString } from '@core/util/string';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import type { NamedSubType } from '@entity';
 import EyeSlash from '@icon/eye-slash.svg';
-import TrashSimple from '@icon/trash-simple.svg';
 import LoadingSpinner from '@icon/spinner.svg';
+import TrashSimple from '@icon/trash-simple.svg';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
   enqueuePreviewWakeup,

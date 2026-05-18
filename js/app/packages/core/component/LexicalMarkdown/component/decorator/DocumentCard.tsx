@@ -19,9 +19,9 @@ import { matches } from '@core/util/match';
 import Minimize from '@icon/arrows-in.svg';
 import Clipboard from '@icon/clipboard.svg';
 import ClockIcon from '@icon/clock.svg';
-import TrashSimple from '@icon/trash-simple.svg';
 import DotsThree from '@icon/list.svg';
 import LoadingSpinner from '@icon/spinner.svg';
+import TrashSimple from '@icon/trash-simple.svg';
 import UserIcon from '@icon/user.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import {

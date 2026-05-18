@@ -12,27 +12,27 @@ import type {
   EmailEntity,
   EntityData,
 } from '@entity';
-import Check from '@icon/check-fat.svg';
 import Building from '@icon/building.svg';
 import Chat from '@icon/chat.svg';
+import Check from '@icon/check-fat.svg';
 import FileCode from '@icon/code.svg';
 import Email from '@icon/envelope.svg';
 import EmailRead from '@icon/envelope-open.svg';
+import File from '@icon/file.svg';
 import FileArchive from '@icon/file-archive.svg';
 import FileDoc from '@icon/file-doc.svg';
-import File from '@icon/file.svg';
 import FileHtml from '@icon/file-html.svg';
 import FileMd from '@icon/file-md.svg';
 import FilePdf from '@icon/file-pdf.svg';
 import FileVideo from '@icon/file-video.svg';
+import Folder from '@icon/folder-simple.svg';
+import FolderUser from '@icon/folder-user.svg';
 import GlobeIcon from '@icon/globe.svg';
 import FileImage from '@icon/image.svg';
 import Canvas from '@icon/pencil-circle.svg';
 import Robot from '@icon/robot.svg';
 import User from '@icon/user.svg';
 import Users from '@icon/users.svg';
-import Folder from '@icon/folder-simple.svg';
-import FolderUser from '@icon/folder-user.svg';
 import WideBook from '@macro-icons/wide/book.svg';
 import WideCalendar from '@macro-icons/wide/calendar.svg';
 import PhoneCall from '@macro-icons/wide/call.svg';
