@@ -139,13 +139,15 @@ fn child_doc_body(chunk: &UpsertDocumentArgs) -> serde_json::Value {
 /// Process a single chunk of documents in the join shape.
 ///
 /// Emits, for each chunk:
-///   - one parent upsert (deduped within this batch; the first time we see
-///     a parent_id in this batch we emit `update` with `doc_as_upsert: true`)
-///   - one child index op with `routing = parent_id`
+///   - one parent `index` op with `routing = parent_id` (deduped within
+///     this batch). We use full-overwrite `index` semantics rather than
+///     `update + doc_as_upsert` so omitted optional fields like `sub_type`
+///     get cleared when a document transitions from having them to not.
+///   - one child `index` op with `routing = parent_id`.
 ///
-/// Cross-batch duplicate parent upserts are accepted as cheap idempotent
-/// no-ops; deduping across batches would require either a pre-pass or
-/// shared state, and isn't worth the complexity at the per-call scale.
+/// Cross-batch duplicate parent writes are accepted as cheap last-writer-
+/// wins overwrites; all writers should agree on parent metadata since it's
+/// denormalized from the same source.
 async fn bulk_upsert_single_chunk_join(
     client: &opensearch::OpenSearch,
     documents: &[UpsertDocumentArgs],
@@ -160,17 +162,13 @@ async fn bulk_upsert_single_chunk_join(
 
         if seen_parents.insert(parent_id) {
             let parent_action = serde_json::json!({
-                "update": {
+                "index": {
                     "_id": parent_id,
                     "routing": routing,
                 }
             });
-            let parent_body = serde_json::json!({
-                "doc": parent_doc_body(doc),
-                "doc_as_upsert": true,
-            });
             bulk_body.push(parent_action.to_string());
-            bulk_body.push(parent_body.to_string());
+            bulk_body.push(parent_doc_body(doc).to_string());
         }
 
         let child_id = format!("{}:{}", doc.document_id, doc.node_id);
@@ -334,8 +332,10 @@ async fn upsert_document_flat(
     })
 }
 
-/// Upsert a single chunk in the join shape: parent upsert (idempotent)
-/// followed by child index. Uses a 2-op bulk so both land in one request.
+/// Upsert a single chunk in the join shape: parent index followed by
+/// child index. Uses a 2-op bulk so both land in one request. Full-
+/// overwrite `index` semantics on the parent ensure omitted optional
+/// fields (e.g. `sub_type`) get cleared on Some→None transitions.
 async fn upsert_document_join(
     client: &opensearch::OpenSearch,
     args: &UpsertDocumentArgs,
@@ -345,14 +345,10 @@ async fn upsert_document_join(
     let routing = parent_id;
 
     let parent_action = serde_json::json!({
-        "update": {
+        "index": {
             "_id": parent_id,
             "routing": routing,
         }
-    });
-    let parent_body = serde_json::json!({
-        "doc": parent_doc_body(args),
-        "doc_as_upsert": true,
     });
 
     let child_id = format!("{}:{}", args.document_id, args.node_id);
@@ -365,7 +361,7 @@ async fn upsert_document_join(
 
     let bulk_body = vec![
         parent_action.to_string(),
-        parent_body.to_string(),
+        parent_doc_body(args).to_string(),
         child_action.to_string(),
         child_doc_body(args).to_string(),
     ];
