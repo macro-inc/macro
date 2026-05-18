@@ -12,6 +12,7 @@ import type {
   EmailEntity,
   EntityData,
 } from '@entity';
+import Check from '@icon/check-fat.svg';
 import Building from '@icon/duotone/building-duotone.svg';
 import Chat from '@icon/duotone/chat-duotone.svg';
 import FileCode from '@icon/duotone/code-duotone.svg';
@@ -32,7 +33,6 @@ import User from '@icon/duotone/user-duotone.svg';
 import Users from '@icon/duotone/users-duotone.svg';
 import Folder from '@icon/fill/folder-simple-fill.svg';
 import FolderUser from '@icon/fill/folder-user-fill.svg';
-import Check from '@icon/check-fat.svg';
 import WideBook from '@macro-icons/wide/book.svg';
 import WideCalendar from '@macro-icons/wide/calendar.svg';
 import PhoneCall from '@macro-icons/wide/call.svg';

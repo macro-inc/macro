@@ -1,7 +1,7 @@
 import { useMaybeBlockAliasedName, useMaybeBlockId } from '@core/block';
-import DeleteIcon from '@icon/x.svg';
 import PinIcon from '@icon/push-pin.svg';
 import UnpinIcon from '@icon/push-pin-slash.svg';
+import DeleteIcon from '@icon/x.svg';
 import XIcon from '@icon/x.svg';
 import { useDeleteEntityPropertyMutation } from '@queries/properties/entity';
 import { Button, cn, Dialog, Surface } from '@ui';

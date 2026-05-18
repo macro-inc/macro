@@ -3,12 +3,12 @@ import type {
   SelectionData,
 } from '@core/component/LexicalMarkdown/plugins';
 import type { HotkeyToken } from '@core/hotkey/tokens';
-import TextBoldIcon from '@icon/text-b.svg';
 import TextCodeIcon from '@icon/code.svg';
 import ListBulletsIcon from '@icon/list-bullets.svg';
 import ListChecksIcon from '@icon/list-checks.svg';
 import ListNumbersIcon from '@icon/list-numbers.svg';
 import TextQuoteIcon from '@icon/quotes.svg';
+import TextBoldIcon from '@icon/text-b.svg';
 import TextItalicIcon from '@icon/text-italic.svg';
 import TextStrikethroughIcon from '@icon/text-strikethrough.svg';
 import { Button } from '@ui';
