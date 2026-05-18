@@ -1,6 +1,7 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { useIsAuthenticated } from '@core/auth';
 import { startSsoLogin } from '@core/auth/sso';
+import { toast } from '@core/component/Toast/Toast';
 import { isTauri } from '@core/util/platform';
 import ArrowRightIcon from '@icon/arrow-right.svg';
 import IconGoogle from '@macro-icons/macro-google.svg';
@@ -85,18 +86,26 @@ export function ProfileStep() {
       })
     );
 
-    const success = await startSsoLogin({
-      returnPath: `${ROUTER_BASE_CONCAT}welcome?google=1`,
-      loginHint: ctx.email().trim() || undefined,
-    });
+    try {
+      const success = await startSsoLogin({
+        returnPath: `${ROUTER_BASE_CONCAT}welcome?google=1`,
+        loginHint: ctx.email().trim() || undefined,
+      });
 
-    if (success) {
-      if (isTauri()) {
-        window.location.hash = '#/welcome?google=1';
-        window.location.reload();
+      if (success) {
+        if (isTauri()) {
+          window.location.hash = '#/welcome?google=1';
+          window.location.reload();
+        } else {
+          window.location.href = `${window.location.origin}${ROUTER_BASE_CONCAT}welcome?google=1`;
+        }
       } else {
-        window.location.href = `${window.location.origin}${ROUTER_BASE_CONCAT}welcome?google=1`;
+        setAuthPending(false);
       }
+    } catch (e) {
+      console.error('Google sign-in failed:', e);
+      toast.failure('Sign-in failed. Please try again.');
+      setAuthPending(false);
     }
   };
 
