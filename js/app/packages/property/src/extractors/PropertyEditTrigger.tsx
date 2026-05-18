@@ -34,7 +34,14 @@ export function PropertyEditTrigger(props: Props) {
   const handleClick: ButtonClickHandler = (e) => {
     if (local.stopPropagation !== false) e.stopPropagation();
     if (isReadOnly()) return;
-    ctx.onEdit?.(ctx.property(), e.currentTarget);
+    // External onEdit (legacy routing through PropertiesContext modal stack)
+    // takes precedence; otherwise open the local editor so a sibling
+    // <Property.PopoverEditor /> can render anchored to this button.
+    if (ctx.onEdit) {
+      ctx.onEdit(ctx.property(), e.currentTarget);
+    } else {
+      ctx.openEditor(e.currentTarget);
+    }
     if (typeof local.onClick === 'function') local.onClick(e);
   };
 

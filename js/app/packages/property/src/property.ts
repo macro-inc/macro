@@ -8,6 +8,16 @@ import { Layout } from './core/Layout';
 import { Root } from './core/Root';
 import { Slot } from './core/Slot';
 import {
+  InlineBooleanEditor,
+  InlineEditor,
+  InlineLinkEditor,
+  InlineNumberEditor,
+  InlineTextEditor,
+  PopoverEditor,
+  PropertyEditor,
+} from './editors';
+import { EditorPopover } from './editors/popover/EditorPopover';
+import {
   PropertyAddButton,
   PropertyCaret,
   PropertyChips,
@@ -40,4 +50,18 @@ export const Property = {
   EditTrigger: PropertyEditTrigger,
   RemoveButton: PropertyRemoveButton,
   AddButton: PropertyAddButton,
+
+  // Editors — auto-dispatch by valueType. Use Property.Editor for "do the
+  // right thing", or compose with InlineEditor / PopoverEditor when you need
+  // finer control over where the editor sits in the tree.
+  Editor: PropertyEditor,
+  InlineEditor,
+  PopoverEditor,
+  EditorPopover,
+
+  // Per-type editor leaves (rare — prefer the dispatchers above).
+  InlineText: InlineTextEditor,
+  InlineNumber: InlineNumberEditor,
+  InlineBoolean: InlineBooleanEditor,
+  InlineLink: InlineLinkEditor,
 };

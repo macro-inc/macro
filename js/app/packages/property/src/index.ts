@@ -8,6 +8,13 @@ export {
   useMaybeProperty,
   useProperty,
 } from './core/context';
+export {
+  type EntityEditorProps,
+  type PopoverEditorProps,
+  type PropertyEditorProps,
+  useBooleanEditor,
+  useInlineEditor,
+} from './editors';
 export * from './hooks';
 export { Property } from './property';
 export * from './types';
