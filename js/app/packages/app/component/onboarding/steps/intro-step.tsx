@@ -1,4 +1,3 @@
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import LogoIcon from '@icon/macro-logo.svg';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
@@ -6,6 +5,7 @@ import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
+import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import { Button, cn } from '@ui';
 import { For } from 'solid-js';
 import { useOnboarding } from '../onboarding-context';
