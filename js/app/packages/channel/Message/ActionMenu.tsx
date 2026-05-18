@@ -1,8 +1,8 @@
-import AddEmojiIcon from '@icon/square/add-emoji.svg';
-import EditIcon from '@icon/square/edit.svg';
-import LinkIcon from '@icon/square/link.svg';
-import ReplyIcon from '@icon/square/reply.svg';
-import TrashIcon from '@icon/square/trash.svg';
+import AddEmojiIcon from '@icon/square-add-emoji.svg';
+import EditIcon from '@icon/square-edit.svg';
+import LinkIcon from '@icon/square-link.svg';
+import ReplyIcon from '@icon/square-reply.svg';
+import TrashIcon from '@icon/square-trash.svg';
 import StarIcon from '@icon/wide/star.svg';
 import TaskIcon from '@icon/wide/task.svg';
 import { Button, Layer } from '@ui';
