@@ -80,6 +80,7 @@ interface SoupViewContextValues {
   setAssigneeFilter: Setter<string[]>;
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
+  groupByField: Accessor<GroupByField | undefined>;
 }
 
 export const SoupViewContext = createContext<SoupViewContextValues>();
@@ -560,6 +561,7 @@ export const SoupViewContextProvider: FlowComponent<
     setAssigneeFilter,
     activeTab,
     setActiveTab,
+    groupByField,
   };
 
   return (
