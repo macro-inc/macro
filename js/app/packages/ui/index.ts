@@ -14,12 +14,10 @@ export { Hotkey } from './components/Hotkey';
 export { Scroll } from './components/Scroll';
 export { Panel  } from './components/Panel';
 export { LogoProgress } from './components/LogoProgress';
-export { Stepper } from './components/Stepper';
 export { Layer } from './components/Layer';
 
 /* types */
 export type { AvatarSize, AvatarProps, AvatarGroupSize, AvatarGroupProps } from './components/Avatar';
-export type { StepperProps, StepperStepProps, StepperTransition, StepperTransitionResolver } from './components/Stepper';
 export type { ToggleSwitchProps } from './components/ToggleSwitch';
 export type { ButtonProps } from './components/Button';
 export type { DialogProps } from './components/Dialog';

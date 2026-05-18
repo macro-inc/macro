@@ -3,11 +3,11 @@ import { initAndStartEmailSync } from '@core/email-link';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { isErr } from '@core/util/maybeResult';
 import { platformFetch } from '@core/util/platformFetch';
+import SpinnerIcon from '@icon/spinner.svg';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
-import SpinnerIcon from '@icon/spinner.svg';
 import { Button, cn } from '@ui';
-import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import { useOnboarding } from '../onboarding-context';
 
 const RESEND_TIMER = 45;

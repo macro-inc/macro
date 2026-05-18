@@ -14,7 +14,8 @@ import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { invalidateUserTeams, useUserTeamsQuery } from '@queries/team';
 import { authServiceClient } from '@service-auth/client';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Button, cn, Layer, LogoProgress, Stepper } from '@ui';
+import { Button, cn, Layer, LogoProgress } from '@ui';
+import { Stepper } from '@ui/components/Stepper';
 import { createEffect, createMemo, For, on, onMount, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
@@ -195,8 +196,8 @@ function OnboardingInner() {
   const showBack = () => ctx.step() > 1;
 
   // Exclude intro (index 0) and skipped steps from progress count
-  const activeStepCount = createMemo(() =>
-    ctx.steps.filter((s, i) => i > 0 && s.status !== 'skipped').length
+  const activeStepCount = createMemo(
+    () => ctx.steps.filter((s, i) => i > 0 && s.status !== 'skipped').length
   );
 
   const activeStepPosition = createMemo(() => {
