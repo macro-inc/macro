@@ -6,7 +6,19 @@ import ArrowRightIcon from '@icon/arrow-right.svg';
 import IconGoogle from '@macro-icons/macro-google.svg';
 import { Button, cn } from '@ui';
 import { createSignal, onMount, Show } from 'solid-js';
+import { z } from 'zod';
 import { useOnboarding } from '../onboarding-context';
+
+const NAME_MAX_LENGTH = 50;
+const TEAM_NAME_MAX_LENGTH = 50;
+const EMAIL_MAX_LENGTH = 254;
+
+const profileSchema = z.object({
+  firstName: z.string().min(1, 'First name is required').max(NAME_MAX_LENGTH, 'First name is too long'),
+  lastName: z.string().max(NAME_MAX_LENGTH, 'Last name is too long'),
+  email: z.string().min(1, 'Email is required').email('Invalid email address').max(EMAIL_MAX_LENGTH, 'Email is too long'),
+  teamName: z.string().min(1, 'Team name is required').max(TEAM_NAME_MAX_LENGTH, 'Team name is too long'),
+});
 
 export function ProfileStep() {
   const ctx = useOnboarding();
@@ -18,16 +30,27 @@ export function ProfileStep() {
   onMount(() => firstNameRef?.focus());
 
   const validate = () => {
-    const errs: Record<string, string> = {};
-    if (!ctx.firstName().trim()) errs.firstName = 'First name is required';
-    if (!ctx.email().trim()) {
-      errs.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ctx.email().trim())) {
-      errs.email = 'Invalid email address';
+    const result = profileSchema.safeParse({
+      firstName: ctx.firstName().trim(),
+      lastName: ctx.lastName().trim(),
+      email: ctx.email().trim(),
+      teamName: ctx.teamName().trim(),
+    });
+
+    if (result.success) {
+      setErrors({});
+      return true;
     }
-    if (!ctx.teamName().trim()) errs.teamName = 'Team name is required';
+
+    const errs: Record<string, string> = {};
+    for (const issue of result.error.issues) {
+      const field = issue.path[0];
+      if (typeof field === 'string' && !errs[field]) {
+        errs[field] = issue.message;
+      }
+    }
     setErrors(errs);
-    return Object.keys(errs).length === 0;
+    return false;
   };
 
   const clearError = (field: string) => {
@@ -108,6 +131,7 @@ export function ProfileStep() {
               ref={firstNameRef}
               id="onb-first-name"
               type="text"
+              maxLength={NAME_MAX_LENGTH}
               value={ctx.firstName()}
               onInput={(e) => {
                 ctx.setFirstName(e.currentTarget.value);
@@ -127,11 +151,18 @@ export function ProfileStep() {
             <input
               id="onb-last-name"
               type="text"
+              maxLength={NAME_MAX_LENGTH}
               value={ctx.lastName()}
-              onInput={(e) => ctx.setLastName(e.currentTarget.value)}
+              onInput={(e) => {
+                ctx.setLastName(e.currentTarget.value);
+                clearError('lastName');
+              }}
               placeholder="Doe"
-              class={inputClass(false)}
+              class={inputClass(!!errors().lastName)}
             />
+            <Show when={errors().lastName}>
+              <p class="text-xs text-failure">{errors().lastName}</p>
+            </Show>
           </div>
         </div>
 
@@ -142,6 +173,7 @@ export function ProfileStep() {
           <input
             id="onb-email"
             type="email"
+            maxLength={EMAIL_MAX_LENGTH}
             value={ctx.email()}
             onInput={(e) => {
               ctx.setEmail(e.currentTarget.value);
@@ -162,6 +194,7 @@ export function ProfileStep() {
           <input
             id="onb-team-name"
             type="text"
+            maxLength={TEAM_NAME_MAX_LENGTH}
             value={ctx.teamName()}
             onInput={(e) => {
               ctx.setTeamName(e.currentTarget.value);
