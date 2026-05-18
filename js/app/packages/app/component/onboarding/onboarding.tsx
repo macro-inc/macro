@@ -1,9 +1,7 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { analytics } from '@app/lib/analytics/analytics';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { initAndStartEmailSync } from '@core/email-link';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
-import { ENABLE_NEW_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { invalidateUserTeams } from '@queries/team';
@@ -14,16 +12,7 @@ import LogoIcon from '@macro-icons/macro-logo.svg';
 import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Button, cn, Layer, LogoProgress } from '@ui';
-import {
-  createEffect,
-  lazy,
-  Match,
-  on,
-  onMount,
-  Show,
-  Suspense,
-  Switch,
-} from 'solid-js';
+import { createEffect, Match, on, onMount, Show, Switch } from 'solid-js';
 import {
   clearPendingTeam,
   getPendingTeam,
@@ -31,25 +20,13 @@ import {
 import { OnboardingProvider, useOnboarding } from './onboarding-context';
 import { IntroStep, PaymentStep, ProfileStep, TeamStep } from './steps';
 
-const OldOnboarding = lazy(
-  () => import('../interactive-onboarding/InteractiveOnboarding')
-);
-
 const STEP_LABELS = ['Intro', 'Profile', 'Team', 'Payment'];
 
 export default function Onboarding() {
-  const flag = useFeatureFlag('enable-new-onboarding', {
-    enabledOverride: ENABLE_NEW_ONBOARDING_OVERRIDE,
-  });
-
   return (
-    <Suspense>
-      <Show when={flag().enabled} fallback={<OldOnboarding />}>
-        <OnboardingProvider>
-          <OnboardingInner />
-        </OnboardingProvider>
-      </Show>
-    </Suspense>
+    <OnboardingProvider>
+      <OnboardingInner />
+    </OnboardingProvider>
   );
 }
 

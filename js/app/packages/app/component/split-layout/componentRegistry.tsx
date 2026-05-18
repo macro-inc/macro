@@ -7,9 +7,14 @@ import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';
 import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
-import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
+import {
+  DEV_MODE_ENV,
+  ENABLE_NEW_ONBOARDING_OVERRIDE,
+  LOCAL_ONLY,
+} from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import type { ViewId } from '@core/types/view';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import NotificationRoute from '@notifications/components/NotificationRoute';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
@@ -290,10 +295,19 @@ registerComponent(
 );
 registerComponent('settings', () => <SettingsPanelComponentWrapper />);
 registerComponent('notification', () => <NotificationRoute />);
-registerComponent(
-  'welcome',
-  lazy(() => import('@app/component/onboarding/onboarding'))
+const NewOnboarding = lazy(() => import('@app/component/onboarding/onboarding'));
+const OldOnboarding = lazy(
+  () => import('@app/component/interactive-onboarding/InteractiveOnboarding')
 );
+registerComponent('welcome', () => (
+  <ShowFeatureFlag
+    key="enable-new-onboarding"
+    enabledOverride={ENABLE_NEW_ONBOARDING_OVERRIDE}
+    fallback={<OldOnboarding />}
+  >
+    <NewOnboarding />
+  </ShowFeatureFlag>
+));
 
 if (LOCAL_ONLY) {
   registerComponent(
