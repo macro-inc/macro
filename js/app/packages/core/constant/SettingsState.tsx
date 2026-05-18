@@ -40,10 +40,7 @@ export const useSettingsState = () => {
 
   const openSettings = (activeTabId?: SettingsTab) => {
     if (activeTabId) setActiveTabId(activeTabId);
-    openWithSplit(
-      { type: 'component', id: 'settings' },
-      { activate: true }
-    );
+    openWithSplit({ type: 'component', id: 'settings' }, { activate: true });
   };
 
   const closeSettings = () => {
