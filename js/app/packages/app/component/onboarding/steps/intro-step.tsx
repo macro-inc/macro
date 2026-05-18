@@ -14,36 +14,48 @@ const BLOCKS = [
   {
     icon: AnimatedEmailIcon,
     color: 'text-email',
+    hoverBg: 'hover:bg-email/10',
+    hoverBorder: 'hover:border-email/40',
     title: 'Email',
     description: 'Full email client — no tab switching.',
   },
   {
     icon: AnimatedFileMdIcon,
     color: 'text-note',
+    hoverBg: 'hover:bg-note/10',
+    hoverBorder: 'hover:border-note/40',
     title: 'Docs',
     description: 'Markdown editor with mentions and live collaboration.',
   },
   {
     icon: AnimatedTaskIcon,
     color: 'text-task',
+    hoverBg: 'hover:bg-task/10',
+    hoverBorder: 'hover:border-task/40',
     title: 'Tasks',
     description: 'Assignments, due dates, and statuses — all linked.',
   },
   {
     icon: AnimatedChannelIcon,
     color: 'text-default',
+    hoverBg: 'hover:bg-default/10',
+    hoverBorder: 'hover:border-default/40',
     title: 'Channels',
     description: 'Team messaging with threads and file sharing.',
   },
   {
     icon: AnimatedCallIcon,
     color: 'text-default',
+    hoverBg: 'hover:bg-default/10',
+    hoverBorder: 'hover:border-default/40',
     title: 'Calls',
     description: 'Voice and video — no separate app needed.',
   },
   {
     icon: AnimatedStarIcon,
     color: 'text-chat',
+    hoverBg: 'hover:bg-chat/10',
+    hoverBorder: 'hover:border-chat/40',
     title: 'AI Agents',
     description: 'Search, summarize, and act across everything.',
   },
@@ -69,7 +81,7 @@ export function IntroStep() {
       <div class="grid grid-cols-3 gap-3 w-full">
         <For each={BLOCKS}>
           {(item) => (
-            <div class="group flex-1 flex flex-col gap-2.5 p-4 rounded-sm border border-ink/10 text-left transition-colors hover:bg-accent-bg hover:border-accent hover:text-accent">
+            <div class={cn('group flex-1 flex flex-col gap-2.5 p-4 rounded-sm border border-ink/10 text-left transition-colors', item.hoverBg, item.hoverBorder)}>
               <div class="size-8 rounded-sm bg-hover/50 flex items-center justify-center">
                 <item.icon class={cn('size-5', item.color)} />
               </div>
