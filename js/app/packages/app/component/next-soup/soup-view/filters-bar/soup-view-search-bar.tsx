@@ -151,6 +151,17 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
           'group w-full relative flex items-center gap-1 rounded-sm h-7 mobile:h-9 pl-2 pr-1 mobile:min-w-35 border text-xs',
           variantStyles[props.variant ?? 'secondary']
         )}
+        onMouseDown={(e) => {
+          if (e.target instanceof HTMLElement && e.target.closest('button'))
+            return;
+          if (
+            e.target instanceof HTMLElement &&
+            e.target.closest('[contenteditable]')
+          )
+            return;
+          e.preventDefault();
+          editor.controls.focus();
+        }}
       >
         <SearchIcon class="size-4 shrink-0" />
         <div
