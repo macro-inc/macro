@@ -173,7 +173,7 @@ function OnboardingInner() {
   const showBack = () => ctx.step() > 1;
 
   return (
-    <div class="flex items-center justify-center size-full relative">
+    <div class="flex items-center justify-center size-full relative overflow-y-auto">
       <style>
         {`
         input:-webkit-autofill,
@@ -204,7 +204,7 @@ function OnboardingInner() {
       <Layer depth={3}>
         <div
           class={cn(
-            'w-full flex flex-col justify-center px-8 min-h-1/2',
+            'w-full flex flex-col px-8',
             ctx.step() === 0 ? 'max-w-3xl' : 'max-w-md'
           )}
         >
@@ -238,7 +238,7 @@ function OnboardingInner() {
               step={ctx.step()}
               transition={Stepper.transitions.slideFull}
               appear
-              class="overflow-clip p-1 -m-1"
+              class={cn('overflow-clip p-1 -m-1', ctx.step() > 0 && 'h-125')}
             >
               <For each={STEPS}>
                 {(stepDef, i) => (
