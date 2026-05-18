@@ -151,11 +151,18 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
           'group w-full relative flex items-center gap-1 rounded-sm h-7 mobile:h-9 pl-2 pr-1 mobile:min-w-35 border text-xs',
           variantStyles[props.variant ?? 'secondary']
         )}
+        onMouseDown={(e) => {
+          if (!(e.target instanceof HTMLElement)) return;
+          if (e.target.closest('button')) return;
+          if (e.target.closest('[contenteditable]')) return;
+          e.preventDefault();
+          editor.controls.focus();
+        }}
       >
         <SearchIcon class="size-4 shrink-0" />
         <div
           data-soup-search
-          class="flex-1 min-w-0 whitespace-nowrap overflow-hidden **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 **:[[contenteditable]]:whitespace-nowrap **:[[contenteditable]]:min-h-[1.5em] [&_p]:my-0 [&_p]:whitespace-nowrap [&_p]:min-h-[1.5em]"
+          class="flex-1 min-w-0 whitespace-nowrap overflow-hidden **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 **:[[contenteditable]]:whitespace-nowrap [&_p]:my-0 [&_p]:whitespace-nowrap"
         >
           <MarkdownShell
             config={editor}
