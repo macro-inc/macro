@@ -1066,7 +1066,8 @@ impl CallRepository for PgCallRepo {
                 id as "call_id!",
                 channel_id as "channel_id!",
                 created_at as "started_at!",
-                NULL::timestamptz as "ended_at"
+                NULL::timestamptz as "ended_at",
+                NULL::text as "custom_name"
             FROM calls
             WHERE id = ANY($1)
             UNION ALL
@@ -1074,7 +1075,8 @@ impl CallRepository for PgCallRepo {
                 id as "call_id!",
                 channel_id as "channel_id!",
                 started_at as "started_at!",
-                ended_at as "ended_at"
+                ended_at as "ended_at",
+                custom_name as "custom_name"
             FROM call_records
             WHERE id = ANY($1)
             "#,
@@ -1087,6 +1089,7 @@ impl CallRepository for PgCallRepo {
             channel_id: Uuid,
             started_at: chrono::DateTime<Utc>,
             ended_at: Option<chrono::DateTime<Utc>>,
+            custom_name: Option<String>,
         }
 
         let mut found: HashMap<Uuid, Found> = HashMap::with_capacity(rows.len());
@@ -1096,6 +1099,7 @@ impl CallRepository for PgCallRepo {
                 channel_id: row.channel_id,
                 started_at: row.started_at,
                 ended_at: row.ended_at,
+                custom_name: row.custom_name,
             });
         }
 
@@ -1117,6 +1121,7 @@ impl CallRepository for PgCallRepo {
                     call_id,
                     channel_id: f.channel_id,
                     channel_name: channel_names.get(&f.channel_id).cloned(),
+                    custom_name: f.custom_name,
                     started_at: f.started_at,
                     ended_at: f.ended_at,
                 }),
