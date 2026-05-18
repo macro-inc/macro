@@ -81,7 +81,13 @@ export function IntroStep() {
       <div class="grid grid-cols-3 gap-3 w-full">
         <For each={BLOCKS}>
           {(item) => (
-            <div class={cn('group flex-1 flex flex-col gap-2.5 p-4 rounded-sm border border-ink/10 text-left transition-colors', item.hoverBg, item.hoverBorder)}>
+            <div
+              class={cn(
+                'group flex-1 flex flex-col gap-2.5 p-4 rounded-sm border border-ink/10 text-left transition-colors',
+                item.hoverBg,
+                item.hoverBorder
+              )}
+            >
               <div class="size-8 rounded-sm bg-hover/50 flex items-center justify-center">
                 <item.icon class={cn('size-5', item.color)} />
               </div>

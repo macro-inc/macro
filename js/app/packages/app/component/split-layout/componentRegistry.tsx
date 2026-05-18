@@ -295,7 +295,9 @@ registerComponent(
 );
 registerComponent('settings', () => <SettingsPanelComponentWrapper />);
 registerComponent('notification', () => <NotificationRoute />);
-const NewOnboarding = lazy(() => import('@app/component/onboarding/onboarding'));
+const NewOnboarding = lazy(
+  () => import('@app/component/onboarding/onboarding')
+);
 const OldOnboarding = lazy(
   () => import('@app/component/interactive-onboarding/InteractiveOnboarding')
 );

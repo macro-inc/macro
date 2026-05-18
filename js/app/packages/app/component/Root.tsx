@@ -99,7 +99,11 @@ import {
   AnalyticsContextProvider,
   useAnalytics,
 } from '@app/component/analytics-context';
-import { PosthogProvider, ShowFeatureFlag, usePosthog } from '@app/lib/analytics/posthog';
+import {
+  PosthogProvider,
+  ShowFeatureFlag,
+  usePosthog,
+} from '@app/lib/analytics/posthog';
 import { ENABLE_NEW_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
