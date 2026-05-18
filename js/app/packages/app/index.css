@@ -93,6 +93,11 @@
 
   /* scuffed: defualt 0.15, used for transition jamming, currently disabled */
   --transition: 0s;
+
+  ::selection {
+    background-color: oklch(from var(--color-accent) l c h / 0.5);
+  }
+
 }
 
 @theme {
