@@ -379,7 +379,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
             }
           >
             <div class="p-1">
-              <div class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden">
+              <div class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
                 <Show
                   when={selectableItems().length > 0}
                   fallback={

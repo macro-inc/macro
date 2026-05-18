@@ -224,7 +224,7 @@ function CompactBody(props: BodyProps) {
   return (
     <Layout
       class={cn(
-        'group/notif @container/notif-row flex items-center gap-2.5 px-3 py-2 hover:bg-ink-muted/[0.06] min-w-0 overflow-hidden cursor-pointer',
+        'group/notif @container/notif-row flex items-center gap-2.5 px-3 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden cursor-pointer',
         props.class
       )}
     >
@@ -256,7 +256,7 @@ function ExpandedBody(props: BodyProps) {
   return (
     <Layout
       class={cn(
-        'group/notif flex flex-col px-4 py-3 hover:bg-ink-muted/[0.06] min-w-0 overflow-hidden cursor-pointer',
+        'group/notif flex flex-col px-4 py-3 hover:bg-ink-muted/6 min-w-0 overflow-hidden cursor-pointer',
         props.class
       )}
     >
@@ -274,7 +274,7 @@ function ExpandedBody(props: BodyProps) {
       </div>
       <div
         class={cn(
-          'ph-no-capture min-w-0 text-xs text-ink-muted/80 pt-2 break-words',
+          'ph-no-capture min-w-0 text-xs text-ink-muted/80 pt-2 wrap-break-words',
           CONTENT_INDENT
         )}
       >
