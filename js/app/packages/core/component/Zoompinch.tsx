@@ -82,9 +82,22 @@ export function Zoompinch(props: ZoompinchProps) {
       e.wrapperBounds = wrapper.getBoundingClientRect();
     }
 
-    e.addEventListener('init', () =>
-      e.applyTransform(1, [0.5, 0.5], [0.5, 0.5])
-    );
+    // Apply the centering identity transform once bounds are valid.
+    let initialTransformApplied = false;
+    const tryApplyInitialTransform = () => {
+      if (initialTransformApplied) return;
+      if (
+        e.canvasBounds.width > 0 &&
+        e.canvasBounds.height > 0 &&
+        e.wrapperBounds.width > 0 &&
+        e.wrapperBounds.height > 0
+      ) {
+        initialTransformApplied = true;
+        e.applyTransform(1, [0.5, 0.5], [0.5, 0.5]);
+      }
+    };
+    e.addEventListener('init', tryApplyInitialTransform);
+    e.addEventListener('update', tryApplyInitialTransform);
     if (onUpdate) e.addEventListener('update', () => onUpdate(e));
 
     // Mouse pan (mousedown on wrapper, move/up on window)
