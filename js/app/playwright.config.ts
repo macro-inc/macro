@@ -9,14 +9,42 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
+function commandOutput(error: unknown): string {
+  const processError = error as {
+    message?: string;
+    stderr?: Buffer | string;
+    stdout?: Buffer | string;
+  };
+
+  const stdout = processError.stdout?.toString().trim();
+  const stderr = processError.stderr?.toString().trim();
+  return [stderr, stdout, processError.message].filter(Boolean).join('\n');
+}
+
 function localE2EToken(): string {
   if (process.env.LOCAL_JWT) {
     return process.env.LOCAL_JWT;
   }
 
-  return execFileSync('bun', ['scripts/generate-local-e2e-token.ts'], {
-    encoding: 'utf8',
-  }).trim();
+  try {
+    return execFileSync('bun', ['scripts/generate-local-e2e-token.ts'], {
+      encoding: 'utf8',
+    }).trim();
+  } catch (error) {
+    const details = commandOutput(error);
+    const message = [
+      'Failed to generate LOCAL_JWT for LOCAL_E2E Playwright.',
+      'Prefer running the repo-level harness: `just local-e2e`.',
+      'If you are running Playwright directly, run `just local-e2e-seed` first and ensure `.env` exists from `just get_environment`.',
+      'You can also bypass token generation by exporting LOCAL_JWT.',
+      details ? `Generator output:\n${details}` : undefined,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+    console.error(message);
+    throw new Error(message);
+  }
 }
 
 function localE2EWebServerCommand(): string {
