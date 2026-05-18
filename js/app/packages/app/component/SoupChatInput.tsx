@@ -11,18 +11,15 @@ import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
-import { pressedKeys } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { ValidHotkey } from '@core/hotkey/types';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr } from '@core/util/maybeResult';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { Hotkey, Tooltip } from '@ui';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
-import { createSignal, onCleanup, onMount } from 'solid-js';
+import { onMount } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 function SoupChatInputInner() {
@@ -46,21 +43,10 @@ function SoupChatInputInner() {
 
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
 
-  const [chatHasFocus, setChatHasFocus] = createSignal(false);
-  const metaHeld = () => chatHasFocus() && pressedKeys().has('cmd');
-
   let containerRef!: HTMLDivElement;
 
   onMount(() => {
     attachHotkeys(containerRef);
-    const focusIn = () => setChatHasFocus(true);
-    const focusOut = () => setChatHasFocus(false);
-    containerRef.addEventListener('focusin', focusIn);
-    containerRef.addEventListener('focusout', focusOut);
-    onCleanup(() => {
-      containerRef.removeEventListener('focusin', focusIn);
-      containerRef.removeEventListener('focusout', focusOut);
-    });
   });
 
   // cmd+j - Focus AI chat
@@ -152,27 +138,6 @@ function SoupChatInputInner() {
             }}
             isPersistent={true}
             autoFocusOnMount={false}
-            extraRightControls={() => (
-              <Tooltip label="⌘ Enter to send in background" placement="top">
-                <div
-                  class="flex items-center gap-1"
-                  classList={{
-                    'text-accent': metaHeld(),
-                  }}
-                >
-                  <div
-                    class="flex border text-xxs rounded-xs items-center px-1 py-0.5"
-                    classList={{
-                      'border-accent text-accent': metaHeld(),
-                      'border-edge-muted': !metaHeld(),
-                    }}
-                  >
-                    <Hotkey shortcut={'cmd+enter' satisfies ValidHotkey} />
-                  </div>
-                  <span>Background</span>
-                </div>
-              </Tooltip>
-            )}
           />
         </div>
       </div>
