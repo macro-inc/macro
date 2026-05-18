@@ -1,7 +1,7 @@
-import ArrowRightIcon from '@icon/arrow-right.svg';
-import PlusIcon from '@icon/plus.svg';
-import UsersIcon from '@icon/users.svg';
-import XIcon from '@icon/x.svg';
+import ArrowRightIcon from '@phosphor/arrow-right.svg';
+import PlusIcon from '@phosphor/plus.svg';
+import UsersIcon from '@phosphor/users.svg';
+import XIcon from '@phosphor/x.svg';
 import { Button, cn } from '@ui';
 import { createSignal, Index, Show } from 'solid-js';
 import { z } from 'zod';

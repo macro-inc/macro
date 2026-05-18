@@ -3,10 +3,10 @@ import { initAndStartEmailSync } from '@core/email-link';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { isErr } from '@core/util/maybeResult';
 import { platformFetch } from '@core/util/platformFetch';
+import SpinnerIcon from '@phosphor/spinner.svg';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
-import SpinnerIcon from '@icon/spinner.svg';
-import { Button, cn } from '@ui';
+import { cn } from '@ui';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { useOnboarding } from '../onboarding-context';
 

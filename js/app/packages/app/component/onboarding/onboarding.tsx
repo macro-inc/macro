@@ -8,14 +8,14 @@ import { useUserInfo } from '@core/context/user';
 import { initAndStartEmailSync } from '@core/email-link';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { throwOnErr } from '@core/util/maybeResult';
-import ArrowLeftIcon from '@icon/arrow-left.svg';
+import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { invalidateUserTeams, useUserTeamsQuery } from '@queries/team';
 import { authServiceClient } from '@service-auth/client';
 import { useLocation, useNavigate } from '@solidjs/router';
+import { useQuery } from '@tanstack/solid-query';
 import { Button, cn, Layer, LogoProgress } from '@ui';
 import { Stepper } from '@ui/components/Stepper';
-import { useQuery } from '@tanstack/solid-query';
 import { createEffect, createMemo, For, on, onMount, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {

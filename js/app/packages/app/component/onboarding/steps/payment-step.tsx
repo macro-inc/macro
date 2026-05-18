@@ -1,12 +1,12 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import type { PaidPlanTier } from '@app/component/paywall/plans';
+import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { useIsAuthenticated } from '@core/auth';
 import { useHasPaidAccess } from '@core/auth/license';
 import { toast } from '@core/component/Toast/Toast';
-import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
-import ArrowRightIcon from '@icon/arrow-right.svg';
-import LockIcon from '@icon/lock.svg';
-import SpinnerIcon from '@icon/spinner.svg';
+import ArrowRightIcon from '@phosphor/arrow-right.svg';
+import LockIcon from '@phosphor/lock.svg';
+import SpinnerIcon from '@phosphor/spinner.svg';
 import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
