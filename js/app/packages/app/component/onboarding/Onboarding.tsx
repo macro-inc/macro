@@ -204,10 +204,14 @@ function OnboardingInner() {
           >
             <Show when={ctx.step() > 0}>
               <div class={showBack() ? 'visible' : 'invisible'}>
-                <Button variant="ghost" size="sm" onClick={() => ctx.back()}>
-                  <ArrowLeftIcon class="size-4" />
+                <button
+                  type="button"
+                  onClick={() => ctx.back()}
+                  class="flex items-center gap-1 text-xs text-ink-disabled hover:text-ink transition-colors outline-none"
+                >
+                  <ArrowLeftIcon class="size-3" />
                   Back
-                </Button>
+                </button>
               </div>
             </Show>
             <Switch>
