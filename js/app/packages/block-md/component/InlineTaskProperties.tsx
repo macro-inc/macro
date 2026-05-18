@@ -1,5 +1,9 @@
-import { useSidePanel } from '@app/component/side-panel';
-import { useBlockAliasedName, useBlockId } from '@core/block';
+import {
+  type BlockAlias,
+  type BlockName,
+  useBlockAliasedName,
+  useBlockId,
+} from '@core/block';
 import { Modals } from '@core/component/Properties/component/modal';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import {
@@ -14,7 +18,9 @@ import type {
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createMemo, For, Show, Suspense } from 'solid-js';
+import { match } from 'ts-pattern';
 import { InlinePropertyValue } from './InlinePropertyValue';
 
 /**
@@ -24,26 +30,18 @@ import { InlinePropertyValue } from './InlinePropertyValue';
 export function InlineTaskProperties() {
   const blockId = useBlockId();
   const blockName = useBlockAliasedName();
-  const sidePanel = useSidePanel();
   const canEdit = useCanEdit();
   const documentName = useBlockDocumentName();
+  const entityType = match<BlockName | BlockAlias, EntityType>(blockName)
+    .with('task', () => 'TASK')
+    .otherwise(() => 'DOCUMENT');
 
-  const isTask = () => blockName === 'task';
+  const { properties, refetch } = useEntityProperties(
+    blockId,
+    entityType,
+    false
+  );
 
-  // Only show when side panel is closed or doesn't exist
-  const shouldShow = () => {
-    if (!isTask()) return false;
-    // If no side panel context, show properties inline
-    if (!sidePanel) return true;
-    // In narrow mode, always show (side panel is an overlay)
-    if (sidePanel.isNarrow()) return true;
-    // In wide mode, show when panel is closed
-    return !sidePanel.isOpen();
-  };
-
-  const { properties, refetch } = useEntityProperties(blockId, 'TASK', false);
-
-  // Get the three main properties we want to display
   const inlineProperties = createMemo(() => {
     const props = properties();
     const ids = [
@@ -60,9 +58,7 @@ export function InlineTaskProperties() {
 
   const saveOne = (property: Property, apiValues: PropertyApiValues) =>
     saveMutation.mutateAsync({
-      properties: [
-        { entityId: blockId, entityType: 'TASK', property, apiValues },
-      ],
+      properties: [{ entityId: blockId, entityType, property, apiValues }],
     });
 
   const saveHandler: PropertySaveHandler = {
@@ -72,28 +68,26 @@ export function InlineTaskProperties() {
   };
 
   return (
-    <Show when={shouldShow()}>
-      <Suspense>
-        <Show when={inlineProperties().length > 0}>
-          <PropertiesProvider
-            entityType="TASK"
-            canEdit={canEdit()}
-            documentName={documentName()}
-            properties={inlineProperties}
-            onRefresh={refetch}
-            onPropertyAdded={refetch}
-            onPropertyDeleted={refetch}
-            saveHandler={saveHandler}
-          >
-            <div class="flex flex-row flex-wrap items-center gap-1 text-base mb-6">
-              <For each={inlineProperties()}>
-                {(property) => <InlinePropertyValue property={property} />}
-              </For>
-            </div>
-            <Modals />
-          </PropertiesProvider>
-        </Show>
-      </Suspense>
-    </Show>
+    <Suspense>
+      <Show when={inlineProperties().length > 0}>
+        <PropertiesProvider
+          entityType={entityType}
+          canEdit={canEdit()}
+          documentName={documentName()}
+          properties={inlineProperties}
+          onRefresh={refetch}
+          onPropertyAdded={refetch}
+          onPropertyDeleted={refetch}
+          saveHandler={saveHandler}
+        >
+          <div class="flex flex-row flex-wrap items-center gap-1 text-base mb-6">
+            <For each={inlineProperties()}>
+              {(property) => <InlinePropertyValue property={property} />}
+            </For>
+          </div>
+          <Modals />
+        </PropertiesProvider>
+      </Show>
+    </Suspense>
   );
 }

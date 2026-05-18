@@ -264,7 +264,7 @@ export function Notebook() {
     <div class={containerClasses()} ref={notebookRef}>
       <div class={contentDivClasses()} ref={contentRef}>
         <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
-        <div class="spacer h-6" />
+        <div class="spacer h-3" />
         <InlineTaskProperties />
         <ParamsProvider>
           <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
