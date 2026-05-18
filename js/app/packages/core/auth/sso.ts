@@ -32,7 +32,8 @@ export async function startSsoLogin(
     'referral_code'
   );
   if (referralCode) authUrl.searchParams.set('referral_code', referralCode);
-  if (params.loginHint) authUrl.searchParams.set('login_hint', params.loginHint);
+  if (params.loginHint)
+    authUrl.searchParams.set('login_hint', params.loginHint);
 
   if (isNativeMobilePlatform()) {
     authUrl.searchParams.set('is_mobile', 'true');
