@@ -112,6 +112,7 @@ registerComponent(
         viewName="Inbox"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
         disableLocalSearch
       />
     );
@@ -133,6 +134,7 @@ registerComponent(
         viewName="Agents"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
         additionalEntities={automationEntities}
       />
     );
@@ -149,6 +151,7 @@ registerComponent(
         viewName="Email"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
       />
     );
   })
@@ -168,6 +171,7 @@ registerComponent(
         viewName="Documents"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
       />
     );
   })
@@ -187,6 +191,7 @@ registerComponent(
         viewName="Tasks"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
       />
     );
   })
@@ -202,6 +207,7 @@ registerComponent(
         viewName="Channels"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
       />
     );
   })
@@ -217,6 +223,7 @@ registerComponent(
         viewName="Calls"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
       />
     );
   })
@@ -236,6 +243,7 @@ registerComponent(
         viewName="Folders"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
       />
     );
   })

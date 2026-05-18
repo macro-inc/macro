@@ -16,6 +16,12 @@ export type SoupFiltersPreset = {
   filters: Query;
   /** Client filters to apply */
   clientFilters: { and?: FilterID[]; or?: FilterID[] };
+  /**
+   * Initial group-by to apply when this tab is selected. Uses the same id
+   * format consumed by `soup.grouping.setActiveGroupId` (e.g. `date`,
+   * `entity_type`, `project`, or `property:<definition-id>`).
+   */
+  groupBy?: string;
 };
 
 // Tab preset configuration types

@@ -305,6 +305,12 @@ interface SoupViewProps {
   initialClientFilters?: SetPredicatesInput<string>;
   initialFilters?: Partial<QueryState>;
   initialSearchText?: string;
+  /**
+   * Initial group-by id (same format as `soup.grouping.setActiveGroupId`,
+   * e.g. `property:<definition-id>`). Applied only when no persisted state
+   * exists for this view.
+   */
+  initialGroupBy?: string;
   /** Ignore localStorage on mount and use the supplied `initial*` values. */
   skipPersistedState?: boolean;
   disableLocalSearch?: boolean;
@@ -499,6 +505,7 @@ export const SoupView = (props: SoupViewProps) => {
               <SoupViewFileDropzone>
                 <SoupViewList
                   initialClientFilters={props.initialClientFilters}
+                  initialGroupBy={props.initialGroupBy}
                   skipPersistedState={props.skipPersistedState}
                 />
               </SoupViewFileDropzone>
@@ -525,6 +532,7 @@ interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
   initialClientFilters?: SetPredicatesInput<string>;
+  initialGroupBy?: string;
   skipPersistedState?: boolean;
 }
 
@@ -880,6 +888,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
     } else {
       if (props.initialClientFilters) {
         soup.predicates.set(props.initialClientFilters);
+      }
+      if (props.initialGroupBy) {
+        soup.grouping.setActiveGroupId(props.initialGroupBy);
       }
       // Set default tab for list views when no persisted state exists
       if (isListViewID(contentId)) {
