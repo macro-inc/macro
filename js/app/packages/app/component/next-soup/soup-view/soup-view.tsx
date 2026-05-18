@@ -122,17 +122,26 @@ import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 
-const SearchSectionHeader = (props: { label: string }) => {
+export const SoupSectionHeader = (props: {
+  children: JSX.Element;
+  onClick?: () => void;
+  highlighted?: boolean;
+}) => {
   return (
     <Layer depth={2}>
-      <div
+      <Dynamic
+        component={props.onClick ? 'button' : 'div'}
+        type={props.onClick ? 'button' : undefined}
+        onClick={props.onClick}
         class={cn(
-          'w-[calc(100%-0.5rem)] mx-1 mb-1 rounded px-2 py-2 flex items-center text-xs font-semibold tracking-tight',
-          'text-text-muted bg-surface border border-edge-muted'
+          'group/header w-[calc(100%-0.5rem)] mx-1 mb-1 rounded px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
+          'text-text-muted bg-surface border border-edge-muted relative',
+          props.onClick && 'hover:bg-active',
+          props.highlighted && 'ring ring-edge bg-active ring-inset'
         )}
       >
-        <span class="truncate">{props.label}</span>
-      </div>
+        {props.children}
+      </Dynamic>
     </Layer>
   );
 };
@@ -141,43 +150,33 @@ const DefaultGroupHeader = (
   props: GroupHeaderProps & { highlighted?: boolean }
 ) => {
   return (
-    <Layer depth={2}>
-      <button
-        type="button"
+    <SoupSectionHeader
+      onClick={() => props.group.toggle()}
+      highlighted={props.highlighted}
+    >
+      <Layer depth={3}>
+        <div class="flex items-center justify-center size-4.5 rounded-xs bg-surface group-hover/header:bg-active">
+          <ChevronRightIcon
+            class={cn('size-2.5', {
+              'rotate-90': props.group.isExpanded(),
+            })}
+          />
+        </div>
+      </Layer>
+      <PropertyValueIcon
+        optionId={props.group.value as string}
+        class="size-3.5"
+      />
+      <span class="truncate">{props.group.label}</span>
+      <span
         class={cn(
-          'group/header w-[calc(100%-0.5rem)] mx-1 mb-1 rounded px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
-          'text-text-muted bg-surface hover:bg-active border border-edge-muted',
-          'relative',
-          {
-            'ring ring-edge bg-active ring-inset': props.highlighted,
-          }
+          'shrink-0 tabular-nums text-xs font-medium',
+          'px-1.5 py-px rounded-full bg-ink/10 text-text-subtle'
         )}
-        onClick={() => props.group.toggle()}
       >
-        <Layer depth={3}>
-          <div class="flex items-center justify-center size-4.5 rounded-xs bg-surface group-hover/header:bg-active">
-            <ChevronRightIcon
-              class={cn('size-2.5', {
-                'rotate-90': props.group.isExpanded(),
-              })}
-            />
-          </div>
-        </Layer>
-        <PropertyValueIcon
-          optionId={props.group.value as string}
-          class="size-3.5"
-        />
-        <span class="truncate">{props.group.label}</span>
-        <span
-          class={cn(
-            'shrink-0 tabular-nums text-xs font-medium',
-            'px-1.5 py-px rounded-full bg-ink/10 text-text-subtle'
-          )}
-        >
-          {props.group.count}
-        </span>
-      </button>
-    </Layer>
+        {props.group.count}
+      </span>
+    </SoupSectionHeader>
   );
 };
 
@@ -1033,7 +1032,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
                             return (
                               <>
                                 <Show when={i() === 0 && featuredCount() > 0}>
-                                  <SearchSectionHeader label="Featured Results" />
+                                  <SoupSectionHeader>
+                                    <span class="truncate">
+                                      Featured Results
+                                    </span>
+                                  </SoupSectionHeader>
                                 </Show>
                                 <Show
                                   when={
@@ -1041,7 +1044,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     featuredCount() > 0
                                   }
                                 >
-                                  <SearchSectionHeader label="More Results" />
+                                  <SoupSectionHeader>
+                                    <span class="truncate">More Results</span>
+                                  </SoupSectionHeader>
                                 </Show>
 
                                 <Switch>
