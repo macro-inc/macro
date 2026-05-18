@@ -16,6 +16,7 @@ const BLOCKS = [
     color: 'text-email',
     hoverBg: 'hover:bg-email/10',
     hoverBorder: 'hover:border-email/40',
+    hoverIconBg: 'group-hover:bg-email/10',
     title: 'Email',
     description: 'Full email client — no tab switching.',
   },
@@ -24,6 +25,7 @@ const BLOCKS = [
     color: 'text-note',
     hoverBg: 'hover:bg-note/10',
     hoverBorder: 'hover:border-note/40',
+    hoverIconBg: 'group-hover:bg-note/10',
     title: 'Docs',
     description: 'Markdown editor with mentions and live collaboration.',
   },
@@ -32,6 +34,7 @@ const BLOCKS = [
     color: 'text-task',
     hoverBg: 'hover:bg-task/10',
     hoverBorder: 'hover:border-task/40',
+    hoverIconBg: 'group-hover:bg-task/10',
     title: 'Tasks',
     description: 'Assignments, due dates, and statuses — all linked.',
   },
@@ -40,6 +43,7 @@ const BLOCKS = [
     color: 'text-default',
     hoverBg: 'hover:bg-default/10',
     hoverBorder: 'hover:border-default/40',
+    hoverIconBg: 'group-hover:bg-default/10',
     title: 'Channels',
     description: 'Team messaging with threads and file sharing.',
   },
@@ -48,6 +52,7 @@ const BLOCKS = [
     color: 'text-default',
     hoverBg: 'hover:bg-default/10',
     hoverBorder: 'hover:border-default/40',
+    hoverIconBg: 'group-hover:bg-default/10',
     title: 'Calls',
     description: 'Voice and video — no separate app needed.',
   },
@@ -56,6 +61,7 @@ const BLOCKS = [
     color: 'text-chat',
     hoverBg: 'hover:bg-chat/10',
     hoverBorder: 'hover:border-chat/40',
+    hoverIconBg: 'group-hover:bg-chat/10',
     title: 'AI Agents',
     description: 'Search, summarize, and act across everything.',
   },
@@ -88,7 +94,7 @@ export function IntroStep() {
                 item.hoverBorder
               )}
             >
-              <div class="size-8 rounded-sm bg-hover/50 flex items-center justify-center">
+              <div class={cn('size-8 rounded-sm bg-hover/50 flex items-center justify-center transition-colors', item.hoverIconBg)}>
                 <item.icon class={cn('size-5', item.color)} />
               </div>
               <div class="flex flex-col gap-0.5">
