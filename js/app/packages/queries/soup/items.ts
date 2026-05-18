@@ -222,7 +222,7 @@ function keyRank(order: readonly string[], key: string): number {
   return i === -1 ? order.length : i;
 }
 
-function byDisplayOrderNullsLast(a: GroupMeta, b: GroupMeta): number {
+function defaultOrder(a: GroupMeta, b: GroupMeta): number {
   if (a.displayOrder === null && b.displayOrder === null) return 0;
   if (a.displayOrder === null) return 1;
   if (b.displayOrder === null) return -1;
@@ -238,7 +238,7 @@ function makeGroupComparator(
         const diff =
           keyRank(STATUS_OPTION_ORDER, a.key) -
           keyRank(STATUS_OPTION_ORDER, b.key);
-        return diff !== 0 ? diff : byDisplayOrderNullsLast(a, b);
+        return diff !== 0 ? diff : defaultOrder(a, b);
       };
     }
     if (groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PRIORITY) {
@@ -246,7 +246,7 @@ function makeGroupComparator(
         const diff =
           keyRank(PRIORITY_OPTION_ORDER, a.key) -
           keyRank(PRIORITY_OPTION_ORDER, b.key);
-        return diff !== 0 ? diff : byDisplayOrderNullsLast(a, b);
+        return diff !== 0 ? diff : defaultOrder(a, b);
       };
     }
     if (groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES) {
@@ -260,5 +260,5 @@ function makeGroupComparator(
       };
     }
   }
-  return byDisplayOrderNullsLast;
+  return defaultOrder;
 }

@@ -105,7 +105,7 @@ export const useApplyPreset = () => {
       setActiveTab(tabId);
       queryFilters.replace(preset.filters);
       soup.predicates.set(preset.clientFilters);
-      soup.grouping.setActiveGroupId(undefined);
+      soup.grouping.setActiveGroupId(preset.groupBy);
     });
     return true;
   };
