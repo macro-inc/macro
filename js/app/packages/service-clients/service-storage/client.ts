@@ -20,11 +20,12 @@ import {
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import { registerClient } from '@core/util/mockClient';
-import type { AppErrorResult, AppResult } from '@core/util/result';
+import type { ResultError } from '@core/util/result';
+
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import { platformFetch } from 'core/util/platformFetch';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import type {
   AccessLevel,
   CallRecordPreview,
@@ -104,17 +105,17 @@ const dssHost = SERVER_HOSTS['document-storage-service'];
 export function dssFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<AppErrorResult<FetchWithTokenErrorCode>>;
+): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
 export function dssFetch<T extends Record<string, any>>(
   url: string,
   init?: SafeFetchInit
-): Promise<AppResult<FetchWithTokenErrorCode, T>>;
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
 export function dssFetch<T extends Record<string, any> = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<AppResult<FetchWithTokenErrorCode, T>>
-  | Promise<AppErrorResult<FetchWithTokenErrorCode>> {
+  | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
+  | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${dssHost}${url}`, init);
 }
 
@@ -551,9 +552,9 @@ export const storageServiceClient = {
       }
     );
 
-    const result: AppResult<
-      FetchWithTokenErrorCode,
-      DocumentResponseMetadataWithContent
+    const result: Result<
+      DocumentResponseMetadataWithContent,
+      ResultError<FetchWithTokenErrorCode>[]
     > = copyResult.map((result) => result.data.documentMetadata);
 
     if (result.isErr()) {
@@ -590,7 +591,7 @@ export const storageServiceClient = {
     documentId,
   }: {
     documentId: string;
-  }): Promise<AppResult<FetchWithTokenErrorCode, string>> {
+  }): Promise<Result<string, ResultError<FetchWithTokenErrorCode>[]>> {
     return (
       await dssFetch<{ shortId: string }>(`/documents/${documentId}/short_id`, {
         method: 'GET',
@@ -603,7 +604,10 @@ export const storageServiceClient = {
   }: {
     documentId: string;
   }): Promise<
-    AppResult<FetchWithTokenErrorCode, { shortId: string; branchName: string }>
+    Result<
+      { shortId: string; branchName: string },
+      ResultError<FetchWithTokenErrorCode>[]
+    >
   > {
     return (
       await dssFetch<{ shortId: string; branchName: string }>(
@@ -902,9 +906,9 @@ export const storageServiceClient = {
     async function getDocxFile(
       args
     ): Promise<
-      AppResult<
-        FetchError | 'INVALID_FILETYPE' | 'INVALID_DOCUMENT',
-        GetDocxFileResponse
+      Result<
+        GetDocxFileResponse,
+        ResultError<FetchError | 'INVALID_FILETYPE' | 'INVALID_DOCUMENT'>[]
       >
     > {
       const { documentId, documentVersionId } = args;
@@ -1028,9 +1032,9 @@ export const storageServiceClient = {
   async getBinaryDocument(
     args
   ): Promise<
-    AppResult<
-      FetchError | 'INVALID_DOCUMENT',
-      GetDocumentResponseData & { blobUrl: string }
+    Result<
+      GetDocumentResponseData & { blobUrl: string },
+      ResultError<FetchError | 'INVALID_DOCUMENT'>[]
     >
   > {
     const maybeDocument = await storageServiceClient.getDocumentMetadata(args);
@@ -1242,7 +1246,7 @@ export const storageServiceClient = {
 
     async getUserAccessLevel({
       id,
-    }): Promise<AppResult<FetchWithTokenErrorCode, AccessLevel>> {
+    }): Promise<Result<AccessLevel, ResultError<FetchWithTokenErrorCode>[]>> {
       return await dssFetch<any>(`/projects/${id}/access_level`);
     },
 

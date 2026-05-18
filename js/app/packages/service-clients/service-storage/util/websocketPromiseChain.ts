@@ -1,5 +1,6 @@
-import type { AppErrorResult } from '@core/util/result';
-import { err, ok } from 'neverthrow';
+import type { ResultError } from '@core/util/result';
+
+import { err, ok, type Result } from 'neverthrow';
 import { v7 as uuid7 } from 'uuid';
 
 type PromiseHandler = Promise<any> & {
@@ -37,7 +38,7 @@ export function createWebsocketPromiseChain<
 
   const websocketErrorFilter = (
     response: any
-  ): AppErrorResult<'INVALID_RESPONSE' | 'SERVICE_ERROR'> => {
+  ): Result<void, ResultError<'INVALID_RESPONSE' | 'SERVICE_ERROR'>[]> => {
     if (isJobSubmissionErrorResponse(response)) {
       return err([{ code: 'SERVICE_ERROR', message: response.error }]);
     }

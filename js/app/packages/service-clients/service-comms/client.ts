@@ -3,13 +3,14 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
+import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { ApiThreadReply } from '@service-storage/generated/schemas';
 import type { ApiChannelAttachmentsPage } from '@service-storage/generated/schemas/apiChannelAttachmentsPage';
 import type { ApiChannelMessagesPage } from '@service-storage/generated/schemas/apiChannelMessagesPage';
 import type { ApiChannelParticipant } from '@service-storage/generated/schemas/apiChannelParticipant';
 import type { ChannelMessageFilters } from '@service-storage/generated/schemas/channelMessageFilters';
+import type { Result } from 'neverthrow';
 import type {
   ApiActivity,
   ApiChannelWithLatest,
@@ -52,17 +53,17 @@ const commsHost: string = SERVER_HOSTS['document-storage-service'];
 export function commsFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<AppErrorResult<FetchWithTokenErrorCode>>;
+): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
 export function commsFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
-): Promise<AppResult<FetchWithTokenErrorCode, T>>;
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
 export function commsFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<AppResult<FetchWithTokenErrorCode, T>>
-  | Promise<AppErrorResult<FetchWithTokenErrorCode>> {
+  | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
+  | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${commsHost}${url}`, init);
 }
 

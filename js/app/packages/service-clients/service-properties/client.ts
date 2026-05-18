@@ -4,8 +4,9 @@ import {
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import { registerClient } from '@core/util/mockClient';
-import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
+import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
+import type { Result } from 'neverthrow';
 import type { AddPropertyOptionRequest } from './generated/schemas/addPropertyOptionRequest';
 import type { BulkEntityPropertiesRequest } from './generated/schemas/bulkEntityPropertiesRequest';
 import type { CreatePropertyDefinitionRequest } from './generated/schemas/createPropertyDefinitionRequest';
@@ -66,17 +67,17 @@ const propertiesHost: string = SERVER_HOSTS['document-storage-service'];
 export function propertiesFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<AppErrorResult<FetchWithTokenErrorCode>>;
+): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
 export function propertiesFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
-): Promise<AppResult<FetchWithTokenErrorCode, T>>;
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
 export function propertiesFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<AppResult<FetchWithTokenErrorCode, T>>
-  | Promise<AppErrorResult<FetchWithTokenErrorCode>> {
+  | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
+  | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${propertiesHost}${url}`, init);
 }
 

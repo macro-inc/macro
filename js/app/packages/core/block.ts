@@ -5,7 +5,7 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import type { GetDocumentResponseData } from '@service-storage/generated/schemas/getDocumentResponseData';
 import type { Project } from '@service-storage/generated/schemas/project';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import type {
   Accessor,
   Component,
@@ -35,7 +35,7 @@ import { createStore, type SetStoreFunction, type Store } from 'solid-js/store';
 import { ENABLE_PDF_MULTISPLIT } from './constant/featureFlags';
 import { blockDataSignal } from './internal/BlockLoader';
 import type { Source, SourcePreload } from './source';
-import type { AppResult, ObjectLike, ResultErrors } from './util/result';
+import type { ObjectLike, ResultError } from './util/result';
 
 /**
  * List of valid block types that can be used in the application.
@@ -166,16 +166,16 @@ export const ValidNestingCombinations: BlockCombinationRules = {
 };
 
 export const LoadErrors = {
-  UNAUTHORIZED: err<never, ResultErrors<'UNAUTHORIZED'>>([
+  UNAUTHORIZED: err<never, ResultError<'UNAUTHORIZED'>[]>([
     { code: 'UNAUTHORIZED', message: 'Unauthorized access' },
   ]),
-  MISSING: err<never, ResultErrors<'MISSING'>>([
+  MISSING: err<never, ResultError<'MISSING'>[]>([
     { code: 'MISSING', message: 'Not found' },
   ]),
-  INVALID: err<never, ResultErrors<'INVALID'>>([
+  INVALID: err<never, ResultError<'INVALID'>[]>([
     { code: 'INVALID', message: 'Unable to load invalid document' },
   ]),
-  GONE: err<never, ResultErrors<'GONE'>>([
+  GONE: err<never, ResultError<'GONE'>[]>([
     { code: 'GONE', message: 'Document no longer exists' },
   ]),
 } as const;
@@ -183,14 +183,14 @@ export const LoadErrors = {
 type LoadErrorCodes = keyof typeof LoadErrors;
 
 /**
- * Converts a AppResult to a AppResult with a load error code.
+ * Converts a Result to a Result with a load error code.
  * @template T - The type of the input result value.
- * @param {AppResult<string, T>} result - The result to convert.
- * @returns {AppResult<keyof typeof LoadErrors, T>} A new AppResult with a load error code.
+ * @param {Result<T, ResultError<string>[]>} result - The result to convert.
+ * @returns {Result<T, ResultError<keyof typeof LoadErrors>[]>} A new Result with a load error code.
  */
 export function toLoadResult<E extends string, T extends ObjectLike>(
-  result: AppResult<E, T>
-): AppResult<keyof typeof LoadErrors, T> {
+  result: Result<T, ResultError<E>[]>
+): Result<T, ResultError<keyof typeof LoadErrors>[]> {
   if (result.isErr() && result.error.some((error) => error.code === 'GONE')) {
     return err(LoadErrors.GONE.error);
   }
@@ -213,14 +213,16 @@ export function toLoadResult<E extends string, T extends ObjectLike>(
 /**
  * Awaits a load result and returns a new load result with the same value or a load error.
  * @template T - The type of the input result value.
- * @param {Promise<AppResult<string, T>>} result - The result to await.
- * @returns {Promise<AppResult<keyof typeof LoadErrors, T>>} A new AppResult with the same value or a load error.
+ * @param {Promise<Result<T, ResultError<string>[]>>} result - The result to await.
+ * @returns {Promise<Result<T, ResultError<keyof typeof LoadErrors>[]>>} A new Result with the same value or a load error.
  */
 export async function loadResult<
-  T extends Promise<AppResult<string, ObjectLike>>,
+  T extends Promise<Result<ObjectLike, ResultError<string>[]>>,
 >(
   result: T
-): Promise<AppResult<keyof typeof LoadErrors, ExtractSuccessType<Awaited<T>>>> {
+): Promise<
+  Result<ExtractSuccessType<Awaited<T>>, ResultError<keyof typeof LoadErrors>[]>
+> {
   return toLoadResult(await result) as any; // any because TypeScript gets confused and loses the ObjectLike's specific type
 }
 
@@ -228,14 +230,14 @@ export async function loadResult<
  * Maps over an ok result, or passes through a load error.
  * @template T - The type of the input result value.
  * @template U - The type of the output result value.
- * @param {AppResult<string, T>} result - The result to map.
+ * @param {Result<T, ResultError<string>[]>} result - The result to map.
  * @param {(value: T) => U} fn - The function to apply to the ok value.
- * @returns {AppResult<LoadErrorCodes, U>} A new AppResult with the mapped value or a load error.
+ * @returns {Result<U, ResultError<LoadErrorCodes>[]>} A new Result with the mapped value or a load error.
  */
 export function mapLoadResult<T extends ObjectLike, U extends ObjectLike>(
-  result: AppResult<string, T>,
+  result: Result<T, ResultError<string>[]>,
   fn: (value: T) => U
-): AppResult<LoadErrorCodes, U> {
+): Result<U, ResultError<LoadErrorCodes>[]> {
   const loadResult = toLoadResult(result);
   if (loadResult.isErr()) return err(loadResult.error);
   return ok(fn(loadResult.value));
@@ -266,15 +268,19 @@ export type LoadFunction<
 > = (
   source: NoInfer<S>,
   intent: Intent
-) => Promise<AppResult<keyof typeof LoadErrors, S extends Source ? T | P : T>>;
+) => Promise<
+  Result<S extends Source ? T | P : T, ResultError<keyof typeof LoadErrors>[]>
+>;
 
 type ExtractSuccessType<T> =
-  T extends AppResult<any, infer S> ? Exclude<S, { type: 'preload' }> : never;
+  T extends Result<infer S, ResultError<any>[]>
+    ? Exclude<S, { type: 'preload' }>
+    : never;
 
 /**
  * Extracts the non-error, non-preload return type of a load function.
  *
- * This utility type unwraps the Promise, extracts the success type from AppResult,
+ * This utility type unwraps the Promise, extracts the success type from Result,
  * and excludes the SourcePreload type. It's useful for getting the actual data type
  * returned by a load function in the successful, non-preload case.
  *
@@ -285,7 +291,7 @@ type ExtractSuccessType<T> =
  * const definition = defineBlock({
  *   // ... other properties ...
  *   async load(source, intent) {
- *     // Implementation that returns Promise<AppResult<Error, Data | Preload>>
+ *     // Implementation that returns Promise<Result<Data | Preload, ResultError<Error>[]>>
  *   },
  * });
  *

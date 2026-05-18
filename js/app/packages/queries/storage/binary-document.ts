@@ -1,9 +1,9 @@
 import type { FetchError } from '@core/service';
-import { type AppResult, throwOnErr } from '@core/util/result';
+import { type ResultError, throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { GetDocumentResponseData } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { waitForDocumentPresignedUrlReady } from './document-location';
@@ -17,7 +17,7 @@ type BinaryDocumentError = FetchError | 'INVALID_DOCUMENT';
 
 export async function fetchBinaryDocumentData(
   documentId: string
-): Promise<AppResult<BinaryDocumentError, BinaryDocumentData>> {
+): Promise<Result<BinaryDocumentData, ResultError<BinaryDocumentError>[]>> {
   const maybeDocument = await storageServiceClient.getDocumentMetadata({
     documentId,
   });

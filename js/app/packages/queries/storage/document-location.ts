@@ -1,7 +1,11 @@
-import { type AppResult, type ResultType, throwOnErr } from '@core/util/result';
+import {
+  type ResultError,
+  type ResultType,
+  throwOnErr,
+} from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import { DocumentContentState } from '@service-storage/generated/schemas/documentContentState';
-import { ok } from 'neverthrow';
+import { ok, type Result } from 'neverthrow';
 import { queryClient } from '../client';
 import { documentLocationKeys } from './keys';
 
@@ -184,7 +188,7 @@ export function waitForDocumentPresignedUrlReady(
 
 export function locationToAppResult(
   location: DocumentLocation
-): AppResult<string, { data: DocumentLocation }> {
+): Result<{ data: DocumentLocation }, ResultError<string>[]> {
   return ok({ data: location });
 }
 
@@ -193,7 +197,7 @@ export function isDocumentLocationReady(location: DocumentLocation) {
 }
 
 export function isDocumentLocationResultReady(
-  result: AppResult<string, { data: DocumentLocation }>
+  result: Result<{ data: DocumentLocation }, ResultError<string>[]>
 ) {
   return !result.isErr() && isDocumentLocationReady(result.value.data);
 }

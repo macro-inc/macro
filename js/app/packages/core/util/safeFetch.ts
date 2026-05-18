@@ -1,11 +1,6 @@
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { platformFetch } from './platformFetch';
-import type {
-  AppResult,
-  ObjectLike,
-  ResultError,
-  ResultErrors,
-} from './result';
+import type { ObjectLike, ResultError } from './result';
 import { sleep } from './sleep';
 
 /**
@@ -83,7 +78,7 @@ export type TextResponse = { contentType: 'text/plain'; body: string };
  * @param {RequestInfo} input - The resource to fetch.
  * @param {SafeFetchInit} [init] - Custom settings to apply to the request, including retry configuration.
  * @param {ErrorResponseHandler<CustomErrorCode>} [errorResponseHandler] - Custom error response handler.
- * @returns {Promise<AppResult<BaseFetchErrorCode | CustomErrorCode, T>>} A promise that resolves to a AppResult.
+ * @returns {Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>>} A promise that resolves to a Result.
  *
  * @example
  * // Basic usage
@@ -164,14 +159,14 @@ export async function safeFetch<
   input: RequestInfo,
   init?: SafeFetchInit,
   errorResponseHandler?: ErrorResponseHandler<CustomErrorCode>
-): Promise<AppResult<BaseFetchErrorCode | CustomErrorCode, T>> {
+): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
   const { retry, ...fetchInit } = init || {};
   const maxTries = retry?.maxTries ?? 1;
   const delay = retry?.delay ?? 0;
   type ErrorCode = BaseFetchErrorCode | CustomErrorCode;
-  const fetchErr = (errors: ResultErrors<ErrorCode>) =>
-    err<T, ResultErrors<ErrorCode>>(errors);
-  let lastError: AppResult<ErrorCode, T> | undefined;
+  const fetchErr = (errors: ResultError<ErrorCode>[]) =>
+    err<T, ResultError<ErrorCode>[]>(errors);
+  let lastError: Result<T, ResultError<ErrorCode>[]> | undefined;
 
   for (let attempt = 1; attempt <= maxTries; attempt++) {
     try {

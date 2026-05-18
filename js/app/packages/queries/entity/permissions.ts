@@ -1,7 +1,8 @@
-import { type AppResult, catchToResult, throwOnErr } from '@core/util/result';
+import { catchToResult, type ResultError, throwOnErr } from '@core/util/result';
 import { dssFetch } from '@service-storage/client';
 import type { EntityPermissionResponse } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
+import type { Result } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { entityKeys } from './keys';
@@ -31,7 +32,7 @@ export function useEntityPermissions(
 export async function fetchEntityPermissions(
   entityType: string,
   entityId: string
-): Promise<AppResult<string, EntityPermissionResponse>> {
+): Promise<Result<EntityPermissionResponse, ResultError<string>[]>> {
   return await catchToResult(
     async () =>
       await queryClient.ensureQueryData(

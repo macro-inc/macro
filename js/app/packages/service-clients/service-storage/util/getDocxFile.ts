@@ -1,9 +1,9 @@
 import type { FlattenObject } from '@core/util/flatten';
-import type { AppResult, ResultError } from '@core/util/result';
+import type { ResultError } from '@core/util/result';
 import type { WithRequired } from '@core/util/withRequired';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { fetchBinary } from './fetchBinary';
 import { getOPFSDocumentStore } from './opfs';
 import type { StorageError } from './storageError';
@@ -35,7 +35,7 @@ export type GetDocxFileResponse = FlattenObject<{
 
 export async function getDocxExpandedParts(
   docxFile: GetDocxFileResponse
-): Promise<AppResult<StorageError, DocxExpandedPart[]>> {
+): Promise<Result<DocxExpandedPart[], ResultError<StorageError>[]>> {
   const { documentId, documentBom } = docxFile.metadata;
   let opfsDocumentStore;
   try {

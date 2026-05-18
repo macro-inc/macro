@@ -11,27 +11,14 @@ export interface ResultError<Code extends string = string> extends Error {
   message: string;
 }
 
-export type ResultErrors<ErrorCode extends string = string> =
-  ResultError<ErrorCode>[];
-
 export type ObjectLike = Record<string, any>;
-
-export type AppResult<ErrorCode extends string, T> = Result<
-  T,
-  ResultErrors<ErrorCode>
->;
-
-export type AppErrorResult<ErrorCode extends string> = AppResult<
-  ErrorCode,
-  void
->;
 
 export type ResultType<T extends Result<any, any>> =
   T extends Result<infer Value, any> ? Value : never;
 
 /** Error class that preserves result errors when thrown at query/UI boundaries. */
 export class ThrownResultError<E extends string = string> extends Error {
-  constructor(public readonly errors: ResultErrors<E>) {
+  constructor(public readonly errors: ResultError<E>[]) {
     super(errors.map((e) => e.message).join(', '));
     this.name = 'ThrownResultError';
   }
@@ -39,7 +26,7 @@ export class ThrownResultError<E extends string = string> extends Error {
 
 /** Wraps a result-returning async function to throw on error. */
 export async function throwOnErr<E extends string, T>(
-  fn: () => Promise<AppResult<E, T>>
+  fn: () => Promise<Result<T, ResultError<E>[]>>
 ): Promise<T> {
   const result = await fn();
   if (result.isErr()) {
@@ -51,7 +38,7 @@ export async function throwOnErr<E extends string, T>(
 /** Wraps an async throwable function to return a result instead. */
 export async function catchToResult<T>(
   throwable: () => Promise<T>
-): Promise<AppResult<string, T>> {
+): Promise<Result<T, ResultError<string>[]>> {
   try {
     return ok(await throwable());
   } catch (error) {

@@ -2,8 +2,8 @@
  * *DO NOT EDIT MANUALLY*
  */
 
-import type { AppResult } from 'core/util/result';
-import { err, ok } from 'neverthrow';
+import type { ResultError } from 'core/util/result';
+import { err, ok, type Result } from 'neverthrow';
 import * as schemas from './schemas';
 import type * as types from './types';
 
@@ -285,7 +285,7 @@ export type NamedTool<
 function deserializeTool<T extends NamedTool>(
   tool: NamedRawTool,
   direction: 'call' | 'response'
-): AppResult<'parse_error' | 'not_found', T> {
+): Result<T, ResultError<'parse_error' | 'not_found'>[]> {
   if (!(tool.name in toolParserMap)) {
     return err([
       { code: 'not_found', message: `tool name not found ${tool.name}` },
@@ -305,12 +305,18 @@ function deserializeTool<T extends NamedTool>(
 
 export function deserializeToolCall(
   tool: NamedRawTool
-): AppResult<'parse_error' | 'not_found', NamedTool<ToolName, 'call'>> {
+): Result<
+  NamedTool<ToolName, 'call'>,
+  ResultError<'parse_error' | 'not_found'>[]
+> {
   return deserializeTool(tool, 'call');
 }
 
 export function deserializeToolResponse(
   tool: NamedRawTool
-): AppResult<'parse_error' | 'not_found', NamedTool<ToolName, 'response'>> {
+): Result<
+  NamedTool<ToolName, 'response'>,
+  ResultError<'parse_error' | 'not_found'>[]
+> {
   return deserializeTool(tool, 'response');
 }

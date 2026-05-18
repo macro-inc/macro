@@ -33,7 +33,7 @@ import {
 } from '@core/signal/permissions';
 import { idToEmail } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import type { AppErrorResult, AppResult } from '@core/util/result';
+import type { ResultError } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import IconComment from '@icon/wide-comment.svg';
 import WideCopy from '@icon/wide-copy.svg';
@@ -60,6 +60,7 @@ import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { Button, ButtonGroup, cn, Panel, ToggleSwitch, Tooltip } from '@ui';
+import type { Result } from 'neverthrow';
 import {
   type Accessor,
   createContext,
@@ -714,7 +715,10 @@ export function ShareModal(props: ShareModalProps) {
     ) => {
       if (props.userPermissions !== Permissions.OWNER) return;
 
-      let result: AppResult<any, any> | AppErrorResult<any> | null = null;
+      let result:
+        | Result<any, ResultError<any>[]>
+        | Result<void, ResultError<any>[]>
+        | null = null;
       if (props.itemType === 'chat') {
         result = await cognitionApiServiceClient.updateChatPermissions({
           sharePermission: {

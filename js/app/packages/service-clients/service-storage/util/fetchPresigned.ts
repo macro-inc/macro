@@ -1,7 +1,7 @@
 import type { FetchError } from '@core/service';
-import type { AppResult, ObjectLike, ResultErrors } from '@core/util/result';
+import type { ObjectLike, ResultError } from '@core/util/result';
 import { platformFetch } from 'core/util/platformFetch';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 
 type ResultMap = {
   arraybuffer: ArrayBuffer;
@@ -10,34 +10,38 @@ type ResultMap = {
   json: ObjectLike;
 };
 
-function httpStatusToError(status: number): AppResult<FetchError, never> {
+function httpStatusToError(
+  status: number
+): Result<never, ResultError<FetchError>[]> {
   switch (status) {
     case 404:
-      return err<never, ResultErrors<FetchError>>([
+      return err<never, ResultError<FetchError>[]>([
         { code: 'NOT_FOUND', message: 'Resource not found' },
       ]);
     case 401:
-      return err<never, ResultErrors<FetchError>>([
+      return err<never, ResultError<FetchError>[]>([
         { code: 'UNAUTHORIZED', message: 'Unauthorized access' },
       ]);
     case 500:
-      return err<never, ResultErrors<FetchError>>([
+      return err<never, ResultError<FetchError>[]>([
         { code: 'SERVER_ERROR', message: 'Internal server error' },
       ]);
     default:
-      return err<never, ResultErrors<FetchError>>([
+      return err<never, ResultError<FetchError>[]>([
         { code: 'HTTP_ERROR', message: `HTTP error! status: ${status}` },
       ]);
   }
 }
 
-function fetchExceptionToError(error: unknown): AppResult<FetchError, never> {
+function fetchExceptionToError(
+  error: unknown
+): Result<never, ResultError<FetchError>[]> {
   if (error instanceof TypeError && error.message === 'Failed to fetch') {
-    return err<never, ResultErrors<FetchError>>([
+    return err<never, ResultError<FetchError>[]>([
       { code: 'NETWORK_ERROR', message: 'Network error occurred' },
     ]);
   }
-  return err<never, ResultErrors<FetchError>>([
+  return err<never, ResultError<FetchError>[]>([
     { code: 'UNKNOWN_ERROR', message: `An unknown error occurred: ${error}` },
   ]);
 }
@@ -46,7 +50,7 @@ export async function fetchPresigned<K extends keyof ResultMap>(
   url: string,
   responseType: K,
   init?: RequestInit
-): Promise<AppResult<FetchError, ResultMap[K]>> {
+): Promise<Result<ResultMap[K], ResultError<FetchError>[]>> {
   try {
     const response = await platformFetch(url, init);
 
@@ -72,7 +76,7 @@ export async function fetchPresignedBlobWithProgress(
   url: string,
   onProgress: (progress: FetchProgress) => void,
   init?: RequestInit
-): Promise<AppResult<FetchError, Blob>> {
+): Promise<Result<Blob, ResultError<FetchError>[]>> {
   try {
     const response = await platformFetch(url, init);
 

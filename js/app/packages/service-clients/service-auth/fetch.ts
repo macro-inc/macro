@@ -1,5 +1,5 @@
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
-import type { AppResult, ObjectLike, ResultError } from '@core/util/result';
+import type { ObjectLike, ResultError } from '@core/util/result';
 import {
   type BaseFetchErrorCode,
   type ErrorResponseHandler,
@@ -7,7 +7,7 @@ import {
   safeFetch,
   type TextResponse,
 } from '@core/util/safeFetch';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { authServiceClient } from './client';
 
 function isExpired(token: string) {
@@ -72,7 +72,7 @@ export async function fetchWithAuth<
 >(
   input: RequestInfo,
   init?: fetchWithAuthOptions<T, CustomErrorCode>
-): Promise<AppResult<BaseFetchErrorCode | CustomErrorCode, T>> {
+): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
   const apiToken = await getMacroApiToken();
   if (!apiToken) {
     return err([

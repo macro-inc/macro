@@ -1,4 +1,5 @@
-import type { AppErrorResult, AppResult } from '@core/util/result';
+import type { ResultError } from '@core/util/result';
+
 import {
   type InferType,
   Mirror,
@@ -14,7 +15,7 @@ import {
   type Side,
   type VersionVector,
 } from 'loro-crdt';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 import type { GenericRootSchema, LoroRawUpdate } from './shared';
 
@@ -136,10 +137,12 @@ export type LoroManager<S extends GenericRootSchema = GenericRootSchema> = {
    * @returns result - The error if syncing to loro failed
    *
    * */
-  syncToLoro(state: InferType<S>): Promise<AppErrorResult<LoroManagerError>>;
+  syncToLoro(
+    state: InferType<S>
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>>;
 
   /** Retrieve all loro container ids */
-  getAllContainerIds(): AppResult<LoroManagerError, ContainerID[]>;
+  getAllContainerIds(): Result<ContainerID[], ResultError<LoroManagerError>[]>;
 
   /**  Retrieve a LoroUpdate with all relavent events/data since the given version vector
    *
@@ -148,7 +151,7 @@ export type LoroManager<S extends GenericRootSchema = GenericRootSchema> = {
    * */
   getUpdateSince(
     lastVersionVector: VersionVector
-  ): AppResult<LoroManagerError, Uint8Array | undefined>;
+  ): Result<Uint8Array | undefined, ResultError<LoroManagerError>[]>;
 
   /** Initializes the manager from a snapshot
    *
@@ -159,14 +162,16 @@ export type LoroManager<S extends GenericRootSchema = GenericRootSchema> = {
    * */
   initializeFromSnapshot(
     snapshot: LoroRawUpdate
-  ): Promise<AppErrorResult<LoroManagerError>>;
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>>;
 
   /** Imports a single loro update
    *
    * @param update - The update to import
    * @returns result - The error if importing the update failed
    * */
-  importUpdate(update: LoroRawUpdate): AppResult<LoroManagerError, boolean>;
+  importUpdate(
+    update: LoroRawUpdate
+  ): Result<boolean, ResultError<LoroManagerError>[]>;
 
   /** Imports multiple loro updates at once
    *
@@ -175,14 +180,16 @@ export type LoroManager<S extends GenericRootSchema = GenericRootSchema> = {
    * */
   importBatchUpdates(
     updates: LoroRawUpdate[]
-  ): AppResult<LoroManagerError, boolean>;
+  ): Result<boolean, ResultError<LoroManagerError>[]>;
 
   /** Resets the manager to a new state
    *
    * @param snapshot - The snapshot to reset to
    * @returns result - The error if resetting the manager failed
    * */
-  reset(snapshot: LoroRawUpdate): Promise<AppErrorResult<LoroManagerError>>;
+  reset(
+    snapshot: LoroRawUpdate
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>>;
 
   /** Returns the current version of the manager */
   getVersion(): VersionVector;
@@ -195,16 +202,16 @@ export type LoroManager<S extends GenericRootSchema = GenericRootSchema> = {
   /** Returns the container with the given id if it exists */
   getContainerById(
     id: ContainerID
-  ): AppResult<LoroManagerError, Container | undefined>;
+  ): Result<Container | undefined, ResultError<LoroManagerError>[]>;
 
   /** Returns the current cursor position for the given LoroCursor within its container */
-  getCursorPos(cursor: Cursor): AppResult<
-    LoroManagerError,
+  getCursorPos(cursor: Cursor): Result<
     {
       update?: Cursor;
       offset: number;
       side: Side;
-    }
+    },
+    ResultError<LoroManagerError>[]
   >;
 };
 
@@ -240,7 +247,7 @@ export function createLoroManager<S extends GenericRootSchema>(
 
   const importUpdate = (
     update: LoroRawUpdate
-  ): AppResult<LoroManagerError, boolean> => {
+  ): Result<boolean, ResultError<LoroManagerError>[]> => {
     let importStatus;
 
     try {
@@ -270,7 +277,7 @@ export function createLoroManager<S extends GenericRootSchema>(
 
   const importBatchUpdates = (
     updates: LoroRawUpdate[]
-  ): AppResult<LoroManagerError, boolean> => {
+  ): Result<boolean, ResultError<LoroManagerError>[]> => {
     let importStatus;
 
     try {
@@ -300,7 +307,7 @@ export function createLoroManager<S extends GenericRootSchema>(
 
   const initializeFromSnapshot = async (
     snapshot: LoroRawUpdate
-  ): Promise<AppErrorResult<LoroManagerError>> => {
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>> => {
     const importResult = importUpdate(snapshot);
 
     if (importResult.isErr()) {
@@ -339,7 +346,7 @@ export function createLoroManager<S extends GenericRootSchema>(
 
   const getUpdateSince = (
     lastVersionVector: VersionVector
-  ): AppResult<LoroManagerError, Uint8Array | undefined> => {
+  ): Result<Uint8Array | undefined, ResultError<LoroManagerError>[]> => {
     const mirror_ = mirror();
 
     if (!initialized() || !mirror_) {
@@ -388,7 +395,10 @@ export function createLoroManager<S extends GenericRootSchema>(
     return ok(update);
   };
 
-  const getAllContainerIds = (): AppResult<LoroManagerError, ContainerID[]> => {
+  const getAllContainerIds = (): Result<
+    ContainerID[],
+    ResultError<LoroManagerError>[]
+  > => {
     if (!initialized() || !mirror()) {
       return err([
         { code: LoroManagerError.NotInitialized, message: 'Not initialized' },
@@ -400,7 +410,7 @@ export function createLoroManager<S extends GenericRootSchema>(
 
   const syncToLoro = async (
     state: InferType<S>
-  ): Promise<AppErrorResult<LoroManagerError>> => {
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>> => {
     const mirror_ = mirror();
     if (!initialized() || !mirror_) {
       return err([
@@ -429,7 +439,7 @@ export function createLoroManager<S extends GenericRootSchema>(
 
   const reset = async (
     snapshot: LoroRawUpdate
-  ): Promise<AppErrorResult<LoroManagerError>> => {
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>> => {
     mirror()?.dispose();
     loroDoc().free();
 
@@ -481,7 +491,7 @@ export function createLoroManager<S extends GenericRootSchema>(
 
   const getContainerById = (
     id: ContainerID
-  ): AppResult<LoroManagerError, Container | undefined> => {
+  ): Result<Container | undefined, ResultError<LoroManagerError>[]> => {
     let container: Container | undefined;
 
     try {
@@ -499,13 +509,13 @@ export function createLoroManager<S extends GenericRootSchema>(
 
   const getCursorPos = (
     cursor: Cursor
-  ): AppResult<
-    LoroManagerError,
+  ): Result<
     {
       update?: Cursor;
       offset: number;
       side: Side;
-    }
+    },
+    ResultError<LoroManagerError>[]
   > => {
     let pos: { update?: Cursor; offset: number; side: Side } | undefined;
     try {

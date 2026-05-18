@@ -2,8 +2,8 @@ import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { logger } from '@observability';
 import { fetchWithAuth } from '@service-auth/fetch';
-import { err, ok } from 'neverthrow';
-import type { AppErrorResult, AppResult, ObjectLike } from './result';
+import { err, ok, type Result } from 'neverthrow';
+import type { ObjectLike, ResultError } from './result';
 import {
   type BaseFetchErrorCode,
   type SafeFetchInit,
@@ -15,18 +15,19 @@ export type FetchWithTokenErrorCode = BaseFetchErrorCode;
 function fetchWithCredentials<T extends ObjectLike>(
   input: RequestInfo,
   init?: SafeFetchInit
-): Promise<AppResult<BaseFetchErrorCode, T>> {
+): Promise<Result<T, ResultError<BaseFetchErrorCode>[]>> {
   return safeFetch<T>(input, {
     ...init,
     credentials: 'include',
   });
 }
 
-let tokenPromise: Promise<AppErrorResult<FetchWithTokenErrorCode>> | null =
-  null;
+let tokenPromise: Promise<
+  Result<void, ResultError<FetchWithTokenErrorCode>[]>
+> | null = null;
 
 export async function fetchToken(): Promise<
-  AppErrorResult<FetchWithTokenErrorCode>
+  Result<void, ResultError<FetchWithTokenErrorCode>[]>
 > {
   if (tokenPromise == null) {
     tokenPromise = (async () => {
@@ -62,7 +63,7 @@ export async function fetchToken(): Promise<
  * @template T - The expected response data type.
  * @param {RequestInfo} input - The resource that you wish to fetch.
  * @param {SafeFetchInit} [init] - An options object containing any custom settings you want to apply to the request, including retry configuration.
- * @returns {Promise<AppResult<FetchWithTokenErrorCode, T>>} A promise that resolves to a AppResult containing either the response data or an error.
+ * @returns {Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>} A promise that resolves to a Result containing either the response data or an error.
  *
  * @example
  * const result = await fetchWithToken<UserData>(
@@ -82,7 +83,7 @@ export async function fetchToken(): Promise<
 export async function fetchWithToken<T extends ObjectLike>(
   input: RequestInfo,
   init?: SafeFetchInit
-): Promise<AppResult<FetchWithTokenErrorCode, T>> {
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>> {
   if (ENABLE_BEARER_TOKEN_AUTH) {
     const result = await fetchWithAuth<T>(input, init);
     if (result.isErr()) {

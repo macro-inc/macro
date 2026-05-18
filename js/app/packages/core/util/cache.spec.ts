@@ -1,7 +1,7 @@
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cache } from './cache';
-import type { AppResult } from './result';
+import type { ResultError } from './result';
 
 describe('cache', () => {
   let mockFn: ReturnType<typeof vi.fn>;
@@ -81,9 +81,11 @@ describe('cache', () => {
   test('handle promises that resolve after expiration time', async () => {
     const slowMockFn = vi.fn(
       (_arg: string) =>
-        new Promise<AppResult<string, { data: string }>>((resolve) => {
-          setTimeout(() => resolve(ok({ data: 'slow test' })), 100);
-        })
+        new Promise<Result<{ data: string }, ResultError<string>[]>>(
+          (resolve) => {
+            setTimeout(() => resolve(ok({ data: 'slow test' })), 100);
+          }
+        )
     );
 
     const cachedFn = cache(slowMockFn, { minutes: 1 });

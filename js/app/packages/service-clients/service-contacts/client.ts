@@ -3,9 +3,9 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
-
+import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
+import type { Result } from 'neverthrow';
 
 const contactsHost = `${SERVER_HOSTS['contacts']}`;
 
@@ -14,17 +14,17 @@ import type { GetContactsResponse } from './generated/schemas/getContactsRespons
 export function contactsFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<AppErrorResult<FetchWithTokenErrorCode>>;
+): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
 export function contactsFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
-): Promise<AppResult<FetchWithTokenErrorCode, T>>;
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
 export function contactsFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<AppResult<FetchWithTokenErrorCode, T>>
-  | Promise<AppErrorResult<FetchWithTokenErrorCode>> {
+  | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
+  | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${contactsHost}${url}`, init);
 }
 

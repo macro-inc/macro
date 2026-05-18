@@ -96,7 +96,7 @@ export const stripeServiceClient = {
   },
   /**
    * Changes the current user's subscription tier. Returns a narrow discriminated union so
-   * callers get a type-checked error `code` without drilling into the AppResult
+   * callers get a type-checked error `code` without drilling into the Result
    * error array (`result.error?.[0]?.code`), which would silently fall through to the default case
    * if the shape ever changes. Callers should invalidate the user info query on success.
    */

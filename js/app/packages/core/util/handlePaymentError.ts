@@ -1,7 +1,8 @@
-import type { AppErrorResult, AppResult } from './result';
+import type { Result } from 'neverthrow';
+import type { ResultError } from './result';
 
 export function isPaymentError<T>(
-  result: AppResult<string, T> | AppErrorResult<string>
+  result: Result<T, ResultError<string>[]> | Result<void, ResultError<string>[]>
 ): boolean {
   if (!result.isErr()) {
     return false;

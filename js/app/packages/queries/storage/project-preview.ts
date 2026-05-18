@@ -1,8 +1,8 @@
-import { type AppResult, catchToResult } from '@core/util/result';
+import { catchToResult, type ResultError } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { ProjectPreviewData } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { projectsKeys } from './keys';
@@ -69,7 +69,7 @@ export function useProjectPreviewQuery(projectId: Accessor<string>) {
  */
 export async function fetchAndCacheProjectPreview(
   projectId: string
-): Promise<AppResult<string, { project: ProjectPreviewData }>> {
+): Promise<Result<{ project: ProjectPreviewData }, ResultError<string>[]>> {
   const result = await catchToResult(async () =>
     queryClient.ensureQueryData(projectPreviewQueryOptions(projectId))
   );

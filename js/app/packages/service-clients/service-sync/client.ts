@@ -6,10 +6,10 @@ import {
 } from '@core/util/fetchWithToken';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
-import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
+import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { SerializedEditorState } from 'lexical';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { InitializeFromSnapshotRequest } from './generated/schema';
 
 const SYNC_SERVICE_WORKER_URL = `${SYNC_SERVICE_HOSTS['worker']}`;
@@ -42,17 +42,17 @@ const cancelIdleTask =
 export function syncFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<AppErrorResult<FetchWithTokenErrorCode>>;
+): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
 export function syncFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
-): Promise<AppResult<FetchWithTokenErrorCode, T>>;
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
 export function syncFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<AppResult<FetchWithTokenErrorCode, T>>
-  | Promise<AppErrorResult<FetchWithTokenErrorCode>> {
+  | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
+  | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${SYNC_SERVICE_WORKER_URL}${url}`, {
     ...init,
     headers: {

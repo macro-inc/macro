@@ -3,9 +3,10 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
+import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import { platformFetch } from 'core/util/platformFetch';
+import type { Result } from 'neverthrow';
 import type { FileMetadata } from './generated/schemas/fileMetadata';
 import type { PutFileRequest } from './generated/schemas/putFileRequest';
 import type { PutFileResponse } from './generated/schemas/putFileResponse';
@@ -15,17 +16,17 @@ const staticFileHost = `${SERVER_HOSTS['static-file']}`;
 export function staticFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<AppErrorResult<FetchWithTokenErrorCode>>;
+): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
 export function staticFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
-): Promise<AppResult<FetchWithTokenErrorCode, T>>;
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
 export function staticFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<AppResult<FetchWithTokenErrorCode, T>>
-  | Promise<AppErrorResult<FetchWithTokenErrorCode>> {
+  | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
+  | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${staticFileHost}${url}`, init);
 }
 

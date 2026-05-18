@@ -6,10 +6,10 @@ import {
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import { platformFetch } from '@core/util/platformFetch';
-import type { AppErrorResult, AppResult, ObjectLike } from '@core/util/result';
+import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { DocumentTextPart } from '@service-cognition/generated/schemas/documentTextPart';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import type OpenAI from 'openai';
 import type { AddServerRequest } from './generated/schemas/addServerRequest';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
@@ -46,17 +46,17 @@ type WithProjectId = { project_id: string };
 export function dcsFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<AppErrorResult<FetchWithTokenErrorCode>>;
+): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
 export function dcsFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
-): Promise<AppResult<FetchWithTokenErrorCode, T>>;
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
 export function dcsFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<AppResult<FetchWithTokenErrorCode, T>>
-  | Promise<AppErrorResult<FetchWithTokenErrorCode>> {
+  | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
+  | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${dcsHost}${url}`, init);
 }
 export type Success = { success: boolean };
@@ -381,9 +381,9 @@ type DcsCompletionErrorCode = 'NETWORK_ERROR' | 'OPENAI_ERROR';
 export async function dcsCompletion(
   body: Omit<OpenAI.ChatCompletionCreateParamsNonStreaming, 'stream'>
 ): Promise<
-  AppResult<
-    FetchWithTokenErrorCode | DcsCompletionErrorCode,
-    OpenAI.ChatCompletion
+  Result<
+    OpenAI.ChatCompletion,
+    ResultError<FetchWithTokenErrorCode | DcsCompletionErrorCode>[]
   >
 > {
   let response: Response;

@@ -4,7 +4,8 @@ import { heicConversionService } from '@core/heic/service';
 import type { FetchError } from '@core/service';
 import { createStaticFile } from '@core/util/create';
 import { contentHash } from '@core/util/hash';
-import type { AppResult } from '@core/util/result';
+import type { ResultError } from '@core/util/result';
+
 import { mergeRegister } from '@lexical/utils';
 import {
   $createImageNode,
@@ -34,7 +35,7 @@ import {
   type LexicalEditor,
   type NodeKey,
 } from 'lexical';
-import { ok } from 'neverthrow';
+import { ok, type Result } from 'neverthrow';
 import { $insertNodesAndSplitList } from '../../utils';
 import { mapRegisterDelete } from '../shared';
 
@@ -123,7 +124,7 @@ export async function getMediaUrl(src: {
   type: string;
   id: string;
   url: string;
-}): Promise<AppResult<FetchError | 'INVALID_DOCUMENT', string>> {
+}): Promise<Result<string, ResultError<FetchError | 'INVALID_DOCUMENT'>[]>> {
   if (src.type === 'local' || src.type === 'url') return ok(src.url);
   if (src.type === 'sfs') {
     const url = staticFileIdEndpoint(src.id);
