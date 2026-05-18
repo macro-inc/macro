@@ -308,7 +308,7 @@ type PersistedSoupViewState = {
   collapsedGroups: string[];
 };
 
-const PERSISTED_STATE_VERSION = 7;
+const PERSISTED_STATE_VERSION = 8;
 
 const listStateCache = new Map<
   string,
