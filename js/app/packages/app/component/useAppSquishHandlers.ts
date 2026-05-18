@@ -7,6 +7,16 @@ import { isEditableInput } from '@core/util/isEditableInput';
 import { isIOS } from '@solid-primitives/platform';
 import { onCleanup, onMount } from 'solid-js';
 
+function resetVirtualKeyboardState() {
+  setVirtualKeyboardVisible(false);
+  setVirtualKeyboardHeight(0);
+  document.documentElement.style.setProperty('--dvh', '1dvh');
+  document.documentElement.style.setProperty(
+    '--virtual-keyboard-height',
+    '0px'
+  );
+}
+
 /**
  * Functionality for responding to virtual keyboard appearance in web app and native mobile app.
  */
@@ -31,13 +41,16 @@ export function useAppSquishHandlers() {
     };
 
     const handleKeyboardWillHide = () => {
-      setVirtualKeyboardVisible(false);
-      setVirtualKeyboardHeight(0);
-      document.documentElement.style.setProperty('--dvh', '1dvh');
-      document.documentElement.style.setProperty(
-        '--virtual-keyboard-height',
-        '0px'
-      );
+      resetVirtualKeyboardState();
+    };
+
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        !isEditableInput(document.activeElement)
+      ) {
+        resetVirtualKeyboardState();
+      }
     };
 
     onMount(() => {
@@ -48,10 +61,15 @@ export function useAppSquishHandlers() {
       document.documentElement.style.setProperty('--dvh', '1dvh');
       window.addEventListener('keyboardWillShow', handleKeyboardWillShow);
       window.addEventListener('keyboardWillHide', handleKeyboardWillHide);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
 
       onCleanup(() => {
         window.removeEventListener('keyboardWillShow', handleKeyboardWillShow);
         window.removeEventListener('keyboardWillHide', handleKeyboardWillHide);
+        document.removeEventListener(
+          'visibilitychange',
+          handleVisibilityChange
+        );
       });
     });
   } else if (isIOS) {
