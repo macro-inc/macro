@@ -2,13 +2,13 @@ import {
   entityReferencesToIdSet,
   updateEntityReferences,
 } from '@core/component/Properties/utils/entityConversion';
-import { PropertyEntitySelector } from '../selectors/PropertyEntitySelector';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createSignal, Show } from 'solid-js';
 import { useProperty } from '../../core/context';
 import type { EntityProperty, PropertyApiValues } from '../../types';
 import { isEntityProperty } from '../../utils';
+import { PropertyEntitySelector } from '../selectors/PropertyEntitySelector';
 import { EditorPopover } from './EditorPopover';
 
 export type EntityEditorProps = {

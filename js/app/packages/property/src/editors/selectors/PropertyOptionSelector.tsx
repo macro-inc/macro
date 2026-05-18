@@ -1,3 +1,6 @@
+import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue';
+import { useSearchInputFocus } from '@core/component/Properties/utils';
+import { ERROR_MESSAGES } from '@core/component/Properties/utils/errorHandling';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import CircleDashedEmpty from '@icon/circle-dashed.svg';
 import SearchIcon from '@icon/magnifying-glass.svg';
@@ -18,9 +21,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { useSearchInputFocus } from '@core/component/Properties/utils';
-import { ERROR_MESSAGES } from '@core/component/Properties/utils/errorHandling';
-import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue';
 import { OptionCheckBox } from './OptionCheckBox';
 import type { OptionSelectorConfig, SelectableOption } from './types';
 

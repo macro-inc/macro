@@ -1,3 +1,10 @@
+import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
+import { useEmail, useUserId } from '@core/context/user';
+import { useAugmentUserWithDmActivity } from '@core/user';
+import { createFreshSearch } from '@core/util/freshSort';
+import type { EmailEntity } from '@entity';
+import XIcon from '@icon/x.svg';
+import { createEmailsInfiniteQuery } from '@macro-entity';
 import {
   type CombinedEntity,
   createEntitySearchConfig,
@@ -12,13 +19,6 @@ import {
   useQuickAccessEntities,
   userToEntity,
 } from '@property';
-import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
-import { useEmail, useUserId } from '@core/context/user';
-import { useAugmentUserWithDmActivity } from '@core/user';
-import { createFreshSearch } from '@core/util/freshSort';
-import type { EmailEntity } from '@entity';
-import XIcon from '@icon/x.svg';
-import { createEmailsInfiniteQuery } from '@macro-entity';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';

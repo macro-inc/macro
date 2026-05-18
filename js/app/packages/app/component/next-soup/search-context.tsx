@@ -1,7 +1,4 @@
-import {
-  type EntityTypeItemMap,
-  useQuickAccessEntities,
-} from '@property';
+import { type EntityTypeItemMap, useQuickAccessEntities } from '@property';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import {
   type Accessor,

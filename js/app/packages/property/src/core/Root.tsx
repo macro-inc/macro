@@ -29,9 +29,9 @@ export function Root(props: PropertyRootProps) {
   ]);
 
   const [editorOpen, setEditorOpen] = createSignal(false);
-  const [editorAnchor, setEditorAnchor] = createSignal<
-    HTMLElement | undefined
-  >(undefined);
+  const [editorAnchor, setEditorAnchor] = createSignal<HTMLElement | undefined>(
+    undefined
+  );
 
   const value: PropertyRootContextValue = {
     property: () => local.property,

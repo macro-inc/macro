@@ -9,7 +9,7 @@ import {
   PROPERTIES_METADATA,
 } from '../../mocks/mockProperties';
 import { Property } from '../property';
-import type { Property as PropertyT, PropertyApiValues } from '../types';
+import type { PropertyApiValues, Property as PropertyT } from '../types';
 
 // Seed mock display names so user properties render real first names.
 seedMockDisplayNames([
@@ -294,7 +294,10 @@ const PropertyDebug: Component = () => {
  */
 const EditorsDemo: Component = () => {
   return (
-    <div class="grid gap-3" style={{ 'grid-template-columns': 'repeat(2, minmax(0, 1fr))' }}>
+    <div
+      class="grid gap-3"
+      style={{ 'grid-template-columns': 'repeat(2, minmax(0, 1fr))' }}
+    >
       <For each={PROPERTIES_FILLED}>
         {(initial) => <EditorRow initial={initial} />}
       </For>
@@ -318,10 +321,16 @@ const EditorRow: Component<{ initial: PropertyT }> = (props) => {
     if (p.valueType === 'DATE' && value.valueType === 'DATE') {
       return { ...p, value: value.value };
     }
-    if (p.valueType === 'SELECT_STRING' && value.valueType === 'SELECT_STRING') {
+    if (
+      p.valueType === 'SELECT_STRING' &&
+      value.valueType === 'SELECT_STRING'
+    ) {
       return { ...p, value: value.values };
     }
-    if (p.valueType === 'SELECT_NUMBER' && value.valueType === 'SELECT_NUMBER') {
+    if (
+      p.valueType === 'SELECT_NUMBER' &&
+      value.valueType === 'SELECT_NUMBER'
+    ) {
       return { ...p, value: value.values };
     }
     if (p.valueType === 'ENTITY' && value.valueType === 'ENTITY') {

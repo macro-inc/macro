@@ -4,6 +4,10 @@
 // property values in any layout, replacing the duplicated PropertyValue /
 // CondensedPropertyValue / InlinePropertyValue / ListPropertyValue trees.
 
+import {
+  PropertyDisplay,
+  PropertyDisplayCondensed,
+} from './composed/PropertyDisplay';
 import { Layout } from './core/Layout';
 import { Root } from './core/Root';
 import { Slot } from './core/Slot';
@@ -64,4 +68,9 @@ export const Property = {
   InlineNumber: InlineNumberEditor,
   InlineBoolean: InlineBooleanEditor,
   InlineLink: InlineLinkEditor,
+
+  // Composed: opinionated display + editor compositions. Drop-in replacements
+  // for the legacy PropertyValue / CondensedPropertyValue routers.
+  Display: PropertyDisplay,
+  DisplayCondensed: PropertyDisplayCondensed,
 };

@@ -20,8 +20,10 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
   const { saveHandler, entityType } = usePropertiesContext();
   const blockId = useMaybeBlockId();
 
-  const onSave = (p: Parameters<typeof saveHandler.saveProperty>[0], v: PropertyApiValues) =>
-    saveHandler.saveProperty(p, v);
+  const onSave = (
+    p: Parameters<typeof saveHandler.saveProperty>[0],
+    v: PropertyApiValues
+  ) => saveHandler.saveProperty(p, v);
 
   return (
     <Property.Root
@@ -30,10 +32,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
       onSave={onSave}
       onRefresh={props.onSaved}
     >
-      <LegacyEditorBridge
-        anchor={props.anchorRef}
-        onExit={props.onClose}
-      />
+      <LegacyEditorBridge anchor={props.anchorRef} onExit={props.onClose} />
       <Property.PopoverEditor entitySelfFilter={{ entityType, blockId }} />
     </Property.Root>
   );

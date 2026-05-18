@@ -1,7 +1,3 @@
-export { CreatePropertyModal } from './CreatePropertyModal';
-export { EditPropertyValueModal } from './EditPropertyValueModal';
-export { Modals } from './Modals';
-export { SelectPropertyModal } from './SelectPropertyModal';
 // The selectors and entity utilities used to live under ./shared. They were
 // physically moved into @property/editors/selectors; this barrel re-exports
 // the public-facing helpers so callers that pulled them from the modal
@@ -11,9 +7,9 @@ export {
   createEntitySearchConfig,
   Dropdown,
   type DropdownOption,
+  type EntityTypeItemMap,
   entityDataToEntity,
   entityTypeToBuckets,
-  type EntityTypeItemMap,
   getEntityName,
   getEntitySearchText,
   getEntityTimestampedItem,
@@ -28,3 +24,7 @@ export {
   useQuickAccessEntities,
   userToEntity,
 } from '@property';
+export { CreatePropertyModal } from './CreatePropertyModal';
+export { EditPropertyValueModal } from './EditPropertyValueModal';
+export { Modals } from './Modals';
+export { SelectPropertyModal } from './SelectPropertyModal';

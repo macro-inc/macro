@@ -1,8 +1,8 @@
-import { PropertyDateSelector } from '../selectors/PropertyDateSelector';
 import { createSignal, Show } from 'solid-js';
 import { useProperty } from '../../core/context';
 import type { DateProperty } from '../../types';
 import { isDateProperty } from '../../utils';
+import { PropertyDateSelector } from '../selectors/PropertyDateSelector';
 import { EditorPopover } from './EditorPopover';
 
 /**

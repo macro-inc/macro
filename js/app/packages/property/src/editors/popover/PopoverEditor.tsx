@@ -27,9 +27,7 @@ export function PopoverEditor(props: PopoverEditorProps) {
       <Match when={type() === 'DATE'}>
         <DateEditor />
       </Match>
-      <Match
-        when={type() === 'SELECT_STRING' || type() === 'SELECT_NUMBER'}
-      >
+      <Match when={type() === 'SELECT_STRING' || type() === 'SELECT_NUMBER'}>
         <SelectEditor />
       </Match>
       <Match when={type() === 'ENTITY'}>

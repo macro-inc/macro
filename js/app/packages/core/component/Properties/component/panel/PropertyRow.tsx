@@ -1,16 +1,26 @@
+import { useMaybeBlockId } from '@core/block';
+import { Property } from '@property';
 import type { Component } from 'solid-js';
-import type { Property } from '../../types';
-import { PropertyValue } from '../propertyValue/PropertyValue';
+import { usePropertiesContext } from '../../context/PropertiesContext';
+import type { Property as PropertyT } from '../../types';
 import { PropertyLabel } from './PropertyLabel';
 
 interface PropertyRowProps {
-  property: Property;
-  onValueClick: (property: Property, anchor?: HTMLElement) => void;
+  property: PropertyT;
   withDelete?: boolean;
   withPin?: boolean;
 }
 
+/**
+ * Panel row: label + value. Value uses Property.Display, which composes
+ * display + inline/popover editing entirely from primitives — the legacy
+ * PropertiesContext modal stack is bypassed here. Saves still route through
+ * the panel's saveHandler (bulk-save mutation).
+ */
 export const PropertyRow: Component<PropertyRowProps> = (props) => {
+  const { saveHandler, entityType, onRefresh } = usePropertiesContext();
+  const blockId = useMaybeBlockId();
+
   return (
     <>
       <div class="flex items-start min-w-0">
@@ -21,7 +31,14 @@ export const PropertyRow: Component<PropertyRowProps> = (props) => {
         />
       </div>
       <div class="ph-no-capture flex items-start min-w-0">
-        <PropertyValue property={props.property} onEdit={props.onValueClick} />
+        <Property.Root
+          property={props.property}
+          canEdit
+          onSave={(p, v) => saveHandler.saveProperty(p, v)}
+          onRefresh={onRefresh}
+        >
+          <Property.Display entitySelfFilter={{ entityType, blockId }} />
+        </Property.Root>
       </div>
     </>
   );

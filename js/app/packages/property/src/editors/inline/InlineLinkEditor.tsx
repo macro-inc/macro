@@ -31,7 +31,8 @@ export function InlineLinkEditor() {
 
   const property = () => ctx.property();
   const isReadOnly = () => property().isMetadata || !ctx.canEdit();
-  const links = () => (isLinkProperty(property()) ? getLinkValues(property()) : []);
+  const links = () =>
+    isLinkProperty(property()) ? getLinkValues(property()) : [];
 
   const startAdding = () => {
     if (isReadOnly()) return;
@@ -165,26 +166,24 @@ export function InlineLinkEditor() {
             </Show>
           }
         >
-          <>
-            <input
-              ref={(el) => setTimeout(() => el.focus(), 0)}
-              type="text"
-              value={inputValue()}
-              onInput={(e) => setInputValue(e.currentTarget.value)}
-              onKeyDown={handleKeyDown}
-              onBlur={() => {
-                setTimeout(() => {
-                  if (isAdding()) handleAddLink();
-                }, 100);
-              }}
-              placeholder="Enter URL..."
-              disabled={isSaving()}
-              class="text-left px-2 py-0.5 bg-transparent focus:outline-none text-ink inline-block shrink-0 rounded-sm"
-            />
-            <Show when={error()}>
-              <div class="text-failure-ink mt-1 w-full">{error()}</div>
-            </Show>
-          </>
+          <input
+            ref={(el) => setTimeout(() => el.focus(), 0)}
+            type="text"
+            value={inputValue()}
+            onInput={(e) => setInputValue(e.currentTarget.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={() => {
+              setTimeout(() => {
+                if (isAdding()) handleAddLink();
+              }, 100);
+            }}
+            placeholder="Enter URL..."
+            disabled={isSaving()}
+            class="text-left px-2 py-0.5 bg-transparent focus:outline-none text-ink inline-block shrink-0 rounded-sm"
+          />
+          <Show when={error()}>
+            <div class="text-failure-ink mt-1 w-full">{error()}</div>
+          </Show>
         </Show>
       </Show>
     </div>

@@ -1,5 +1,4 @@
 import { usePropertyEditor } from '@core/component/Properties/hooks/usePropertyEditor';
-import { PropertyOptionSelector } from '../selectors/PropertyOptionSelector';
 import {
   useAddPropertyOptionMutation,
   usePropertyOptionsQuery,
@@ -8,6 +7,7 @@ import { onMount, Show } from 'solid-js';
 import { useProperty } from '../../core/context';
 import type { PropertyApiValues, SelectProperty } from '../../types';
 import { formatOptionValue, isSelectProperty } from '../../utils';
+import { PropertyOptionSelector } from '../selectors/PropertyOptionSelector';
 import { EditorPopover } from './EditorPopover';
 
 /**
