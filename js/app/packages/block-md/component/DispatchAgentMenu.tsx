@@ -90,6 +90,10 @@ async function generateTaskPrompt(
   lines.push(
     'If you have the Macro MCP server enabled, use it to gather additional context about this task.'
   );
+  lines.push('');
+  lines.push(
+    'When committing, please follow the Conventional Commits spec (e.g. `feat: ...`, `fix: ...`, `chore: ...`) so the history stays consistent.'
+  );
 
   return lines.join('\n');
 }
