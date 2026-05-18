@@ -332,7 +332,7 @@ export const SoupView = (props: SoupViewProps) => {
         disableLocalSearch={props.disableLocalSearch}
         additionalEntities={props.additionalEntities}
       >
-        <div class="size-full flex flex-col">
+        <div class="size-full flex flex-col" data-list-view={activeListView()}>
           <div class="flex flex-col w-full">
             <SplitHeaderLeft>
               <div

@@ -126,7 +126,10 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
   const handleFileUpload = useHandleFileUpload({ projectId: projectId() });
 
   return (
-    <div class="size-full flex items-center justify-center p-4 text-ink-muted">
+    <div
+      class="size-full flex items-center justify-center p-4 text-ink-muted"
+      data-soup-empty-state
+    >
       <div class="panel w-full flex flex-col items-center size-full">
         {getRandomArcanumGraphic()}
         <p class="text-ink-muted font-mono">
@@ -182,7 +185,7 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
 
 function AgentsEmptyState() {
   return (
-    <div class="size-full relative overflow-hidden">
+    <div class="size-full relative overflow-hidden" data-soup-empty-state>
       <div class="absolute inset-0 flex flex-col items-center pointer-events-none p-4">
         {getRandomArcanumGraphic('h-72 m-8 mt-32 @max-sm:mt-20 opacity-5')}
       </div>

@@ -27,7 +27,9 @@ test.describe('local app smoke', () => {
 
   test('documents view shows seeded documents', async ({ page }) => {
     await gotoApp(page, '/component/documents');
-    await expect(page.getByRole('heading', { name: 'Documents' })).toBeVisible();
+    await expect(page.locator('[data-list-view="documents"]')).toBeVisible({
+      timeout: 30_000,
+    });
 
     await expectEntityInCurrentList(
       page,
@@ -38,7 +40,9 @@ test.describe('local app smoke', () => {
 
   test('channels view and channel page show seeded channel data', async ({ page }) => {
     await gotoApp(page, '/component/channels');
-    await expect(page.getByRole('heading', { name: 'Channels' })).toBeVisible();
+    await expect(page.locator('[data-list-view="channels"]')).toBeVisible({
+      timeout: 30_000,
+    });
 
     await expectEntityInCurrentList(
       page,

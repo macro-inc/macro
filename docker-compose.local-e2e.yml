@@ -53,14 +53,43 @@ services:
     environment: *local-e2e-env
   contacts_service:
     environment: *local-e2e-env
+  # Not needed by the smoke suite. Keep this behind an inactive profile so
+  # missing cognition-only env vars do not block local E2E startup.
   document_cognition_service:
+    profiles:
+      - local-e2e-unused
     environment: *local-e2e-env
+    # lexical_service is intentionally disabled below for local E2E, so remove
+    # it from the base service dependency set if this profile is enabled manually.
+    depends_on: !override
+      - document_storage_service
+      - email_service
+      - static_file_service
+      - sync_service
   document_storage_service:
     environment: *local-e2e-env
+  document_upload_finalizer:
+    environment:
+      <<: *local-e2e-env
+      DOCUMENT_UPLOAD_FINALIZER_QUEUE_URL: http://localstack:4566/000000000000/document-upload-finalizer-queue
+    # lexical_service is intentionally disabled below for local E2E, so remove
+    # it from the base service dependency set.
+    depends_on: !override
+      - postgres
+      - sync_service
   email_service:
     environment: *local-e2e-env
+  # Not needed by the smoke suite. Keep this behind an inactive profile because
+  # it requires push/SNS/email notification env that is unrelated to local E2E.
   notification_service:
+    profiles:
+      - local-e2e-unused
     environment: *local-e2e-env
+    depends_on: !override
+      - redis
+      - authentication-service
+      - connection_gateway
+      - document_storage_service
   search_processing_service:
     environment: *local-e2e-env
   static_file_service:
