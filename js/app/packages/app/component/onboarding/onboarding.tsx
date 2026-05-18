@@ -102,7 +102,6 @@ function OnboardingInner() {
     }
   });
 
-
   const cleanParam = (key: string) => {
     const cleanParams = new URLSearchParams(window.location.search);
     cleanParams.delete(key);

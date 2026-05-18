@@ -129,9 +129,7 @@ function CheckoutView() {
             </span>
             <span class="text-ink-muted text-sm pb-0.5">/mo</span>
           </div>
-          <span class="text-sm text-ink-muted">
-            Up to {plan().seats} seats
-          </span>
+          <span class="text-sm text-ink-muted">Up to {plan().seats} seats</span>
         </div>
 
         <div class="flex flex-col text-sm">
