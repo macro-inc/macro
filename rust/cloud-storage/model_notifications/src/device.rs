@@ -13,4 +13,10 @@ use utoipa::ToSchema;
 pub enum DeviceType {
     Ios,
     Android,
+    /// iOS VoIP device (PushKit / CallKit). Registered and delivered via the
+    /// APNS_VOIP SNS platform application — separate from the regular APNS one.
+    #[serde(rename = "iosvoip")]
+    #[sqlx(rename = "iosvoip")]
+    #[strum(serialize = "iosvoip")]
+    IosVoip,
 }

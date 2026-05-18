@@ -1,9 +1,9 @@
 import { useSettingsState } from "@core/constant/SettingsState";
 import { useSplitLayout } from "../split-layout/layout";
 import { Show } from "solid-js";
-import { Button } from "@ui/components/Button";
-import { cn } from "@ui/utils/classname";
-import { LabelAndHotKey } from "@core/component/Tooltip";
+import { Button } from "@ui";
+import { cn } from "@ui";
+
 import { TOKENS } from "@core/hotkey/tokens";
 import IconGear from '@macro-icons/macro-gear.svg';
 
@@ -19,12 +19,8 @@ export function SettingsButton() {
     <Show when={isSingleSplit()}>
       <Button
         class="px-0"
-        tooltip={
-          <LabelAndHotKey
-            label={settingsOpen() ? 'Close Settings' : 'Open Settings'}
-            hotkeyToken={TOKENS.global.toggleSettings}
-          />
-        }
+        label={settingsOpen() ? 'Close Settings' : 'Open Settings'}
+        hotkey={TOKENS.global.toggleSettings}
         onClick={() => toggleSettings()}
       >
         <IconGear class={cn("size-4.5 box-content rounded-full hover:bg-transparent p-1", settingsOpen() && 'bg-accent/20 text-accent hover:text-ink hover:bg-hover',

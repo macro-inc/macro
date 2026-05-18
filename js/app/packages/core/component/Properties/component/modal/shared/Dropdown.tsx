@@ -1,7 +1,7 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { cn } from '@ui/utils/classname';
 import ChevronDownIcon from '@icon/bold/caret-down-bold.svg';
 import CheckIcon from '@icon/bold/check-bold.svg';
+import { cn, Layer } from '@ui';
 import {
   type Component,
   createEffect,
@@ -11,7 +11,6 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { Layer } from '@ui';
 
 export type DropdownOption<T> = {
   value: T;
@@ -107,7 +106,7 @@ export const Dropdown = <T extends string | number>(
         </div>
       </div>
       <Show when={isSelected}>
-        <CheckIcon class="w-3 h-3 shrink-0" />
+        <CheckIcon class="size-3 shrink-0" />
       </Show>
     </>
   );
@@ -118,18 +117,18 @@ export const Dropdown = <T extends string | number>(
         ref={buttonRef}
         type="button"
         onClick={() => setIsOpen(!isOpen())}
-        class="w-full p-1.5 border border-edge-muted bg-input text-sm text-ink text-left flex items-center gap-2 hover:bg-hover rounded-sm"
+        class="w-full p-1.5 border border-edge-muted bg-surface text-sm text-ink text-left flex items-center gap-2 hover:bg-hover rounded-sm"
       >
         {props.renderValue?.(selectedOption()) ??
           defaultRenderValue(selectedOption())}
-        <ChevronDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
+        <ChevronDownIcon class="size-3 text-ink-muted shrink-0" />
       </button>
       <Show when={isOpen()}>
         <ScopedPortal scope="local">
           <Layer depth={2}>
             <div
               ref={menuRef}
-              class="z-toast-region border border-edge bg-menu shadow-lg max-h-64 overflow-y-auto p-1"
+              class="z-toast-region border border-edge bg-surface shadow-lg max-h-64 overflow-y-auto p-1"
               style={getMenuStyle()}
             >
               <For each={props.options}>
@@ -153,7 +152,7 @@ export const Dropdown = <T extends string | number>(
                           ? 'opacity-50 cursor-not-allowed'
                           : isSelected()
                             ? 'bg-active text-ink'
-                            : 'hover:bg-hover/50 text-ink'
+                            : 'hover:bg-hover text-ink'
                       )}
                     >
                       {props.renderOption?.(option, isSelected()) ??

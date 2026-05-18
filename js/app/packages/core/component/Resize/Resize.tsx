@@ -1,4 +1,5 @@
 import { createElementSize } from '@solid-primitives/resize-observer';
+import { cn } from '@ui/utils/classname';
 import {
   createContext,
   createEffect,
@@ -12,7 +13,12 @@ import {
   useContext,
 } from 'solid-js';
 import { createResizeSolver } from './solver';
-import type { PanelConfig, PanelId, ResizeZoneCtx } from './types';
+import type {
+  PanelConfig,
+  PanelId,
+  PanelSizeSpec,
+  ResizeZoneCtx,
+} from './types';
 
 export const ResizeZoneContext = createContext<ResizeZoneCtx>();
 
@@ -24,6 +30,7 @@ export const ResizeZoneContext = createContext<ResizeZoneCtx>();
  * @property minSize - The zone-wide min size for a panel (in px). Individual panels can override.
  * @property class - Optional class name for the Zone.
  * @property id - Optional id for the Zone.
+ * @property resizable - Optional boolean indicating whether the zone is resizable. Defaults to true.
  */
 type ZoneProps = {
   direction: 'horizontal' | 'vertical';
@@ -32,6 +39,7 @@ type ZoneProps = {
   class?: string;
   id?: string;
   captureResizeCtx?: (ctx: ResizeZoneCtx) => void;
+  resizable?: boolean;
 };
 
 /**
@@ -136,6 +144,8 @@ function Zone(props: ParentProps<ZoneProps>) {
     props.captureResizeCtx?.(ctx);
   });
 
+  const gutterEnabled = () => Boolean(props.resizable ?? true);
+
   return (
     <div
       class={props.class ?? ''}
@@ -149,7 +159,7 @@ function Zone(props: ParentProps<ZoneProps>) {
     >
       <ResizeZoneContext.Provider value={ctx}>
         {props.children}
-        <Show when={visibleLayouts().length > 1}>
+        <Show when={gutterEnabled() && visibleLayouts().length > 1}>
           <Index each={visibleLayouts()}>
             {(panel, visibleIndex) => {
               const actualIndex = solver.order().indexOf(panel().id);
@@ -189,6 +199,14 @@ type PanelProps = {
   id: PanelId;
   minSize: number;
   maxSize?: number;
+  /**
+   * Initial target size for the panel at registration time.
+   * - number: interpreted as a percentage (e.g., 25 = 25%)
+   * - PanelSizeSpec: explicit spec like { kind: 'percent', percent: 25 } or { kind: 'px', px: 300 }
+   *
+   * After initial layout, the panel resizes normally via drag handles.
+   */
+  target?: number | PanelSizeSpec;
   collapsed?: () => boolean;
   hidden?: () => boolean;
   /** The index position for this panel in the layout order */
@@ -226,6 +244,15 @@ function Panel(props: ParentProps<PanelProps>) {
   const ctx = useContext(ResizeZoneContext);
   if (!ctx) throw new Error('<Resize.Panel> must be inside <Resize.Zone>');
 
+  // Convert shorthand number (percentage) to PanelSizeSpec
+  const getTarget = (): PanelSizeSpec | undefined => {
+    if (props.target === undefined) return undefined;
+    if (typeof props.target === 'number') {
+      return { kind: 'percent', percent: props.target };
+    }
+    return props.target;
+  };
+
   onMount(() => {
     if (props.collapsed?.() === false) return;
     ctx.register(
@@ -233,6 +260,7 @@ function Panel(props: ParentProps<PanelProps>) {
         id: props.id,
         minSize: props.minSize,
         maxSize: props.maxSize ?? Infinity,
+        target: getTarget(),
       },
       props.index
     );
@@ -256,6 +284,7 @@ function Panel(props: ParentProps<PanelProps>) {
           id: props.id,
           minSize: props.minSize,
           maxSize: props.maxSize ?? Infinity,
+          target: getTarget(),
         },
         props.index
       );
@@ -281,6 +310,7 @@ function Panel(props: ParentProps<PanelProps>) {
             id: props.id,
             minSize: props.minSize,
             maxSize: props.maxSize ?? Infinity,
+            target: getTarget(),
           },
           props.index
         );
@@ -419,32 +449,27 @@ function Gutter(props: GutterProps) {
       aria-label={`resize at ${props.index}`}
       style={{
         position: 'absolute',
-        cursor:
-          ctx.direction === 'horizontal'
-            ? 'var(--cursor-col-resize)'
-            : 'var(--cursor-row-resize)',
+        cursor: ctx.direction === 'horizontal' ? 'col-resize' : 'row-resize',
         ...styles(),
       }}
       onPointerDown={onPointerDown}
       onKeyDown={onKeyDown}
     >
       <div
-        class="border-accent absolute opacity-0 group-focus:opacity-100"
-        classList={{
-          'group-hover:opacity-50': !ptrDown(),
-          'opacity-100': ptrDown(),
-        }}
+        class={cn(
+          'bg-accent absolute opacity-0 group-focus:opacity-100 rounded-[1px]',
+          !ptrDown() && 'group-hover:opacity-50',
+          ptrDown() && 'opacity-100'
+        )}
         style={{
           left: ctx.direction === 'horizontal' ? '50%' : '0',
           top: ctx.direction === 'vertical' ? '50%' : '0',
-          width: ctx.direction === 'horizontal' ? '0' : '100%',
-          height: ctx.direction === 'vertical' ? '0' : '100%',
-          'border-left-width': ctx.direction === 'horizontal' ? '1px' : '0',
-          'border-top-width': ctx.direction === 'vertical' ? '1px' : '0',
+          width: ctx.direction === 'horizontal' ? '2px' : '100%',
+          height: ctx.direction === 'vertical' ? '2px' : '100%',
           transform:
             ctx.direction === 'horizontal'
-              ? 'translate(-0.5px, 0)'
-              : 'translate(0, -0.5px)',
+              ? 'translateX(-50%)'
+              : 'translateY(-50%)',
         }}
       ></div>
     </div>

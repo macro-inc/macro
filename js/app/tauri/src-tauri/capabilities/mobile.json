@@ -14,6 +14,8 @@
     "haptics:allow-vibrate",
     "log:default",
     "auth:allow-authenticate",
-    "device-info:default"
+    "device-info:default",
+    "call-kit:allow-get-voip-token",
+    "call-kit:allow-end-active-call"
   ]
 }

@@ -10,15 +10,18 @@ use entity_access::domain::models::{
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use notification::domain::models::apple::VoipPushPayload;
 use notification::domain::models::apple::{
     APNSPushNotification, Alert, AlertDictionary, Aps, PushNotificationData,
 };
 use notification::domain::models::{
     NotifCollapseKey, Notification, NotificationExtIos, SendNotificationRequestBuilder,
 };
+use notification::domain::ports::VoipPushSender;
 use notification::domain::service::NotificationIngress;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+
 use uuid::Uuid;
 
 use crate::domain::models::{EditCallRecordRequest, EditCallTranscriptRequest};
@@ -31,8 +34,20 @@ use super::models::{
 };
 use super::ports::{
     CallRecordQueryService, CallRepository, CallRtcClient, CallSearchIndexer, CallService,
-    CallSummarizer, NoOpCallSearchIndexer, RecordingStorage,
+    CallSummarizer, NoOpCallSearchIndexer, NoOpVoiceRepository, RecordingStorage, VoiceRepository,
 };
+
+/// Cosine distance threshold used by the post-archive voice matcher when
+/// resolving a transcript's `voice_id` to an enrolled macro user.
+///
+/// pgvector exposes cosine *distance* via `<=>` (range 0.0–2.0; 0.0 ≈
+/// identical, 1.0 ≈ orthogonal). Resemblyzer's docs report ~0.75 cosine
+/// *similarity* for same-speaker pairs, which corresponds to ~0.25
+/// cosine distance — that's our starting point. Lower = stricter (fewer
+/// false matches, more missed matches); higher = looser. Tune with real
+/// enrollment data; consider promoting to per-tenant config once we have
+/// signal on false-positive vs miss rates.
+pub const VOICE_MATCH_DISTANCE_THRESHOLD: f32 = 0.25;
 
 /// The concrete call service implementation.
 pub struct CallServiceImpl<
@@ -44,6 +59,8 @@ pub struct CallServiceImpl<
     S: RecordingStorage,
     Sm: CallSummarizer = NoopCallSummarizer,
     I: CallSearchIndexer = NoOpCallSearchIndexer,
+    V: VoipPushSender = (),
+    Vr: VoiceRepository = NoOpVoiceRepository,
 > {
     repo: R,
     rtc_client: C,
@@ -56,6 +73,8 @@ pub struct CallServiceImpl<
     egress_s3_config: Option<EgressS3Config>,
     internal_call_secret: Option<String>,
     summarizer: Option<Sm>,
+    voip_push_sender: V,
+    voice_repo: Vr,
 }
 
 impl<
@@ -66,7 +85,7 @@ impl<
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, NoOpCallSearchIndexer>
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, NoOpCallSearchIndexer, (), NoOpVoiceRepository>
 {
     /// Create a new call service.
     pub fn new(
@@ -90,6 +109,8 @@ impl<
             egress_s3_config: None,
             internal_call_secret: None,
             summarizer: None,
+            voip_push_sender: (),
+            voice_repo: NoOpVoiceRepository,
         }
     }
 }
@@ -103,7 +124,9 @@ impl<
     S: RecordingStorage,
     Sm: CallSummarizer,
     I: CallSearchIndexer,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, I>
+    V: VoipPushSender,
+    Vr: VoiceRepository,
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
 {
     /// Enable auto-recording with the given S3 configuration.
     pub fn with_egress(mut self, s3_config: EgressS3Config) -> Self {
@@ -124,11 +147,34 @@ impl<
         self
     }
 
+    /// Attach a VoIP push sender so incoming-call PushKit notifications are
+    /// delivered when a new call is created.
+    pub fn with_voip_push_sender<V2: VoipPushSender>(
+        self,
+        sender: V2,
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V2, Vr> {
+        CallServiceImpl {
+            repo: self.repo,
+            rtc_client: self.rtc_client,
+            connection_service: self.connection_service,
+            entity_access_service: self.entity_access_service,
+            notification_ingress: self.notification_ingress,
+            recording_storage: self.recording_storage,
+            search_indexer: self.search_indexer,
+            server_url: self.server_url,
+            egress_s3_config: self.egress_s3_config,
+            internal_call_secret: self.internal_call_secret,
+            summarizer: self.summarizer,
+            voip_push_sender: sender,
+            voice_repo: self.voice_repo,
+        }
+    }
+
     /// Swap the search indexer.
     pub fn with_search_indexer<I2: CallSearchIndexer>(
         self,
         indexer: I2,
-    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I2> {
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I2, V, Vr> {
         CallServiceImpl {
             repo: self.repo,
             rtc_client: self.rtc_client,
@@ -141,6 +187,30 @@ impl<
             egress_s3_config: self.egress_s3_config,
             internal_call_secret: self.internal_call_secret,
             summarizer: self.summarizer,
+            voip_push_sender: self.voip_push_sender,
+            voice_repo: self.voice_repo,
+        }
+    }
+
+    /// Swap the voice repository.
+    pub fn with_voice_repo<Vr2: VoiceRepository>(
+        self,
+        voice_repo: Vr2,
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr2> {
+        CallServiceImpl {
+            repo: self.repo,
+            rtc_client: self.rtc_client,
+            connection_service: self.connection_service,
+            entity_access_service: self.entity_access_service,
+            notification_ingress: self.notification_ingress,
+            recording_storage: self.recording_storage,
+            search_indexer: self.search_indexer,
+            server_url: self.server_url,
+            egress_s3_config: self.egress_s3_config,
+            internal_call_secret: self.internal_call_secret,
+            summarizer: self.summarizer,
+            voip_push_sender: self.voip_push_sender,
+            voice_repo,
         }
     }
 
@@ -222,6 +292,20 @@ impl<
     }
 }
 
+fn exclude_voip_recipients<'a>(
+    recipient_ids: HashSet<MacroUserIdStr<'a>>,
+    voip_recipient_ids: &HashSet<MacroUserIdStr<'static>>,
+) -> HashSet<MacroUserIdStr<'a>> {
+    recipient_ids
+        .into_iter()
+        .filter(|recipient_id| {
+            !voip_recipient_ids
+                .iter()
+                .any(|voip_recipient_id| voip_recipient_id.as_ref() == recipient_id.as_ref())
+        })
+        .collect()
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 struct CallStartedNotification {
     sender_profile_picture_url: Option<String>,
@@ -280,7 +364,9 @@ impl<
     S: RecordingStorage,
     Sm: CallSummarizer + Clone,
     I: CallSearchIndexer,
-> CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, I>
+    V: VoipPushSender,
+    Vr: VoiceRepository + Clone,
+> CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
 {
     fn validate_internal_call(&self, token: &str) -> bool {
         self.internal_call_secret
@@ -380,7 +466,7 @@ impl<
                         )
                         .await;
 
-                        // Send push notification to channel members (best-effort).
+                        // Send push notification and VoIP push to channel members (best-effort).
                         let _: Result<(), anyhow::Error> = async {
                             let channel_name = self
                                 .repo
@@ -404,23 +490,53 @@ impl<
                                 .ok()
                                 .flatten();
 
-                            let req = SendNotificationRequestBuilder {
-                                notification_entity: EntityType::Channel
-                                    .with_entity_string(channel_id_str),
-                                notification: CallStartedNotification {
-                                    sender_profile_picture_url,
-                                    channel_name,
-                                },
-                                sender_id: Some(user_id.copied()),
-                                recipient_ids,
-                            }
-                            .into_request()
-                            .with_apns();
-
-                            self.notification_ingress
-                                .send_notification(req)
+                            let caller_name = self
+                                .repo
+                                .get_user_display_name(user_id.copied())
                                 .await
-                                .map_err(|e| anyhow::anyhow!(e))?;
+                                .ok()
+                                .flatten()
+                                .unwrap_or_else(|| user_id.email_str().to_string());
+
+                            // Send VoIP push for the native iOS incoming-call sheet first.
+                            // Recipients with successful VoIP delivery do not need the regular
+                            // APNS alert banner as well.
+                            let recipient_vec: Vec<MacroUserIdStr<'_>> =
+                                recipient_ids.iter().cloned().collect();
+                            let voip_payload = VoipPushPayload {
+                                aps: Default::default(),
+                                call_id: call.id.to_string(),
+                                channel_id: channel_id_str.clone(),
+                                channel_name: channel_name.clone().unwrap_or_default(),
+                                caller_name,
+                            };
+                            let voip_recipient_ids = self
+                                .voip_push_sender
+                                .send_voip_push(&recipient_vec, &voip_payload)
+                                .await;
+
+                            let apns_recipient_ids =
+                                exclude_voip_recipients(recipient_ids, &voip_recipient_ids);
+
+                            if !apns_recipient_ids.is_empty() {
+                                let req = SendNotificationRequestBuilder {
+                                    notification_entity: EntityType::Channel
+                                        .with_entity_string(channel_id_str.clone()),
+                                    notification: CallStartedNotification {
+                                        sender_profile_picture_url,
+                                        channel_name: channel_name.clone(),
+                                    },
+                                    sender_id: Some(user_id.copied()),
+                                    recipient_ids: apns_recipient_ids,
+                                }
+                                .into_request()
+                                .with_apns();
+
+                                self.notification_ingress
+                                    .send_notification(req)
+                                    .await
+                                    .map_err(|e| anyhow::anyhow!(e))?;
+                            }
 
                             Ok(())
                         }
@@ -565,6 +681,7 @@ impl<
                     // Fire-and-forget summarization now that the
                     // `call_records` row is persisted.
                     self.spawn_summarize_call(call.id);
+                    self.spawn_process_voices_for_call(call.id);
 
                     if let Err(e) = self.search_indexer.enqueue_upsert(&call.id).await {
                         tracing::error!(error=?e, call_id=%call.id, "failed to enqueue call record for search indexing");
@@ -674,6 +791,7 @@ impl<
                     // Fire-and-forget summarization now that the
                     // `call_records` row is persisted.
                     self.spawn_summarize_call(call.id);
+                    self.spawn_process_voices_for_call(call.id);
 
                     if let Err(e) = self.search_indexer.enqueue_upsert(&call.id).await {
                         tracing::error!(error=?e, call_id=%call.id, "failed to enqueue call record for search indexing");
@@ -900,8 +1018,45 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))?
             .ok_or_else(|| CallError::NotFound(channel_id.to_string()))?;
 
+        // Attach a stable voice id to each transcript row. Reuse an earlier
+        // voice id for the same diarized speaker in this call before falling
+        // back to embedding-based upsert; this prevents creating a fresh
+        // `voice.id` for every finalized utterance from the same user.
+        // Failure to persist the embedding must not block transcript ingest —
+        // log and continue without a voice id.
+        let voice_id = match segment.embedding.as_deref() {
+            Some(embedding) if !embedding.is_empty() => {
+                let existing_voice_id = self
+                    .repo
+                    .get_transcript_voice_id_for_speaker(
+                        &call.id,
+                        &segment.speaker_id,
+                        segment.diarized_speaker_id.as_deref(),
+                    )
+                    .await
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, "failed to look up existing speaker voice id")
+                    })
+                    .ok()
+                    .flatten();
+
+                match existing_voice_id {
+                    Some(voice_id) => Some(voice_id),
+                    None => self
+                        .voice_repo
+                        .upsert_voice(embedding)
+                        .await
+                        .inspect_err(
+                            |e| tracing::error!(error=?e, "failed to upsert voice embedding"),
+                        )
+                        .ok(),
+                }
+            }
+            _ => None,
+        };
+
         self.repo
-            .create_transcript_segment(&call.id, &segment)
+            .create_transcript_segment(&call.id, &segment, voice_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 
@@ -1079,6 +1234,32 @@ impl<
 
         Ok(())
     }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_user_voices(&self, macro_user_id: &Uuid) -> Result<Vec<Uuid>, CallError> {
+        self.voice_repo
+            .get_user_voices(macro_user_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self, embedding))]
+    async fn set_user_voice(
+        &self,
+        macro_user_id: &Uuid,
+        embedding: &[f32],
+    ) -> Result<Uuid, CallError> {
+        let voice_id = self
+            .voice_repo
+            .upsert_voice(embedding)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        self.voice_repo
+            .link_user_voice(macro_user_id, &voice_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        Ok(voice_id)
+    }
 }
 
 impl<
@@ -1090,7 +1271,9 @@ impl<
     S: RecordingStorage,
     Sm: CallSummarizer + Clone,
     I: CallSearchIndexer,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, I>
+    V: VoipPushSender,
+    Vr: VoiceRepository + Clone,
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
 {
     /// Fire-and-forget spawn of [`CallService::summarize_call`] for `call_id`.
     ///
@@ -1168,6 +1351,169 @@ impl<
             }
         });
     }
+
+    /// Fire-and-forget spawn of finished-call voice processing.
+    ///
+    /// Called from `process_webhook_event` immediately after `archive_call`
+    /// finalizes the `call_records` row. First, voice ids for consistently
+    /// diarized speakers are enrolled for the users who spoke them; then the
+    /// regular voice matcher can use both pre-existing and newly-enrolled
+    /// voices to populate speaker overrides. Errors are logged inside the
+    /// spawned task.
+    fn spawn_process_voices_for_call(&self, call_record_id: Uuid) {
+        let repo = self.repo.clone();
+        let voice_repo = self.voice_repo.clone();
+        tokio::spawn(async move {
+            enroll_stable_speaker_voices_for_call_record(&repo, &voice_repo, call_record_id).await;
+            match_voices_for_call_record(
+                &repo,
+                &voice_repo,
+                call_record_id,
+                VOICE_MATCH_DISTANCE_THRESHOLD,
+            )
+            .await;
+        });
+    }
+}
+
+/// Enroll stable speaker voice ids observed in a freshly archived call.
+///
+/// For each `speaker_id` in the call transcript, the repository returns
+/// candidates only when every transcript row for that speaker has the same
+/// non-NULL `diarized_speaker_id`. All distinct non-NULL `voice_id`s on those
+/// rows are linked to the resolved macro user in `macro_user_voice` via
+/// [`VoiceRepository::link_user_voice`].
+async fn enroll_stable_speaker_voices_for_call_record<R: CallRepository, Vr: VoiceRepository>(
+    repo: &R,
+    voice_repo: &Vr,
+    call_record_id: Uuid,
+) {
+    let stable_voices = match repo
+        .get_stable_speaker_voices_for_call_record(&call_record_id)
+        .await
+    {
+        Ok(stable_voices) => stable_voices,
+        Err(e) => {
+            tracing::error!(
+                error=?e, %call_record_id,
+                "failed to load stable speaker voices for enrollment"
+            );
+            return;
+        }
+    };
+
+    if stable_voices.is_empty() {
+        return;
+    }
+
+    let total = stable_voices.len();
+    let mut linked = 0usize;
+    for (macro_user_id, voice_id) in stable_voices {
+        match voice_repo.link_user_voice(&macro_user_id, &voice_id).await {
+            Ok(()) => linked += 1,
+            Err(e) => tracing::error!(
+                error=?e, %call_record_id, %macro_user_id, %voice_id,
+                "failed to link stable speaker voice to user"
+            ),
+        }
+    }
+
+    tracing::info!(
+        %call_record_id, linked, total,
+        "stable speaker voice enrollment completed"
+    );
+}
+
+/// Match the voice ids on a freshly archived call to enrolled users and
+/// populate `custom_speaker` for the matched diarized speakers.
+///
+/// Pulls the distinct `(diarized_speaker_id, voice_id)` pairs from the
+/// call's transcripts, resolves each `voice_id` to a macro user via
+/// the voice repository's nearest-neighbour lookup, then writes eligible
+/// assignments back via [`CallRepository::patch_call_transcript_speakers_from_voice_match`]
+/// (which only fills `custom_speaker` rows that are still `NULL` and whose
+/// matched user shares a team with at least one participant, so manual
+/// corrections are preserved and cross-team matches are ignored).
+async fn match_voices_for_call_record<R: CallRepository, Vr: VoiceRepository>(
+    repo: &R,
+    voice_repo: &Vr,
+    call_record_id: Uuid,
+    distance_threshold: f32,
+) {
+    let pairs = match repo
+        .get_distinct_voice_speakers_for_call_record(&call_record_id)
+        .await
+    {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!(
+                error=?e, %call_record_id,
+                "failed to load voice/speaker pairs for matching"
+            );
+            return;
+        }
+    };
+
+    if pairs.is_empty() {
+        return;
+    }
+
+    let total = pairs.len();
+    let mut raw_assignments: Vec<(String, Uuid)> = Vec::new();
+    for (diarized_speaker_id, voice_id) in pairs {
+        match voice_repo
+            .find_nearest_user_for_voice(&voice_id, distance_threshold)
+            .await
+        {
+            Ok(Some(user_id)) => raw_assignments.push((diarized_speaker_id, user_id)),
+            Ok(None) => {}
+            Err(e) => tracing::error!(
+                error=?e, %call_record_id, %voice_id,
+                "voice match lookup failed; skipping speaker"
+            ),
+        }
+    }
+
+    // The same diarized_speaker_id can appear with multiple voice_ids, each
+    // potentially resolving to a different user. The patch query joins only on
+    // diarized_speaker_id, so collapse to one winner per speaker — most-frequent
+    // user wins, ties broken by earliest appearance for determinism.
+    let mut tally: HashMap<(String, Uuid), (usize, usize)> = HashMap::new();
+    for (idx, (speaker, user)) in raw_assignments.iter().enumerate() {
+        tally.entry((speaker.clone(), *user)).or_insert((0, idx)).0 += 1;
+    }
+    let mut winners: HashMap<String, (Uuid, usize, usize)> = HashMap::new();
+    for ((speaker, user), (count, first_idx)) in tally {
+        let replace = winners
+            .get(&speaker)
+            .is_none_or(|(_, cur_count, cur_first)| {
+                count > *cur_count || (count == *cur_count && first_idx < *cur_first)
+            });
+        if replace {
+            winners.insert(speaker, (user, count, first_idx));
+        }
+    }
+    let assignments: Vec<(String, Uuid)> = winners
+        .into_iter()
+        .map(|(speaker, (user, _, _))| (speaker, user))
+        .collect();
+
+    let matched = assignments.len();
+    if let Err(e) = repo
+        .patch_call_transcript_speakers_from_voice_match(&call_record_id, &assignments)
+        .await
+    {
+        tracing::error!(
+            error=?e, %call_record_id,
+            "failed to persist voice-matched speakers"
+        );
+        return;
+    }
+
+    tracing::info!(
+        %call_record_id, matched, total,
+        "voice match completed"
+    );
 }
 
 /// Extract the recording key from a full S3 URL.

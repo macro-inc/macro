@@ -7,8 +7,7 @@ import {
   type NotificationSource,
   useNotificationsForEntity,
 } from '@notifications';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button, cn } from '@ui';
 import { createMemo, Show, Suspense } from 'solid-js';
 import { Notifications } from './Notifications';
 
@@ -30,12 +29,12 @@ export function NotificationsButton(props: {
     () => notifications().filter((n) => !n.viewed_at).length
   );
   return (
-    <div class="relative" tabIndex={-1}>
+    <div class="relative p-0 flex" tabIndex={-1}>
       <Button
         class={cn(
           'px-1',
           drawerControl.isOpen() &&
-            'bg-accent/20 hover:bg-accent/30 text-accent-ink'
+            'bg-accent/20 hover:bg-accent/30 text-accent'
         )}
         tooltip="View notifications"
         onClick={() => {
@@ -48,7 +47,7 @@ export function NotificationsButton(props: {
       </Button>
       <Suspense fallback={null}>
         <Show when={unreadCount() > 0}>
-          <div class="text-[6pt] bg-accent text-page font-semibold rounded-full absolute top-0 right-0 px-[4px] pointer-events-none">
+          <div class="text-[6pt] bg-accent text-surface font-semibold rounded-full absolute top-0 right-0 px-1 pointer-events-none">
             {unreadCount()}
           </div>
         </Show>
@@ -86,7 +85,7 @@ export function NotificationsDrawer(props: {
       <Suspense
         fallback={
           <div class="flex justify-center py-8">
-            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-ink-muted"></div>
+            <div class="animate-spin rounded-full size-6 border-b-2 border-ink-muted"></div>
           </div>
         }
       >

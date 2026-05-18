@@ -17,6 +17,7 @@ pub fn send_remove_chat_message_to_search(ctx: &ApiContext, chat_id: &str, messa
                         sqs_client::search::chat::RemoveChatMessage {
                             chat_id: chat_id.to_string(),
                             message_id: Some(message_id.to_string()),
+                            index_override: None,
                         },
                     ),
                 )
@@ -48,6 +49,7 @@ pub fn send_chat_message_to_search(
                         user_id,
                         created_at,
                         updated_at,
+                        index_override: None,
                     },
                 ))
                 .await;

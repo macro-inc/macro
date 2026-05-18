@@ -1,10 +1,9 @@
-import { Show, Suspense } from 'solid-js';
-import { Tooltip } from '@core/component/Tooltip';
-import type { ProjectEntity, ProjectContainedEntity } from '../types/entity';
-import { useProjectPreviewQuery } from '@queries/storage/project-preview';
-import { truncatedPath } from '../utils/path';
 import FolderIcon from '@icon/regular/folder-simple.svg';
-import { cn } from '@ui/utils/classname';
+import { useProjectPreviewQuery } from '@queries/storage/project-preview';
+import { cn, Tooltip } from '@ui';
+import { Show, Suspense } from 'solid-js';
+import type { ProjectContainedEntity, ProjectEntity } from '../types/entity';
+import { truncatedPath } from '../utils/path';
 
 const MAX_PATH_LENGTH = 30;
 
@@ -16,9 +15,14 @@ function Path(props: { path: string[] }) {
   const truncated = () => displayPath().length < fullPath().length;
 
   return (
-    <Tooltip tooltip={fullPath()} hide={!truncated()}>
-      <div class="truncate">{displayPath()}</div>
-    </Tooltip>
+    <Show
+      when={truncated()}
+      fallback={<div class="truncate">{displayPath()}</div>}
+    >
+      <Tooltip label={fullPath()}>
+        <div class="truncate">{displayPath()}</div>
+      </Tooltip>
+    </Show>
   );
 }
 
@@ -54,7 +58,7 @@ export function ProjectBreadCrumb(props: {
     >
       <FolderIcon class="size-[1em]" />
       <Suspense
-        fallback={<div class="h-1 w-10 bg-ink-placeholder/20 animate-pulse" />}
+        fallback={<div class="h-1 w-10 bg-ink-placeholder animate-pulse" />}
       >
         <Show when={projectQuery.data}>
           {(data) => <Path path={data().path} />}

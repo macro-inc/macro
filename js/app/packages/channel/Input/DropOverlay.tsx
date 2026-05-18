@@ -1,5 +1,5 @@
-import { children, Show, splitProps, type JSX } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
+import { children, type JSX, Show, splitProps } from 'solid-js';
 import { useInput } from './context';
 import { isReplyInput } from './types';
 
@@ -34,7 +34,7 @@ export function DropOverlay(props: DropOverlayProps) {
         data-input-drop-overlay
         {...rest}
       >
-        <div class="bg-menu border border-edge px-8 py-4 text-xs text-ink-muted shadow-md font-mono">
+        <div class="bg-surface border border-edge px-8 py-4 text-xs text-ink-muted shadow-md font-mono">
           <Show
             when={valid()}
             fallback={local.invalidMessage ?? 'Invalid file'}

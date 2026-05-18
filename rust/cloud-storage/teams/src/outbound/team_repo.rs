@@ -3,7 +3,7 @@ use crate::domain::{
     model::{
         AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
         RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamRole, TeamUserTier, TeamWithMembers,
+        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
     },
     team_repo::TeamRepository,
 };
@@ -86,7 +86,6 @@ impl TeamRepositoryImpl {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
-        team_user_tier: &TeamUserTier,
     ) -> Result<Team, sqlx::Error> {
         let mut transaction = self.pool.begin().await?;
 
@@ -94,8 +93,8 @@ impl TeamRepositoryImpl {
 
         let team = sqlx::query!(
             r#"
-            INSERT INTO team (id, name, owner_id)
-            VALUES ($1, $2, $3)
+            INSERT INTO team (id, name, owner_id, seat_count)
+            VALUES ($1, $2, $3, 1)
             RETURNING id, name, owner_id
             "#,
             &id,
@@ -116,12 +115,11 @@ impl TeamRepositoryImpl {
 
         sqlx::query!(
             r#"
-            INSERT INTO team_user (team_id, user_id, team_role, tier)
-            VALUES ($1, $2, 'owner', $3)
+            INSERT INTO team_user (team_id, user_id, team_role)
+            VALUES ($1, $2, 'owner')
             "#,
             &team.id,
             user_id.as_ref(),
-            team_user_tier as _,
         )
         .execute(&mut *transaction)
         .await?;
@@ -230,13 +228,12 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
-        team_user_tier: &TeamUserTier,
     ) -> Result<Team, CreateTeamError> {
         if team_name.is_empty() || team_name.len() > 50 {
             return Err(CreateTeamError::InvalidTeamName(team_name.to_string()));
         }
 
-        self.create_team_inner(user_id, team_name, team_user_tier)
+        self.create_team_inner(user_id, team_name)
             .await
             .map_err(|e| e.into())
     }
@@ -246,18 +243,19 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         team_id: &uuid::Uuid,
         invited_by: &MacroUserIdStr<'_>,
-        emails: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+        invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError> {
-        // Convert emails to strings and macro_user_ids once
-        let email_strings: Vec<String> = emails.iter().map(|e| e.as_ref().to_string()).collect();
+        let email_strings: Vec<String> = invites
+            .iter()
+            .map(|email| email.as_ref().to_string())
+            .collect();
 
-        let macro_user_ids: Vec<String> = emails
+        let macro_user_ids: Vec<String> = invites
             .iter()
             .map(|email| format!("macro|{}", email.as_ref()))
             .collect();
 
-        // Generate UUIDs for all emails upfront
-        let team_invite_ids: Vec<uuid::Uuid> = emails
+        let team_invite_ids: Vec<uuid::Uuid> = invites
             .iter()
             .map(|_| macro_uuid::generate_uuid_v7())
             .collect();
@@ -265,10 +263,10 @@ impl TeamRepository for TeamRepositoryImpl {
         let mut transaction = self.pool.begin().await?;
 
         // Single query that filters out both already invited AND already on team
-        let invites: Vec<(uuid::Uuid, uuid::Uuid, String)> = sqlx::query!(
+        let created_invites: Vec<(uuid::Uuid, uuid::Uuid, String)> = sqlx::query!(
         r#"
             INSERT INTO team_invite (id, team_id, email, team_role, invited_by, created_at, last_sent_at)
-            SELECT 
+            SELECT
                 t.id,
                 $1::uuid,
                 t.email,
@@ -278,11 +276,11 @@ impl TeamRepository for TeamRepositoryImpl {
                 NOW()
             FROM UNNEST($4::uuid[], $5::text[], $6::text[]) AS t(id, email, user_id)
             WHERE NOT EXISTS (
-                SELECT 1 FROM team_invite ti 
+                SELECT 1 FROM team_invite ti
                 WHERE ti.team_id = $1 AND ti.email = t.email
             )
             AND NOT EXISTS (
-                SELECT 1 FROM team_user tu 
+                SELECT 1 FROM team_user tu
                 WHERE tu.team_id = $1 AND tu.user_id = t.user_id
             )
             RETURNING id, team_id, email
@@ -292,7 +290,7 @@ impl TeamRepository for TeamRepositoryImpl {
         invited_by.as_ref(),
         &team_invite_ids[..],
         &email_strings[..],
-        &macro_user_ids[..]
+        &macro_user_ids[..],
     )
     .map(|r| (r.id, r.team_id, r.email))
     .fetch_all(&mut *transaction)
@@ -326,7 +324,7 @@ impl TeamRepository for TeamRepositoryImpl {
         };
 
         // Combine new invites and resent invites
-        let all_invites: Vec<TeamInvite<'static>> = invites
+        let all_invites: Vec<TeamInvite<'static>> = created_invites
             .into_iter()
             .chain(resent_invites)
             .filter_map(|(id, team_id, email)| to_email(id, team_id, email))
@@ -335,6 +333,59 @@ impl TeamRepository for TeamRepositoryImpl {
         transaction.commit().await?;
 
         Ok(all_invites)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_new_invites(
+        &self,
+        team_id: &uuid::Uuid,
+        invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+    ) -> Result<Vec<Email<Lowercase<'static>>>, InviteUsersToTeamError> {
+        let email_strings: Vec<String> = invites
+            .iter()
+            .map(|email| email.as_ref().to_string())
+            .collect();
+
+        let macro_user_ids: Vec<String> = invites
+            .iter()
+            .map(|email| format!("macro|{}", email.as_ref()))
+            .collect();
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT t.email as "email!"
+            FROM UNNEST($2::text[], $3::text[]) WITH ORDINALITY AS t(email, user_id, ord)
+            WHERE NOT EXISTS (
+                SELECT 1 FROM team_invite ti
+                WHERE ti.team_id = $1 AND ti.email = t.email
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM team_user tu
+                WHERE tu.team_id = $1 AND tu.user_id = t.user_id
+            )
+            GROUP BY t.email
+            ORDER BY MIN(t.ord)
+            "#,
+            team_id,
+            &email_strings[..],
+            &macro_user_ids[..],
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut new_invites = Vec::with_capacity(rows.len());
+        for row in rows {
+            let email = Email::parse_from_str(&row.email)
+                .map(|email| email.into_owned().lowercase())
+                .map_err(|e| {
+                    InviteUsersToTeamError::StorageLayerError(anyhow::anyhow!(
+                        "unable to parse email {e}"
+                    ))
+                })?;
+            new_invites.push(email);
+        }
+
+        Ok(new_invites)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -370,7 +421,7 @@ impl TeamRepository for TeamRepositoryImpl {
             r#"
             DELETE FROM team_user
             WHERE team_id = $1 AND user_id = $2
-            RETURNING team_role, tier
+            RETURNING team_role
             "#,
         )
         .bind(team_id)
@@ -386,7 +437,6 @@ impl TeamRepository for TeamRepositoryImpl {
             team_id: *team_id,
             user_id: user_id.clone().into_owned(),
             role: row.try_get("team_role")?,
-            tier: row.try_get("tier")?,
         };
 
         TeamRepositoryImpl::bump_seat_count(&mut transaction, team_id, -1).await?;
@@ -501,8 +551,7 @@ impl TeamRepository for TeamRepositoryImpl {
         let members = sqlx::query!(
             r#"
             SELECT user_id, 
-                team_role as "team_role!: TeamRole",
-                tier as "tier!: TeamUserTier"
+                team_role as "team_role!: TeamRole"
             FROM team_user
             WHERE team_id = $1
             "#,
@@ -522,7 +571,6 @@ impl TeamRepository for TeamRepositoryImpl {
                         user_id,
                         role: row.team_role,
                         team_id: *team_id,
-                        tier: row.tier,
                     })
                 } else {
                     Err(anyhow::anyhow!("unable to parse user id"))
@@ -551,7 +599,7 @@ impl TeamRepository for TeamRepositoryImpl {
         // Get invite data before deleting it so the accept can be rolled back later.
         let invite = sqlx::query(
             r#"
-            SELECT id, email, team_role, team_id, invited_by, created_at, last_sent_at, tier
+            SELECT id, email, team_role, team_id, invited_by, created_at, last_sent_at
             FROM team_invite
             WHERE id = $1 AND email = $2
             "#,
@@ -581,21 +629,19 @@ impl TeamRepository for TeamRepositoryImpl {
                 invite.try_get("last_sent_at")?,
                 chrono::Utc,
             ),
-            tier: invite.try_get("tier")?,
         };
 
         // Assign user to team_user
         let team_member = sqlx::query(
             r#"
-            INSERT INTO team_user (team_id, user_id, team_role, tier)
-            VALUES ($1, $2, $3, $4)
-            RETURNING user_id, team_role, tier, team_id
+            INSERT INTO team_user (team_id, user_id, team_role)
+            VALUES ($1, $2, $3)
+            RETURNING user_id, team_role, team_id
             "#,
         )
         .bind(invite_snapshot.team_id)
         .bind(user_id.as_ref())
         .bind(invite_snapshot.team_role)
-        .bind(invite_snapshot.tier)
         .fetch_one(&mut *transaction)
         .await?;
 
@@ -624,7 +670,6 @@ impl TeamRepository for TeamRepositoryImpl {
             .map_err(|e| TeamError::StorageLayerError(e.into()))?,
             role: team_member.try_get("team_role")?,
             team_id,
-            tier: team_member.try_get("tier")?,
         };
 
         Ok(AcceptedTeamInvite {
@@ -663,8 +708,8 @@ impl TeamRepository for TeamRepositoryImpl {
         sqlx::query(
             r#"
             INSERT INTO team_invite
-                (id, team_id, email, team_role, invited_by, created_at, last_sent_at, tier)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                (id, team_id, email, team_role, invited_by, created_at, last_sent_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT DO NOTHING
             "#,
         )
@@ -675,7 +720,6 @@ impl TeamRepository for TeamRepositoryImpl {
         .bind(accepted_invite.invite.invited_by.as_ref())
         .bind(accepted_invite.invite.created_at.naive_utc())
         .bind(accepted_invite.invite.last_sent_at.naive_utc())
-        .bind(accepted_invite.invite.tier)
         .execute(&mut *transaction)
         .await?;
 
@@ -693,15 +737,14 @@ impl TeamRepository for TeamRepositoryImpl {
 
         let inserted = sqlx::query(
             r#"
-            INSERT INTO team_user (team_id, user_id, team_role, tier)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO team_user (team_id, user_id, team_role)
+            VALUES ($1, $2, $3)
             ON CONFLICT DO NOTHING
             "#,
         )
         .bind(removed_member.team_id)
         .bind(removed_member.user_id.as_ref())
         .bind(removed_member.role)
-        .bind(removed_member.tier)
         .execute(&mut *transaction)
         .await?;
 
@@ -742,8 +785,7 @@ impl TeamRepository for TeamRepositoryImpl {
         let members = sqlx::query!(
             r#"
             SELECT user_id, 
-                team_role as "team_role!: TeamRole",
-                tier as "tier!: TeamUserTier"
+                team_role as "team_role!: TeamRole"
             FROM team_user
             WHERE team_id = $1
             "#,
@@ -763,7 +805,6 @@ impl TeamRepository for TeamRepositoryImpl {
                         user_id,
                         role: row.team_role,
                         team_id: *team_id,
-                        tier: row.tier,
                     })
                 } else {
                     Err(anyhow::anyhow!("unable to parse user id"))
@@ -843,8 +884,7 @@ impl TeamRepository for TeamRepositoryImpl {
         let members = sqlx::query!(
             r#"
             SELECT user_id,
-                team_role as "team_role!: TeamRole",
-                tier as "tier!: TeamUserTier"
+                team_role as "team_role!: TeamRole"
             FROM team_user
             WHERE team_id = $1
             "#,
@@ -861,7 +901,6 @@ impl TeamRepository for TeamRepositoryImpl {
                         user_id: id.into_owned(),
                         role: row.team_role,
                         team_id: *team_id,
-                        tier: row.tier,
                     })
                     .ok()
             })
@@ -1039,8 +1078,7 @@ impl TeamRepository for TeamRepositoryImpl {
         let member = sqlx::query!(
             r#"
             SELECT user_id, 
-                team_role as "team_role!: TeamRole",
-                tier as "tier!: TeamUserTier"
+                team_role as "team_role!: TeamRole"
             FROM team_user
             WHERE team_id = $1
             AND user_id = $2
@@ -1055,41 +1093,12 @@ impl TeamRepository for TeamRepositoryImpl {
                     .into_owned(),
                 team_id: *team_id,
                 role: r.team_role,
-                tier: r.tier,
             })
         })
         .fetch_one(&self.pool)
         .await?;
 
         Ok(member)
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn patch_team_tier(
-        &self,
-        team_id: &uuid::Uuid,
-        user_id: &MacroUserIdStr<'_>,
-        team_tier: TeamUserTier,
-    ) -> Result<(), TeamError> {
-        let result = sqlx::query!(
-            r#"
-            UPDATE team_user
-            SET tier = $3
-            WHERE team_id = $1
-            AND user_id = $2
-            "#,
-            team_id,
-            user_id.as_ref(),
-            team_tier as _,
-        )
-        .execute(&self.pool)
-        .await?;
-
-        if result.rows_affected() == 0 {
-            return Err(TeamError::TeamMemberNotFound(*team_id));
-        }
-
-        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -1115,6 +1124,65 @@ impl TeamRepository for TeamRepositoryImpl {
 
         if result.rows_affected() == 0 {
             return Err(TeamError::TeamMemberNotFound(*team_id));
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_seat_count(&self, team_id: &uuid::Uuid) -> Result<i32, TeamError> {
+        let seat_count = sqlx::query!(
+            r#"
+            SELECT seat_count
+            FROM team
+            WHERE id = $1
+            "#,
+            team_id,
+        )
+        .map(|row| row.seat_count)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(seat_count)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_plan(&self, team_id: &uuid::Uuid) -> Result<Option<TeamPlan>, TeamError> {
+        let plan = sqlx::query!(
+            r#"
+            SELECT plan as "plan?: TeamPlan"
+            FROM team
+            WHERE id = $1
+            "#,
+            team_id,
+        )
+        .map(|row| row.plan)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(plan)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn patch_team_plan(
+        &self,
+        team_id: &uuid::Uuid,
+        team_plan: TeamPlan,
+    ) -> Result<(), TeamError> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE team
+            SET plan = $2
+            WHERE id = $1
+            "#,
+            team_id,
+            team_plan as _,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(TeamError::TeamDoesNotExist);
         }
 
         Ok(())

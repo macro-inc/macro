@@ -1,7 +1,6 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import { useBlockAliasedName } from '@core/block';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   $getPinnedProperties,
   ADD_PINNED_PROPERTY_COMMAND,
@@ -12,6 +11,7 @@ import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import TagIcon from '@icon/regular/tag.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { Button } from '@ui';
 import { createEffect, createSignal, Suspense } from 'solid-js';
 import { mdStore } from '../signal/markdownBlockData';
 
@@ -22,13 +22,14 @@ export function MarkdownPropertiesButton(props: {
 }) {
   const drawerControl = useDrawerControl(DRAWER_ID);
   return (
-    <DeprecatedIconButton
-      icon={TagIcon}
-      theme={drawerControl.isOpen() ? 'accent' : 'clear'}
-      size={props.buttonSize ?? 'base'}
-      tooltip={{ label: 'Properties' }}
+    <Button
+      variant={drawerControl.isOpen() ? 'active' : 'ghost'}
+      size={props.buttonSize === 'sm' ? 'icon-sm' : 'icon-md'}
+      label="Properties"
       onClick={drawerControl.toggle}
-    />
+    >
+      <TagIcon />
+    </Button>
   );
 }
 
@@ -50,13 +51,14 @@ export function MarkdownPropertiesModal(props: {
 
   return (
     <>
-      <DeprecatedIconButton
-        icon={TagIcon}
-        theme={drawerControl.isOpen() ? 'accent' : 'clear'}
-        size={props.buttonSize ?? 'base'}
-        tooltip={{ label: 'Properties' }}
+      <Button
+        variant={drawerControl.isOpen() ? 'active' : 'ghost'}
+        size={props.buttonSize === 'sm' ? 'icon-sm' : 'icon-md'}
+        label="Properties"
         onClick={drawerControl.toggle}
-      />
+      >
+        <TagIcon />
+      </Button>
       <SplitDrawer id={DRAWER_ID} side="right" size={550} title="Properties">
         <Suspense fallback={<LoadingFallback />}>
           <MarkdownPropertiesContent documentId={props.documentId} />
@@ -138,7 +140,7 @@ function MarkdownPropertiesContent(_props: { documentId: string }) {
 function LoadingFallback() {
   return (
     <div class="flex justify-center items-center py-8">
-      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-ink-muted"></div>
+      <div class="animate-spin rounded-full size-6 border-b-2 border-ink-muted"></div>
     </div>
   );
 }

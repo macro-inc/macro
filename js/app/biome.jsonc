@@ -17,7 +17,7 @@
       "packages/service-clients/**/generated/**",
       "!packages/filesystem",
       "!packages/_app-mobile",
-      "!packages/loro-mirror/packages",
+      "!../loro-mirror/packages",
       "**/generated/tools",
       "!wireframe",
       "!packages/app/dist",
@@ -38,7 +38,7 @@
     "enabled": true,
     "actions": {
       "source": {
-        "organizeImports": "off"
+        "organizeImports": "on"
       }
     }
   },
@@ -68,6 +68,21 @@
         "noPrivateImports": "error"
       },
       "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "@loro-mirror/core": "Use @loro-mirror/packages/core/src so app and loro-mirror share the app's loro-crdt instance.",
+              "loro-mirror-monorepo": "Use @loro-mirror/packages/* source imports; do not consume loro-mirror as an installed package."
+            },
+            "patterns": [
+              {
+                "group": ["@loro-mirror/core/*"],
+                "message": "Use @loro-mirror/packages/* source imports; do not consume loro-mirror as an installed package."
+              }
+            ]
+          }
+        },
         "useBlockStatements": "off",
         "useConst": "off",
         "noNonNullAssertion": "off",

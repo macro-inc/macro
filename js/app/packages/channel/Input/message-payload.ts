@@ -1,9 +1,9 @@
-import { STATIC_IMAGE, STATIC_VIDEO } from '@core/store/cacheChannelInput';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
+import { STATIC_IMAGE, STATIC_VIDEO } from '@core/store/cacheChannelInput';
 import type { PostMessageRequest } from '@service-comms/generated/models';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
-import type { InputAttachmentData, InputSnapshot } from './types';
 import { match } from 'ts-pattern';
+import type { InputAttachmentData, InputSnapshot } from './types';
 
 export function attachmentEntityType(
   kind: InputAttachmentData['kind']
@@ -44,7 +44,7 @@ function expandGroupMention(
  *   participant, de-duplicated against explicitly mentioned users.
  * - Regular user mentions are de-duplicated so the same user isn't sent twice.
  */
-function expandMentions(
+export function expandMentions(
   mentions: ItemMention[],
   participantIds: string[]
 ): SimpleMention[] {

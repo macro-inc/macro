@@ -4,6 +4,7 @@ pub mod create_message_mentions;
 pub mod delete_message;
 pub mod get_channel_message;
 pub mod get_count;
+pub mod get_deleted_ats;
 pub mod get_message_owner;
 pub mod get_messages;
 pub mod patch_message;

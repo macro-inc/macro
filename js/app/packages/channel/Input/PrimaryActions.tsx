@@ -1,13 +1,11 @@
-import { children, Show, splitProps, type JSX } from 'solid-js';
-import { cn } from '@ui/utils/classname';
-import { useInput, useInputCommands } from './context';
-import { isReplyInput } from './types';
 import FormatIcon from '@icon/regular/text-aa.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import { Button } from '@ui/components/Button';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { Button, cn } from '@ui';
+import { children, type JSX, Show, splitProps } from 'solid-js';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
+import { useInput, useInputCommands } from './context';
+import { isReplyInput } from './types';
 
 export function InputActionButton(props: {
   label: string;
@@ -19,7 +17,7 @@ export function InputActionButton(props: {
     <Button
       title={props.label}
       aria-label={props.label}
-      tooltip={<LabelAndHotKey label={props.label} />}
+      label={props.label}
       onClick={(event) => props.onClick?.(event)}
       classList={{ 'bg-active': props.active }}
     >

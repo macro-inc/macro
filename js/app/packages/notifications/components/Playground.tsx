@@ -1,9 +1,10 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import { formatDate } from '@core/util/date';
+import { NotificationRow } from '@entity';
+import { Button } from '@ui';
 import {
   type Component,
   createEffect,
@@ -68,7 +69,7 @@ function TypeButton(props: {
   return (
     <button
       class={`w-full p-4 text-left border-b border-edge-muted transition-all ${
-        props.isSelected ? 'bg-accent text-ink' : 'bg-menu hover:bg-hover'
+        props.isSelected ? 'bg-accent text-ink' : 'bg-surface hover:bg-hover'
       }`}
       onClick={props.onSelect}
     >
@@ -114,7 +115,7 @@ function NotificationItem(props: {
       class={`w-full p-4 text-left border-b border-edge-muted transition-all ${
         props.isSelected
           ? 'bg-accent/10 border-l-2 border-l-accent'
-          : 'bg-menu hover:bg-hover'
+          : 'bg-surface hover:bg-hover'
       }`}
       onClick={props.onSelect}
     >
@@ -186,7 +187,7 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
               <div class="text-xs font-mono text-ink-muted uppercase mb-2">
                 Title
               </div>
-              <div class="bg-menu p-4 rounded-lg border border-edge-muted text-sm text-ink font-medium">
+              <div class="bg-surface p-4 rounded-lg border border-edge-muted text-sm text-ink font-medium">
                 {browserNotif()!.title}
               </div>
             </div>
@@ -194,7 +195,7 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
               <div class="text-xs font-mono text-ink-muted uppercase mb-2">
                 Description (Body)
               </div>
-              <div class="bg-menu p-4 rounded-lg border border-edge-muted text-sm text-ink">
+              <div class="bg-surface p-4 rounded-lg border border-edge-muted text-sm text-ink">
                 {browserNotif()!.body || (
                   <span class="italic text-ink-muted">(empty)</span>
                 )}
@@ -204,7 +205,7 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
               <div class="text-xs font-mono text-ink-muted uppercase mb-2">
                 Icon
               </div>
-              <div class="bg-menu p-4 rounded-lg border border-edge-muted">
+              <div class="bg-surface p-4 rounded-lg border border-edge-muted">
                 <code class="text-xs text-ink-muted">
                   {browserNotif()!.icon}
                 </code>
@@ -216,7 +217,7 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
             <summary class="text-xs font-mono text-ink-muted uppercase hover:text-accent">
               Raw JSON ▸
             </summary>
-            <pre class="bg-menu p-4 rounded-lg border border-edge-muted text-xs overflow-auto mt-2">
+            <pre class="bg-surface p-4 rounded-lg border border-edge-muted text-xs overflow-auto mt-2">
               {JSON.stringify(browserNotif(), null, 2)}
             </pre>
           </details>
@@ -233,11 +234,12 @@ function PermissionButton(props: { platformNotif: any }) {
         <Show
           when={props.platformNotif.permission() === 'granted'}
           fallback={
-            <DeprecatedTextButton
-              theme="accent"
-              text="Enable Browser Notifications"
+            <Button
+              variant="active"
               onClick={() => props.platformNotif.requestPermission()}
-            />
+            >
+              Enable Browser Notifications
+            </Button>
           }
         >
           <div class="flex items-center gap-3 text-sm text-accent bg-accent/10 px-4 py-3 rounded-lg">
@@ -256,8 +258,8 @@ function CustomBuilder(props: {
   onTest: (notification: UnifiedNotification) => void;
 }) {
   return (
-    <div class="w-96 border-r border-edge-muted bg-menu flex flex-col shrink-0">
-      <div class="p-6 border-b border-edge-muted bg-menu sticky top-0">
+    <div class="w-96 border-r border-edge-muted bg-surface flex flex-col shrink-0">
+      <div class="p-6 border-b border-edge-muted bg-surface sticky top-0">
         <h2 class="text-lg font-semibold text-ink mb-1">
           Custom Message Builder
         </h2>
@@ -269,7 +271,7 @@ function CustomBuilder(props: {
           <label class="block text-sm font-medium text-ink mb-3">
             Message Content
           </label>
-          <div class="border border-edge-muted rounded-lg p-3 bg-menu min-h-64 max-h-96 overflow-auto">
+          <div class="border border-edge-muted rounded-lg p-3 bg-surface min-h-64 max-h-96 overflow-auto">
             <MarkdownShell
               config={props.markdownEditor}
               placeholder="Type your markdown message here... (use @ for mentions)"
@@ -283,16 +285,17 @@ function CustomBuilder(props: {
         </div>
 
         <div class="pt-4 border-t border-edge-muted">
-          <DeprecatedTextButton
-            theme="accent"
-            text="🔔 Test Browser Notification"
+          <Button
+            variant="active"
             onClick={() => props.onTest(props.customNotification)}
-          />
+          >
+            🔔 Test Browser Notification
+          </Button>
         </div>
 
         <div>
           <h3 class="text-sm font-medium text-ink mb-3">Live Preview</h3>
-          <div class="p-4 bg-menu-hover rounded-lg border border-edge-muted">
+          <div class="p-4 bg-surface-hover rounded-lg border border-edge-muted">
             <NotificationRenderer
               notification={props.customNotification}
               mode="preview"
@@ -311,8 +314,8 @@ function NotificationList(props: {
   onSelect: (notification: UnifiedNotification) => void;
 }) {
   return (
-    <div class="w-96 border-r border-edge-muted bg-menu flex flex-col shrink-0">
-      <div class="p-6 border-b border-edge-muted bg-menu sticky top-0">
+    <div class="w-96 border-r border-edge-muted bg-surface flex flex-col shrink-0">
+      <div class="p-6 border-b border-edge-muted bg-surface sticky top-0">
         <h2 class="text-lg font-semibold text-ink mb-1">
           {NOTIFICATION_LABEL_BY_TYPE[
             props.type as keyof typeof NOTIFICATION_LABEL_BY_TYPE
@@ -341,6 +344,7 @@ function NotificationList(props: {
 
 function NotificationDetail(props: {
   notification: UnifiedNotification;
+  siblings: UnifiedNotification[];
   onTest: (notification: UnifiedNotification) => void;
 }) {
   return (
@@ -358,66 +362,100 @@ function NotificationDetail(props: {
               {formatDate(props.notification.created_at)}
             </p>
           </div>
-          <DeprecatedTextButton
-            theme="accent"
-            text="🔔 Test Notification"
+          <Button
+            variant="active"
             onClick={() => props.onTest(props.notification)}
-          />
+          >
+            🔔 Test Notification
+          </Button>
         </div>
       </div>
 
       <section class="mb-10">
-        <h3 class="text-lg font-semibold text-ink mb-4">Preview Mode</h3>
-        <div class="p-4 bg-menu rounded-xl border border-edge-muted">
-          <div class="flex items-start gap-3">
-            <div
-              class={`size-2 mt-1 shrink-0  ${
-                !props.notification.viewed_at
-                  ? 'bg-accent'
-                  : 'bg-ink-extra-muted'
-              }`}
-            />
-            <div class="flex-1 min-w-0">
-              <NotificationRenderer
-                notification={props.notification}
-                mode="preview"
-              />
-            </div>
+        <h3 class="text-lg font-semibold text-ink mb-2">Compact Row</h3>
+        <p class="text-xs text-ink-muted mb-4">
+          One-line variant used in the right-panel notifications card. Hover for
+          the mark-done button; right-click for the context menu.
+        </p>
+        <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+          <NotificationRow notification={props.notification} />
+        </div>
+      </section>
+
+      <section class="mb-10">
+        <h3 class="text-lg font-semibold text-ink mb-2">Notifications Card</h3>
+        <p class="text-xs text-ink-muted mb-4">
+          What the right-panel card looks like when several notifications of
+          this type land on the same entity.
+        </p>
+        <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+          <div class="divide-y divide-ink-muted/8">
+            <For each={props.siblings.slice(0, 5)}>
+              {(n) => <NotificationRow notification={n} />}
+            </For>
           </div>
         </div>
       </section>
 
       <section class="mb-10">
-        <h3 class="text-lg font-semibold text-ink mb-4">Full Mode</h3>
-        <div
-          class={`p-6 rounded-xl border border-edge-muted ${
-            !props.notification.viewed_at ? 'bg-menu-hover' : 'bg-menu'
-          }`}
-        >
-          <div class="flex justify-start items-center gap-3 mb-4 font-mono text-ink-muted text-xs uppercase">
-            <div
-              class={`size-2 ${
-                !props.notification.viewed_at
-                  ? 'bg-accent'
-                  : 'bg-ink-extra-muted'
-              }`}
-            />
-            <div class="font-medium">
-              {
-                NOTIFICATION_LABEL_BY_TYPE[
-                  props.notification
-                    .notification_event_type as keyof typeof NOTIFICATION_LABEL_BY_TYPE
-                ]
-              }
+        <h3 class="text-lg font-semibold text-ink mb-2">Expanded Row</h3>
+        <p class="text-xs text-ink-muted mb-4">
+          Same header as compact, but the content moves below and renders as
+          multi-line markdown aligned under the description.
+        </p>
+        <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+          <NotificationRow
+            notification={props.notification}
+            variant="expanded"
+          />
+        </div>
+      </section>
+
+      <section class="mb-10">
+        <h3 class="text-lg font-semibold text-ink mb-2">
+          Expanded Row · no mark-done
+        </h3>
+        <p class="text-xs text-ink-muted mb-4">
+          Same variant with <code>showMarkDone=&#123;false&#125;</code> — the
+          check button is suppressed and the timestamp stays put on hover.
+        </p>
+        <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+          <NotificationRow
+            notification={props.notification}
+            variant="expanded"
+            showMarkDone={false}
+          />
+        </div>
+      </section>
+
+      <section class="mb-10">
+        <h3 class="text-lg font-semibold text-ink mb-2">
+          Both variants side by side
+        </h3>
+        <p class="text-xs text-ink-muted mb-4">
+          Same notification in both variants — fonts, colors, indicator, icon,
+          sender, and mark-done affordance are identical; only the content
+          layout differs.
+        </p>
+        <div class="flex flex-col gap-4">
+          <div>
+            <div class="text-[10px] font-mono uppercase text-ink-extra-muted tracking-wider mb-1.5">
+              compact
             </div>
-            <div class="grow" />
-            <div>{formatDate(props.notification.created_at)}</div>
+            <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+              <NotificationRow notification={props.notification} />
+            </div>
           </div>
-          <div class="ml-5">
-            <NotificationRenderer
-              notification={props.notification}
-              mode="full"
-            />
+          <div>
+            <div class="text-[10px] font-mono uppercase text-ink-extra-muted tracking-wider mb-1.5">
+              expanded
+            </div>
+            <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+              <NotificationRow
+                notification={props.notification}
+                variant="expanded"
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -434,7 +472,7 @@ function NotificationDetail(props: {
           <summary class="text-lg font-semibold text-ink mb-4 hover:text-accent">
             Raw Notification Data ▸
           </summary>
-          <pre class="bg-menu p-6 rounded-xl border border-edge-muted text-xs overflow-auto mt-4">
+          <pre class="bg-surface p-6 rounded-xl border border-edge-muted text-xs overflow-auto mt-4">
             {JSON.stringify(props.notification, null, 2)}
           </pre>
         </details>
@@ -563,7 +601,7 @@ function PlaygroundContent() {
     <Show
       when={!isLoading()}
       fallback={
-        <div class="h-screen flex items-center justify-center bg-menu">
+        <div class="h-screen flex items-center justify-center bg-surface">
           <div class="text-center">
             <div class="text-lg text-ink-muted animate-pulse mb-2">
               Loading notifications...
@@ -573,10 +611,10 @@ function PlaygroundContent() {
         </div>
       }
     >
-      <div class="h-screen flex bg-menu">
+      <div class="h-screen flex bg-surface">
         {/* Type selector sidebar */}
-        <div class="w-80 border-r border-edge-muted bg-menu flex flex-col shrink-0">
-          <div class="p-6 border-b border-edge-muted bg-menu sticky top-0">
+        <div class="w-80 border-r border-edge-muted bg-surface flex flex-col shrink-0">
+          <div class="p-6 border-b border-edge-muted bg-surface sticky top-0">
             <h1 class="text-xl font-semibold text-ink mb-2">
               Notifications Playground
             </h1>
@@ -591,7 +629,9 @@ function PlaygroundContent() {
           <div class="border-b border-edge-muted">
             <button
               class={`w-full p-4 text-left transition-all ${
-                customMode() ? 'bg-accent text-ink' : 'bg-menu hover:bg-hover'
+                customMode()
+                  ? 'bg-accent text-ink'
+                  : 'bg-surface hover:bg-hover'
               }`}
               onClick={() => {
                 setCustomMode(true);
@@ -658,7 +698,7 @@ function PlaygroundContent() {
         </Show>
 
         {/* Detail view */}
-        <div class="flex-1 overflow-auto bg-menu">
+        <div class="flex-1 overflow-auto bg-surface">
           <Show
             when={selectedNotification()}
             fallback={
@@ -671,6 +711,7 @@ function PlaygroundContent() {
             {(notification) => (
               <NotificationDetail
                 notification={notification()}
+                siblings={selectedNotifications()}
                 onTest={handleTestNotification}
               />
             )}
@@ -706,19 +747,19 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
       <div class="flex items-start gap-3 p-4">
         {/* Icon with optional badge */}
         <div class="relative shrink-0">
-          <div class="w-10 h-10 rounded-lg overflow-hidden bg-[oklch(0.278_0.033_256.848)] flex items-center justify-center">
+          <div class="size-10 rounded-lg overflow-hidden bg-[oklch(0.278_0.033_256.848)] flex items-center justify-center">
             <Show
               when={props.icon}
               fallback={
-                <div class="w-6 h-6 bg-[oklch(0.446_0.03_256.802)] rounded" />
+                <div class="size-6 bg-[oklch(0.446_0.03_256.802)] rounded" />
               }
             >
-              <img src={props.icon} alt="" class="w-full h-full object-cover" />
+              <img src={props.icon} alt="" class="size-full object-cover" />
             </Show>
           </div>
           <Show when={props.badge}>
-            <div class="absolute -top-1 -left-1 w-5 h-5 bg-failure rounded-full flex items-center justify-center">
-              <img src={props.badge} alt="" class="w-3 h-3" />
+            <div class="absolute -top-1 -left-1 size-5 bg-failure rounded-full flex items-center justify-center">
+              <img src={props.badge} alt="" class="size-3" />
             </div>
           </Show>
         </div>
@@ -738,7 +779,7 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
           onClick={props.onClose}
           class="shrink-0 text-[oklch(0.551_0.027_264.364)] hover:text-[oklch(0.872_0.01_258.338)] transition-colors"
         >
-          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+          <svg class="size-4" fill="currentColor" viewBox="0 0 20 20">
             <path
               fill-rule="evenodd"
               d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"

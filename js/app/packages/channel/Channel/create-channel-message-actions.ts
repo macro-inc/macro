@@ -1,3 +1,4 @@
+import { useAnalytics } from '@app/component/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { getWebOrigin } from '@core/util/webOrigin';
 import type { Accessor } from 'solid-js';
@@ -13,7 +14,6 @@ import {
   DEFAULT_REACTION_EMOJI,
   hasReactionFromUser,
 } from '../Thread/utils/message-actions';
-import { useAnalytics } from '@app/component/analytics-context';
 
 type AddReactionInput = {
   channelId: string;

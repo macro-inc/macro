@@ -1,8 +1,8 @@
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { handleFileFolderDrop } from '@core/util/upload';
-import { createSignal, Show, type FlowComponent } from 'solid-js';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
+import { handleFileFolderDrop } from '@core/util/upload';
+import { createSignal, type FlowComponent, Show } from 'solid-js';
 
 false && fileFolderDrop;
 
@@ -14,7 +14,7 @@ export const SoupViewFileDropzone: FlowComponent = (props) => {
 
   return (
     <div
-      class="relative flex flex-col bg-panel size-full"
+      class="relative flex flex-col bg-surface size-full"
       use:fileFolderDrop={{
         onDrop: (fileEntries, folderEntries) => {
           handleFileFolderDrop(fileEntries, folderEntries, handleFileUpload);

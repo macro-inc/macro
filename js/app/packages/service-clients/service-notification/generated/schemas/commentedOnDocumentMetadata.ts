@@ -6,6 +6,7 @@
  */
 import type { CommentedOnDocumentMetadataFileType } from './commentedOnDocumentMetadataFileType';
 import type { CommentedOnDocumentMetadataSenderProfilePictureUrl } from './commentedOnDocumentMetadataSenderProfilePictureUrl';
+import type { CommentedOnDocumentMetadataSubType } from './commentedOnDocumentMetadataSubType';
 
 /**
  * Notification sent when someone comments on a document the user owns.
@@ -20,6 +21,7 @@ export interface CommentedOnDocumentMetadata {
   /** The owner of the document. */
   owner: string;
   senderProfilePictureUrl?: CommentedOnDocumentMetadataSenderProfilePictureUrl;
+  subType?: CommentedOnDocumentMetadataSubType;
   /** the text of the comment */
   text: string;
   /** the thread id */

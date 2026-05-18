@@ -6,6 +6,7 @@
  */
 import type { MentionedInDocumentCommentMetadataFileType } from './mentionedInDocumentCommentMetadataFileType';
 import type { MentionedInDocumentCommentMetadataSenderProfilePictureUrl } from './mentionedInDocumentCommentMetadataSenderProfilePictureUrl';
+import type { MentionedInDocumentCommentMetadataSubType } from './mentionedInDocumentCommentMetadataSubType';
 
 /**
  * Notification sent when a user is mentioned in a document comment.
@@ -22,6 +23,7 @@ export interface MentionedInDocumentCommentMetadata {
   /** The owner of the document. */
   owner: string;
   senderProfilePictureUrl?: MentionedInDocumentCommentMetadataSenderProfilePictureUrl;
+  subType?: MentionedInDocumentCommentMetadataSubType;
   /** the text of the comment */
   text: string;
   /** the thread id */

@@ -1,27 +1,25 @@
+import type { SidebarState } from '@app/component/app-sidebar/sidebar';
+import { useSenderName } from '@app/component/app-sidebar/utils';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import type { UnifiedNotification } from '@notifications/types';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { ContextMenuContent, MenuItem } from '@core/component/Menu';
+import { UserIcon } from '@core/component/UserIcon';
+import { compareDateDesc } from '@core/util/date';
+import { ContextMenu } from '@kobalte/core/context-menu';
 import { openNotification } from '@notifications';
+import { isChannelNotification } from '@notifications/notification-helpers';
+import { getChannelNotificationParams } from '@notifications/notification-navigation';
+import type { UnifiedNotification } from '@notifications/types';
+import { Avatar, Button, cn, Tooltip } from '@ui';
 import {
-  For,
-  Show,
-  createSignal,
-  createMemo,
   createEffect,
+  createMemo,
+  createSignal,
+  For,
   on,
   onMount,
+  Show,
 } from 'solid-js';
-import { UserIcon } from '@core/component/UserIcon';
-import { useSenderName } from '@app/component/app-sidebar/utils';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { compareDateDesc } from '@core/util/date';
-import { ContextMenuContent, MenuItem } from '@core/component/Menu';
-import { ContextMenu } from '@kobalte/core/context-menu';
-import { Tooltip } from '@core/component/Tooltip';
-import { getChannelNotificationParams } from '@notifications/notification-navigation';
-import { isChannelNotification } from '@notifications/notification-helpers';
-import type { SidebarState } from '@app/component/app-sidebar/sidebar';
-import { cn } from '@ui/utils/classname';
-import { Button } from '@ui/components/Button';
 
 function getChannelInfo(notification: UnifiedNotification): {
   channelName: string | null;
@@ -73,9 +71,9 @@ function computeChannelLetters(groups: ChannelGroup[]): Map<string, string> {
 
 function ChannelLetterIcon(props: { letters: string }) {
   return (
-    <div class="size-full rounded-sm border border-ink/40 text-ink-muted flex items-center justify-center">
-      <span class="text-[10px] leading-none">{props.letters}</span>
-    </div>
+    <Avatar size="md" class="bg-ink-extra-muted/15 text-ink-muted">
+      <Avatar.Fallback>{props.letters}</Avatar.Fallback>
+    </Avatar>
   );
 }
 
@@ -189,11 +187,9 @@ function ChannelGroupItem(props: {
 
   const ButtonContent = () => (
     <Button
-      as={'a'}
-      href={`/channel/${props.group.entityId}`}
       class={cn(
         'flex items-center cursor-default rounded-xs',
-        isSlim() ? 'justify-center size-8' : 'justify-start gap-3 size-full'
+        isSlim() ? 'justify-center size-8' : 'justify-start gap-3 size-full h-8'
       )}
       draggable={false}
       variant="ghost"
@@ -202,9 +198,8 @@ function ChannelGroupItem(props: {
         'opacity-0 -translate-y-2': !isVisible(),
         'opacity-100 translate-y-0': isVisible(),
       }}
-      onClick={(e) => {
-        if (e.button === 1) return;
-
+      onMouseDown={(e) => {
+        if (e.button !== 0) return;
         e.preventDefault();
         navigateToLatestNotification(e.shiftKey);
       }}
@@ -216,13 +211,13 @@ function ChannelGroupItem(props: {
         >
           <UserIcon
             id={senderId()!}
-            size="fill"
+            size="md"
             suppressClick
             showTooltip={false}
           />
         </Show>
         <Show when={isSlim()}>
-          <div class="absolute -top-0.5 -right-0.5 size-1.5 bg-accent rounded-full" />
+          <div class="absolute -top-0.5 -right-0.5 size-1.5 bg-accent rounded-full ring-surface ring-2" />
         </Show>
       </div>
 
@@ -246,10 +241,7 @@ function ChannelGroupItem(props: {
         <Show
           when={!isSlim()}
           fallback={
-            <Tooltip
-              tooltip={<span class="text-xs">{displayName()}</span>}
-              placement="right"
-            >
+            <Tooltip label={displayName()} placement="right">
               <ButtonContent />
             </Tooltip>
           }
@@ -333,7 +325,7 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
       <Show
         when={!isSlim()}
         fallback={
-          <section class="w-full py-2 px-2 flex flex-col items-center">
+          <section class="w-full p-2 flex flex-col items-center">
             <For each={slimVisible()}>
               {(group) => (
                 <ChannelGroupItem
@@ -345,14 +337,14 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
               )}
             </For>
             <Show when={slimOverflow() > 0}>
-              <span class="text-[10px] text-ink-muted mt-1">
+              <span class="text-xxs text-ink-muted mt-1">
                 +{slimOverflow()}
               </span>
             </Show>
           </section>
         }
       >
-        <section class="w-full h-full flex flex-col justify-center px-2 py-1.5">
+        <section class="size-full flex flex-col justify-center px-2 py-1.5">
           <header class="text-xs font-medium text-ink-muted ml-2 mb-1">
             <h1>Unread</h1>
           </header>

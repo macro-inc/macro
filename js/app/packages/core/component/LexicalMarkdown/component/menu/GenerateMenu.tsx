@@ -2,7 +2,6 @@ import {
   generatedAndWaitingSignal,
   isGeneratingSignal,
 } from '@block-md/signal/generateSignal';
-import { cn } from '@ui/utils/classname';
 import {
   InlineInputDisabled,
   InlineInputLoading,
@@ -11,6 +10,7 @@ import {
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { createCallback } from '@solid-primitives/rootless';
+import { cn } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, JSXElement } from 'solid-js';
 import {
@@ -101,7 +101,7 @@ function GenerateActionMenu(props: GenerateMenuProps) {
   });
 
   return (
-    <div class="w-fit flex flex-col ring-1 ring-edge rounded-md p-1 bg-menu shadow-md space-y-1">
+    <div class="w-fit flex flex-col ring-1 ring-edge rounded-md p-1 bg-surface shadow-md space-y-1">
       <MenuItem
         onClick={() => {
           props.editor.dispatchCommand(ACCEPT_COMPLETION, undefined);

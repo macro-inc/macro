@@ -1,11 +1,9 @@
-import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
-import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
-import { createBulkRenameDssEntityMutation } from '@macro-entity';
 import { type EntityData, InlineEntity } from '@entity';
 import { Dialog } from '@kobalte/core/dialog';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { createBulkRenameDssEntityMutation } from '@macro-entity';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import { Button, cn, SegmentedControl } from '@ui';
+import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 
 type RenameMode = 'total' | 'prepend' | 'append' | 'replace';
 
@@ -31,7 +29,7 @@ export const BulkRenameEntitiesView = (props: {
     multi() ? 'append' : 'total'
   );
 
-  const modeOptions = [
+  const modeOptions: { value: RenameMode; label: string }[] = [
     { value: 'prepend', label: 'Prepend' },
     { value: 'append', label: 'Append' },
     { value: 'replace', label: 'Replace' },
@@ -116,9 +114,12 @@ export const BulkRenameEntitiesView = (props: {
           <For each={props.entities.slice(0, 2)}>
             {(entity) => (
               <div
-                class={cn('bg-edge px-2 py-1 truncate text-xs rounded-xs', {
-                  'max-w-[50%]': props.entities.length === 2,
-                })}
+                class={cn(
+                  'bg-hover border border-edge-muted px-2 py-1 truncate text-xs rounded-xs',
+                  {
+                    'max-w-[50%]': props.entities.length === 2,
+                  }
+                )}
               >
                 <InlineEntity entity={entity} />
               </div>
@@ -135,11 +136,11 @@ export const BulkRenameEntitiesView = (props: {
       <div class="p-3 flex flex-col gap-3">
         <Show when={multi()}>
           <SegmentedControl
-            label="Mode"
+            aria-label="Mode"
             value={mode()}
-            list={modeOptions}
-            onChange={(value) => setMode(value as RenameMode)}
-            size="SM"
+            options={modeOptions}
+            onChange={(value) => setMode(value)}
+            size="sm"
           />
         </Show>
 
@@ -157,9 +158,9 @@ export const BulkRenameEntitiesView = (props: {
             value={editValue()}
             onInput={(e) => setEditValue(e.currentTarget.value)}
             onKeyDown={handleKeyDown}
-            class="w-full p-2 text-sm border border-edge bg-menu text-ink
+            class="w-full p-2 text-sm border border-edge bg-surface text-ink
                    placeholder:text-ink-placeholder focus:outline-none focus:bg-active
-                   selection:bg-ink selection:text-panel"
+                   selection:bg-ink selection:text-surface"
             placeholder="Enter new text..."
           />
         </div>
@@ -167,13 +168,13 @@ export const BulkRenameEntitiesView = (props: {
         <Show when={multi() && mode() === 'replace'}>
           <div class="flex flex-col gap-2">
             <input
-              class="p-1 text-sm border border-edge bg-menu"
+              class="p-1 text-sm border border-edge bg-surface"
               placeholder="Find…"
               value={replaceFind()}
               onInput={(e) => setReplaceFind(e.currentTarget.value)}
             />
             <input
-              class="p-1 text-sm border border-edge bg-menu"
+              class="p-1 text-sm border border-edge bg-surface"
               placeholder="Replace with…"
               value={replaceWith()}
               onInput={(e) => setReplaceWith(e.currentTarget.value)}
@@ -196,7 +197,7 @@ export const BulkRenameEntitiesView = (props: {
           </Button>
           <Button
             type="button"
-            variant="secondary"
+            variant="base"
             class="rounded-xs"
             onClick={finishEditing}
           >

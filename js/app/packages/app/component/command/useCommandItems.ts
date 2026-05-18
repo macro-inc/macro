@@ -1,30 +1,29 @@
+import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import {
-  useQuickAccess,
-  type QuickAccessItem,
   type Bucket,
   type EntityItem,
-  type UserItem,
   exclude,
+  type QuickAccessItem,
+  type UserItem,
+  useQuickAccess,
 } from '@core/context/quickAccess';
+import { HotkeyTags } from '@core/hotkey/constants';
+import {
+  type CommandWithInfo,
+  getActiveCommandsFromScope,
+} from '@core/hotkey/getCommands';
+import { activeScope } from '@core/hotkey/state';
 import type { HotkeyCommand } from '@core/hotkey/types';
 import {
   createFreshSearch,
   type FreshSortConfig,
   type TimestampedItem,
 } from '@core/util/freshSort';
-import { createMemo } from 'solid-js';
-import type { CategoryFilter } from './types';
-import {
-  getActiveCommandsFromScope,
-  type CommandWithInfo,
-} from '@core/hotkey/getCommands';
-import { activeScope } from '@core/hotkey/state';
-import { CommandState } from './state';
-import { HotkeyTags } from '@core/hotkey/constants';
-import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import type { HotkeySequenceStep } from '@core/component/Tooltip';
-import { getCommandLastUsedAt } from './recency';
 import { mergeSortedArrays } from '@core/util/list';
+import { createMemo } from 'solid-js';
+import { getCommandLastUsedAt } from './recency';
+import { CommandState } from './state';
+import type { CategoryFilter, DisplayHotkeyStep } from './types';
 
 /** Command item type - local to command menu, not part of quickAccess */
 type CommandItem = {
@@ -36,7 +35,7 @@ type CommandItem = {
   timestamps: TimestampedItem;
   data: HotkeyCommand;
   displayHotkey?: string;
-  displayHotkeySequence?: HotkeySequenceStep[];
+  displayHotkeySequence?: DisplayHotkeyStep[];
 };
 
 /** Search item: triggers full-text search in the sidebar Search view */
@@ -116,7 +115,7 @@ function commandsToItems(
     displayHotkey?: (command: CommandWithInfo) => string | undefined;
     displayHotkeySequence?: (
       command: CommandWithInfo
-    ) => HotkeySequenceStep[] | undefined;
+    ) => DisplayHotkeyStep[] | undefined;
   }
 ): CommandItem[] {
   const seen = new Set<string>();
@@ -298,11 +297,11 @@ export function useCommandItems(
   return filteredItems;
 }
 
-export { isEntityItem, isUserItem, isCommandItem, isSearchItem };
 export type {
-  QuickAccessItem,
-  CommandMenuItem,
-  CommandItem,
-  SearchItem,
   Bucket,
+  CommandItem,
+  CommandMenuItem,
+  QuickAccessItem,
+  SearchItem,
 };
+export { isCommandItem, isEntityItem, isSearchItem, isUserItem };

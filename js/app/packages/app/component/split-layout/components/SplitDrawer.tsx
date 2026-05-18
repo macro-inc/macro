@@ -1,12 +1,12 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ScopedPortal } from '@core/component/ScopedPortal';
+
 import { TOKENS } from '@core/hotkey/tokens';
 import CloseIcon from '@icon/regular/x.svg';
+import { Button, Layer } from '@ui';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { useSplitPanel } from '../layoutUtils';
 import { useDrawerControl, useDrawerGroup } from './SplitDrawerContext';
-import { Layer } from '@ui';
 
 const BUFFER_SIZE = 48; // tw 3rem;
 
@@ -32,7 +32,7 @@ function DrawerInner(props: ParentProps<{ id: string }>) {
   }
 
   return (
-    <div class="w-full h-full p-2 overflow-auto shrink" ref={ref}>
+    <div class="size-full p-2 overflow-auto shrink" ref={ref}>
       {props.children}
     </div>
   );
@@ -64,7 +64,7 @@ export function SplitDrawer(
   };
 
   const getPositionClasses = () => {
-    const baseClasses = `absolute bg-panel border-edge-muted z-annotation-layer flex flex-col`;
+    const baseClasses = `absolute bg-surface border-edge-muted z-annotation-layer flex flex-col`;
     let positionClasses = '';
     switch (props.side) {
       case 'top':
@@ -130,13 +130,14 @@ export function SplitDrawer(
                 </h3>
               </Show>
               <div class="grow" />
-              <DeprecatedIconButton
-                icon={CloseIcon}
-                theme="clear"
-                size="sm"
-                tooltip={{ label: 'Close' }}
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                label="Close"
                 onClick={drawerControl.close}
-              />
+              >
+                <CloseIcon />
+              </Button>
             </div>
             <div class="size-full overflow-hidden">
               <DrawerInner id={props.id}>{props.children}</DrawerInner>

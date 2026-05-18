@@ -1,14 +1,14 @@
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import { seedMockDisplayNames } from '@core/user';
-import { For, createSignal } from 'solid-js';
-import { ListEntity } from '../composed/ListEntity';
+import { createSignal, For } from 'solid-js';
 import {
   ALL_MOCK_ENTITIES,
   createEntityWithNotifications,
   MOCK_NOTIFICATIONS,
   MOCK_USERS,
 } from '../../mocks/mockEntityData';
+import { ListEntity } from '../composed/ListEntity';
 import type { EntityData } from '../types/entity';
 import type { WithNotification } from '../types/notification';
 
@@ -66,7 +66,7 @@ export default function DebugEntityView() {
         <StaticSplitLabel label="Enity Component Demo (mock data)" />
         jk
       </SplitHeaderLeft>
-      <div class="w-full h-full overflow-auto">
+      <div class="size-full overflow-auto">
         <For each={entitiesWithNotifications}>
           {(entity, index) => (
             <ListEntity

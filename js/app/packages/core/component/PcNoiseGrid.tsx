@@ -202,6 +202,6 @@ export function PcNoiseGrid(props: {
   });
 
   return (
-    <canvas ref={canvas} class="pointer-none bg-inherit w-full h-full block" />
+    <canvas ref={canvas} class="pointer-none bg-inherit size-full block" />
   );
 }

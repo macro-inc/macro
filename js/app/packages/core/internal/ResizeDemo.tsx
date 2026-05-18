@@ -2,8 +2,8 @@ import { EntityIcon, type EntityIconProps } from '@core/component/EntityIcon';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { Resize } from '@core/component/Resize/Resize';
 import { Bar } from '@core/component/TopBar/Bar';
+import AddIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
-import AddIcon from '@macro-icons/pixel/add.svg';
 import { nanoid } from 'nanoid';
 import { createSignal, For, type ParentProps } from 'solid-js';
 
@@ -20,10 +20,10 @@ function PanelCard(
 ) {
   return (
     <div
-      class="size-full bg-panel flex overflow-hidden flex-col border border-edge focus-within:border-accent -ring-offset-2 focus-within:ring-2 focus-within:ring-accent group"
+      class="size-full bg-surface flex overflow-hidden flex-col border border-edge focus-within:border-accent -ring-offset-2 focus-within:ring-2 focus-within:ring-accent group"
       id={props.id}
     >
-      <div class="bg-edge flex-0 p-2 text-ink flex items-center justify-between group-focus-within:bg-accent group-focus-within:text-panel">
+      <div class="bg-edge flex-0 p-2 text-ink flex items-center justify-between group-focus-within:bg-accent group-focus-within:text-surface">
         <div class="flex items-center gap-2">
           <EntityIcon targetType={props.entityType} theme="monochrome" />
 
@@ -78,10 +78,10 @@ function VerticalPanelCard(
 ) {
   return (
     <div
-      class="size-full bg-panel flex overflow-hidden flex-col border border-edge focus-within:border-accent -ring-offset-2 focus-within:ring-2 focus-within:ring-accent group"
+      class="size-full bg-surface flex overflow-hidden flex-col border border-edge focus-within:border-accent -ring-offset-2 focus-within:ring-2 focus-within:ring-accent group"
       id={props.id}
     >
-      <div class="bg-edge flex-0 p-2 text-ink flex items-center justify-between group-focus-within:bg-accent group-focus-within:text-panel">
+      <div class="bg-edge flex-0 p-2 text-ink flex items-center justify-between group-focus-within:bg-accent group-focus-within:text-surface">
         <div class="flex items-center gap-2">
           <EntityIcon targetType={props.entityType} theme="monochrome" />
           <div class="font-mono">
@@ -278,7 +278,7 @@ export default function ResizeDemo() {
   };
 
   return (
-    <div class="h-full w-full flex-flex-col">
+    <div class="size-full flex-flex-col">
       <Bar
         left={
           <div class="p-2 text-sm w-2xl truncate">
@@ -287,7 +287,7 @@ export default function ResizeDemo() {
         }
         center={<div />}
       />
-      <div class="bg-panel size-full p-2">
+      <div class="bg-surface size-full p-2">
         <div class="h-[95%] w-full">
           <Resize.Zone gutter={8} direction="horizontal">
             <For each={selectedConfigs()}>

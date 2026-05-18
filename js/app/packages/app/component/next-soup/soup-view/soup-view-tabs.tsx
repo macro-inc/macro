@@ -1,18 +1,18 @@
 import {
-  VIEW_TAB_PRESETS,
-  type PresetContext,
   getViewPreset,
+  type PresetContext,
+  VIEW_TAB_PRESETS,
 } from '@app/component/app-sidebar/soup-filter-presets';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
+import { type TabItem, Tabs } from '@core/component/Tabs';
+import { TabsInset } from '@core/component/TabsInset';
 import { useUserContext } from '@core/context/user';
-import { Tabs, type TabItem } from '@core/component/Tabs';
-import { batch, createMemo, For, Match, Switch } from 'solid-js';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Layer } from '@ui';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
+import { Dropdown, Layer } from '@ui';
+import { batch, createMemo, For, Match, Switch } from 'solid-js';
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
 export type TabbedListView = Extract<
@@ -105,6 +105,7 @@ export const useApplyPreset = () => {
       setActiveTab(tabId);
       queryFilters.replace(preset.filters);
       soup.predicates.set(preset.clientFilters);
+      soup.grouping.setActiveGroupId(undefined);
     });
     return true;
   };
@@ -134,7 +135,7 @@ const ViewTabs = (props: { view: TabbedListView }) => {
   const list = () => VIEW_TAB_LISTS[props.view];
 
   return (
-    <Tabs
+    <TabsInset
       list={list()}
       value={activeTab()}
       defaultValue={VIEW_TAB_PRESETS[props.view].default}
@@ -161,17 +162,17 @@ export const CollapsedSoupViewTabs = () => {
   });
 
   return (
-    <DropdownMenu placement="bottom-start" gutter={4}>
-      <DropdownMenu.Trigger class="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xs border border-edge-muted hover:bg-ink/6 transition-colors">
+    <Dropdown placement="bottom-start" gutter={4}>
+      <Dropdown.Trigger class="flex items-center gap-1">
         <span class="truncate">{activeLabel()}</span>
         <ChevronDownIcon class="size-3 shrink-0" />
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
+      </Dropdown.Trigger>
+      <Dropdown.Portal>
         <Layer depth={2}>
-          <DropdownMenu.Content class="z-action-menu bg-page border border-edge-muted rounded-sm shadow-sm p-1">
+          <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-sm p-1">
             <For each={list()}>
               {(item) => (
-                <DropdownMenu.Item
+                <Dropdown.Item
                   class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
                   classList={{
                     'font-semibold': activeTab() === item.value,
@@ -182,13 +183,13 @@ export const CollapsedSoupViewTabs = () => {
                   }}
                 >
                   {item.label}
-                </DropdownMenu.Item>
+                </Dropdown.Item>
               )}
             </For>
-          </DropdownMenu.Content>
+          </Dropdown.Content>
         </Layer>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+      </Dropdown.Portal>
+    </Dropdown>
   );
 };
 
@@ -196,7 +197,7 @@ export const MobileSoupViewTabs = () => {
   const listView = useCurrentListView();
 
   return (
-    <div class="bg-panel border-t border-edge-muted h-11 px-1">
+    <div class="bg-surface border-t border-edge-muted h-11 px-1">
       <Switch>
         <For
           each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
@@ -224,7 +225,7 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
       defaultValue={VIEW_TAB_PRESETS[props.view].default}
       onChange={(value) => applyTabPreset(props.view, value)}
       indicatorPosition="top"
-      class="**:data-indicator:h-[3px]"
+      class="**:data-indicator:h-0.75"
     />
   );
 };

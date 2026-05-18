@@ -1,10 +1,10 @@
-import type { EntityData } from '@entity';
-import type { SoupState } from '../create-soup-state';
 import {
   isShareableEntityType,
   openGlobalShareModal,
   type ShareableEntityData,
 } from '@app/component/global-share-modal/GlobalShareModal';
+import type { EntityData } from '@entity';
+import type { SoupState } from '../create-soup-state';
 
 export const makeShareAction = () => {
   /**

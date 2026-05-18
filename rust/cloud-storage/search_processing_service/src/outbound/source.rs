@@ -52,6 +52,7 @@ impl BackfillSource for PgBackfillSource {
                 .map(|id| {
                     SearchQueueMessage::CallRecord(CallRecordMessage {
                         call_id: id.clone(),
+                        index_override: req.index_override.clone(),
                     })
                 })
                 .collect();
@@ -76,6 +77,7 @@ impl BackfillSource for PgBackfillSource {
             .map(|r| {
                 SearchQueueMessage::CallRecord(CallRecordMessage {
                     call_id: r.call_id.to_string(),
+                    index_override: req.index_override.clone(),
                 })
             })
             .collect();
@@ -100,6 +102,7 @@ impl BackfillSource for PgBackfillSource {
             offset as i64,
             chat_ids,
             user_ids,
+            req.deletion_filter.as_only_deleted(),
         )
         .await
         .map_err(BackfillError::Source)?;
@@ -114,6 +117,7 @@ impl BackfillSource for PgBackfillSource {
                     user_id: chat.user_id,
                     created_at: chat.created_at,
                     updated_at: chat.updated_at,
+                    index_override: req.index_override.clone(),
                 })
             })
             .collect();
@@ -126,13 +130,14 @@ impl BackfillSource for PgBackfillSource {
 
     async fn fetch_channels(
         &self,
-        _req: &ChannelBackfillRequest,
+        req: &ChannelBackfillRequest,
         offset: usize,
     ) -> Result<SourcePage, BackfillError> {
         let batch = comms_db_client::messages::get_messages::get_channel_messages(
             &self.db,
             self.page_sizes.channels as i64,
             offset as i64,
+            req.deletion_filter.as_only_deleted(),
         )
         .await
         .map_err(BackfillError::Source)?;
@@ -144,6 +149,7 @@ impl BackfillSource for PgBackfillSource {
                 SearchQueueMessage::ChannelMessageUpdate(ChannelMessageUpdate {
                     channel_id: channel_id.to_string(),
                     message_id: message_id.to_string(),
+                    index_override: req.index_override.clone(),
                 })
             })
             .collect();
@@ -167,6 +173,7 @@ impl BackfillSource for PgBackfillSource {
             &req.sub_type,
             &req.created_after,
             &req.created_before,
+            req.deletion_filter.as_only_deleted(),
         )
         .await
         .map_err(BackfillError::Source)?;
@@ -175,10 +182,12 @@ impl BackfillSource for PgBackfillSource {
         let messages: Vec<SearchQueueMessage> = batch
             .iter()
             .map(|d| {
+                let mut msg: sqs_client::search::document::SearchExtractorMessage = d.into();
+                msg.index_override.clone_from(&req.index_override);
                 if d.file_type == FileType::Md {
-                    SearchQueueMessage::ExtractSync(d.into())
+                    SearchQueueMessage::ExtractSync(msg)
                 } else {
-                    SearchQueueMessage::ExtractDocumentText(d.into())
+                    SearchQueueMessage::ExtractDocumentText(msg)
                 }
             })
             .collect();

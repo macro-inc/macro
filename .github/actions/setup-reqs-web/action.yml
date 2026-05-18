@@ -5,22 +5,24 @@ inputs:
     description: Install Playwright and cache
     required: false
     default: ''
+  cachix-auth-token:
+    description: Cachix auth token used to configure authenticated pulls.
+    required: false
+    default: ''
+  sccache-bucket:
+    description: Optional S3 bucket for shared sccache storage.
+    required: false
+    default: ''
 
 runs:
   using: composite
   steps:
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v2
-
-    - name: Setup Rust
-      uses: ./.github/actions/setup-rust
-
-    - name: Install wasm-pack
-      shell: bash
-      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-
-    - name: Install just
-      uses: extractions/setup-just@v2
+    - name: Setup Nix dev shell
+      uses: ./.github/actions/setup-cachix
+      with:
+        cachix-auth-token: ${{ inputs.cachix-auth-token }}
+        dev-shell: 'true'
+        sccache-bucket: ${{ inputs.sccache-bucket }}
 
     - name: Setup bunfig.toml
       working-directory: js
@@ -32,9 +34,7 @@ runs:
     - name: Install Dependencies
       shell: bash
       working-directory: js
-      run: |
-        bun install --frozen-lockfile
-        bun add -g npm
+      run: bun install --frozen-lockfile
 
     - name: Get Playwright version (for caching)
       if: inputs.playwright == 'true'

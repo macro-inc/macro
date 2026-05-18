@@ -4,13 +4,13 @@ on:
   workflow_dispatch: {}
 
 # Create a GitHub-hosted larger image-generation runner with this label before
-# running this workflow. After it succeeds, configure linux-extra-beefy to use
-# the generated `macro-rust-ci` custom image.
+# running this workflow. Keep its CPU/RAM/disk size at or below the smallest
+# runner size that should be allowed to use the generated custom image.
 jobs:
   build-rust-ci-image:
-    runs-on: linux-extra-beefy-image-generation
+    runs-on: linux-rust-ci-image-generation-small
     snapshot:
-      image-name: macro-rust-ci
+      image-name: macro-rust-ci-small
       version: 1.*
     steps:
       - uses: actions/checkout@v6
@@ -21,74 +21,88 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential \
             curl \
-            jq \
-            libssl-dev \
-            lld \
-            pkg-config \
             postgresql-client \
-            unzip \
-            zstd
+            unzip
 
-      - name: Install Rust toolchain
+      - name: Install Nix
         shell: bash
         run: |
           set -euo pipefail
-          if ! command -v rustup >/dev/null 2>&1; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
-            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-            export PATH="$HOME/.cargo/bin:$PATH"
+          curl --http1.1 --retry 5 --retry-delay 5 --retry-all-errors \
+            --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
+            sh -s -- install linux --no-confirm --init systemd \
+            --extra-conf "experimental-features = nix-command flakes" \
+            --extra-conf "trusted-users = root runner"
+          # Daemon socket may be active but not reachable in this shell; ensure it.
+          sudo systemctl enable --now nix-daemon.socket nix-daemon.service
+          # Make nix discoverable in non-login shells (GHA default).
+          echo 'PATH="/nix/var/nix/profiles/default/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"' \
+            | sudo tee /etc/environment >/dev/null
+
+      - name: Configure Cachix
+        uses: ./.github/actions/setup-cachix
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
+
+      - name: Materialize dev shell into /nix/store
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NIX_REMOTE=daemon
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          sudo mkdir -p /var/cache/nix
+          sudo chown runner:runner /var/cache/nix
+          if command -v cachix >/dev/null 2>&1; then
+            cachix watch-store "$CACHIX_CACHE_NAME" &
+            cachix_pid=$!
+            trap 'kill "$cachix_pid" || true' EXIT
+          else
+            echo "::warning::Cachix is unavailable; skipping Cachix store uploads."
           fi
+          nix develop --profile /var/cache/nix/dev-shell --command true
 
-          toolchain="$(grep -E '^\s*channel\s*=' rust/rust-toolchain.toml | sed -E 's/.*"([^"]+)".*/\1/')"
-          rustup toolchain install "$toolchain" --profile minimal --component clippy --component rustfmt
-          rustup default "$toolchain"
-          rustc --version
-          cargo --version
-          cargo clippy --version
-          cargo fmt --version
-
-      - name: Install Rust CI tools
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo install cargo-nextest --locked
-          cargo install just --locked
-          cargo install sqlx-cli --locked
-
-          cargo nextest --version
-          just --version
-          sqlx --version
-
-      - name: Install sccache
+      - name: Write image markers
         shell: bash
         env:
-          SCCACHE_VERSION: v0.15.0
+          BUILD_RUN_ID: ${{ github.run_id }}
+          BUILD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-
-          archive="sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz"
-          basename="${archive%.tar.gz}"
-          tmp_dir="$(mktemp -d)"
-          trap 'rm -rf "$tmp_dir"' EXIT
-
-          curl -fsSL "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/${archive}" \
-            | tar -xz -C "$tmp_dir"
-
-          sudo install -m 0755 "$tmp_dir/$basename/sccache" /usr/local/bin/sccache
-          sccache --version
+          marker="run_id=${BUILD_RUN_ID} sha=${BUILD_SHA} ts=$(date -u +%FT%TZ)"
+          # Write to multiple locations to learn which the snapshot preserves.
+          echo "$marker" | sudo tee /opt/macro-ami-marker.txt >/dev/null
+          echo "$marker" | sudo tee /etc/macro-ami-marker.txt >/dev/null
+          echo "$marker" | sudo tee /usr/local/share/macro-ami-marker.txt >/dev/null
+          echo "$marker" > /home/runner/macro-ami-marker.txt
+          # Also drop a sentinel inside /nix so we can tell if the whole tree was wiped.
+          echo "$marker" | sudo tee /nix/macro-ami-marker.txt >/dev/null
 
       - name: Verify image contents
         shell: bash
         run: |
           set -euo pipefail
-          rustc --version
-          cargo --version
-          cargo clippy --version
-          cargo fmt --version
-          cargo nextest --version
-          just --version
-          sqlx --version
-          sccache --version
-          ld.lld --version
+          export NIX_REMOTE=daemon
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          if command -v cachix >/dev/null 2>&1; then
+            cachix watch-store "$CACHIX_CACHE_NAME" &
+            cachix_pid=$!
+            trap 'kill "$cachix_pid" || true' EXIT
+          else
+            echo "::warning::Cachix is unavailable; skipping Cachix store uploads."
+          fi
+          nix --version
+          test -L /var/cache/nix/dev-shell
+          nix develop --profile /var/cache/nix/dev-shell --command bash -lc '
+            set -euo pipefail
+            rustc --version
+            cargo --version
+            cargo clippy --version
+            cargo fmt --version
+            cargo nextest --version
+            just --version
+            sqlx --version
+            sccache --version
+            mold --version
+          '

@@ -1,11 +1,10 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import { cn } from '@ui/utils/classname';
 import CheckIcon from '@icon/bold/check-bold.svg?component-solid';
 import CaretRight from '@icon/regular/caret-right.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Layer } from '@ui';
+import { cn, Layer } from '@ui';
 import {
   type Component,
   createEffect,
@@ -19,9 +18,9 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { Hotkey } from '../../ui/components/Hotkey';
 import clickOutside from '../directive/clickOutside';
 import { EditingContext } from './Editable';
-import { Hotkey } from './Hotkey';
 
 false && clickOutside;
 
@@ -196,12 +195,12 @@ export function MenuItem(props: MenuItemProps) {
         <div
           class={cn(
             'shrink-0 flex items-center justify-center',
-            isMobile() ? 'w-5 h-5' : 'w-4 h-4'
+            isMobile() ? 'size-5' : 'size-4'
           )}
         >
           <CheckIcon
             class={cn(
-              'w-[14px] h-[14px] shrink-0 rounded-sm p-[2px]',
+              'size-3.5 shrink-0 rounded-sm p-0.5',
               (props as CheckboxMenuItemProps).checked
                 ? 'bg-accent text-[white]'
                 : 'bg-transparent text-transparent border border-edge'
@@ -213,12 +212,12 @@ export function MenuItem(props: MenuItemProps) {
         <div
           class={cn(
             'flex items-center justify-center shrink-0',
-            isMobile() ? 'w-5 h-5' : 'w-4 h-4'
+            isMobile() ? 'size-5' : 'size-4'
           )}
         >
           <div
             class={cn(
-              'w-[14px] h-[14px] shrink-0 rounded-full',
+              'size-3.5 shrink-0 rounded-full',
               (props as RadioMenuItemProps).value ===
                 (props as RadioMenuItemProps).groupValue
                 ? 'bg-accent text-[white]'
@@ -235,7 +234,7 @@ export function MenuItem(props: MenuItemProps) {
             }
             class={cn(
               'shrink-0',
-              isMobile() ? 'w-5 h-5' : 'w-4 h-4',
+              isMobile() ? 'size-5' : 'size-4',
               props.iconClass
             )}
           />
@@ -249,7 +248,7 @@ export function MenuItem(props: MenuItemProps) {
       </Show>
       <Show when={props.hotkeyToken} keyed>
         {(hotkeyToken) => (
-          <div class="ml-auto text-page text-xs">
+          <div class="ml-auto text-surface text-xs">
             <Hotkey token={hotkeyToken} class="text-ink-muted" showPlus />
           </div>
         )}
@@ -282,7 +281,7 @@ export function SubTrigger(props: {
             }
             class={cn(
               'shrink-0',
-              isMobile() ? 'w-5 h-5' : 'w-4 h-4',
+              isMobile() ? 'size-5' : 'size-4',
               props.iconClass
             )}
           />
@@ -292,7 +291,7 @@ export function SubTrigger(props: {
         </Show>
       </Show>
       <div class="flex-1 truncate">{props.text}</div>
-      <CaretRight class="w-4 h-4 shrink-0" />
+      <CaretRight class="size-4 shrink-0" />
     </ContextMenu.SubTrigger>
   );
 }
@@ -360,7 +359,7 @@ const menuWidths: Record<MenuWidth, string> = {
   screen: 'w-screen',
 };
 
-export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start bg-menu shadow-lg ring-1 ring-edge-muted rounded-sm p-1 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal`;
+export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start bg-surface shadow-lg ring-1 ring-edge-muted rounded-sm p-1 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal`;
 
 type MenuContentProps = ParentProps<{
   class?: string;

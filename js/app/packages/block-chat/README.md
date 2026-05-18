@@ -1,5 +1,7 @@
 # chat-block
 
+This package is part of the Macro frontend workspace.
+
 To install dependencies:
 
 ```bash

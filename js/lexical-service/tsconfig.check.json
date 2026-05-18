@@ -1,0 +1,13 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"baseUrl": ".",
+		"paths": {
+			"@macro-inc/lexical-core/markdown-loro-snapshot": [
+				"src/types/markdown-loro-snapshot.d.ts"
+			],
+			"@macro-inc/lexical-core": ["../lexical-core/"],
+			"@macro-inc/lexical-core/*": ["../lexical-core/*"]
+		}
+	}
+}

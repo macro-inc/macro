@@ -7,8 +7,8 @@ import {
   virtualKeyboardHeight,
   virtualKeyboardVisible,
 } from '@core/mobile/virtualKeyboard';
-import type { Accessor } from 'solid-js';
 import type { LexicalEditor } from 'lexical';
+import type { Accessor } from 'solid-js';
 import { createEffect, createRoot, on } from 'solid-js';
 import { $getCaretRect } from '../../utils';
 

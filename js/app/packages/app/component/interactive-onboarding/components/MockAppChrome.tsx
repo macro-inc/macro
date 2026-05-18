@@ -1,32 +1,31 @@
-import {
-  For,
-  Show,
-  type JSX,
-  onMount,
-  onCleanup,
-  createSignal,
-} from 'solid-js';
+import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
+import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
+import type { ValidHotkey } from '@core/hotkey/types';
 import MacroIcon from '@macro-icons/macro-logo.svg';
-import { Dynamic } from 'solid-js/web';
-import { cn } from '@ui/utils/classname';
-import {
-  sidebarFilter,
-  setSidebarFilter,
-  type SandboxSidebarFilter,
-} from '../sandbox/sandbox-store';
-import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
+import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
+import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
+import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
 import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
-import { registerHotkey, createHotkeyGroup } from '@core/hotkey/hotkeys';
-import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import type { ValidHotkey } from '@core/hotkey/types';
-import { Tooltip } from '@core/component/Tooltip';
+import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
+import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
+import { cn, HoverCard } from '@ui';
+import {
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import {
+  type SandboxSidebarFilter,
+  setSidebarFilter,
+  sidebarFilter,
+} from '../sandbox/sandbox-store';
 
 export const MOCK_SIDEBAR_LINKS = [
   {
@@ -154,7 +153,7 @@ export function MockAppChrome(props: MockAppChromeProps) {
   onCleanup(() => group.dispose());
 
   return (
-    <div class="size-full p-4 bg-panel">
+    <div class="size-full p-4 bg-surface">
       <style>{`
         @keyframes sidebar-glow-pulse {
           0%, 100% { box-shadow: 0 0 0 0 rgb(from var(--color-accent) r g b / 0.7), 0 0 6px 1px rgb(from var(--color-accent) r g b / 0.7), 0 0 12px 3px rgb(from var(--color-accent) r g b / 0.4); }
@@ -162,7 +161,7 @@ export function MockAppChrome(props: MockAppChromeProps) {
         }
         .sidebar-glow { animation: sidebar-glow-pulse 1.8s ease-in-out infinite; border-radius: 4px; }
       `}</style>
-      <div class="flex size-full bg-page rounded-sm border border-edge-muted">
+      <div class="flex size-full bg-surface rounded-sm border border-edge-muted">
         <div class="px-2 shrink-0 bg-surface-secondary/50 flex flex-col items-center py-3 gap-1">
           <MacroIcon class="size-5 text-accent mb-3" />
           <button
@@ -227,8 +226,9 @@ export function MockAppChrome(props: MockAppChromeProps) {
                 return 'text-ink opacity-50 hover:opacity-80 hover:bg-ink/10';
               };
               return (
-                <Tooltip
-                  tooltip={
+                <HoverCard
+                  placement="right"
+                  content={
                     <span class="flex items-center gap-1.5 text-xs">
                       {link.label}
                       <span class="flex items-center gap-1 text-ink/40">
@@ -242,7 +242,6 @@ export function MockAppChrome(props: MockAppChromeProps) {
                       </span>
                     </span>
                   }
-                  placement="right"
                 >
                   <button
                     type="button"
@@ -259,7 +258,7 @@ export function MockAppChrome(props: MockAppChromeProps) {
                       <Dynamic component={link.icon} class="size-4" />
                     )}
                   </button>
-                </Tooltip>
+                </HoverCard>
               );
             }}
           </For>
@@ -294,7 +293,7 @@ export function MockAppChrome(props: MockAppChromeProps) {
         </div>
 
         {/* Main area */}
-        <div class="flex-1 min-w-0 flex flex-col m-1 ml-0 bg-panel border border-edge-muted rounded-sm">
+        <div class="flex-1 min-w-0 flex flex-col m-1 ml-0 bg-surface border border-edge-muted rounded-sm">
           {/* Mock top bar */}
           <Show when={sidebarFilter() !== 'empty'}>
             <div class="h-10 shrink-0 border-b border-edge-muted flex items-center px-3">

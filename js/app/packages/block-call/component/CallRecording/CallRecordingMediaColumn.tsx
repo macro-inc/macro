@@ -1,7 +1,7 @@
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import { cn } from '@ui';
 import type { Accessor, Setter } from 'solid-js';
 import { Show } from 'solid-js';
-import { cn } from '@ui/utils/classname';
 import { CallRecordingParticipantsSection } from './CallRecordingParticipants';
 import { CallRecordingSummarySection } from './CallRecordingSummary';
 import { CallRecordingVideo } from './CallRecordingVideo';
@@ -45,13 +45,11 @@ export function CallRecordingMediaColumn(props: {
             </div>
           }
         >
-          <div class="flex min-h-[120px] flex-1 items-center justify-center px-4 text-center text-sm text-ink-faint">
+          <div class="flex min-h-30 flex-1 items-center justify-center px-4 text-center text-sm text-ink-faint">
             No video recording for this call.
           </div>
         </Show>
       </Show>
-
-      <CallRecordingSummarySection record={props.record} />
 
       <div
         class={cn(
@@ -81,6 +79,8 @@ export function CallRecordingMediaColumn(props: {
           <CallRecordingParticipantsSection record={props.record} />
         </div>
       </div>
+
+      <CallRecordingSummarySection record={props.record} />
     </div>
   );
 }

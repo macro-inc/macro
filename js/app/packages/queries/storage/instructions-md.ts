@@ -1,6 +1,3 @@
-import { MARKDOWN_LORO_SCHEMA } from '@block-md/definition';
-import { rawStateToLoroSnapshot } from '@core/collab/utils';
-import { createMarkdownStateFromContent } from '@core/component/LexicalMarkdown/collaboration/utils';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
   getTextContent,
@@ -102,26 +99,9 @@ export function useInstructionsMdTextQuery() {
 /** Creates the instructions md document. Backend prevents duplicates */
 export function useCreateInstructionsMd() {
   return async () => {
-    const emptyMarkdownState = await createMarkdownStateFromContent(undefined);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const snapshot = await rawStateToLoroSnapshot(
-      MARKDOWN_LORO_SCHEMA,
-      emptyMarkdownState as any
-    );
-    if (!snapshot) return;
     const createResult = await storageServiceClient.instructions.create();
     if (isOk(createResult)) {
       const [, { documentId }] = createResult;
-      const res = await syncServiceClient.initializeFromSnapshot({
-        snapshot,
-        documentId: documentId,
-      });
-      if (!isOk(res)) {
-        console.error(
-          'Failed to initialize instructions document from snapshot'
-        );
-        return;
-      }
       queryClient.setQueryData(instructionsMdKeys.id.queryKey, documentId);
       return documentId;
     }

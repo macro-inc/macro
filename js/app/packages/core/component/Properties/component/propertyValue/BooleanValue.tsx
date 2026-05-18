@@ -3,7 +3,7 @@ import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import { useBooleanEditor } from '../../hooks';
 import type { Property } from '../../types';
-import { stubSaveHandler, type PropertyValueProps } from './ValueComponents';
+import { type PropertyValueProps, stubSaveHandler } from './ValueComponents';
 
 /**
  * Display component for boolean properties with instant toggle
@@ -47,7 +47,7 @@ export const BooleanValue: Component<PropertyValueProps> = (props) => {
         }}
       >
         <Show when={isChecked()}>
-          <CheckIcon class="size-3 text-panel" />
+          <CheckIcon class="size-3 text-surface" />
         </Show>
       </div>
     </button>

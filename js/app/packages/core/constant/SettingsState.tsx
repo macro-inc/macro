@@ -12,11 +12,15 @@ export type SettingsTab =
   | 'Inbox'
   | 'Shortcuts'
   | 'Mobile App'
-  | 'MCP'
+  | 'Agent'
   | 'Team';
 
 export const [activeTabId, setActiveTabId] =
   createSignal<SettingsTab>('Appearance');
+
+export type AgentSettingsSubTab = 'connectors' | 'mcp_server';
+export const [agentSettingsSubTab, setAgentSettingsSubTab] =
+  createSignal<AgentSettingsSubTab>('connectors');
 
 export const useSettingsState = () => {
   const { insertSplit } = useSplitLayout();

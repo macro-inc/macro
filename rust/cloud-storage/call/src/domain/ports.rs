@@ -158,15 +158,36 @@ pub trait CallRepository: Send + Sync + 'static {
         started_at: chrono::DateTime<chrono::Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Insert a transcript segment for an active call.
+    /// Insert a transcript segment for an active call. When `voice_id` is
+    /// `Some`, it's stored on the row so the call-finished pipeline can
+    /// resolve the speaker to a macro user.
     fn create_transcript_segment(
         &self,
         call_id: &Uuid,
         segment: &TranscriptSegmentRequest,
+        voice_id: Option<Uuid>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Return a voice id already attached to this speaker in the active call,
+    /// if one exists. Prefer `diarized_speaker_id` when present because a
+    /// single participant track can contain multiple diarized voices; otherwise
+    /// fall back to the LiveKit speaker/participant id.
+    fn get_transcript_voice_id_for_speaker<'a>(
+        &self,
+        call_id: &Uuid,
+        speaker_id: &'a str,
+        diarized_speaker_id: Option<&'a str>,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
     /// Get the profile picture URL for a user by their `MacroUserIdStr`.
     fn get_user_profile_picture<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Get the display name (first + last) for a user. Returns `None` if neither
+    /// field is set or both are the sentinel "N/A".
+    fn get_user_display_name<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
@@ -243,6 +264,39 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_record_id: &Uuid,
         assignments: &[CustomSpeakerAssignment],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Stable `(macro_user_id, voice_id)` pairs inferred from a finished
+    /// call's archived transcripts. A speaker is returned only when every
+    /// transcript row for that `speaker_id` has the same non-NULL
+    /// `diarized_speaker_id`; all distinct non-NULL `voice_id`s observed on
+    /// those rows are returned. The `speaker_id` is resolved through the
+    /// canonical `User` row to get the `macro_user.id` used by
+    /// `macro_user_voice`.
+    fn get_stable_speaker_voices_for_call_record(
+        &self,
+        call_record_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<(Uuid, Uuid)>, Self::Err>> + Send;
+
+    /// Distinct `(diarized_speaker_id, voice_id)` pairs from a call's
+    /// archived transcripts. Used by the post-archive voice matcher; rows
+    /// with NULL `diarized_speaker_id` or NULL `voice_id` are skipped.
+    fn get_distinct_voice_speakers_for_call_record(
+        &self,
+        call_record_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<(String, Uuid)>, Self::Err>> + Send;
+
+    /// Apply auto-matched speaker assignments to `call_record_transcripts`
+    /// rows, only where `custom_speaker IS NULL` (so manual overrides are
+    /// never clobbered) and the matched macro user shares a team with at least
+    /// one call participant. Each tuple is `(diarized_speaker_id,
+    /// macro_user_id)`; the canonical `User.id` is resolved inline via the
+    /// `User` row whose `macro_user_id` matches and stored in
+    /// `custom_speaker`. Empty `assignments` is a no-op.
+    fn patch_call_transcript_speakers_from_voice_match(
+        &self,
+        call_record_id: &Uuid,
+        assignments: &[(String, Uuid)],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Persist the AI-generated summary text on the archived call record.
@@ -506,6 +560,21 @@ pub trait CallService: Send + Sync + 'static {
     /// and empty transcripts are also no-ops — no AI call is made in those
     /// cases.
     fn summarize_call(&self, call_id: &Uuid) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// List the voice ids currently enrolled for `macro_user_id`.
+    fn get_user_voices(
+        &self,
+        macro_user_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<Uuid>, CallError>> + Send;
+
+    /// Enroll a new voice embedding for `macro_user_id`. Inserts a row into
+    /// the `voice` table and links it to the user via `macro_user_voice`.
+    /// Returns the new `voice.id`.
+    fn set_user_voice(
+        &self,
+        macro_user_id: &Uuid,
+        embedding: &[f32],
+    ) -> impl Future<Output = Result<Uuid, CallError>> + Send;
 }
 
 /// Lightweight read-only port for querying call records in Soup.
@@ -547,6 +616,115 @@ pub trait CallSearchIndexer: Send + Sync + 'static {
         channel_id: &Uuid,
         call_id: &Uuid,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
+/// Repository port for persisting speaker voice embeddings and their
+/// association with macro users.
+///
+/// `voice` stores a row per distinct speaker fingerprint (a `vector(N)`
+/// embedding produced by the LiveKit agent's speaker-embedding model).
+/// `macro_user_voice` is a many-to-many join linking enrolled users to
+/// the voice rows that identify them.
+#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+pub trait VoiceRepository: Send + Sync + 'static {
+    /// The error type returned by repository operations.
+    type Err: Into<anyhow::Error> + Send + Debug;
+
+    /// Return the id for the supplied voice embedding.
+    ///
+    /// Implementations may reuse an existing nearby embedding instead of
+    /// inserting a new row, so repeated transcript segments from the same
+    /// speaker resolve to the same `voice.id`.
+    fn upsert_voice(
+        &self,
+        embedding: &[f32],
+    ) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
+
+    /// Link a `voice` row to a macro user. Idempotent on the composite
+    /// primary key `(macro_user_id, voice_id)`.
+    fn link_user_voice(
+        &self,
+        macro_user_id: &Uuid,
+        voice_id: &Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// All voice ids currently linked to a macro user.
+    fn get_user_voices(
+        &self,
+        macro_user_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+
+    /// Resolve a `voice_id` back to its linked macro user, if any. Uses the
+    /// `macro_user_voice` join — does not perform similarity search.
+    fn find_user_by_voice(
+        &self,
+        voice_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
+    /// Find the macro user whose enrolled voice embedding is closest to
+    /// `embedding`, provided the cosine distance is `<= threshold`. Returns
+    /// `None` when no enrolled voice is within the threshold.
+    fn find_nearest_user(
+        &self,
+        embedding: &[f32],
+        threshold: f32,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
+    /// Same as [`Self::find_nearest_user`] but looks the embedding up by
+    /// `voice_id` in the `voice` table first. Used by the call-finished
+    /// matcher, which already has `voice_id`s on the transcript rows and
+    /// shouldn't need to re-load the embeddings client-side.
+    fn find_nearest_user_for_voice(
+        &self,
+        voice_id: &Uuid,
+        threshold: f32,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+}
+
+/// No-op [`VoiceRepository`] used as the default for services that do not
+/// have speaker-identification wired up. All operations are no-ops or
+/// return `None`/empty results.
+#[derive(Default, Clone, Copy)]
+pub struct NoOpVoiceRepository;
+
+impl VoiceRepository for NoOpVoiceRepository {
+    type Err = anyhow::Error;
+
+    async fn upsert_voice(&self, _embedding: &[f32]) -> Result<Uuid, Self::Err> {
+        anyhow::bail!("voice repository not configured");
+    }
+
+    async fn link_user_voice(
+        &self,
+        _macro_user_id: &Uuid,
+        _voice_id: &Uuid,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn get_user_voices(&self, _macro_user_id: &Uuid) -> Result<Vec<Uuid>, Self::Err> {
+        Ok(Vec::new())
+    }
+
+    async fn find_user_by_voice(&self, _voice_id: &Uuid) -> Result<Option<Uuid>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn find_nearest_user(
+        &self,
+        _embedding: &[f32],
+        _threshold: f32,
+    ) -> Result<Option<Uuid>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn find_nearest_user_for_voice(
+        &self,
+        _voice_id: &Uuid,
+        _threshold: f32,
+    ) -> Result<Option<Uuid>, Self::Err> {
+        Ok(None)
+    }
 }
 
 /// No-op for services without search.

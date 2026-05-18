@@ -47,12 +47,12 @@ import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
 import WarningIcon from '@icon/regular/warning.svg';
 import {
+  AwaitNode,
   CommentNode,
   createPeerIdValidator,
   InlineSearchNode,
   type PeerIdValidator,
   peerIdPlugin,
-  AwaitNode,
 } from '@lexical-core';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';

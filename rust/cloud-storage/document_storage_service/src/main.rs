@@ -20,7 +20,7 @@ use call::{
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
     outbound::{
         ai_call_summarizer::AiCallSummarizer, livekit_rtc_client::LivekitRtcClient,
-        pg_call_repo::PgCallRepo,
+        pg_call_repo::PgCallRepo, pg_voice_repo::PgVoiceRepo,
     },
 };
 use channels::{
@@ -29,7 +29,7 @@ use channels::{
 };
 use comms::{
     domain::service::ChannelServiceImpl,
-    inbound::CommsRouterState,
+    inbound::router::CommsRouterState,
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use config::{Config, Environment};
@@ -52,6 +52,7 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
+use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -207,10 +208,15 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
-    let sync_service_client = SyncServiceClient::new(
+    let sync_service_client = Arc::new(SyncServiceClient::new(
         sync_service_auth_key,
         config.vars.sync_service_url.as_ref().to_string(),
-    );
+    ));
+
+    let lexical_client = Arc::new(LexicalClient::new(
+        internal_api_secret.as_ref().to_string(),
+        config.vars.lexical_service_url.as_ref().to_string(),
+    ));
 
     let jwt_validation_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
@@ -328,6 +334,11 @@ async fn main() -> anyhow::Result<()> {
         config.vars.document_storage_bucket.as_ref(),
         config.vars.docx_document_upload_bucket.as_ref(),
     );
+    let markdown_initializer =
+        documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer::new(
+            lexical_client.as_ref().clone(),
+            sync_service_client.as_ref().clone(),
+        );
 
     let connection_gateway = Arc::new(ConnectionGatewayImpl::new(conn_gateway_client.clone()));
 
@@ -342,7 +353,7 @@ async fn main() -> anyhow::Result<()> {
     let document_service = Arc::new(DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
-        sync_service_client.clone(),
+        sync_service_client.as_ref().clone(),
         s3_upload_adapter,
         TaskPropertiesAdapter {
             system_properties: system_properties_service.clone(),
@@ -462,10 +473,47 @@ async fn main() -> anyhow::Result<()> {
         call_service_builder = call_service_builder.with_egress(config);
     }
 
+    // VoIP push is optional: enabled only when both env vars are present.
+    // APPLE_BUNDLE_ID:           the app bundle ID (e.g. "com.macro.app.prod")
+    // SNS_APNS_VOIP_PLATFORM_ARN: SNS platform app ARN for APNS_VOIP
+    //
+    // Option<VoipPushServiceImpl<...>> is used as the type parameter so the
+    // type stays stable regardless of whether VoIP push is configured.
+    let voip_sender = if let (Ok(bundle_id), Ok(voip_arn)) = (
+        std::env::var("APPLE_BUNDLE_ID"),
+        std::env::var("SNS_APNS_VOIP_PLATFORM_ARN"),
+    ) {
+        if voip_arn.is_empty() {
+            tracing::warn!("voip push disabled: SNS_APNS_VOIP_PLATFORM_ARN is set but empty");
+            None
+        } else {
+            let voip_repo =
+                notification::outbound::repository::DbNotificationRepository::new(db.clone());
+            let voip_mobile = notification::outbound::mobile::MobilePushAdapter {
+                push_service: aws_sdk_sns::Client::new(&aws_config),
+                apns_bundle_id: bundle_id.clone(),
+                voip_bundle_id: Some(format!("{}.voip", bundle_id)),
+            };
+            tracing::info!(bundle_id, voip_arn, "voip push enabled");
+            Some(notification::domain::service::VoipPushServiceImpl::new(
+                voip_repo,
+                voip_mobile,
+            ))
+        }
+    } else {
+        tracing::info!("voip push disabled: APPLE_BUNDLE_ID or SNS_APNS_VOIP_PLATFORM_ARN not set");
+        None
+    };
+    let call_service_builder = call_service_builder.with_voip_push_sender(voip_sender);
+
     let call_search_indexer = crate::service::call_search_indexer::SqsCallSearchIndexer::new(
         Arc::new(sqs_client.clone()),
     );
-    let call_service = Arc::new(call_service_builder.with_search_indexer(call_search_indexer));
+    let call_service = Arc::new(
+        call_service_builder
+            .with_search_indexer(call_search_indexer)
+            .with_voice_repo(PgVoiceRepo::new(db.clone())),
+    );
 
     let call_state = CallRouterState::new(call_service.clone(), entity_access_service.clone());
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
@@ -505,7 +553,7 @@ async fn main() -> anyhow::Result<()> {
         sqs_client: Arc::new(sqs_client),
         notification_ingress_service,
         conn_gateway_client: Arc::new(conn_gateway_client),
-        sync_service_client: Arc::new(sync_service_client),
+        sync_service_client: sync_service_client.clone(),
         system_properties_service: system_properties_service.clone(),
         properties_service: properties_service.clone(),
         opensearch_client: Arc::new(opensearch_client),
@@ -518,9 +566,14 @@ async fn main() -> anyhow::Result<()> {
         permissions_token_secret: comms_permissions_token_secret,
         entity_access_service: entity_access_service.clone(),
         documents_state: DocumentRouterState {
-            service: document_service,
+            service: document_service.clone(),
             access_service: entity_access_service.clone(),
             pool: db.clone(),
+            creator: documents_hex::domain::create::DocumentCreator::new(
+                document_service,
+                markdown_initializer,
+                documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
+            ),
         },
         channels_state: ChannelsRouterState::new(
             ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(db.clone())),

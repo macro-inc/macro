@@ -189,6 +189,7 @@ async fn main() -> anyhow::Result<()> {
         PlatformArnConfig {
             apns_platform_arn: String::new(),
             fcm_platform_arn: String::new(),
+            apns_voip_platform_arn: String::new(),
         },
     );
     let notification_tool_context =
@@ -261,6 +262,7 @@ async fn main() -> anyhow::Result<()> {
         document_service,
         (*entity_access_service).clone(),
         lexical_client_for_tools,
+        sync_service_client.clone(),
     );
 
     tracing::info!("initialized document tool context");
@@ -349,7 +351,7 @@ async fn main() -> anyhow::Result<()> {
     let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
         chat::domain::service::ChatServiceImpl::new(
             chat::outbound::postgres::PgChatRepo::new(db.clone()),
-            Arc::new(ai_toolset::AsyncToolSet::new()),
+            Arc::new(ai_toolset::AsyncToolCollection::new()),
             (),
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
                 entity_access_management::outbound::PgRepository::new(db.clone()),
@@ -389,6 +391,35 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized memory service");
 
+    let mcp_credentials_key_b64 = match config.environment {
+        Environment::Local => config.mcp_credentials_key_secret_name.clone(),
+        _ => secretsmanager_client
+            .get_secret_value(&config.mcp_credentials_key_secret_name)
+            .await
+            .context("failed to get MCP credentials key from secrets manager")?
+            .to_string(),
+    };
+    let mcp_encryption_key =
+        mcp_client::domain::models::AesKey::try_from(mcp_credentials_key_b64.as_str())
+            .context("invalid MCP credentials encryption key")?;
+    let mcp_server_repo =
+        mcp_client::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key);
+    let mcp_redirect_uri = format!(
+        "{}/mcp/servers/auth/callback",
+        config.document_cognition_service_url
+    );
+    let mcp_oauth_state_store =
+        mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client.clone());
+    let mcp_pre_registered =
+        mcp_client::domain::provider_registry::PreRegisteredProviders::from_env();
+    let mcp_oauth = mcp_client::domain::service::OAuthService::new(
+        mcp_server_repo.clone(),
+        mcp_oauth_state_store,
+        mcp_redirect_uri,
+        mcp_pre_registered,
+    );
+    let mcp_state = mcp_client::inbound::McpRouterState::new(mcp_server_repo, mcp_oauth);
+
     api::setup_and_serve(ApiContext {
         db: db.clone(),
         email_service_client_external,
@@ -417,6 +448,7 @@ async fn main() -> anyhow::Result<()> {
         ai_stream_registry: service::ai_stream_registry::AiStreamRegistry::new(
             redis_client.clone(),
         ),
+        mcp_state,
     })
     .await
     .context("failed to setup and serve api")?;

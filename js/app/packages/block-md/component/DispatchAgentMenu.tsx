@@ -1,57 +1,36 @@
+import { openMacroMcpSetupModal } from '@app/component/macro-mcp-setup-modal/MacroMcpSetupModal';
 import { useBlockId } from '@core/block';
-import { toast } from '@core/component/Toast/Toast';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
-import { isOk } from '@core/util/maybeResult';
+import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
+import { toast } from '@core/component/Toast/Toast';
+import { macroIdToEmail, tryMacroId } from '@core/user';
+import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { tryMacroId, macroIdToEmail } from '@core/user';
+import { isOk } from '@core/util/maybeResult';
+import CaretDown from '@icon/regular/caret-down.svg';
+import CopyIcon from '@icon/regular/copy.svg';
+import GitBranch from '@icon/regular/git-branch.svg';
+import PlugIcon from '@icon/regular/plug.svg';
+import TerminalWindowIcon from '@icon/regular/terminal-window.svg';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import ClaudeIcon from '@macro-icons/wide/claude.svg';
+import CodexIcon from '@macro-icons/wide/codex-ide.svg';
+import CursorIcon from '@macro-icons/wide/cursor-ide.svg';
+import ZedIcon from '@macro-icons/wide/zed-ide.svg';
 import { storageServiceClient } from '@service-storage/client';
-import { mdStore } from '../signal/markdownBlockData';
+import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
+import { createCallback } from '@solid-primitives/rootless';
+import { makePersisted } from '@solid-primitives/storage';
+import { Button, ButtonGroup } from '@ui';
+import { type Component, createSignal, For, type JSX } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import {
   discussionThreads,
   sortComments,
 } from '../comments/discussionResource';
-import { makePersisted } from '@solid-primitives/storage';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Button } from '@ui/components/Button';
-import { createSignal, For, type Component, type JSX } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
-import CaretDown from '@icon/regular/caret-down.svg';
-import CopyIcon from '@icon/regular/copy.svg';
-import TerminalWindowIcon from '@icon/regular/terminal-window.svg';
-import ClaudeIcon from '@macro-icons/wide/claude.svg';
-import CursorIcon from '@macro-icons/wide/cursor-ide.svg';
-import ZedIcon from '@macro-icons/wide/zed-ide.svg';
-import CodexIcon from '@macro-icons/wide/codex-ide.svg';
-import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
-import { createCallback } from '@solid-primitives/rootless';
-import { openMacroMcpSetupModal } from '@app/component/macro-mcp-setup-modal/MacroMcpSetupModal';
-import PlugIcon from '@icon/regular/plug.svg';
+import { mdStore } from '../signal/markdownBlockData';
 
-const MAX_BRANCH_LENGTH = 200;
 const LAST_USED_KEY = 'dispatch-agent-last-used';
-
-const slugify = (title: string): string =>
-  title
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
-
-async function buildBranchName(
-  documentId: string,
-  documentName: string
-): Promise<{ shortId: string; branchName: string }> {
-  const result = await storageServiceClient.getDocumentShortId({ documentId });
-  const shortId = isOk(result) ? result[1] : documentId;
-  const slug = slugify(documentName);
-  const branchName = `macro-${shortId}${slug ? `-${slug}` : ''}`.slice(
-    0,
-    MAX_BRANCH_LENGTH
-  );
-  return { shortId, branchName };
-}
 
 async function generateTaskPrompt(
   documentId: string,
@@ -59,10 +38,13 @@ async function generateTaskPrompt(
   content: string,
   threads: CommentThread[]
 ): Promise<string> {
-  const { shortId, branchName } = await buildBranchName(
+  const result = await storageServiceClient.getDocumentBranchName({
     documentId,
-    documentName
-  );
+  });
+  if (!isOk(result)) {
+    throw new Error('Failed to fetch branch name');
+  }
+  const { shortId, branchName } = result[1];
 
   const lines: string[] = [];
 
@@ -211,35 +193,32 @@ export function DispatchAgentButton() {
 
   return (
     <DropdownMenu open={open()} onOpenChange={setOpen}>
-      <div class="border border-edge-muted flex ml-1 items-stretch rounded-xs">
-        <Button
-          onClick={handlePrimaryClick}
-          tooltip={lastUsed().name}
-          variant="ghost"
-          size="icon-sm"
-          class="p-1"
-        >
+      <ButtonGroup variant="base" size="icon-sm" depth={2} class="bg-surface">
+        <Button onClick={handlePrimaryClick} tooltip={lastUsed().name}>
           <Dynamic
             component={lastUsed().buttonIcon ?? lastUsed().icon}
-            class="size-3.5"
+            class="size-3!"
           />
         </Button>
-        <div class="w-px bg-edge-muted" />
-        <DropdownMenu.Trigger
-          as={Button}
-          variant="ghost"
-          size="icon-sm"
-          class="p-1"
-        >
-          <CaretDown class="w-3 h-3" />
+        <ButtonGroup.Divider />
+        <DropdownMenu.Trigger as={Button} class="p-1">
+          <CaretDown class="size-3.5!" />
         </DropdownMenu.Trigger>
-      </div>
+      </ButtonGroup>
       <DropdownMenu.Portal>
         <DropdownMenuContent>
           <MenuItem
             text={COPY_ACTION.name}
             icon={COPY_ACTION.icon}
             onClick={() => executeAction(COPY_ACTION)}
+          />
+          <MenuItem
+            text="Copy branch name"
+            icon={GitBranch}
+            onClick={() => {
+              copyBranchNameToClipboard(blockId);
+              setOpen(false);
+            }}
           />
           <MenuItem
             text="MCP setup instructions"

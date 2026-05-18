@@ -1,3 +1,4 @@
+import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
 import { isInBlock, useBlockAliasedName, useBlockId } from '@core/block';
 import {
   EntityIcon,
@@ -5,7 +6,6 @@ import {
   isArchiveType,
 } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
   useCanComment,
@@ -14,11 +14,10 @@ import {
   useIsDocumentOwner,
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { buildEntityData, type BuildEntityDataArgs } from '@entity';
+import { type BuildEntityDataArgs, buildEntityData } from '@entity';
+import { cn, Tooltip } from '@ui';
 import { createEffect, type JSX, Show } from 'solid-js';
-import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
 import { useSplitPanelOrThrow } from '../layoutUtils';
-import { cn } from '@ui/utils/classname';
 
 export function StaticSplitLabel(props: {
   label: string;
@@ -112,7 +111,7 @@ export function SplitLabel(props: {
 export function SplitHeaderBadge(props: { text: string; tooltip?: string }) {
   return (
     <span class="py-0.5 px-2 rounded-none text-xxs text-ink-muted">
-      <Tooltip tooltip={props.tooltip} spanMode>
+      <Tooltip label={props.tooltip ?? ''} as="span">
         <span class="font-mono uppercase">{props.text}</span>
       </Tooltip>
     </span>
@@ -173,7 +172,7 @@ export function BlockItemSplitLabel(props: {
   });
 
   return (
-    <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 w-screen max-w-full h-full shrink">
+    <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
       <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
       <Show when={props.badges}>{props.badges}</Show>
       <SplitLabel

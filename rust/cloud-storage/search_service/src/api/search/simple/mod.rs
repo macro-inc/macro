@@ -38,6 +38,9 @@ pub enum SearchError {
     /// No query or terms provided
     #[error("query or terms must be provided and at least 3 characters")]
     NoQueryOrTermsProvided,
+    /// No channel IDs provided
+    #[error("at least one channel_id must be provided")]
+    NoChannelIds,
     #[error("searching with an invalid cursor")]
     /// Searching with an invalid cursor
     InvalidCursor,
@@ -59,7 +62,9 @@ impl IntoResponse for SearchError {
             SearchError::InvalidPageSize
             | SearchError::InvalidQuerySize
             | SearchError::InvalidCursor
-            | SearchError::NoQueryOrTermsProvided => StatusCode::BAD_REQUEST,
+            | SearchError::NoQueryOrTermsProvided
+            | SearchError::NoChannelIds => StatusCode::BAD_REQUEST,
+            SearchError::NameSearch(NameSearchError::IncompatibleCursor) => StatusCode::BAD_REQUEST,
             SearchError::Search(_) | SearchError::NameSearch(_) | SearchError::InternalError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }

@@ -2,8 +2,8 @@ import { throwOnErr } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';
 import type { PatchUserOnboardingRequest } from '@service-auth/generated/schemas/patchUserOnboardingRequest';
 import { useMutation } from '@tanstack/solid-query';
-import { type MutationCallbacks, withCallbacks } from '../utils';
 import { queryClient } from '../client';
+import { type MutationCallbacks, withCallbacks } from '../utils';
 import { authKeys } from './keys';
 
 type CompleteOnboardingCallbacks = MutationCallbacks<

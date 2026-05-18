@@ -1,16 +1,16 @@
+import { Modals } from '@core/component/Properties/component/modal';
 import { PropertyValue } from '@core/component/Properties/component/propertyValue/PropertyValue';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
 } from '@core/component/Properties/context/PropertiesContext';
-import { Modals } from '@core/component/Properties/component/modal';
 import type {
   Property,
   PropertyApiValues,
 } from '@core/component/Properties/types';
-import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { For, Show, Suspense, createMemo } from 'solid-js';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
+import { createMemo, For, Show, Suspense } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   type EntityData,

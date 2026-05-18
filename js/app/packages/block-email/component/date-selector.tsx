@@ -1,24 +1,23 @@
-import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
-import { useSearchInputFocus } from '@core/component/Properties/utils';
 import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
+import { useSearchInputFocus } from '@core/component/Properties/utils';
+import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
-import {
-  createMemo,
-  createSignal,
-  type JSX,
-  Show,
-  type FlowComponent,
-  type Component,
-  createEffect,
-  on,
-} from 'solid-js';
 import {
   Combobox,
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
-import { cn } from '@ui/utils/classname';
+import { cn, Layer } from '@ui';
 import { format, setHours, setMinutes, startOfDay } from 'date-fns';
-import { Layer } from '@ui';
+import {
+  type Component,
+  createEffect,
+  createMemo,
+  createSignal,
+  type FlowComponent,
+  type JSX,
+  on,
+  Show,
+} from 'solid-js';
 
 type DateSelectorMode = 'search' | 'calendar';
 
@@ -306,7 +305,7 @@ export const DateSelector = (props: DateSelectorProps) => {
       <DateSelectorPortalWrapper disabled={props.disablePortal}>
         <Layer depth={3}>
           <Combobox.Content
-            class="w-full max-w-sm bg-dialog text-ink border border-edge"
+            class="w-full max-w-sm bg-surface text-ink border border-edge"
             on:keydown={handleKeyDown}
           >
             <WithCustomDateMode
@@ -320,7 +319,7 @@ export const DateSelector = (props: DateSelectorProps) => {
               }}
             >
               <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
-                <SearchIcon class="h-4 w-4 text-ink-muted" />
+                <SearchIcon class="size-4 text-ink-muted" />
                 <Combobox.Input
                   ref={setSearchInputRef}
                   class="w-full caret-accent"
@@ -402,7 +401,7 @@ const CurrentValueDisplay = (props: CurrentValueDisplayProps) => {
   });
 
   return (
-    <div class="px-3 py-2 border-b border-edge-muted pattern pattern-edge-muted pattern-dot-4">
+    <div class="px-3 py-2 border-b border-edge-muted">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <span class="text-xs text-ink-muted">Current:</span>

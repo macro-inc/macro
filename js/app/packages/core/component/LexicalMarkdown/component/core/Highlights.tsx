@@ -1,6 +1,6 @@
-import { cn } from '@ui/utils/classname';
 import { createDOMRange } from '@lexical/selection';
 import type { NodeIdMappings } from '@lexical-core';
+import { cn } from '@ui';
 import {
   $getNodeByKey,
   $isRangeSelection,

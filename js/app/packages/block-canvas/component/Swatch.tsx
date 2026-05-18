@@ -1,5 +1,5 @@
 import { getTailwindColor } from '@block-canvas/util/style';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { Show } from 'solid-js';
 
 type ColorOption = {
@@ -52,7 +52,7 @@ export function Swatch(props: {
       >
         <Show when={isTransparent()}>
           <div class="absolute inset-0 flex items-center justify-center">
-            <div class="w-full h-0.25 bg-failure transform rotate-45" />
+            <div class="w-full h-px bg-failure transform rotate-45" />
           </div>
         </Show>
       </div>

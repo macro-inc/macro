@@ -12,7 +12,7 @@ use crate::domain::{
     models::Link,
     ports::{EmailService, GmailTokenProvider},
 };
-use ai::tool::{AsyncToolSet, ToolCallError};
+use ai::tool::{AsyncToolCollection, ToolCallError};
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
@@ -89,15 +89,24 @@ impl<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> EmailToolCo
     }
 }
 
-/// Create an email toolset.
-pub fn email_toolset<T, G, E>() -> AsyncToolSet<EmailToolContext<T, G, E>>
+/// Create the full email toolset including SendEmail.
+pub fn email_toolset<T, G, E>() -> AsyncToolCollection<EmailToolContext<T, G, E>>
 where
     T: EmailService,
     G: GmailTokenProvider,
     E: EntityAccessService,
 {
-    AsyncToolSet::new()
+    mcp_toolset().add_user_tool::<SendEmail, EmailToolContext<T, G, E>>()
+}
+
+/// Email toolset for the MCP server — excludes SendEmail.
+pub fn mcp_toolset<T, G, E>() -> AsyncToolCollection<EmailToolContext<T, G, E>>
+where
+    T: EmailService,
+    G: GmailTokenProvider,
+    E: EntityAccessService,
+{
+    AsyncToolCollection::new()
         .add_tool::<UpdateThreadLabels, EmailToolContext<T, G, E>>()
         .add_tool::<GetThread, EmailToolContext<T, G, E>>()
-        .add_user_tool::<SendEmail, EmailToolContext<T, G, E>>()
 }

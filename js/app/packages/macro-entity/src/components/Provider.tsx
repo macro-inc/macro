@@ -1,7 +1,7 @@
+import { queryClient } from '@queries/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import type { ParentProps } from 'solid-js';
 import { fetchApiToken } from '../queries/auth';
-import { queryClient } from '@queries/client';
 import { queryKeys } from '../queries/key';
 
 export function Provider(props: ParentProps) {

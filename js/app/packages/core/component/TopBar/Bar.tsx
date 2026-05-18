@@ -1,8 +1,8 @@
 import { isInBlock, useIsNestedBlock } from '@core/block';
-import { cn } from '@ui/utils/classname';
 import { observedSize } from '@core/directive/observedSize';
 import { TOP_BAR_HEIGHT } from '@core/signal/layout';
 import { throttle } from '@solid-primitives/scheduled';
+import { cn } from '@ui';
 import type { Accessor, JSX, Setter } from 'solid-js';
 import {
   createContext,
@@ -276,7 +276,7 @@ function BarContent(props: BarProps) {
       <div
         use:observedSize={{ setSize: context.setBarSize }}
         style={{ 'container-type': 'inline-size' }}
-        class="w-full bg-panel"
+        class="w-full bg-surface"
       >
         <div
           class={cn(

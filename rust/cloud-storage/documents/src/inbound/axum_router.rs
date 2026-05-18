@@ -4,20 +4,25 @@
 //! - `POST /` — create a new document
 //! - `GET /{document_id}` — get document metadata
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
+//! - `GET /{document_id}/branch_name` — get short ID + git branch name (when the document is a task)
 //! - `GET /{document_id}/short_id` — get document short ID
+//! - `POST /create_markdown` — create and initialize a markdown document
 //! - `DELETE /{document_id}` — soft-delete a document
 
 #[cfg(test)]
 mod tests;
 
-mod copy_document;
-mod create_document;
-mod create_task;
-mod delete_document;
-mod edit_document;
-mod get_document;
-mod get_location;
-mod get_short_id;
+pub mod copy_document;
+pub mod create_document;
+#[cfg(feature = "document_create")]
+pub mod create_markdown;
+pub mod create_task;
+pub mod delete_document;
+pub mod edit_document;
+pub mod get_branch_name;
+pub mod get_document;
+pub mod get_location;
+pub mod get_short_id;
 
 use std::sync::Arc;
 
@@ -34,18 +39,20 @@ use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use sqlx::PgPool;
 
+#[cfg(feature = "document_create")]
+use self::create_markdown::create_markdown_handler;
+use self::{
+    copy_document::copy_document_handler, create_document::create_document_handler,
+    create_task::create_task_handler, delete_document::delete_document_handler,
+    edit_document::edit_document_handler, get_branch_name::get_branch_name_handler,
+    get_document::get_document_handler, get_location::get_location_v3_handler,
+    get_short_id::get_short_id_handler,
+};
+
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
-
-// Re-export handlers and utoipa path types for external use (swagger, internal routes)
-pub use copy_document::*;
-pub use create_document::*;
-pub use create_task::*;
-pub use delete_document::*;
-pub use edit_document::*;
-pub use get_document::*;
-pub use get_location::*;
-pub use get_short_id::*;
+#[cfg(feature = "document_create")]
+use crate::domain::ports::create::DocumentCreationService;
 
 impl IntoResponse for DocumentError {
     fn into_response(self) -> axum::response::Response {
@@ -73,7 +80,15 @@ impl IntoResponse for DocumentError {
     }
 }
 
-/// Router state containing the document service, entity access service, and DB pool.
+/// Default backend-owned document creation use case for the document router.
+#[cfg(feature = "document_create_adapters")]
+pub type DefaultDocumentCreator<T> = crate::domain::create::DocumentCreator<
+    Arc<T>,
+    crate::outbound::markdown_init::LexicalSyncMarkdownInitializer,
+    crate::outbound::document_bytes_upload::ReqwestDocumentBytesUploader,
+>;
+
+/// Router state containing document router dependencies.
 pub struct DocumentRouterState<T, Svc> {
     /// The document service implementation.
     pub service: Arc<T>,
@@ -81,6 +96,9 @@ pub struct DocumentRouterState<T, Svc> {
     pub access_service: Arc<Svc>,
     /// The database pool (used by middleware for document lookups).
     pub pool: PgPool,
+    /// Backend-owned document creation use case.
+    #[cfg(feature = "document_create_adapters")]
+    pub creator: DefaultDocumentCreator<T>,
 }
 
 // Manual Clone impl so T and Svc don't need to be Clone (they're behind Arc).
@@ -90,6 +108,8 @@ impl<T, Svc> Clone for DocumentRouterState<T, Svc> {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
             pool: self.pool.clone(),
+            #[cfg(feature = "document_create_adapters")]
+            creator: self.creator.clone(),
         }
     }
 }
@@ -109,7 +129,7 @@ pub struct Params {
 /// Build the documents router with all endpoints.
 pub fn documents_router<T, Svc, S>(state: DocumentRouterState<T, Svc>) -> Router<S>
 where
-    T: DocumentService,
+    T: DocumentService + DocumentCreationService,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -126,26 +146,38 @@ where
             axum::routing::get(get_location_v3_handler::<T, Svc>),
         )
         .route(
+            "/{document_id}/branch_name",
+            axum::routing::get(get_branch_name_handler::<T, Svc>),
+        )
+        .route(
             "/{document_id}/short_id",
             axum::routing::get(get_short_id_handler::<T, Svc>),
         )
         .route(
             "/{document_id}/copy",
             axum::routing::post(copy_document_handler::<T, Svc>),
-        )
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            ensure_document_exists,
-        ));
+        );
 
-    Router::new()
+    let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(
+        state.clone(),
+        ensure_document_exists,
+    ));
+
+    let router = Router::new()
         .merge(document_id_routes)
         .route("/", axum::routing::post(create_document_handler::<T, Svc>))
         .route(
             "/create_task",
             axum::routing::post(create_task_handler::<T, Svc>),
-        )
-        .with_state(state)
+        );
+
+    #[cfg(feature = "document_create")]
+    let router = router.route(
+        "/create_markdown",
+        axum::routing::post(create_markdown_handler::<T, Svc>),
+    );
+
+    router.with_state(state)
 }
 
 /// Path parameters for document endpoints.

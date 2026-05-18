@@ -35,6 +35,7 @@ members = [
   "document_storage_service_client",
   "document_sub_type",
   "document_text_extractor",
+  "document_upload_finalizer_handler",
   "documents",
   "docx_unzip_handler",
   "dynamodb_client",
@@ -75,6 +76,7 @@ members = [
   "macro_sha_count_client",
   "macro_uuid",
   "mcp_auth_proxy",
+  "mcp_client",
   "mcp_service",
   "memory",
   "mention_utils",
@@ -84,6 +86,7 @@ members = [
   "model_user",
   "models_dcs",
   "models_email",
+  "models_grouping",
   "models_opensearch",
   "models_pagination",
   "models_permissions",
@@ -202,6 +205,7 @@ rand = "0.9.0"
 recursion = "0.5.4"
 redis = "1.0.3"
 regex = "1.11.1"
+rmcp = "1.6.0"
 reqwest = { version = "0.13", features = ["form", "hickory-dns", "json"] }
 rootcause = { version = "0.12" }
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
@@ -215,10 +219,11 @@ sha2 = "0.10.8"
 sqlx = { version = "0.8.6", features = [
   "chrono",
   "postgres",
-  "runtime-tokio-native-tls",
+  "runtime-tokio-rustls",
   "uuid",
 ] }
 sqlx-core = { version = "0.8.6" }
+pgvector = { version = "0.4", features = ["sqlx", "postgres"] }
 strum = { version = "0.27.1", features = ["derive"] }
 thiserror = "2.0.0"
 time = "0.3.37"

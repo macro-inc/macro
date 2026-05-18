@@ -32,7 +32,7 @@ To learn more read the [infra](../../infra/README.md) documentation.
 
 ## Instructions
 
-- If you haven't built anything in his project before you will need to run `just build_lambdas`
+- Lambda `bootstrap.zip` files are built by CI for deployments. For local Pulumi deploys, run `just build_lambdas` first.
 - cd `infra`
 - install node modules `npm i`
 - ensure you are on your correct AWS account and have pulumi cli logged into your correct work account

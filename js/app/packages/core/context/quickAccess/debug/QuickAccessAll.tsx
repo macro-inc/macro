@@ -1,8 +1,8 @@
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { useQuickAccess } from '../QuickAccessProvider';
-import { For, Match, Switch } from 'solid-js';
 import { InlineEntity } from '@entity';
+import { For, Match, Switch } from 'solid-js';
+import { useQuickAccess } from '../QuickAccessProvider';
 
 export default function QuickAccessAll() {
   const { useList } = useQuickAccess();

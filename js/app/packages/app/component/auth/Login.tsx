@@ -1,12 +1,20 @@
-import { cn } from '@ui/utils/classname';
+import { useAnalytics } from '@app/component/analytics-context';
+import { LoadingBlock } from '@core/component/LoadingBlock';
+import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import { useEmailLinks } from '@core/email-link';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { isOk } from '@core/util/maybeResult';
-import { authServiceClient } from '@service-auth/client';
+import LogoIcon from '@macro-icons/macro-logo.svg';
+import { useUserInfo } from '@queries/auth';
 import {
   invalidateAllAfterLogin,
   invalidateUserInfo,
 } from '@queries/auth/user-info';
+import { authServiceClient } from '@service-auth/client';
 import { useNavigate, useSearchParams } from '@solidjs/router';
+import { cn, Surface } from '@ui';
+import { detect } from 'detect-browser';
 import {
   createEffect,
   createSignal,
@@ -20,15 +28,6 @@ import { EmailForm } from './EmailForm';
 import { LoginOptions } from './LoginOptions';
 import { Stage } from './Shared';
 import { VerifyForm } from './VerifyForm';
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { useAnalytics } from '@app/component/analytics-context';
-import { detect } from 'detect-browser';
-import { useUserInfo } from '@queries/auth';
-import { Panel } from '@ui';
-import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
-import LogoIcon from '@macro-icons/macro-logo.svg';
-import { useEmailLinks } from '@core/email-link';
-import { LoadingBlock } from '@core/component/LoadingBlock';
 
 function PostLoginRedirect() {
   const navigate = useNavigate();
@@ -143,7 +142,7 @@ export function Login() {
 
   return (
     <Show when={!userInfo()?.authenticated} fallback={<PostLoginRedirect />}>
-      <div class="flex items-center justify-center h-full w-full p-8 overflow-hidden relative">
+      <div class="flex items-center justify-center size-full p-8 overflow-hidden relative">
         <style>{
           /*css*/ `
           @keyframes login-fade-up {
@@ -163,7 +162,7 @@ export function Login() {
           .login-stagger > *:nth-child(5) { animation-delay: 330ms; }
         `
         }</style>
-        <div class="inset-0 absolute text-edge bg-panel opacity-10 -z-1">
+        <div class="inset-0 absolute text-edge bg-surface opacity-10 -z-1">
           <PcNoiseGrid
             cellSize={30}
             warp={0}
@@ -178,7 +177,7 @@ export function Login() {
         </div>
 
         <div class="w-full max-w-105 login-card">
-          <Panel depth={1}>
+          <Surface depth={1}>
             <div class="login-stagger">
               <div
                 class={cn(
@@ -202,7 +201,7 @@ export function Login() {
                 </Switch>
               </div>
             </div>
-          </Panel>
+          </Surface>
         </div>
       </div>
     </Show>

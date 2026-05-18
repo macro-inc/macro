@@ -4,8 +4,8 @@ import {
   STATIC_IMAGE,
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
-import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import type { NewAttachment } from '@service-comms/generated/models/newAttachment';
+import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import { attachmentEntityType } from '../Input/message-payload';
 import type { InputAttachmentData, InputSnapshot } from '../Input/types';
 import type { MessageData } from '../Message';

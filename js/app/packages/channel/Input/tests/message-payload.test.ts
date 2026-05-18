@@ -1,6 +1,6 @@
+import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { describe, expect, it } from 'vitest';
 import { buildPostMessageRequest } from '../message-payload';
-import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 
 const snap = (mentions: ItemMention[]) => ({
   value: '',

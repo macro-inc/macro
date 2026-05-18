@@ -23,6 +23,7 @@ outbound = [
   "dep:livekit-api",
   "dep:livekit-protocol",
   "dep:macro_aws_config",
+  "dep:pgvector",
   "dep:sqlx",
   "ports",
 ]
@@ -58,6 +59,7 @@ model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions" }
 notification = { path = "../notification" }
+pgvector = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

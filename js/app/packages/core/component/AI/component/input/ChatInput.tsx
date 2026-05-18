@@ -2,12 +2,10 @@ import { useAnalytics } from '@app/component/analytics-context';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useChatInputContext } from '@core/component/AI/context';
 import type { Model, ToolSet } from '@core/component/AI/types';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { Hotkey } from '@core/component/Hotkey';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -18,9 +16,7 @@ import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import Stop from '@phosphor-icons/core/regular/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button } from '@ui';
-import { Panel } from '@ui';
-import { cn } from '@ui/utils/classname';
+import { Button, cn, Hotkey, Surface, Tooltip } from '@ui';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
@@ -138,23 +134,27 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const LeftButton = () => (
     <div ref={setAttachMenuAnchorRef} class="shrink-0">
-      <DeprecatedIconButton
-        icon={showAttachMenu() ? XIcon : PlusIcon}
-        theme="base"
+      <Button
+        variant="ghost"
+        size="icon-md"
+        class="text-ink"
         onClick={() => setShowAttachMenu((prev) => !prev)}
-      />
+      >
+        {showAttachMenu() ? <XIcon /> : <PlusIcon />}
+      </Button>
     </div>
   );
 
   const StopButton = () => (
-    <DeprecatedIconButton
-      icon={Stop}
-      theme="base"
-      size="sm"
-      iconSize={14}
-      tooltip={{ label: 'Stop generating', shortcut: 'ctrl+c' }}
+    <Button
+      variant="base"
+      size="icon-sm"
+      label="Stop generating"
+      hotkey={TOKENS.chat.stop}
       onClick={() => props.onStop?.()}
-    />
+    >
+      <Stop />
+    </Button>
   );
 
   const RightControls = () => (
@@ -165,10 +165,10 @@ export function ChatInput(props: ChatInputComponentProps) {
           fallback={
             <div class="flex flex-row items-center gap-3 text-xs text-ink-disabled opacity-70 shrink-0">
               {props.extraRightControls?.()}
-              <Tooltip tooltip="Enter to send" placement="top">
+              <Tooltip label="Enter to send" placement="top">
                 <div class="flex items-center">
                   <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1 py-0.5">
-                    <Hotkey shortcut="Enter" />
+                    <Hotkey shortcut="enter" />
                   </div>
                 </div>
               </Tooltip>
@@ -187,7 +187,7 @@ export function ChatInput(props: ChatInputComponentProps) {
               onClick={() => sendMessage({ modelOverride: 'claude-opus-4-6' })}
             >
               <div class="group hover:bg-accent transition ease-in-out size-6 p-0.5 border border-accent rounded-full flex items-center justify-center">
-                <ArrowUp class="group-hover:text-input! group-hover:fill-input! text-accent-ink! fill-accent! size-4 transition ease-in-out" />
+                <ArrowUp class="group-hover:text-surface! group-hover:fill-surface! text-accent! fill-accent! size-4 transition ease-in-out" />
               </div>
             </Button>
           </Show>
@@ -200,7 +200,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   );
 
   return (
-    <Panel depth={2}>
+    <Surface depth={2}>
       <div id="chat-input" ref={containerRef} class="relative flex flex-col">
         <Show when={hasAttachments()}>
           <div class="px-2 pt-2 w-full">
@@ -234,10 +234,10 @@ export function ChatInput(props: ChatInputComponentProps) {
             id="chat-input-text-area"
             class={cn('text-sm sm:text-sm text-ink')}
             classList={{
-              'pl-8': !isMultiline(),
-              'pr-[48px]': !isMultiline() && isTouchDevice(),
-              'pr-[130px]': !isMultiline() && !isTouchDevice(),
-              'pl-0 pr-0 pb-8': isMultiline(),
+              'pl-12': !isMultiline(),
+              'pr-12': !isMultiline() && isTouchDevice(),
+              'pr-32.5': !isMultiline() && !isTouchDevice(),
+              'px-0  pb-8': isMultiline(),
             }}
             ref={mdRef}
           >
@@ -275,6 +275,6 @@ export function ChatInput(props: ChatInputComponentProps) {
         </div>
         <ConsentDialog />
       </div>
-    </Panel>
+    </Surface>
   );
 }

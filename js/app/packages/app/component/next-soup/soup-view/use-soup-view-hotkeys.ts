@@ -1,8 +1,13 @@
+import { useAnalytics } from '@app/component/analytics-context';
+import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
 import { CommandState } from '@app/component/command/state';
+import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
+import { isListViewID, type ListView } from '@app/constants/list-views';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
+import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
   getHotkeyCommand,
@@ -11,21 +16,16 @@ import {
   runCommand,
 } from '@core/hotkey/utils';
 import {
-  isSearchEntity,
-  isWithNotification,
   filterNotDoneNotifications,
   filterValidNotifications,
+  isSearchEntity,
+  isWithNotification,
 } from '@entity';
 import { openSingleStackNotification } from '@notifications';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { onCleanup, type Accessor } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
-import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
-import { isListViewID, type ListView } from '@app/constants/list-views';
-import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
-import { VIEW_TAB_LISTS, type TabbedListView } from './soup-view-tabs';
-import { useAnalytics } from '@app/component/analytics-context';
+import { type TabbedListView, VIEW_TAB_LISTS } from './soup-view-tabs';
 
 type UseSoupViewHotkeysOptions = {
   splitId: string;
@@ -135,7 +135,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     );
   };
 
-  // enter - Open entity in split
+  // enter - Open entity in split, toggle group, or load more
   registerHotkey({
     hotkey: ['enter'],
     hotkeyToken: TOKENS.entity.open,
@@ -143,6 +143,27 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     description: 'Open',
     hide: true,
     keyDownHandler: () => {
+      const focusedRow = soup.focus.row();
+      if (!focusedRow) return false;
+
+      // If focused on a group header, toggle expand/collapse
+      if (focusedRow.getIsGrouped() && focusedRow.group) {
+        focusedRow.group.toggle();
+        return true;
+      }
+
+      // If focused on a load more row, trigger load more and stay at same index
+      if (focusedRow.getIsLoadMore() && focusedRow.group) {
+        const currentIndex = focusedRow.index;
+        focusedRow.group.loadMore().then(() => {
+          soup.navigate.toIndex(currentIndex);
+          virtualizerHandle()?.scrollToIndex(currentIndex, {
+            align: 'nearest',
+          });
+        });
+        return true;
+      }
+
       if (tryOpenChannelNotification(false)) return true;
 
       const entity = soup.focus.item();
@@ -237,13 +258,13 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     scopeId,
     description: 'Toggle select all',
     keyDownHandler: (e) => {
-      const items = soup.items.data();
-      if (items.length === 0) return false;
+      const rows = soup.rows();
+      if (rows.length === 0) return false;
       e?.preventDefault();
-      if (soup.selection.count() === items.length) {
+      if (soup.selection.count() === rows.length) {
         soup.selection.clear();
       } else {
-        soup.selection.set(items.slice());
+        soup.selection.set(rows.map((r) => r.original));
       }
       return true;
     },

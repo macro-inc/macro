@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO mcp_servers (user_id, url, server_name, credentials, enabled)\n            VALUES ($1, $2, $3, $4, $5)\n            ON CONFLICT (user_id, url) DO UPDATE\n            SET server_name = EXCLUDED.server_name,\n                credentials = EXCLUDED.credentials,\n                enabled     = EXCLUDED.enabled,\n                updated_at  = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Bytea",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1fc6d4133d6252a01a56005faa3e7244ab1debf1731781813995f3be3075d9f1"
+}

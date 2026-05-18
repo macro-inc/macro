@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { Notification } from '../src/types/notification';
 import {
-  filterValidNotifications,
-  filterNotDoneNotifications,
-  extractNotificationSenderIds,
-  getNotificationActionText,
   extractMessageContent,
+  extractNotificationSenderIds,
+  filterNotDoneNotifications,
+  filterValidNotifications,
+  getNotificationActionText,
   isNotificationUnread,
 } from '../src/utils/notification';
 

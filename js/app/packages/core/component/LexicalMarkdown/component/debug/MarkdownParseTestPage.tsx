@@ -1,7 +1,7 @@
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { cn } from '@ui/utils/classname';
 import { debounce } from '@solid-primitives/scheduled';
+import { cn } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -307,8 +307,8 @@ export default function MarkdownParseTestPage() {
       <SplitHeaderLeft>
         <StaticSplitLabel label="Lexical Parse Playground" />
       </SplitHeaderLeft>
-      <div class="flex flex-col h-full w-full">
-        <div class="w-full h-full flex">
+      <div class="flex flex-col size-full">
+        <div class="size-full flex">
           <div class="w-1/2 h-full p-4 flex flex-col border-r border-edge">
             <div class="flex items-center gap-2 mb-2">
               <h2 class="text-sm">Input</h2>
@@ -316,7 +316,7 @@ export default function MarkdownParseTestPage() {
                 <button
                   class={cn(
                     'px-2 py-0.5 text-xs border-r border-edge',
-                    inputType() === 'markdown' && 'bg-accent text-panel'
+                    inputType() === 'markdown' && 'bg-accent text-surface'
                   )}
                   onClick={() => setInputType('markdown')}
                 >
@@ -325,7 +325,7 @@ export default function MarkdownParseTestPage() {
                 <button
                   class={cn(
                     'px-2 py-0.5 text-xs',
-                    inputType() === 'lexical-json' && 'bg-accent text-panel'
+                    inputType() === 'lexical-json' && 'bg-accent text-surface'
                   )}
                   onClick={() => setInputType('lexical-json')}
                 >
@@ -334,7 +334,7 @@ export default function MarkdownParseTestPage() {
               </div>
             </div>
             <textarea
-              class="w-full h-full p-4 resize-none border border-edge rounded font-mono text-ink text-sm bg-input"
+              class="size-full p-4 resize-none border border-edge rounded font-mono text-ink text-sm bg-surface"
               placeholder={
                 inputType() === 'markdown'
                   ? 'Test markdown here...'
@@ -357,7 +357,7 @@ export default function MarkdownParseTestPage() {
                   <button
                     class={cn(
                       'px-3 py-1 text-sm border-r border-edge',
-                      outputType() === 'static' && 'bg-accent text-panel'
+                      outputType() === 'static' && 'bg-accent text-surface'
                     )}
                     onClick={() => setOutputType('static')}
                   >
@@ -366,7 +366,7 @@ export default function MarkdownParseTestPage() {
                   <button
                     class={cn(
                       'px-3 py-1 text-sm',
-                      outputType() === 'editor' && 'bg-accent text-panel'
+                      outputType() === 'editor' && 'bg-accent text-surface'
                     )}
                     onClick={() => setOutputType('editor')}
                   >
@@ -381,7 +381,7 @@ export default function MarkdownParseTestPage() {
                   <button
                     class={cn(
                       'px-3 py-1 text-sm border-r border-edge',
-                      targetType() === 'internal' && 'bg-accent text-panel'
+                      targetType() === 'internal' && 'bg-accent text-surface'
                     )}
                     onClick={() => setTargetType('internal')}
                   >
@@ -390,7 +390,7 @@ export default function MarkdownParseTestPage() {
                   <button
                     class={cn(
                       'px-3 py-1 text-sm',
-                      targetType() === 'external' && 'bg-accent text-panel'
+                      targetType() === 'external' && 'bg-accent text-surface'
                     )}
                     onClick={() => setTargetType('external')}
                   >
@@ -399,7 +399,7 @@ export default function MarkdownParseTestPage() {
                   <button
                     class={cn(
                       'px-3 py-1 text-sm',
-                      targetType() === 'both' && 'bg-accent text-panel'
+                      targetType() === 'both' && 'bg-accent text-surface'
                     )}
                     onClick={() => setTargetType('both')}
                   >
@@ -439,7 +439,7 @@ export default function MarkdownParseTestPage() {
               </div>
             </Show>
 
-            <div class="flex-1 overflow-auto bg-input border border-edge rounded p-4">
+            <div class="flex-1 overflow-auto bg-surface border border-edge rounded p-4">
               <Show when={outputType() === 'static'}>
                 <StaticMarkdownContext theme={getThemeByType(themeType())}>
                   <Show when={inputType() === 'markdown'}>

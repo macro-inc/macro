@@ -86,7 +86,7 @@ export function AssistantMessageActionAndMetadata(props: AssistantActionProps) {
   });
 
   return (
-    <div class="flex flex-row w-full justify-start items-center h-[32px] px-2 space-x-2">
+    <div class="flex flex-row w-full justify-start items-center h-8 px-2 space-x-2">
       <div class="flex flex-row space-x-2 items-center text-xs text-ink-muted">
         <Dynamic component={modelIcon()} width={12} height={12} />
         <p>{modelName()}</p>
@@ -97,11 +97,11 @@ export function AssistantMessageActionAndMetadata(props: AssistantActionProps) {
               class="flex flex-row items-center space-x-1 hover:bg-hover hover-transition-bg rounded-md p-1 text-xs font-sans"
               onClick={handleEditInMarkdown}
             >
-              <NotesIcon class="w-3 h-3 text-note" />
+              <NotesIcon class="size-3 text-note" />
             </button>
           </Match>
           <Match when={isLoading()}>
-            <LoadingIcon class="w-3 h-3 animate-spin" />
+            <LoadingIcon class="size-3 animate-spin" />
           </Match>
         </Switch>
         <div class="w-fit">
@@ -111,9 +111,9 @@ export function AssistantMessageActionAndMetadata(props: AssistantActionProps) {
           >
             <Show
               when={!copied()}
-              fallback={<CheckIcon class="w-3 h-3 text-success" />}
+              fallback={<CheckIcon class="size-3 text-success" />}
             >
-              <ClipboardIcon class="w-3 h-3" />
+              <ClipboardIcon class="size-3" />
             </Show>
             <p>{copied() ? 'Copied!' : 'Copy'}</p>
           </button>

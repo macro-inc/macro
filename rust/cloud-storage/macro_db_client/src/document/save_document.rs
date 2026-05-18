@@ -470,6 +470,7 @@ pub async fn save_document(
                 .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
                 .into_owned(),
             file_type: row.file_type,
+            sub_type: None,
             branched_from_id: row.branched_from_id,
             branched_from_version_id: row.branched_from_version_id,
             document_family_id: row.document_family_id,

@@ -1,8 +1,7 @@
-import { Tooltip } from '@core/component/Tooltip';
 import { touchHandler } from '@core/directive/touchHandler';
 import { idToDisplayName } from '@core/user';
-import { cn } from '@ui/utils/classname';
 import { Popover } from '@kobalte/core/popover';
+import { Button, cn, HoverCard } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 
 type ReactionChipProps = {
@@ -66,20 +65,20 @@ export function ReactionChip(props: ReactionChipProps) {
       placement="top"
     >
       <Popover.Anchor>
-        <Tooltip
-          tooltip={
+        <HoverCard
+          placement="top"
+          content={
             <ReactionTooltipContent
               users={props.users}
               currentUserId={props.currentUserId}
               emoji={props.emoji}
             />
           }
-          placement="top"
         >
-          <button
-            type="button"
+          <Button
             data-message-reaction-chip
             data-emoji={props.emoji}
+            noTouchResize
             ref={(el) =>
               touchHandler(el, () => ({
                 onLongPress: () => {
@@ -88,14 +87,16 @@ export function ReactionChip(props: ReactionChipProps) {
                 stopTouchStartPropagation: true,
               }))
             }
+            size="sm"
+            variant="base"
             class={cn(
-              'flex flex-row items-center gap-2 py-1 px-2 bg-menu border h-8',
+              'flex flex-row items-center h-7 min-w-7 gap-2 rounded-sm',
               {
-                'text-accent-ink border-accent': props.selected,
-                'border-edge-muted hover:bg-hover hover:scale-105 transition-none hover:transition':
-                  !props.selected && props.interactive,
+                'border-edge-muted hover:bg-hover hover:scale-105':
+                  props.interactive,
                 'border-edge-muted': !props.selected && !props.interactive,
-                'cursor-default': !props.interactive,
+                'text-accent border-accent hover:bg-accent-hover':
+                  props.selected,
                 'pointer-events-auto': !props.interactive,
               }
             )}
@@ -105,15 +106,15 @@ export function ReactionChip(props: ReactionChipProps) {
               props.onClick?.(event);
             }}
           >
-            <span class="text-md">{props.emoji}</span>
+            <span class="text-lg leading-0">{props.emoji}</span>
             <Show when={props.count > 1}>
               <span class="text-xs">{props.count}</span>
             </Show>
-          </button>
-        </Tooltip>
+          </Button>
+        </HoverCard>
       </Popover.Anchor>
       <Popover.Portal>
-        <Popover.Content class="z-modal bg-panel p-1.5 text-ink-muted text-xs rounded-sm border border-edge-muted">
+        <Popover.Content class="z-modal bg-surface p-1.5 text-ink-muted text-xs rounded-sm border border-edge-muted">
           <ReactionTooltipContent
             users={props.users}
             currentUserId={props.currentUserId}

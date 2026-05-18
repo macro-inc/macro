@@ -1,13 +1,13 @@
-import * as stackingContext from '@core/constant/stackingContext';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Lightbox, LightboxToolbar } from '@core/component/Lightbox';
+
+import * as stackingContext from '@core/constant/stackingContext';
 import { isMobile } from '@core/mobile/isMobile';
 import ChevronLeftIcon from '@icon/regular/caret-left.svg';
 import ChevronRightIcon from '@icon/regular/caret-right.svg';
 import XIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import { Show, type Accessor, createMemo } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { Button, cn } from '@ui';
+import { type Accessor, createMemo, Show } from 'solid-js';
 import type { MediaItem } from './media-items';
 
 type MediaViewerDialogProps = {
@@ -26,7 +26,7 @@ function VideoViewerContent(props: {
   navigationHidden?: boolean;
 }) {
   const navButtonClass =
-    'absolute top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-colors disabled:cursor-not-allowed disabled:opacity-50';
+    'absolute top-1/2 -translate-y-1/2 bg-surface backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-surface transition-colors disabled:cursor-not-allowed disabled:opacity-50';
 
   let swipeTouchStartX = 0;
   let swipeTouchEndX = 0;
@@ -72,20 +72,18 @@ function VideoViewerContent(props: {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      <Dialog.Content class="flex items-center justify-center bg-panel">
+      <Dialog.Content class="flex items-center justify-center bg-surface">
         <LightboxToolbar isVisible={true}>
           <Dialog.CloseButton>
-            <DeprecatedIconButton
-              icon={XIcon}
-              theme="clear"
-              tooltip={{ label: 'Close' }}
-            />
+            <Button variant="ghost" size="icon-md" label="Close">
+              <XIcon />
+            </Button>
           </Dialog.CloseButton>
         </LightboxToolbar>
 
         <Show when={props.indexLabel}>
           <div
-            class="absolute top-4 left-4 rounded-lg border border-edge bg-dialog px-3 py-1.5 shadow-md"
+            class="absolute top-4 left-4 rounded-lg border border-edge bg-surface px-3 py-1.5 shadow-md"
             style={{ 'z-index': stackingContext.zModal + 1 }}
           >
             <span class="text-sm font-medium text-ink">
@@ -102,7 +100,7 @@ function VideoViewerContent(props: {
             disabled={!props.onPrevious}
             aria-label="Previous media"
           >
-            <ChevronLeftIcon class="h-5 w-5 text-ink" />
+            <ChevronLeftIcon class="size-5 text-ink" />
           </button>
 
           <button
@@ -112,11 +110,11 @@ function VideoViewerContent(props: {
             disabled={!props.onNext}
             aria-label="Next media"
           >
-            <ChevronRightIcon class="h-5 w-5 text-ink" />
+            <ChevronRightIcon class="size-5 text-ink" />
           </button>
         </Show>
 
-        <div class="flex h-full w-full items-center justify-center">
+        <div class="flex size-full items-center justify-center">
           <video
             class="max-h-[80vh] max-w-[90vw] rounded-2xl bg-black"
             controls

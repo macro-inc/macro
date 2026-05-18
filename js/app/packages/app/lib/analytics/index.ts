@@ -1,7 +1,7 @@
 export {
-  createAnalytics,
-  analytics,
   type AnalyticsInterface,
   type AnalyticsProvider,
+  analytics,
+  createAnalytics,
 } from './analytics';
-export type { AppEvents, AppEventNames } from './app-events';
+export type { AppEventNames, AppEvents } from './app-events';

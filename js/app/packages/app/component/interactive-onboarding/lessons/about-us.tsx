@@ -1,15 +1,15 @@
-import { onMount, For } from 'solid-js';
-import type { JSX } from 'solid-js';
-import type { LessonContentProps, LessonDefinition } from '../types';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import EyeSlash from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
-import UsersThree from '@phosphor-icons/core/regular/users-three.svg?component-solid';
-import { startSsoLogin } from '@core/auth/sso';
-import { initAndStartEmailSync } from '@core/email-link';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
-import { isTauri } from '@core/util/platform';
 // Singleton is correct here — onContinue/onCompleteParam are plain callbacks outside Solid context.
 import { analytics } from '@app/lib/analytics/analytics';
+import { startSsoLogin } from '@core/auth/sso';
+import { initAndStartEmailSync } from '@core/email-link';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isTauri } from '@core/util/platform';
+import EyeSlash from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
+import UsersThree from '@phosphor-icons/core/regular/users-three.svg?component-solid';
+import type { JSX } from 'solid-js';
+import { For, onMount } from 'solid-js';
+import type { LessonContentProps, LessonDefinition } from '../types';
 
 function AboutUsContent(props: LessonContentProps) {
   onMount(() => {
@@ -71,7 +71,7 @@ const PANELS: { icon: () => JSX.Element; label: string }[] = [
 
 function AboutUsDemo() {
   return (
-    <div class="h-full w-full flex items-center justify-center px-8">
+    <div class="size-full flex items-center justify-center px-8">
       <div
         class="w-full max-w-2xl items-start"
         classList={{
@@ -82,7 +82,7 @@ function AboutUsDemo() {
         <For each={PANELS}>
           {(panel) => (
             <div class="flex-1 w-full flex flex-col">
-              <div class="border border-edge-muted bg-panel rounded-xs overflow-hidden">
+              <div class="border border-edge-muted bg-surface rounded-xs overflow-hidden">
                 <div class="p-6 flex flex-col items-center gap-4 text-center">
                   {panel.icon()}
                   <p class="text-sm text-ink/70 font-medium">{panel.label}</p>

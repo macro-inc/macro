@@ -1,13 +1,13 @@
-import { For, Show } from 'solid-js';
-import { usePropertyEntityDisplay } from '@core/component/Properties/hooks';
+import { formatCallDuration } from '@block-call/utils';
 import { UserGroup } from '@core/component/Properties/component/propertyValue/UserGroup';
+import { usePropertyEntityDisplay } from '@core/component/Properties/hooks';
 import type { EntityReference } from '@core/component/Properties/types';
-import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { matches } from '@core/util/match';
-import { formatCallDuration } from '@block-call/utils';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
+import { HoverCard } from '@ui';
+import { For, Show } from 'solid-js';
 import { AttendanceBadge } from '../../components/Badges';
 import { CallRecordName } from '../../components/CallRecordName';
 import { Entity } from '../../entity';
@@ -24,18 +24,18 @@ function ParticipantItem(props: { userId: string }) {
     { fallbackIcon: null }
   );
   return (
-    <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted h-fit w-fit">
+    <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted size-fit">
       <div class="size-4 rounded-full overflow-hidden shrink-0">
         <UserIcon id={props.userId} isDeleted={false} size="fill" />
       </div>
-      <span class="truncate max-w-[150px]">{name()}</span>
+      <span class="truncate max-w-37.5">{name()}</span>
     </div>
   );
 }
 
 function ParticipantsTooltip(props: { participantIds: string[] }) {
   return (
-    <div class="p-2 border border-edge-muted bg-panel min-w-48 max-w-72">
+    <div class="min-w-48 max-w-72">
       <div class="flex items-center gap-2 text-ink-muted border-b border-edge-muted/50 pb-1.5 mb-1.5">
         <UserCircleIcon class="size-3.5 text-ink-muted" />
         <span class="text-xs">Participants</span>
@@ -57,13 +57,11 @@ export function CallParticipants(props: { participantIds: string[] }) {
     }));
   return (
     <Show when={props.participantIds.length > 0}>
-      <Tooltip
-        unstyled
-        tooltip={<ParticipantsTooltip participantIds={props.participantIds} />}
-        class="flex items-center"
+      <HoverCard
+        content={<ParticipantsTooltip participantIds={props.participantIds} />}
       >
         <UserGroup entities={entities()} maxUsers={2} />
-      </Tooltip>
+      </HoverCard>
     </Show>
   );
 }
@@ -90,7 +88,7 @@ export function CallNarrowBody(props: {
             <Show when={matches(h(), isCallRecordHit)}>
               {(callHit) => (
                 <Show when={callHit().senderId}>
-                  {(id) => <UserIcon id={id()} size="xs" />}
+                  {(id) => <UserIcon id={id()} size="sm" />}
                 </Show>
               )}
             </Show>
@@ -167,7 +165,7 @@ export function CallWideContent(props: {
               <Show when={matches(h(), isCallRecordHit)}>
                 {(callHit) => (
                   <Show when={callHit().senderId}>
-                    {(id) => <UserIcon id={id()} size="xs" />}
+                    {(id) => <UserIcon id={id()} size="sm" />}
                   </Show>
                 )}
               </Show>

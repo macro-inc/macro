@@ -16,7 +16,7 @@ use crate::domain::{
     ports::EmailService,
 };
 
-use super::{EmailLinkExtractor, EmailRouterState};
+use super::{axum_impls::EmailLinkExtractor, previews_router::EmailRouterState};
 
 // ── API types ────────────────────────────────────────────────────────
 

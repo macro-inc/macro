@@ -1,25 +1,25 @@
 import {
   type CombinedEntity,
   createEntitySearchConfig,
-  useQuickAccessEntities,
   getEntityName,
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
   isChannelEntity,
-  threadMapper,
   quickAccessItemToEntity,
-  userToEntity,
   sortEntitiesWithSelfFirst,
+  threadMapper,
+  useQuickAccessEntities,
+  userToEntity,
 } from '@core/component/Properties/component/modal/shared/entityUtils';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
-import { useAugmentUserWithDmActivity } from '@core/user';
 import { useEmail, useUserId } from '@core/context/user';
+import { useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
-import { createEmailsInfiniteQuery } from '@macro-entity';
 import type { EmailEntity } from '@entity';
+import XIcon from '@icon/regular/x.svg';
+import { createEmailsInfiniteQuery } from '@macro-entity';
 import { useSearchSoupQuery } from '@queries/soup/search';
-import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
 import type { Component } from 'solid-js';
@@ -51,18 +51,18 @@ const EntityPill: Component<{
   );
 
   return (
-    <div class="group relative h-6 px-1.5 text-xxs text-ink border border-edge bg-panel font-mono flex items-center gap-1.5">
+    <div class="group relative h-6 px-1.5 text-xxs text-ink border border-edge bg-surface font-mono flex items-center gap-1.5">
       <span class="size-3 flex items-center justify-center shrink-0">
         {icon()}
       </span>
-      <span class="whitespace-nowrap max-w-[80px] truncate">
+      <span class="whitespace-nowrap max-w-20 truncate">
         {isLoading() ? 'Loading...' : name()}
       </span>
       {/* X shows on hover, overlays the text */}
       <button
         type="button"
         onClick={props.onRemove}
-        class="absolute inset-0 flex items-center justify-end pr-1 bg-linear-to-l from-panel via-panel to-transparent opacity-0 group-hover:opacity-100 hover:text-failure-ink"
+        class="absolute inset-0 flex items-center justify-end pr-1 bg-linear-to-l from-surface via-surface to-transparent opacity-0 group-hover:opacity-100 hover:text-failure-ink"
       >
         <XIcon class="size-3" />
       </button>
@@ -111,6 +111,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
   const emails = () => emailsQuery.data ?? [];
 
   // Server-side email search
+  // TODO: fix this it doesn't work
   const emailSearchQuery = useSearchSoupQuery(
     () => ({
       params: { page_size: 20 },
@@ -317,7 +318,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
           />
           <div
             ref={dropdownRef}
-            class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-[200px] max-h-48 overflow-y-auto z-user-highlight"
+            class="absolute left-0 top-full mt-1 border border-edge bg-surface shadow-lg font-mono min-w-50 max-h-48 overflow-y-auto z-user-highlight"
           >
             <Show
               when={availableEntities().length > 0}

@@ -11,7 +11,10 @@ import {
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
-import { DocumentCognitionService } from './document-cognition-service';
+import {
+  DocumentCognitionService,
+  SERVICE_DOMAIN_NAME,
+} from './document-cognition-service';
 
 const tags = {
   environment: stack,
@@ -77,6 +80,14 @@ const PERPLEXITY_API_KEY = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.get('perplexity-api-key') ?? '',
   })
+  .apply((secret) => secret.secretString);
+
+const SLACK_MCP_CLIENT_ID = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: 'slack-mcp-client-id' })
+  .apply((secret) => secret.secretString);
+
+const SLACK_MCP_CLIENT_SECRET = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: 'slack-mcp-client-secret' })
   .apply((secret) => secret.secretString);
 
 const AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME = config.require(
@@ -297,6 +308,18 @@ const documentCognitionService = new DocumentCognitionService(
       {
         name: 'DD_ENV',
         value: stack,
+      },
+      {
+        name: 'DOCUMENT_COGNITION_SERVICE_URL',
+        value: `https://${SERVICE_DOMAIN_NAME}`,
+      },
+      {
+        name: 'SLACK_MCP_CLIENT_ID',
+        value: pulumi.interpolate`${SLACK_MCP_CLIENT_ID}`,
+      },
+      {
+        name: 'SLACK_MCP_CLIENT_SECRET',
+        value: pulumi.interpolate`${SLACK_MCP_CLIENT_SECRET}`,
       },
     ],
     isPrivate: false,

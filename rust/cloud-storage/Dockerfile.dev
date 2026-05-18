@@ -20,6 +20,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
         --bin contacts_service \
         --bin document_cognition_service \
         --bin document_storage_service \
+        --bin document_upload_finalizer_local_worker \
         --bin email_service \
         --bin notification_service \
         --bin static_file_service \
@@ -31,6 +32,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
     && cp /app/target/debug/contacts_service /app/out/ \
     && cp /app/target/debug/document_cognition_service /app/out/ \
     && cp /app/target/debug/document_storage_service /app/out/ \
+    && cp /app/target/debug/document_upload_finalizer_local_worker /app/out/ \
     && cp /app/target/debug/email_service /app/out/ \
     && cp /app/target/debug/notification_service /app/out/ \
     && cp /app/target/debug/static_file_service /app/out/ \

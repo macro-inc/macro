@@ -1,29 +1,27 @@
+import { isRoot, type Reply, type Root } from '@core/comments/commentType';
 import {
   isWrapperWithIds,
   LexicalWrapperContext,
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { autoRegister } from '@core/component/LexicalMarkdown/plugins';
 import {
   commentPlugin,
   MARK_SELECTED_COMMENT_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
-import { autoRegister } from '@core/component/LexicalMarkdown/plugins';
-import { blockLoroManagerSignal } from '@core/signal/load';
-import { isRoot, type Reply, type Root } from '@core/comments/commentType';
 import { useUserId } from '@core/context/user';
+import { blockLoroManagerSignal } from '@core/signal/load';
 import type { CommentNode } from '@lexical-core';
 import { COMMAND_PRIORITY_LOW, SELECTION_CHANGE_COMMAND } from 'lexical';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   untrack,
   useContext,
-  type Accessor,
   type VoidComponent,
 } from 'solid-js';
 import { reconcile } from 'solid-js/store';
 import { useDeleteComment, useDeleteNewComments } from './commentOperations';
-import { commentThreadsResource, sortComments } from './commentsResource';
-import type { Mark, ThreadMetadata, ThreadStore } from './commentType';
 import {
   activeCommentThreadSignal,
   activeMarkIdsSignal,
@@ -34,6 +32,8 @@ import {
   markStore,
   threadStore,
 } from './commentStore';
+import { commentThreadsResource, sortComments } from './commentsResource';
+import type { Mark, ThreadMetadata, ThreadStore } from './commentType';
 
 function getHighlightThread(
   highlight: Mark

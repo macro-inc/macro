@@ -6,7 +6,7 @@
 export const PROPERTY_STYLES = {
   input: {
     search:
-      'w-full pl-10 pr-3 py-1 border border-edge text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent bg-input text-ink placeholder-ink-muted',
+      'w-full pl-10 pr-3 py-1 border border-edge text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent bg-surface text-ink placeholder-ink-muted',
   },
 
   button: {
@@ -17,7 +17,7 @@ export const PROPERTY_STYLES = {
 
   value: {
     multiButton:
-      'text-right text-ink hover:bg-hover px-2 py-0.5 border border-edge-muted inline-flex items-center gap-2 shrink-0 max-w-[140px] wrap-break-word',
+      'text-right text-ink px-2 py-0.5 inline-flex items-center gap-2 shrink-0 max-w-[140px] wrap-break-word rounded-sm',
   },
 
   checkbox: {

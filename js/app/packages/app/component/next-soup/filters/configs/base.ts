@@ -1,6 +1,6 @@
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
-import type { Query, PropertyFilter } from '../filter-store';
+import type { PropertyFilter, Query } from '../filter-store';
 
 export const NO_ASSIGNEE = 'NO_ASSIGNEE';
 
@@ -13,6 +13,22 @@ export const IMAGE_EXTENSIONS = [
   'gif',
   'svg',
   'webp',
+] as const;
+
+// NOTE: inlined from the block-video definition to avoid circular dependency
+export const VIDEO_EXTENSIONS = [
+  'mp4',
+  'mkv',
+  'webm',
+  'avi',
+  'mov',
+  'wmv',
+  'mpg',
+  'mpeg',
+  'm4v',
+  'flv',
+  'f4v',
+  'threegp',
 ] as const;
 
 export const isEmail = { exclude: { threadId: [NIL_UUID] } };

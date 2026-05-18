@@ -1,187 +1,77 @@
 <div align="center">
-<a target="_blank" href="https://macro.com">
-<img width="1414" height="314" alt="Frame 2 (1)" src="https://github.com/user-attachments/assets/48250880-b1cf-4e18-bcaf-f314be1d1bfb" />
-</a>
+  <a target="_blank" href="https://macro.com">
+    <img width="100%" alt="Macro, built for high-output teams" src=".github/readme/Hero Image from Figma.png" />
+  </a>
 
-
-  
-<p align="center">
-  Extremely fast email, messaging, tasks and docs @linked together in one system.
+  <p>
+    <a href="https://macro.com/app">Sign up</a>
+    ·
+    <a href="https://cal.com/team/macro/macro-demo-call?metadata%5Bfbp%5D=fb.1.1778954074516.817396687896036613">Book demo</a>
+    ·
+    <a href="https://macro.com">Website</a>
+    ·
+    <a href="mailto:contact@macro.com">Feature requests</a>
+    ·
+    <a href="mailto:contribute@macro.com">Contribute</a>
+    ·
+    <a href="mailto:teo@macro.com">Hiring</a>
+  </p>
 </div>
 
+# Why Macro
 
-##  Features
-<div>
-<table>
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/email.svg" width="32" height="32" alt="email">
-</td>
-<td>
-<strong>Email</strong><br>
-Full email client with keyboard-driven triage, instant search, and Gmail sync.
-</td>
-</tr>
+Macro is a unified system for teams. We built it for our startup. Email, tasks, calls, messages, agents, docs, diagrams, (soon, crm) in one @linked together with team-level memory. Inspired by, and replaces — or integrates with — Slack, Linear, Notion, HubSpot, Superhuman, etc.
 
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/channel.svg" width="32" height="32" alt="channel">
-</td>
-<td>
-<strong>Channels & Groups</strong><br>
-Team messaging with bi-directional @links. Mention a doc or task to create a reference you can trace back.
-</td>
-</tr>
+We built Macro because we wanted a single unified system. There are many good products, but nothing works together. So, we rebuilt everything from scratch, from first principles, in SolidJS and Rust, to work together as one. We've been dogfooding it for two years and now we've opened it up so you can use it too.
 
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/book.svg" width="32" height="32" alt="docs">
-</td>
-<td>
-<strong>Docs & Notes</strong><br>
-Real-time collaborative documents using CRDT. @link to any message, task, or file in the system.
-</td>
-</tr>
+[Sign up](https://macro.com/app) · [Book demo](https://cal.com/team/macro/macro-demo-call?metadata%5Bfbp%5D=fb.1.1778954074516.817396687896036613)
 
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/diagram.svg" width="32" height="32" alt="canvas">
-</td>
-<td>
-<strong>Canvas</strong><br>
-2D diagramming with embedded @links to tasks, files, and emails. Embeds update automatically.
-</td>
-</tr>
+# Features
 
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/file-md.svg" width="32" height="32" alt="editor">
-</td>
-<td>
-<strong>Unified Editor</strong><br>
-Same rich text editor across emails, notes, channels, and tasks. One surface, everywhere.
-</td>
-</tr>
+Email inspired by Superhuman, with better AI. Tasks inspired by Linear, deeply integrated into channels. Channels like Slack, with Reddit-style threading for focused technical discussions. And AI to separate #random pings from important ones. CRM that "just works". Video calls logged to team-level memory. A unified inbox for all of this, in one place, and much more.
 
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/ai.svg" width="32" height="32" alt="ai">
-</td>
-<td>
-<strong>AI Chat</strong><br>
-Query your emails, messages, docs, and the web. @mention anything for context. Agent mode for autonomous search.
-</td>
-</tr>
+<img width="100%" alt="Macro feature grid" src=".github/readme/CRM Feature Grid Request.png" />
 
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/search.svg" width="32" height="32" alt="search">
-</td>
-<td>
-<strong>Unified Search</strong><br>
-Search and query everything: <code>type:email inbox:true</code>, <code>type:task due:[1 week]</code>, <code>type:file "contract"</code>
-</td>
-</tr>
+# About
 
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/folder.svg" width="32" height="32" alt="folder">
-</td>
-<td>
-<strong>File Storage</strong><br>
-Store and share videos, images, and documents. Auto-imports attachments from emails and channels.
-</td>
-</tr>
+Macro has raised $30m led by a16z. We are based in NYC.
 
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/pdf.svg" width="32" height="32" alt="pdf">
-</td>
-<td>
-<strong>PDF Viewer</strong><br>
-Intelligent parsing with text extraction. Full-text search over PDF contents.
-</td>
-</tr>
+Core contributors: [@whutchinson98](https://github.com/whutchinson98), [@gbirman](https://github.com/gbirman), [@synoet](https://github.com/synoet), [@sedson](https://github.com/sedson), [@evanhutnik](https://github.com/evanhutnik), [@peterchinman](https://github.com/peterchinman), [@ehayes2000](https://github.com/ehayes2000), [@seanaye](https://github.com/seanaye), [@dev-rb](https://github.com/dev-rb), [@danielkweon](https://github.com/danielkweon), and [@aquaductape](https://github.com/aquaductape).
 
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/keyboard.svg" width="32" height="32" alt="keyboard">
-</td>
-<td>
-<strong>Keyboard First</strong><br>
-Every action has a hotkey. Navigate, triage, search, and execute from anywhere without touching the mouse.
-</td>
-</tr>
-
-<tr>
-<td width="64" align="center">
-<img src=".github/icons/user.svg" width="32" height="32" alt="permissions">
-</td>
-<td>
-<strong>Intuitive Permissions</strong><br>
-Permissions inherit from channels. Send a document to someone and they can access it.
-</td>
-</tr>
-</table>
-
-</p>
-<h1 style="border-bottom: none">
-</h1>
-</div>
-
-## Directory Structure
-
-While we're not accepting contributions yet, we encourage you to explore the codebase. This overview should help you navigate.
-
-```
-macro/
-├── js/app/                      # Frontend (SolidJS + Tauri)
-│   ├── packages/
-│   │   ├── app/                 # Web/Desktop app entry point
-│   │   ├── core/                # Core shared logic and components
-│   │   ├── lexical-core/        # Core text editor (Lexical-based)
-│   │   ├── block-*/             # UI block components (email, chat, canvas, etc.)
-│   │   └── service-*/           # API clients for backend services
-│   └── src-tauri/               # Tauri Rust backend for desktop
-│
-├── rust/cloud-storage/          # Backend services (Rust)
-│   ├── document-storage-service/    # Document storage API
-│   ├── email_service/               # Email processing
-│   ├── comms_service/               # Messaging
-│   ├── search_service/              # Full-text search
-│   ├── authentication_service/      # Auth
-│   ├── connection_gateway/          # WebSocket gateway
-│   ├── macro_db_client/             # PostgreSQL client
-│   └── ...                          # Other services and shared crates
-│
-├── infra/                       # Infrastructure (Pulumi + AWS)
-│   ├── stacks/                  # Pulumi deployment stacks
-│   ├── lambda/                  # Lambda function configs
-│   └── resources/               # Reusable AWS resource definitions
-│
-└── scripts/                     # Build and utility scripts
-```
-
-## Feature Requests
-
-For feature requests, please email contact@macro.com
-
-## Hiring
-
-We're hiring! If you're interested in working on macro, please email teo@macro.com
-
-
-## CONTRIBUTIONS
-
-Email contribute@macro.com to join the community.
-
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=macro-inc%2Fmacro&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=macro-inc/macro&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=macro-inc/macro&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=macro-inc/macro&type=date&legend=top-left" />
- </picture>
+<a href="https://www.youtube.com/watch?v=hZRin23hRKc">
+  <img width="100%" alt="Watch the Macro demo" src="https://img.youtube.com/vi/hZRin23hRKc/maxresdefault.jpg" />
 </a>
+
+# Security
+
+<img width="520" alt="ISO 27001 and SOC 2 Type II badges" src=".github/readme/security-badges.svg" />
+
+Enterprise-grade security. Zero data retention with model providers, including no training on customer data. SOC 2 Type II certified. We welcome responsible security reports and pay bounties in accordance with severity and impact. Send reports to [security@macro.com](mailto:security@macro.com).
+
+# License
+
+Macro is licensed under the Business Source License with AGPL conversion. See `LICENSE.md` for details. The short version is that non-production use is allowed, and each released version converts to AGPL after its change date. Production commercial use before that conversion requires a commercial license.
+
+You can self-host Macro for development and evaluation. If you want to run Macro in production, contact [self-host@macro.com](mailto:self-host@macro.com) so we can work through licensing and operational requirements.
+
+We strongly recommend the hosted version for most teams. Macro gets better when it can connect teams to each other, and the managed service is where you get the latest features, Google Workspace integrations, SOC 2 controls, Apple App Store distribution, LiveKit-backed calls, and the sublicenses needed for production video. If you are in the military, government, or another environment where managed hosting is not possible, email us and we can talk through a deployment that fits.
+
+# Stack
+
+<img width="100%" alt="Macro stack diagram" src=".github/readme/CRM Feature Grid Request (1).png" />
+
+Thanks to the teams behind SolidJS, Rust, Tauri, LiveKit, Axum, Tokio, PostgreSQL, OpenSearch, Pulumi, Datadog, Biome, Vitest, Playwright, and the rest of the open-source infrastructure Macro is built on.
+
+# Community
+
+Have an idea, want to contribute, or want to work on Macro?
+
+- Feature requests: [contact@macro.com](mailto:contact@macro.com)
+- Contributions: [contribute@macro.com](mailto:contribute@macro.com)
+- Hiring: [teo@macro.com](mailto:teo@macro.com)
+
+<div align="center">
+  <a target="_blank" href="https://macro.com/app">
+    <img width="100%" alt="Everything your team needs, connected. Sign up." src=".github/readme/Footer Readme CTA.png" />
+  </a>
+</div>

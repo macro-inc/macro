@@ -1243,6 +1243,17 @@
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
           },
+          "subType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotificationDocumentSubType",
+                "description": "The sub type of the document (e.g. task)."
+              }
+            ]
+          },
           "text": {
             "type": "string",
             "description": "the text of the comment"
@@ -1388,40 +1399,44 @@
       },
       "DeviceType": {
         "type": "string",
-        "enum": ["ios", "android"]
+        "enum": ["ios", "android", "iosvoip"]
       },
       "DocumentMentionMetadata": {
-        "type": "object",
-        "description": "Someone mentioned a document in a channel",
-        "required": ["documentName", "owner"],
-        "properties": {
-          "documentName": {
-            "type": "string",
-            "description": "The name of the document"
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ChannelMentionMetadata"
           },
-          "fileType": {
-            "type": ["string", "null"],
-            "description": "The file type of the document"
-          },
-          "owner": {
-            "type": "string",
-            "description": "The owner of the document"
-          },
-          "senderProfilePictureUrl": {
-            "type": ["string", "null"]
-          },
-          "subType": {
-            "oneOf": [
-              {
-                "type": "null"
+          {
+            "type": "object",
+            "required": ["documentName", "owner"],
+            "properties": {
+              "documentName": {
+                "type": "string",
+                "description": "The name of the document"
               },
-              {
-                "$ref": "#/components/schemas/NotificationDocumentSubType",
-                "description": "The sub type of the document (e.g. task)"
+              "fileType": {
+                "type": ["string", "null"],
+                "description": "The file type of the document"
+              },
+              "owner": {
+                "type": "string",
+                "description": "The owner of the document"
+              },
+              "subType": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/NotificationDocumentSubType",
+                    "description": "The sub type of the document (e.g. task)"
+                  }
+                ]
               }
-            ]
+            }
           }
-        }
+        ],
+        "description": "Someone mentioned a document in a channel"
       },
       "EmptyResponse": {
         "type": "object",
@@ -1604,6 +1619,17 @@
           },
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
+          },
+          "subType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotificationDocumentSubType",
+                "description": "The sub type of the document (e.g. task)."
+              }
+            ]
           },
           "text": {
             "type": "string",
@@ -1900,6 +1926,17 @@
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
           },
+          "subType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotificationDocumentSubType",
+                "description": "The sub type of the document (e.g. task)."
+              }
+            ]
+          },
           "text": {
             "type": "string",
             "description": "the text of the comment"
@@ -1933,6 +1970,17 @@
           },
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
+          },
+          "subType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotificationDocumentSubType",
+                "description": "The sub type of the backing document (task)."
+              }
+            ]
           },
           "taskId": {
             "type": "string",

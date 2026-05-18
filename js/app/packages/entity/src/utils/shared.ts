@@ -1,5 +1,5 @@
-import type { EntityData } from '../types/entity';
 import { useUserContext } from '@core/context/user';
+import type { EntityData } from '../types/entity';
 
 export function useIsShared(entity: EntityData) {
   const { userId } = useUserContext();

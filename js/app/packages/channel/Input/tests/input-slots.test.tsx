@@ -2,8 +2,8 @@
  * @vitest-environment jsdom
  */
 
-import userEvent from '@testing-library/user-event';
 import { render, screen } from '@solidjs/testing-library';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.hoisted(() => {
@@ -50,6 +50,13 @@ vi.mock('@icon/regular/x.svg', () => ({
 vi.mock('@icon/bold/arrow-up-bold.svg', () => ({
   default: () => <span data-testid="send-icon" />,
 }));
+
+vi.mock(
+  '@phosphor-icons/core/regular/paper-plane-right.svg?component-solid',
+  () => ({
+    default: () => <span data-testid="paper-plane-icon" />,
+  })
+);
 
 vi.mock('@icon/bold/spinner-gap-bold.svg', () => ({
   default: () => <span data-testid="spinner-icon" />,
@@ -136,10 +143,10 @@ vi.mock('../FormatButtons', () => ({
   FormatButtons: () => <div data-testid="format-buttons" />,
 }));
 
-import { ChannelInput } from '../ChannelInput';
-import { Root } from '../Root';
-import { DropOverlay } from '../DropOverlay';
 import { createInputAttachmentTracker } from '../attachment-tracker';
+import { ChannelInput } from '../ChannelInput';
+import { DropOverlay } from '../DropOverlay';
+import { Root } from '../Root';
 import type { InputData } from '../types';
 
 const baseInput: InputData = {

@@ -1,4 +1,4 @@
-import { Button } from '@ui/components/Button';
+import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
@@ -6,10 +6,10 @@ import { usePermissions } from '@core/context/user';
 import IconX from '@icon/regular/x.svg';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { stripeServiceClient } from '@service-stripe/client';
+import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import { useAnalytics } from '@app/component/analytics-context';
-import { PLANS, PLAN_FEATURES, type PaidPlanTier } from './plans';
+import { type PaidPlanTier, PLAN_FEATURES, PLANS } from './plans';
 import SubscriptionTier from './SubscriptionTier';
 
 // Paid-only plans for the billing paywall — Stripe has no product for the
@@ -137,13 +137,13 @@ const PaywallComponent = (props: PaywallComponent) => {
   };
 
   return (
-    <div class="space-y-2 w-full">
+    <div class="relative space-y-2 w-full">
       <Show when={!props.hideCloseButton}>
         <button
           onClick={props.cb}
-          class="fixed top-6 right-6 sm:top-3 sm:right-3 text-ink-extra-muted hover:text-ink transition-colors"
+          class="absolute -top-2 -right-2 sm:-top-3 sm:-right-3 text-ink-extra-muted hover:text-ink transition-colors z-10"
         >
-          <IconX class="w-5 sm:w-6 h-5 sm:h-6" />
+          <IconX class="size-5 sm:size-6" />
         </button>
       </Show>
       <Show when={!hasPaid()}>
@@ -169,12 +169,12 @@ const PaywallComponent = (props: PaywallComponent) => {
             {(plan) => (
               <button
                 onClick={() => setUserSelectedTier(plan.tier)}
-                class="p-4 sm:p-5 border flex flex-col transition-all relative text-left"
-                classList={{
-                  'border-accent-ink bg-active': selectedTier() === plan.tier,
-                  'border-edge hover:border-edge': selectedTier() !== plan.tier,
-                }}
-                style={{ 'border-radius': '2px' }}
+                class={cn(
+                  selectedTier() === plan.tier
+                    ? 'border-accent bg-active'
+                    : 'border-edge hover:border-edge',
+                  'p-4 sm:p-5 border flex flex-col transition-all relative text-left rounded-sm'
+                )}
               >
                 <div class="flex flex-col gap-3 w-full">
                   <div class="flex justify-between items-start">
@@ -218,7 +218,7 @@ const PaywallComponent = (props: PaywallComponent) => {
           fallback={
             <Button
               onClick={handleContinue}
-              variant="secondary"
+              variant="base"
               size="lg"
               depth={3}
               class="w-full"
@@ -243,7 +243,7 @@ const PaywallComponent = (props: PaywallComponent) => {
         <Show when={!hasPaid() && props.handleGuest}>
           <Button
             onClick={() => props.handleGuest?.()}
-            variant="link"
+            variant="base"
             size="sm"
             class="mt-3 text-ink/40 hover:text-ink/60"
           >

@@ -1,4 +1,4 @@
-use crate::api::context::{AppState, DocumentPermissionJwtSecretKey};
+use crate::api::context::DocumentPermissionJwtSecretKey;
 use axum::{
     Extension, Json,
     extract::State,
@@ -48,7 +48,7 @@ pub struct CreateEntityMentionResponse {
     tag = "mentions"
 )]
 #[tracing::instrument(skip(db, config, user_context))]
-#[debug_handler(state = AppState)]
+#[debug_handler(state = crate::api::context::AppState)]
 pub async fn create_mention_handler(
     State(db): State<PgPool>,
     State(config): State<LocalOrRemoteSecret<DocumentPermissionJwtSecretKey>>,

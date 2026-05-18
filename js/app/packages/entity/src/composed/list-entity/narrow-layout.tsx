@@ -1,6 +1,6 @@
-import { Show } from 'solid-js';
 import { UserIcon } from '@core/component/UserIcon';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
+import { Show } from 'solid-js';
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
 import { Entity } from '../../entity';
@@ -64,7 +64,7 @@ export function NarrowLayout(props: LayoutProps) {
                   {entity().channelName}
                 </span>
                 <Show when={entity().senderId}>
-                  {(id) => <UserIcon id={id()} size="xs" />}
+                  {(id) => <UserIcon id={id()} size="sm" />}
                 </Show>
                 <Show when={hit()}>
                   {(h) => (
@@ -92,7 +92,7 @@ export function NarrowLayout(props: LayoutProps) {
       >
         <Entity.Slot
           placement="timestamp"
-          class="text-xs font-mono text-right text-ink-extra-muted uppercase font-light"
+          class="text-xs text-right text-ink-extra-muted font-light"
         >
           <Show
             when={!isTaskEntity(props.entity)}

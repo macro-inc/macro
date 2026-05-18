@@ -1,6 +1,6 @@
 import { useIsAuthenticated } from '@core/auth';
 import { useNavigate } from '@solidjs/router';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 
 export function openLoginModal() {
   const isAuthenticated = useIsAuthenticated();
@@ -16,7 +16,7 @@ export function LoginButton() {
   return (
     <div class="flex gap-2 justify-center w-max items-center">
       <Button
-        variant="secondary"
+        variant="base"
         size="sm"
         class="rounded-xs"
         onClick={() => navigate(`/login${window.location.search}`)}
@@ -25,7 +25,7 @@ export function LoginButton() {
       </Button>
       <span class="text-xs text-ink-muted italic">or</span>
       <Button
-        variant="accent"
+        variant="active"
         size="sm"
         class="rounded-xs"
         onClick={() => navigate(`/welcome${window.location.search}`)}

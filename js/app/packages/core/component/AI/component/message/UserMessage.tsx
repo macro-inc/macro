@@ -1,10 +1,10 @@
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { ItemPreview } from '@core/component/ItemPreview';
 import PencilIcon from '@icon/regular/note-pencil.svg';
 import QuoteIcon from '@phosphor-icons/core/bold/arrow-elbow-down-right-bold.svg?component-solid';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
+import { Button } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { DEFAULT_MODEL } from '../../constant';
 import { ChatMessageMarkdown } from './ChatMessageMarkdown';
@@ -44,8 +44,8 @@ export function UserMessage(props: {
     let content;
     const messageContent = props.message.content as string;
     if (messageContent.startsWith('<quote>')) {
-      let start = messageContent.indexOf('<quote>');
-      let end = messageContent.indexOf('</quote>');
+      const start = messageContent.indexOf('<quote>');
+      const end = messageContent.indexOf('</quote>');
       quote = messageContent.substring(start + 7, end);
       content = messageContent.substring(end + 9);
       return [quote, content];
@@ -76,13 +76,13 @@ export function UserMessage(props: {
       <Show when={quote()}>
         <div class="relative w-full text-xs flex flex-row space-x-2 items-start text-ink-muted">
           <div class="flex flex-row items-center space-x-3">
-            <QuoteIcon class="w-3 h-3 shrink-0" />
+            <QuoteIcon class="size-3 shrink-0" />
             <p>"{quote()?.substring(0, 300)}..."</p>
           </div>
         </div>
       </Show>
       <Show when={props.message.attachments.length > 0}>
-        <div class="flex flex-col flex-wrap justify-end items-end gap-1 w-full px-1 mb-2">
+        <div class="flex flex-col items-end gap-1 ml-auto max-w-[calc(100%-8rem)] mb-2">
           <For each={imageAttachments()}>
             {(attachment) => (
               <ImagePreview
@@ -94,18 +94,21 @@ export function UserMessage(props: {
           </For>
           <For each={itemPreviewAttachments()}>
             {(attachment) => (
-              <ItemPreview
-                id={attachment.entity_id}
-                type={
-                  (attachment.entity_type === 'email_thread'
-                    ? 'email'
-                    : attachment.entity_type) as
-                    | 'channel'
-                    | 'document'
-                    | 'email'
-                    | 'project'
-                }
-              />
+              <div class="max-w-full overflow-hidden p-[0.5px]">
+                <ItemPreview
+                  id={attachment.entity_id}
+                  type={
+                    (attachment.entity_type === 'email_thread'
+                      ? 'email'
+                      : attachment.entity_type) as
+                      | 'channel'
+                      | 'document'
+                      | 'email'
+                      | 'project'
+                  }
+                  class="max-w-full"
+                />
+              </div>
             )}
           </For>
         </div>
@@ -122,11 +125,13 @@ export function UserMessage(props: {
                 />
                 <Show when={props.edit}>
                   <div class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <DeprecatedIconButton
-                      icon={PencilIcon}
-                      theme="clear"
+                    <Button
+                      variant="ghost"
+                      size="icon-md"
                       onClick={() => setIsEditing(true)}
-                    />
+                    >
+                      <PencilIcon />
+                    </Button>
                   </div>
                 </Show>
               </div>

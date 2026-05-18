@@ -24,8 +24,7 @@ export function useUserTeamsQuery() {
 export function useTeamQuery(teamId: Accessor<string>) {
   return useQuery(() => ({
     queryKey: teamKeys.detail(teamId()).queryKey,
-    queryFn: async () =>
-      await throwOnErr(() => authServiceClient.getTeam(teamId())),
+    queryFn: async () => await throwOnErr(() => authServiceClient.getTeam()),
     enabled: !!teamId(),
   }));
 }
@@ -72,8 +71,8 @@ type PatchTeamCallbacks = MutationCallbacks<void, Error, PatchTeamArgs>;
 
 export function usePatchTeamMutation(callbacks?: PatchTeamCallbacks) {
   return useMutation(() => ({
-    mutationFn: async ({ teamId, request }: PatchTeamArgs) => {
-      await throwOnErr(() => authServiceClient.patchTeam(teamId, request));
+    mutationFn: async ({ request }: PatchTeamArgs) => {
+      await throwOnErr(() => authServiceClient.patchTeam(request));
     },
 
     ...withCallbacks<void, Error, PatchTeamArgs>(
@@ -105,8 +104,8 @@ type DeleteTeamCallbacks = MutationCallbacks<
 
 export function useDeleteTeamMutation(callbacks?: DeleteTeamCallbacks) {
   return useMutation(() => ({
-    mutationFn: async ({ teamId }: DeleteTeamArgs) => {
-      await throwOnErr(() => authServiceClient.deleteTeam(teamId));
+    mutationFn: async (_args: DeleteTeamArgs) => {
+      await throwOnErr(() => authServiceClient.deleteTeam());
     },
 
     ...withCallbacks<void, Error, DeleteTeamArgs, DeleteTeamContext>(
@@ -151,7 +150,7 @@ export function useDeleteTeamMutation(callbacks?: DeleteTeamCallbacks) {
 
 type CreateTeamWithInvitesArgs = {
   name: string;
-  emails?: string[];
+  invites?: { email: string }[];
 };
 type CreateTeamWithInvitesContext = { previousTeams: Team[] | undefined };
 type CreateTeamWithInvitesCallbacks = MutationCallbacks<
@@ -165,15 +164,13 @@ export function useCreateTeamWithInvitesMutation(
   callbacks?: CreateTeamWithInvitesCallbacks
 ) {
   return useMutation(() => ({
-    mutationFn: async ({ name, emails }: CreateTeamWithInvitesArgs) => {
+    mutationFn: async ({ name, invites }: CreateTeamWithInvitesArgs) => {
       const team = await throwOnErr(() =>
         authServiceClient.createTeam({ name })
       );
 
-      if (emails && emails.length > 0) {
-        await throwOnErr(() =>
-          authServiceClient.inviteToTeam(team.id, { emails })
-        );
+      if (invites && invites.length > 0) {
+        await throwOnErr(() => authServiceClient.inviteToTeam({ invites }));
       }
 
       return team;
@@ -215,9 +212,9 @@ export function useCreateTeamWithInvitesMutation(
           return { previousTeams };
         },
 
-        onSuccess: (_team, { emails }) => {
+        onSuccess: (_team, { invites }) => {
           invalidateUserTeams();
-          const hasInvites = emails && emails.length > 0;
+          const hasInvites = invites && invites.length > 0;
           toast.success(
             hasInvites ? 'Team created and invitations sent' : 'Team created'
           );

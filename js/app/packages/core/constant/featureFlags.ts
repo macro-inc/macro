@@ -306,7 +306,7 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = resolveFeatureFlag(
 
 export const ENABLE_APP_STORE_QR_CODE = resolveFeatureFlag(
   'ENABLE_APP_STORE_QR_CODE',
-  DEV_MODE_ENV
+  true
 );
 
 export const ENABLE_RAIL_CHAT_TASK_COMMENTS = resolveFeatureFlag(
@@ -337,3 +337,22 @@ export const ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE = DEV_MODE_ENV
 export const ENABLE_TEAM_INVITE_TIERS_OVERRIDE = DEV_MODE_ENV
   ? true
   : undefined;
+
+export const ENABLE_SOUP_GROUP_BY_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+
+export const ENABLE_AUTO_UPDATE_UI = resolveFeatureFlag(
+  'ENABLE_AUTO_UPDATE_UI',
+  false
+);
+
+export const ENABLE_CALLKIT = resolveFeatureFlag('ENABLE_CALLKIT', false);
+
+export const ENABLE_MARKDOWN_SIDE_PANEL = resolveFeatureFlag(
+  'ENABLE_MARKDOWN_SIDE_PANEL',
+  true
+);
+
+export const ENABLE_MOBILE_TOAST = resolveFeatureFlag(
+  'ENABLE_MOBILE_TOAST',
+  false
+);

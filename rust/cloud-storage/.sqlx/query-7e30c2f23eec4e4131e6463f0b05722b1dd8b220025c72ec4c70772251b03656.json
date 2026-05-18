@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            m.content as \"content\",\n            c.name as \"name\",\n            m.role as \"role\",\n            c.\"deletedAt\"::timestamptz as \"deleted_at\"\n        FROM\n            \"ChatMessage\" m\n        JOIN\n            \"Chat\" c on c.\"id\" = m.\"chatId\"\n        WHERE\n            m.id = $1 AND m.\"chatId\" = $2 AND c.\"isPersistent\" = false\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "content",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "7e30c2f23eec4e4131e6463f0b05722b1dd8b220025c72ec4c70772251b03656"
+}

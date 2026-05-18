@@ -55,16 +55,22 @@ fn transform_local_url(url: &str) -> String {
     // NOTE: it is ok to use expect as this is only run locally
     let parsed = url::Url::parse(url).expect("valid url");
     let host = parsed.host_str().unwrap();
+    let port = parsed.port().unwrap_or(4566);
+    let path = parsed.path();
+    let query = parsed.query().map(|q| format!("?{q}")).unwrap_or_default();
+
+    // Path-style LocalStack URLs generated inside Docker use `localstack` as
+    // the host, which the browser on the host machine cannot resolve. Keep the
+    // existing path (`/{bucket}/{key}`) and only swap the host to localhost.
+    if host == "localstack" || host == "localhost" {
+        return format!("http://localhost:{port}{path}{query}");
+    }
 
     // hostname should be in the form {asset}.localstack or {asset}.localhost
     let asset = host
         .strip_suffix(".localstack")
         .or_else(|| host.strip_suffix(".localhost"))
         .unwrap();
-
-    let port = parsed.port().unwrap_or(4566);
-    let path = parsed.path();
-    let query = parsed.query().map(|q| format!("?{q}")).unwrap_or_default();
 
     format!("http://localhost:{port}/{asset}{path}{query}")
 }

@@ -1,9 +1,9 @@
-import Subtitles from '@phosphor-icons/core/assets/regular/subtitles.svg';
-import UsersThree from '@phosphor-icons/core/assets/regular/users-three.svg';
+import Subtitles from '@icon/regular/subtitles.svg';
+import UsersThree from '@icon/regular/users-three.svg';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import { cn } from '@ui';
 import type { Accessor } from 'solid-js';
 import { Show } from 'solid-js';
-import { cn } from '@ui/utils/classname';
 import { CallTranscript } from '../CallTranscript';
 import { CallRecordingParticipantsSection } from './CallRecordingParticipants';
 import { CallRecordingSectionShell } from './CallRecordingSectionShell';
@@ -34,7 +34,7 @@ export function CallRecordingTranscriptColumn(props: {
       <Show
         when={props.hasTranscripts()}
         fallback={
-          <div class="flex h-full min-h-0 w-full min-w-0 flex-1 items-center justify-center px-4 py-10 text-center text-sm text-ink-muted">
+          <div class="flex size-full min-h-0 min-w-0 flex-1 items-center justify-center px-4 py-10 text-center text-sm text-ink-muted">
             No transcripts for this call.
           </div>
         }
@@ -47,6 +47,19 @@ export function CallRecordingTranscriptColumn(props: {
               : 'flex min-h-0 flex-1 flex-col @[860px]:h-full @[860px]:min-h-0 @[860px]:min-w-[40cqw]'
           )}
         >
+          <Show when={props.isStacked()}>
+            <CallRecordingSectionShell
+              title="Participants"
+              icon={<UsersThree class="size-4 text-ink shrink-0" />}
+              open={props.participantsOpen()}
+              accordion
+              accordionOpenMaxVh={38}
+              onToggle={props.onToggleParticipants}
+            >
+              <CallRecordingParticipantsSection record={props.record} />
+            </CallRecordingSectionShell>
+          </Show>
+
           <CallRecordingSectionShell
             title="Transcript"
             icon={<Subtitles class="size-4 text-ink shrink-0" />}
@@ -66,22 +79,6 @@ export function CallRecordingTranscriptColumn(props: {
               hideHeader
             />
           </CallRecordingSectionShell>
-
-          <Show when={props.isStacked()}>
-            <CallRecordingSectionShell
-              title="Participants"
-              icon={<UsersThree class="size-4 text-ink shrink-0" />}
-              open={props.participantsOpen()}
-              accordion
-              accordionOpenMaxVh={38}
-              onToggle={props.onToggleParticipants}
-            >
-              <CallRecordingParticipantsSection
-                record={props.record}
-                withShell={false}
-              />
-            </CallRecordingSectionShell>
-          </Show>
         </div>
       </Show>
     </div>

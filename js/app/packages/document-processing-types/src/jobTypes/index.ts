@@ -1,35 +1,21 @@
 import {
-  preprocess_response_data_validate,
-  preprocess_response_validate,
-  preprocess_upload_response_validate,
-  preprocess_validate,
-} from './pdf/preprocess';
+  consolidate_response_validate,
+  consolidate_unzip_response,
+  consolidate_upload_response,
+  consolidate_validate,
+} from './docx/consolidate';
 import {
-  modify_response_data_validate,
-  modify_response_validate,
-  modify_validate,
-} from './pdf/modify';
-import {
-  password_validate,
-  password_response_validate,
-  password_response_data_validate,
-} from './pdf/password';
-import {
-  remove_metadata_response_validate,
-  remove_metadata_validate,
-} from './pdf/remove_metadata';
+  docx_upload_ready_response,
+  docx_upload_response_validate,
+  docx_upload_unzip_response,
+  docx_upload_validate,
+} from './docx/docx_upload';
 import {
   simple_compare_response_validate,
   simple_compare_unzip_response,
   simple_compare_upload_response,
   simple_compare_validate,
 } from './docx/simple_compare';
-import {
-  consolidate_response_validate,
-  consolidate_unzip_response,
-  consolidate_upload_response,
-  consolidate_validate,
-} from './docx/consolidate';
 import {
   create_temp_file_response_data_validate,
   create_temp_file_response_validate,
@@ -41,16 +27,30 @@ import {
   ping_validate,
 } from './generic/ping';
 import {
-  docx_upload_ready_response,
-  docx_upload_response_validate,
-  docx_upload_unzip_response,
-  docx_upload_validate,
-} from './docx/docx_upload';
-import {
+  export_response_data_validate,
   export_response_validate,
   export_validate,
-  export_response_data_validate,
 } from './pdf/export';
+import {
+  modify_response_data_validate,
+  modify_response_validate,
+  modify_validate,
+} from './pdf/modify';
+import {
+  password_response_data_validate,
+  password_response_validate,
+  password_validate,
+} from './pdf/password';
+import {
+  preprocess_response_data_validate,
+  preprocess_response_validate,
+  preprocess_upload_response_validate,
+  preprocess_validate,
+} from './pdf/preprocess';
+import {
+  remove_metadata_response_validate,
+  remove_metadata_validate,
+} from './pdf/remove_metadata';
 
 export const JobValidation = {
   ping: ping_validate,

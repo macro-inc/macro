@@ -8,14 +8,14 @@
 //!
 //! ```rust,ignore
 //! use ai::tool::tool_loop::cli::Cli;
-//! use ai::tool::{AsyncToolSet, RequestContext};
+//! use ai::tool::{AsyncToolCollection, RequestContext};
 //! use ai::types::Model;
 //! use macro_user_id::user_id::MacroUserIdStr;
 //! use std::sync::Arc;
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let toolset = AsyncToolSet::new()
+//!     let toolset = AsyncToolCollection::new()
 //!         .add_tool::<MyTool>()
 //!         .expect("failed to add tool");
 //!
@@ -43,9 +43,10 @@
 //! }
 //! ```
 
+use crate::openai_toolset::OpenAIToolSetExt;
 use crate::prompts::CLI_PROMPT;
 use crate::tool::ToolLoop;
-use crate::tool::types::{AsyncToolSet, RequestContext, StreamPart, ToolResponse};
+use crate::tool::types::{AsyncToolCollection, RequestContext, StreamPart, ToolResponse, ToolSet};
 use crate::types::{ChatMessage, MessageBuilder, Model, RequestBuilder, Role};
 use futures::stream::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -56,12 +57,12 @@ use std::sync::Arc;
 ///
 /// This struct wraps the tool loop and provides an interactive readline-style
 /// interface for multi-turn conversations with tool support.
-pub struct Cli<T, F>
+pub struct Cli<T, F, S = AsyncToolCollection<T>>
 where
     T: Clone + Send + Sync + 'static,
     F: Fn() -> RequestContext,
 {
-    toolset: AsyncToolSet<T>,
+    toolset: S,
     service_context: T,
     system_prompt: String,
     model: Model,
@@ -71,7 +72,7 @@ where
 impl Default for Cli<(), fn() -> RequestContext> {
     fn default() -> Self {
         Self {
-            toolset: AsyncToolSet::new(),
+            toolset: AsyncToolCollection::new(),
             service_context: (),
             system_prompt: CLI_PROMPT.to_string(),
             model: Model::Claude45Opus,
@@ -82,10 +83,11 @@ impl Default for Cli<(), fn() -> RequestContext> {
     }
 }
 
-impl<T, F> Cli<T, F>
+impl<T, F, S> Cli<T, F, S>
 where
     T: Clone + Send + Sync + 'static,
     F: Fn() -> RequestContext,
+    S: ToolSet<T> + OpenAIToolSetExt,
 {
     /// Create a new CLI with the given configuration.
     ///
@@ -97,7 +99,7 @@ where
     /// * `model` - The model to use for completions
     /// * `request_context_fn` - A function that creates a request context for each message
     pub fn new(
-        toolset: AsyncToolSet<T>,
+        toolset: S,
         service_context: T,
         system_prompt: impl Into<String>,
         model: Model,
@@ -125,18 +127,15 @@ where
     pub async fn run(self) {
         // Print startup info
         println!("Model: {}", self.model);
-        let tool_names: Vec<&String> = self.toolset.tools.keys().collect();
+        let tool_names: Vec<String> = self
+            .toolset
+            .request_schemas()
+            .map(|schemas| schemas.into_iter().map(|s| s.name).collect())
+            .unwrap_or_default();
         if tool_names.is_empty() {
             println!("Tools: (none)");
         } else {
-            println!(
-                "Tools: {}",
-                tool_names
-                    .into_iter()
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
+            println!("Tools: {}", tool_names.join(", "));
         }
         println!("---");
 

@@ -1,6 +1,6 @@
 #![recursion_limit = "256"]
 
-use ai_toolset::AsyncToolSet;
+use ai_toolset::AsyncToolCollection;
 use ai_toolset::schema::{CombinedToolSchemas, ToolSchemaGenerator};
 mod build_context;
 pub mod prompts;
@@ -14,7 +14,7 @@ use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
 use chat::inbound::toolset::chat_toolset;
 use documents::inbound::toolset::document_toolset;
-use email::inbound::toolset::email_toolset;
+use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
 use notification::inbound::ai_tool::notification_toolset;
 use properties::inbound::toolset::properties_toolset;
 use schemas::{anthropic_tools, read};
@@ -24,9 +24,20 @@ use subagent::Subagent;
 
 pub use build_context::build_tool_service_context_from_env;
 pub use search::search_toolset;
-pub use tool_context::*;
-
-pub type AiToolSet = AsyncToolSet<ToolServiceContext>;
+#[cfg(any(test, feature = "test-support"))]
+pub use tool_context::no_op_schedule_context;
+pub use tool_context::{
+    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
+    NoOpScheduleContext, NoOpSnsEndpointManager, NoOpTaskProperties, RequestContext,
+    ToolCallRecordQueryService, ToolCallService, ToolCallToolContext, ToolChannelMessagesService,
+    ToolChannelToolContext, ToolChatService, ToolChatToolContext, ToolCommsService,
+    ToolDocumentService, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
+    ToolEntityAccessManagementService, ToolEntityAccessService, ToolFrecencyService,
+    ToolNotificationQueue, ToolNotificationService, ToolNotificationToolContext,
+    ToolPropertiesService, ToolPropertiesToolContext, ToolServiceContext, ToolSoupService,
+    ToolUserEmailService, build_channel_tool_context,
+};
+pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
 
 pub struct ToolSetWithPrompt {
     pub toolset: Arc<AiToolSet>,
@@ -49,7 +60,7 @@ impl ToolSchemaGenerator for ToolSetWithPrompt {
 /// Toolset available to subagents — everything except email and the Subagent
 /// tool itself (subagents cannot create subagents).
 pub(crate) fn subagent_toolset() -> AiToolSet {
-    AsyncToolSet::new()
+    AsyncToolCollection::new()
         .add_toolset(search_toolset())
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
@@ -82,9 +93,20 @@ pub fn all_tool_combined_schema() -> CombinedToolSchemas {
         .build()
 }
 
+/// Toolset for the MCP server — excludes SendEmail.
+pub fn mcp_tools() -> ToolSetWithPrompt {
+    let toolset = subagent_toolset()
+        .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
+        .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
+        .add_tool::<Subagent, ToolServiceContext>();
+    let prompt = prompts::TOOLS_PROMPT;
+    let toolset = Arc::new(toolset);
+    ToolSetWithPrompt { toolset, prompt }
+}
+
 pub fn no_tools() -> ToolSetWithPrompt {
     ToolSetWithPrompt {
         prompt: prompts::BASE_PROMPT,
-        toolset: Arc::new(AsyncToolSet::new()),
+        toolset: Arc::new(AsyncToolCollection::new()),
     }
 }

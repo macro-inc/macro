@@ -40,6 +40,26 @@ inputs:
     description: 'Datadog host'
     required: false
     default: 'https://api.us5.datadoghq.com/'
+  prebuilt-binaries-artifact:
+    description: 'Optional GitHub artifact containing prebuilt service binaries to copy into Docker images'
+    required: false
+    default: ''
+  lambda-artifacts:
+    description: 'Optional GitHub artifact containing built Lambda bootstrap.zip files under target/lambda'
+    required: false
+    default: ''
+  cloud-storage-service-name:
+    description: 'Optional service key from .github/services-config.json; builds Lambda artifacts inline when lambda-artifacts is not provided'
+    required: false
+    default: ''
+  cachix-auth-token:
+    description: 'Cachix auth token used for inline Lambda artifact builds'
+    required: false
+    default: ''
+  sccache-bucket:
+    description: 'Optional S3 bucket for shared sccache storage during inline Lambda artifact builds'
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -48,6 +68,61 @@ runs:
     - uses: actions/checkout@v6
       with:
         lfs: ${{ inputs.use-lfs }}
+
+    - name: Download prebuilt service binaries
+      if: ${{ inputs.prebuilt-binaries-artifact != '' }}
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: ${{ inputs.prebuilt-binaries-artifact }}
+        path: rust/cloud-storage/prebuilt-artifact
+
+    - name: Extract prebuilt service binaries
+      if: ${{ inputs.prebuilt-binaries-artifact != '' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p rust/cloud-storage/prebuilt
+        tar -xzf rust/cloud-storage/prebuilt-artifact/prebuilt-binaries.tar.gz -C rust/cloud-storage/prebuilt
+
+    - name: Download Lambda artifacts
+      if: ${{ inputs.lambda-artifacts != '' }}
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: ${{ inputs.lambda-artifacts }}
+        path: rust/cloud-storage/lambda-artifact
+
+    - name: Extract Lambda artifacts
+      if: ${{ inputs.lambda-artifacts != '' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        tar -xzf rust/cloud-storage/lambda-artifact/lambda-artifacts.tar.gz -C rust/cloud-storage
+
+    - name: Check Lambda config for inline build
+      if: ${{ inputs.lambda-artifacts == '' && inputs.cloud-storage-service-name != '' }}
+      id: check-lambdas
+      shell: bash
+      env:
+        SERVICE: ${{ inputs.cloud-storage-service-name }}
+      run: |
+        has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' .github/services-config.json)
+        echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
+
+    - name: Configure Cachix
+      if: ${{ inputs.lambda-artifacts == '' && inputs.cloud-storage-service-name != '' && steps.check-lambdas.outputs.has_lambdas == 'true' }}
+      uses: ./.github/actions/setup-cachix
+      with:
+        cachix-auth-token: ${{ inputs.cachix-auth-token }}
+        sccache-bucket: ${{ inputs.sccache-bucket }}
+
+    - name: Build Lambda artifacts inline
+      if: ${{ inputs.lambda-artifacts == '' && inputs.cloud-storage-service-name != '' && steps.check-lambdas.outputs.has_lambdas == 'true' }}
+      shell: bash
+      env:
+        SERVICE: ${{ inputs.cloud-storage-service-name }}
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-key }}
+      run: .github/scripts/build-cloud-storage-lambdas.sh
 
     # setup docker
     - uses: docker/setup-buildx-action@v3
@@ -90,3 +165,4 @@ runs:
         DD_APP_KEY: ${{ inputs.dd-app-key }}
         DD_API_KEY: ${{ inputs.dd-api-key }}
         DD_HOST: ${{ inputs.dd-host }}
+        USE_PREBUILT_SERVICE_BINARIES: ${{ inputs.prebuilt-binaries-artifact != '' && 'true' || 'false' }}

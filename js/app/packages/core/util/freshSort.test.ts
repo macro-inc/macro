@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createFreshSearch, normalizeFuzzyScore } from './freshSort';
 import { applyDurationToDate } from './dateSearch/dateParser';
+import { createFreshSearch, normalizeFuzzyScore } from './freshSort';
 
 interface MockItem {
   id: string;

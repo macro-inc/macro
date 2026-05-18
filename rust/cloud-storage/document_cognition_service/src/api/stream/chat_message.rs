@@ -22,11 +22,12 @@ use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::IntoResponse;
 use chat::domain::ports::MessageService;
-use chat::inbound::ChatModelAccess;
+use chat::inbound::http::extractors::ChatModelAccess;
 use futures::StreamExt;
 use macro_auth::headers::AccessTokenExtractor;
 use macro_db_client::dcs::create_chat;
 use macro_user_id::user_id::MacroUserIdStr;
+use mcp_client::domain::ports::McpServerStore;
 use memory::domain::MemoryService;
 use model::user::UserContext;
 use model_entity::{Entity, EntityType};
@@ -387,7 +388,8 @@ fn resolve_pending_tool_calls(parts: Vec<AssistantMessagePart>) -> Vec<Assistant
     let mut pending: HashSet<String> = HashSet::new();
     for part in &parts {
         match part {
-            AssistantMessagePart::ToolCall { id, .. } => {
+            AssistantMessagePart::ToolCall { id, .. }
+            | AssistantMessagePart::McpToolCall { id, .. } => {
                 pending.insert(id.clone());
             }
             AssistantMessagePart::ToolCallResponseJson { id, .. }
@@ -403,7 +405,10 @@ fn resolve_pending_tool_calls(parts: Vec<AssistantMessagePart>) -> Vec<Assistant
     let mut out: Vec<AssistantMessagePart> = Vec::with_capacity(parts.len() + pending.len());
     for part in parts {
         let synthetic = match &part {
-            AssistantMessagePart::ToolCall { id, name, .. } if pending.contains(id) => {
+            AssistantMessagePart::ToolCall { id, name, .. }
+            | AssistantMessagePart::McpToolCall { id, name, .. }
+                if pending.contains(id) =>
+            {
                 Some(AssistantMessagePart::ToolCallErr {
                     name: name.clone(),
                     id: id.clone(),
@@ -443,9 +448,9 @@ fn stream_and_save_message(
     cancellation_sub: CancellationSubscription,
 ) {
     tracing::trace!(request=?request, "streaming chat request");
-    let model = Model::Claude45Haiku;
     let tool_context = ctx.tool_service_context.clone();
-    let toolset = ctx.all_tools.clone();
+    let static_tools = ctx.all_tools.clone();
+    let mcp_store = ctx.mcp_state.store();
 
     let request_context = RequestContext {
         user_id: user_id.clone(),
@@ -475,6 +480,10 @@ fn stream_and_save_message(
             yield json;
         }
 
+        let mcp_records = mcp_store.list(&user_id).await.unwrap_or_default();
+        let toolset = Arc::new(
+            mcp_client::domain::service::CombinedToolSet::new(static_tools, &mcp_records).await,
+        );
         let client = ToolLoop::new(toolset, tool_context);
         let mut chat = client.chat();
 
@@ -496,7 +505,7 @@ fn stream_and_save_message(
                         stream_id: stream_id.clone(),
                     },
                 };
-                if let Ok(json) = serde_json::to_value(&stream_error) {
+                if let Ok(json) = serde_json::to_value(ChatStream::Error(stream_error)) {
                     yield json;
                 }
                 return;
@@ -529,7 +538,7 @@ fn stream_and_save_message(
                             let stream_error = StreamError::InternalError {
                                 stream_id: stream_id.clone(),
                             };
-                            if let Ok(json) = serde_json::to_value(&stream_error) {
+                            if let Ok(json) = serde_json::to_value(ChatStream::Error(stream_error)) {
                                 yield json;
                             }
                             None
@@ -556,10 +565,19 @@ fn stream_and_save_message(
                             }
                             AssistantMessagePart::Text { text: content }
                         }
-                        StreamPart::ToolCall(call) => AssistantMessagePart::ToolCall {
-                            name: call.name,
-                            json: call.json,
-                            id: call.id,
+                        StreamPart::ToolCall(call) => match call.mcp {
+                            Some(mcp) => AssistantMessagePart::McpToolCall {
+                                name: mcp.tool_name,
+                                service: mcp.service,
+                                display_name: mcp.display_name,
+                                json: call.json,
+                                id: call.id,
+                            },
+                            None => AssistantMessagePart::ToolCall {
+                                name: call.name,
+                                json: call.json,
+                                id: call.id,
+                            },
                         },
                         StreamPart::Usage(usage) => {
                             tracing::debug!(record=?usage, "usage");
@@ -596,7 +614,6 @@ fn stream_and_save_message(
                 }
                 Err(e) => {
                     tracing::error!(error=?e, chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "error in AI stream");
-                    // Map error type to appropriate StreamError
                     let stream_error = match e {
                         ai::types::AiError::ContextWindowExceeded => {
                             StreamError::ModelContextOverflow {
@@ -607,7 +624,7 @@ fn stream_and_save_message(
                             stream_id: stream_id.clone(),
                         },
                     };
-                    if let Ok(json) = serde_json::to_value(&stream_error) {
+                    if let Ok(json) = serde_json::to_value(ChatStream::Error(stream_error)) {
                         yield json;
                     }
                     break;
@@ -631,26 +648,31 @@ fn stream_and_save_message(
         // into its own `self.messages`, so `get_new_conversation_messages`
         // returns the full assistant (+ any tool) messages. Use those.
         //
-        // Cancellation: the ToolLoop never flushed, so that call returns
-        // empty. Build a ChatMessage from the parts we actually yielded —
-        // that's exactly what the user saw in the chunks pushed to the
-        // durable stream, so the saved message matches the UI deterministically.
-        let new_messages = if was_cancelled {
-            // Any tool calls that didn't get a response before cancellation
-            // are closed out with a synthetic "cancelled" error so the saved
-            // message has no dangling tool_call_ids.
-            let resolved_parts = resolve_pending_tool_calls(yielded_parts);
-            if resolved_parts.is_empty() {
+        // Early termination (cancellation or mid-stream error): the ToolLoop
+        // never flushed, so that call returns empty. Build a ChatMessage from
+        // the parts we actually yielded — that's exactly what the user saw in
+        // the chunks pushed to the durable stream, so the saved message
+        // matches the UI deterministically.
+        let new_messages = {
+            let flushed = if was_cancelled {
                 vec![]
             } else {
-                vec![ai::types::ChatMessage {
-                    role: ai::types::Role::Assistant,
-                    content: ChatMessageContent::AssistantMessageParts(resolved_parts),
-                    attachments: None,
-                }]
+                chat.get_new_conversation_messages()
+            };
+            if !flushed.is_empty() {
+                flushed
+            } else {
+                let resolved_parts = resolve_pending_tool_calls(yielded_parts);
+                if resolved_parts.is_empty() {
+                    vec![]
+                } else {
+                    vec![ai::types::ChatMessage {
+                        role: ai::types::Role::Assistant,
+                        content: ChatMessageContent::AssistantMessageParts(resolved_parts),
+                        attachments: None,
+                    }]
+                }
             }
-        } else {
-            chat.get_new_conversation_messages()
         };
 
         // Extract assistant response text before moving new_messages into store

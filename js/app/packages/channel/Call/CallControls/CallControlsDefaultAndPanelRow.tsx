@@ -1,27 +1,26 @@
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import Microphone from '@icon/regular/microphone.svg';
-import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
-import Screencast from '@icon/regular/screencast.svg';
-import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
-import VideoCamera from '@icon/regular/video-camera.svg';
-import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
-import Users from '@icon/regular/users.svg';
-import { useToggleShareWithTeamMutation } from '@queries/call/call';
-import { For, Show, type Accessor } from 'solid-js';
-import { cn } from '@ui/utils/classname';
 import {
   GroupLabel,
   MenuGroup,
   MenuItem,
   MenuSeparator,
 } from '@core/component/Menu';
+import Microphone from '@icon/regular/microphone.svg';
+import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
+import Screencast from '@icon/regular/screencast.svg';
+import VideoCamera from '@icon/regular/video-camera.svg';
+import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
+import { cn } from '@ui';
+import { type Accessor, For, Show } from 'solid-js';
+import { match } from 'ts-pattern';
+import { BACKGROUND_IMAGES, useCallContext } from '../CallContext';
+import { CallDeviceList } from '../CallDeviceList';
 import {
   CallControlButton,
   type CallControlButtonSize,
 } from './CallControlButton';
 import { CallControlButtonWithDropdown } from './CallControlButtonWithDropdown';
-import { CallDeviceList } from '../CallDeviceList';
-import { BACKGROUND_IMAGES, useCallContext } from '../CallContext';
 
 export type CallControlsDefaultAndPanelRowProps = {
   size: Accessor<CallControlButtonSize>;
@@ -156,14 +155,12 @@ export function CallControlsDefaultAndPanelRow(
   const isConnecting = () => callCtx.isConnecting();
   const size = () => props.size();
   const iconClass = () => (size() === 'sm' ? 'w-4 h-4' : 'w-5 h-5');
-  const toggleShareWithTeam = useToggleShareWithTeamMutation();
-
-  const handleToggleShareWithTeam = async () => {
-    const callId = callCtx.activeCallId();
-    if (!callId) return;
-    const newValue = await toggleShareWithTeam.mutateAsync(callId);
-    callCtx.setSharedWithTeam(newValue);
-  };
+  const noiseSuppressionModeLabel = () =>
+    match(callCtx.noiseSuppressionMode())
+      .with('krisp', () => 'Krisp')
+      .with('browser', () => 'Browser')
+      .with('off', () => 'Off')
+      .exhaustive();
 
   return (
     <div
@@ -197,6 +194,24 @@ export function CallControlsDefaultAndPanelRow(
                 onSelect={(id) => callCtx.switchAudioOutput(id)}
               />
             </Show>
+            <MenuSeparator />
+            <MenuGroup>
+              <GroupLabel>Audio processing</GroupLabel>
+              <MenuItem
+                text={
+                  <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
+                    <span>Noise suppression</span>
+                    <span class="text-xs text-ink-muted">
+                      {noiseSuppressionModeLabel()}
+                    </span>
+                  </div>
+                }
+                selectorType="checkbox"
+                checked={callCtx.isNoiseSuppressed()}
+                closeOnSelect={false}
+                onClick={() => void callCtx.toggleNoiseSuppression()}
+              />
+            </MenuGroup>
           </>
         )}
       >
@@ -244,16 +259,6 @@ export function CallControlsDefaultAndPanelRow(
         disabled={isConnecting()}
       >
         <Screencast class={iconClass()} />
-      </CallControlButton>
-
-      <CallControlButton
-        class="border-0"
-        size={size()}
-        onClick={handleToggleShareWithTeam}
-        active={callCtx.isSharedWithTeam()}
-        disabled={isConnecting()}
-      >
-        <Users class={iconClass()} />
       </CallControlButton>
 
       <CallControlButton

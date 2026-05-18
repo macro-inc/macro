@@ -1,15 +1,15 @@
+import CheckIcon from '@icon/bold/check-bold.svg';
+import { cn } from '@ui';
 import {
+  type Component,
   createSignal,
   For,
+  type JSX,
   onCleanup,
   onMount,
   Show,
-  type Component,
-  type JSX,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import CheckIcon from '@icon/bold/check-bold.svg';
-import { cn } from '@ui/utils/classname';
 
 interface CalloutShellProps {
   leader: string;
@@ -25,7 +25,7 @@ function CalloutShell(props: CalloutShellProps) {
       <div class="flex items-center gap-2.5">{props.children}</div>
       <span class="text-sm text-muted">{props.label}</span>
       <Show when={props.completed}>
-        <div class="bg-accent text-panel size-5 rounded xs flex items-center justify-center ml-auto">
+        <div class="bg-accent text-surface size-5 rounded xs flex items-center justify-center ml-auto">
           <CheckIcon class="size-4" />
         </div>
       </Show>
@@ -185,7 +185,7 @@ export function ClickCallout(props: ClickCalloutProps) {
     >
       <span
         class={cn(
-          'inline-grid place-items-center rounded-sm border aspect-square h-[34px]',
+          'inline-grid place-items-center rounded-sm border aspect-square h-8.5',
           props.completed
             ? 'bg-ink/20 border-edge text-ink'
             : 'bg-ink/10 border-edge text-ink'
@@ -218,7 +218,7 @@ export function ContinueButton(props: ContinueButtonProps) {
         {
           'bg-transparent text-ink/40 font-normal ring-1 ring-edge-muted':
             props.disabled,
-          'bg-accent text-panel hover:bg-accent hover:ring-2 ring-accent ring-offset-1 ring-offset-panel focus:ring-2':
+          'bg-accent text-surface hover:bg-accent hover:ring-2 ring-accent ring-offset-1 ring-offset-surface focus:ring-2':
             !props.disabled,
         }
       )}
@@ -227,7 +227,7 @@ export function ContinueButton(props: ContinueButtonProps) {
       {props.label ?? 'Continue'}
       {/*<span
         class={cn(
-          'text-sm px-3 py-1 border rounded-sm flex items-center gap-1 border-panel/50 text-panel',
+          'text-sm px-3 py-1 border rounded-sm flex items-center gap-1 border-surface/50 text-surface',
           { 'opacity-0': props.disabled }
         )}
       >

@@ -65,6 +65,7 @@ async fn handle_chats(ctx: &context::Context) -> anyhow::Result<()> {
                     SearchQueueMessage::RemoveChatMessage(RemoveChatMessage {
                         chat_id: id.to_string(),
                         message_id: None,
+                        index_override: None,
                     })
                 })
                 .collect(),

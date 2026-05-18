@@ -1,5 +1,5 @@
 import { Dialog } from '@kobalte/core/dialog';
-import { DeprecatedTextButton } from './DeprecatedTextButton';
+import { Button } from '@ui';
 
 type DeleteConfimationDialogProps = {
   open: boolean;
@@ -13,7 +13,7 @@ export function DeleteConfimationDialog(props: DeleteConfimationDialogProps) {
     <Dialog open={props.open} onOpenChange={props.setOpen}>
       <Dialog.Portal>
         <Dialog.Overlay class="fixed flex inset-0 z-modal bg-modal-overlay items-center justify-content" />
-        <Dialog.Content class="fixed left-1/2 top-1/2 z-modal -translate-x-1/2 -translate-y-1/2 bg-dialog rounded-xl p-4 shadow-lg w-80">
+        <Dialog.Content class="fixed left-1/2 top-1/2 z-modal -translate-1/2 bg-surface rounded-xl p-4 shadow-lg w-80">
           <Dialog.Title class="font-bold mb-2 text-ink">
             Delete Items?
           </Dialog.Title>
@@ -23,13 +23,11 @@ export function DeleteConfimationDialog(props: DeleteConfimationDialogProps) {
           />
           <div class="flex justify-end gap-3 mt-4">
             <Dialog.CloseButton>
-              <DeprecatedTextButton text="Cancel" theme="clear" />
+              <Button variant="ghost">Cancel</Button>
             </Dialog.CloseButton>
-            <DeprecatedTextButton
-              text="Delete"
-              theme="red"
-              onClick={props.onDelete}
-            />
+            <Button variant="danger" onClick={props.onDelete}>
+              Delete
+            </Button>
           </div>
         </Dialog.Content>
       </Dialog.Portal>

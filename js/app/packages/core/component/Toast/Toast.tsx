@@ -3,9 +3,7 @@ import ExclamationIcon from '@icon/regular/exclamation-mark.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import { Toast, toaster } from '@kobalte/core/toast';
-import { Panel } from '@ui';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button, cn, Surface } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import {
   createEffect,
@@ -102,7 +100,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
     button: {
       background: 'bg-accent',
       hover: 'hover:bg-accent/80',
-      text: 'text-panel',
+      text: 'text-surface',
     },
     closeButtonHover: 'hover:text-accent hover:bg-accent/10',
   },
@@ -118,7 +116,7 @@ export interface ToastAction {
 /**
  * Config for a fully custom toast.
  * Replaces the icon, title, and accent color of the standard layout while
- * still using the shared Panel chrome and progress/dismiss machinery.
+ * still using the shared Surface chrome and progress/dismiss machinery.
  */
 export interface CustomToastConfig {
   title: string;
@@ -210,7 +208,7 @@ function ActionButtons(props: { actions: ToastAction[] }) {
       {(action) => (
         <Button
           onClick={action.onClick}
-          variant="secondary"
+          variant="base"
           class="flex items-center gap-1.5 rounded py-1 px-2 text-sm font-semibold shrink-0"
         >
           <Show when={action.icon}>
@@ -305,13 +303,13 @@ function ToastContent(props: {
     <Toast
       toastId={props.toastId}
       class={`relative overflow-visible pointer-events-auto shadow-md rounded
-        data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-(--kb-toast-swipe-move-x)
+        data-opened:animate-slide-in transition-[transform,opacity] duration-100 ease-in data-closed:opacity-0 data-[swipe=move]:translate-x-(--kb-toast-swipe-move-x)
         data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`}
       persistent={true}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <Panel
+      <Surface
         highlightColor={accentColor()}
         active
         class="relative w-[90vw] sm:w-md p-2 sm:p-3"
@@ -375,7 +373,7 @@ function ToastContent(props: {
                     <Dynamic
                       component={s().icon}
                       class={cn(
-                        'size-3.5 text-panel',
+                        'size-3.5 text-surface',
                         props.toastType === ToastType.LOADING
                           ? 'animate-spin'
                           : ''
@@ -414,7 +412,7 @@ function ToastContent(props: {
             }}
           />
         </Show>
-      </Panel>
+      </Surface>
     </Toast>
   );
 }
@@ -571,7 +569,7 @@ function embed(
 
 /**
  * Show a toast with a fully custom title, icon, accent color, body content,
- * and actions row — while still using the shared Panel chrome and
+ * and actions row — while still using the shared Surface chrome and
  * progress/dismiss machinery.
  */
 function custom(

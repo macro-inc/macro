@@ -62,6 +62,7 @@ model-entity = { path = "../model-entity" }
 non_empty = { path = "../non_empty", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true }
+models_grouping = { path = "../models_grouping" }
 models_pagination = { path = "../models_pagination" }
 recursion = { workspace = true }
 schemars = { workspace = true, optional = true, features = ["uuid1"] }

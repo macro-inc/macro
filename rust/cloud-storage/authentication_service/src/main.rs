@@ -5,6 +5,7 @@ use analytics_client::{
 use anyhow::Context;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use github::{
     domain::service::{GithubLinkConfig, GithubLinkServiceImpl},
     outbound::{
@@ -241,10 +242,25 @@ async fn main() -> anyhow::Result<()> {
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
     let customer_repo_impl = CustomerRepositoryImpl::new(
         stripe_client.clone(),
-        teams::outbound::customer_repo::StripePriceIds {
-            haiku: config.stripe_price_ids.stripe_price_id_haiku.to_string(),
-            sonnet: config.stripe_price_ids.stripe_price_id_sonnet.to_string(),
-            opus: config.stripe_price_ids.stripe_price_id_opus.to_string(),
+        teams::outbound::customer_repo::TeamStripePriceIds {
+            idea: config.team_stripe_price_ids.idea,
+            pre_seed: config.team_stripe_price_ids.pre_seed,
+            seed: config.team_stripe_price_ids.seed,
+            series_a: config.team_stripe_price_ids.series_a,
+        },
+        teams::outbound::customer_repo::LegacyStripePriceIds {
+            haiku: config
+                .legacy_stripe_price_ids
+                .stripe_price_id_haiku
+                .to_string(),
+            sonnet: config
+                .legacy_stripe_price_ids
+                .stripe_price_id_sonnet
+                .to_string(),
+            opus: config
+                .legacy_stripe_price_ids
+                .stripe_price_id_opus
+                .to_string(),
         },
     );
     let team_channels_repo_impl = TeamChannelsRepositoryImpl::new(db.clone());
@@ -284,6 +300,9 @@ async fn main() -> anyhow::Result<()> {
         notification_ingress: notification_ingress_service.clone(),
     };
 
+    let entity_access_service_impl =
+        EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
+
     api::setup_and_serve(
         ApiContext {
             db,
@@ -310,6 +329,7 @@ async fn main() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service: Arc::new(teams_service_impl),
+            entity_access_service: Arc::new(entity_access_service_impl),
             referral_service: Arc::new(referral_service),
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::new(config.environment.app()),
@@ -319,7 +339,7 @@ async fn main() -> anyhow::Result<()> {
                 },
             }),
             analytics_client: Arc::new(analytics_client),
-            stripe_price_ids: config.stripe_price_ids,
+            legacy_stripe_price_ids: config.legacy_stripe_price_ids,
         },
         config.port,
     )

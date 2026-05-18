@@ -25,7 +25,7 @@ export const PanelContainer: Component<PropertiesContentProps> = (props) => {
       </Show>
 
       <Show when={hasProperties()}>
-        <div class="flex-1 overflow-y-auto overflow-x-auto pb-2">
+        <div class="flex-1 overflow-auto pb-2">
           <PropertyGrid properties={props.properties()} />
         </div>
       </Show>

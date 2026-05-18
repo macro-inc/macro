@@ -3,51 +3,53 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useOpenChatForAttachment } from '@block-chat/client';
 import { URL_PARAMS as URL_PARAMS_MD } from '@block-md/constants';
 import { URL_PARAMS as URL_PARAMS_PDF } from '@block-pdf/signal/location';
-import { cn } from '@ui/utils/classname';
 import {
   type BlockAlias,
   type BlockName,
   useMaybeBlockId,
   useMaybeBlockName,
 } from '@core/block';
-import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { Panel } from '@ui';
+import { isBlockNameWithLocation } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { channelTheme } from '@core/component/LexicalMarkdown/theme';
+import { PropertyValue } from '@core/component/Properties/component/propertyValue/PropertyValue';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import { useEntityProperties } from '@core/component/Properties/hooks';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  isAccessiblePreviewItem,
-  isChannelPreviewItem,
-  isPreviewItemNoAccess,
-} from '@queries/preview';
-import { blockNameToItemType } from '@service-storage/client';
-import { copyBranchNameToClipboard } from '@core/util/branchName';
+import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
+import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import { tryMacroId, useDisplayName } from '@core/user';
+import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { matches } from '@core/util/match';
+import { isErr } from '@core/util/maybeResult';
 import CollapseInlinePreview from '@icon/regular/arrows-in-line-horizontal.svg';
 import OpenIcon from '@icon/regular/arrows-out.svg';
 import ExpandInlinePreview from '@icon/regular/arrows-out-line-horizontal.svg';
 import MessageIcon from '@icon/regular/chat-circle.svg';
 import ThreadIcon from '@icon/regular/chats-circle.svg';
 import Clipboard from '@icon/regular/clipboard.svg';
-import GitBranchIcon from '@icon/regular/git-branch.svg';
 import ClockIcon from '@icon/regular/clock.svg';
 import ColumnsPlusRight from '@icon/regular/columns-plus-right.svg';
+import GitBranchIcon from '@icon/regular/git-branch.svg';
 import HighlightIcon from '@icon/regular/highlighter-circle.svg';
 import MapPinIcon from '@icon/regular/map-pin-simple.svg';
 import SparkleIcon from '@icon/regular/sparkle.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import TrashSimple from '@icon/regular/trash-simple.svg';
 import MacroEmbed from '@macro-icons/macro-embed.svg';
+import {
+  isAccessiblePreviewItem,
+  isChannelPreviewItem,
+  isPreviewItemNoAccess,
+} from '@queries/preview';
 import { useBinaryDocumentQuery } from '@queries/storage/binary-document';
-import { isBlockNameWithLocation } from '@core/component/LexicalMarkdown/component/core/BlockLink';
-import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { channelTheme } from '@core/component/LexicalMarkdown/theme';
-import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
+import { blockNameToItemType } from '@service-storage/client';
+import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
+import { cn, Surface, Tooltip } from '@ui';
 import { globalSplitManager } from 'app/signal/splitLayout';
-import { fetchBinary } from '@service-storage/util/fetchBinary';
-import { isErr } from '@core/util/maybeResult';
 import type { Component, JSX } from 'solid-js';
 import {
   createEffect,
@@ -61,13 +63,9 @@ import {
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { useEntityProperties } from '@core/component/Properties/hooks';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import { PropertyValue } from '@core/component/Properties/component/propertyValue/PropertyValue';
 import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
-import { Tooltip } from './Tooltip';
 import { useItemPreviewData } from './ItemPreview';
 
 /**
@@ -226,7 +224,7 @@ function PopupIconButton(props: {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
 }) {
   return (
-    <Tooltip tooltip={props.tooltip}>
+    <Tooltip label={props.tooltip}>
       <button
         onClick={(e) => {
           e.stopPropagation();
@@ -234,7 +232,7 @@ function PopupIconButton(props: {
         }}
         class="rounded-md py-1 hover:bg-hover transition flex items-center gap-1.5"
       >
-        <div class="w-fit flex justify-right items-center mx-0.5 my-0.5 text-xs font-normal text-current/90">
+        <div class="w-fit flex justify-right items-center m-0.5 text-xs font-normal text-current/90">
           <PopupIcon icon={props.icon} />
         </div>
       </button>
@@ -257,8 +255,7 @@ function MetadataInfo(props: {
         'mt-2',
         props.align === 'left' && 'w-fit max-w-[66%]',
         'text-ink-muted',
-        props.align === 'left' &&
-          'overflow-hidden whitespace-nowrap text-ellipsis'
+        props.align === 'left' && 'truncate  '
       )}
     >
       <span class="relative text-[0.8em] text-ink-muted max-w-full flex items-center">
@@ -275,10 +272,10 @@ function MetadataInfo(props: {
 function UserInfo(props: { userId: string }) {
   const [displayName] = useDisplayName(tryMacroId(props.userId));
   return (
-    <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted overflow-hidden whitespace-nowrap text-ellipsis flex items-center gap-1.5">
+    <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted truncate flex items-center gap-1.5">
       <UserIconComponent
         id={props.userId}
-        size="xs"
+        size="sm"
         suppressClick
         showTooltip={false}
       />
@@ -354,7 +351,7 @@ function ImageCoverStrip(props: {
             <img
               src={url()}
               class={cn(
-                'absolute inset-0 w-full h-full object-cover',
+                'absolute inset-0 size-full object-cover',
                 shouldFadeIn && 'opacity-0 transition-opacity duration-300'
               )}
               onLoad={
@@ -550,12 +547,7 @@ export function PopupPreview(props: {
   };
 
   const handleCopyBranchName = () => {
-    const previewItem = item();
-    const docName =
-      props.documentInfo.name ||
-      ('name' in previewItem ? (previewItem.name as string) : '') ||
-      '';
-    copyBranchNameToClipboard(props.documentInfo.id, docName);
+    copyBranchNameToClipboard(props.documentInfo.id);
   };
 
   const isSplitAlreadyOpen = () => {
@@ -723,7 +715,7 @@ export function PopupPreview(props: {
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
-      <Panel active depth={3}>
+      <Surface active depth={3}>
         <Switch>
           {/* Loading state */}
           <Match when={item().loading}>
@@ -774,7 +766,7 @@ export function PopupPreview(props: {
                   {/* Task properties: status, priority, assignees */}
                   <Show when={props.documentInfo.type === 'task'}>
                     <Suspense
-                      fallback={<div class="w-full bg-hover/50 h-4 m-2" />}
+                      fallback={<div class="w-full bg-active h-4 m-2" />}
                     >
                       <TaskPropertiesPreview taskId={props.documentInfo.id} />
                     </Suspense>
@@ -798,7 +790,7 @@ export function PopupPreview(props: {
                       props.snapshotInfo
                     }
                   >
-                    <div class="px-2 py-2 border-t border-edge-muted">
+                    <div class="p-2 border-t border-edge-muted">
                       <Show when={messageContext()}>
                         {(context) => (
                           <div class="mb-2 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
@@ -900,7 +892,7 @@ export function PopupPreview(props: {
                     </div>
                     <div class="flex shrink-0">{renderActionButtons()}</div>
                   </div>
-                  <div class="line-clamp-2 break-words px-2 mb-2">
+                  <div class="line-clamp-2 wrap-break-word px-2 mb-2">
                     {props.documentInfo.name}
                   </div>
                 </div>
@@ -908,7 +900,7 @@ export function PopupPreview(props: {
             )}
           </Match>
         </Switch>
-      </Panel>
+      </Surface>
     </div>
   );
 }

@@ -48,5 +48,5 @@ export function TrackView(props: {
     }
   });
 
-  return <div ref={ref} class="w-full h-full" />;
+  return <div ref={ref} class="size-full" />;
 }

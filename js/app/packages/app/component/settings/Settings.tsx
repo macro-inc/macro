@@ -5,7 +5,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { DEV_MODE_ENV, ENABLE_APP_STORE_QR_CODE, ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MobileApp } from './MobileApp';
-import { Mcp } from './Mcp';
+import { Agent } from './Agent';
 import { Appearance } from './Appearance';
 import { Tabs } from '@core/component/Tabs';
 import { Account } from './Account';
@@ -17,9 +17,7 @@ import { SplitHeaderLeft, SplitHeaderRight } from '../split-layout/components/Sp
 import { CollapsibleHeaderItem } from '../split-layout/components/CollapsibleHeaderItem';
 import { SettingsButton } from './SettingsButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Layer } from '@ui';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
+import { Dropdown, Layer } from '@ui';
 
 export function SettingsPanelComponentWrapper() {
   return (
@@ -65,7 +63,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     if (teamsFlag().enabled) { tabs.push({ value: 'Team', label: 'Team' }) }
     tabs.push({ value: 'Shortcuts', label: 'Shortcuts' });
     if (ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()) { tabs.push({ value: 'Mobile App', label: 'App' }) }
-    if (!isNativeMobilePlatform()) { tabs.push({ value: 'MCP', label: 'MCP' }) }
+    if (!isNativeMobilePlatform()) { tabs.push({ value: 'Agent', label: 'Agent' }) }
     if (isNativeMobilePlatform() && DEV_MODE_ENV) { tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' }) }
     return tabs;
   }
@@ -161,7 +159,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   function BottomTabs() {
     return (
-    <div class="bg-panel border-t border-edge-muted h-11 shrink-0 px-1">
+    <div class="bg-surface border-t border-edge-muted h-11 shrink-0 px-1">
       <Tabs
         list={settingsTabs()}
         value={activeTabId()}
@@ -181,7 +179,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
       tabIndex={0}
       ref={settingsContainerRef}
     >
-
       <SplitHeaderLeft>
         <div class="h-full flex gap-3 items-center">
           <h1 class="font-semibold text-ink select-none text-sm shrink-0">
@@ -233,8 +230,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <Show when={activeTabId() === 'Mobile App' && ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()}>
           <MobileApp />
         </Show>
-        <Show when={activeTabId() === 'MCP' && !isNativeMobilePlatform()}>
-          <Mcp />
+        <Show when={activeTabId() === 'Agent' && !isNativeMobilePlatform()}>
+          <Agent />
         </Show>
       </div>
 
@@ -260,17 +257,16 @@ function CollapsedSettingsTabs(props: CollapsedSettingsTabsProps) {
   });
 
   return (
-    <DropdownMenu placement="bottom-start" gutter={4}>
-      <DropdownMenu.Trigger class="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xs border border-edge-muted hover:bg-ink/6 transition-colors">
+    <Dropdown placement="bottom-start" gutter={4}>
+      <Dropdown.Trigger>
         <span class="truncate">{activeLabel()}</span>
-        <ChevronDownIcon class="size-3 shrink-0" />
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
+      </Dropdown.Trigger>
+      <Dropdown.Portal>
         <Layer depth={2}>
-          <DropdownMenu.Content class="z-action-menu bg-page border border-edge-muted rounded-sm shadow-sm p-1">
+          <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-sm p-1">
             <For each={props.tabs}>
               {(item) => (
-                <DropdownMenu.Item
+                <Dropdown.Item
                   class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
                   classList={{
                     'font-semibold': props.value === item.value,
@@ -278,12 +274,12 @@ function CollapsedSettingsTabs(props: CollapsedSettingsTabsProps) {
                   onSelect={() => props.onChange(item.value)}
                 >
                   {item.label}
-                </DropdownMenu.Item>
+                </Dropdown.Item>
               )}
             </For>
-          </DropdownMenu.Content>
+          </Dropdown.Content>
         </Layer>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+      </Dropdown.Portal>
+    </Dropdown>
   );
 }

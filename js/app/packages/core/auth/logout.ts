@@ -1,11 +1,11 @@
-import { authServiceClient } from '@service-auth/client';
+import { useAnalytics } from '@app/component/analytics-context';
+import { SERVER_HOSTS } from '@core/constant/servers';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { syncLoginStorage } from '@core/util/cookies';
 import { authKeys } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
-import { SERVER_HOSTS } from '@core/constant/servers';
-import { syncLoginStorage } from '@core/util/cookies';
+import { authServiceClient } from '@service-auth/client';
 import { createCallback } from '@solid-primitives/rootless';
-import { useAnalytics } from '@app/component/analytics-context';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useNavigate } from '@solidjs/router';
 
 export function useLogout() {

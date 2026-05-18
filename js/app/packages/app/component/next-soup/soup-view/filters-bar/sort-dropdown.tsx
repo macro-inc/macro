@@ -1,15 +1,12 @@
-import { type Component, For, Show } from 'solid-js';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import CheckIcon from '@icon/regular/check.svg';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
-import SortIcon from '@macro-icons/wide/sort.svg';
 import type {
   SortOption,
   SystemSortOption,
 } from '@app/component/next-soup/soup-view/sort-options';
-import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
-import { Layer } from '@ui';
+import { TOKENS } from '@core/hotkey/tokens';
+import CheckIcon from '@icon/regular/check.svg';
+import SortIcon from '@phosphor-icons/core/regular/funnel-simple.svg?component-solid';
+import { Dropdown, Layer, Tooltip } from '@ui';
+import { type Component, For, Show } from 'solid-js';
 
 export interface SortDropdownProps {
   /** Current sort value */
@@ -28,29 +25,24 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
   const options = () => props.options ?? [];
 
   return (
-    <DropdownMenu
+    <Dropdown
       open={props.open}
       onOpenChange={props.onOpenChange}
       placement="bottom-start"
       gutter={4}
     >
-      <Tooltip tooltip={<LabelAndHotKey label="Sort" shortcut="S" />}>
-        <DropdownMenu.Trigger
-          as={Button}
-          variant="secondary"
-          size="sm"
-          class="whitespace-nowrap rounded-xs [&_svg]:size-4"
-        >
+      <Tooltip label="Sort" hotkey={TOKENS.soup.sort}>
+        <Dropdown.Trigger depth={2} class="bg-surface">
           <SortIcon />
-          <ChevronDownIcon class="size-4" />
-        </DropdownMenu.Trigger>
+          <span>Sort</span>
+        </Dropdown.Trigger>
       </Tooltip>
-      <DropdownMenu.Portal>
+      <Dropdown.Portal>
         <Layer depth={2}>
-          <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-sm min-w-[140px] p-1">
+          <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-sm min-w-35 p-1">
             <For each={options()}>
               {(option) => (
-                <DropdownMenu.Item
+                <Dropdown.Item
                   class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
                   onSelect={() => props.onChange(option.value)}
                 >
@@ -75,12 +67,12 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
                       <CheckIcon class="size-3 text-accent" />
                     </Show>
                   </span>
-                </DropdownMenu.Item>
+                </Dropdown.Item>
               )}
             </For>
-          </DropdownMenu.Content>
+          </Dropdown.Content>
         </Layer>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+      </Dropdown.Portal>
+    </Dropdown>
   );
 };

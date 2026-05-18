@@ -171,11 +171,11 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
 
             match self.document_service.get_document(entity_access).await {
                 Ok(document) => {
-                    if let Some(sub_type) = document.document_metadata.sub_type
+                    if let Some(sub_type) = document.document_metadata.metadata.sub_type
                         && sub_type.to_string() == "task"
                     {
-                        let doc_name = &document.document_metadata.document_name;
-                        let doc_id = &document.document_metadata.document_id;
+                        let doc_name = &document.document_metadata.metadata.document_name;
+                        let doc_id = &document.document_metadata.metadata.document_id;
                         tracing::trace!(task_id=%uuid, doc_id, doc_name, "resolved task document");
 
                         doc_ids.push(doc_id.clone());

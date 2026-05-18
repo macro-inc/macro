@@ -1,12 +1,12 @@
-import { Show } from 'solid-js';
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
-import { Button } from '@ui/components/Button';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import PhoneIcon from '@macro-icons/wide/call.svg';
 import PhoneDisconnectIcon from '@macro-icons/wide/call-disconnect.svg';
 import { useActiveCallQuery } from '@queries/call/call';
+import { Button } from '@ui';
+import { Show } from 'solid-js';
 import { useCall } from './use-call';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export function ChannelCallButton(props: { channelId: string }) {
   const { setActiveTab } = useChannelTab();
@@ -48,7 +48,7 @@ export function ChannelCallButton(props: { channelId: string }) {
       tooltip={tooltip()}
       class={
         isHighlighted()
-          ? 'px-1 bg-accent/20 hover:bg-accent/30 text-accent-ink'
+          ? 'px-1 bg-accent/20 hover:bg-accent/30 text-accent'
           : 'px-1'
       }
       size={isTouchDevice() ? 'icon-md' : 'icon-sm'}

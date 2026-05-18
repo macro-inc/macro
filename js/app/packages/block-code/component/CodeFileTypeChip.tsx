@@ -3,9 +3,9 @@ import { FileTypeChip } from '@core/component/FileTypeChip';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
 import { Popover } from '@kobalte/core/popover';
-import { createSignal, For, Show, createMemo } from 'solid-js';
-import { FileType } from '@service-storage/generated/schemas/fileType';
 import { createUpdateFileTypeMutation } from '@macro-entity';
+import { FileType } from '@service-storage/generated/schemas/fileType';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 
 // NOTE: this attempts to match codemirror supported file types, see @block-code/util/languageSupport.ts
 const DROPDOWN_FILE_TYPES: FileType[] = [
@@ -89,7 +89,7 @@ export function CodeFileTypeChip() {
             {fileType()}
           </Popover.Trigger>
           <Popover.Portal>
-            <Popover.Content class="z-50 w-48 rounded shadow-md ring-1 ring-edge bg-dialog text-ink text-sm overflow-hidden">
+            <Popover.Content class="z-50 w-48 rounded shadow-md ring-1 ring-edge bg-surface text-ink text-sm overflow-hidden">
               <div class="p-1.5 border-b border-edge">
                 <input
                   ref={searchRef}

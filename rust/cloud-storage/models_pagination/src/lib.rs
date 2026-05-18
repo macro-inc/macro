@@ -12,7 +12,11 @@ mod cursor;
 mod sort;
 
 #[cfg(feature = "axum")]
-pub use axum::*;
-pub use collections::*;
-pub use cursor::*;
-pub use sort::*;
+pub use axum::{BidirectionalCursor, CursorExtractErr, CursorOptionExt};
+pub use collections::{CollectBy, CollectByIds};
+pub use cursor::{
+    Base64SerdeErr, Base64Str, Cursor, CursorVal, CursorWithVal, CursorWithValAndFilter, Identify,
+    Paginate, PaginateOn, Paginated, PaginatedCursor, PaginatedOpaqueCursor, Paginator, Query,
+    SortOn, Sortable, TypeEraseCursor,
+};
+pub use sort::{CreatedAt, Frecency, FrecencyValue, SimpleSortMethod, SortMethod};

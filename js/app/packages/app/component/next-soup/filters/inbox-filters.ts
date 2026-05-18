@@ -1,5 +1,5 @@
-import type { EntityData } from '@entity';
 import { ENABLE_CLIENT_EMAIL_SIGNAL_FILTER } from '@core/constant/featureFlags';
+import type { EntityData } from '@entity';
 
 const PRIORITY_LABELS = [
   {

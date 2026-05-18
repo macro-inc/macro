@@ -167,7 +167,7 @@ export function ComposeLayout(props: {
               <Suspense
                 fallback={
                   <div class="flex gap-1 items-center">
-                    <CircleSpinner class="w-4 h-4 animate-spin" />
+                    <CircleSpinner class="size-4 animate-spin" />
                     <span class="text-ink-extra-muted/50 text-xs">
                       Processing...
                     </span>
@@ -223,7 +223,7 @@ export function ComposeLayout(props: {
         <ComposeSubject inputRef={registerRef('subjectInput')} />
       </div>
 
-      <div class="w-full flex flex-col min-h-0 mt-4 h-full">
+      <div class="size-full flex flex-col min-h-0 mt-4">
         <ComposeBody
           debugName={props.bodyDebugName}
           inputRef={registerRef('messageInput')}

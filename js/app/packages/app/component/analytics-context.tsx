@@ -1,6 +1,6 @@
 import {
-  analytics,
   type AnalyticsInterface,
+  analytics,
 } from '@app/lib/analytics/analytics';
 import { createAssertedContextProvider } from '@core/context/createContext';
 

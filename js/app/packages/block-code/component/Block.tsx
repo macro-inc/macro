@@ -1,5 +1,5 @@
-import { useIsNestedBlock } from '@core/block';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
+import { useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
@@ -41,7 +41,7 @@ export default function BlockCode() {
   return (
     <DocumentBlockContainer usesCenterBar>
       <Show when={!isNestedBlock} fallback={<CodeMarkdown />}>
-        <div class="size-full bg-panel select-none overscroll-none overflow-hidden flex flex-col items-end relative">
+        <div class="size-full bg-surface select-none overscroll-none overflow-hidden flex flex-col items-end relative">
           <ModalsProvider>
             <TopBar
               isHtmlFile={isHtmlFile()}

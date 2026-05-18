@@ -1,5 +1,34 @@
-import { DialogWrapper } from '@core/component/DialogWrapper';
-import { Dialog } from '@kobalte/core/dialog';
+import {
+  type CombinedEntity,
+  getEntityName,
+  getEntityType,
+} from '@core/component/Properties/component/modal/shared/entityUtils';
+import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue';
+import { usePropertySelection } from '@core/component/Properties/hooks';
+import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
+import type {
+  Property,
+  PropertyApiValues,
+  PropertyDefinitionDomain,
+} from '@core/component/Properties/types';
+import {
+  macroEntityToPropertyEntityType,
+  PropertyDataTypeIcon,
+  toPropertyApiValue,
+} from '@core/component/Properties/utils';
+import { toast } from '@core/component/Toast/Toast';
+import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
+import { fuzzyFilter } from '@core/util/fuzzy';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
+import {
+  type ListNavActions,
+  useListKeyBindings,
+} from '@core/util/useListKeyBindings';
+import { type EntityData, InlineEntity } from '@entity';
+import { useEntityPropertiesQuery } from '@queries/properties/entity';
+import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
+import { mergeRefs } from '@solid-primitives/refs';
+import { cn, Dialog, Hotkey, Surface } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
@@ -17,6 +46,9 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { useAllProperties } from './hooks/useAllProperties';
+import { useEntitiesForProperty } from './hooks/useEntitiesForProperty';
+import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
 import {
   closePropertyEditor,
   propertyEditorOpen,
@@ -25,43 +57,6 @@ import {
   setPropertyEditorTarget,
   togglePropertyEditor,
 } from './state/propertyEditor';
-import { useAllProperties } from './hooks/useAllProperties';
-import { usePropertySelection } from '@core/component/Properties/hooks';
-import { cn } from '@ui/utils/classname';
-import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
-import type {
-  Property,
-  PropertyDefinitionDomain,
-} from '@core/component/Properties/types';
-import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
-import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue';
-import { Hotkey } from '@core/component/Hotkey';
-
-import { fuzzyFilter } from '@core/util/fuzzy';
-import { mergeRefs } from '@solid-primitives/refs';
-import {
-  macroEntityToPropertyEntityType,
-  PropertyDataTypeIcon,
-  toPropertyApiValue,
-} from '@core/component/Properties/utils';
-import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
-
-import { useEntitiesForProperty } from './hooks/useEntitiesForProperty';
-import {
-  useListKeyBindings,
-  type ListNavActions,
-} from '@core/util/useListKeyBindings';
-import {
-  getEntityName,
-  getEntityType,
-  type CombinedEntity,
-} from '@core/component/Properties/component/modal/shared/entityUtils';
-import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
-import type { PropertyApiValues } from '@core/component/Properties/types';
-import { toast } from '@core/component/Toast/Toast';
-import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
-import { useEntityPropertiesQuery } from '@queries/properties/entity';
-import { InlineEntity, type EntityData } from '@entity';
 
 /* Styled wrapper for list items in each menu. */
 function ListItem(props: {
@@ -78,10 +73,10 @@ function ListItem(props: {
       id={props.id}
       disabled={props.disabled}
       class={cn(
-        'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 scroll-my-1',
+        'rounded-md group w-full flex items-center h-10 px-2 gap-2 text-sm font-semibold relative scroll-m-1',
         {
-          'bg-active': props.isSelected && !props.disabled,
-          'opacity-50 cursor-not-allowed': props.disabled,
+          'bg-active': props.isSelected,
+          'hover:bg-hover/50': !props.isSelected,
         }
       )}
       onClick={props.onClick}
@@ -149,11 +144,15 @@ export function PropertyEditorModal() {
   const keybindings = useListKeyBindings(() => dialogRef());
 
   return (
-    <Dialog open={propertyEditorOpen()} onOpenChange={togglePropertyEditor}>
-      <Dialog.Portal>
-        <DialogWrapper contentRef={mergeRefs(attach, setDialogRef)}>
+    <Dialog
+      open={propertyEditorOpen()}
+      onOpenChange={togglePropertyEditor}
+      contentRef={mergeRefs(attach, setDialogRef)}
+    >
+      <Surface depth={2} active class="rounded-xl">
+        <div class="*:max-h-[75vh]">
           <div class="flex flex-col max-h-108 overflow-hidden text-sm">
-            <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
+            <div class="flex items-center gap-2 bg-surface px-2 h-10 border-b border-edge-muted shrink-0">
               <span class="pl-2 pointer-events-none">❯</span>
               <SearchInput
                 placeHolder={placeholder() || defaultPlaceholder}
@@ -197,8 +196,8 @@ export function PropertyEditorModal() {
               </Match>
             </Switch>
           </div>
-        </DialogWrapper>
-      </Dialog.Portal>
+        </div>
+      </Surface>
     </Dialog>
   );
 }
@@ -300,7 +299,7 @@ function PropertyList(props: {
     >
       <div
         ref={containerRef}
-        class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden p-1"
+        class="max-h-52 overflow-y-auto overflow-x-hidden scrollbar-hidden p-1"
       >
         <For each={filteredProperties()}>
           {(property, index) => (
@@ -331,9 +330,12 @@ function EditingEntityPreview(props: { entities: EntityData[] }) {
         {(entity) => {
           return (
             <div
-              class={cn('bg-edge px-2 py-1 truncate text-xs rounded-xs', {
-                'max-w-[50%]': props.entities.length === 2,
-              })}
+              class={cn(
+                'bg-active border border-edge-muted px-2 py-1 truncate text-xs rounded',
+                {
+                  'max-w-[50%]': props.entities.length === 2,
+                }
+              )}
             >
               <InlineEntity entity={entity} />
             </div>
@@ -484,7 +486,7 @@ function SelectPropertyEditor(props: {
   const selector = createSelector(props.selectedIndex);
 
   return (
-    <div class="p-1 max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
+    <div class="p-1 max-h-52 overflow-y-auto overflow-x-hidden scrollbar-hidden">
       <Show
         when={filteredOptions().length > 0}
         fallback={

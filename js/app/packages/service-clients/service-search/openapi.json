@@ -454,6 +454,10 @@
                 "$ref": "#/components/schemas/SearchOn",
                 "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
               },
+              "sort": {
+                "$ref": "#/components/schemas/ChannelSortTimestamp",
+                "description": "Sort key for results. Defaults to `message`."
+              },
               "terms": {
                 "type": ["array", "null"],
                 "items": {
@@ -468,14 +472,23 @@
       "ChannelSearchResponse": {
         "type": "object",
         "description": "The document search response object",
-        "required": ["results"],
+        "required": ["results", "total_count"],
         "properties": {
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Base64-encoded cursor for the next page; `None` when exhausted."
+          },
           "results": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ChannelSearchResponseItemWithMetadata"
             },
             "description": "List containing results from email threads"
+          },
+          "total_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of matching channel messages across all pages."
           }
         }
       },
@@ -550,6 +563,11 @@
             "format": "date-time",
             "description": "When the channel message was created\nThis is only prsent if the search result is on the message content"
           },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the channel message was deleted, if it has been"
+          },
           "highlight": {
             "$ref": "#/components/schemas/SearchHighlight",
             "description": "The highlights for the channel message"
@@ -579,6 +597,11 @@
             "description": "When the channel message was last updated\nThis is only prsent if the search result is on the message content"
           }
         }
+      },
+      "ChannelSortTimestamp": {
+        "type": "string",
+        "description": "Sort key for channel content search results.",
+        "enum": ["message", "thread"]
       },
       "ChatFilters": {
         "type": "object",
@@ -1925,6 +1948,10 @@
             "type": ["boolean", "null"],
             "description": "Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
+          "include_root": {
+            "type": "boolean",
+            "description": "When true, `project_ids` also matches the projects themselves in addition to their children."
+          },
           "notification_filters": {
             "$ref": "#/components/schemas/NotificationFilters",
             "description": "Filter by project notification state."
@@ -1941,7 +1968,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects."
+            "description": "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects.\nBy default matches children of these projects; set `include_root` to also match the projects themselves."
           }
         }
       },

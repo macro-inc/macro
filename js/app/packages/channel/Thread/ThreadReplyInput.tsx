@@ -1,19 +1,19 @@
-import { useUserId } from '@core/context/user';
-import { useSendMessageMutation } from '@queries/channel/message';
-import { usePostTypingUpdateMutation } from '@queries/channel/typing';
-import { createSignal, onCleanup, type Accessor, type Setter } from 'solid-js';
-import { ChannelInput, createInputAttachmentTracker } from '../Input';
-import type { InputHandle, InputSnapshot } from '../Input';
-import { hasSendableInputContent } from '../Input/utils/sendable-content';
-import { buildPostMessageRequest } from '../Input/message-payload';
-import { createEntityDropZone } from '../Channel/create-entity-drop-zone';
-import { replyInputOffsetX } from './utils/thread-rail-geometry';
-import { ThreadReplyInputConnector } from './ThreadReplyInputConnector';
 import {
   makeAttachmentTrackerPersistenceKey,
   makeInputValuePersistenceKey,
 } from '@channel/Input/utils/persistence';
 import { useChannelParticipants } from '@channel/use-channel-participants';
+import { useUserId } from '@core/context/user';
+import { useSendMessageMutation } from '@queries/channel/message';
+import { usePostTypingUpdateMutation } from '@queries/channel/typing';
+import { type Accessor, createSignal, onCleanup, type Setter } from 'solid-js';
+import { createEntityDropZone } from '../Channel/create-entity-drop-zone';
+import type { InputHandle, InputSnapshot } from '../Input';
+import { ChannelInput, createInputAttachmentTracker } from '../Input';
+import { buildPostMessageRequest } from '../Input/message-payload';
+import { hasSendableInputContent } from '../Input/utils/sendable-content';
+import { ThreadReplyInputConnector } from './ThreadReplyInputConnector';
+import { replyInputOffsetX } from './utils/thread-rail-geometry';
 
 type ThreadReplyInputProps = {
   channelId: string;

@@ -1,14 +1,17 @@
-import { DialogWrapper } from '@core/component/DialogWrapper';
-import {
-  isCommandItem,
-  isEntityItem,
-  isSearchItem,
-  type CommandMenuItem,
-} from './useCommandItems';
+import { useAnalytics } from '@app/component/analytics-context';
+import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
+import { isListViewID } from '@app/constants/list-views';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { TabsInset } from '@core/component/TabsInset';
+import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
+import type { RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
-import { Dialog } from '@kobalte/core/dialog';
-import { Tabs } from '@core/component/Tabs';
+import { debouncedDependent } from '@core/util/debounce';
+import { type EntityData, InlineEntity } from '@entity';
+import ArrowLeft from '@icon/regular/arrow-left.svg';
+import Macro from '@macro-icons/macro-logo.svg';
+import { cn, Dialog, Hotkey, Panel } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,
@@ -25,22 +28,17 @@ import {
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useSplitLayout } from '../split-layout/layout';
 import { CommandItem } from './CommandItem';
-import { CommandState } from './state';
-import { useCommandItems } from './useCommandItems';
-import { trackCommandUsage } from './recency';
-import type { CategoryFilter } from './types';
-import { itemToBlockName } from '@core/constant/allBlocks';
-import { cn } from '@ui/utils/classname';
-import Macro from '@macro-icons/macro-logo.svg';
-import ArrowLeft from '@icon/regular/arrow-left.svg';
-import { debouncedDependent } from '@core/util/debounce';
-import { Hotkey } from '@core/component/Hotkey';
-import { InlineEntity, type EntityData } from '@entity';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { isListViewID } from '@app/constants/list-views';
-import { useAnalytics } from '@app/component/analytics-context';
 import { getCategorySearchFilters } from './category-search-filters';
-import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
+import { trackCommandUsage } from './recency';
+import { CommandState } from './state';
+import type { CategoryFilter } from './types';
+import {
+  type CommandMenuItem,
+  isCommandItem,
+  isEntityItem,
+  isSearchItem,
+  useCommandItems,
+} from './useCommandItems';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -54,11 +52,11 @@ const CATEGORIES: { id: CategoryFilter; label: string }[] = [
 ];
 
 const VIRTUAL_ITEM_HEIGHT = 40; // tailwind h-10
-const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8;
-const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5;
+const LIST_PADDING = 16; // p-2 = 8px top + 8px bottom
+const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8 + LIST_PADDING;
+const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5 + LIST_PADDING;
 
 export function CommandMenu() {
-  const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
   const splitManager = globalSplitManager();
   const isListMode = splitManager
     ? () => isListViewID(splitManager.activeSplit()?.content().id)
@@ -84,34 +82,33 @@ export function CommandMenu() {
   };
 
   return (
-    <Dialog open={CommandState.isOpen()} onOpenChange={CommandState.setIsOpen}>
-      <Dialog.Portal>
-        <DialogWrapper
-          contentRef={setCommandMenuRef}
-          onCloseAutoFocus={(event) => {
-            if (suppressCloseAutoFocus) {
-              event.preventDefault();
-              suppressCloseAutoFocus = false;
-            }
-          }}
-        >
-          <CommandMenuInner
-            commandMenuRef={commandMenuRef}
-            onSelect={handleSelect}
-          />
-        </DialogWrapper>
-      </Dialog.Portal>
+    <Dialog
+      onOpenChange={CommandState.setIsOpen}
+      onCloseAutoFocus={(e) => {
+        if (suppressCloseAutoFocus) {
+          e.preventDefault();
+          suppressCloseAutoFocus = false;
+        }
+      }}
+      open={CommandState.isOpen()}
+    >
+      <CommandMenuInner depth={2} onSelect={handleSelect} />
     </Dialog>
   );
 }
 
 export function CommandMenuInner(props: {
-  commandMenuRef: () => HTMLDivElement | undefined;
   /** Override items source with custom data (e.g. sandbox entities for tutorial) */
   items?: () => CommandMenuItem[];
   /** Called when the user selects an item from the menu */
   onSelect?: (item: CommandMenuItem) => void;
+  /** Optional class merged onto the Panel wrapper. */
+  class?: string;
+  /** Optional depth for the Panel wrapper. */
+  depth?: 0 | 1 | 2 | 3 | 4 | 5;
 }) {
+  const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
+
   const analytics = useAnalytics();
 
   const { openWithSplit } = useSplitLayout();
@@ -137,7 +134,7 @@ export function CommandMenuInner(props: {
   });
 
   createEffect(
-    on(query, () => {
+    on([query, CommandState.categoryFilter], () => {
       const items = filteredItems();
       const firstIsSearch = items[0] && isSearchItem(items[0]);
       CommandState.setSelectedIndex(firstIsSearch && items.length > 1 ? 1 : 0);
@@ -148,6 +145,19 @@ export function CommandMenuInner(props: {
     const items = filteredItems();
     const index = CommandState.selectedIndex();
     return items[index];
+  };
+
+  const selectedIsCommand = () => {
+    const item = selectedItem();
+    return item && isCommandItem(item);
+  };
+  const selectedIsEntity = () => {
+    const item = selectedItem();
+    return item && isEntityItem(item);
+  };
+  const selectedIsSearch = () => {
+    const item = selectedItem();
+    return item && isSearchItem(item);
   };
 
   function handleItemAction(item: CommandMenuItem, openInNewSplit = false) {
@@ -252,7 +262,7 @@ export function CommandMenuInner(props: {
     CommandState.setQuery('');
   }
 
-  registerHotkey({
+  const navDownHotkey = registerHotkey({
     hotkey: ['arrowdown', 'ctrl+j'],
     scopeId: hotkeyScope,
     description: 'Move selection down',
@@ -266,7 +276,7 @@ export function CommandMenuInner(props: {
     hide: true,
   });
 
-  registerHotkey({
+  const navUpHotkey = registerHotkey({
     hotkey: ['arrowup', 'ctrl+k'],
     scopeId: hotkeyScope,
     description: 'Move selection up',
@@ -282,7 +292,7 @@ export function CommandMenuInner(props: {
     hide: true,
   });
 
-  registerHotkey({
+  const confirmHotkey = registerHotkey({
     hotkey: 'enter',
     scopeId: hotkeyScope,
     description: 'Select item',
@@ -297,7 +307,7 @@ export function CommandMenuInner(props: {
     runWithInputFocused: true,
   });
 
-  registerHotkey({
+  const confirmSplitHotkey = registerHotkey({
     hotkey: 'shift+enter',
     scopeId: hotkeyScope,
     description: 'Open in new split',
@@ -312,7 +322,7 @@ export function CommandMenuInner(props: {
     runWithInputFocused: true,
   });
 
-  registerHotkey({
+  const escapeHotkey = registerHotkey({
     hotkey: 'escape',
     scopeId: hotkeyScope,
     description: 'Close command menu',
@@ -332,7 +342,7 @@ export function CommandMenuInner(props: {
   });
 
   // Backspace when query is empty goes back from command scope
-  registerHotkey({
+  const backspaceHotkey = registerHotkey({
     hotkey: 'backspace',
     scopeId: hotkeyScope,
     description: 'Go back',
@@ -354,7 +364,7 @@ export function CommandMenuInner(props: {
     hide: true,
   });
 
-  registerHotkey({
+  const tabHotkey = registerHotkey({
     hotkey: 'tab',
     scopeId: hotkeyScope,
     description: 'Next category',
@@ -364,7 +374,6 @@ export function CommandMenuInner(props: {
       );
       const nextIndex = (currentIndex + 1) % CATEGORIES.length;
       CommandState.setCategoryFilter(CATEGORIES[nextIndex].id);
-      CommandState.setSelectedIndex(0);
       return true;
     },
     runWithInputFocused: true,
@@ -382,7 +391,6 @@ export function CommandMenuInner(props: {
       const prevIndex =
         (currentIndex - 1 + CATEGORIES.length) % CATEGORIES.length;
       CommandState.setCategoryFilter(CATEGORIES[prevIndex].id);
-      CommandState.setSelectedIndex(0);
       return true;
     },
     runWithInputFocused: true,
@@ -390,7 +398,7 @@ export function CommandMenuInner(props: {
   });
 
   onMount(() => {
-    const element = props.commandMenuRef();
+    const element = commandMenuRef();
     if (element) {
       attachHotkeys(element);
     }
@@ -425,26 +433,37 @@ export function CommandMenuInner(props: {
     CommandState.isEntityActionMode()
   );
 
-  const handleBackFromCommandScope = () => {
+  // Back is only available in command scope (entity action mode just closes).
+  const handleBack = () => {
+    if (!isInCommandScope()) return;
     CommandState.clearCommandScopeCommands();
     CommandState.setSelectedIndex(0);
   };
 
-  // Show back button only in command scope (entity action mode just closes)
-  const showBackButton = () => isInCommandScope();
-
-  const handleBack = () => {
-    if (isInCommandScope()) {
-      handleBackFromCommandScope();
-    }
+  const resultsHeight = () => {
+    const count = filteredItems().length;
+    if (count === 0) return EMPTY_STATE_HEIGHT;
+    return Math.min(
+      MAX_LIST_HEIGHT,
+      count * VIRTUAL_ITEM_HEIGHT + LIST_PADDING
+    );
   };
 
+  const categoryTabs = CATEGORIES.map((c) => ({
+    value: c.id,
+    label: c.label,
+  }));
+
   return (
-    <div class="flex flex-col">
-      {/* Search Input */}
-      <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted">
+    <Panel
+      class={cn('max-h-[75vh] rounded-xl', props.class)}
+      ref={setCommandMenuRef}
+      depth={props.depth}
+      active
+    >
+      <Panel.Header class="gap-2 px-2 bg-surface">
         <Show
-          when={showBackButton()}
+          when={isInCommandScope()}
           fallback={
             <span class="pl-2 text-accent">
               <Macro class="size-3" />
@@ -461,39 +480,118 @@ export function CommandMenuInner(props: {
         </Show>
         <input
           type="text"
-          class="flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder/50"
+          class="flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder"
           placeholder={isEntityActionMode() ? 'Search actions...' : 'Search...'}
           value={CommandState.query()}
           onInput={(e) => CommandState.setQuery(e.currentTarget.value)}
           autofocus
         />
-      </div>
+      </Panel.Header>
 
-      {/* Entity Action Preview Row */}
-      <Show when={isEntityActionMode()}>
-        <EntityActionPreview entities={CommandState.entityActionEntities()} />
+      <Show when={isEntityActionMode() || !isInCommandScope()}>
+        <Panel.Toolbar
+          class={cn(
+            'bg-surface px-1.5 border-0',
+            isEntityActionMode() && 'gap-1.5'
+          )}
+        >
+          <Show
+            when={isEntityActionMode()}
+            fallback={
+              <TabsInset
+                depth={1}
+                list={categoryTabs}
+                value={CommandState.categoryFilter()}
+                onChange={(value) => {
+                  if (value) {
+                    CommandState.setCategoryFilter(value as CategoryFilter);
+                  }
+                }}
+              />
+            }
+          >
+            <EntityActionPreview
+              entities={CommandState.entityActionEntities()}
+            />
+          </Show>
+        </Panel.Toolbar>
       </Show>
 
-      <Show when={!isInCommandScope() && !isEntityActionMode()}>
-        <CategoryFilterTabs />
-      </Show>
+      <Panel.Body>
+        <div
+          class="bg-surface overflow-hidden transition-[height] duration-60 ease-out"
+          style={{ height: `${resultsHeight()}px` }}
+        >
+          <Show
+            when={filteredItems().length > 0}
+            fallback={
+              <div class="p-4 text-center text-ink-muted">No results found</div>
+            }
+          >
+            <VirtualizedCommandList
+              items={filteredItems()}
+              selectedIndex={CommandState.selectedIndex()}
+              onSelect={(item, openInNewSplit) =>
+                handleItemAction(item, openInNewSplit)
+              }
+              onMouseEnter={handleMouseEnter}
+            />
+          </Show>
+        </div>
+      </Panel.Body>
 
-      <ResultsContainer
-        items={filteredItems()}
-        selectedIndex={CommandState.selectedIndex()}
-        onSelect={(item, openInNewSplit) =>
-          handleItemAction(item, openInNewSplit)
-        }
-        onMouseEnter={handleMouseEnter}
-      />
+      <Panel.Footer class="gap-4 px-4 bg-surface text-xs text-ink-extra-muted/80">
+        <span class="flex items-center gap-1">
+          <div class="flex gap-1">
+            <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
+              <Hotkey shortcut={navUpHotkey.hotkey()} class="space-x-1" />
+            </div>
+            <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
+              <Hotkey shortcut={navDownHotkey.hotkey()} class="space-x-1" />
+            </div>
+          </div>
+          Navigate
+        </span>
 
-      <CommandMenuFooter
-        selectedItem={selectedItem()}
-        isInCommandScope={isInCommandScope()}
-        isEntityActionMode={isEntityActionMode()}
-        canOpenInNewSplit={canOpenInNewSplit()}
-      />
-    </div>
+        <Switch>
+          <Match when={isInCommandScope()}>
+            <HotkeyHint command={confirmHotkey} label="Run action" />
+            <HotkeyHint command={backspaceHotkey} label="Back" />
+          </Match>
+          <Match when={selectedIsCommand() || isEntityActionMode()}>
+            <HotkeyHint command={confirmHotkey} label="Run action" />
+          </Match>
+          <Match when={selectedIsSearch()}>
+            <HotkeyHint command={confirmHotkey} label="Search" />
+            <Show when={canOpenInNewSplit()}>
+              <HotkeyHint
+                command={confirmSplitHotkey}
+                label="Search in new split"
+              />
+            </Show>
+          </Match>
+          <Match when={selectedIsEntity()}>
+            <HotkeyHint command={confirmHotkey} label="Open" />
+            <Show when={canOpenInNewSplit()}>
+              <HotkeyHint
+                command={confirmSplitHotkey}
+                label="Open in new split"
+              />
+            </Show>
+          </Match>
+        </Switch>
+
+        <Show when={!isInCommandScope() && !isEntityActionMode()}>
+          <HotkeyHint command={tabHotkey} label="Category" />
+        </Show>
+        <Show
+          when={isInCommandScope()}
+          fallback={<HotkeyHint command={escapeHotkey} label="Close" />}
+        >
+          <HotkeyHint command={escapeHotkey} label="Back" />
+        </Show>
+      </Panel.Footer>
+    </Panel>
   );
 }
 
@@ -503,14 +601,17 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
   const remainingCount = () => Math.max(0, props.entities.length - 2);
 
   return (
-    <div class="flex items-center gap-2 px-3 py-2 bg-panel border-b border-edge-muted">
+    <>
       <For each={displayEntities()}>
         {(entity) => {
           return (
             <div
-              class={cn('bg-edge px-2 py-1 truncate text-xs rounded-xs', {
-                'max-w-[50%]': props.entities.length === 2,
-              })}
+              class={cn(
+                'bg-active border border-edge-muted px-2 py-1 truncate text-xs rounded',
+                {
+                  'max-w-[50%]': props.entities.length === 2,
+                }
+              )}
             >
               <InlineEntity entity={entity} />
             </div>
@@ -522,44 +623,7 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
           +{remainingCount()} more
         </div>
       </Show>
-    </div>
-  );
-}
-
-function ResultsContainer(props: {
-  items: CommandMenuItem[];
-  selectedIndex: number;
-  onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
-  onMouseEnter: (index: number) => void;
-}) {
-  const containerHeight = () => {
-    const count = props.items.length;
-    if (count === 0) return EMPTY_STATE_HEIGHT;
-    const totalHeight = count * VIRTUAL_ITEM_HEIGHT;
-    return Math.min(MAX_LIST_HEIGHT, totalHeight);
-  };
-
-  return (
-    <div
-      class="bg-panel overflow-hidden transition-[height] duration-60 ease-out"
-      style={{ height: `${containerHeight()}px` }}
-    >
-      <Show
-        when={props.items.length > 0}
-        fallback={
-          <div class="px-4 py-4 text-center text-ink-muted">
-            No results found
-          </div>
-        }
-      >
-        <VirtualizedCommandList
-          items={props.items}
-          selectedIndex={props.selectedIndex}
-          onSelect={props.onSelect}
-          onMouseEnter={props.onMouseEnter}
-        />
-      </Show>
-    </div>
+    </>
   );
 }
 
@@ -574,9 +638,17 @@ function VirtualizedCommandList(props: {
 
   createEffect(() => {
     const index = props.selectedIndex;
-    if (index >= 0 && index < props.items.length && virtualizerHandle) {
-      virtualizerHandle.scrollToIndex(index, { align: 'nearest' });
+    if (index < 0 || index >= props.items.length || !virtualizerHandle) {
+      return;
     }
+    // Skip when all items fit: scrolling would be a no-op at the final
+    // container size, but during the height transition the container is
+    // briefly clipped and scrollToIndex shifts scrollTop, hiding the search
+    // row across category switches.
+    if (props.items.length * VIRTUAL_ITEM_HEIGHT <= MAX_LIST_HEIGHT) {
+      return;
+    }
+    virtualizerHandle.scrollToIndex(index, { align: 'nearest' });
   });
 
   const selector = createSelector(
@@ -591,7 +663,7 @@ function VirtualizedCommandList(props: {
       }}
       data={props.items}
       style={{ height: '100%' }}
-      class="scrollbar-hidden"
+      class="scrollbar-hidden p-2"
     >
       {(item, index) => (
         <CommandItem
@@ -606,92 +678,13 @@ function VirtualizedCommandList(props: {
   );
 }
 
-function HotkeyHint(props: { shortcut: string; label: string }) {
+function HotkeyHint(props: { command: RegisterHotkeyReturn; label: string }) {
   return (
     <span class="flex items-center gap-1">
-      <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-0.25 font-normal">
-        <Hotkey shortcut={props.shortcut} class="space-x-1" />
+      <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
+        <Hotkey shortcut={props.command.hotkey()} class="space-x-1" />
       </div>
       {props.label}
     </span>
-  );
-}
-
-function CommandMenuFooter(props: {
-  selectedItem: CommandMenuItem | undefined;
-  isInCommandScope: boolean;
-  isEntityActionMode?: boolean;
-  canOpenInNewSplit: boolean;
-}) {
-  const isCommand = () =>
-    props.selectedItem && isCommandItem(props.selectedItem);
-  const isEntity = () => props.selectedItem && isEntityItem(props.selectedItem);
-  const isSearch = () => props.selectedItem && isSearchItem(props.selectedItem);
-
-  return (
-    <div class="flex items-center gap-4 px-4 py-2 bg-panel border-t border-edge-muted text-xs text-ink-extra-muted/80">
-      <span class="flex items-center gap-1">
-        <div class="flex gap-1">
-          <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-0.25 font-normal">
-            <Hotkey shortcut="arrowup" class="space-x-1" />
-          </div>
-          <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-0.25 font-normal">
-            <Hotkey shortcut="arrowdown" class="space-x-1" />
-          </div>
-        </div>
-        Navigate
-      </span>
-
-      <Switch>
-        <Match when={props.isInCommandScope}>
-          <HotkeyHint shortcut="enter" label="Run action" />
-          <HotkeyHint shortcut="escape" label="Back" />
-        </Match>
-        <Match when={isCommand() || props.isEntityActionMode}>
-          <HotkeyHint shortcut="enter" label="Run action" />
-        </Match>
-        <Match when={isSearch()}>
-          <HotkeyHint shortcut="enter" label="Search" />
-          <Show when={props.canOpenInNewSplit}>
-            <HotkeyHint shortcut="shift+enter" label="Search in new split" />
-          </Show>
-        </Match>
-        <Match when={isEntity()}>
-          <HotkeyHint shortcut="enter" label="Open" />
-          <Show when={props.canOpenInNewSplit}>
-            <HotkeyHint shortcut="shift+enter" label="Open in new split" />
-          </Show>
-        </Match>
-      </Switch>
-
-      <Show when={!props.isInCommandScope && !props.isEntityActionMode}>
-        <HotkeyHint shortcut="tab" label="Category" />
-      </Show>
-      <Show
-        when={props.isInCommandScope}
-        fallback={<HotkeyHint shortcut="escape" label="Close" />}
-      >
-        <HotkeyHint shortcut="escape" label="Back" />
-      </Show>
-    </div>
-  );
-}
-
-function CategoryFilterTabs() {
-  const list = CATEGORIES.map((c) => ({ value: c.id, label: c.label }));
-
-  return (
-    <div class="px-1.5 h-10 border-b border-edge-muted">
-      <Tabs
-        list={list}
-        value={CommandState.categoryFilter()}
-        onChange={(value) => {
-          if (value) {
-            CommandState.setCategoryFilter(value as CategoryFilter);
-            CommandState.setSelectedIndex(0);
-          }
-        }}
-      />
-    </div>
   );
 }

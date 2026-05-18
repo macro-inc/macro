@@ -97,7 +97,8 @@ pub fn run() {
     {
         builder = builder
             .plugin(tauri_plugin_haptics::init())
-            .plugin(tauri_plugin_input_accessory::init());
+            .plugin(tauri_plugin_input_accessory::init())
+            .plugin(tauri_plugin_call_kit::init());
     }
 
     // register the rest of the common plugins

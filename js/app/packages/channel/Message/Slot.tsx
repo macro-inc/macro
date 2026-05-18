@@ -1,9 +1,9 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   type ComponentProps,
   type JSX,
-  type ValidComponent,
   splitProps,
+  type ValidComponent,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 

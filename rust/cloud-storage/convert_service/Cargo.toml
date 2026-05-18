@@ -32,7 +32,7 @@ model = { path = "../model" }
 s3_key = { path = "../s3_key" }
 nix = { version = "0.29.0", features = ["process", "signal"] }
 remote_env_var = { path = "../remote_env_var" }
-rs-libreoffice-bindings = "0.0.7"
+rs-libreoffice-bindings = { git = "https://github.com/macro-inc/rs-libreoffice-bindings", rev = "056a40ddfac1d9650be30b9f0b4b934e9266c7dc" }
 s3_client = { path = "../s3_client" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }

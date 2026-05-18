@@ -30,30 +30,55 @@ jobs:
               - 'js/app/biome.jsonc'
               - 'js/lexical-core/**'
               - 'js/lexical-service/**'
+              - '.github/actions/setup-cachix/**'
               - '.github/actions/setup-reqs-web/**'
               - '.github/workflows/web-app-check-main.yml'
             api_changed:
               - 'rust/cloud-storage/**/*.rs'
+              - 'rust/cloud-storage/Cargo.toml'
+              - 'rust/cloud-storage/Cargo.lock'
+              - 'flake.nix'
+              - 'flake.lock'
+              - 'js/app/scripts/generate-api-schema.ts'
+              - 'js/app/scripts/services.ts'
+              - '.github/actions/setup-cachix/**'
+              - '.github/actions/setup-reqs-web/**'
+              - '.github/workflows/web-app-check-main.yml'
 
   typescript:
     needs: path-check
     # Run the type check if rust code or frontend code has changed.
     if: needs.path-check.outputs.should_run == 'true' || needs.path-check.outputs.api_changed == 'true'
     name: Typecheck
-    runs-on: linux-latest-beefy
+    runs-on: linux-extra-beefy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
-      - name: Setup Biome
-        uses: biomejs/setup-biome@v2
         with:
-          version: 2.4.12
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
+        if: needs.path-check.outputs.api_changed == 'true'
+        with:
+          workspaces: rust/cloud-storage
+          shared-key: cloud-storage-gen-api
+          cache-on-failure: true
+          cache-targets: true
       - name: Generate API Types
         if: needs.path-check.outputs.api_changed == 'true'
         working-directory: js/app
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: bun run gen-api -- --check
+      - name: show sccache stats
+        if: always() && needs.path-check.outputs.api_changed == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: sccache --show-stats || true
       - name: Check Types
         working-directory: js/app
         run: |
@@ -69,10 +94,12 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Setup Biome
-        uses: biomejs/setup-biome@v2
+      - name: Setup Nix dev shell
+        uses: ./.github/actions/setup-cachix
         with:
-          version: 2.4.12
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          dev-shell: 'true'
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: Run Biome
         working-directory: js/app
         run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
@@ -89,6 +116,9 @@ jobs:
           fetch-depth: 0
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: Check Tailwind Classes
         working-directory: js/app
         run: just check-tailwind
@@ -104,6 +134,8 @@ jobs:
       - name: Setup
         uses: ./.github/actions/setup-reqs-web
         with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
           playwright: 'true'
       - name: Test
         working-directory: js/app
@@ -117,10 +149,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      - name: Setup Biome
-        uses: biomejs/setup-biome@v2
+      - name: Setup Nix dev shell
+        uses: ./.github/actions/setup-cachix
         with:
-          version: 2.4.12
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          dev-shell: 'true'
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: Cycles Import Check
         working-directory: js/app
         run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
@@ -135,6 +169,9 @@ jobs:
         uses: actions/checkout@v6
       - name: Setup
         uses: ./.github/actions/setup-reqs-web
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: Build
         working-directory: js/app
         run: bun run build
@@ -169,4 +206,3 @@ jobs:
           fi
 
           echo "✅ All jobs passed or were skipped"
-

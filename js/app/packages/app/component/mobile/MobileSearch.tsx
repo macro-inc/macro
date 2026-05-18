@@ -1,7 +1,21 @@
 /** Mobile Search is based on Command Menu. */
+
+import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
+import { Tabs } from '@core/component/Tabs';
+import { TailSpinner } from '@core/component/TailSpinner';
+import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { runCommand } from '@core/hotkey/utils';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { debouncedDependent } from '@core/util/debounce';
+import { windowSearchMatch } from '@core/util/searchHighlight';
+import { Entity, type EntityData, type WithSearch } from '@entity';
+import { SearchContent } from '@entity/extractors-search/search-content';
+import ArrowLeft from '@icon/regular/arrow-left.svg';
 import { Dialog } from '@kobalte/core/dialog';
+import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
+import { useFullTextSearch } from '@queries/soup/useFullTextSearch';
+import { cn, Layer } from '@ui';
 import {
   createSignal,
   Match,
@@ -11,16 +25,7 @@ import {
   Switch,
 } from 'solid-js';
 import { VList } from 'virtua/solid';
-import { useSplitLayout } from '../split-layout/layout';
-import { cn } from '@ui/utils/classname';
-import ArrowLeft from '@icon/regular/arrow-left.svg';
-import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
-import { debouncedDependent } from '@core/util/debounce';
-import { Entity, type WithSearch, type EntityData } from '@entity';
-import { SearchContent } from '@entity/extractors-search/search-content';
-import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { Tabs } from '@core/component/Tabs';
+import { CommandItem } from '../command/CommandItem';
 import type { CategoryFilter } from '../command/types';
 import {
   type CommandMenuItem,
@@ -28,13 +33,8 @@ import {
   isEntityItem,
   useCommandItems,
 } from '../command/useCommandItems';
+import { useSplitLayout } from '../split-layout/layout';
 import { SearchState } from './mobileSearchState';
-import { CommandItem } from '../command/CommandItem';
-import { useFullTextSearch } from '@queries/soup/useFullTextSearch';
-import { windowSearchMatch } from '@core/util/searchHighlight';
-import { TailSpinner } from '@core/component/TailSpinner';
-import { itemToBlockName } from '@core/constant/allBlocks';
-import { Layer } from '@ui';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -146,7 +146,7 @@ export function MobileSearchInner() {
   };
 
   return (
-    <div class="flex flex-col h-full bg-panel">
+    <div class="flex flex-col h-full bg-surface">
       <ResultsContainer
         nameMatchItems={filteredItems()}
         fullTextItems={fullTextResults()}
@@ -164,7 +164,7 @@ export function MobileSearchInner() {
         <CategoryFilterTabs />
       </Show>
       {/* Search Input */}
-      <div class="flex items-center gap-2 bg-page px-2 border-t border-edge-muted">
+      <div class="flex items-center gap-2 bg-surface px-2 border-t border-edge-muted">
         <button
           class="text-ink-muted flex flex-col items-center justify-center pl-2 pt-3 pb-2"
           onClick={handleBack}
@@ -175,7 +175,7 @@ export function MobileSearchInner() {
         <input
           id="mobile-search-input"
           type="text"
-          class="pt-3 pb-2 flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder/50"
+          class="pt-3 pb-2 flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder"
           placeholder={'Search...'}
           value={SearchState.query()}
           onInput={(e) => SearchState.setQuery(e.currentTarget.value)}
@@ -218,7 +218,7 @@ function ResultsContainer(props: {
   };
 
   return (
-    <div class="flex-1 min-h-0 bg-panel" ref={ref}>
+    <div class="flex-1 min-h-0 bg-surface" ref={ref}>
       <Switch>
         <Match when={props.isLoading?.()}>
           <div class="flex items-center gap-2 text-ink-muted h-10 px-2">
@@ -357,7 +357,7 @@ function FullTextResultItem(props: {
 
   return (
     <div
-      class="px-2 py-2 text-sm font-semibold"
+      class="p-2 text-sm font-semibold"
       onClick={() => props.onSelect(props.entity)}
     >
       <div class="flex items-center gap-2 min-w-0">
@@ -379,7 +379,7 @@ function FullTextResultItem(props: {
 
 function CategoryFilterTabs() {
   return (
-    <div class="bg-panel border-t border-edge-muted h-11 px-1 overflow-x-auto scrollbar-hidden">
+    <div class="bg-surface border-t border-edge-muted h-11 px-1 overflow-x-auto scrollbar-hidden">
       <Tabs
         list={CATEGORIES.map((c) => ({ value: c.id, label: c.label }))}
         value={SearchState.categoryFilter()}
@@ -387,7 +387,7 @@ function CategoryFilterTabs() {
           if (value) SearchState.setCategoryFilter(value as CategoryFilter);
         }}
         indicatorPosition="top"
-        class="w-max **:data-indicator:h-[3px]"
+        class="w-max **:data-indicator:h-0.75"
       />
     </div>
   );

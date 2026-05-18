@@ -2,10 +2,10 @@
  * @vitest-environment jsdom
  */
 
-import type { InfiniteData } from '@tanstack/solid-query';
+import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
-import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
+import type { InfiniteData } from '@tanstack/solid-query';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -38,17 +38,17 @@ vi.mock('./normalizer', () => ({
   },
 }));
 
-// biome-ignore lint/correctness/noPrivateImports: testing private export
-import { buildSingleEntityFilter } from './operations';
+import { soupKeys } from '../keys';
 import {
+  // biome-ignore lint/correctness/noPrivateImports: testing private export
+  buildSingleEntityFilter,
   getSoupItemId,
   insertSoupEntity,
-  removeSoupEntities,
-  removeSearchEntities,
-  optimisticUpdateSoupItemUpdatedAt,
   optimisticUpdateSoupEntity,
+  optimisticUpdateSoupItemUpdatedAt,
+  removeSearchEntities,
+  removeSoupEntities,
 } from './operations';
-import { soupKeys } from '../keys';
 
 // -- Fixtures --
 
@@ -215,6 +215,11 @@ describe('buildSingleEntityFilter', () => {
       filterKey: 'project_filters',
       idKey: 'project_ids',
     },
+    {
+      entityType: 'call' as const,
+      filterKey: 'call_filters',
+      idKey: 'call_ids',
+    },
   ])('unblocks only $entityType filter with the real entityId', ({
     entityType,
     filterKey,
@@ -233,12 +238,25 @@ describe('buildSingleEntityFilter', () => {
       'chat_filters',
       'channel_filters',
       'project_filters',
+      'call_filters',
     ].filter((k) => k !== filterKey);
 
     for (const key of otherFilters) {
       const ids = Object.values((filter as any)[key])[0];
       expect(ids).toEqual([NIL_ID]);
     }
+  });
+
+  it('project filter defaults include_root to false', () => {
+    const filter = buildSingleEntityFilter('project', 'entity-1');
+    expect((filter as any).project_filters.include_root).toBe(false);
+  });
+
+  it('project filter respects includeRoot option', () => {
+    const filter = buildSingleEntityFilter('project', 'entity-1', {
+      includeRoot: true,
+    });
+    expect((filter as any).project_filters.include_root).toBe(true);
   });
 });
 

@@ -1,5 +1,5 @@
 import type { UseInfiniteQueryResult } from '@tanstack/solid-query';
-import { createSignal, type Accessor, type Setter } from 'solid-js';
+import { type Accessor, createSignal, type Setter } from 'solid-js';
 import type { Store } from 'solid-js/store';
 
 export type ThreadPaginator = {

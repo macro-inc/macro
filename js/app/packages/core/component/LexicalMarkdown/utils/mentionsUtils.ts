@@ -6,9 +6,9 @@ import type { ChannelWithParticipants, IUser } from '@core/user';
 import type { ParsedDate } from '@core/util/dateParser';
 import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { EmailEntity } from '@entity';
+import type { HistoryItem as Item } from '@queries/history/history';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import type { DocumentMentionMetadata } from '@service-notification/client';
-import type { HistoryItem as Item } from '@queries/history/history';
 import type { UploadSuccess } from '@service-storage/util/upload';
 import type { LexicalEditor } from 'lexical';
 import { v7 } from 'uuid';
@@ -79,6 +79,7 @@ export type DateItem = ParsedDate & {
 export type UserMentionRecord = {
   documentId: string;
   mentions: string[];
+  email: string;
   metadata: DocumentMentionMetadata;
 };
 
@@ -155,20 +156,19 @@ export async function handleUserMention(
   let mentionId: string | undefined;
 
   if (blockName !== 'channel') {
-    if (blockId) {
-      const record: UserMentionRecord = {
-        documentId: blockId,
-        mentions: [user.id],
-        metadata: {
-          mention_id: v7(),
-        },
-      };
-      if (onUserMention) {
-        onUserMention(record);
-      }
-      if (!disableMentionTracking) {
-        mentionId = await trackMention(blockId, 'user', user.id);
-      }
+    const record: UserMentionRecord = {
+      documentId: blockId ?? '',
+      mentions: [user.id],
+      email: user.email,
+      metadata: {
+        mention_id: v7(),
+      },
+    };
+    if (onUserMention) {
+      onUserMention(record);
+    }
+    if (blockId && !disableMentionTracking) {
+      mentionId = await trackMention(blockId, 'user', user.id);
     }
   }
 

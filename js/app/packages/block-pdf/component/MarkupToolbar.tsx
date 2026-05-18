@@ -5,8 +5,6 @@ import {
   showTabBarSignal,
 } from '@block-pdf/signal/placeables';
 import { isThreadPlaceable } from '@block-pdf/store/comments/freeComments';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { Tooltip } from '@core/component/Tooltip';
 import {
   useCanComment,
   useCanEdit,
@@ -18,6 +16,7 @@ import Tabs from '@icon/regular/tabs.svg';
 import Textbox from '@icon/regular/textbox.svg';
 import Trash from '@icon/regular/trash-simple.svg';
 import Cancel from '@icon/regular/x.svg';
+import { Button } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { placeableIdMap, useDeletePlaceable } from '../store/placeables';
@@ -53,91 +52,84 @@ export function MarkupToolbar() {
 
   const dynamicButton = createMemo(() => ({
     cancel: () => (
-      <Tooltip tooltip={'Cancel'}>
-        <DeprecatedIconButton
-          size="sm"
-          theme="red"
-          icon={Cancel}
-          onClick={() => {
-            setMode(PayloadMode.NoMode);
-          }}
-        />
-      </Tooltip>
+      <Button
+        size="icon-sm"
+        variant="danger"
+        tooltip="Cancel"
+        onClick={() => {
+          setMode(PayloadMode.NoMode);
+        }}
+      >
+        <Cancel />
+      </Button>
     ),
     delete: () => (
-      <Tooltip tooltip={'Delete'}>
-        <DeprecatedIconButton
-          size="sm"
-          theme="red"
-          icon={Trash}
-          onClick={() => {
-            const activePlaceableIndex_ = activePlaceableId();
-            if (activePlaceableIndex_ == null) return;
-            deletePlaceable(activePlaceableIndex_);
-          }}
-        />
-      </Tooltip>
+      <Button
+        size="icon-sm"
+        variant="danger"
+        tooltip="Delete"
+        onClick={() => {
+          const activePlaceableIndex_ = activePlaceableId();
+          if (activePlaceableIndex_ == null) return;
+          deletePlaceable(activePlaceableIndex_);
+        }}
+      >
+        <Trash />
+      </Button>
     ),
     placeholder: () => (
       <div class="invisible">
-        <DeprecatedIconButton size="sm" icon={Cancel} />
+        <Button size="icon-sm">
+          <Cancel />
+        </Button>
       </div>
     ),
   }));
 
   return (
     <Show when={canComment()}>
-      <div
-        class="flex flex-row items-center"
-        on:click={(e) => {
-          e.stopPropagation();
-        }}
-      >
+      <div class="flex flex-row items-center">
         <Show when={canEdit()}>
-          <DeprecatedIconButton
-            size="sm"
-            tooltip={{
-              label: showTabBar() ? 'Hide Tabs' : 'Show Tabs',
-            }}
-            theme="clear"
-            icon={Tabs}
+          <Button
+            size="icon-sm"
+            label={showTabBar() ? 'Hide Tabs' : 'Show Tabs'}
+            variant="ghost"
             onClick={() => {
               setShowTabBar(!showTabBar());
             }}
-          />
+          >
+            <Tabs />
+          </Button>
           <div class="w-px h-5 bg-edge mx-2" />
-          <DeprecatedIconButton
-            size="sm"
-            tooltip={{
-              label: 'Text Box',
-            }}
-            theme="clear"
-            icon={Textbox}
+          <Button
+            size="icon-sm"
+            label="Text Box"
+            variant="ghost"
             onClick={() => {
               setMode(PayloadMode.FreeTextAnnotation);
             }}
-          />
-          <DeprecatedIconButton
-            size="sm"
-            tooltip={{
-              label: 'Signature',
-            }}
-            theme="clear"
-            icon={Signature}
+          >
+            <Textbox />
+          </Button>
+          <Button
+            size="icon-sm"
+            label="Signature"
+            variant="ghost"
             onClick={() => setMode(PayloadMode.Signature)}
-          />
+          >
+            <Signature />
+          </Button>
         </Show>
-        <DeprecatedIconButton
-          size="sm"
-          tooltip={{
-            label: 'Comment',
-          }}
-          theme="clear"
-          icon={ChatTeardrop}
+        <Button
+          size="icon-sm"
+          label="Comment"
+          variant="ghost"
           onClick={() => {
             setMode(PayloadMode.Thread);
           }}
-        />
+        >
+          <ChatTeardrop />
+        </Button>
         <Dynamic component={dynamicButton()[dynamicButtonMode()]} />
       </div>
     </Show>

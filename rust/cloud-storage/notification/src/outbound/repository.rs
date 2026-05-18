@@ -246,6 +246,8 @@ fn push_cursor_filter(
 enum DbDeviceType {
     Ios,
     Android,
+    #[sqlx(rename = "iosvoip")]
+    IosVoip,
 }
 
 /// Database-backed implementation of the notification repository port.
@@ -491,6 +493,7 @@ impl NotificationDbOps for PgPool {
             let device = match row.device_type {
                 DbDeviceType::Ios => DeviceEndpoint::Ios(row.device_endpoint),
                 DbDeviceType::Android => DeviceEndpoint::Android(row.device_endpoint),
+                DbDeviceType::IosVoip => DeviceEndpoint::IosVoip(row.device_endpoint),
             };
 
             result

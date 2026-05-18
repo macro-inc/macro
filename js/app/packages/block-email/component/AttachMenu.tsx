@@ -9,7 +9,7 @@ import LaptopIcon from '@icon/regular/laptop.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { DocumentMentionInfo } from '@lexical-core';
-import { useHistoryQuery, type HistoryItem } from '@queries/history/history';
+import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
 import fuzzy from 'fuzzy';
 import {
   createMemo,
@@ -73,7 +73,7 @@ export function AttachMenu(props: AttachMenuProps) {
       <DropdownMenu.Portal>
         <DropdownMenuContent>
           <div class="flex flex-row items-center w-full p-2 gap-2 text-sm border-b border-edge text-ink mb-1">
-            <SearchIcon class="w-3 h-3" />
+            <SearchIcon class="size-3" />
             <input
               value={input()}
               onInput={(e) => setInput(e.target.value)}
@@ -82,7 +82,7 @@ export function AttachMenu(props: AttachMenuProps) {
               placeholder="Search Attachments"
             />
           </div>
-          <div class="flex flex-col gap-1 max-h-[250px] w-[300px] overflow-y-auto">
+          <div class="flex flex-col gap-1 max-h-62.5 w-75 overflow-y-auto">
             <Show
               when={rankedHistory().length > 0}
               fallback={

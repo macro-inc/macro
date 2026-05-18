@@ -1,20 +1,18 @@
 import { CREATABLE_BLOCKS, runCreateAction } from '@app/component/Launcher';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
+import { useHandleFileUpload } from '@app/util/handleFileUpload';
+import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import {
   handleFolderSelect,
   openFilePicker,
   openFolderPicker,
 } from '@core/util/upload';
-import { useHandleFileUpload } from '@app/util/handleFileUpload';
-import type { BlockAlias, BlockName } from '@core/block';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import UploadIcon from '@icon/regular/upload-simple.svg';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { Button, Dropdown, Layer } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
-import { Button } from '@ui/components/Button';
 import { NewCallButton } from './NewCallButton';
 
 // Which blocks to show as create options per view, in order
@@ -133,40 +131,42 @@ export const SoupViewCreateButton = () => {
           when={options().length > 1}
           fallback={
             <Button
-              variant="secondary"
+              variant="base"
               size="sm"
-              class="rounded-xs whitespace-nowrap px-2 text-ink-muted hover:text-ink"
               onClick={() => handleSelect(options()[0])}
             >
               <CreateOptionIcon id={options()[0].id} />
-              Create
+              <span>Create</span>
             </Button>
           }
         >
-          <DropdownMenu placement="bottom-start" gutter={4}>
-            <DropdownMenu.Trigger
-              as={Button}
-              variant="secondary"
-              size="sm"
-              class="rounded-xs whitespace-nowrap px-2 text-ink-muted hover:text-ink"
-            >
+          <Dropdown placement="bottom-start" gutter={4}>
+            <Dropdown.Trigger>
               <span>Create</span>
               <ChevronDownIcon class="size-3" />
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenuContent class="z-action-menu min-w-[160px]">
-                <For each={options()}>
-                  {(item) => (
-                    <MenuItem
-                      text={item.label}
-                      icon={<CreateOptionIcon id={item.id} />}
-                      onClick={() => handleSelect(item)}
-                    />
-                  )}
-                </For>
-              </DropdownMenuContent>
-            </DropdownMenu.Portal>
-          </DropdownMenu>
+            </Dropdown.Trigger>
+            <Dropdown.Portal>
+              <Layer depth={2}>
+                <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-sm min-w-35 p-1">
+                  <For each={options()}>
+                    {(item) => (
+                      <Dropdown.Item
+                        class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
+                        onSelect={() => handleSelect(item)}
+                      >
+                        <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
+                          <CreateOptionIcon id={item.id} />
+                        </span>
+                        <span class="flex-1 truncate text-ink-muted">
+                          {item.label}
+                        </span>
+                      </Dropdown.Item>
+                    )}
+                  </For>
+                </Dropdown.Content>
+              </Layer>
+            </Dropdown.Portal>
+          </Dropdown>
         </Show>
       </Show>
     </>

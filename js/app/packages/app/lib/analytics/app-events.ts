@@ -8,7 +8,7 @@ export type AppEvents = {
   login_from_onboarding: Record<string, unknown>;
   mobile_web_welcome_viewed: Record<string, unknown>;
   mobile_web_signup_sent_viewed: Record<string, unknown>;
-  onboarding_team_created: { inviteCount: number };
+  onboarding_team_created: { teamId: string; inviteCount: number };
   onboarding_team_skipped: Record<string, unknown>;
 
   subscription_start: Record<string, unknown>;

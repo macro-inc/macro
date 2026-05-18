@@ -22,7 +22,6 @@ export function OpenRefInNewTabIcon(props: IProps) {
 
   return (
     <IconContainer>
-      {/* <Tooltip placement={'bottom'} label={'Open'} small={true}> */}
       <span class="flex">
         <ArrowSquareOut
           on:click={() => {
@@ -34,7 +33,7 @@ export function OpenRefInNewTabIcon(props: IProps) {
             });
           }}
           style={{
-            cursor: 'var(--cursor-pointer)',
+            cursor: 'pointer',
             'margin-left': '5px',
             width: '1.5em',
             height: '1.5em',
@@ -42,7 +41,6 @@ export function OpenRefInNewTabIcon(props: IProps) {
           class="icon"
         />
       </span>
-      {/* </Tooltip> */}
     </IconContainer>
   );
 }

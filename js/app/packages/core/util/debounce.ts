@@ -1,6 +1,6 @@
 import {
-  debounce as solidDebounce,
   leadingAndTrailing,
+  debounce as solidDebounce,
   throttle as solidThrottle,
 } from '@solid-primitives/scheduled';
 import { createEffect, createSignal, onCleanup } from 'solid-js';

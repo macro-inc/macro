@@ -57,6 +57,11 @@ function createTauriNotification(): PlatformNotificationHandle {
         'notification on click is not yet supported on this platform'
       );
     },
+    onDismiss: (_cb) => {
+      console.warn(
+        'notification on dismiss is not yet supported on this platform'
+      );
+    },
     close() {
       console.warn('notification close is not yet supported on this platform');
     },

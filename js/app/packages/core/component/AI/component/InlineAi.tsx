@@ -1,6 +1,6 @@
 import PaperPlaneRight from '@icon/fill/paper-plane-right-fill.svg';
 import GridLoader from '@macro-icons/macro-grid-noise-loader-4.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createSignal, onMount } from 'solid-js';
 
 const defaultPlaceholder = 'Generate with AI...';
@@ -104,7 +104,7 @@ export function InlineInputReady(props: InlineInputReadyProps) {
           class={cn(
             isEmpty()
               ? 'text-ink-extra-muted/30 fill-ink-disabled'
-              : 'text-accent-ink fill-accent!'
+              : 'text-accent fill-accent!'
           )}
         />
       </button>

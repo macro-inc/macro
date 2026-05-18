@@ -4,7 +4,7 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-pub use decode_jwt::*;
+pub use decode_jwt::{DecodeJwtError, DecodedJwt, JwtContext, Params};
 use macro_auth::{headers::AccessTokenExtractor, middleware::decode_jwt::JwtValidationArgs};
 
 /// Axum middleware that decodes the JWT and attaches the user context to the request.

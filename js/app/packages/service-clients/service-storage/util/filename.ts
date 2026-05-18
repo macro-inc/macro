@@ -1,4 +1,4 @@
-import type { BlockName, BlockAlias } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 
 const FULLY_QUALIFIED_DOCUMENT_NAME_BLOCKS: Array<BlockName | BlockAlias> = [

@@ -1,6 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { RenderTool } from '@core/component/AI/component/tool/handler';
+import { McpToolCall } from '@core/component/AI/component/tool/McpToolCall';
 import { useChatContext } from '@core/component/AI/context';
 import { replaceCitations } from '@core/component/LexicalMarkdown/citationsUtils';
 import { ENABLE_TTFT } from '@core/constant/featureFlags';
@@ -182,7 +183,7 @@ export function AssistantMessage(props: {
             </Show>
           </div>
           <Show when={!props.isStreaming}>
-            <div class="flex flex-row w-full justify-start items-center h-[32px] px-4 space-x-2 ">
+            <div class="flex flex-row w-full justify-start items-center h-8 px-4 space-x-2">
               <div class="flex flex-row space-x-2 items-center text-xs text-ink-muted">
                 <div class="w-fit">
                   <button
@@ -193,9 +194,9 @@ export function AssistantMessage(props: {
                   >
                     <Show
                       when={!isLoading()}
-                      fallback={<LoadingIcon class="w-3 h-3 animate-spin" />}
+                      fallback={<LoadingIcon class="size-3 animate-spin" />}
                     >
-                      <NotesIcon class="w-3 h-3 text-note" />
+                      <NotesIcon class="size-3 text-note" />
                     </Show>
                     <p>{isLoading() ? 'Loading Notes' : 'Edit in Notes'}</p>
                   </button>
@@ -207,15 +208,15 @@ export function AssistantMessage(props: {
                   >
                     <Show
                       when={!copied()}
-                      fallback={<CheckIcon class="w-3 h-3 text-success" />}
+                      fallback={<CheckIcon class="size-3 text-success" />}
                     >
-                      <ClipboardIcon class="w-3 h-3" />
+                      <ClipboardIcon class="size-3" />
                     </Show>
                     <p>{copied() ? 'Copied!' : 'Copy'}</p>
                   </button>
                 </div>
                 <Show when={props.ttft && ENABLE_TTFT}>
-                  <div class="flex flex-row items-center space-x-1 text-xs font-mono bg-panel px-2 py-1">
+                  <div class="flex flex-row items-center space-x-1 text-xs font-mono bg-surface px-2 py-1">
                     <span class="text-ink-muted">Time to first token:</span>
                     <span class="text-ink font-medium">
                       {props.ttft! / 1000}s
@@ -333,6 +334,28 @@ function AssistantMessageParts(props: {
                     message_id={props.message.id}
                     part_index={i()}
                     isComplete={isCompleteSelector(toolCall().id)}
+                    renderContext={{
+                      renderContext: {
+                        isStreaming: props.isStreaming,
+                      },
+                    }}
+                  />
+                );
+              })()}
+            </Match>
+            <Match when={type() === 'mcpToolCall'}>
+              {(() => {
+                const mcpCall = () =>
+                  currentPart() as Extract<
+                    AssistantMessagePart,
+                    { type: 'mcpToolCall' }
+                  >;
+                return (
+                  <McpToolCall
+                    name={mcpCall().name}
+                    service={mcpCall().service}
+                    display_name={mcpCall().display_name ?? undefined}
+                    isComplete={isCompleteSelector(mcpCall().id)}
                     renderContext={{
                       renderContext: {
                         isStreaming: props.isStreaming,

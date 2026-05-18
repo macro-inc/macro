@@ -1,17 +1,17 @@
 //! Contains the models for teams
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
-use roles_and_permissions::domain::model::{RoleId, UserRolesAndPermissionsError};
+use roles_and_permissions::domain::model::UserRolesAndPermissionsError;
 
+/// Team plans
 #[derive(
     Eq,
     PartialEq,
     Debug,
     Clone,
-    Hash,
     PartialOrd,
     Copy,
     std::cmp::Ord,
@@ -22,50 +22,31 @@ use roles_and_permissions::domain::model::{RoleId, UserRolesAndPermissionsError}
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
     feature = "outbound",
-    sqlx(type_name = "\"team_user_tier\"", rename_all = "lowercase")
+    sqlx(type_name = "\"team_plan\"", rename_all = "snake_case")
 )]
-/// Ordered from lowest to highest tier top -> bottom
-pub enum TeamUserTier {
-    /// Haiku
-    Haiku,
-    /// Sonnet,
-    Sonnet,
-    /// Opus
-    Opus,
+#[serde(rename_all = "snake_case")]
+pub enum TeamPlan {
+    /// Idea team plan
+    Idea,
+    /// Pre-seed team plan
+    PreSeed,
+    /// Seed team plan
+    Seed,
+    /// Series A team plan
+    SeriesA,
+    /// Growth team plan
+    Growth,
 }
 
-impl std::fmt::Display for TeamUserTier {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl TeamPlan {
+    /// Get the seat cap associated with a team plan
+    pub fn seat_cap(&self) -> i32 {
         match self {
-            TeamUserTier::Haiku => write!(f, "haiku"),
-            TeamUserTier::Sonnet => write!(f, "sonnet"),
-            TeamUserTier::Opus => write!(f, "opus"),
-        }
-    }
-}
-
-impl From<TeamUserTier> for RoleId {
-    fn from(value: TeamUserTier) -> Self {
-        match value {
-            TeamUserTier::Haiku => RoleId::SubHaiku,
-            TeamUserTier::Sonnet => RoleId::SubSonnet,
-            TeamUserTier::Opus => RoleId::SubOpus,
-        }
-    }
-}
-
-impl TeamUserTier {
-    /// Given a list of a users roles, this will try to grab the users respective
-    /// team tier
-    pub fn try_from_roles(roles: HashSet<RoleId>) -> anyhow::Result<TeamUserTier> {
-        if roles.contains(&RoleId::SubHaiku) {
-            Ok(TeamUserTier::Haiku)
-        } else if roles.contains(&RoleId::SubSonnet) {
-            Ok(TeamUserTier::Sonnet)
-        } else if roles.contains(&RoleId::SubOpus) {
-            Ok(TeamUserTier::Opus)
-        } else {
-            anyhow::bail!("unable to extract team tier from user roles")
+            TeamPlan::Idea => 3,
+            TeamPlan::PreSeed => 6,
+            TeamPlan::Seed => 10,
+            TeamPlan::SeriesA => 25,
+            TeamPlan::Growth => i32::MAX,
         }
     }
 }
@@ -119,9 +100,6 @@ pub struct TeamMember<'a> {
     pub user_id: MacroUserIdStr<'a>,
     /// The role of the team member
     pub role: TeamRole,
-    /// The tier of the team member
-    #[cfg_attr(feature = "axum", schema(value_type = String))]
-    pub tier: TeamUserTier,
 }
 
 /// A team with its members
@@ -164,6 +142,14 @@ pub struct PatchTeamRequest {
     pub user_role_updates: Option<Vec<PatchTeamUserRole>>,
 }
 
+/// Request to update the team plan
+#[derive(Debug, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct PatchTeamPlanRequest {
+    /// The new team plan
+    pub team_plan: TeamPlan,
+}
+
 /// Request to update a team user's role
 #[derive(Debug, serde::Deserialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -173,17 +159,6 @@ pub struct PatchTeamUserRole {
     pub team_user_id: MacroUserIdStr<'static>,
     /// The new role of the team user
     pub role: TeamRole,
-}
-
-/// Request to update a team user's tier
-#[derive(Debug, serde::Deserialize)]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
-pub struct PatchTeamUserTierRequest {
-    /// The team user you are updating
-    #[cfg_attr(feature = "axum", schema(value_type = String))]
-    pub team_user_id: MacroUserIdStr<'static>,
-    /// The new tier of the team user
-    pub new_tier: TeamUserTier,
 }
 
 /// The Team struct
@@ -276,8 +251,6 @@ pub struct TeamInviteSnapshot<'a> {
     pub created_at: DateTime<Utc>,
     /// When the invite was last sent
     pub last_sent_at: DateTime<Utc>,
-    /// The tier being invited as
-    pub tier: TeamUserTier,
 }
 
 /// Result of accepting a team invite, including the data needed to roll it back.
@@ -307,6 +280,9 @@ pub enum TeamError {
     /// The team invite does not exist
     #[error("The team invite does not exist")]
     TeamInviteDoesNotExist,
+    /// Underlying entity access error
+    #[error("Access error")]
+    AccessError(#[from] entity_access::domain::models::AccessError),
     /// Bad request
     #[error("Bad request: {0}")]
     BadRequest(String),
@@ -332,6 +308,9 @@ pub enum InviteUsersToTeamError {
     /// Too many emails were provided
     #[error("Too many emails were provided")]
     TooManyEmails,
+    /// Not enough open seats
+    #[error("Not enough open seats")]
+    NotEnoughOpenSeats,
     /// Underlying team error
     #[error("Underlying team error {0}")]
     TeamError(#[from] TeamError),

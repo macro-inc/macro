@@ -1,29 +1,27 @@
 import User from '@phosphor-icons/core/regular/user.svg?component-solid';
+import { cn, Tooltip } from '@ui';
 import {
-  For,
-  Show,
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
-  onCleanup,
-  type Accessor,
+  For,
   type JSX,
+  onCleanup,
+  Show,
 } from 'solid-js';
-import { Tooltip } from './Tooltip';
+import { HoverCard } from './HoverCard';
 import type { UserIconProps } from './UserIcon';
-import { cn } from '@ui/utils/classname';
 
 /** Same keys as {@link UserIconProps} `size` (aligned ring + overlap + overflow chip). */
 export type StackedAvatarsSize = NonNullable<UserIconProps['size']>;
 
 /** `distribute="fill"`: face + chip footprint in px (matches Tailwind `size-*` at default rem). */
 const AVATAR_DIAMETER_PX: Record<StackedAvatarsSize, number> = {
-  xs: 16,
-  sm: 24,
-  md: 32,
+  sm: 16,
+  md: 24,
   lg: 40,
-  xl: 100,
-  fill: 32,
+  fill: 24,
 };
 
 /** Horizontal row shell: stacking context (`isolate`). */
@@ -50,82 +48,62 @@ const STACK_STYLE: Record<
     defaultEmptyIcon: string;
   }
 > = {
-  xs: {
+  sm: {
     overlap: '-mr-1.5',
     overflowChip:
-      'size-4 shrink-0 rounded-full border-2 border-panel bg-menu flex flex-col items-center justify-center',
+      'size-4 shrink-0 rounded-full border-2 border-surface bg-surface flex flex-col items-center justify-center',
     overflowChipText:
       'text-[8px] font-semibold tabular-nums leading-none text-ink',
     inner:
-      'bg-panel size-4 rounded-full p-[1px] border-2 border-panel box-border',
+      'bg-surface size-4 rounded-full p-[1px] border-2 border-surface box-border',
     defaultEmptyIcon: 'w-2 h-2',
   },
-  sm: {
+  md: {
     overlap: '-mr-2',
     overflowChip:
-      'size-6 shrink-0 rounded-full border-2 border-panel bg-menu flex flex-col items-center justify-center',
+      'size-6 shrink-0 rounded-full border-2 border-surface bg-surface flex flex-col items-center justify-center',
     overflowChipText:
       'text-[10px] font-semibold tabular-nums leading-none text-ink',
     inner:
-      'bg-panel size-6 rounded-full p-[2px] border-2 border-panel box-border',
+      'bg-surface size-6 rounded-full p-[2px] border-2 border-surface box-border',
     defaultEmptyIcon: 'w-3 h-3',
-  },
-  md: {
-    overlap: '-mr-3',
-    overflowChip:
-      'size-8 shrink-0 rounded-full border-2 border-panel bg-menu flex flex-col items-center justify-center',
-    overflowChipText:
-      'text-xs font-semibold tabular-nums leading-none text-ink',
-    inner:
-      'bg-panel size-8 rounded-full p-[2px] border-2 border-panel box-border',
-    defaultEmptyIcon: 'w-4 h-4',
   },
   lg: {
     overlap: '-mr-4',
     overflowChip:
-      'size-10 shrink-0 rounded-full border-2 border-panel bg-menu flex flex-col items-center justify-center',
+      'size-10 shrink-0 rounded-full border-2 border-surface bg-surface flex flex-col items-center justify-center',
     overflowChipText:
       'text-sm font-semibold tabular-nums leading-none text-ink',
     inner:
-      'bg-panel size-10 rounded-full p-[2px] border-2 border-panel box-border',
+      'bg-surface size-10 rounded-full p-[2px] border-2 border-surface box-border',
     defaultEmptyIcon: 'w-5 h-5',
   },
-  xl: {
-    overlap: '-mr-10',
-    overflowChip:
-      'size-25 shrink-0 rounded-full border-2 border-panel bg-menu flex flex-col items-center justify-center',
-    overflowChipText:
-      'text-lg font-semibold tabular-nums leading-none text-ink',
-    inner:
-      'bg-panel size-25 rounded-full p-[2px] border-2 border-panel box-border',
-    defaultEmptyIcon: 'w-16 h-16',
-  },
   fill: {
-    overlap: '-mr-3',
+    overlap: '-mr-2',
     overflowChip:
-      'size-8 shrink-0 rounded-full border-2 border-panel bg-menu flex flex-col items-center justify-center',
+      'size-6 shrink-0 rounded-full border-2 border-surface bg-surface flex flex-col items-center justify-center',
     overflowChipText:
-      'text-xs font-semibold tabular-nums leading-none text-ink',
+      'text-[10px] font-semibold tabular-nums leading-none text-ink',
     inner:
-      'bg-panel size-8 rounded-full p-[2px] border-2 border-panel box-border',
-    defaultEmptyIcon: 'w-4 h-4',
+      'bg-surface size-6 rounded-full p-[2px] border-2 border-surface box-border',
+    defaultEmptyIcon: 'w-3 h-3',
   },
 };
 
 /** Inner ring around `UserIcon` (no overlap margin — the row applies overlap on a wrapper). */
-export function stackedAvatarInnerClass(size: StackedAvatarsSize = 'md') {
+export function stackedAvatarInnerClass(size: StackedAvatarsSize = 'sm') {
   return STACK_STYLE[size].inner;
 }
 
 /** Default +N chip shell (no text); pair with {@link stackedAvatarOverflowChipTextClass}. */
 export function stackedAvatarOverflowChipClass(
-  size: StackedAvatarsSize = 'md'
+  size: StackedAvatarsSize = 'sm'
 ) {
   return STACK_STYLE[size].overflowChip;
 }
 
 export function stackedAvatarOverflowChipTextClass(
-  size: StackedAvatarsSize = 'md'
+  size: StackedAvatarsSize = 'sm'
 ) {
   return STACK_STYLE[size].overflowChipText;
 }
@@ -140,7 +118,7 @@ export function StackedAvatarsDefaultEmptyPlaceholder(props: {
   const s = () => props.size ?? 'md';
   return (
     <div class={stackedAvatarInnerClass(s())}>
-      <div class="flex size-full min-h-0 min-w-0 items-center justify-center overflow-hidden rounded-full bg-ink-extra-muted text-panel leading-none">
+      <div class="flex size-full min-h-0 min-w-0 items-center justify-center overflow-hidden rounded-full bg-ink-extra-muted text-surface leading-none">
         <User
           class={cn(STACK_STYLE[s()].defaultEmptyIcon, 'block shrink-0')}
           aria-hidden
@@ -156,6 +134,22 @@ export type StackedAvatarInput = {
   onPress?: () => void;
   ariaLabel?: string;
 };
+
+function OverflowTooltip(props: {
+  chip: JSX.Element;
+  render: (close: () => void) => JSX.Element;
+}) {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <HoverCard
+      open={open()}
+      onOpenChange={setOpen}
+      triggerAs="div"
+      trigger={props.chip}
+      content={props.render(() => setOpen(false))}
+    />
+  );
+}
 
 export type StackedAvatarsRowProps<T = unknown> = {
   each: Accessor<T[]>;
@@ -214,7 +208,7 @@ function defaultOverflowChip(
 export function StackedAvatarsRow<T = unknown>(
   props: StackedAvatarsRowProps<T>
 ) {
-  const size = () => props.size ?? 'md';
+  const size = () => props.size ?? 'sm';
 
   const distributeFill = () => props.distribute === 'fill';
 
@@ -302,7 +296,7 @@ export function StackedAvatarsRow<T = unknown>(
       !(useFillWidthLayout() && fillStepMarginPx() !== null) && overlap(),
       !(useFillWidthLayout() && fillStepMarginPx() !== null) &&
         lastNoOverflowChip &&
-        '!mr-0'
+        'mr-0!'
     );
 
   const faceWrapperStyle = (
@@ -362,18 +356,14 @@ export function StackedAvatarsRow<T = unknown>(
 
     if (props.overflowTooltipContent) {
       return faceShell(
-        <Tooltip
-          unstyled
-          tooltip={(close) => props.overflowTooltipContent!(close, ctx)}
-        >
-          {chip}
-        </Tooltip>
+        <OverflowTooltip
+          chip={chip}
+          render={(close) => props.overflowTooltipContent!(close, ctx)}
+        />
       );
     }
 
-    return faceShell(
-      <Tooltip tooltip={plainOverflowTooltip()}>{chip}</Tooltip>
-    );
+    return faceShell(<Tooltip label={plainOverflowTooltip()}>{chip}</Tooltip>);
   };
 
   return (

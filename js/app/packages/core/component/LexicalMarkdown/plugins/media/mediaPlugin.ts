@@ -15,7 +15,7 @@ import {
   type MediaType,
   type VideoNode,
 } from '@lexical-core';
-import { storageServiceClient } from '@service-storage/client';
+import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fileExtension } from '@service-storage/util/filename';
 import {
   $createNodeSelection,
@@ -129,12 +129,7 @@ export async function getMediaUrl(src: {
     return [null, url];
   }
   if (src.type === 'dss') {
-    return mapOk(
-      await storageServiceClient.getBinaryDocument({
-        documentId: src.id,
-      }),
-      (res) => res.blobUrl
-    );
+    return mapOk(await fetchBinaryDocumentData(src.id), (res) => res.blobUrl);
   }
   console.warn('Get media url failed for src:', src);
   return [null, ''];

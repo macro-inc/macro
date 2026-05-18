@@ -179,7 +179,7 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                         ]
                     }
                 },
-                {"term": {"_index": "emails_alias"}},
+                {"term": {"_index": "emails"}},
                 {"terms": {"link_id": ["link1", "link2"]}},
                 {
                     "bool": {

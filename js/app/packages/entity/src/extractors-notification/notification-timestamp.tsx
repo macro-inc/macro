@@ -1,7 +1,7 @@
-import type { Notification } from '../types/notification';
-import type { NotificationStack } from '@notifications';
-import { formatRelativeTimestamp } from '../utils/timestamp';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
+import type { NotificationStack } from '@notifications';
+import type { Notification } from '../types/notification';
+import { formatRelativeTimestamp } from '../utils/timestamp';
 
 interface NotificationTimestampProps {
   notification?: Notification;

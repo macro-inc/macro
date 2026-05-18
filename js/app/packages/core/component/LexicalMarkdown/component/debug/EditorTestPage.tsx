@@ -80,7 +80,7 @@ console.log(a + b);
 
 function Container(props: { label: string; children: JSX.Element }) {
   return (
-    <div class="flex flex-col gap-4 w-full max-w-xl p-4 bg-panel rounded-lg border border-edge h-64">
+    <div class="flex flex-col gap-4 w-full max-w-xl p-4 bg-surface rounded-lg border border-edge h-64">
       <label class="text-xs text-ink-muted">{props.label}</label>
       <div class="h-px bg-edge"></div>
       <div class="h-full overflow-y-auto">{props.children}</div>
@@ -122,11 +122,11 @@ export default function EditorTestPage() {
   };
 
   return (
-    <div class="flex flex-col h-full w-full">
+    <div class="flex flex-col size-full">
       <SplitHeaderLeft>
         <StaticSplitLabel label="Markdown Test Page" />
       </SplitHeaderLeft>
-      <div class="w-full h-full p-8 flex-1 flex flex-row flex-wrap gap-4 overflow-y-auto items-start justify-center content-start">
+      <div class="size-full p-8 flex-1 flex flex-row flex-wrap gap-4 overflow-y-auto items-start justify-center content-start">
         <Container label="With Suspense">
           <Suspense
             fallback={

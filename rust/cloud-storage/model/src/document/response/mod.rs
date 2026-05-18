@@ -1,7 +1,7 @@
 mod location;
 
 use document_sub_type::DocumentSubType;
-pub use location::*;
+pub use location::LocationResponseV3;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::str::FromStr;
 

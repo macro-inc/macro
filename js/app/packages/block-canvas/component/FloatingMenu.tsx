@@ -1,14 +1,11 @@
 import { useAlign } from '@block-canvas/signal/align';
 import { clamp } from '@block-canvas/util/math';
-import { cn } from '@ui/utils/classname';
 import { vec2 } from '@block-canvas/util/vector2';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   type DropdownPreset,
   SlidableNumberInput,
 } from '@core/component/SlidableNumberInput';
 import { themeColors, themeStyles } from '@core/component/Themes';
-import { Tooltip } from '@core/component/Tooltip';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import AlignBottom from '@phosphor-icons/core/regular/align-bottom.svg?component-solid';
 import AlignCenterHorizontal from '@phosphor-icons/core/regular/align-center-horizontal.svg?component-solid';
@@ -20,6 +17,7 @@ import Reverse from '@phosphor-icons/core/regular/arrows-horizontal.svg?componen
 import CornersOut from '@phosphor-icons/core/regular/corners-out.svg?component-solid';
 import TextAa from '@phosphor-icons/core/regular/text-aa.svg?component-solid';
 import TrashSimple from '@phosphor-icons/core/regular/trash-simple.svg?component-solid';
+import { Button, cn, Tooltip } from '@ui';
 import type { JSX } from 'solid-js';
 import {
   batch,
@@ -180,12 +178,12 @@ function ReverseEdgeButton() {
   const { selectedEdges } = useSelection();
 
   return (
-    <Tooltip tooltip="Reverse connection">
+    <Tooltip label="Reverse connection">
       <button
         class={cn(
           themeColors['base'],
           themeStyles['base'],
-          'h-6 w-6 flex border-0 rounded-md justify-center items-center'
+          'size-6 flex border-0 rounded-md justify-center items-center'
         )}
         onClick={() => {
           edges.batchUpdate(
@@ -230,12 +228,15 @@ function MobileDeleteButton() {
 
   return (
     <Show when={selection.active() && isMobileWidth()}>
-      <div class="max-h-12 flex p-2 bg-menu cursor-auto justify-center items-center rounded shadow-md ring ring-edge">
-        <DeprecatedIconButton
-          icon={TrashSimple}
+      <div class="max-h-12 flex p-2 bg-surface cursor-auto justify-center items-center rounded shadow-md ring ring-edge">
+        <Button
+          variant="ghost"
+          size="icon-md"
           onClick={deleteSelection}
           class="text-failure"
-        />
+        >
+          <TrashSimple />
+        </Button>
       </div>
     </Show>
   );
@@ -484,7 +485,7 @@ export function FloatingMenu() {
     >
       <div
         class={cn(
-          'flex bg-menu rounded-lg shadow-lg ring ring-edge',
+          'flex bg-surface rounded-lg shadow-lg ring ring-edge',
           isMobileWidth() ? 'flex-row p-2 mr-2' : 'flex-col w-54 p-3',
           selectedNodes().length + selectedEdges().length <= 1 &&
             validMenus().size === 0 &&

@@ -332,7 +332,7 @@ export function TextBox(props: { node: TextNode; mode: RenderMode }) {
     >
       <Show when={props.mode === RenderModes.Basic}>
         <div
-          class="h-full w-full absolute top-0 left-0 bg-transparent"
+          class="size-full absolute top-0 left-0 bg-transparent"
           style={{
             'pointer-events': 'auto',
             'user-select': 'none',
@@ -398,7 +398,7 @@ export function TextBox(props: { node: TextNode; mode: RenderMode }) {
           />
           {/* click blocker */}
           <div
-            class="w-full h-full absolute top-0 left-0 invisible"
+            class="size-full absolute top-0 left-0 invisible"
             classList={{
               visible: showClickBlocker(),
             }}

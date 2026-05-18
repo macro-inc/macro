@@ -1,9 +1,8 @@
 import CaretRight from '@phosphor-icons/core/bold/caret-right-bold.svg?component-solid';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
-import { Button } from '@ui';
+import { Button, cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
-import { cn } from '@ui/utils/classname';
 import {
   CLI_COMMANDS,
   MACRO_MCP_CONFIG,
@@ -17,15 +16,14 @@ function CollapsibleCard(props: {
   hint?: string;
   copyKey: string;
   copyValue: string;
-  copyLabel?: string;
   copiedKey: () => string | null;
   onCopy: (key: string, text: string) => void;
 }) {
-  const [expanded, setExpanded] = createSignal(false);
+  const [expanded, setExpanded] = createSignal(true);
   const isCopied = () => props.copiedKey() === props.copyKey;
 
   return (
-    <div class="overflow-hidden rounded-md border border-edge-muted bg-input/70">
+    <div class="overflow-hidden rounded-md border border-edge-muted bg-surface/70">
       <button
         type="button"
         class="flex items-center gap-2 w-full px-4 py-2 text-left"
@@ -46,11 +44,11 @@ function CollapsibleCard(props: {
             </div>
           </Show>
           <div class="flex items-start justify-between gap-3 px-4 py-3">
-            <pre class="flex-1 min-w-0 overflow-x-auto text-[12px] leading-5 text-ink select-text cursor-text whitespace-pre-wrap break-all">
+            <pre class="flex-1 min-w-0 overflow-x-auto text-[12px]/5 text-ink select-text cursor-text whitespace-pre-wrap break-all">
               <code>{props.copyValue}</code>
             </pre>
             <Button
-              variant={isCopied() ? 'secondary' : 'ghost'}
+              variant={isCopied() ? 'base' : 'ghost'}
               size="sm"
               class="shrink-0"
               onClick={() => props.onCopy(props.copyKey, props.copyValue)}
@@ -63,7 +61,7 @@ function CollapsibleCard(props: {
               ) : (
                 <>
                   <ClipboardIcon class="size-3.5" />
-                  {props.copyLabel ?? 'Copy'}
+                  Copy
                 </>
               )}
             </Button>
@@ -98,7 +96,6 @@ export function McpSetupCards(props: { class?: string }) {
             hint={item.hint}
             copyKey={item.key}
             copyValue={MACRO_MCP_URL}
-            copyLabel="Copy URL"
             copiedKey={copiedKey}
             onCopy={copy}
           />

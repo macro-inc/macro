@@ -1,10 +1,7 @@
 use std::str::FromStr;
 
 use crate::api::context::EntityAccessService;
-use crate::{
-    api::context::ApiContext,
-    model::response::annotations::{AnchorResponse, ThreadResponse},
-};
+use crate::model::response::annotations::{AnchorResponse, ThreadResponse};
 use axum::{
     Json,
     extract::{Extension, Path, State},
@@ -43,7 +40,7 @@ pub struct Params {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[axum::debug_handler(state = ApiContext)]
+#[axum::debug_handler(state = crate::api::context::ApiContext)]
 #[tracing::instrument(skip(_access, db))]
 pub async fn get_document_comments_handler(
     Path(Params { document_id }): Path<Params>,

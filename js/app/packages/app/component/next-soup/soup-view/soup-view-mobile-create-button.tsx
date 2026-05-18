@@ -1,9 +1,12 @@
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
-import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
+import { useAnalytics } from '@app/component/analytics-context';
+import type { ListView } from '@app/constants/list-views';
 import { hapticImpact } from '@core/mobile/haptics';
+import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
+import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
+import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
+import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
+import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
+import { Layer } from '@ui';
 import {
   type Component,
   createMemo,
@@ -12,10 +15,7 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import type { ListView } from '@app/constants/list-views';
 import { runCreateAction, setCreateMenuOpen } from '../../Launcher';
-import { useAnalytics } from '@app/component/analytics-context';
-import { Layer } from '@ui';
 
 const ICON_ANIMATION_DURATION_MS = 500;
 
@@ -95,15 +95,16 @@ export function SoupViewMobileCreateButton(props: {
       <Layer depth={1}>
         <button
           type="button"
-          class="absolute bottom-4 right-4 z-10 pl-3 pr-4 py-2 rounded-full bg-panel ring text-accent flex items-center justify-center gap-2 shadow-md ring-accent/20"
-          onPointerDown={() => {
+          class="absolute bottom-4 right-4 z-10 pl-3 pr-4 py-2 rounded-full bg-surface ring text-accent flex items-center justify-center gap-2 shadow-md ring-accent/20"
+          onClick={() => {
             hapticImpact('light');
             setAnimating(true);
             setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
-            createAction()?.();
+            // Defer to next frame to avoid focus race with Dialog
+            requestAnimationFrame(() => createAction()?.());
           }}
         >
-          <div class="w-5 h-5 [&_svg]:size-5">
+          <div class="size-5 [&_svg]:size-5">
             <Dynamic component={createIcon()} triggerAnimation={animating()} />
           </div>
           <div>Create</div>

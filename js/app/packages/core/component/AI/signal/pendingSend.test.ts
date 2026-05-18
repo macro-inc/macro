@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import {
   getPendingSend,
-  setPendingSendData,
   type PendingSend,
+  setPendingSendData,
 } from './pendingSend';
 
 describe('pendingSend signal', () => {

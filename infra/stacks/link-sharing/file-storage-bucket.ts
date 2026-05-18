@@ -40,6 +40,7 @@ export const attachPolicyToBucket = ({
   documentTextExtractorArn,
   documentProcessingServiceRoleArn,
   pdfPreprocessLambdaRoleArn,
+  documentUploadFinalizerRoleArn,
   documentStorageBucketReplicationRoleArn,
   searchProcessingServiceRoleArn,
   bulkUploadLambdaRoleArn,
@@ -54,6 +55,7 @@ export const attachPolicyToBucket = ({
   shaCleanupWorkerArn: pulumi.Output<string>;
   documentProcessingServiceRoleArn: pulumi.Output<string>;
   pdfPreprocessLambdaRoleArn: pulumi.Output<string>;
+  documentUploadFinalizerRoleArn: pulumi.Output<string>;
   documentStorageBucketReplicationRoleArn: pulumi.Output<string>;
   searchProcessingServiceRoleArn: pulumi.Output<string>;
   bulkUploadLambdaRoleArn: pulumi.Output<string>;
@@ -82,6 +84,7 @@ export const attachPolicyToBucket = ({
         shaCleanupWorkerArn,
         documentProcessingServiceRoleArn,
         pdfPreprocessLambdaRoleArn,
+        documentUploadFinalizerRoleArn,
         documentStorageBucketReplicationRoleArn,
         documentTextExtractorArn,
         searchProcessingServiceRoleArn,
@@ -240,6 +243,15 @@ export const attachPolicyToBucket = ({
           AWS: pdfPreprocessLambdaRoleArn,
         },
         Action: ['s3:GetObject', 's3:PutObject'],
+        Resource: [bucket.arn, pulumi.interpolate`${bucket.arn}/*`],
+      },
+      {
+        Sid: 'AllowAccessForDocumentUploadFinalizer',
+        Effect: 'Allow',
+        Principal: {
+          AWS: documentUploadFinalizerRoleArn,
+        },
+        Action: ['s3:GetObject'],
         Resource: [bucket.arn, pulumi.interpolate`${bucket.arn}/*`],
       },
       {

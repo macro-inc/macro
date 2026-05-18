@@ -6,8 +6,8 @@ import { EntityIcon } from './EntityIcon';
 import {
   AddPropertyValueButton,
   EmptyValue,
-  stubSaveHandler,
   type PropertyValueProps,
+  stubSaveHandler,
 } from './ValueComponents';
 
 /**
@@ -77,7 +77,7 @@ export const EntityValue: Component<PropertyValueProps> = (props) => {
         when={!isReadOnly()}
         fallback={
           <Show when={entities.length === 0}>
-            <div class="text-ink-muted px-2 py-0.5 border border-edge-muted bg-transparent inline-block shrink-0">
+            <div class="text-ink-muted px-2 py-0.5 bg-transparent inline-block shrink-0 rounded-sm">
               <EmptyValue />
             </div>
           </Show>

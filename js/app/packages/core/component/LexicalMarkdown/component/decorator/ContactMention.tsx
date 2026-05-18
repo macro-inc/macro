@@ -1,9 +1,9 @@
-import { cn } from '@ui/utils/classname';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import BuildingIcon from '@icon/regular/buildings.svg';
 import UserIcon from '@icon/regular/user.svg';
 import type { ContactMentionDecoratorProps } from '@lexical-core';
+import { cn } from '@ui';
 import { COMMAND_PRIORITY_NORMAL, KEY_ENTER_COMMAND } from 'lexical';
 import { createSignal, Show, useContext } from 'solid-js';
 import { Portal } from 'solid-js/web';
@@ -105,7 +105,7 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
       <span
         ref={mentionRef}
         class={cn(
-          'relative py-0.5 px-0.5 cursor-default rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent-ink',
+          'relative p-0.5 cursor-default rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent',
           isSelectedAsNode() && 'bg-active'
         )}
         {...navHandlers}
@@ -119,11 +119,8 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
           data-contact-mention="true"
         >
           <span class="inline-flex items-center gap-1">
-            <Show
-              when={props.isCompany}
-              fallback={<UserIcon class="w-3 h-3" />}
-            >
-              <BuildingIcon class="w-3 h-3" />
+            <Show when={props.isCompany} fallback={<UserIcon class="size-3" />}>
+              <BuildingIcon class="size-3" />
             </Show>
             {displayName()}
           </span>
@@ -134,15 +131,15 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
       <Show when={popupOpen()}>
         <Portal>
           <div
-            class="absolute select-none overflow-hidden z-toast-region w-64 bg-dialog ring-1 ring-edge text-ink rounded-lg p-3"
+            class="absolute select-none overflow-hidden z-toast-region w-64 bg-surface ring-1 ring-edge text-ink rounded-lg p-3"
             use:floatWithElement={{ element: () => mentionRef }}
           >
             <div class="flex items-center gap-2">
               <Show
                 when={props.isCompany}
-                fallback={<UserIcon class="w-5 h-5" />}
+                fallback={<UserIcon class="size-5" />}
               >
-                <BuildingIcon class="w-5 h-5" />
+                <BuildingIcon class="size-5" />
               </Show>
               <div class="flex-1">
                 <div class="font-semibold">{props.name}</div>

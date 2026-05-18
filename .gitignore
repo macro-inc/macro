@@ -9,3 +9,6 @@ temp/
 .env.local
 run-local.fish
 **/node_modules
+**/result
+**/result-*
+.pi/

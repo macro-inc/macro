@@ -11,14 +11,14 @@ import type {
 } from '@service-comms/generated/models';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import { ChannelNonceKeys } from './keys';
-import { getChannelMessagesQueryKeyPrefix } from './channel-messages';
 import { createMutationNonce } from '../nonce';
+import { getChannelMessagesQueryKeyPrefix } from './channel-messages';
+import { ChannelNonceKeys } from './keys';
 import {
-  replaceTargetReactions,
-  softInvalidateTargetCaches,
-  resolveMessageTarget,
   type MessageTarget,
+  replaceTargetReactions,
+  resolveMessageTarget,
+  softInvalidateTargetCaches,
 } from './reconcile';
 
 type WithChannelId<T> = T & { channelId: string };

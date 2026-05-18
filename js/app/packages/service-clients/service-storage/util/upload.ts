@@ -5,6 +5,7 @@ import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { contentHash } from '@core/util/hash';
 import { isErr, type ResultError } from '@core/util/maybeResult';
 import { toaster } from '@kobalte/core/toast';
+import { waitForDocumentContentReady } from '@queries/storage/document-location';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import { storageServiceClient } from '@service-storage/client';
 import { filenameWithoutExtension } from '@service-storage/util/filename';
@@ -198,15 +199,8 @@ export async function upload(
     return handleUploadError(newfile[0], toastId);
   }
 
-  const [
-    ,
-    {
-      metadata: { documentId },
-      presignedUrl,
-      contentType,
-      fileType,
-    },
-  ] = newfile;
+  const [, { metadata, presignedUrl, contentType, fileType }] = newfile;
+  const { documentId, documentVersionId } = metadata;
 
   const fallbackMime = fileType
     ? (FileTypeMap[fileType as keyof typeof FileTypeMap]?.mime as
@@ -227,7 +221,26 @@ export async function upload(
   ) {
     console.error('failed to upload', documentId, 'removing...');
     await storageServiceClient.deleteDocument({ documentId });
-    return handleUploadError('Failed to upload docx file', toastId);
+    return handleUploadError('Failed to upload file', toastId);
+  }
+
+  // Document upload finalization is owned by the backend S3 ObjectCreated
+  // pipeline. The event finalizer marks object-storage documents uploaded and
+  // initializes markdown documents in sync-service.
+  if (fileType !== 'docx') {
+    const readyLocation = await waitForDocumentContentReady({
+      documentId,
+      versionId: documentVersionId,
+    }).catch((error) => {
+      console.warn('failed while waiting for document upload readiness', error);
+      return undefined;
+    });
+    if (readyLocation?.content.state !== 'ready') {
+      console.warn('document upload did not become ready before timeout', {
+        documentId,
+        fileType,
+      });
+    }
   }
 
   if (docxProcessingPromise) {

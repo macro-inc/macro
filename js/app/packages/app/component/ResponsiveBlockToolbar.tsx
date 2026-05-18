@@ -1,7 +1,9 @@
-import { cn } from '@ui/utils/classname';
+import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import type { ItemType } from '@service-storage/client';
+import { Button, cn } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import {
   type FileOperation,
   SplitFileMenu,
@@ -10,15 +12,11 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from './split-layout/components/SplitHeader';
+import { SplitPermissionsBadge } from './split-layout/components/SplitLabel';
 import {
   SplitToolbarLeft,
   SplitToolbarRight,
 } from './split-layout/components/SplitToolbar';
-import { Button } from '@ui/components/Button';
-import { Dynamic } from 'solid-js/web';
-import { SplitPermissionsBadge } from './split-layout/components/SplitLabel';
-import { LabelAndHotKey } from '@core/component/Tooltip';
-import type { HotkeyToken } from '@core/hotkey/tokens';
 
 export type BlockTool = {
   label: string | (() => string);
@@ -41,20 +39,11 @@ export function ToolButton(props: { tool: BlockTool }) {
   return (
     <Button
       onClick={props.tool.action}
-      tooltip={
-        props.tool.hotkeyToken ? (
-          <LabelAndHotKey
-            label={label()}
-            hotkeyToken={props.tool.hotkeyToken}
-          />
-        ) : (
-          label()
-        )
-      }
+      label={label()}
+      hotkey={props.tool.hotkeyToken}
       class={cn(
         'px-1',
-        props.tool.isActive?.() &&
-          'bg-accent/20 hover:bg-accent/30 text-accent-ink'
+        props.tool.isActive?.() && 'bg-accent/20 hover:bg-accent/30 text-accent'
       )}
       size="icon-sm"
     >

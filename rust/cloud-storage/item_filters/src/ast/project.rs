@@ -11,9 +11,12 @@ use crate::{
 /// the literal ast types for a project
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ProjectLiteral {
-    /// the id of the project
+    /// matches projects whose parent is this id (i.e. children of this project)
     #[serde(rename = "pid")]
     ProjectId(Uuid),
+    /// matches the project with this id itself (not its children)
+    #[serde(rename = "pids")]
+    ProjectIdSelf(Uuid),
     /// the owner of the project
     #[serde(rename = "o")]
     Owner(MacroUserIdStr<'static>),
@@ -40,6 +43,7 @@ impl ExpandFrame<ProjectLiteral> for ProjectFilters {
     fn expand_ast(input: Self) -> Result<Option<filter_ast::Expr<ProjectLiteral>>, Self::Err> {
         let ProjectFilters {
             project_ids,
+            include_root,
             owners,
             importance,
             notification_filters,
@@ -48,7 +52,17 @@ impl ExpandFrame<ProjectLiteral> for ProjectFilters {
         let project_ids = project_ids
             .iter()
             .map(|s| Uuid::parse_str(s))
-            .try_expand(|r| r.map(ProjectLiteral::ProjectId), Expr::or)?;
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(|id| {
+                let children = Expr::Literal(ProjectLiteral::ProjectId(id));
+                if include_root {
+                    Expr::or(Expr::Literal(ProjectLiteral::ProjectIdSelf(id)), children)
+                } else {
+                    children
+                }
+            })
+            .reduce(Expr::or);
 
         let owners = owners
             .iter()

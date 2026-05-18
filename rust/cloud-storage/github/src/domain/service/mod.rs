@@ -4,10 +4,9 @@
 mod sync;
 
 #[cfg(feature = "sync")]
-pub use sync::*;
-
+pub use sync::{GithubSyncConfig, GithubSyncServiceImpl};
 #[cfg(feature = "link")]
 mod link;
 
 #[cfg(feature = "link")]
-pub use link::*;
+pub use link::{GithubLinkConfig, GithubLinkServiceImpl};

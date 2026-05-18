@@ -13,8 +13,8 @@ import {
   $isRangeSelection,
   COMMAND_PRIORITY_HIGH,
   KEY_DOWN_COMMAND,
-  SELECTION_CHANGE_COMMAND,
   type LexicalEditor,
+  SELECTION_CHANGE_COMMAND,
 } from 'lexical';
 import { createStore, type SetStoreFunction } from 'solid-js/store';
 

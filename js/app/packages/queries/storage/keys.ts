@@ -11,6 +11,20 @@ export const deletedKeys = createQueryKeys('deleted', {
   list: null,
 });
 
+export const documentLocationKeys = createQueryKeys('documentLocation', {
+  location: (documentId: string, versionId?: number) => ({
+    queryKey: [documentId, versionId],
+  }),
+  wait: (
+    documentId: string,
+    versionId: number | undefined,
+    target: string,
+    timeoutMs: number
+  ) => ({
+    queryKey: ['wait', target, documentId, versionId, timeoutMs],
+  }),
+});
+
 export const binaryDocumentKeys = createQueryKeys('binaryDocument', {
   document: (documentId: string) => ({
     queryKey: [documentId],

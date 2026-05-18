@@ -1,14 +1,14 @@
+import {
+  type ChannelMessagesData,
+  getChannelMessagesQueryKey,
+} from '@queries/channel/channel-messages';
+import { queryClient } from '@queries/client';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createTargetMessageController,
   restoreDefaultChannelPaginationAfterTargetLoad,
 } from '../create-target-message-controller';
-import { queryClient } from '@queries/client';
-import {
-  getChannelMessagesQueryKey,
-  type ChannelMessagesData,
-} from '@queries/channel/channel-messages';
 
 afterEach(() => {
   queryClient.clear();
@@ -76,7 +76,7 @@ describe('createTargetMessageController', () => {
 
       expect(controller.activeTargetMessageId()).toBe('message-2');
       expect(controller.pendingScrollTargetId()).toBe('message-2');
-      expect(controller.loadAroundMessageId()).toBeUndefined();
+      expect(controller.loadAroundMessageId()).toBe('message-1');
       dispose();
     });
   });

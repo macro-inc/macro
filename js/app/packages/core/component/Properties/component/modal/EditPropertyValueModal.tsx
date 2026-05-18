@@ -2,26 +2,29 @@ import { useMaybeBlockId } from '@core/block';
 import { floatWithElement } from '@core/component/LexicalMarkdown/directive/floatWithElement';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
-import { mergeRefs } from '@solid-primitives/refs';
-import { createSignal, onMount, Show } from 'solid-js';
-import { usePropertiesContext } from '../../context/PropertiesContext';
-import { usePropertyEditor } from '../../hooks/usePropertyEditor';
-import { formatOptionValue } from '../../utils';
-import type { PropertyApiValues, PropertyEditorProps } from '../../types';
-import {
-  entityReferencesToIdSet,
-  updateEntityReferences,
-} from '../../utils/entityConversion';
-import { PropertyEntitySelector } from './shared/PropertyEntitySelector';
-import { PropertyOptionSelector } from './shared/PropertyOptionSelector';
-import { PropertyDateSelector } from './shared/PropertyDateSelector';
 import {
   useAddPropertyOptionMutation,
   usePropertyOptionsQuery,
 } from '@queries/properties/options';
-import type { DateProperty } from '../../types';
+import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
+import { mergeRefs } from '@solid-primitives/refs';
 import { cn, Layer } from '@ui';
+import { createSignal, onMount, Show } from 'solid-js';
+import { usePropertiesContext } from '../../context/PropertiesContext';
+import { usePropertyEditor } from '../../hooks/usePropertyEditor';
+import type {
+  DateProperty,
+  PropertyApiValues,
+  PropertyEditorProps,
+} from '../../types';
+import { formatOptionValue } from '../../utils';
+import {
+  entityReferencesToIdSet,
+  updateEntityReferences,
+} from '../../utils/entityConversion';
+import { PropertyDateSelector } from './shared/PropertyDateSelector';
+import { PropertyEntitySelector } from './shared/PropertyEntitySelector';
+import { PropertyOptionSelector } from './shared/PropertyOptionSelector';
 
 export function EditPropertyValueModal(props: PropertyEditorProps) {
   const propertyOptionsQuery = usePropertyOptionsQuery(
@@ -72,6 +75,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
     hasChanges,
     initializeSelectedOptions,
     toggleOption,
+    clearOptions,
     addOption,
   } = usePropertyEditor(
     props.property,
@@ -216,13 +220,13 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
               }));
             })}
             class={cn(
-              'absolute border border-edge rounded sm z-action-menu max-h-96 overflow-hidden flex flex-col w-full max-w-sm'
+              'absolute border border-edge rounded-md z-action-menu max-h-96 overflow-hidden flex flex-col w-full max-w-60 shadow-md shadow-drop-shadow'
             )}
             tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
           >
             <Show when={!isLoading()}>
-              <div class="bg-dialog text-ink">
+              <div class="bg-surface text-ink">
                 <div>
                   <Show
                     when={
@@ -304,6 +308,15 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
                       onToggleOption={toggleOption}
                       onAddOption={
                         props.property.isSystemProperty ? undefined : addOption
+                      }
+                      clearOption={
+                        !props.property.isMultiSelect &&
+                        !props.property.isRequired
+                          ? {
+                              label: `No ${props.property.displayName.toLowerCase()}`,
+                              onClear: clearOptions,
+                            }
+                          : undefined
                       }
                       onClose={handleClose}
                     />

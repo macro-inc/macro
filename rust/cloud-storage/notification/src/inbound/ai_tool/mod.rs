@@ -14,7 +14,7 @@ use crate::domain::{
     service::NotificationReader,
 };
 use ai::tool::{
-    AsyncTool, AsyncToolSet, RequestContext, ServiceContext, ToolCallError, ToolResult,
+    AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolCallError, ToolResult,
 };
 use async_trait::async_trait;
 use cowlike::CowLike;
@@ -50,11 +50,11 @@ impl<T: NotificationReader> NotificationToolContext<T> {
 }
 
 /// Create a notification toolset for AI agents
-pub fn notification_toolset<T>() -> AsyncToolSet<NotificationToolContext<T>>
+pub fn notification_toolset<T>() -> AsyncToolCollection<NotificationToolContext<T>>
 where
     T: NotificationReader,
 {
-    AsyncToolSet::new()
+    AsyncToolCollection::new()
         .add_tool::<ListNotifications, NotificationToolContext<T>>()
         .add_tool::<MarkNotificationsSeen, NotificationToolContext<T>>()
         .add_tool::<MarkNotificationsDone, NotificationToolContext<T>>()

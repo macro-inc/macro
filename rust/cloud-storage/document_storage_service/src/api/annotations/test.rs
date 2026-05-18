@@ -6,6 +6,7 @@ fn check_ser_meta() -> Result<(), Box<dyn std::error::Error>> {
         document_name: "test".to_string(),
         owner: MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap(),
         file_type: None,
+        sub_type: None,
         mention_id: "xxx".to_string(),
         thread_id: 42,
         comment_id: 99,
@@ -225,6 +226,30 @@ fn new_thread_comment_notifies_doc_owner() {
     assert!(result.mention_recipients.is_empty());
     assert!(result.thread_reply_recipients.is_empty());
     assert_eq!(result.doc_owner_recipient.as_deref(), Some(owner.as_ref()),);
+}
+
+#[test]
+fn non_owner_non_assignee_commenter_gets_subsequent_thread_reply() {
+    let sender = user_id("macro|sender@test.com");
+    let owner = user_id("macro|owner@test.com");
+    let commenter = "macro|commenter@test.com";
+
+    let result = compute_notification_recipients(
+        Some(&sender),
+        &[],
+        &[commenter.to_string(), sender.as_ref().to_string()],
+        &[],
+        &owner,
+        true,
+    );
+
+    assert!(
+        result.thread_reply_recipients.contains(&user_id(commenter)),
+        "a prior commenter should be subscribed to subsequent replies even when they are not the owner or an assignee"
+    );
+    assert!(result.assignee_recipients.is_empty());
+    assert_eq!(result.doc_owner_recipient.as_deref(), Some(owner.as_ref()));
+    assert_eq!(result.all_recipients().len(), result.total_count());
 }
 
 #[test]

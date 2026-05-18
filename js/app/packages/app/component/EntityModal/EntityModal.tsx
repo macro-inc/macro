@@ -2,8 +2,9 @@ import { getSplitPanelRef } from '@app/component/split-layout/layoutUtils';
 import { isInBlock } from '@core/block';
 import clickOutside from '@core/directive/clickOutside';
 import { blockElementSignal } from '@core/signal/blockElement';
+import type { EntityData } from '@entity';
 import { Dialog } from '@kobalte/core/dialog';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { ComponentProps } from 'solid-js';
 import {
   type Accessor,
@@ -14,7 +15,6 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import type { EntityData } from '@entity';
 import { MoveToProjectView } from './MoveToProjectView';
 import { RenameView } from './RenameView';
 
@@ -38,7 +38,7 @@ export const EntityModalActionFooter = (props: {
           'uppercase py-1 px-3 font-mono text-sm',
           props.isDisabled
             ? 'bg-edge text-ink-placeholder cursor-not-allowed'
-            : 'bg-accent text-menu'
+            : 'bg-accent text-surface'
         )}
         onClick={props.onConfirm}
         disabled={props.isDisabled}
@@ -76,7 +76,7 @@ const EntityModalContent = (props: {
     >
       <div
         ref={entityModalContentRef}
-        class="pointer-events-auto w-full max-w-[min(36rem,calc(100%-1rem))] mx-auto mt-16 bg-menu border border-edge h-fit p-2"
+        class="pointer-events-auto w-full max-w-[min(36rem,calc(100%-1rem))] mx-auto mt-16 bg-surface border border-edge h-fit p-2"
       >
         <div class="w-full my-1">
           <Show when={props.view() === 'rename'}>
@@ -140,7 +140,7 @@ function SplitModal(
           as="div"
           class="absolute z-modal"
           classList={{
-            'left-px right-px bottom-px top-px': props.mode === 'split',
+            'inset-px': props.mode === 'split',
             'inset-0': props.mode !== 'split',
             'bg-modal-overlay': props.scrim !== false,
           }}
@@ -150,7 +150,7 @@ function SplitModal(
         <div
           class="absolute z-modal pointer-events-none px-2"
           classList={{
-            'left-px right-px bottom-px top-px': props.mode === 'split',
+            'inset-px': props.mode === 'split',
             'inset-0': props.mode !== 'split',
           }}
         >

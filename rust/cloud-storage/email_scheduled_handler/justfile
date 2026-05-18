@@ -5,8 +5,8 @@ import '../database.just'
 test:
     cargo test --all-features
 
-build:
-    SQLX_OFFLINE=true cargo lambda build --release --bin {{lambda_name}} --output-format zip
+build compiler="":
+    SQLX_OFFLINE=true cargo lambda build {{ if compiler == "" { "" } else { "--compiler " + compiler } }} --release --bin {{lambda_name}} --output-format zip
 
 check:
   SQLX_OFFLINE=true cargo check
@@ -15,4 +15,4 @@ create-queues:
 	AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name sfs-delete-queue.fifo
 
 prepare_db:
-	DATABASE_URL={{ DATABASE_URL }} cargo sqlx prepare
+	DATABASE_URL={{ DATABASE_URL }} sqlx prepare

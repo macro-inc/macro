@@ -1,6 +1,6 @@
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
-import { createEffect, createSignal, onCleanup, type JSX } from 'solid-js';
+import { createEffect, createSignal, type JSX, onCleanup } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
 import { SoupEntityActionDrawer } from './SoupEntityActionDrawer';
 import {

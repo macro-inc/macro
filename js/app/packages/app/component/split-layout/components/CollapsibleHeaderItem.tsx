@@ -1,6 +1,6 @@
+import { cn } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { useRegisterCollapsibleHeaderItem } from '../layoutUtils';
-import { cn } from '@ui/utils/classname';
 
 type CollapsibleHeaderItemProps = {
   id: string;

@@ -1,4 +1,3 @@
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import {
   ChatWithAgentButton,
   ChatWithAgentIcon,
@@ -9,6 +8,7 @@ import {
   ResponsivePermissionsBadge,
   ToolButton,
 } from '@app/component/ResponsiveBlockToolbar';
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import {
   type FileOperation,
   SplitFileMenu,
@@ -36,18 +36,18 @@ import {
   ENABLE_PROJECT_SHARING,
   ENABLE_PROJECT_VIEW_PREVIEW,
 } from '@core/constant/featureFlags';
+import { isMobile } from '@core/mobile/isMobile';
 import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import { toast } from 'core/component/Toast/Toast';
-import { isMobile } from '@core/mobile/isMobile';
-import IconShared from '@macro-icons/wide/share.svg';
 import Info from '@icon/regular/info.svg';
 import TagIcon from '@icon/regular/tag.svg';
+import IconShared from '@macro-icons/wide/share.svg';
+import { toast } from 'core/component/Toast/Toast';
 import { createMemo, For, Show } from 'solid-js';
 import { ProjectCreateMenu, useProjectCreateTools } from './ProjectCreateMenu';
 import {
-  ProjectPropertiesButton,
   PROPERTIES_DRAWER_ID,
+  ProjectPropertiesButton,
 } from './ProjectPropertiesModal';
 
 // TODO (SEAMUS) : Revisit this file when we figure out what we wanna do

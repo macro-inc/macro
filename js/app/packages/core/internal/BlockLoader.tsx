@@ -1,4 +1,7 @@
+import { useAnalytics } from '@app/component/analytics-context';
+import { SplitPanelContext } from '@app/component/split-layout/context';
 import type { OwnedBlockHandle } from '@core/orchestrator';
+import { useQueryClient } from '@queries/client';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { createAsync } from '@solidjs/router';
 import { createEffect, type JSX, onCleanup, useContext } from 'solid-js';
@@ -24,9 +27,6 @@ import {
 } from '../signal/load';
 import type { Source, SourcePreload } from '../source';
 import { err, isErr, type ObjectLike, ok } from '../util/maybeResult';
-import { useQueryClient } from '@queries/client';
-import { SplitPanelContext } from '@app/component/split-layout/context';
-import { useAnalytics } from '@app/component/analytics-context';
 
 export const blockDataSignal = createBlockSignal<unknown>();
 export const blockLiveTrackingEnabledSignal = createBlockSignal<boolean>();

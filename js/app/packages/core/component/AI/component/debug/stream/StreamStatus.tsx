@@ -1,5 +1,5 @@
 import type { ChatMessageStream } from '@service-connection/stream';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { Match, Switch } from 'solid-js';
 
 type Props = {
@@ -9,7 +9,7 @@ type Props = {
 export function StreamStatus(props: Props) {
   console.log('status');
   return (
-    <div class="p-2 bg-menu border border-edge text-ink font-mono space-y-2 text-sm">
+    <div class="p-2 bg-surface border border-edge text-ink font-mono space-y-2 text-sm">
       <Switch>
         <Match when={props.stream()}>
           {(stream) => (
@@ -37,7 +37,7 @@ function Dot(props: { active: boolean }) {
   return (
     <div
       class={cn(
-        'w-3 h-3 rounded-full border border-edge',
+        'size-3 rounded-full border border-edge',
         props.active && 'bg-accent'
       )}
     />

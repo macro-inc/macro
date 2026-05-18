@@ -1,17 +1,19 @@
-import { useBlockAliasedName, useBlockName } from '@core/block';
+import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { ResponsiveDropdown } from '@app/component/SimpleDropdown';
+import { useBlockAliasedName, useBlockName } from '@core/block';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
+import { toast } from '@core/component/Toast/Toast';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { useIsDocumentOwner } from '@core/signal/permissions';
+import { buildEntityData } from '@entity';
 import ArrowRight from '@icon/regular/arrow-right.svg';
 import Copy from '@icon/regular/copy.svg';
 import ThreeDots from '@icon/regular/list.svg';
 import Rename from '@icon/regular/pencil-line.svg';
 import Trash from '@icon/regular/trash-simple.svg';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button, cn, Layer } from '@ui';
 import {
   type Component,
   createMemo,
@@ -22,10 +24,6 @@ import {
 } from 'solid-js';
 import { SplitPanelContext } from '../context';
 import { useSplitLayout } from '../layout';
-import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
-import { toast } from '@core/component/Toast/Toast';
-import { buildEntityData } from '@entity';
-import { Layer } from '@ui';
 
 export type FileOperationName = 'delete' | 'rename' | 'copy' | 'moveToProject';
 
@@ -192,7 +190,7 @@ export function SplitFileMenu(props: {
         as={Button}
         class={cn(
           'px-1',
-          open() && 'bg-accent/20 hover:bg-accent/30 text-accent-ink',
+          open() && 'bg-accent/20 hover:bg-accent/30 text-accent',
           props.buttonClass
         )}
         size="icon-sm"
@@ -201,7 +199,7 @@ export function SplitFileMenu(props: {
       </ResponsiveDropdown.Trigger>
       <ResponsiveDropdown.Portal>
         <Layer depth={2}>
-          <ResponsiveDropdown.Content class="bg-menu w-fit p-1 border border-edge-muted rounded-xs shadow">
+          <ResponsiveDropdown.Content class="bg-surface w-fit p-1 border border-edge-muted rounded shadow">
             <For each={ops()}>
               {(op, i) => (
                 <>

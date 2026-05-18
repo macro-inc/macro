@@ -5,9 +5,9 @@ import { toast } from '@core/component/Toast/Toast';
 import { batch, createEffect, on } from 'solid-js';
 import { DEFAULT_DARK_THEME } from '../constants';
 
-export function exportTheme(){
-  let id = currentThemeId();
-  let theme = JSON.stringify(themes().find((t) => t.id === id));
+export function exportTheme(themeId?: string){
+  const id = themeId ?? currentThemeId();
+  const theme = JSON.stringify(themes().find((t) => t.id === id));
   navigator.clipboard.writeText(theme);
 }
 
@@ -139,8 +139,10 @@ export function saveTheme(name: string): void{
 
 export function deleteTheme(id: string): void{
   setUserThemes(userThemes().filter((theme) => theme.id !== id));
-  setIsThemeSaved(false);
-  setCurrentThemeId('');
+  if(currentThemeId() === id){
+    setIsThemeSaved(false);
+    setCurrentThemeId('');
+  }
 }
 
 /** Returns true when the current theme has a dark background (ink lightness > panel lightness). */

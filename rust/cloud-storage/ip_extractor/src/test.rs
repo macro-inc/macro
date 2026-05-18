@@ -224,6 +224,7 @@ fn error_response_parse_err_is_400() {
 
 #[test]
 fn error_response_invalid_ascii_is_400() {
+    #[expect(invalid_from_utf8)]
     let err = ClientIpError::InvalidAscii(std::str::from_utf8(b"\xff").unwrap_err());
     let response = err.into_response();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);

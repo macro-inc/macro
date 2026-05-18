@@ -1,8 +1,10 @@
-import { cn } from '@ui/utils/classname';
 import type { PortalScope } from '@core/component/ScopedPortal';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { EditorType } from '@lexical-core';
 import type { HistoryItem } from '@queries/history/types';
 import { onElementConnect } from '@solid-primitives/lifecycle';
+import { isIOS } from '@solid-primitives/platform';
+import { cn } from '@ui';
 import {
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
@@ -33,8 +35,8 @@ import {
   customSelectionDataPlugin,
   emojisPlugin,
   filePastePlugin,
-  iosCursorScrollPlugin,
   type ItemMention,
+  iosCursorScrollPlugin,
   keyboardFocusPlugin,
   mediaPlugin,
   mentionsPlugin,
@@ -58,8 +60,6 @@ import { FloatingLinkMenu } from '../menu/FloatingLinkMenu';
 import { MentionsMenu } from '../menu/MentionsMenu';
 import { DecoratorRenderer } from './DecoratorRenderer';
 import { NodeAccessoryRenderer } from './NodeAccessoryRenderer';
-import { isIOS } from '@solid-primitives/platform';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 
 /**
  * @param editable - A signal that indicates whether the textarea is editable
@@ -307,7 +307,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
       <div
         ref={scrollContainerRef}
-        class={cn('relative w-full h-full overflow-auto min-h-8', props.class)}
+        class={cn('relative size-full overflow-auto min-h-8', props.class)}
         on:keydown={(e) => {
           e.stopPropagation();
         }}
@@ -337,7 +337,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         <DecoratorRenderer editor={editor} />
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
         <Show when={showPlaceholder()}>
-          <div class="pointer-events-none text-ink-placeholder/50 absolute top-0">
+          <div class="pointer-events-none text-ink-placeholder absolute top-0">
             <p class="my-1.5 pointer-events-none">
               {props.placeholder ?? '...'}
             </p>

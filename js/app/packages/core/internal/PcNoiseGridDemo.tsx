@@ -36,16 +36,16 @@ export default function PcNoiseGridDemo() {
   };
 
   return (
-    <div class="flex flex-col h-full w-full">
+    <div class="flex flex-col size-full">
       <Bar
         left={<div class="p-2 text-sm w-2xl truncate">PcNoiseGrid</div>}
         center={<div></div>}
       ></Bar>
-      <div class="flex flex-row h-full w-full">
+      <div class="flex flex-row size-full">
         {/* Left side - PcNoiseGrid preview */}
-        <div class="flex-1 relative bg-panel flex items-center justify-center p-4">
-          <div class="w-full h-full flex items-center justify-center border border-edge">
-            <div class="w-full h-full relative bg-panel text-accent">
+        <div class="flex-1 relative bg-surface flex items-center justify-center p-4">
+          <div class="size-full flex items-center justify-center border border-edge">
+            <div class="size-full relative bg-surface text-accent">
               <PcNoiseGrid
                 cellSize={cellSize()}
                 warp={warp()}
@@ -63,7 +63,7 @@ export default function PcNoiseGridDemo() {
         </div>
 
         {/* Right side - Controls */}
-        <div class="w-[50%] max-w-lg bg-panel p-4 overflow-y-auto border-l border-edge border-dashed">
+        <div class="w-[50%] max-w-lg bg-surface p-4 overflow-y-auto border-l border-edge border-dashed">
           <h2 class="font-mono mb-6">PcNoiseGrid Generator</h2>
 
           <div class="space-y-6">
@@ -193,7 +193,7 @@ export default function PcNoiseGridDemo() {
               onClick={() =>
                 navigator.clipboard.writeText(generateComponentCode())
               }
-              class="w-full px-4 py-2 bg-ink-extra-muted text-page font-medium"
+              class="w-full px-4 py-2 bg-ink-extra-muted text-surface font-medium"
             >
               Copy Component Code
             </button>

@@ -425,8 +425,7 @@ export const StorageService = new Svc('Document++ Storage Service API')
       ...schemas.copyDocumentQueryParams.shape,
       ...schemas.copyDocumentBody.shape,
     },
-    result:
-      schemas.copyDocumentResponse.shape.data.shape.documentMetadata.shape,
+    result: schemas.copyDocumentResponse.shape.data.shape.documentMetadata,
     modifies: true,
     throws: withFetchErrors(),
   })
@@ -583,12 +582,11 @@ export const StorageService = new Svc('Document++ Storage Service API')
         schemas.getLocationHandlerParams.shape.document_id.describe(
           `Document UUID`
         ),
-      versionId:
-        schemas.getLocationHandlerQueryParams.shape.document_version_id.describe(
-          `A specific document version id to get the location for.`
-        ),
+      versionId: schemas.getLocationHandlerQueryParams.shape.document_version_id
+        .optional()
+        .describe(`A specific document version id to get the location for.`),
     },
-    result: z.object({ data: schemas.getLocationHandlerResponse }).shape,
+    result: z.object({ data: z.any() }).shape,
     throws: withFetchErrors(),
   })
   .fn('getDocumentPermissions', {

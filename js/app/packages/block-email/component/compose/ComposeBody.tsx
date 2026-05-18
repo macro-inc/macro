@@ -2,13 +2,14 @@ import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
+import { addUserMentionToCc } from '@block-email/util/mentionToCc';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { createFilesReadyHandler } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { logger } from '@observability/logger';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
   type Accessor,
@@ -136,9 +137,9 @@ export function ComposeBody(props: {
 
   return (
     <>
-      <div class="w-full h-full min-h-0 sm:max-h-full mobile:flex-1 flex flex-col flex-1">
+      <div class="size-full min-h-0 sm:max-h-full mobile:flex-1 flex flex-col flex-1">
         <div
-          class="grow w-full h-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 overflow-auto"
+          class="grow size-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 overflow-auto"
           ref={bodyDiv}
           onclick={() => {
             editor()?.focus();
@@ -170,6 +171,16 @@ export function ComposeBody(props: {
               !ctx.hasPaidAccess() ? <MacroSignatureButton /> : undefined
             }
             onChange={ctx.onContentChange}
+            onUserMention={(mention) => {
+              addUserMentionToCc({
+                mention,
+                recipientOptions: ctx.recipientOptions(),
+                toRecipients: ctx.recipients().to,
+                ccRecipients: ctx.recipients().cc,
+                bccRecipients: ctx.recipients().bcc,
+                setCc: (next) => ctx.setRecipients('cc', next),
+              });
+            }}
             onFocusLeaveStart={(e) => {
               e.preventDefault();
               focusSibling('prev');

@@ -1,3 +1,4 @@
+import type { DocumentMetadata } from '@coparse/document-processing-types';
 import {
   createDocumentStorageServiceHandle,
   makeFile,
@@ -6,7 +7,6 @@ import type {
   DocumentKeyParts,
   FileSystemFile,
 } from '@coparse/filesystem/src/file';
-import type { DocumentMetadata } from '@coparse/document-processing-types';
 
 export async function makeFileFromBlob({
   blob,

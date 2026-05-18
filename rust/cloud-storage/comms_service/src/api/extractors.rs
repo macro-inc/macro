@@ -7,7 +7,7 @@ use axum::{
 use axum_extra::extract::Cached;
 use comms::{
     domain::{models::channel_name::resolve_channel_name, ports::ChannelsService},
-    inbound::CommsRouterState,
+    inbound::router::CommsRouterState,
 };
 use comms_db_client::{
     channels::get_channel_info::{ChannelInfo, get_channel_info},

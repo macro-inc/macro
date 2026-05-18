@@ -1,6 +1,7 @@
-import { Match, Show, Switch } from 'solid-js';
 import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import { cn } from '@ui/utils/classname';
+import { CallAgainButton } from '@channel/Call/CallAgainButton';
+import { cn } from '@ui';
+import { Match, Show, Switch } from 'solid-js';
 import { AttendanceBadge, SharedBadge } from '../../components/Badges';
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
 import { ProjectBreadCrumb } from '../../components/ProjectBreadCrumb';
@@ -117,10 +118,20 @@ export function WideLayout(props: LayoutProps) {
         <Show when={isCallEntity(props.entity) && props.entity}>
           {(entity) => (
             <>
+              <span class="flex w-24 shrink-0 justify-end">
+                <Show when={!entity().isActive}>
+                  <CallAgainButton
+                    channelId={entity().channelId}
+                    class="opacity-0 group-hover/narrow:opacity-100 transition-opacity flex shrink-0 items-center gap-1 rounded-xs border border-edge-muted px-1.5 py-1 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-none"
+                  />
+                </Show>
+              </span>
               <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
                 <AttendanceBadge attended={entity().attended} />
               </Show>
-              <CallParticipants participantIds={entity().participantIds} />
+              <span class="flex w-10 shrink-0 justify-end">
+                <CallParticipants participantIds={entity().participantIds} />
+              </span>
             </>
           )}
         </Show>
@@ -130,7 +141,7 @@ export function WideLayout(props: LayoutProps) {
       </Entity.Slot>
       <Entity.Slot
         placement="timestamp"
-        class="text-xs font-mono text-right text-ink-extra-muted uppercase font-light"
+        class="text-xs text-right text-ink-extra-muted font-medium"
       >
         <Show
           when={

@@ -1,13 +1,13 @@
-import { Show, type Component } from 'solid-js';
-import { tryMacroId, useDisplayName } from '@core/user';
-import { Tooltip } from '@core/component/Tooltip';
-import { UserIcon } from '@core/component/UserIcon';
 import {
-  StackedAvatarsDefaultEmptyPlaceholder,
-  stackedAvatarInnerClass,
   type StackedAvatarInput,
+  StackedAvatarsDefaultEmptyPlaceholder,
   type StackedAvatarsSize,
+  stackedAvatarInnerClass,
 } from '@core/component/StackedAvatarsRow';
+import { UserIcon } from '@core/component/UserIcon';
+import { tryMacroId, useDisplayName } from '@core/user';
+import { Tooltip } from '@ui';
+import { type Component, Show } from 'solid-js';
 
 /** Matches {@link UserIcon} `lg` (`size-10`) for the in-call strip. */
 export const IN_CALL_STRIP_IMAGE_SIZE = 'lg' satisfies StackedAvatarsSize;
@@ -43,9 +43,7 @@ export const InCallStripAvatarImage: Component<{
   };
 
   return (
-    <Tooltip
-      tooltip={<span class="wrap-break-word text-ink">{nameLabel()}</span>}
-    >
+    <Tooltip label={nameLabel()}>
       <Show
         when={props.image.stripLocalPending}
         fallback={

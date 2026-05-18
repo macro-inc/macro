@@ -1,10 +1,11 @@
-import { Show, createMemo } from 'solid-js';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { isEmojiOnly } from '@core/util/string';
-import { cn } from '@ui/utils/classname';
-import { useMessage } from './context';
-import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { cn } from '@ui';
+import { createMemo, createSignal, Show } from 'solid-js';
+import { useMessage, useSearchHighlightTermsLookup } from './context';
+import { createSearchHighlightOverlay } from './highlightOverlay';
 
 type ContentProps = {
   class?: string;
@@ -13,6 +14,14 @@ type ContentProps = {
 export function Content(props: ContentProps) {
   const message = useMessage();
   const bigEmoji = createMemo(() => isEmojiOnly(message().content ?? ''));
+  const termsLookup = useSearchHighlightTermsLookup();
+
+  const content = createMemo(() => message().content ?? '');
+  const terms = createMemo(() => termsLookup?.(message().id));
+
+  const [markdownRoot, setMarkdownRoot] = createSignal<HTMLDivElement>();
+
+  createSearchHighlightOverlay({ root: markdownRoot, content, terms });
 
   return (
     <Show when={message().content}>
@@ -24,9 +33,10 @@ export function Content(props: ContentProps) {
         )}
       >
         <StaticMarkdown
-          markdown={message().content ?? ''}
+          markdown={content()}
           theme={channelTheme}
           target="internal"
+          rootRef={setMarkdownRoot}
         />
       </div>
     </Show>

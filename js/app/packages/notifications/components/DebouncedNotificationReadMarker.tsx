@@ -1,12 +1,12 @@
 import type { Entity } from '@core/types';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
+import { debounce } from '@solid-primitives/scheduled';
 import { onMount } from 'solid-js';
 import {
   markNotificationForEntityIdAsRead,
   markNotificationsForEntityAsRead,
 } from '../notification-helpers';
 import type { NotificationSource } from '../notification-source';
-import { debounce } from '@solid-primitives/scheduled';
 
 const DEFAULT_DEBOUNCE_TIME = 2_000;
 

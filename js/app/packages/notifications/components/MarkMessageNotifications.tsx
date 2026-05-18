@@ -1,11 +1,11 @@
-import { createEffect } from 'solid-js';
-import type { JSXElement } from 'solid-js';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import type { UnifiedNotification } from '@notifications/types';
 import {
   isChannelNotification,
   useNotificationsForEntity,
 } from '@notifications/notification-helpers';
+import type { UnifiedNotification } from '@notifications/types';
+import type { JSXElement } from 'solid-js';
+import { createEffect } from 'solid-js';
 
 export function MarkMessageNotifications(props: {
   messageId: string;

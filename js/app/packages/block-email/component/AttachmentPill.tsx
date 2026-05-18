@@ -26,7 +26,7 @@ export function EmailAttachmentPill(props: EmailAttachmentPillProps) {
   return (
     <div
       ref={parentDiv}
-      class="items-center text-xs flex flex-row p-2 w-36 rounded border border-edge hover:bg-hover hover-transition-bg"
+      class="items-center text-xs flex flex-row p-2 w-36 rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] hover:bg-ink-muted/[0.06] cursor-pointer"
       classList={{
         'pl-2': props.removable,
       }}
@@ -49,7 +49,7 @@ export function EmailAttachmentPill(props: EmailAttachmentPillProps) {
             if (props.onRemove) props.onRemove();
           }}
           onPointerEnter={() => {
-            parentDiv.style.backgroundColor = 'var(--color-panel)';
+            parentDiv.style.backgroundColor = 'var(--color-surface)';
           }}
           onPointerLeave={() => {
             parentDiv.style.backgroundColor = '';

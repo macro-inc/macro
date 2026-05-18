@@ -1,18 +1,19 @@
-import { throwOnErr } from '@core/util/maybeResult';
+import { MaybeResultError, throwOnErr } from '@core/util/maybeResult';
 import {
-  commsServiceClient,
   type ApiChannelMessage,
   type ApiThreadReply,
   type ChannelMessagesPage,
+  commsServiceClient,
 } from '@service-comms/client';
+import type { ApiCountedReaction } from '@service-storage/generated/schemas';
+import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import {
   type InfiniteData,
   useInfiniteQuery,
   useQuery,
 } from '@tanstack/solid-query';
 import { type Accessor, createEffect, on } from 'solid-js';
-import type { ApiCountedReaction } from '@service-storage/generated/schemas';
-import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
+import { createStore, reconcile } from 'solid-js/store';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
 import {
@@ -23,7 +24,6 @@ import {
   replaceReplyReactionsInThreadPreview,
   restoreReplyToThreadPreview,
 } from './thread-preview';
-import { createStore, reconcile } from 'solid-js/store';
 
 export type ChannelMessagesData = InfiniteData<
   ChannelMessagesPage,
@@ -55,6 +55,13 @@ type ChannelMessagesPageParam = {
   next_cursor: string | null;
   previous_cursor: string | null;
 };
+
+export function isMissingChannelMessageError(error: unknown): boolean {
+  return (
+    error instanceof MaybeResultError &&
+    error.errors.some(({ code }) => code === 'NOT_FOUND' || code === 'GONE')
+  );
+}
 
 export function channelMessagesQueryOptions(
   channelId: string,
@@ -94,6 +101,12 @@ export function channelMessagesQueryOptions(
           }
         : null,
     staleTime: Infinity,
+    retry: (failureCount: number, error: Error) => {
+      if (loadAroundMessageId && isMissingChannelMessageError(error)) {
+        return false;
+      }
+      return failureCount < 1;
+    },
   };
 }
 
@@ -729,7 +742,16 @@ export function createMessageIndex(
 
   const [messageIndex, setMessageIndex] = createStore(buildIndex());
 
-  createEffect(on(data, () => setMessageIndex(reconcile(buildIndex()))));
+  createEffect(
+    on(data, () => {
+      const next = buildIndex();
+      // The underlying query can briefly emit undefined data during a refetch
+      if (next.items.length === 0 && messageIndex.items.length > 0) {
+        return;
+      }
+      setMessageIndex(reconcile(next));
+    })
+  );
 
   return messageIndex;
 }

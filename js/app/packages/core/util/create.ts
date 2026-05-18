@@ -1,7 +1,5 @@
+import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
-import { MARKDOWN_LORO_SCHEMA } from '@block-md/definition';
-import { rawStateToLoroSnapshot } from '@core/collab/utils';
-import { createMarkdownStateFromContent } from '@core/component/LexicalMarkdown/collaboration/utils';
 import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
@@ -9,42 +7,28 @@ import {
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
+  authKeys,
   invalidateUserQuota,
   type UserInfoData,
-  authKeys,
 } from '@queries/auth';
 import { queryClient } from '@queries/client';
+import { postNewHistoryItem } from '@queries/history/history';
+import { setPreviewOnCreate } from '@queries/preview/preview';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { CreateChatRequest } from '@service-cognition/generated/schemas';
-import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
-import { postNewHistoryItem } from '@queries/history/history';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
-import { syncServiceClient } from '@service-sync/client';
+import { isPaymentError } from './handlePaymentError';
 import { contentHash } from './hash';
 import {
   getExtensionForLanguage,
   isCodeEditorExtensionSupported,
   isCodeEditorLanguageSupported,
 } from './languageQuery';
-import { isPaymentError } from './handlePaymentError';
 import { err, isErr, ok } from './maybeResult';
-import { refetchSoupEntity } from '@queries/soup/cache';
-import { setPreviewOnCreate } from '@queries/preview/preview';
-
-/**
- * Generate a fake sha256 hash
- *
- * HACK: Since we don't actually store markdown files in dss, we need to provide a fake sha256 hash
- * to dss.
- */
-function fakeSha256() {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes); // secure RNG
-  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
 
 type CreateMarkdownFileArgs = {
   title?: string;
@@ -53,45 +37,24 @@ type CreateMarkdownFileArgs = {
 };
 
 /**
- * Initializes a new markdown file in dss & sync_service given a content string.
+ * Creates a new markdown file and initializes sync-service on the backend.
  * Use createTask for the task subtype.
  */
 export async function createMarkdownFile(
   args?: CreateMarkdownFileArgs
 ): Promise<string | undefined> {
-  const emptyMarkdownState = await createMarkdownStateFromContent(
-    args?.content
-  );
-  const snapshot = await rawStateToLoroSnapshot(
-    MARKDOWN_LORO_SCHEMA,
-    emptyMarkdownState as any
-  );
-  const fakeSha = fakeSha256();
-  const result = await storageServiceClient.createDocument({
+  const result = await storageServiceClient.createMarkdownDocument({
     documentName: args?.title ?? '',
-    fileType: 'md',
-    sha: fakeSha,
+    markdown: args?.content ?? '',
     projectId: args?.projectId,
-    isTask: false,
   });
 
   invalidateUserQuota();
 
-  if (isErr(result) || !snapshot) return;
-  let [
-    ,
-    {
-      metadata: { documentId },
-    },
-  ] = result;
+  if (isErr(result)) return;
 
-  let res = await syncServiceClient.initializeFromSnapshot({
-    snapshot,
-    documentId: documentId,
-  });
-  if (isErr(res)) {
-    return;
-  }
+  const { documentId } = result[1];
+
   setPreviewOnCreate({
     itemId: documentId,
     itemType: 'document',
@@ -116,15 +79,6 @@ type CreateTaskArgs = {
 export async function createTask(
   args?: CreateTaskArgs
 ): Promise<string | undefined> {
-  // Convert content to loro snapshot for sync service
-  const markdownState = await createMarkdownStateFromContent(args?.content);
-  const snapshot = await rawStateToLoroSnapshot(
-    MARKDOWN_LORO_SCHEMA,
-    markdownState as any
-  );
-
-  if (!snapshot) return;
-
   // Ensure status is always set, defaulting to NOT_STARTED
   const existingPropertyValues = args?.propertyValues ?? [];
   const hasStatus = existingPropertyValues.some(
@@ -143,9 +97,10 @@ export async function createTask(
         },
       ];
 
-  // Create task with properties in one call
+  // Create task, properties, and sync-service content in one backend-owned lifecycle.
   const result = await storageServiceClient.createTask({
     taskName: args?.title ?? '',
+    markdown: args?.content ?? '',
     projectId: args?.projectId,
     propertyValues,
   });
@@ -155,17 +110,6 @@ export async function createTask(
   if (isErr(result)) return;
 
   const { documentId } = result[1];
-
-  // Initialize sync service with content
-  const syncRes = await syncServiceClient.initializeFromSnapshot({
-    snapshot,
-    documentId,
-  });
-
-  if (isErr(syncRes)) {
-    console.error('Failed to initialize task content in sync service');
-    // Task was created, just without content - still return the id
-  }
 
   setPreviewOnCreate({
     itemId: documentId,

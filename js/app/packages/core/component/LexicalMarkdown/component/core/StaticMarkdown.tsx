@@ -5,7 +5,6 @@
 
 import type { CodeNode } from '@lexical/code';
 import { PrismTokenizer } from '@lexical/code';
-import { cn } from '@ui/utils/classname';
 import type { LinkNode } from '@lexical/link';
 import { $getListDepth, type ListItemNode, type ListNode } from '@lexical/list';
 import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
@@ -19,19 +18,20 @@ import {
   type DocumentCardNode,
   type DocumentMentionNode,
   type EquationNode,
-  type SnapshotNode,
   type GroupMentionNode,
   type HorizontalRuleNode,
   type ImageNode,
-  type ThemeMentionNode,
-  type UnknownMentionNode,
   isSupportedLanguage,
   normalizedLanguage,
+  type SnapshotNode,
   SupportedNodeTypes,
+  type ThemeMentionNode,
+  type UnknownMentionNode,
   type UserMentionNode,
   type VideoNode,
   type WatermarkNode,
 } from '@lexical-core';
+import { cn } from '@ui';
 import {
   $getRoot,
   createEditor,
@@ -72,14 +72,15 @@ import { ContactMention as ContactMentionDecorator } from '../decorator/ContactM
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard';
 import { DocumentMention as DocumentMentionDecorator } from '../decorator/DocumentMention';
-import { Snapshot as SnapshotDecorator } from '../decorator/Snapshot';
-import { GroupMention as GroupMentionDecorator } from '../decorator/GroupMention';
 import { Equation as EquationDecorator } from '../decorator/Equation';
+import { GroupMention as GroupMentionDecorator } from '../decorator/GroupMention';
+import { LazyDecorator } from '../decorator/LazyDecorator';
 import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
 import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
-import { UserMention as UserMentionDecorator } from '../decorator/UserMention';
+import { Snapshot as SnapshotDecorator } from '../decorator/Snapshot';
 import { ThemeMention as ThemeMentionDecorator } from '../decorator/ThemeMention';
 import { UnknownMention as UnknownMentionDecorator } from '../decorator/UnknownMention';
+import { UserMention as UserMentionDecorator } from '../decorator/UserMention';
 import { Watermark as WatermarkDecorator } from '../decorator/Watermark';
 import { LinkWithPreview } from './LinkWithPreview';
 
@@ -267,18 +268,34 @@ const UserMention: RenderableEntity<UserMentionNode> = {
   ),
 };
 
+const MentionPlaceholder = () => (
+  <span class="pointer-events-none inline-block align-baseline opacity-60">
+    <span class="relative top-[0.125em] size-[1em] inline-block mx-1 bg-current/15 rounded-xs" />
+    <span class="inline-block w-12 h-[0.9em] align-baseline bg-current/10 rounded-sm" />
+  </span>
+);
+
 const DocumentMention: RenderableEntity<DocumentMentionNode> = {
   guard: (node: LexicalNode): node is DocumentMentionNode =>
     node.__type === 'document-mention',
-  render: (props) => (
-    <span class={getTextClassName(props.node, props.theme)}>
-      {DocumentMentionDecorator({
-        ...props.node.exportComponentProps(),
-        key: props.node.getKey(),
-        theme: props.theme,
-      })}
-    </span>
-  ),
+  render: (props) => {
+    const componentProps = props.node.exportComponentProps();
+    const key = props.node.getKey();
+    return (
+      <span class={getTextClassName(props.node, props.theme)}>
+        <LazyDecorator
+          placeholder={<MentionPlaceholder />}
+          render={() =>
+            DocumentMentionDecorator({
+              ...componentProps,
+              key,
+              theme: props.theme,
+            })
+          }
+        />
+      </span>
+    );
+  },
 };
 
 const ThemeMention: RenderableEntity<ThemeMentionNode> = {
@@ -647,7 +664,7 @@ const TableCell: RenderableElement<TableCellNode> = {
     return (
       <Dynamic
         component={'td'}
-        class={cn(props.theme.tableCell, 'min-w-[100px] max-w-[350px]')}
+        class={cn(props.theme.tableCell, 'min-w-25 max-w-87.5')}
         colspan={props.node.__colSpan}
         rowspan={props.node.__rowSpan}
       >
@@ -840,6 +857,7 @@ export function StaticMarkdown(props: {
       return Document({
         rootNode: $getRoot(),
         theme: mergedTheme(),
+        rootRef: props.rootRef,
       });
     });
   });

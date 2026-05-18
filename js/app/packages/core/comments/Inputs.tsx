@@ -2,10 +2,9 @@ import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin';
 import PaperPlaneRight from '@icon/fill/paper-plane-right-fill.svg';
 import XIcon from '@icon/regular/x.svg';
+import { Button, cn } from '@ui';
 import { batch, createEffect, createSignal, Show, useContext } from 'solid-js';
 import { CommentsContext, ThreadContext } from './Thread';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
 
 export function EditBottomRow(props: {
   handleCancel: (e: MouseEvent) => void;
@@ -84,7 +83,7 @@ export function EditInput(props: {
   return (
     <div class="relative">
       <div
-        class="px-2 pt-1 pb-8 bg-input rounded-sm relative border border-edge focus-within:ring-accent focus-within:ring"
+        class="px-2 pt-1 pb-8 bg-surface rounded-sm relative border border-edge focus-within:ring-accent focus-within:ring"
         on:click={(e) => {
           e.stopPropagation();
           focusEditor();
@@ -136,7 +135,7 @@ export function NewReplyInput(props: {
         when={props.isEditing}
         fallback={
           <div
-            class="px-2 py-2 mt-2 cursor-default text-sm text-ink-extra-muted bg-input border border-edge-muted rounded-sm"
+            class="p-2 mt-2 cursor-default text-sm text-ink-extra-muted bg-surface border border-edge-muted rounded-sm"
             on:click={(e) => {
               e.stopPropagation();
               props.setEditing(true);

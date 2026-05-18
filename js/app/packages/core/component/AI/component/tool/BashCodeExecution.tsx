@@ -44,8 +44,8 @@ function CodeFence(props: {
           class="text-ink-extra-muted hover:text-ink-muted absolute top-1 right-1 p-1"
           onClick={() => setExpanded(!expanded())}
         >
-          <Show when={expanded()} fallback={<CaretRight class="h-4 w-4" />}>
-            <CaretDown class="h-4 w-4" />
+          <Show when={expanded()} fallback={<CaretRight class="size-4" />}>
+            <CaretDown class="size-4" />
           </Show>
         </button>
       </Show>
@@ -143,7 +143,7 @@ const handler = createToolRenderer({
             }}
           >
             <CaretRight
-              class="h-4 w-4 transition-transform"
+              class="size-4 transition-transform"
               classList={{
                 'rotate-90': isExpanded(),
               }}

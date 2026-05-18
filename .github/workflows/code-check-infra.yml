@@ -21,6 +21,9 @@ jobs:
           filters: |
             should_run:
               - 'infra/**'
+              - 'flake.nix'
+              - 'flake.lock'
+              - '.github/actions/setup-cachix/**'
               - .github/workflows/code-check-infra.yml
 
   biome-check:
@@ -33,10 +36,12 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Setup Biome
-        uses: biomejs/setup-biome@v2
+      - name: Setup Nix dev shell
+        uses: ./.github/actions/setup-cachix
         with:
-          version: 2.4.12
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          dev-shell: 'true'
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: Run Biome
         working-directory: infra
         run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
@@ -47,7 +52,12 @@ jobs:
     runs-on: linux-latest-middy
     steps:
       - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
+      - name: Setup Nix dev shell
+        uses: ./.github/actions/setup-cachix
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          dev-shell: 'true'
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: install
         working-directory: infra
         run: bun install --frozen-lockfile
@@ -59,17 +69,19 @@ jobs:
   status-check:
     name: Infra Status Check
     if: always()
-    needs: [path-check, biome-check]
+    needs: [path-check, biome-check, check]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
         run: |
           echo "path-check: ${{ needs.path-check.result }}"
           echo "biome-check: ${{ needs.biome-check.result }}"
+          echo "check: ${{ needs.check.result }}"
 
           # Fail if any job failed (skipped and success are both OK)
           if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-             [[ "${{ needs.biome-check.result }}" == "failure" ]]; then
+             [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
+             [[ "${{ needs.check.result }}" == "failure" ]]; then
             echo "❌ One or more jobs failed"
             exit 1
           fi

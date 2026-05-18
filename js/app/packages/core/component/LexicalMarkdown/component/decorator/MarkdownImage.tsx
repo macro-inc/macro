@@ -1,10 +1,10 @@
 import { internalDrag } from '@core/directive/internalDragState';
+
 false && internalDrag;
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
 import { isErr } from '@core/util/maybeResult';
-import { cn } from '@ui/utils/classname';
 import ImageIcon from '@icon/regular/image-broken.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -13,6 +13,7 @@ import { mergeRegister } from '@lexical/utils';
 import { $isImageNode, type ImageDecoratorProps } from '@lexical-core';
 import { calculateEffectiveDimensions } from '@lexical-core/utils/media';
 import { debounce } from '@solid-primitives/scheduled';
+import { Button, cn, Layer } from '@ui';
 import {
   $createNodeSelection,
   $getNodeByKey,
@@ -270,7 +271,8 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         class={cn(
           'relative max-w-full my-4 grid place-items-center',
           isSelectedAsNode() && 'ring-3 ring-edge-muted',
-          state() === 'error' && 'media-error min-h-44',
+          state() === 'error' &&
+            'pattern-edge-muted pattern-diagonal-8 min-h-44',
           // If there are no constrained dimensions, center the image
           !props.constrainedWidth && !props.constrainedHeight && 'mx-auto'
         )}
@@ -331,14 +333,14 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         />
 
         <Show when={state() === 'error'}>
-          <div class="absolute top-0 left-0 w-full h-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted min-h-44">
+          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted min-h-44">
             <ImageIcon class="size-5" />
             <div>{ImageErrors[imageError() ?? 'FALLBACK']}</div>
           </div>
         </Show>
 
         <Show when={state() === 'loading'}>
-          <div class="absolute top-0 left-0 w-full h-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
+          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
             <Spinner />
           </div>
         </Show>
@@ -356,19 +358,21 @@ export function MarkdownImage(props: ImageDecoratorProps) {
             (state() === 'ok' || state() === 'error')
           }
         >
-          <div class="w-full h-full absolute top-0 left-0 pointer-events-none bg-edge/10" />
-          <MediaButtons
-            delete={interactable() ? deleteImage : undefined}
-            enlarge={state() === 'ok' ? viewFull : undefined}
-            newTab={
-              state() === 'ok'
-                ? () => {
-                    window.open(imageUrl(), '_blank');
-                  }
-                : undefined
-            }
-            containerRef={containerRef}
-          />
+          <Layer depth={3}>
+            <div class="size-full absolute top-0 left-0 pointer-events-none bg-edge/10" />
+            <MediaButtons
+              delete={interactable() ? deleteImage : undefined}
+              enlarge={state() === 'ok' ? viewFull : undefined}
+              newTab={
+                state() === 'ok'
+                  ? () => {
+                      window.open(imageUrl(), '_blank');
+                    }
+                  : undefined
+              }
+              containerRef={containerRef}
+            />
+          </Layer>
         </Show>
       </div>
 
@@ -376,14 +380,16 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay items-center justify-center" />
         <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center bg-transparent">
           <Dialog.Content class="relative max-w-[65%] max-h-[80vh] flex items-center justify-center">
-            <div class="absolute bg-dialog top-2 right-2 flex flex-row">
+            <div class="absolute bg-surface top-2 right-2 flex flex-row">
               <Dialog.CloseButton>
-                <DeprecatedIconButton icon={XIcon} theme="clear" />
+                <Button variant="ghost" size="icon-md">
+                  <XIcon />
+                </Button>
               </Dialog.CloseButton>
             </div>
             <img
               crossorigin="anonymous"
-              class="max-w-full max-h-[80vh] w-auto h-auto object-contain"
+              class="max-w-full max-h-[80vh] size-auto object-contain"
               src={imageUrl()}
             />
           </Dialog.Content>

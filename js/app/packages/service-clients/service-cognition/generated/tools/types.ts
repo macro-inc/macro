@@ -70,6 +70,19 @@ export type ContentType =
   | 'chat-message'
   | 'project';
 /**
+ * Where document content is, or is expected to be, read from.
+ */
+export type DocumentContentLocation =
+  | 'object_storage'
+  | 'sync_service'
+  | 'docx_bom_parts'
+  | 'converted_pdf'
+  | 'unknown';
+/**
+ * API-visible content lifecycle state derived from current document metadata.
+ */
+export type DocumentContentState = 'unknown' | 'pending' | 'ready';
+/**
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
  */
@@ -485,6 +498,10 @@ export interface ChannelSearchResult {
    * This is only prsent if the search result is on the message content
    */
   created_at?: string | null;
+  /**
+   * When the channel message was deleted, if it has been
+   */
+  deleted_at?: string | null;
   highlight: SearchHighlight;
   /**
    * The channel message id
@@ -713,15 +730,15 @@ export interface MarkdownNode {
   type: string;
 }
 /**
- * Search for items by their content. For documents, this searches the document body text. For emails, this searches the email message body. For chats, this searches the message content. For call records, this searches the call transcript text. This tool finds items based on what's inside them, not their titles or names.
+ * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. For emails, whitespace-separated terms are ANDed and each term is matched independently across the text fields and the local-part of address fields, with the two groups OR'd. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"` or `"alice@example.com"`) to force exact-token matching instead of prefix. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
  */
 export interface ContentSearch {
   /**
-   * Which types of items to search. Leave empty to search all types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']
+   * Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records'].
    */
   entityTypes?: UnifiedSearchIndex[];
   /**
-   * The text content to search for. This searches within the body of documents, emails, messages, and call transcripts.
+   * The text to search. Pass 1-3 keywords drawn from words that would literally appear in the content, not the user's natural-language description. Whitespace-separated terms are ANDed. For non-email types the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. For emails each term is matched across subject/body/sender/recipient. Wrap a term in double quotes to force exact-token (or full-email-address) matching.
    */
   query: string;
 }
@@ -764,6 +781,16 @@ export interface CreateDocumentResponse {
    * The id of the document
    */
   documentId: string;
+}
+/**
+ * API-visible content lifecycle and location metadata.
+ */
+export interface DocumentContent {
+  /**
+   * The content location, when known.
+   */
+  location?: DocumentContentLocation | null;
+  state: DocumentContentState;
 }
 /**
  * Metadata for a document fetched from the database
@@ -1269,15 +1296,15 @@ export interface MarkNotificationsSeen {
   notificationIds: string[];
 }
 /**
- * Search for items by their name or title. For documents, this searches the document name. For emails, this searches the subject line. For chats, this searches the chat title. For projects (folders), this searches the project name. For call records, this searches the channel name the call took place in. This tool finds items based on what they're called, not their content.
+ * Search items by their name or title: document name, email subject, chat title, project name, the channel name a call belongs to. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"`) to force exact-token matching instead of prefix. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
  */
 export interface NameSearch {
   /**
-   * Which types of items to search. Leave empty to search all types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']
+   * Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records'].
    */
   entityTypes?: UnifiedSearchIndex[];
   /**
-   * The name or title to search for. For emails, this is the subject line. For channels, this can be the channel name or participant names. For call records, this is the channel name the call belongs to.
+   * The name or title to search. Pass 1-3 keywords drawn from words that would literally appear in the title, not the user's natural-language description. Whitespace-separated terms are ANDed. For non-email types the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. For emails each term is matched against the subject. Wrap a term in double quotes to force exact-token matching.
    */
   name: string;
 }
@@ -1337,6 +1364,10 @@ export interface ReadCallRecordResponse {
    * The call id the transcript belongs to.
    */
   callId: string;
+  /**
+   * The AI generated summary of the call if one was generated. Use this before you read through the transcript.
+   */
+  summary?: string | null;
   /**
    * Transcript segments in chronological order.
    */
@@ -1894,6 +1925,9 @@ export interface ReadContentResponse {
   comments: CommentThread[];
   content: Content;
 }
+/**
+ * Full document metadata plus content lifecycle metadata.
+ */
 export interface ReadDocumentMetadata {
   /**
    * If the document is a "task" the branch name of the document will be provided.
@@ -1909,6 +1943,7 @@ export interface ReadDocumentMetadata {
    * the file type
    */
   branchedFromVersionId?: number | null;
+  content: DocumentContent;
   /**
    * The time the document was created
    */

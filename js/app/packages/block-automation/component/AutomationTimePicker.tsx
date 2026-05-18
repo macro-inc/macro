@@ -1,5 +1,5 @@
 import clickOutside from '@core/directive/clickOutside';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createEffect, createSignal, on, Show } from 'solid-js';
 import { INPUT_CLASS, isValidTime } from './automationUtils';
 
@@ -90,7 +90,7 @@ export function AutomationTimePicker(props: {
       </button>
       <Show when={open()}>
         <div
-          class="absolute left-0 right-0 top-full mt-1 z-action-menu bg-dialog border border-edge-muted rounded-sm p-3"
+          class="absolute inset-x-0 top-full mt-1 z-action-menu bg-surface border border-edge-muted rounded-sm p-3"
           use:clickOutside={() => setOpen(false)}
         >
           <div class="flex items-center gap-2">
@@ -100,7 +100,7 @@ export function AutomationTimePicker(props: {
                 inputmode="numeric"
                 maxLength={2}
                 aria-label="Hour"
-                class="w-10 text-center bg-active border border-edge-muted rounded-sm px-1 py-1 text-sm focus:outline-none focus:border-accent"
+                class="w-10 text-center bg-active border border-edge-muted rounded-sm p-1 text-sm focus:outline-none focus:border-accent"
                 value={hourDisplay()}
                 onKeyDown={(e) => {
                   if (e.key.length === 1 && !/\d/.test(e.key)) {
@@ -124,7 +124,7 @@ export function AutomationTimePicker(props: {
                 inputmode="numeric"
                 maxLength={2}
                 aria-label="Minute"
-                class="w-10 text-center bg-active border border-edge-muted rounded-sm px-1 py-1 text-sm focus:outline-none focus:border-accent"
+                class="w-10 text-center bg-active border border-edge-muted rounded-sm p-1 text-sm focus:outline-none focus:border-accent"
                 value={minuteDisplay()}
                 onKeyDown={(e) => {
                   if (e.key.length === 1 && !/\d/.test(e.key)) {
@@ -150,7 +150,7 @@ export function AutomationTimePicker(props: {
                 type="button"
                 class="px-2 py-1 transition-colors"
                 classList={{
-                  'bg-accent text-dialog': period() === 'AM',
+                  'bg-accent text-surface': period() === 'AM',
                   'hover:bg-active': period() !== 'AM',
                 }}
                 onClick={() => {
@@ -164,7 +164,7 @@ export function AutomationTimePicker(props: {
                 type="button"
                 class="px-2 py-1 transition-colors"
                 classList={{
-                  'bg-accent text-dialog': period() === 'PM',
+                  'bg-accent text-surface': period() === 'PM',
                   'hover:bg-active': period() !== 'PM',
                 }}
                 onClick={() => {

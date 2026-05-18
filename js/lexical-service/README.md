@@ -23,6 +23,9 @@ Returns the pre-processed document to be uses in the search processing service.
 ## /cognition/<document-id>
 Returns the pre-processed document to be uses in the cognition service.
 
+## POST /snapshot/markdown
+Accepts `{ "markdown": "..." }` and returns an `application/octet-stream` Loro snapshot equivalent to the markdown block migration path.
+
 # Local Development
 `bun run dev` will start the development server with the wrangler env set to 'local' and the port set to 8931. The local
 environment uses 'local' as the INTERNAL_API_SECRET_KEY. There are scripts to run document ids against the local endpoints.

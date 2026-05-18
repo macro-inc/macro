@@ -1,5 +1,5 @@
 import ChevronDownIcon from '@icon/regular/caret-down.svg?component-solid';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 
 interface ToggleButtonProps {
@@ -14,25 +14,26 @@ interface ToggleButtonProps {
 function ToggleButton(props: ToggleButtonProps) {
   return (
     <Show when={props.hasMore}>
-      <div class="w-full flex items-center gap-2 my-2">
-        <button
-          type="button"
-          class="flex items-center gap-1 text-xs hover:text-accent"
-          data-collapsible-toggle
-          data-collapsible-state={props.showAll ? 'expanded' : 'collapsed'}
-          onClick={props.toggle}
-        >
-          <ChevronDownIcon
-            class={cn('w-3 h-3 transition-transform duration-100', {
-              'rotate-180': props.showAll,
-            })}
-          />
-          <Show when={!props.showAll} fallback="Collapse">
-            {props.getExpandTextFn(props.itemsLength - props.visibleCount)}
-          </Show>
-        </button>
-        <div class="border-t border-edge-muted grow" />
-      </div>
+      <button
+        type="button"
+        class="w-full flex items-center gap-1 px-3 py-1.5 text-[0.6875rem] text-ink-muted/70 hover:text-ink-muted hover:bg-ink-muted/[0.06]"
+        data-collapsible-toggle
+        data-collapsible-state={props.showAll ? 'expanded' : 'collapsed'}
+        onClick={props.toggle}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+      >
+        <ChevronDownIcon
+          class={cn('size-2.5', {
+            'rotate-180': props.showAll,
+          })}
+        />
+        <Show when={!props.showAll} fallback="Show less">
+          {props.getExpandTextFn(props.itemsLength - props.visibleCount)}
+        </Show>
+      </button>
     </Show>
   );
 }

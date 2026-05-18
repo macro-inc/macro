@@ -4,8 +4,8 @@ import {
   useBlockId,
   useBlockName,
 } from '@core/block';
-import { isErr } from '@core/util/maybeResult';
 import { compareDateAsc } from '@core/util/date';
+import { isErr } from '@core/util/maybeResult';
 import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
 import { storageServiceClient } from '@service-storage/client';
 import type { AnnotationIncrementalUpdate } from '@service-storage/generated/schemas/annotationIncrementalUpdate';

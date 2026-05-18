@@ -5,7 +5,6 @@ use crate::error::OpensearchClientError;
 use crate::search::query::QueryKey;
 use crate::search::query::generate_terms_must_query;
 use models_opensearch::OpenSearchEntityType;
-use models_search_cursor::SearchMethodCursor;
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, QueryType, Script, ScriptSort, ScriptSortType, SortOrder, SortType,
 };
@@ -45,6 +44,16 @@ macro_rules! delegate_methods {
     };
 }
 
+/// Sort mode for the channel content endpoint.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ChannelSortMode {
+    /// Sort by sent_at_seconds/updated_at_seconds, entity_id as tiebreaker.
+    #[default]
+    Message,
+    /// Sort by thread_id, message_id as tiebreaker.
+    Thread,
+}
+
 /// Creates sort vec to sort by sent_at_seconds (preferred) or updated_at_seconds (fallback)
 /// with entity_id as a tiebreaker. Items without a timestamp are pushed to the end.
 pub(crate) fn updated_at_sort<'a>() -> Vec<SortType<'a>> {
@@ -66,10 +75,13 @@ pub(crate) fn updated_at_sort<'a>() -> Vec<SortType<'a>> {
     ]
 }
 
-pub(crate) fn search_after(cursor: SearchMethodCursor) -> Vec<serde_json::Value> {
+/// Sort vec for channel content with thread-grouped ordering.
+/// `unmapped_type` lets the same sort apply to non-channel indices in mixed
+/// unified search.
+pub(crate) fn thread_sort<'a>() -> Vec<SortType<'a>> {
     vec![
-        serde_json::json!(cursor.updated_at.timestamp_millis()),
-        serde_json::json!(cursor.entity_id.to_string()),
+        SortType::Field(FieldSort::new("thread_id", SortOrder::Desc).unmapped_type("keyword")),
+        SortType::Field(FieldSort::new("message_id", SortOrder::Desc).unmapped_type("keyword")),
     ]
 }
 

@@ -44,5 +44,6 @@ RUN worker-build --release
 
 EXPOSE 8787
 
-# Generate .dev.vars from environment variables so wrangler can resolve secret bindings, then start
-CMD sh -c 'echo "LOCAL_API_KEY=${INTERNAL_API_SECRET_KEY}\nDOCUMENT_PERMISSIONS_SECRET=${DOCUMENT_PERMISSIONS_SECRET}" > .dev.vars && npx wrangler dev --local --ip 0.0.0.0 --port 8787 --config wrangler.docker.toml'
+# Generate .dev.vars from environment variables so wrangler can resolve secret bindings,
+# apply local D1 migrations, then start.
+CMD sh -c 'printf "LOCAL_API_KEY=%s\nDOCUMENT_PERMISSIONS_SECRET=%s\n" "$INTERNAL_API_SECRET_KEY" "$DOCUMENT_PERMISSIONS_SECRET" > .dev.vars && CI=true npx wrangler d1 migrations apply USER_PEER_MAPPING --local --config wrangler.docker.toml && exec npx wrangler dev --local --ip 0.0.0.0 --port 8787 --config wrangler.docker.toml'

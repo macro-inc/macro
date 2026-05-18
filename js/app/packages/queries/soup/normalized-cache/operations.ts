@@ -1,3 +1,4 @@
+import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
 import { isErr } from '@core/util/maybeResult';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type {
@@ -6,8 +7,8 @@ import type {
 } from '@service-storage/generated/schemas';
 import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
 import {
-  partialMatchKey,
   type InfiniteData,
+  partialMatchKey,
   type QueryKey,
 } from '@tanstack/solid-query';
 import { isAfter } from 'date-fns';
@@ -223,20 +224,15 @@ export function removeSearchEntities(entityIds: Set<string>): SoupTransaction {
  * Fetch a single entity from the server and merge it into the cache.
  * If the entity is already cached, updates it via normy (deep-merge).
  * If it's new, prepends it to the first page of every active soup list query.
- * Falls back to `invalidateSoupEntity` for unsupported entity types (e.g. emailThread).
  */
 export async function refetchSoupEntity(
   entityId: string,
-  entityType: SoupEntityTag
+  entityType: SoupEntityTag,
+  options?: { includeRoot?: boolean }
 ): Promise<void> {
   const { storageServiceClient } = await import('@service-storage/client');
 
-  const filter = buildSingleEntityFilter(entityType, entityId);
-
-  if (!filter) {
-    invalidateSoupEntity(entityId);
-    return;
-  }
+  const filter = buildSingleEntityFilter(entityType, entityId, options);
 
   const result = await storageServiceClient.getSoupItems({
     params: {},
@@ -254,31 +250,25 @@ export async function refetchSoupEntity(
   const [, page] = result;
   if (!page.items.length) return;
 
-  const item = page.items[0];
-
-  if (hasSoupEntity(entityId)) {
-    optimisticUpdateSoupEntity(item);
-  } else {
-    insertSoupEntity(item);
+  for (const item of page.items) {
+    const itemId = getSoupItemId(item);
+    if (hasSoupEntity(itemId)) {
+      optimisticUpdateSoupEntity(item);
+    } else {
+      insertSoupEntity(item);
+    }
   }
 }
-
-// UUID that matches no real entity — used to zero out soup filters
-// so omitted entity types return nothing instead of everything.
-const NIL_ID = '00000000-0000-0000-0000-000000000000';
 
 /** @private */
 export function buildSingleEntityFilter(
   entityType: SoupEntityTag,
-  entityId: string
-): PostSoupRequest | null {
+  entityId: string,
+  options?: { includeRoot?: boolean }
+): PostSoupRequest {
   const base: PostSoupRequest = {
+    ...QUERY_FILTERS_BASE,
     limit: 1,
-    document_filters: { document_ids: [NIL_ID] },
-    chat_filters: { chat_ids: [NIL_ID] },
-    channel_filters: { channel_ids: [NIL_ID] },
-    project_filters: { project_ids: [NIL_ID] },
-    email_filters: { email_thread_ids: [NIL_ID] },
   };
   return match(entityType)
     .with('document', () => ({
@@ -292,13 +282,19 @@ export function buildSingleEntityFilter(
     }))
     .with('project', () => ({
       ...base,
-      project_filters: { project_ids: [entityId] },
+      project_filters: {
+        project_ids: [entityId],
+        include_root: options?.includeRoot ?? false,
+      },
     }))
     .with('emailThread', () => ({
       ...base,
       email_filters: { email_thread_ids: [entityId] },
     }))
-    .with('call', () => null)
+    .with('call', () => ({
+      ...base,
+      call_filters: { call_ids: [entityId] },
+    }))
     .exhaustive();
 }
 

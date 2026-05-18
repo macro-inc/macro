@@ -1,12 +1,9 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { DialogWrapper } from '@core/component/DialogWrapper';
 import { toast } from '@core/component/Toast/Toast';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { useCreateScheduleMutation } from '@queries/agent-schedule/schedules';
-import { Dialog } from '@kobalte/core/dialog';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button, cn, Dialog, Surface } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -135,7 +132,7 @@ export function AutomationComposer() {
       'cursor-default border rounded-sm px-2 py-1 text-xs transition-colors',
       active
         ? 'border-accent/30 bg-accent/10 text-accent'
-        : 'border-edge-muted text-ink-muted hover:bg-hover/30'
+        : 'border-edge-muted text-ink-muted hover:bg-hover'
     );
 
   return (
@@ -143,8 +140,8 @@ export function AutomationComposer() {
       open={automationComposerOpen()}
       onOpenChange={(open) => setAutomationComposerOpen(open, false)}
     >
-      <Dialog.Portal>
-        <DialogWrapper width="800px">
+      <Surface depth={2} active class="rounded-xl">
+        <div class="*:max-h-[75vh]">
           <div class="flex cursor-default flex-col text-ink">
             <div class="flex items-center justify-between border-b border-edge-muted px-3 py-2">
               <Dialog.Title class="m-0 p-0 text-sm font-semibold">
@@ -155,7 +152,7 @@ export function AutomationComposer() {
               </Dialog.CloseButton>
             </div>
 
-            <div class="grid max-h-[70vh] gap-3 overflow-y-auto px-3 py-3">
+            <div class="grid max-h-[70vh] gap-3 overflow-y-auto p-3">
               <div class="grid gap-1.5">
                 <label class="text-xs font-medium text-ink-muted cursor-default">
                   Name
@@ -302,7 +299,7 @@ export function AutomationComposer() {
 
             <div class="flex items-center justify-end gap-2 border-t border-edge-muted px-3 py-2">
               <Button
-                variant="secondary"
+                variant="base"
                 size="sm"
                 class="cursor-default"
                 onClick={() => setAutomationComposerOpen(false, false)}
@@ -310,7 +307,7 @@ export function AutomationComposer() {
                 Cancel
               </Button>
               <Button
-                variant="accent"
+                variant="active"
                 size="sm"
                 class="cursor-default"
                 disabled={createMutation.isPending}
@@ -320,8 +317,8 @@ export function AutomationComposer() {
               </Button>
             </div>
           </div>
-        </DialogWrapper>
-      </Dialog.Portal>
+        </div>
+      </Surface>
     </Dialog>
   );
 }

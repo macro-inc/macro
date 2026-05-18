@@ -13,7 +13,7 @@ export function ThreadReplyRailDecorations(props: ThreadReplyRailProps) {
       <div class="pointer-events-none absolute" style={threadConnectorStyle}>
         <div
           class={cn(
-            'absolute text-edge-muted -z-1 w-full h-full',
+            'absolute text-rail -z-1 w-full h-full',
             props.firstThreadReplyNewMessage && 'text-accent'
           )}
         >
@@ -32,7 +32,7 @@ export function ThreadReplyRailDecorations(props: ThreadReplyRailProps) {
         </div>
       </div>
       {/* THIS IS A HACKY ELEMENT POSITIONED TO BLOCK THE STUB END OF THE RAIL THAT POKE UP ABOVE THE USER ICON */}
-      <div class="pointer-events-none absolute bg-panel left-[calc(var(--left-of-connector)+var(--thread-shift))] top-(--regular-message-padding-t) min-h-(--message-padding-x) min-w-4 -translate-x-1/2 z-0" />
+      <div class="pointer-events-none absolute bg-surface left-[calc(var(--left-of-connector)+var(--thread-shift))] top-(--regular-message-padding-t) min-h-(--message-padding-x) min-w-4 -translate-x-1/2 z-0" />
     </>
   );
 }

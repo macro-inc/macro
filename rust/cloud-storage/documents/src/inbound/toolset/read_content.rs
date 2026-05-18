@@ -4,7 +4,8 @@ use std::str::FromStr;
 
 use crate::domain::{
     models::{CommentThread, LocationQueryParams},
-    ports::DocumentService,
+    ports::{DocumentService, create::DocumentCreationService},
+    response::LocationResponseV3,
 };
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
@@ -75,7 +76,7 @@ pub struct ReadContent {
 #[async_trait]
 impl<DSvc, ESvc> AsyncTool<DocumentToolContext<DSvc, ESvc>> for ReadContent
 where
-    DSvc: DocumentService,
+    DSvc: DocumentService + DocumentCreationService,
     ESvc: EntityAccessService,
 {
     type Output = ReadContentResponse;
@@ -187,7 +188,10 @@ where
 
 /// Gets the document content from location
 #[tracing::instrument(skip(service_context), err)]
-async fn get_document_content_from_location<DSvc: DocumentService, ESvc: EntityAccessService>(
+async fn get_document_content_from_location<
+    DSvc: DocumentService + DocumentCreationService,
+    ESvc: EntityAccessService,
+>(
     service_context: ServiceContext<DocumentToolContext<DSvc, ESvc>>,
     document_context: &DocumentBasic,
     entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -205,9 +209,10 @@ async fn get_document_content_from_location<DSvc: DocumentService, ESvc: EntityA
         .await?;
 
     let presigned_url = match location {
-        model::document::response::LocationResponseV3::PresignedUrl {
+        LocationResponseV3::PresignedUrl {
             presigned_url,
             metadata: _metadata,
+            content: _content,
         } => presigned_url,
         // This should only be called with text documents which result in 1 presigned url
         _ => unreachable!(),

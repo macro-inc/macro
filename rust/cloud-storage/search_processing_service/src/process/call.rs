@@ -56,7 +56,7 @@ pub async fn process_call_record(
         .collect::<Result<Vec<_>, _>>()?;
 
     let result = opensearch_client
-        .bulk_upsert_call_record_segments(&segments)
+        .bulk_upsert_call_record_segments(&segments, message.index_override.as_deref())
         .await
         .context("failed to bulk upsert call record segments")?;
 
@@ -77,11 +77,14 @@ pub async fn process_remove_call_record(
     opensearch_client: &OpensearchClient,
     message: &RemoveCallRecord,
 ) -> anyhow::Result<()> {
+    let index_override = message.index_override.as_deref();
     if let Some(call_id) = &message.call_id {
-        opensearch_client.delete_call_record(call_id).await?;
+        opensearch_client
+            .delete_call_record(call_id, index_override)
+            .await?;
     } else {
         opensearch_client
-            .delete_call_records_by_channel(&message.channel_id)
+            .delete_call_records_by_channel(&message.channel_id, index_override)
             .await?;
     }
     Ok(())

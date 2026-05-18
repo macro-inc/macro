@@ -11,7 +11,7 @@ function Container(props: {
   footer?: JSX.Element;
 }) {
   return (
-    <div class="flex flex-col gap-2 w-full max-w-4xl p-4 bg-panel rounded-lg border border-edge min-h-100">
+    <div class="flex flex-col gap-2 w-full max-w-4xl p-4 bg-surface rounded-lg border border-edge min-h-100">
       <div class="flex flex-col gap-1">
         <label class="text-sm font-medium text-ink">{props.label}</label>
         {props.description && (
@@ -61,11 +61,11 @@ function Editor() {
 
 export default function BuilderTestPage() {
   return (
-    <div class="flex flex-col h-full w-full">
+    <div class="flex flex-col size-full">
       <SplitHeaderLeft>
         <StaticSplitLabel label="Markdown Editor Builder Pattern Test" />
       </SplitHeaderLeft>
-      <div class="w-full h-full p-8 flex-1 flex flex-row flex-wrap gap-4 overflow-y-auto items-start justify-center content-start">
+      <div class="size-full p-8 flex-1 flex flex-row flex-wrap gap-4 overflow-y-auto items-start justify-center content-start">
         <Editor />
       </div>
     </div>

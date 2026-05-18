@@ -1,6 +1,9 @@
-import { cn } from '@ui/utils/classname';
+import { HoverCard } from '@core/component/HoverCard';
+import { UserTooltip } from '@core/component/UserTooltip';
+import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import type { UserMentionDecoratorProps } from '@lexical-core';
-import { useContext } from 'solid-js';
+import { cn } from '@ui';
+import { createMemo, createSignal, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 
 export function UserMention(props: UserMentionDecoratorProps) {
@@ -13,20 +16,54 @@ export function UserMention(props: UserMentionDecoratorProps) {
     return sel.type === 'node' && sel.nodeKeys.has(props.key);
   };
 
+  // Convert String wrapper to primitive string
+  const userId = () => String(props.userId);
+  const propEmail = () => String(props.email);
+
+  const macroId = createMemo(() =>
+    props.userId ? tryMacroId(userId()) : undefined
+  );
+
+  const [displayName] = useDisplayName(macroId());
+
+  const email = createMemo(() => {
+    const id = macroId();
+    if (id) return macroIdToEmail(id);
+    return propEmail();
+  });
+
+  const [open, setOpen] = createSignal(false);
+
   return (
-    <span
-      class={cn(
-        'relative py-0.5 px-0.5 cursor-default rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent-ink',
-        isSelectedAsNode() && 'bg-active'
-      )}
-    >
-      <span
-        data-user-id={props.userId}
-        data-email={props.email}
-        data-user-mention="true"
-      >
-        @{props.email.split('@')[0]}
-      </span>
-    </span>
+    <HoverCard
+      placement="top"
+      open={open()}
+      onOpenChange={setOpen}
+      triggerAs="span"
+      trigger={
+        <span
+          class={cn(
+            'relative p-0.5 cursor-default rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent',
+            isSelectedAsNode() && 'bg-active'
+          )}
+        >
+          <span
+            data-user-id={props.userId}
+            data-email={props.email}
+            data-user-mention="true"
+          >
+            @{propEmail().split('@')[0]}
+          </span>
+        </span>
+      }
+      content={
+        <UserTooltip
+          displayName={displayName() || email() || propEmail()}
+          email={email() || propEmail()}
+          id={userId()}
+          onClose={() => setOpen(false)}
+        />
+      }
+    />
   );
 }

@@ -160,16 +160,16 @@ export default function SvgNoiseGridDemo() {
   };
 
   return (
-    <div class="flex flex-col h-full w-full">
+    <div class="flex flex-col size-full">
       <Bar
         left={
           <div class="p-2 text-sm w-2xl truncate">SVG Noise Grid Generator</div>
         }
         center={<div></div>}
       ></Bar>
-      <div class="flex h-full w-full">
-        <div class="flex-1 relative bg-panel flex items-center justify-center">
-          <div class="w-64 h-64 flex items-center justify-center border border-edge">
+      <div class="flex size-full">
+        <div class="flex-1 relative bg-surface flex items-center justify-center">
+          <div class="size-64 flex items-center justify-center border border-edge">
             <div
               id="svg-preview"
               class="text-accent"
@@ -179,7 +179,7 @@ export default function SvgNoiseGridDemo() {
           </div>
         </div>
 
-        <div class="w-[50%] max-w-lg bg-panel p-4 overflow-y-auto border-l border-edge border-dashed">
+        <div class="w-[50%] max-w-lg bg-surface p-4 overflow-y-auto border-l border-edge border-dashed">
           <h2 class="font-mono mb-6">SVG Noise Grid Generator</h2>
 
           <div class="space-y-6">
@@ -254,14 +254,14 @@ export default function SvgNoiseGridDemo() {
           <div class="mt-8 space-y-3">
             <button
               onClick={downloadSvg}
-              class="w-full px-4 py-2 bg-ink-extra-muted text-page font-medium"
+              class="w-full px-4 py-2 bg-ink-extra-muted text-surface font-medium"
             >
               Download SVG
             </button>
 
             <button
               onClick={() => navigator.clipboard.writeText(generateSvg())}
-              class="w-full px-4 py-2 bg-ink-extra-muted text-page font-medium"
+              class="w-full px-4 py-2 bg-ink-extra-muted text-surface font-medium"
             >
               Copy SVG Code
             </button>
@@ -270,7 +270,7 @@ export default function SvgNoiseGridDemo() {
           {/* Generated SVG Code */}
           <div class="mt-8">
             <h3 class="font-mono text-ink-muted mb-3">Generated SVG</h3>
-            <div class="p-4  rounded-xs bg-message overflow-x-auto max-h-96">
+            <div class="p-4 rounded-xs bg-message overflow-x-auto max-h-96">
               <pre class="text-xs font-mono whitespace-pre-wrap text-ink-muted">
                 {generateSvg()}
               </pre>

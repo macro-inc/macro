@@ -22,31 +22,30 @@ import type {
   UserQuota,
 } from './generated/schemas';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
+import type { CreateTeamRequest } from './generated/schemas/createTeamRequest';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GenericSuccessResponse } from './generated/schemas/genericSuccessResponse';
 import type { GetLegacyUserPermissionsResponse } from './generated/schemas/getLegacyUserPermissionsResponse';
 import type { GetProfilePicturesRequestBody } from './generated/schemas/getProfilePicturesRequestBody';
 import type { GetUserInfo } from './generated/schemas/getUserInfo';
+import type { InviteToTeamRequest } from './generated/schemas/inviteToTeamRequest';
 import type { MacroApiTokenResponse } from './generated/schemas/macroApiTokenResponse';
 import type { PasswordRequest } from './generated/schemas/passwordRequest';
+import type { PatchTeamRequest } from './generated/schemas/patchTeamRequest';
 import type { PatchUserGroupRequest } from './generated/schemas/patchUserGroupRequest';
 import type { PatchUserOnboardingRequest } from './generated/schemas/patchUserOnboardingRequest';
 import type { PostGetNamesRequestBody } from './generated/schemas/postGetNamesRequestBody';
 import type { ProfilePictures } from './generated/schemas/profilePictures';
 import type { PutProfilePictureParams } from './generated/schemas/putProfilePictureParams';
 import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQueryParams';
+import type { Team } from './generated/schemas/team';
+import type { TeamInvitesResponse } from './generated/schemas/teamInvitesResponse';
+import type { TeamWithMembers } from './generated/schemas/teamWithMembers';
 import type { UserLinkResponse } from './generated/schemas/userLinkResponse';
 import type { UserName } from './generated/schemas/userName';
 import type { UserNames } from './generated/schemas/userNames';
 import type { UserOrganizationResponse } from './generated/schemas/userOrganizationResponse';
 import type { UserTokensResponse } from './generated/schemas/userTokensResponse';
-import type { CreateTeamRequest } from './generated/schemas/createTeamRequest';
-import type { InviteToTeamRequest } from './generated/schemas/inviteToTeamRequest';
-import type { PatchTeamRequest } from './generated/schemas/patchTeamRequest';
-import type { PatchTeamUserTierRequest } from './generated/schemas/patchTeamUserTierRequest';
-import type { Team } from './generated/schemas/team';
-import type { TeamInvitesResponse } from './generated/schemas/teamInvitesResponse';
-import type { TeamWithMembers } from './generated/schemas/teamWithMembers';
 
 const authHost = SERVER_HOSTS['auth-service'];
 
@@ -603,21 +602,20 @@ export const authServiceClient = {
     );
   },
 
-  async getTeam(teamId: string) {
+  async getTeam() {
     return mapOk(
-      await fetchWithAuth<TeamWithMembers>(`${authHost}/team/${teamId}`, {
+      await fetchWithAuth<TeamWithMembers>(`${authHost}/team`, {
         method: 'GET',
       }),
       (result) => result
     );
   },
 
-  async getTeamInvites(teamId: string) {
+  async getTeamInvites() {
     return mapOk(
-      await fetchWithAuth<TeamInvitesResponse>(
-        `${authHost}/team/${teamId}/invites`,
-        { method: 'GET' }
-      ),
+      await fetchWithAuth<TeamInvitesResponse>(`${authHost}/team/invites`, {
+        method: 'GET',
+      }),
       (result) => result
     );
   },
@@ -650,9 +648,9 @@ export const authServiceClient = {
     );
   },
 
-  async patchTeam(teamId: string, args: PatchTeamRequest) {
+  async patchTeam(args: PatchTeamRequest) {
     return mapOk(
-      await fetchWithAuth<{}>(`${authHost}/team/${teamId}`, {
+      await fetchWithAuth<{}>(`${authHost}/team`, {
         method: 'PATCH',
         body: JSON.stringify(args),
       }),
@@ -660,19 +658,9 @@ export const authServiceClient = {
     );
   },
 
-  async patchTeamUserTier(teamId: string, args: PatchTeamUserTierRequest) {
+  async inviteToTeam(args: InviteToTeamRequest) {
     return mapOk(
-      await fetchWithAuth<{}>(`${authHost}/team/${teamId}/tier`, {
-        method: 'PATCH',
-        body: JSON.stringify(args),
-      }),
-      () => undefined
-    );
-  },
-
-  async inviteToTeam(teamId: string, args: InviteToTeamRequest) {
-    return mapOk(
-      await fetchWithAuth<{}>(`${authHost}/team/${teamId}/invite`, {
+      await fetchWithAuth<{}>(`${authHost}/team/invite`, {
         method: 'POST',
         body: JSON.stringify(args),
       }),
@@ -680,28 +668,27 @@ export const authServiceClient = {
     );
   },
 
-  async deleteTeamInvite(teamId: string, teamInviteId: string) {
+  async deleteTeamInvite(teamInviteId: string) {
     return mapOk(
-      await fetchWithAuth<{}>(
-        `${authHost}/team/${teamId}/invite/${teamInviteId}`,
-        { method: 'DELETE' }
-      ),
-      () => undefined
-    );
-  },
-
-  async removeUserFromTeam(teamId: string, userId: string) {
-    return mapOk(
-      await fetchWithAuth<{}>(`${authHost}/team/${teamId}/remove/${userId}`, {
+      await fetchWithAuth<{}>(`${authHost}/team/invite/${teamInviteId}`, {
         method: 'DELETE',
       }),
       () => undefined
     );
   },
 
-  async deleteTeam(teamId: string) {
+  async removeUserFromTeam(userId: string) {
     return mapOk(
-      await fetchWithAuth<{}>(`${authHost}/team/${teamId}`, {
+      await fetchWithAuth<{}>(`${authHost}/team/remove/${userId}`, {
+        method: 'DELETE',
+      }),
+      () => undefined
+    );
+  },
+
+  async deleteTeam() {
+    return mapOk(
+      await fetchWithAuth<{}>(`${authHost}/team`, {
         method: 'DELETE',
       }),
       () => undefined

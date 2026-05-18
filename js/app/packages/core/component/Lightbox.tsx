@@ -1,5 +1,4 @@
 import * as stackingContext from '@core/constant/stackingContext';
-import { cn } from '@ui/utils/classname';
 import { isMobile } from '@core/mobile/isMobile';
 import ChevronLeftIcon from '@icon/regular/caret-left.svg';
 import ChevronRightIcon from '@icon/regular/caret-right.svg';
@@ -8,6 +7,8 @@ import DownloadIcon from '@icon/regular/download-simple.svg';
 import XIcon from '@icon/regular/x.svg';
 import { Dialog, useDialogContext } from '@kobalte/core/dialog';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import { isIOS } from '@solid-primitives/platform';
+import { Button, cn } from '@ui';
 import {
   type Accessor,
   type Component,
@@ -24,9 +25,8 @@ import {
   downloadImage as downloadImageAction,
 } from '../util/imageActions';
 import { platformFetch } from '../util/platformFetch';
-import { DeprecatedIconButton } from './DeprecatedIconButton';
+
 import { Zoompinch, type ZoompinchHandle } from './Zoompinch';
-import { isIOS } from '@solid-primitives/platform';
 
 const SpinnerIcon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> = (p) => (
   <Spinner {...p} class="animate-spin" />
@@ -267,7 +267,7 @@ export function Lightbox(props: LightboxProps) {
   });
 
   const navButtonClass =
-    'absolute top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300 disabled:cursor-not-allowed disabled:opacity-50';
+    'absolute top-1/2 -translate-y-1/2 bg-surface backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-surface transition-opacity duration-300 disabled:cursor-not-allowed disabled:opacity-50';
 
   const navVisible = () => true;
 
@@ -281,29 +281,31 @@ export function Lightbox(props: LightboxProps) {
         'margin-right': 'max(var(--safe-right), 0.5rem)',
       }}
     >
-      <Dialog.Content class="flex items-center justify-center bg-panel">
+      <Dialog.Content class="flex items-center justify-center bg-surface">
         {/* Toolbar */}
         <LightboxToolbar isVisible={true}>
-          <DeprecatedIconButton
-            icon={isCopying() ? SpinnerIcon : ClipboardIcon}
-            theme="clear"
+          <Button
+            variant="ghost"
+            size="icon-md"
             onClick={copyToClipboard}
             disabled={isCopying()}
-            tooltip={{ label: 'Copy image' }}
-          />
-          <DeprecatedIconButton
-            icon={isDownloading() ? SpinnerIcon : DownloadIcon}
-            theme="clear"
+            label="Copy image"
+          >
+            {isCopying() ? <SpinnerIcon /> : <ClipboardIcon />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-md"
             onClick={downloadImage}
             disabled={isDownloading()}
-            tooltip={{ label: 'Download image' }}
-          />
+            label="Download image"
+          >
+            {isDownloading() ? <SpinnerIcon /> : <DownloadIcon />}
+          </Button>
           <Dialog.CloseButton>
-            <DeprecatedIconButton
-              icon={XIcon}
-              theme="clear"
-              tooltip={{ label: 'Close' }}
-            />
+            <Button variant="ghost" size="icon-md" label="Close">
+              <XIcon />
+            </Button>
           </Dialog.CloseButton>
         </LightboxToolbar>
 
@@ -321,7 +323,7 @@ export function Lightbox(props: LightboxProps) {
               disabled={!props.onPrevious}
               aria-label="Previous image"
             >
-              <ChevronLeftIcon class="w-5 h-5 text-ink" />
+              <ChevronLeftIcon class="size-5 text-ink" />
             </button>
 
             <button
@@ -335,7 +337,7 @@ export function Lightbox(props: LightboxProps) {
               disabled={!props.onNext}
               aria-label="Next image"
             >
-              <ChevronRightIcon class="w-5 h-5 text-ink" />
+              <ChevronRightIcon class="size-5 text-ink" />
             </button>
           </Show>
         </Show>
@@ -344,7 +346,7 @@ export function Lightbox(props: LightboxProps) {
         <Show when={props.indexLabel}>
           <div
             class={cn(
-              'absolute top-4 left-4 bg-dialog backdrop-blur-sm rounded-lg border border-edge px-3 py-1.5 shadow-md transition-opacity duration-300',
+              'absolute top-4 left-4 bg-surface backdrop-blur-sm rounded-lg border border-edge px-3 py-1.5 shadow-md transition-opacity duration-300',
               navVisible() ? 'opacity-100' : 'opacity-0 pointer-events-none'
             )}
             style={{ 'z-index': stackingContext.zModal + 1 }}
@@ -356,12 +358,12 @@ export function Lightbox(props: LightboxProps) {
         </Show>
 
         {/* Image */}
-        <div class="w-full h-full flex items-center justify-center">
+        <div class="size-full flex items-center justify-center">
           <Show
             when={props.src()}
             fallback={
-              <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge rounded-md bg-menu">
-                <Spinner class="w-4 h-4 animate-spin" />
+              <div class="flex flex-col items-center justify-center gap-2 size-15 border border-edge rounded-md bg-surface">
+                <Spinner class="size-4 animate-spin" />
               </div>
             }
           >
@@ -374,11 +376,11 @@ export function Lightbox(props: LightboxProps) {
                 onWindowMove: touchOnWindowMove,
                 onWindowEnd: touchOnWindowEnd,
               }}
-              class="w-full h-full relative overflow-hidden rounded-2xl"
+              class="size-full relative overflow-hidden rounded-2xl"
               style={{ cursor: cursor() }}
             >
               <img
-                class="w-full h-full sm:min-w-[200px] sm:max-h-[80vh] object-contain select-none"
+                class="size-full sm:min-w-50 sm:max-h-[80vh] object-contain select-none"
                 style={{ '-webkit-touch-callout': 'none' }}
                 src={props.src()}
                 alt="preview"
@@ -399,7 +401,7 @@ type LightboxToolbarProps = {
 export function LightboxToolbar(props: LightboxToolbarProps) {
   return (
     <div
-      class="absolute top-4 right-4 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300"
+      class="absolute top-4 right-4 bg-surface backdrop-blur-sm rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300"
       classList={{
         'opacity-100': isMobile() || props.isVisible,
         'opacity-0 pointer-events-none': !isMobile() && !props.isVisible,

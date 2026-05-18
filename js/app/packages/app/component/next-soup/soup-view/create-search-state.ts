@@ -8,16 +8,18 @@ import {
   intersectEntityPools,
   nameFuzzySearchFilter,
 } from '@app/component/next-soup/search-utils';
-import { arrayEquals } from '@core/util/compareUtils';
 import { useUserId } from '@core/context/user';
+import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
-import { isChannelEntity, type EntityData } from '@entity';
+import { type EntityData, isChannelEntity } from '@entity';
 import {
   useSearchSoupQuery,
   validateSearchServiceText,
 } from '@queries/soup/search';
-import type { EntityFilters } from '@service-search/generated/models';
-import type { UnifiedSearchRequest } from '@service-search/generated/models';
+import type {
+  EntityFilters,
+  UnifiedSearchRequest,
+} from '@service-search/generated/models';
 import { type Accessor, createMemo, createSignal, on } from 'solid-js';
 
 function filterDataToQueryFilters(data: QueryState): EntityFilters {
@@ -122,7 +124,6 @@ interface CreateSearchStateArgs {
   assignees: Accessor<string[]>;
   disableLocalSearch?: boolean;
   searchPaused?: Accessor<boolean>;
-  searchMentions?: Accessor<string[]>;
   /** Pre-populate searchText so the service request fires on mount (skips the debounce wait for the initial value). */
   initialText?: string;
 }
@@ -133,7 +134,6 @@ export const createSearchState = ({
   assignees,
   disableLocalSearch,
   searchPaused,
-  searchMentions,
   initialText,
 }: CreateSearchStateArgs) => {
   const [searchText, setSearchText] = createSignal(initialText ?? '');
@@ -172,21 +172,7 @@ export const createSearchState = ({
   const searchUnifiedNameContentRequest = createMemo(
     (): UnifiedSearchRequest => {
       const query = debouncedSearchForService();
-      const mentionIds =
-        isSearchServiceDebounceSettled() && !isSearchServiceDisabled()
-          ? searchMentions?.()
-          : undefined;
-
-      // Translate FilterData to legacy EntityFilters format for search service
       const baseFilters = filterDataToQueryFilters(filters());
-
-      // Merge mention filters into channel_filters if present
-      if (mentionIds && mentionIds.length > 0) {
-        baseFilters.channel_filters = {
-          ...baseFilters.channel_filters,
-          mentions: mentionIds,
-        };
-      }
 
       return {
         search_on: 'name_content',

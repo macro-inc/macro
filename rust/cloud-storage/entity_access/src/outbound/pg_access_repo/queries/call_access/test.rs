@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use super::*;
 use crate::domain::models::AccessLevel;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
