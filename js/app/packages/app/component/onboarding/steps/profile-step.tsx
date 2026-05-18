@@ -14,10 +14,20 @@ const TEAM_NAME_MAX_LENGTH = 50;
 const EMAIL_MAX_LENGTH = 254;
 
 const profileSchema = z.object({
-  firstName: z.string().min(1, 'First name is required').max(NAME_MAX_LENGTH, 'First name is too long'),
+  firstName: z
+    .string()
+    .min(1, 'First name is required')
+    .max(NAME_MAX_LENGTH, 'First name is too long'),
   lastName: z.string().max(NAME_MAX_LENGTH, 'Last name is too long'),
-  email: z.string().min(1, 'Email is required').email('Invalid email address').max(EMAIL_MAX_LENGTH, 'Email is too long'),
-  teamName: z.string().min(1, 'Team name is required').max(TEAM_NAME_MAX_LENGTH, 'Team name is too long'),
+  email: z
+    .string()
+    .min(1, 'Email is required')
+    .email('Invalid email address')
+    .max(EMAIL_MAX_LENGTH, 'Email is too long'),
+  teamName: z
+    .string()
+    .min(1, 'Team name is required')
+    .max(TEAM_NAME_MAX_LENGTH, 'Team name is too long'),
 });
 
 export function ProfileStep() {

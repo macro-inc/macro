@@ -280,7 +280,10 @@ function OnboardingInner() {
               step={ctx.step()}
               transition={Stepper.transitions.slideFull}
               appear
-              class={cn('overflow-clip p-1 -m-1', ctx.step() > 0 && 'min-h-125')}
+              class={cn(
+                'overflow-clip p-1 -m-1',
+                ctx.step() > 0 && 'min-h-125'
+              )}
             >
               <For each={STEPS}>
                 {(stepDef, i) => (

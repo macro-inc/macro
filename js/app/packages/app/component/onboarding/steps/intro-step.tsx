@@ -94,7 +94,12 @@ export function IntroStep() {
                 item.hoverBorder
               )}
             >
-              <div class={cn('size-8 rounded-sm bg-hover/50 flex items-center justify-center transition-colors', item.hoverIconBg)}>
+              <div
+                class={cn(
+                  'size-8 rounded-sm bg-hover/50 flex items-center justify-center transition-colors',
+                  item.hoverIconBg
+                )}
+              >
                 <item.icon class={cn('size-5', item.color)} />
               </div>
               <div class="flex flex-col gap-0.5">
