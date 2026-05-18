@@ -1,3 +1,4 @@
+import { useSearchInputFocus } from '@core/component/Properties/utils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useEmail, useUserId } from '@core/context/user';
 import { useAugmentUserWithDmActivity } from '@core/user';
@@ -20,7 +21,6 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { useSearchInputFocus } from '../../../utils';
 import {
   type CombinedEntity,
   createEntitySearchConfig,

@@ -1,35 +1,26 @@
-import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
-import { useInlineEditor } from '../../hooks';
+import { useProperty } from '../../core/context';
+import { PropertyEmpty } from '../../extractors/PropertyEmpty';
 import { formatNumber } from '../../utils';
-import {
-  EmptyValue,
-  type PropertyValueProps,
-  stubSaveHandler,
-} from './ValueComponents';
+import { useInlineEditor } from '../hooks/useInlineEditor';
 
 /**
- * Display component for number properties with inline editing
- * Numbers are formatted to 4 decimal places
+ * Click-to-edit number input. Step 0.0001 matches the existing
+ * NUMBER_DECIMAL_PLACES rounding the save path applies.
  */
-export const NumberValue: Component<PropertyValueProps> = (props) => {
-  const saveHandler = () => props.saveHandler ?? stubSaveHandler;
-  const editor = useInlineEditor(
-    props.property,
-    saveHandler(),
-    props.onRefresh
-  );
+export function InlineNumberEditor() {
+  const ctx = useProperty();
+  const editor = useInlineEditor();
 
+  const property = () => ctx.property();
   const supportsInline = () =>
-    props.canEdit &&
-    !props.property.isMetadata &&
-    props.property.valueType === 'NUMBER';
+    ctx.canEdit() &&
+    !property().isMetadata &&
+    property().valueType === 'NUMBER';
 
-  const handleClick = () => {
-    if (supportsInline()) {
-      editor.startEdit();
-    }
-  };
+  const hasValue = () => property().value != null;
+  const display = () =>
+    hasValue() ? formatNumber(property().value as number) : '';
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -41,35 +32,27 @@ export const NumberValue: Component<PropertyValueProps> = (props) => {
     }
   };
 
-  const hasValue = () => props.property.value != null;
-  const displayValue = hasValue()
-    ? formatNumber(props.property.value as number)
-    : '';
-
   return (
     <Show
       when={editor.isEditing()}
       fallback={
         <button
-          onClick={handleClick}
+          type="button"
+          onClick={() => supportsInline() && editor.startEdit()}
           class="text-left px-2 py-0.5 bg-transparent block max-w-full wrap-break-word cursor-default rounded-sm"
           classList={{
             'text-ink': supportsInline(),
             'text-ink-muted': !supportsInline(),
           }}
         >
-          <Show when={hasValue()} fallback={<EmptyValue />}>
-            <span class="block truncate max-w-full">{displayValue}</span>
+          <Show when={hasValue()} fallback={<PropertyEmpty label="Empty" />}>
+            <span class="block truncate max-w-full">{display()}</span>
           </Show>
         </button>
       }
     >
       <input
-        ref={(el) => {
-          setTimeout(() => {
-            el.focus();
-          }, 0);
-        }}
+        ref={(el) => setTimeout(() => el.focus(), 0)}
         type="number"
         step="0.0001"
         value={editor.inputValue()}
@@ -82,4 +65,4 @@ export const NumberValue: Component<PropertyValueProps> = (props) => {
       />
     </Show>
   );
-};
+}

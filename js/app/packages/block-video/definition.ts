@@ -86,10 +86,9 @@ export const definition = defineBlock({
           versionId: documentMetadata.documentVersionId,
         });
       } else {
-        toast.failure(
-          'Video playback is not supported for this file type',
-          `File type: ${fileType}`
-        );
+        toast.failure('Video playback is not supported for this file type', {
+          subtext: `File type: ${fileType}`,
+        });
       }
 
       return ok({ documentMetadata, userAccessLevel, videoUrl });

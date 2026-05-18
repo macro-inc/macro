@@ -20,10 +20,9 @@ function PostSignupRedirect() {
       () => {},
       (err) => {
         if (err.tag !== 'AlreadyInitialized') {
-          toast.alert(
-            'Failed to connect email',
-            'Select email permissions on sign-in to enable'
-          );
+          toast.alert('Failed to connect email', {
+            subtext: 'Select email permissions on sign-in to enable',
+          });
         }
       }
     );

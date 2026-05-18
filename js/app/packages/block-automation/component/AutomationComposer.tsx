@@ -111,10 +111,14 @@ export function AutomationComposer() {
           { referredFrom: 'launcher' }
         );
       }
-      toast.success('Automation created', 'The automation is now scheduled.');
+      toast.success('Automation created', {
+        subtext: 'The automation is now scheduled.',
+      });
     },
     onError: (error) => {
-      toast.alert('Failed to create automation', getErrorMessage(error));
+      toast.alert('Failed to create automation', {
+        subtext: getErrorMessage(error),
+      });
     },
   });
 

@@ -315,10 +315,8 @@ export function EmailCompose(props: EmailComposeProps) {
   const sendMutation = useSendMessageMutation({
     onSuccess: (data) => {
       const draftId = data.message.db_id;
-      const toastId = toast.success(
-        'Email sent',
-        undefined,
-        draftId
+      const toastId = toast.success('Email sent', {
+        actions: draftId
           ? [
               {
                 label: 'Undo',
@@ -330,8 +328,9 @@ export function EmailCompose(props: EmailComposeProps) {
               },
             ]
           : undefined,
-        10_000
-      );
+        duration: 10_000,
+        mobile: true,
+      });
       if (data.message.thread_db_id) {
         replaceSplit({
           content: { type: 'email', id: data.message.thread_db_id },
@@ -472,7 +471,9 @@ export function EmailCompose(props: EmailComposeProps) {
     if (date) {
       const draftID = currentDraft ?? (await executeSaveDraft());
       if (!draftID) {
-        toast.failure('Failed to schedule message', 'Draft required');
+        toast.failure('Failed to schedule message', {
+          subtext: 'Draft required',
+        });
         return;
       }
 

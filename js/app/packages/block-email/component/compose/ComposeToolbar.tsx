@@ -53,10 +53,9 @@ export function EmailComposeToolbar(props: {
       currentAttachmentsByteSize + attachmentsToAddByteSize >=
       MAX_ATTACHMENTS_BYTES_SIZE
     ) {
-      toast.failure(
-        "Can't add more attachments",
-        'Total attachments exceed 18MB limit'
-      );
+      toast.failure("Can't add more attachments", {
+        subtext: 'Total attachments exceed 18MB limit',
+      });
       return;
     }
 

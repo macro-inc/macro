@@ -67,10 +67,9 @@ function EmailSignupCallback(props: Pick<EmailAuthParams, 'successPath'>) {
           onSuccess();
           return;
         }
-        toast.alert(
-          'Failed to connect email',
-          'Select email permissions on sign-in to enable'
-        );
+        toast.alert('Failed to connect email', {
+          subtext: 'Select email permissions on sign-in to enable',
+        });
         navigateToSuccess();
       });
     },

@@ -1,33 +1,27 @@
-import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
-import { useInlineEditor } from '../../hooks';
+import { useProperty } from '../../core/context';
+import { PropertyEmpty } from '../../extractors/PropertyEmpty';
 import { formatPropertyValue } from '../../utils';
-import {
-  EmptyValue,
-  type PropertyValueProps,
-  stubSaveHandler,
-} from './ValueComponents';
+import { useInlineEditor } from '../hooks/useInlineEditor';
 
 /**
- * Display component for string properties with inline editing
+ * Click-to-edit textarea for STRING properties. In display mode renders as a
+ * button (matches existing CondensedPropertyValue / panel pill look); editing
+ * mode swaps to a field-sizing textarea that grows with content.
  */
-export const TextValue: Component<PropertyValueProps> = (props) => {
-  const saveHandler = () => props.saveHandler ?? stubSaveHandler;
-  const editor = useInlineEditor(
-    props.property,
-    saveHandler(),
-    props.onRefresh
-  );
+export function InlineTextEditor() {
+  const ctx = useProperty();
+  const editor = useInlineEditor();
 
+  const property = () => ctx.property();
   const supportsInline = () =>
-    props.canEdit &&
-    !props.property.isMetadata &&
-    props.property.valueType === 'STRING';
+    ctx.canEdit() &&
+    !property().isMetadata &&
+    property().valueType === 'STRING';
 
-  const handleClick = () => {
-    if (supportsInline()) {
-      editor.startEdit();
-    }
+  const hasValue = () => {
+    const v = property().value;
+    return typeof v === 'string' && v.length > 0;
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -40,29 +34,22 @@ export const TextValue: Component<PropertyValueProps> = (props) => {
     }
   };
 
-  const hasValue = () =>
-    props.property.value != null &&
-    typeof props.property.value === 'string' &&
-    props.property.value.length > 0;
-
   return (
     <Show
       when={editor.isEditing()}
       fallback={
         <button
-          onClick={handleClick}
+          type="button"
+          onClick={() => supportsInline() && editor.startEdit()}
           class="text-left px-2 py-0.5 bg-transparent block max-w-full wrap-break-word cursor-default rounded-sm"
           classList={{
             'text-ink': supportsInline(),
             'text-ink-muted': !supportsInline(),
           }}
         >
-          <Show when={hasValue()} fallback={<EmptyValue />}>
+          <Show when={hasValue()} fallback={<PropertyEmpty label="Empty" />}>
             <span class="block max-w-full">
-              {formatPropertyValue(
-                props.property,
-                props.property.value as string
-              )}
+              {formatPropertyValue(property(), property().value as string)}
             </span>
           </Show>
         </button>
@@ -75,7 +62,7 @@ export const TextValue: Component<PropertyValueProps> = (props) => {
             el.setSelectionRange(el.value.length, el.value.length);
           }, 0);
         }}
-        placeholder={`Set ${props.property.displayName}...`}
+        placeholder={`Set ${property().displayName}...`}
         value={editor.inputValue()}
         onInput={(e) => editor.setInputValue(e.currentTarget.value)}
         onBlur={editor.save}
@@ -85,4 +72,4 @@ export const TextValue: Component<PropertyValueProps> = (props) => {
       />
     </Show>
   );
-};
+}

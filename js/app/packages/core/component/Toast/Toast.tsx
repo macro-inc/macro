@@ -1,3 +1,4 @@
+import { isMobile } from '@core/mobile/isMobile';
 import { Toast, toaster } from '@kobalte/core/toast';
 import CheckIcon from '@phosphor/check.svg';
 import ExclamationIcon from '@phosphor/exclamation-mark.svg';
@@ -114,6 +115,26 @@ export interface ToastAction {
 }
 
 /**
+ * Common options for all toast calls.
+ *
+ * Note: by default, toasts do NOT render on mobile. Pass `mobile: true` to opt
+ * in to the mobile-styled toast region (centered above the mobile dock).
+ */
+export interface ToastOptions {
+  subtext?: string;
+  /** Auto-dismiss duration in ms. When omitted, the toast uses a default 3s timer. */
+  duration?: number;
+  /** When true, render this toast on mobile (in the mobile-specific region). */
+  mobile?: boolean;
+}
+
+export interface ToastSuccessOptions extends ToastOptions {
+  actions?: ToastAction[];
+  /** When true, bypasses the 3s dedupe so repeated calls stack instead of replacing. */
+  stack?: boolean;
+}
+
+/**
  * Config for a fully custom toast.
  * Replaces the icon, title, and accent color of the standard layout while
  * still using the shared Surface chrome and progress/dismiss machinery.
@@ -147,6 +168,11 @@ const MAX_VISIBLE_TOASTS = 3;
  * oldest first. Used to evict the oldest toast when the limit is exceeded.
  */
 const activeToastIds: number[] = [];
+/**
+ * The currently-visible mobile toast. The mobile region only shows one toast
+ * at a time — each new mobile toast dismisses the previous one immediately.
+ */
+let activeMobileToastId: number | undefined;
 
 function createToastKey(message: string, type: ToastType): string {
   return `${type}:${message}`;
@@ -169,21 +195,10 @@ function dismissIfRecent(message: string, type: ToastType): void {
 // Tell users that an action has successfully completed
 function success(
   message: string,
-  subtext?: string,
-  actions?: ToastAction[],
-  duration?: number,
-  /** When true, bypasses the 3s dedupe so repeated calls stack instead of replacing. */
-  stack?: boolean
+  options?: ToastSuccessOptions
 ): number | undefined {
-  if (!stack) dismissIfRecent(message, ToastType.SUCCESS);
-  return createToast(
-    message,
-    ToastType.SUCCESS,
-    subtext,
-    actions,
-    duration,
-    stack
-  );
+  if (!options?.stack) dismissIfRecent(message, ToastType.SUCCESS);
+  return createToast(message, ToastType.SUCCESS, options);
 }
 
 function dismiss(toastId: number) {
@@ -191,33 +206,65 @@ function dismiss(toastId: number) {
 }
 
 // Tell users that an action has failed, because of us
-function failure(message: string, subtext?: string, duration?: number) {
+function failure(message: string, options?: ToastOptions) {
   dismissIfRecent(message, ToastType.FAILURE);
-  createToast(message, ToastType.FAILURE, subtext, undefined, duration);
+  createToast(message, ToastType.FAILURE, options);
 }
 
 // Tell users that an action has failed, because of them
-function alert(message: string, subtext?: string, duration?: number) {
+function alert(message: string, options?: ToastOptions) {
   dismissIfRecent(message, ToastType.ALERT);
-  createToast(message, ToastType.ALERT, subtext, undefined, duration);
+  createToast(message, ToastType.ALERT, options);
 }
 
-function ActionButtons(props: { actions: ToastAction[] }) {
+function ActionButtons(props: { actions: ToastAction[]; mobile?: boolean }) {
   return (
     <For each={props.actions}>
       {(action) => (
         <Button
+          size={props.mobile ? 'sm' : 'md'}
           onClick={action.onClick}
-          variant="base"
-          class="flex items-center gap-1.5 rounded py-1 px-2 text-sm font-semibold shrink-0"
+          variant={props.mobile ? 'ghost' : 'base'}
+          class={cn('px-2 py-1', props.mobile && 'text-panel text-xs')}
         >
           <Show when={action.icon}>
-            {(icon) => <Dynamic component={icon()} class="size-3.5 shrink-0" />}
+            {(icon) => (
+              <Dynamic
+                component={icon()}
+                class="size-[1em] touch:min-h-0! touch:min-w-0!"
+              />
+            )}
           </Show>
           {action.label}
         </Button>
       )}
     </For>
+  );
+}
+
+function ToastBodyWrapper(props: {
+  mobile?: boolean;
+  accentColor: string;
+  children: JSX.Element;
+}) {
+  return (
+    <Show
+      when={props.mobile}
+      fallback={
+        <Surface
+          highlightColor={props.accentColor}
+          active
+          class="relative w-[90vw] sm:w-md p-2 sm:p-3"
+          depth={2}
+        >
+          {props.children}
+        </Surface>
+      }
+    >
+      <div class="relative w-full p-2 text-xs rounded bg-ink text-surface shadow-md">
+        {props.children}
+      </div>
+    </Show>
   );
 }
 
@@ -232,6 +279,8 @@ function ToastContent(props: {
   duration?: number;
   embed?: Component;
   custom?: CustomToastConfig;
+  /** Render the mobile variant (no highlight border, text-xs, simplified). */
+  mobile?: boolean;
   /** Called when this toast is removed from the DOM, so callers can clean up tracking. */
   onDismiss?: () => void;
 }) {
@@ -302,19 +351,17 @@ function ToastContent(props: {
   return (
     <Toast
       toastId={props.toastId}
-      class={`relative overflow-visible pointer-events-auto shadow-md rounded
+      class={cn(
+        `relative overflow-visible pointer-events-auto shadow-md rounded
         data-opened:animate-slide-in transition-[transform,opacity] duration-100 ease-in data-closed:opacity-0 data-[swipe=move]:translate-x-(--kb-toast-swipe-move-x)
-        data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`}
+        data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`,
+        props.mobile && 'w-full'
+      )}
       persistent={true}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <Surface
-        highlightColor={accentColor()}
-        active
-        class="relative w-[90vw] sm:w-md p-2 sm:p-3"
-        depth={2}
-      >
+      <ToastBodyWrapper mobile={props.mobile} accentColor={accentColor()}>
         <Switch>
           {/* ── Embed layout ── */}
           <Match when={props.embed}>
@@ -335,26 +382,39 @@ function ToastContent(props: {
             {(customConfig) => (
               <>
                 <div class="flex items-center gap-2 justify-between">
-                  <Show when={customConfig().icon}>
-                    {(icon) => (
-                      <div class="size-5 flex shrink-0 justify-center items-center rounded-full p-0.75">
-                        <Dynamic component={icon()} />
-                      </div>
-                    )}
+                  <Show when={customConfig().icon && !props.mobile}>
+                    {(_) => {
+                      const icon = customConfig().icon!;
+                      return (
+                        <div class="size-5 flex shrink-0 justify-center items-center rounded-full p-0.75">
+                          <Dynamic component={icon} />
+                        </div>
+                      );
+                    }}
                   </Show>
-                  <Toast.Title class="font-semibold text-ink grow shrink truncate">
+                  <Toast.Title
+                    class={cn(
+                      'font-semibold grow shrink truncate text-left',
+                      props.mobile ? 'text-xs' : 'text-ink'
+                    )}
+                  >
                     {customConfig().title}
                   </Toast.Title>
                   <Show when={customConfig().actions?.length}>
-                    <ActionButtons actions={customConfig().actions!} />
+                    <ActionButtons
+                      actions={customConfig().actions!}
+                      mobile={props.mobile}
+                    />
                   </Show>
-                  <Toast.CloseButton>
-                    <Button variant="ghost" size="icon-sm" class="rounded-xs">
-                      <XIcon />
-                    </Button>
-                  </Toast.CloseButton>
+                  <Show when={!props.mobile}>
+                    <Toast.CloseButton>
+                      <Button variant="ghost" size="icon-sm" class="rounded-xs">
+                        <XIcon />
+                      </Button>
+                    </Toast.CloseButton>
+                  </Show>
                 </div>
-                <Show when={customConfig().content}>
+                <Show when={customConfig().content && !props.mobile}>
                   <div class="my-2 ml-7">{customConfig().content?.()}</div>
                 </Show>
               </>
@@ -366,33 +426,45 @@ function ToastContent(props: {
             {(s) => (
               <>
                 <div class="flex items-center gap-2 justify-between">
-                  <div
-                    class="size-5 flex shrink-0 justify-center items-center rounded-full p-0.75"
-                    style={{ 'background-color': s().borderColor }}
+                  <Show when={!props.mobile}>
+                    <div
+                      class="size-5 flex shrink-0 justify-center items-center rounded-full p-0.75"
+                      style={{ 'background-color': s().borderColor }}
+                    >
+                      <Dynamic
+                        component={s().icon}
+                        class={cn(
+                          'size-3.5 text-surface',
+                          props.toastType === ToastType.LOADING
+                            ? 'animate-spin'
+                            : ''
+                        )}
+                      />
+                    </div>
+                  </Show>
+                  <Toast.Title
+                    class={cn(
+                      'font-semibold grow shrink truncate text-left',
+                      props.mobile ? 'text-xs' : 'text-ink'
+                    )}
                   >
-                    <Dynamic
-                      component={s().icon}
-                      class={cn(
-                        'size-3.5 text-surface',
-                        props.toastType === ToastType.LOADING
-                          ? 'animate-spin'
-                          : ''
-                      )}
-                    />
-                  </div>
-                  <Toast.Title class="font-semibold text-ink grow shrink truncate">
                     {props.message}
                   </Toast.Title>
                   <Show when={props.actions?.length}>
-                    <ActionButtons actions={props.actions!} />
+                    <ActionButtons
+                      actions={props.actions!}
+                      mobile={props.mobile}
+                    />
                   </Show>
-                  <Toast.CloseButton>
-                    <Button variant="ghost" size="icon-sm" class="rounded-xs">
-                      <XIcon />
-                    </Button>
-                  </Toast.CloseButton>
+                  <Show when={!props.mobile}>
+                    <Toast.CloseButton>
+                      <Button variant="ghost" size="icon-sm" class="rounded-xs">
+                        <XIcon />
+                      </Button>
+                    </Toast.CloseButton>
+                  </Show>
                 </div>
-                <Show when={props.subtext}>
+                <Show when={props.subtext && !props.mobile}>
                   <Toast.Description class="text-sm text-ink-extra-muted ml-7">
                     {props.subtext}
                   </Toast.Description>
@@ -412,7 +484,7 @@ function ToastContent(props: {
             }}
           />
         </Show>
-      </Surface>
+      </ToastBodyWrapper>
     </Toast>
   );
 }
@@ -427,8 +499,12 @@ async function promise<T>(
     error?: string | ((error: any) => string);
     toastTypeDeterminer?: (result: T) => ToastType;
     subtext?: string;
+    mobile?: boolean;
   }
 ): Promise<T> {
+  const useMobile = options.mobile && isMobile();
+  const region = useMobile ? 'mobile-toast-region' : 'toast-region';
+
   const toastId = toaster.show(
     (props) => (
       <ToastContent
@@ -437,9 +513,10 @@ async function promise<T>(
         message={options.loading}
         subtext={options.subtext}
         persistent={true}
+        mobile={useMobile}
       />
     ),
-    { region: 'toast-region' }
+    { region }
   );
 
   return promiseArg
@@ -455,7 +532,7 @@ async function promise<T>(
         const toastType =
           options.toastTypeDeterminer?.(result) ?? ToastType.SUCCESS;
 
-        createToast(successMessage, toastType);
+        createToast(successMessage, toastType, { mobile: options.mobile });
       }
 
       return result;
@@ -467,7 +544,7 @@ async function promise<T>(
           typeof options.error === 'function'
             ? options.error(error)
             : options.error;
-        failure(errorMessage);
+        failure(errorMessage, { mobile: options.mobile });
       }
       throw error;
     });
@@ -478,14 +555,13 @@ async function promise<T>(
 function createToast(
   message: string,
   toastType: ToastType,
-  subtext?: string,
-  actions?: ToastAction[],
-  // When undefined, the toast auto-dismisses after a default delay but shows NO progress bar.
-  // When explicitly set, the toast uses that duration AND shows the progress bar.
-  duration?: number,
-  /** Skip recentToasts tracking so this toast never dedupes against a future call. */
-  stack?: boolean
+  options?: ToastSuccessOptions
 ) {
+  const { subtext, actions, duration, stack, mobile } = options ?? {};
+
+  // On mobile, toasts only render when explicitly opted in via `mobile: true`.
+  if (isMobile() && !mobile) return undefined;
+
   if (!stack) {
     const key = createToastKey(message, toastType);
     const existingToast = recentToasts.get(key);
@@ -494,11 +570,21 @@ function createToast(
     }
   }
 
-  // Evict the oldest visible toast when the display limit is reached, so the
-  // newest toast always appears immediately instead of being queued.
-  if (activeToastIds.length >= MAX_VISIBLE_TOASTS) {
-    const oldestId = activeToastIds.shift();
-    if (oldestId !== undefined) toaster.dismiss(oldestId);
+  const useMobile = mobile && isMobile();
+  const region = useMobile ? 'mobile-toast-region' : 'toast-region';
+
+  if (useMobile) {
+    // Mobile region shows only the latest toast — dismiss the previous one.
+    if (activeMobileToastId !== undefined) {
+      toaster.dismiss(activeMobileToastId);
+    }
+  } else {
+    // Evict the oldest visible toast when the display limit is reached, so the
+    // newest toast always appears immediately instead of being queued.
+    if (activeToastIds.length >= MAX_VISIBLE_TOASTS) {
+      const oldestId = activeToastIds.shift();
+      if (oldestId !== undefined) toaster.dismiss(oldestId);
+    }
   }
 
   const toastId = toaster.show(
@@ -512,16 +598,27 @@ function createToast(
         // Pass duration only when explicitly provided — this is what gates the progress bar.
         // When undefined, ToastContent falls back to its own default dismiss timing internally.
         duration={duration}
+        mobile={useMobile}
         onDismiss={() => {
-          const idx = activeToastIds.indexOf(props.toastId);
-          if (idx !== -1) activeToastIds.splice(idx, 1);
+          if (useMobile) {
+            if (activeMobileToastId === props.toastId) {
+              activeMobileToastId = undefined;
+            }
+          } else {
+            const idx = activeToastIds.indexOf(props.toastId);
+            if (idx !== -1) activeToastIds.splice(idx, 1);
+          }
         }}
       />
     ),
-    { region: 'toast-region' }
+    { region }
   );
 
-  activeToastIds.push(toastId);
+  if (useMobile) {
+    activeMobileToastId = toastId;
+  } else {
+    activeToastIds.push(toastId);
+  }
 
   if (!stack) {
     const key = createToastKey(message, toastType);
@@ -550,8 +647,12 @@ function embed(
     persistent?: boolean;
     duration?: number;
     region?: string;
+    mobile?: boolean;
   }
 ) {
+  const useMobile = options?.mobile && isMobile();
+  const region =
+    options?.region ?? (useMobile ? 'mobile-toast-region' : 'toast-region');
   return toaster.show(
     (props) => (
       <ToastContent
@@ -559,9 +660,10 @@ function embed(
         embed={component}
         persistent={options?.persistent}
         duration={options?.duration}
+        mobile={useMobile}
       />
     ),
-    { region: options?.region || 'toast-region' }
+    { region }
   );
 }
 
@@ -578,8 +680,12 @@ function custom(
     persistent?: boolean;
     duration?: number;
     region?: string;
+    mobile?: boolean;
   }
 ): number {
+  const useMobile = options?.mobile && isMobile();
+  const region =
+    options?.region ?? (useMobile ? 'mobile-toast-region' : 'toast-region');
   return toaster.show(
     (props) => (
       <ToastContent
@@ -587,9 +693,10 @@ function custom(
         custom={config}
         persistent={options?.persistent}
         duration={options?.duration}
+        mobile={useMobile}
       />
     ),
-    { region: options?.region || 'toast-region' }
+    { region }
   );
 }
 

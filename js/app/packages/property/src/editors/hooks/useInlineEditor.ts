@@ -1,21 +1,16 @@
 import { type Accessor, createSignal, type Setter } from 'solid-js';
-import { NUMBER_DECIMAL_PLACES } from '../constants';
-import type { PropertySaveHandler } from '../context/PropertiesContext';
-import type { Property, PropertyApiValues } from '../types';
-import { formatPropertyValue } from '../utils';
+import { NUMBER_DECIMAL_PLACES } from '../../constants';
+import { useProperty } from '../../core/context';
+import type { PropertyApiValues } from '../../types';
+import { formatPropertyValue } from '../../utils';
 
 /**
- * Hook for inline editing of string and number properties
+ * Inline editing state for STRING / NUMBER properties. Saves via the
+ * <Property.Root> onSave handler; surfaces dirty/saving signals for UI.
  *
- * @param property - The property to edit
- * @param entityType - The type of entity
- * @param onSaved - Callback when save succeeds
+ * Read-only properties (canEdit=false or isMetadata) reject startEdit.
  */
-export function useInlineEditor(
-  property: Property,
-  saveHandler: PropertySaveHandler,
-  onSaved?: () => void
-): {
+export function useInlineEditor(): {
   isEditing: Accessor<boolean>;
   inputValue: Accessor<string>;
   setInputValue: Setter<string>;
@@ -24,20 +19,22 @@ export function useInlineEditor(
   cancelEdit: () => void;
   save: () => Promise<void>;
 } {
+  const ctx = useProperty();
   const [isEditing, setIsEditing] = createSignal(false);
   const [inputValue, setInputValue] = createSignal('');
   const [isSaving, setIsSaving] = createSignal(false);
 
   const getCurrentRawValue = () => {
+    const property = ctx.property();
     const val = property.value;
     if (val == null) return '';
-
-    // This hook works with string and number properties
-    // For these types, val is a single value, not an array
     return formatPropertyValue(property, val as string | number);
   };
 
+  const isReadOnly = () => !ctx.canEdit() || ctx.property().isMetadata;
+
   const startEdit = () => {
+    if (isReadOnly()) return;
     setInputValue(getCurrentRawValue());
     setIsEditing(true);
   };
@@ -49,26 +46,20 @@ export function useInlineEditor(
 
   const save = async () => {
     if (isSaving()) return;
-
+    const property = ctx.property();
     const trimmedValue = inputValue().trim();
     const currentRawValue = getCurrentRawValue();
 
-    // No change, just cancel
     if (trimmedValue === currentRawValue) {
       cancelEdit();
       return;
     }
 
     setIsSaving(true);
-
     try {
       let apiValues: PropertyApiValues;
-
       if (property.valueType === 'STRING') {
-        apiValues = {
-          valueType: 'STRING',
-          value: trimmedValue || null,
-        };
+        apiValues = { valueType: 'STRING', value: trimmedValue || null };
       } else if (property.valueType === 'NUMBER') {
         const numValue = parseFloat(trimmedValue);
         apiValues = {
@@ -80,12 +71,11 @@ export function useInlineEditor(
       } else {
         throw new Error(`Unsupported property type: ${property.valueType}`);
       }
-
-      await saveHandler.saveProperty(property, apiValues);
+      await ctx.onSave?.(property, apiValues);
       setIsEditing(false);
-      onSaved?.();
+      ctx.onRefresh?.();
     } catch {
-      // Error toast is shown by mutation's onError callback
+      // onSave callers (mutations) own error UX via onError toasts.
     } finally {
       setIsSaving(false);
     }

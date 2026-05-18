@@ -5,7 +5,6 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { ENABLE_MOBILE_TOAST } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
 import {
   UserContextProvider,
@@ -13,7 +12,6 @@ import {
   useUserInfo,
 } from '@core/context/user';
 import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
-import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
@@ -68,7 +66,6 @@ import {
   onCleanup,
   onMount,
   type ParentProps,
-  Show,
   Suspense,
   Switch,
 } from 'solid-js';
@@ -507,9 +504,7 @@ export function Root() {
                                 }}
                               </IsomorphicRouter>
                             </Suspense>
-                            <Show when={!isMobile() || ENABLE_MOBILE_TOAST}>
-                              <ToastRegion />
-                            </Show>
+                            <ToastRegion />
                           </SearchProvider>
                         </QuickAccessProvider>
                       </CallProvider>

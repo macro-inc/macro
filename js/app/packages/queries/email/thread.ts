@@ -384,14 +384,13 @@ export async function blockSenderWithToast(senderEmail: string) {
   });
 
   if (result.isErr()) {
-    toast.failure('Failed to block sender', senderEmail);
+    toast.failure('Failed to block sender', { subtext: senderEmail });
     return;
   }
 
-  toast.success(
-    'Sender blocked',
-    `All new messages will be trashed for ${senderEmail}`,
-    [
+  toast.success('Sender blocked', {
+    subtext: `All new messages will be trashed for ${senderEmail}`,
+    actions: [
       {
         label: 'Undo',
         icon: ArrowCounterClockwise,
@@ -400,14 +399,14 @@ export async function blockSenderWithToast(senderEmail: string) {
             email_address: senderEmail,
           });
           if (undoResult.isErr()) {
-            toast.failure('Failed to unblock sender', senderEmail);
+            toast.failure('Failed to unblock sender', { subtext: senderEmail });
           } else {
             toast.success('Sender unblocked');
           }
         },
       },
-    ]
-  );
+    ],
+  });
 }
 
 async function upsertSenderFilterWithToast(
@@ -422,17 +421,18 @@ async function upsertSenderFilterWithToast(
   });
 
   if (result.isErr()) {
-    toast.failure(`Failed to mark sender as ${label}`, senderEmail);
+    toast.failure(`Failed to mark sender as ${label}`, {
+      subtext: senderEmail,
+    });
     return;
   }
 
   const filterId = result.value.filter.id;
   invalidateAllSoup();
 
-  toast.success(
-    `Sender marked as ${label}`,
-    `Messages from ${senderEmail} will appear in ${label}`,
-    [
+  toast.success(`Sender marked as ${label}`, {
+    subtext: `Messages from ${senderEmail} will appear in ${label}`,
+    actions: [
       {
         label: 'Undo',
         icon: ArrowCounterClockwise,
@@ -441,15 +441,15 @@ async function upsertSenderFilterWithToast(
             id: filterId,
           });
           if (undoResult.isErr()) {
-            toast.failure('Failed to undo', senderEmail);
+            toast.failure('Failed to undo', { subtext: senderEmail });
           } else {
             invalidateAllSoup();
             toast.success('Sender filter removed');
           }
         },
       },
-    ]
-  );
+    ],
+  });
 }
 
 export const markSenderSignalWithToast = (senderEmail: string) =>
