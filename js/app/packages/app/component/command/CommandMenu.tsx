@@ -171,6 +171,7 @@ export function CommandMenuInner(props: {
 
       // Check if this is a multi-stage command
       if (command.activateCommandScopeId) {
+        trackCommandUsage(item.id);
         // Get commands from the nested scope
         const nestedCommands = getActiveCommandsFromScope(
           command.activateCommandScopeId,
