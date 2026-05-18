@@ -12,9 +12,8 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
-import PlusIcon from '@icon/regular/plus.svg';
-import XIcon from '@icon/regular/x.svg';
-import Stop from '@phosphor-icons/core/regular/stop.svg';
+import PaperclipIcon from '@icon/regular/paperclip.svg';
+import Stop from '@icon/regular/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn, Hotkey, Surface, Tooltip } from '@ui';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
@@ -136,11 +135,11 @@ export function ChatInput(props: ChatInputComponentProps) {
     <div ref={setAttachMenuAnchorRef} class="shrink-0">
       <Button
         variant="ghost"
-        size="icon-md"
+        size="icon-sm"
         class="text-ink"
         onClick={() => setShowAttachMenu((prev) => !prev)}
       >
-        {showAttachMenu() ? <XIcon /> : <PlusIcon />}
+        <PaperclipIcon />
       </Button>
     </div>
   );
@@ -253,13 +252,7 @@ export function ChatInput(props: ChatInputComponentProps) {
             />
           </div>
 
-          <div
-            class="absolute left-2"
-            classList={{
-              'top-1/2 -translate-y-1/2': !isMultiline(),
-              'bottom-1.5 top-auto translate-y-0': isMultiline(),
-            }}
-          >
+          <div class="absolute left-2 bottom-1.5">
             <LeftButton />
           </div>
 
