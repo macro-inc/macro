@@ -4,7 +4,7 @@ import { createSoupState } from '@app/component/next-soup/create-soup-state';
 import { IS_MAC } from '@core/constant/isMac';
 import { createFreshSearch } from '@core/util/freshSort';
 import { Dialog } from '@kobalte/core/dialog';
-import { AnimatedCommandIcon } from '../../../../icon/wide/animating/command';
+import { AnimatedCommandIcon } from '@icon/wide/animating/command';
 import {
   createEffect,
   createMemo,

@@ -9,7 +9,7 @@ import {
 } from '@app/component/next-soup/create-soup-state';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { Dialog } from '@kobalte/core/dialog';
-import { AnimatedPlusIcon } from '../../../../icon/wide/animating/plus';
+import { AnimatedPlusIcon } from '@icon/wide/animating/plus';
 import {
   createEffect,
   createSignal,
