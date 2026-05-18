@@ -24,14 +24,20 @@ export function VerifyStep() {
   const [sending, setSending] = createSignal(false);
   const [resendTimer, setResendTimer] = createSignal(RESEND_TIMER);
 
+  let resendIntervalId: ReturnType<typeof setInterval> | undefined;
+
   const startTimer = () => {
+    if (resendIntervalId) clearInterval(resendIntervalId);
     setResendTimer(RESEND_TIMER);
-    const interval = setInterval(
+    resendIntervalId = setInterval(
       () => setResendTimer((t) => (t > 0 ? t - 1 : 0)),
       1000
     );
-    onCleanup(() => clearInterval(interval));
   };
+
+  onCleanup(() => {
+    if (resendIntervalId) clearInterval(resendIntervalId);
+  });
 
   const sendCode = async () => {
     setSending(true);
