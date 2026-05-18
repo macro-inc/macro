@@ -319,6 +319,16 @@ export function Channel(props: ChannelProps) {
     isMessageLoaded: (id) => messageIndex.keys.includes(id),
   });
 
+  const handleScrollToBottom = () => {
+    if (messagesQuery.hasPreviousPage) {
+      targetMessageController.reset();
+      const defaultKey = getChannelMessagesQueryKey(props.channelId, null);
+      queryClient.resetQueries({ queryKey: defaultKey });
+    } else {
+      threadListNavigation()?.scrollToBottom('end');
+    }
+  };
+
   const { messageListScopeId, attachMessageListRef, attachInputRef } =
     createChannelHotkeys({
       selection,
@@ -330,17 +340,8 @@ export function Channel(props: ChannelProps) {
       isInputEmpty: () =>
         (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
       onOpenFindBar: findBar.open,
+      onGoToBottom: handleScrollToBottom,
     });
-
-  const handleScrollToBottom = () => {
-    if (messagesQuery.hasPreviousPage) {
-      targetMessageController.reset();
-      const defaultKey = getChannelMessagesQueryKey(props.channelId, null);
-      queryClient.resetQueries({ queryKey: defaultKey });
-    } else {
-      threadListNavigation()?.scrollToBottom('end');
-    }
-  };
 
   createStickyScrollEffect({
     isNearBottom: () => threadListScrollState()?.isNearBottom ?? false,
