@@ -1,7 +1,7 @@
 import { useBlockId } from '@core/block';
 import { useUserId } from '@core/context/user';
-import LoadingSpinner from '@icon/spinner.svg';
-import XIcon from '@icon/x.svg';
+import LoadingSpinner from '@phosphor/spinner.svg';
+import XIcon from '@phosphor/x.svg';
 import { Dropdown, type DropdownOption } from '@property';
 import { useCreatePropertyDefinitionMutation } from '@queries/properties/definitions';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
