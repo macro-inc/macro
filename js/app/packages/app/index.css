@@ -271,10 +271,6 @@
   cursor: default;
 }
 
-@utility hide-scrollbar {
-  scrollbar-width: none;
-}
-
 /* utils for patterned bg images */
 @utility pattern-* {
   --pattern-color: --value(--color-*);
@@ -417,23 +413,6 @@ html:not([data-touch-device="true"]) [data-message]:hover{
 [data-message].long-press-animation > .message-accent-bar,
 .long-press-animation [data-accent-bar] {
   animation: long-press-accent-bar 400ms ease-in both;
-}
-
-/* scuffed scrollbar should be killed. use scroll from @ui */
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-edge);
-}
-
-::-webkit-scrollbar-thumb {
-  background: oklch(from var(--color-edge) l c h / 0.5);
-  border-radius: 10px;
-  margin: 2px;
-}
-
-::-webkit-scrollbar {
-  overflow: auto;
-  height: 8px;
-  width: 8px;
 }
 
 :focus-visible {
