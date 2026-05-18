@@ -89,10 +89,12 @@ export function ProfileStep() {
     <div class="flex flex-col gap-8 w-full">
       <div class="flex flex-col gap-1">
         <h1 class="text-2xl font-semibold text-ink tracking-tight">
-          Create your workspace
+          {isAuthenticated() ? 'Your workspace' : 'Create your workspace'}
         </h1>
         <p class="text-sm text-ink-disabled">
-          Tell us about yourself and your team.
+          {isAuthenticated()
+            ? 'Confirm your details before continuing.'
+            : 'Tell us about yourself and your team.'}
         </p>
       </div>
 

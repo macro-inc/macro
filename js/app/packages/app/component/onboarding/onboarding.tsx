@@ -2,6 +2,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { analytics } from '@app/lib/analytics/analytics';
 import { useIsAuthenticated } from '@core/auth';
+import { useHasPaidAccess } from '@core/auth/license';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserInfo } from '@core/context/user';
@@ -10,11 +11,11 @@ import { fetchToken } from '@core/util/fetchWithToken';
 import { throwOnErr } from '@core/util/maybeResult';
 import ArrowLeftIcon from '@icon/arrow-left.svg';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
-import { invalidateUserTeams } from '@queries/team';
+import { invalidateUserTeams, useUserTeamsQuery } from '@queries/team';
 import { authServiceClient } from '@service-auth/client';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Button, cn, Layer, LogoProgress, Stepper } from '@ui';
-import { createEffect, For, on, onMount, Show } from 'solid-js';
+import { createEffect, createMemo, For, on, onMount, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   clearPendingTeam,
@@ -40,6 +41,8 @@ function OnboardingInner() {
   const completeTutorial = useCompleteTutorialMutation();
   const isAuthenticated = useIsAuthenticated();
   const userInfo = useUserInfo();
+  const hasPaidAccess = useHasPaidAccess();
+  const userTeamsQuery = useUserTeamsQuery();
 
   const params = new URLSearchParams(location.search);
 
@@ -82,6 +85,25 @@ function OnboardingInner() {
         if (name?.last_name && !ctx.lastName()) ctx.setLastName(name.last_name);
       })
       .catch(() => {});
+  });
+
+  // Prefill team name and skip team step if user already has a team
+  createEffect(() => {
+    const teams = userTeamsQuery.data;
+    if (!teams) return;
+
+    if (teams.length > 0) {
+      const team = teams[0];
+      if (team.name && !ctx.teamName()) ctx.setTeamName(team.name);
+      ctx.skipStep('team');
+    }
+  });
+
+  // Skip payment step if user already has a paid plan
+  createEffect(() => {
+    if (hasPaidAccess()) {
+      ctx.skipStep('payment');
+    }
   });
 
   const cleanParam = (key: string) => {
@@ -172,6 +194,22 @@ function OnboardingInner() {
 
   const showBack = () => ctx.step() > 1;
 
+  // Exclude intro (index 0) and skipped steps from progress count
+  const activeStepCount = createMemo(() =>
+    ctx.steps.filter((s, i) => i > 0 && s.status !== 'skipped').length
+  );
+
+  const activeStepPosition = createMemo(() => {
+    const current = ctx.step();
+    let pos = 0;
+    for (let i = 1; i < ctx.steps.length; i++) {
+      if (ctx.steps[i]?.status === 'skipped') continue;
+      pos++;
+      if (i === current) return pos;
+    }
+    return pos;
+  });
+
   return (
     <div class="flex items-center justify-center size-full relative overflow-y-auto">
       <style>
@@ -211,13 +249,15 @@ function OnboardingInner() {
           <Show when={ctx.step() > 0}>
             <div class="w-full flex items-center gap-3 mb-10">
               <LogoProgress
-                level={ctx.step()}
-                total={STEPS.length - 1}
+                level={activeStepPosition()}
+                total={activeStepCount()}
                 class="w-7"
               />
-              <span class="text-xs font-mono text-ink-disabled">
-                {ctx.step()}/{STEPS.length - 1}
-              </span>
+              <Show when={activeStepCount() > 1}>
+                <span class="text-xs font-mono text-ink-disabled">
+                  {activeStepPosition()}/{activeStepCount()}
+                </span>
+              </Show>
             </div>
           </Show>
 
