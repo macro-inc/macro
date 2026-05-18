@@ -37,6 +37,14 @@ import { trackMention } from '@core/signal/mention';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { plural } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
+import { $generateHtmlFromNodes } from '@lexical/html';
+import {
+  $appendWatermarkNodeToLast,
+  $removeAllWatermarkNodes,
+} from '@lexical-core';
+import { logger } from '@observability';
 import ReplyAll from '@phosphor/arrow-bend-double-up-left.svg';
 import Reply from '@phosphor/arrow-bend-up-left.svg';
 import Forward from '@phosphor/arrow-bend-up-right.svg';
@@ -47,14 +55,6 @@ import Quotes from '@phosphor/quotes.svg';
 import Spinner from '@phosphor/spinner-gap.svg';
 import TextAa from '@phosphor/text-aa.svg';
 import Trash from '@phosphor/trash.svg';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
-import { $generateHtmlFromNodes } from '@lexical/html';
-import {
-  $appendWatermarkNodeToLast,
-  $removeAllWatermarkNodes,
-} from '@lexical-core';
-import { logger } from '@observability';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {

@@ -40,19 +40,19 @@ import {
   type MaybeResult,
 } from '@core/util/maybeResult';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import ChevronDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import IconLink from '@phosphor/link.svg';
-import IconShared from '@phosphor/share.svg';
-import IconX from '@phosphor/x.svg';
-import { Dialog } from '@kobalte/core/dialog';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import IconComment from '@icon/wide-comment.svg';
 import WideCopy from '@icon/wide-copy.svg';
 import IconEdit from '@icon/wide-edit.svg';
 import IconEye from '@icon/wide-eye.svg';
 import UserCircle from '@icon/wide-user-circle.svg';
 import WideUsers from '@icon/wide-users.svg';
+import { Dialog } from '@kobalte/core/dialog';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import ChevronDownIcon from '@phosphor/caret-down.svg';
+import CheckIcon from '@phosphor/check.svg';
+import IconLink from '@phosphor/link.svg';
+import IconShared from '@phosphor/share.svg';
+import IconX from '@phosphor/x.svg';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
 import {

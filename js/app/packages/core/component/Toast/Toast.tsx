@@ -1,8 +1,8 @@
+import { Toast, toaster } from '@kobalte/core/toast';
 import CheckIcon from '@phosphor/check.svg';
 import ExclamationIcon from '@phosphor/exclamation-mark.svg';
 import Spinner from '@phosphor/spinner.svg';
 import XIcon from '@phosphor/x.svg';
-import { Toast, toaster } from '@kobalte/core/toast';
 import { Button, cn, Surface } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import {

@@ -9,8 +9,8 @@ import type { RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
 import { type EntityData, InlineEntity } from '@entity';
-import ArrowLeft from '@phosphor/arrow-left.svg';
 import Macro from '@icon/macro-logo.svg';
+import ArrowLeft from '@phosphor/arrow-left.svg';
 import { cn, Dialog, Hotkey, Panel } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {

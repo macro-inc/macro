@@ -3,6 +3,7 @@ import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import clickOutside from '@core/directive/clickOutside';
 import { useUnfurl } from '@core/signal/unfurl';
+import { mergeRegister } from '@lexical/utils';
 import NewTab from '@phosphor/arrow-square-out.svg';
 import Check from '@phosphor/check-circle.svg';
 import Copy from '@phosphor/copy.svg';
@@ -10,7 +11,6 @@ import Link from '@phosphor/link.svg';
 import Trash from '@phosphor/link-break.svg';
 import Pencil from '@phosphor/pencil-simple.svg';
 import LinkText from '@phosphor/text-t.svg';
-import { mergeRegister } from '@lexical/utils';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import { Button, Tooltip } from '@ui';
 import {

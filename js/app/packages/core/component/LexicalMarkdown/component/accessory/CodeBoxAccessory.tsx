@@ -6,6 +6,15 @@ import { isInBlock, useIsNestedBlock } from '@core/block';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { Switch } from '@kobalte/core/switch';
+import { $isCodeNode, CodeNode } from '@lexical/code';
+import {
+  $isCustomCodeNode,
+  LanguageDefinitions,
+  normalizedLanguage,
+  type SupportedLanguage,
+} from '@lexical-core';
 import Braces from '@phosphor/brackets-curly.svg';
 import Copy from '@phosphor/copy.svg';
 import FileC from '@phosphor/file-c.svg';
@@ -19,15 +28,6 @@ import FilePy from '@phosphor/file-py.svg';
 import FileRs from '@phosphor/file-rs.svg';
 import FileSql from '@phosphor/file-sql.svg';
 import FileTs from '@phosphor/file-ts.svg';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Switch } from '@kobalte/core/switch';
-import { $isCodeNode, CodeNode } from '@lexical/code';
-import {
-  $isCustomCodeNode,
-  LanguageDefinitions,
-  normalizedLanguage,
-  type SupportedLanguage,
-} from '@lexical-core';
 import { Button, cn } from '@ui';
 import {
   $getNodeByKey,

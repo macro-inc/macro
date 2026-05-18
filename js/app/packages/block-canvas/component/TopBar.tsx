@@ -36,11 +36,11 @@ import {
 } from '@core/util/currentBlockDocumentName';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { downloadFile } from '@filesystem/download';
+import IconShared from '@icon/wide-share.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
 import Info from '@phosphor/info.svg';
 import Quotes from '@phosphor/quotes.svg';
 import TagIcon from '@phosphor/tag.svg';
-import IconShared from '@icon/wide-share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
 import { onMount } from 'solid-js';

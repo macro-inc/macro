@@ -47,13 +47,10 @@ type ColorOption =
   | { name: 'Custom'; value: 'custom'; css: string };
 
 // Dynamically import all arcanum SVG icons
-const arcanumIconModules = import.meta.glob(
-  '@design/arcanum-*.svg',
-  {
-    eager: true,
-    query: '?component-solid',
-  }
-) as Record<string, { default: Component }>;
+const arcanumIconModules = import.meta.glob('@design/arcanum-*.svg', {
+  eager: true,
+  query: '?component-solid',
+}) as Record<string, { default: Component }>;
 
 // Dynamically import all static SVG icons
 const staticIconModules = import.meta.glob('@icon/wide-*.svg', {
@@ -62,12 +59,9 @@ const staticIconModules = import.meta.glob('@icon/wide-*.svg', {
 }) as Record<string, { default: Component }>;
 
 // Dynamically import all animated icon modules
-const animatedIconModules = import.meta.glob(
-  '@icon/wide-*.tsx',
-  {
-    eager: true,
-  }
-) as Record<string, Record<string, Component<{ triggerAnimation?: boolean }>>>;
+const animatedIconModules = import.meta.glob('@icon/wide-*.tsx', {
+  eager: true,
+}) as Record<string, Record<string, Component<{ triggerAnimation?: boolean }>>>;
 
 // Extract icon name from file path
 function getIconName(path: string): string {

@@ -1,4 +1,6 @@
 import { DropdownMenuContent, MENU_ITEM_CLASS } from '@core/component/Menu';
+import PhoneDisconnect from '@icon/wide-call-disconnect.svg';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import CheckIcon from '@phosphor/check.svg';
 import Info from '@phosphor/info.svg';
 import Microphone from '@phosphor/microphone.svg';
@@ -8,8 +10,6 @@ import ShareNetwork from '@phosphor/share-network.svg';
 import VideoCamera from '@phosphor/video-camera.svg';
 import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
 import VideoConference from '@phosphor/video-conference.svg';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import PhoneDisconnect from '@icon/wide-call-disconnect.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { cn, ToggleSwitch, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';

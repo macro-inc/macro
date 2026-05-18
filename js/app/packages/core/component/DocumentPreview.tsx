@@ -23,6 +23,7 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { matches } from '@core/util/match';
 import { isErr } from '@core/util/maybeResult';
+import MacroEmbed from '@icon/macro-embed.svg';
 import CollapseInlinePreview from '@phosphor/arrows-in-line-horizontal.svg';
 import OpenIcon from '@phosphor/arrows-out.svg';
 import ExpandInlinePreview from '@phosphor/arrows-out-line-horizontal.svg';
@@ -37,7 +38,6 @@ import MapPinIcon from '@phosphor/map-pin-simple.svg';
 import SparkleIcon from '@phosphor/sparkle.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import TrashSimple from '@phosphor/trash-simple.svg';
-import MacroEmbed from '@icon/macro-embed.svg';
 import {
   isAccessiblePreviewItem,
   isChannelPreviewItem,

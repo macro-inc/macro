@@ -18,6 +18,8 @@ import {
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import type { ElementName } from '@lexical-core';
 import ChatTeardrop from '@phosphor/chat-teardrop.svg';
 import Check from '@phosphor/check-square.svg';
 import TextCode from '@phosphor/code.svg';
@@ -47,8 +49,6 @@ import TextSub from '@phosphor/text-subscript.svg';
 import TextSuper from '@phosphor/text-superscript.svg';
 import TextT from '@phosphor/text-t.svg';
 import TextUnderline from '@phosphor/text-underline.svg';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import type { ElementName } from '@lexical-core';
 import { Button, Hotkey, Layer } from '@ui';
 import { toast } from 'core/component/Toast/Toast';
 import type { ValidHotkey } from 'core/hotkey/types';

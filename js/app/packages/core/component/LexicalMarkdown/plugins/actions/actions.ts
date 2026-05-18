@@ -1,5 +1,19 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { ComposeTaskSuccess } from '@block-md/component/ComposeTask';
+import { LinkNode } from '@lexical/link';
+import { ListNode } from '@lexical/list';
+import { HeadingNode, QuoteNode } from '@lexical/rich-text';
+import { INSERT_TABLE_COMMAND, TableNode } from '@lexical/table';
+import {
+  $createDocumentMentionNode,
+  AwaitNode,
+  CustomCodeNode,
+  DocumentMentionNode,
+  EquationNode,
+  HorizontalRuleNode,
+  ImageNode,
+  VideoNode,
+} from '@lexical-core';
 import CheckSquare from '@phosphor/check-square.svg';
 import CodeBlock from '@phosphor/code-block.svg';
 import VideoIcon from '@phosphor/file-video.svg';
@@ -16,20 +30,6 @@ import TextH1 from '@phosphor/text-h-one.svg';
 import TextH3 from '@phosphor/text-h-three.svg';
 import TextH2 from '@phosphor/text-h-two.svg';
 import TextT from '@phosphor/text-t.svg';
-import { LinkNode } from '@lexical/link';
-import { ListNode } from '@lexical/list';
-import { HeadingNode, QuoteNode } from '@lexical/rich-text';
-import { INSERT_TABLE_COMMAND, TableNode } from '@lexical/table';
-import {
-  $createDocumentMentionNode,
-  AwaitNode,
-  CustomCodeNode,
-  DocumentMentionNode,
-  EquationNode,
-  HorizontalRuleNode,
-  ImageNode,
-  VideoNode,
-} from '@lexical-core';
 import type { LexicalEditor } from 'lexical';
 import { nanoid } from 'nanoid';
 import { INSERT_HORIZONTAL_RULE_COMMAND } from '..';

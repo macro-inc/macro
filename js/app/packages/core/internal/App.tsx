@@ -1,9 +1,9 @@
 import { BlockRegistry } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { LiveIndicators } from '@core/component/LiveIndicators';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import MacroBrandLoader from '@icon/macro-brand-loader.svg';
 import MacroGridLoader from '@icon/macro-grid-noise-loader.svg';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import Acorn from '@phosphor-icons/core/regular/acorn.svg?component-solid';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import Subtract from '@phosphor-icons/core/regular/subtract.svg?component-solid';
