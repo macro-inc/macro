@@ -1,12 +1,12 @@
-import PlusIcon from '@icon/regular/plus.svg';
-import XIcon from '@icon/regular/x.svg';
-import UsersIcon from '@icon/regular/users.svg';
 import ArrowRightIcon from '@icon/regular/arrow-right.svg';
+import PlusIcon from '@icon/regular/plus.svg';
+import UsersIcon from '@icon/regular/users.svg';
+import XIcon from '@icon/regular/x.svg';
 import { Button, cn } from '@ui';
 import { createSignal, Index, Show } from 'solid-js';
 import { z } from 'zod';
-import { useOnboarding } from '../onboarding-context';
 import type { InvitedMember } from '../onboarding-context';
+import { useOnboarding } from '../onboarding-context';
 
 type InviteEntry = { email: string };
 

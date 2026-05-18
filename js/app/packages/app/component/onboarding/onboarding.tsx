@@ -10,20 +10,19 @@ import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { invalidateUserTeams } from '@queries/team';
 import { authServiceClient } from '@service-auth/client';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Button, cn, Layer, LogoProgress } from '@ui';
-import { createEffect, Match, on, onMount, Show, Switch } from 'solid-js';
+import { Button, cn, Layer, LogoProgress, Stepper } from '@ui';
+import { createEffect, For, on, onMount, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import {
   clearPendingTeam,
   getPendingTeam,
 } from '../interactive-onboarding/use-onboarding-checkout';
 import { OnboardingProvider, useOnboarding } from './onboarding-context';
-import { IntroStep, PaymentStep, ProfileStep, TeamStep } from './steps';
-
-const STEP_LABELS = ['Intro', 'Profile', 'Team', 'Payment'];
+import { STEPS } from './steps';
 
 export default function Onboarding() {
   return (
-    <OnboardingProvider>
+    <OnboardingProvider totalSteps={STEPS.length}>
       <OnboardingInner />
     </OnboardingProvider>
   );
@@ -39,6 +38,17 @@ function OnboardingInner() {
 
   const params = new URLSearchParams(location.search);
 
+  const cleanParam = (key: string) => {
+    const cleanParams = new URLSearchParams(window.location.search);
+    cleanParams.delete(key);
+    const qs = cleanParams.toString();
+    window.history.replaceState(
+      null,
+      '',
+      qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+    );
+  };
+
   const navigateAway = () => {
     if (splitPanel) {
       splitPanel.handle.replace({
@@ -51,14 +61,7 @@ function OnboardingInner() {
 
   onMount(() => {
     if (params.has('google')) {
-      const cleanParams = new URLSearchParams(window.location.search);
-      cleanParams.delete('google');
-      const qs = cleanParams.toString();
-      window.history.replaceState(
-        null,
-        '',
-        qs ? `${window.location.pathname}?${qs}` : window.location.pathname
-      );
+      cleanParam('google');
 
       fetchToken().then(() => {
         initAndStartEmailSync().match(
@@ -73,31 +76,28 @@ function OnboardingInner() {
         );
       });
 
-      ctx.setStep(2);
-    }
-  });
+      const teamStepIndex = STEPS.findIndex((s) => s.id === 'team');
+      if (teamStepIndex !== -1) ctx.setStep(teamStepIndex);
 
-  onMount(() => {
+      return;
+    }
+
     if (params.has('subscriptionSuccess')) {
-      const cleanParams = new URLSearchParams(window.location.search);
-      const rawTier = cleanParams.get('type');
-      cleanParams.delete('subscriptionSuccess');
-      cleanParams.delete('type');
-      const qs = cleanParams.toString();
-      window.history.replaceState(
-        null,
-        '',
-        qs ? `${window.location.pathname}?${qs}` : window.location.pathname
-      );
+      const rawTier = params.get('type');
+
+      cleanParam('subscriptionSuccess');
+      cleanParam('type');
 
       analytics.track('subscription_success', { type: rawTier ?? 'unknown' });
+
       fetchToken().then(() => createPendingTeamOnReturn());
       completeTutorial.mutate(undefined);
-      navigateAway();
-    }
-  });
 
-  onMount(() => {
+      navigateAway();
+
+      return;
+    }
+
     analyticsCtx.track('onboarding_start');
   });
 
@@ -107,7 +107,8 @@ function OnboardingInner() {
       (step) => {
         analyticsCtx.track('onboarding_step', {
           step,
-          label: STEP_LABELS[step],
+          id: STEPS[step]?.id,
+          label: STEPS[step]?.label,
         });
       }
     )
@@ -116,13 +117,9 @@ function OnboardingInner() {
   const showBack = () => ctx.step() > 1;
 
   return (
-    <div class="flex items-center justify-center size-full overflow-hidden relative">
+    <div class="flex items-center justify-center size-full relative">
       <style>
         {`
-        @keyframes onb-enter {
-          from { opacity: 0; transform: translateY(12px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
         input:-webkit-autofill,
         input:-webkit-autofill:hover,
         input:-webkit-autofill:focus {
@@ -155,29 +152,20 @@ function OnboardingInner() {
             ctx.step() === 0 ? 'max-w-3xl' : 'max-w-md'
           )}
         >
-          {/* Header */}
           <Show when={ctx.step() > 0}>
             <div class="w-full flex items-center gap-3 mb-10">
               <LogoProgress
                 level={ctx.step()}
-                total={STEP_LABELS.length - 1}
+                total={STEPS.length - 1}
                 class="w-7"
               />
               <span class="text-xs font-mono text-ink-disabled">
-                {ctx.step()}/{STEP_LABELS.length - 1}
+                {ctx.step()}/{STEPS.length - 1}
               </span>
             </div>
           </Show>
 
-          {/* Content */}
-          <div
-            class="w-full flex flex-col gap-2"
-            style={{
-              animation: 'onb-enter 400ms cubic-bezier(0.16, 1, 0.3, 1) both',
-              'animation-delay': '50ms',
-              '--onboarding-key': String(ctx.step()),
-            }}
-          >
+          <div class="w-full flex flex-col gap-2">
             <Show when={ctx.step() > 0}>
               <div class={showBack() ? 'visible' : 'invisible'}>
                 <button
@@ -190,20 +178,20 @@ function OnboardingInner() {
                 </button>
               </div>
             </Show>
-            <Switch>
-              <Match when={ctx.step() === 0}>
-                <IntroStep />
-              </Match>
-              <Match when={ctx.step() === 1}>
-                <ProfileStep />
-              </Match>
-              <Match when={ctx.step() === 2}>
-                <TeamStep />
-              </Match>
-              <Match when={ctx.step() === 3}>
-                <PaymentStep />
-              </Match>
-            </Switch>
+            <Stepper
+              step={ctx.step()}
+              transition={Stepper.transitions.slideFull}
+              appear
+              class="overflow-clip p-1 -m-1"
+            >
+              <For each={STEPS}>
+                {(stepDef, i) => (
+                  <Stepper.Step noTransition={i() === 0}>
+                    <Dynamic component={stepDef.component} />
+                  </Stepper.Step>
+                )}
+              </For>
+            </Stepper>
           </div>
         </div>
       </Layer>

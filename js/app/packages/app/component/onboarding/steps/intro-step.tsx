@@ -1,11 +1,11 @@
+import ArrowRightIcon from '@icon/regular/arrow-right.svg';
 import LogoIcon from '@macro-icons/macro-logo.svg';
+import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
+import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
 import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
-import ArrowRightIcon from '@icon/regular/arrow-right.svg';
+import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import { Button, cn } from '@ui';
 import { For } from 'solid-js';
 import { useOnboarding } from '../onboarding-context';

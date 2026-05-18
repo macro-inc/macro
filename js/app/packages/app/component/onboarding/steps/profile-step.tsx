@@ -1,8 +1,8 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { startSsoLogin } from '@core/auth/sso';
 import { isTauri } from '@core/util/platform';
-import IconGoogle from '@macro-icons/macro-google.svg';
 import ArrowRightIcon from '@icon/regular/arrow-right.svg';
+import IconGoogle from '@macro-icons/macro-google.svg';
 import { Button, cn } from '@ui';
 import { createSignal, onMount, Show } from 'solid-js';
 import { useOnboarding } from '../onboarding-context';

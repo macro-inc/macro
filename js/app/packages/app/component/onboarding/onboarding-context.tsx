@@ -38,7 +38,9 @@ export interface OnboardingContextValue {
 
 const OnboardingContext = createContext<OnboardingContextValue>();
 
-export function OnboardingProvider(props: ParentProps) {
+export function OnboardingProvider(
+  props: ParentProps & { totalSteps: number }
+) {
   const [firstName, setFirstName] = createSignal('');
   const [lastName, setLastName] = createSignal('');
   const [email, setEmail] = createSignal('');
@@ -64,8 +66,7 @@ export function OnboardingProvider(props: ParentProps) {
   const totalCost = () => userSeatCost() + teamSeatsCost();
   const seatCount = () => 1 + invitedMembers().length;
 
-  const TOTAL_STEPS = 4;
-  const next = () => setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1));
+  const next = () => setStep((s) => Math.min(s + 1, props.totalSteps - 1));
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
   const value: OnboardingContextValue = {

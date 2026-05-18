@@ -8,8 +8,8 @@ import SpinnerIcon from '@icon/regular/spinner.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import {
-  savePendingTeam,
   clearPendingTeam,
+  savePendingTeam,
   useOnboardingCheckoutMutation,
 } from '../../interactive-onboarding/use-onboarding-checkout';
 import { useOnboarding } from '../onboarding-context';
