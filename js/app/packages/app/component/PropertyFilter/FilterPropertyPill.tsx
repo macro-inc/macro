@@ -1,7 +1,7 @@
 import type { PropertyDefinitionDomain } from '@core/component/Properties/types';
 import { PropertyDataTypeIcon } from '@core/component/Properties/utils/PropertyDataTypeIcon';
-import CheckIcon from '@icon/check.svg';
-import XIcon from '@icon/x.svg';
+import CheckIcon from '@phosphor/check.svg';
+import XIcon from '@phosphor/x.svg';
 import type { Component } from 'solid-js';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import type {

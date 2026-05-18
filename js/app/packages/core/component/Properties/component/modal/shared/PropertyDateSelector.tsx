@@ -3,7 +3,7 @@ import type { DateProperty } from '@core/component/Properties/types';
 import { useSearchInputFocus } from '@core/component/Properties/utils';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { useKeyPressed } from '@core/util/useKeyPressed';
-import SearchIcon from '@icon/magnifying-glass.svg';
+import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { cn } from '@ui';
 import { format } from 'date-fns';
 import {

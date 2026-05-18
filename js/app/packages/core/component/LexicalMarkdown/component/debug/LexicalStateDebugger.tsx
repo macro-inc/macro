@@ -1,6 +1,6 @@
 import { blockElementSignal } from '@core/signal/blockElement';
-import Collapse from '@icon/arrow-down-right.svg';
-import Expand from '@icon/arrow-up-left.svg';
+import Collapse from '@phosphor/arrow-down-right.svg';
+import Expand from '@phosphor/arrow-up-left.svg';
 import { CodeNode } from '@lexical/code';
 import type { CommentNode, ElementName } from '@lexical-core';
 import {

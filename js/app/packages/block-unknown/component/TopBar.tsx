@@ -27,9 +27,9 @@ import {
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import DownloadSimple from '@icon/download-simple.svg';
-import Info from '@icon/info.svg';
-import Quotes from '@icon/quotes.svg';
+import DownloadSimple from '@phosphor/download-simple.svg';
+import Info from '@phosphor/info.svg';
+import Quotes from '@phosphor/quotes.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';

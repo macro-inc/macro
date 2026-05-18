@@ -1,4 +1,4 @@
-import FolderIcon from '@icon/folder-simple.svg';
+import FolderIcon from '@phosphor/folder-simple.svg';
 import { useProjectPreviewQuery } from '@queries/storage/project-preview';
 import { cn, Tooltip } from '@ui';
 import { Show, Suspense } from 'solid-js';

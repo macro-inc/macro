@@ -1,4 +1,4 @@
-import DeleteIcon from '@icon/x.svg';
+import DeleteIcon from '@phosphor/x.svg';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 import { PROPERTY_STYLES } from '../../styles/styles';

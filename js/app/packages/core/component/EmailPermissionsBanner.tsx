@@ -1,5 +1,5 @@
 import { useLogout } from '@core/auth/logout';
-import Caution from '@icon/warning.svg';
+import Caution from '@phosphor/warning.svg';
 import { Button } from '@ui';
 
 export function EmailPermissionsBanner() {

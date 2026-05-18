@@ -1,5 +1,5 @@
 import { EntityIcon } from '@core/component/EntityIcon';
-import X from '@icon/x.svg';
+import X from '@phosphor/x.svg';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { Show } from 'solid-js';

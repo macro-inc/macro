@@ -1,5 +1,5 @@
 import { getSelectValues } from '@core/component/Properties/utils';
-import CircleDashedEmpty from '@icon/circle-dashed.svg';
+import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import { cn, HoverCard } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import { Show } from 'solid-js';

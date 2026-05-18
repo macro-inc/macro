@@ -4,7 +4,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import CheckIcon from '@icon/check.svg';
+import CheckIcon from '@phosphor/check.svg';
 import {
   type NotificationStack,
   openNotification,

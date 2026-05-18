@@ -5,10 +5,10 @@ import {
 } from '@core/component/Menu';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
-import NewTab from '@icon/arrow-square-out.svg';
-import ArrowsOut from '@icon/arrows-out-simple.svg';
-import ThreeDotsIcon from '@icon/dots-three.svg';
-import Trash from '@icon/trash.svg';
+import NewTab from '@phosphor/arrow-square-out.svg';
+import ArrowsOut from '@phosphor/arrows-out-simple.svg';
+import ThreeDotsIcon from '@phosphor/dots-three.svg';
+import Trash from '@phosphor/trash.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Button, Layer } from '@ui';

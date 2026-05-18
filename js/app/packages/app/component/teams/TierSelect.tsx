@@ -1,6 +1,6 @@
 import { type PaidPlanTier, PLAN_FEATURES } from '@app/component/paywall/plans';
-import CaretDownIcon from '@icon/caret-down.svg';
-import CheckIcon from '@icon/check.svg';
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import CheckIcon from '@phosphor/check.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
 import type { ValidComponent } from 'solid-js';

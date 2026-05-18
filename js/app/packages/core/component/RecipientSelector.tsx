@@ -18,9 +18,9 @@ import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import { matches } from '@core/util/match';
 import { clamp } from '@core/util/math';
 import { truncateString } from '@core/util/string';
-import CheckIcon from '@icon/check.svg';
-import HashIcon from '@icon/hash.svg';
-import XIcon from '@icon/x.svg';
+import CheckIcon from '@phosphor/check.svg';
+import HashIcon from '@phosphor/hash.svg';
+import XIcon from '@phosphor/x.svg';
 import type { CollectionNode } from '@kobalte/core';
 import {
   Combobox,

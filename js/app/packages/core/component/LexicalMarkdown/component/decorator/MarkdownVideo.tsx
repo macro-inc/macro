@@ -1,9 +1,9 @@
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
 import { isErr } from '@core/util/maybeResult';
-import VideoIcon from '@icon/file-video.svg';
-import LoadingSpinner from '@icon/spinner.svg';
-import XIcon from '@icon/x.svg';
+import VideoIcon from '@phosphor/file-video.svg';
+import LoadingSpinner from '@phosphor/spinner.svg';
+import XIcon from '@phosphor/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
 import { $isVideoNode, type VideoDecoratorProps } from '@lexical-core';

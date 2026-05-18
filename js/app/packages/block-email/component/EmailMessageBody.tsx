@@ -7,7 +7,7 @@ import {
   processEmailColors,
   type ThemeColorParams,
 } from '@core/email';
-import DotsThree from '@icon/dots-three.svg';
+import DotsThree from '@phosphor/dots-three.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { Button, cn } from '@ui';
 import {

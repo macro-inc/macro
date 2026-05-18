@@ -4,11 +4,11 @@ import {
   MenuItem,
   MenuSeparator,
 } from '@core/component/Menu';
-import Microphone from '@icon/microphone.svg';
-import MicrophoneSlash from '@icon/microphone-slash.svg';
-import Screencast from '@icon/screencast.svg';
-import VideoCamera from '@icon/video-camera.svg';
-import VideoCameraSlash from '@icon/video-camera-slash.svg';
+import Microphone from '@phosphor/microphone.svg';
+import MicrophoneSlash from '@phosphor/microphone-slash.svg';
+import Screencast from '@phosphor/screencast.svg';
+import VideoCamera from '@phosphor/video-camera.svg';
+import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
 import { cn } from '@ui';

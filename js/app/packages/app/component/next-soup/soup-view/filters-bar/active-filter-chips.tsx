@@ -1,6 +1,6 @@
 import { truncateLabel } from '@core/util/string';
-import CheckIcon from '@icon/check.svg';
-import XIcon from '@icon/x.svg';
+import CheckIcon from '@phosphor/check.svg';
+import XIcon from '@phosphor/x.svg';
 import { Combobox } from '@kobalte/core/combobox';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Button, cn, Layer } from '@ui';

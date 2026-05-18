@@ -1,5 +1,5 @@
-import FormatIcon from '@icon/text-aa.svg';
-import TrashIcon from '@icon/trash.svg';
+import FormatIcon from '@phosphor/text-aa.svg';
+import TrashIcon from '@phosphor/trash.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import { Button, cn } from '@ui';
 import { children, type JSX, Show, splitProps } from 'solid-js';

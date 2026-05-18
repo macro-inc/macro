@@ -1,5 +1,5 @@
 import { DatePicker } from '@core/component/DatePicker';
-import XIcon from '@icon/x.svg';
+import XIcon from '@phosphor/x.svg';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 

@@ -40,11 +40,11 @@ import {
   type MaybeResult,
 } from '@core/util/maybeResult';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import ChevronDownIcon from '@icon/caret-down.svg';
-import CheckIcon from '@icon/check.svg';
-import IconLink from '@icon/link.svg';
-import IconShared from '@icon/share.svg';
-import IconX from '@icon/x.svg';
+import ChevronDownIcon from '@phosphor/caret-down.svg';
+import CheckIcon from '@phosphor/check.svg';
+import IconLink from '@phosphor/link.svg';
+import IconShared from '@phosphor/share.svg';
+import IconX from '@phosphor/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import IconComment from '@macro-icons/wide/comment.svg';

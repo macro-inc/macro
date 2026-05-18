@@ -1,7 +1,7 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
-import ShareNetwork from '@icon/share-network.svg';
+import ShareNetwork from '@phosphor/share-network.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { cn, ToggleSwitch, Tooltip } from '@ui';
 import { type RemoteParticipant, Track } from 'livekit-client';

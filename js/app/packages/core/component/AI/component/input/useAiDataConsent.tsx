@@ -1,5 +1,5 @@
 import { useAiDataConsent } from '@core/context/user';
-import CloseIcon from '@icon/x.svg';
+import CloseIcon from '@phosphor/x.svg';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
 import { Button, Dialog, Surface } from '@ui';

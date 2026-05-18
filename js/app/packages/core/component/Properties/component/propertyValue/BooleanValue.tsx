@@ -1,4 +1,4 @@
-import CheckIcon from '@icon/check.svg';
+import CheckIcon from '@phosphor/check.svg';
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import { useBooleanEditor } from '../../hooks';

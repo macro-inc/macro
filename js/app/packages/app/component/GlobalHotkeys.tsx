@@ -12,9 +12,9 @@ import {
   openFilePicker,
   openFolderPicker,
 } from '@core/util/upload';
-import LogoutIcon from '@icon/sign-out.svg';
-import Upload from '@icon/upload.svg';
-import UserIcon from '@icon/user.svg';
+import LogoutIcon from '@phosphor/sign-out.svg';
+import Upload from '@phosphor/upload.svg';
+import UserIcon from '@phosphor/user.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
 import { AiInstructionsIcon } from '@queries/storage/instructions-md';
 import { useMutationUndoContext } from '@queries/undo';

@@ -7,7 +7,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { ItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
-import XIcon from '@icon/x.svg';
+import XIcon from '@phosphor/x.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import Close from '@phosphor-icons/core/regular/x.svg?component-solid';
 import type { ItemType } from '@service-storage/client';

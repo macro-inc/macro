@@ -1,6 +1,6 @@
 import { useUnfurl } from '@core/signal/unfurl';
-import LinkIcon from '@icon/link.svg';
-import DeleteIcon from '@icon/x.svg';
+import LinkIcon from '@phosphor/link.svg';
+import DeleteIcon from '@phosphor/x.svg';
 import { proxyResource } from '@service-unfurl/client';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
