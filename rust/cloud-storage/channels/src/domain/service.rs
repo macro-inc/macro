@@ -1,15 +1,25 @@
 use crate::domain::{
     models::{
-        ChannelAttachmentType, ChannelMessage, ChannelMessageFilters, ChannelParticipant,
-        MessagePageDirection, ResolvedChannelMessage, ThreadInfo, ThreadReply, TopLevelMessageRow,
+        AddParticipantsRequest, ChannelAttachmentType, ChannelMessage, ChannelMessageFilters,
+        ChannelParticipant, ChannelType, DeleteMessageQuery, GetOrCreateAction,
+        GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest,
+        MessagePageDirection, MutatedAttachment, NewChannelAttachment, ParticipantRole,
+        PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostMessageResponse,
+        PostReactionRequest, PostTypingRequest, ReactionAction, RemoveParticipantsRequest,
+        ResolvedChannelMessage, SimpleMention, ThreadInfo, ThreadReply, TopLevelMessageRow,
     },
     ports::{
-        ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult,
-        ChannelMessagesRepo, ChannelMessagesService,
+        ChannelAttachmentsPage, ChannelContactsDispatcher, ChannelMessagesErr,
+        ChannelMessagesQueryResult, ChannelMessagesRepo, ChannelMessagesService,
+        ChannelMutationErr, ChannelMutationsRepo, ChannelMutationsService,
+        ChannelNotificationDispatcher, ChannelRealtimeGateway, ChannelSearchIndexer,
+        ChannelSharePermissionService,
     },
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Query};
+use serde::Serialize;
+use std::collections::HashSet;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -104,6 +114,1183 @@ where
             .collect();
 
         Ok(messages)
+    }
+}
+
+/// Service implementation for channel mutations.
+pub struct ChannelMutationsServiceImpl<R, G, N, C, S, P> {
+    repo: R,
+    gateway: G,
+    notifications: N,
+    contacts: C,
+    search: S,
+    share_permissions: P,
+}
+
+impl<R, G, N, C, S, P> ChannelMutationsServiceImpl<R, G, N, C, S, P>
+where
+    R: ChannelMutationsRepo,
+    G: ChannelRealtimeGateway,
+    N: ChannelNotificationDispatcher,
+    C: ChannelContactsDispatcher,
+    S: ChannelSearchIndexer,
+    P: ChannelSharePermissionService,
+{
+    /// Create a new mutation service.
+    pub fn new(
+        repo: R,
+        gateway: G,
+        notifications: N,
+        contacts: C,
+        search: S,
+        share_permissions: P,
+    ) -> Self {
+        Self {
+            repo,
+            gateway,
+            notifications,
+            contacts,
+            search,
+            share_permissions,
+        }
+    }
+}
+
+/// Mutation service used by read-only router states.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopChannelMutationsService;
+
+#[derive(Serialize)]
+struct WithNonce<T: Serialize> {
+    #[serde(flatten)]
+    data: T,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    nonce: Option<String>,
+}
+
+#[derive(Serialize)]
+struct AttachmentRealtimeData {
+    channel_id: Uuid,
+    message_id: Uuid,
+    attachments: Vec<MutatedAttachment>,
+}
+
+#[derive(Serialize)]
+struct ReactionRealtimeData {
+    channel_id: Uuid,
+    message_id: Uuid,
+    reactions: Vec<crate::domain::models::CountedReaction>,
+}
+
+#[derive(Serialize)]
+struct TypingRealtimeData {
+    channel_id: Uuid,
+    user_id: String,
+    action: crate::domain::models::TypingAction,
+    thread_id: Option<Uuid>,
+}
+
+fn lower_macro_users(users: &[String]) -> Vec<String> {
+    users
+        .iter()
+        .map(|u| u.to_lowercase())
+        .filter(|u| u.starts_with("macro|"))
+        .collect()
+}
+
+fn parse_macro_user_id(
+    user_id: impl Into<String>,
+) -> Result<MacroUserIdStr<'static>, ChannelMutationErr> {
+    MacroUserIdStr::try_from(user_id.into())
+        .map_err(|_| ChannelMutationErr::BadRequest("invalid user id".to_string()))
+}
+
+fn participant_ids(participants: &[ChannelParticipant]) -> Vec<MacroUserIdStr<'static>> {
+    participants
+        .iter()
+        .filter_map(|p| MacroUserIdStr::try_from(p.user_id.clone()).ok())
+        .collect()
+}
+
+fn share_items(
+    attachments: &[NewChannelAttachment],
+    mentions: &[SimpleMention],
+) -> Vec<(String, String)> {
+    attachments
+        .iter()
+        .filter(|a| a.entity_type != "user")
+        .map(|a| (a.entity_id.clone(), a.entity_type.clone()))
+        .chain(
+            mentions
+                .iter()
+                .filter(|m| m.entity_type != "user")
+                .map(|m| (m.entity_id.clone(), m.entity_type.clone())),
+        )
+        .collect()
+}
+
+fn is_admin_or_owner(role: ParticipantRole) -> bool {
+    matches!(role, ParticipantRole::Owner | ParticipantRole::Admin)
+}
+
+fn all_contacts(
+    users: impl IntoIterator<Item = String>,
+) -> Result<HashSet<MacroUserIdStr<'static>>, ChannelMutationErr> {
+    users
+        .into_iter()
+        .map(parse_macro_user_id)
+        .collect::<Result<HashSet<_>, _>>()
+}
+
+impl ChannelMutationsService for NoopChannelMutationsService {
+    async fn create_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _actor_org_id: Option<i64>,
+        _req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound(
+            "channel mutations are not configured".to_string(),
+        ))
+    }
+
+    async fn get_or_create_dm(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _req: GetOrCreateDmRequest,
+    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound(
+            "channel mutations are not configured".to_string(),
+        ))
+    }
+
+    async fn get_or_create_private(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _req: GetOrCreatePrivateRequest,
+    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound(
+            "channel mutations are not configured".to_string(),
+        ))
+    }
+
+    async fn patch_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _req: PatchChannelRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound(
+            "channel mutations are not configured".to_string(),
+        ))
+    }
+
+    async fn delete_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound(
+            "channel mutations are not configured".to_string(),
+        ))
+    }
+
+    async fn post_message(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _req: PostMessageRequest,
+    ) -> Result<PostMessageResponse, ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound(
+            "channel mutations are not configured".to_string(),
+        ))
+    }
+
+    async fn patch_message(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _actor_role: ParticipantRole,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _req: PatchMessageRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound(
+            "channel mutations are not configured".to_string(),
+        ))
+    }
+
+    async fn delete_message(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _actor_role: ParticipantRole,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _query: DeleteMessageQuery,
+    ) -> Result<(), ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound(
+            "channel mutations are not configured".to_string(),
+        ))
+    }
+
+    async fn post_reaction(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _req: PostReactionRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound(
+            "channel mutations are not configured".to_string(),
+        ))
+    }
+
+    async fn post_typing(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _req: PostTypingRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound(
+            "channel mutations are not configured".to_string(),
+        ))
+    }
+
+    async fn add_participants(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _req: AddParticipantsRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound(
+            "channel mutations are not configured".to_string(),
+        ))
+    }
+
+    async fn remove_participants(
+        &self,
+        _channel_id: Uuid,
+        _req: RemoveParticipantsRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound(
+            "channel mutations are not configured".to_string(),
+        ))
+    }
+
+    async fn join_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound(
+            "channel mutations are not configured".to_string(),
+        ))
+    }
+
+    async fn leave_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound(
+            "channel mutations are not configured".to_string(),
+        ))
+    }
+}
+
+impl<R, G, N, C, S, P> ChannelMutationsService for ChannelMutationsServiceImpl<R, G, N, C, S, P>
+where
+    R: ChannelMutationsRepo,
+    G: ChannelRealtimeGateway,
+    N: ChannelNotificationDispatcher,
+    C: ChannelContactsDispatcher,
+    S: ChannelSearchIndexer,
+    P: ChannelSharePermissionService,
+{
+    #[tracing::instrument(err, skip(self, req))]
+    async fn create_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        actor_org_id: Option<i64>,
+        req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
+        if req.channel_type == ChannelType::Team {
+            let team_id = req.team_id.ok_or_else(|| {
+                ChannelMutationErr::BadRequest("team id missing for team channel type".to_string())
+            })?;
+            let has_team = self
+                .repo
+                .user_has_team(actor.as_ref().to_string(), team_id)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+            if !has_team {
+                return Err(ChannelMutationErr::Unauthorized(
+                    "you do not have access to that team".to_string(),
+                ));
+            }
+        }
+
+        if req.team_id.is_some() && req.channel_type != ChannelType::Team {
+            return Err(ChannelMutationErr::BadRequest(
+                "team channels need team channel type".to_string(),
+            ));
+        }
+
+        let org_id = match req.channel_type {
+            ChannelType::Organization => actor_org_id,
+            _ => None,
+        };
+        let participants = lower_macro_users(&req.participants);
+        if participants.is_empty() {
+            return Err(ChannelMutationErr::BadRequest(
+                "participants must be a non-empty list of 'macro|<email>'".to_string(),
+            ));
+        }
+        let create_req = crate::domain::models::CreateChannelRequest {
+            participants: participants.clone(),
+            ..req.clone()
+        };
+
+        let channel_id = self
+            .repo
+            .create_channel(actor.as_ref().to_string(), org_id, create_req)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
+        if req.channel_type == ChannelType::Private {
+            let mut users = participants;
+            if !users.iter().any(|u| u == actor.as_ref()) {
+                users.push(actor.as_ref().to_string());
+            }
+            self.contacts
+                .enqueue_contacts(all_contacts(users)?)
+                .await
+                .map_err(|e| ChannelMutationErr::Contacts(e.into()))?;
+        }
+
+        Ok(crate::domain::models::CreateChannelResponse {
+            id: channel_id.to_string(),
+        })
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn get_or_create_dm(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        req: GetOrCreateDmRequest,
+    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
+        let recipient_id = req.recipient_id.to_lowercase();
+        let user_id = actor.as_ref().to_lowercase();
+
+        if recipient_id.is_empty() {
+            return Err(ChannelMutationErr::BadRequest(
+                "recipient_id must be a non-empty string".to_string(),
+            ));
+        }
+        if !recipient_id.starts_with("macro|") {
+            return Err(ChannelMutationErr::BadRequest(
+                "recipient_id must be 'macro|<email>'".to_string(),
+            ));
+        }
+        if recipient_id == user_id {
+            return Err(ChannelMutationErr::BadRequest(
+                "recipient_id cannot be the same as the user_id".to_string(),
+            ));
+        }
+
+        if let Some(channel_id) = self
+            .repo
+            .maybe_get_dm(user_id.clone(), recipient_id.clone())
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+        {
+            return Ok(GetOrCreateChannelResponse {
+                channel_id: channel_id.to_string(),
+                action: GetOrCreateAction::Get,
+            });
+        }
+
+        let channel_id = self
+            .repo
+            .create_channel(
+                user_id.clone(),
+                None,
+                crate::domain::models::CreateChannelRequest {
+                    name: None,
+                    channel_type: ChannelType::DirectMessage,
+                    team_id: None,
+                    participants: vec![user_id.clone(), recipient_id.clone()],
+                },
+            )
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
+        self.contacts
+            .enqueue_contacts(all_contacts(vec![user_id, recipient_id])?)
+            .await
+            .map_err(|e| ChannelMutationErr::Contacts(e.into()))?;
+
+        Ok(GetOrCreateChannelResponse {
+            channel_id: channel_id.to_string(),
+            action: GetOrCreateAction::Create,
+        })
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn get_or_create_private(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        mut req: GetOrCreatePrivateRequest,
+    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
+        req.recipients = lower_macro_users(&req.recipients);
+        if req.recipients.is_empty() {
+            return Err(ChannelMutationErr::BadRequest(
+                "recipients must be a non-empty list of 'macro|<email>'".to_string(),
+            ));
+        }
+
+        let user_id = actor.as_ref().to_lowercase();
+        let mut lookup = req.recipients.clone();
+        lookup.push(user_id.clone());
+        if let Some(channel_id) = self
+            .repo
+            .maybe_get_private_channel(lookup)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+        {
+            return Ok(GetOrCreateChannelResponse {
+                channel_id: channel_id.to_string(),
+                action: GetOrCreateAction::Get,
+            });
+        }
+
+        let channel_id = self
+            .repo
+            .create_channel(
+                user_id.clone(),
+                None,
+                crate::domain::models::CreateChannelRequest {
+                    name: None,
+                    channel_type: ChannelType::Private,
+                    team_id: None,
+                    participants: req.recipients.clone(),
+                },
+            )
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
+        let mut contacts_users = req.recipients;
+        contacts_users.push(user_id);
+        self.contacts
+            .enqueue_contacts(all_contacts(contacts_users)?)
+            .await
+            .map_err(|e| ChannelMutationErr::Contacts(e.into()))?;
+
+        Ok(GetOrCreateChannelResponse {
+            channel_id: channel_id.to_string(),
+            action: GetOrCreateAction::Create,
+        })
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn patch_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: PatchChannelRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        let info = self
+            .repo
+            .get_channel_info(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        if matches!(info.channel_type, ChannelType::DirectMessage) && req.channel_name.is_some() {
+            return Err(ChannelMutationErr::BadRequest(
+                "cannot change channel_name for direct message channels".to_string(),
+            ));
+        }
+        self.repo
+            .patch_channel(channel_id, actor.as_ref().to_string(), req)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn delete_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        self.repo
+            .delete_channel(channel_id, actor.as_ref().to_string())
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        self.search.remove_message(channel_id, None).await;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn post_message(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: PostMessageRequest,
+    ) -> Result<PostMessageResponse, ChannelMutationErr> {
+        let message = self
+            .repo
+            .create_message(
+                channel_id,
+                actor.as_ref().to_string(),
+                req.content.clone(),
+                req.thread_id,
+            )
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
+        if let Err(err) = self.repo.touch_channel_updated_at(channel_id).await {
+            tracing::error!(error=?err.into(), "unable to update channel updated_at");
+        }
+
+        if let Err(err) = self
+            .repo
+            .create_message_mentions(message.id, req.mentions.clone())
+            .await
+        {
+            tracing::error!(error=?err.into(), "unable to create mentions");
+        }
+
+        let items = share_items(&req.attachments, &req.mentions);
+        if !items.is_empty() {
+            if let Err(err) = self
+                .share_permissions
+                .update_channel_share_permissions(actor.as_ref().to_string(), channel_id, items)
+                .await
+            {
+                let err: anyhow::Error = err.into();
+                tracing::error!(error=?err, "unable to update channel share permissions");
+            }
+        }
+
+        let channel_metadata = self
+            .repo
+            .get_channel_metadata(channel_id, actor.clone())
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        let participants = self
+            .repo
+            .get_participants(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
+        self.gateway
+            .send_update(
+                "comms_message",
+                WithNonce {
+                    data: message.clone(),
+                    nonce: req.nonce.clone(),
+                },
+                participant_ids(&participants),
+            )
+            .await
+            .map_err(|e| ChannelMutationErr::Gateway(e.into()))?;
+
+        if let Err(err) = self
+            .repo
+            .upsert_activity(actor.as_ref().to_string(), channel_id)
+            .await
+        {
+            let err: anyhow::Error = err.into();
+            tracing::error!(error=?err, "unable to upsert activity for message");
+        }
+
+        let has_attachments = !req.attachments.is_empty();
+        let attachments = self
+            .repo
+            .add_attachments(message.id, channel_id, req.attachments.clone())
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        if !attachments.is_empty() {
+            self.gateway
+                .send_update(
+                    "comms_attachment",
+                    WithNonce {
+                        data: AttachmentRealtimeData {
+                            channel_id,
+                            message_id: message.id,
+                            attachments,
+                        },
+                        nonce: req.nonce.clone(),
+                    },
+                    participant_ids(&participants),
+                )
+                .await
+                .map_err(|e| ChannelMutationErr::Gateway(e.into()))?;
+        }
+
+        self.notifications
+            .dispatch_message_notifications(
+                channel_id,
+                channel_metadata,
+                participants,
+                message.clone(),
+                req.mentions,
+                has_attachments,
+            )
+            .await
+            .map_err(|e| ChannelMutationErr::Notification(e.into()))?;
+
+        self.search.index_message(channel_id, message.id).await;
+
+        Ok(PostMessageResponse {
+            id: message.id.to_string(),
+            nonce: req.nonce,
+        })
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn patch_message(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        actor_role: ParticipantRole,
+        channel_id: Uuid,
+        message_id: Uuid,
+        mut req: PatchMessageRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        let owner = self
+            .repo
+            .get_message_owner(message_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        if owner != actor.as_ref() && !is_admin_or_owner(actor_role) {
+            return Err(ChannelMutationErr::Unauthorized(
+                "user is not authorized to edit this message".to_string(),
+            ));
+        }
+
+        let attachments_to_delete = req.attachment_ids_to_delete.clone().unwrap_or_default();
+        let attachments_to_add = req.attachments_to_add.clone().unwrap_or_default();
+        let attachments_changed =
+            !attachments_to_delete.is_empty() || !attachments_to_add.is_empty();
+
+        if attachments_changed {
+            self.patch_message_attachments(
+                actor.as_ref().to_string(),
+                channel_id,
+                message_id,
+                attachments_to_delete,
+                attachments_to_add,
+                req.nonce.clone(),
+            )
+            .await?;
+        }
+
+        if let Some(content) = req.content.clone() {
+            let message = self
+                .repo
+                .patch_message(message_id, content)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
+            if let Some(mentions) = req.mentions.take() {
+                self.repo
+                    .sync_message_mentions(message_id, mentions.clone())
+                    .await
+                    .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
+                let items = share_items(&[], &mentions);
+                if !items.is_empty() {
+                    if let Err(err) = self
+                        .share_permissions
+                        .update_channel_share_permissions(
+                            actor.as_ref().to_string(),
+                            channel_id,
+                            items,
+                        )
+                        .await
+                    {
+                        let err: anyhow::Error = err.into();
+                        tracing::error!(error=?err, "unable to update channel share permissions");
+                    }
+                }
+            }
+
+            let participants = if let Some(thread_id) = message.thread_id {
+                self.repo
+                    .get_thread_participants(thread_id)
+                    .await
+                    .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+            } else {
+                participant_ids(
+                    &self
+                        .repo
+                        .get_participants(channel_id)
+                        .await
+                        .map_err(|e| ChannelMutationErr::Repo(e.into()))?,
+                )
+            };
+
+            self.gateway
+                .send_update(
+                    "comms_message",
+                    WithNonce {
+                        data: message.clone(),
+                        nonce: req.nonce.clone(),
+                    },
+                    participants,
+                )
+                .await
+                .map_err(|e| ChannelMutationErr::Gateway(e.into()))?;
+
+            if let Err(err) = self
+                .repo
+                .upsert_activity(actor.as_ref().to_string(), channel_id)
+                .await
+            {
+                let err: anyhow::Error = err.into();
+                tracing::error!(error=?err, "unable to upsert activity for message");
+            }
+
+            self.search.index_message(channel_id, message.id).await;
+        }
+
+        if attachments_changed && req.content.is_none() {
+            if let Err(err) = self
+                .repo
+                .upsert_activity(actor.as_ref().to_string(), channel_id)
+                .await
+            {
+                let err: anyhow::Error = err.into();
+                tracing::error!(error=?err, "unable to upsert activity for attachment patch");
+            }
+            self.search.index_message(channel_id, message_id).await;
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self, query))]
+    async fn delete_message(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        actor_role: ParticipantRole,
+        channel_id: Uuid,
+        message_id: Uuid,
+        query: DeleteMessageQuery,
+    ) -> Result<(), ChannelMutationErr> {
+        let owner = self
+            .repo
+            .get_message_owner(message_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        if owner != actor.as_ref() && !is_admin_or_owner(actor_role) {
+            return Err(ChannelMutationErr::Unauthorized(
+                "user is not authorized to delete this message".to_string(),
+            ));
+        }
+
+        let message = self
+            .repo
+            .delete_message(message_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        let participants = self
+            .repo
+            .get_participants(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
+        self.gateway
+            .send_update(
+                "comms_message",
+                WithNonce {
+                    data: message,
+                    nonce: query.nonce,
+                },
+                participant_ids(&participants),
+            )
+            .await
+            .map_err(|e| ChannelMutationErr::Gateway(e.into()))?;
+        self.search
+            .remove_message(channel_id, Some(message_id))
+            .await;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn post_reaction(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: PostReactionRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        let message_id = Uuid::parse_str(&req.message_id)
+            .map_err(|err| ChannelMutationErr::BadRequest(err.to_string()))?;
+        match req.action {
+            ReactionAction::Add => {
+                self.repo
+                    .add_reaction(message_id, req.emoji, actor.as_ref().to_string())
+                    .await
+            }
+            ReactionAction::Remove => {
+                self.repo
+                    .remove_reaction(message_id, req.emoji, actor.as_ref().to_string())
+                    .await
+            }
+        }
+        .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
+        let reactions = self
+            .repo
+            .get_message_reactions(message_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        let participants = self
+            .repo
+            .get_participants(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
+        self.gateway
+            .send_update(
+                "comms_reaction",
+                WithNonce {
+                    data: ReactionRealtimeData {
+                        channel_id,
+                        message_id,
+                        reactions,
+                    },
+                    nonce: req.nonce,
+                },
+                participant_ids(&participants),
+            )
+            .await
+            .map_err(|e| ChannelMutationErr::Gateway(e.into()))?;
+
+        if let Err(err) = self
+            .repo
+            .upsert_activity(actor.as_ref().to_string(), channel_id)
+            .await
+        {
+            let err: anyhow::Error = err.into();
+            tracing::error!(error=?err, "unable to upsert activity for reaction");
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn post_typing(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: PostTypingRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        let thread_id = req
+            .thread_id
+            .as_deref()
+            .map(Uuid::parse_str)
+            .transpose()
+            .map_err(|err| ChannelMutationErr::BadRequest(err.to_string()))?;
+        let participants = self
+            .repo
+            .get_participants(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        self.gateway
+            .send_update(
+                "comms_typing",
+                WithNonce {
+                    data: TypingRealtimeData {
+                        channel_id,
+                        user_id: actor.as_ref().to_string(),
+                        action: req.action,
+                        thread_id,
+                    },
+                    nonce: req.nonce,
+                },
+                participant_ids(&participants),
+            )
+            .await
+            .map_err(|e| ChannelMutationErr::Gateway(e.into()))?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn add_participants(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: AddParticipantsRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        let info = self
+            .repo
+            .get_channel_info(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        if info.channel_type == ChannelType::DirectMessage {
+            return Err(ChannelMutationErr::BadRequest(
+                "cannot add/remove participants from direct message channels".to_string(),
+            ));
+        }
+
+        let participants_to_add = lower_macro_users(&req.participants);
+        for participant in &participants_to_add {
+            self.repo
+                .add_participant(channel_id, participant.clone(), ParticipantRole::Member)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        }
+
+        let recipients = participants_to_add
+            .iter()
+            .filter_map(|id| MacroUserIdStr::try_from(id.clone()).ok())
+            .collect();
+        let channel_metadata = self
+            .repo
+            .get_channel_metadata(channel_id, actor.clone())
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        if let Err(err) = self
+            .notifications
+            .dispatch_invite_notifications(channel_id, actor.clone(), recipients, channel_metadata)
+            .await
+        {
+            let err: anyhow::Error = err.into();
+            tracing::error!(error=?err, "unable to send channel invite notification");
+        }
+
+        if matches!(info.channel_type, ChannelType::Private | ChannelType::Team) {
+            let existing = self
+                .repo
+                .get_participants(channel_id)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+                .into_iter()
+                .map(|p| p.user_id);
+            let users = participants_to_add.into_iter().chain(existing);
+            self.contacts
+                .enqueue_contacts(all_contacts(users)?)
+                .await
+                .map_err(|e| ChannelMutationErr::Contacts(e.into()))?;
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn remove_participants(
+        &self,
+        channel_id: Uuid,
+        req: RemoveParticipantsRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        let info = self
+            .repo
+            .get_channel_info(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        if info.channel_type == ChannelType::DirectMessage {
+            return Err(ChannelMutationErr::BadRequest(
+                "cannot add or remove participants from direct message channel".to_string(),
+            ));
+        }
+        for participant in req.participants {
+            self.repo
+                .remove_participant(channel_id, participant)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn join_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        let info = self
+            .repo
+            .get_channel_info(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        if info.channel_type == ChannelType::DirectMessage {
+            return Err(ChannelMutationErr::BadRequest(
+                "cannot join direct message channel".to_string(),
+            ));
+        }
+        let before = self
+            .repo
+            .get_participants(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        self.repo
+            .add_participant(
+                channel_id,
+                actor.as_ref().to_string(),
+                ParticipantRole::Member,
+            )
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
+        if !matches!(
+            info.channel_type,
+            ChannelType::DirectMessage | ChannelType::Organization
+        ) && !before.is_empty()
+        {
+            let users = before
+                .into_iter()
+                .map(|p| p.user_id)
+                .chain(std::iter::once(actor.as_ref().to_string()));
+            if let Err(err) = self.contacts.enqueue_contacts(all_contacts(users)?).await {
+                let err: anyhow::Error = err.into();
+                tracing::error!(error=?err, "unable to create join channel contacts message");
+            }
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn leave_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        let info = self
+            .repo
+            .get_channel_info(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        let participants = self
+            .repo
+            .get_participants(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        match (info.channel_type, participants.len()) {
+            (ChannelType::Organization, _) => {
+                return Err(ChannelMutationErr::BadRequest(
+                    "cannot leave organization channel".to_string(),
+                ));
+            }
+            (ChannelType::Private, 2) | (ChannelType::DirectMessage, _) => {
+                return Err(ChannelMutationErr::BadRequest(
+                    "cannot leave channel with only 2 participants".to_string(),
+                ));
+            }
+            _ => {}
+        }
+        self.repo
+            .remove_participant(channel_id, actor.as_ref().to_string())
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))
+    }
+}
+
+impl<R, G, N, C, S, P> ChannelMutationsServiceImpl<R, G, N, C, S, P>
+where
+    R: ChannelMutationsRepo,
+    G: ChannelRealtimeGateway,
+    N: ChannelNotificationDispatcher,
+    C: ChannelContactsDispatcher,
+    S: ChannelSearchIndexer,
+    P: ChannelSharePermissionService,
+{
+    async fn patch_message_attachments(
+        &self,
+        user_id: String,
+        channel_id: Uuid,
+        message_id: Uuid,
+        attachment_ids_to_delete: Vec<String>,
+        attachments_to_add: Vec<NewChannelAttachment>,
+        nonce: Option<String>,
+    ) -> Result<(), ChannelMutationErr> {
+        let attachment_uuids = attachment_ids_to_delete
+            .iter()
+            .map(|id| Uuid::parse_str(id))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|err| ChannelMutationErr::BadRequest(err.to_string()))?;
+
+        let existing = self
+            .repo
+            .get_message_attachments(message_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        let attachments_to_delete = existing
+            .iter()
+            .filter(|a| attachment_uuids.contains(&a.id))
+            .cloned()
+            .collect::<Vec<_>>();
+        if attachments_to_delete.len() != attachment_uuids.len() {
+            tracing::error!(attachment_ids=?attachment_uuids, "some attachments were not found");
+        }
+
+        let fetched_attachment_ids = attachments_to_delete
+            .iter()
+            .map(|a| a.id)
+            .collect::<Vec<_>>();
+        let fetched_entity_ids = attachments_to_delete
+            .iter()
+            .map(|a| a.entity_id.clone())
+            .collect::<Vec<_>>();
+
+        if !fetched_attachment_ids.is_empty() {
+            self.repo
+                .delete_attachments(fetched_attachment_ids)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+            self.repo
+                .delete_entity_mentions_for_entities(fetched_entity_ids, message_id.to_string())
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        }
+
+        if !attachments_to_add.is_empty() {
+            self.repo
+                .add_attachments(message_id, channel_id, attachments_to_add.clone())
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        }
+
+        let items = share_items(&attachments_to_add, &[]);
+        if !items.is_empty() {
+            if let Err(err) = self
+                .share_permissions
+                .update_channel_share_permissions(user_id, channel_id, items)
+                .await
+            {
+                let err: anyhow::Error = err.into();
+                tracing::error!(error=?err, "unable to update channel share permissions");
+            }
+        }
+
+        let all_attachments = self
+            .repo
+            .get_message_attachments(message_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        let participants = self
+            .repo
+            .get_participants(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        self.gateway
+            .send_update(
+                "comms_attachment",
+                WithNonce {
+                    data: AttachmentRealtimeData {
+                        channel_id,
+                        message_id,
+                        attachments: all_attachments.clone(),
+                    },
+                    nonce,
+                },
+                participant_ids(&participants),
+            )
+            .await
+            .map_err(|e| ChannelMutationErr::Gateway(e.into()))?;
+
+        self.repo
+            .patch_message_attachments(message_id, all_attachments)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
+        Ok(())
     }
 }
 

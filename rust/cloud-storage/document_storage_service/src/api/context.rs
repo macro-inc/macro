@@ -13,8 +13,16 @@ use call::{
     outbound::{livekit_rtc_client::LivekitRtcClient, pg_call_repo::PgCallRepo},
 };
 use channels::{
-    domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
-    outbound::pg_channels_repo::PgChannelMessagesRepo,
+    domain::service::{ChannelMessagesServiceImpl, ChannelMutationsServiceImpl},
+    inbound::axum_router::ChannelsRouterState,
+    outbound::{
+        channel_mutations::{
+            ConnectionGatewayChannelRealtimeGateway, ContactsChannelDispatcher,
+            EntityAccessChannelSharePermissions, NotificationChannelDispatcher,
+            PgChannelMutationsRepo, SqsChannelSearchIndexer,
+        },
+        pg_channels_repo::PgChannelMessagesRepo,
+    },
 };
 use comms::{
     domain::service::ChannelServiceImpl,
@@ -183,8 +191,21 @@ pub(crate) type CommsChannelService =
 pub(crate) type CommsState = CommsRouterState<CommsChannelService>;
 
 /// Type alias for the channels router state.
-pub(crate) type DssChannelsState =
-    ChannelsRouterState<ChannelMessagesServiceImpl<PgChannelMessagesRepo>, EntityAccessService>;
+pub(crate) type DssChannelMutationsService = ChannelMutationsServiceImpl<
+    PgChannelMutationsRepo,
+    ConnectionGatewayChannelRealtimeGateway,
+    NotificationChannelDispatcher<NotificationIngressType>,
+    ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
+    SqsChannelSearchIndexer,
+    EntityAccessChannelSharePermissions<EntityAccessService>,
+>;
+
+/// Type alias for the channels router state.
+pub(crate) type DssChannelsState = ChannelsRouterState<
+    ChannelMessagesServiceImpl<PgChannelMessagesRepo>,
+    EntityAccessService,
+    DssChannelMutationsService,
+>;
 
 /// Type alias for the call connection service.
 pub(crate) type CallConnectionService =

@@ -1,12 +1,18 @@
 use crate::domain::models::{
-    ChannelAttachment, ChannelAttachmentType, ChannelMessageFilters, ChannelParticipant,
-    CountedReaction, MessageAttachment, MessagePageDirection, ResolvedChannelMessage, ThreadData,
-    ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+    AddParticipantsRequest, ChannelAttachment, ChannelAttachmentType, ChannelInfo,
+    ChannelMessageFilters, ChannelMetadata, ChannelParticipant, CountedReaction,
+    CreateChannelRequest, CreateChannelResponse, DeleteMessageQuery, GetOrCreateChannelResponse,
+    GetOrCreateDmRequest, GetOrCreatePrivateRequest, MessageAttachment, MessagePageDirection,
+    MutatedAttachment, MutatedMessage, NewChannelAttachment, PatchChannelRequest,
+    PatchMessageRequest, PostMessageRequest, PostMessageResponse, PostReactionRequest,
+    PostTypingRequest, RemoveParticipantsRequest, ResolvedChannelMessage, SimpleMention,
+    ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
-use std::collections::HashMap;
+use serde::Serialize;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 /// Repository for fetching channel message data.
@@ -189,4 +195,422 @@ pub enum ChannelMessagesErr {
     /// The requested message was not found.
     #[error("message {0} not found")]
     MessageNotFound(Uuid),
+}
+
+/// Repository for channel mutation persistence.
+pub trait ChannelMutationsRepo: Send + Sync + 'static {
+    /// Error type for repo operations.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// Fetch channel metadata.
+    fn get_channel_info(
+        &self,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<ChannelInfo, Self::Err>> + Send;
+
+    /// Resolve channel metadata from a user's perspective.
+    fn get_channel_metadata(
+        &self,
+        channel_id: Uuid,
+        viewer_user_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<ChannelMetadata, Self::Err>> + Send;
+
+    /// Check whether a user belongs to a team.
+    fn user_has_team(
+        &self,
+        user_id: String,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Create a channel.
+    fn create_channel(
+        &self,
+        owner_id: String,
+        org_id: Option<i64>,
+        req: CreateChannelRequest,
+    ) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
+
+    /// Fetch an existing direct message channel.
+    fn maybe_get_dm(
+        &self,
+        user_id: String,
+        recipient_id: String,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
+    /// Fetch an existing private channel.
+    fn maybe_get_private_channel(
+        &self,
+        participants: Vec<String>,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
+    /// Patch a channel.
+    fn patch_channel(
+        &self,
+        channel_id: Uuid,
+        user_id: String,
+        req: PatchChannelRequest,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Delete a channel.
+    fn delete_channel(
+        &self,
+        channel_id: Uuid,
+        user_id: String,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Add a participant.
+    fn add_participant(
+        &self,
+        channel_id: Uuid,
+        user_id: String,
+        role: super::models::ParticipantRole,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Remove a participant.
+    fn remove_participant(
+        &self,
+        channel_id: Uuid,
+        user_id: String,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Create a message.
+    fn create_message(
+        &self,
+        channel_id: Uuid,
+        sender_id: String,
+        content: String,
+        thread_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<MutatedMessage, Self::Err>> + Send;
+
+    /// Update the channel activity timestamp.
+    fn touch_channel_updated_at(
+        &self,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Create message mentions.
+    fn create_message_mentions(
+        &self,
+        message_id: Uuid,
+        mentions: Vec<SimpleMention>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Sync message mentions by deleting old mentions and creating new ones.
+    fn sync_message_mentions(
+        &self,
+        message_id: Uuid,
+        mentions: Vec<SimpleMention>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Add attachments to a message.
+    fn add_attachments(
+        &self,
+        message_id: Uuid,
+        channel_id: Uuid,
+        attachments: Vec<NewChannelAttachment>,
+    ) -> impl Future<Output = Result<Vec<MutatedAttachment>, Self::Err>> + Send;
+
+    /// Get all attachments for a message.
+    fn get_message_attachments(
+        &self,
+        message_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<MutatedAttachment>, Self::Err>> + Send;
+
+    /// Delete attachments by id.
+    fn delete_attachments(
+        &self,
+        attachment_ids: Vec<Uuid>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Delete entity mentions for detached attachment entity ids.
+    fn delete_entity_mentions_for_entities(
+        &self,
+        entity_ids: Vec<String>,
+        source_entity_id: String,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Patch message attachment state.
+    fn patch_message_attachments(
+        &self,
+        message_id: Uuid,
+        attachments: Vec<MutatedAttachment>,
+    ) -> impl Future<Output = Result<MutatedMessage, Self::Err>> + Send;
+
+    /// Patch message content.
+    fn patch_message(
+        &self,
+        message_id: Uuid,
+        content: String,
+    ) -> impl Future<Output = Result<MutatedMessage, Self::Err>> + Send;
+
+    /// Delete a message.
+    fn delete_message(
+        &self,
+        message_id: Uuid,
+    ) -> impl Future<Output = Result<MutatedMessage, Self::Err>> + Send;
+
+    /// Fetch the owner of a message.
+    fn get_message_owner(
+        &self,
+        message_id: Uuid,
+    ) -> impl Future<Output = Result<String, Self::Err>> + Send;
+
+    /// Fetch active participants.
+    fn get_participants(
+        &self,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<ChannelParticipant>, Self::Err>> + Send;
+
+    /// Fetch notification recipients for a thread.
+    fn get_thread_participants(
+        &self,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
+
+    /// Upsert activity for the user in the channel.
+    fn upsert_activity(
+        &self,
+        user_id: String,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Add a reaction.
+    fn add_reaction(
+        &self,
+        message_id: Uuid,
+        emoji: String,
+        user_id: String,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Remove a reaction.
+    fn remove_reaction(
+        &self,
+        message_id: Uuid,
+        emoji: String,
+        user_id: String,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get grouped reactions for a message.
+    fn get_message_reactions(
+        &self,
+        message_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<CountedReaction>, Self::Err>> + Send;
+}
+
+/// Gateway for realtime channel updates.
+pub trait ChannelRealtimeGateway: Send + Sync + 'static {
+    /// Error type for gateway operations.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// Send an update to channel participants.
+    fn send_update<T: Serialize + Send>(
+        &self,
+        message_type: &'static str,
+        payload: T,
+        participants: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Dispatcher for persistent and push notifications.
+pub trait ChannelNotificationDispatcher: Send + Sync + 'static {
+    /// Error type for notification operations.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// Dispatch message notifications.
+    fn dispatch_message_notifications(
+        &self,
+        channel_id: Uuid,
+        metadata: ChannelMetadata,
+        participants: Vec<ChannelParticipant>,
+        message: MutatedMessage,
+        mentions: Vec<SimpleMention>,
+        has_attachments: bool,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Dispatch invite notifications.
+    fn dispatch_invite_notifications(
+        &self,
+        channel_id: Uuid,
+        invited_by_user_id: MacroUserIdStr<'static>,
+        recipient_user_ids: Vec<MacroUserIdStr<'static>>,
+        metadata: ChannelMetadata,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Dispatcher for contact graph updates.
+pub trait ChannelContactsDispatcher: Send + Sync + 'static {
+    /// Error type for contacts operations.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// Enqueue a complete contact graph update for the provided users.
+    fn enqueue_contacts(
+        &self,
+        users: HashSet<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Indexer for channel search updates.
+pub trait ChannelSearchIndexer: Send + Sync + 'static {
+    /// Enqueue a message upsert.
+    fn index_message(&self, channel_id: Uuid, message_id: Uuid) -> impl Future<Output = ()> + Send;
+
+    /// Enqueue a message or channel removal.
+    fn remove_message(
+        &self,
+        channel_id: Uuid,
+        message_id: Option<Uuid>,
+    ) -> impl Future<Output = ()> + Send;
+}
+
+/// Service for channel share permissions caused by message references.
+pub trait ChannelSharePermissionService: Send + Sync + 'static {
+    /// Error type for share-permission operations.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// Ensure channel participants can view referenced items.
+    fn update_channel_share_permissions(
+        &self,
+        user_id: String,
+        channel_id: Uuid,
+        items: Vec<(String, String)>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Service for mutating channel state.
+pub trait ChannelMutationsService: Send + Sync + 'static {
+    /// Create a channel.
+    fn create_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        actor_org_id: Option<i64>,
+        req: CreateChannelRequest,
+    ) -> impl Future<Output = Result<CreateChannelResponse, ChannelMutationErr>> + Send;
+
+    /// Get or create a direct message channel.
+    fn get_or_create_dm(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        req: GetOrCreateDmRequest,
+    ) -> impl Future<Output = Result<GetOrCreateChannelResponse, ChannelMutationErr>> + Send;
+
+    /// Get or create a private channel.
+    fn get_or_create_private(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        req: GetOrCreatePrivateRequest,
+    ) -> impl Future<Output = Result<GetOrCreateChannelResponse, ChannelMutationErr>> + Send;
+
+    /// Patch a channel.
+    fn patch_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: PatchChannelRequest,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
+
+    /// Delete a channel.
+    fn delete_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
+
+    /// Send a message.
+    fn post_message(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: PostMessageRequest,
+    ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send;
+
+    /// Patch a message.
+    fn patch_message(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        actor_role: super::models::ParticipantRole,
+        channel_id: Uuid,
+        message_id: Uuid,
+        req: PatchMessageRequest,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
+
+    /// Delete a message.
+    fn delete_message(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        actor_role: super::models::ParticipantRole,
+        channel_id: Uuid,
+        message_id: Uuid,
+        query: DeleteMessageQuery,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
+
+    /// Mutate a reaction.
+    fn post_reaction(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: PostReactionRequest,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
+
+    /// Emit a typing update.
+    fn post_typing(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: PostTypingRequest,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
+
+    /// Add participants to a channel.
+    fn add_participants(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: AddParticipantsRequest,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
+
+    /// Remove participants from a channel.
+    fn remove_participants(
+        &self,
+        channel_id: Uuid,
+        req: RemoveParticipantsRequest,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
+
+    /// Join a channel.
+    fn join_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
+
+    /// Leave a channel.
+    fn leave_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
+}
+
+/// Errors that can occur while mutating channels.
+#[derive(Debug, thiserror::Error)]
+pub enum ChannelMutationErr {
+    /// Bad request.
+    #[error("{0}")]
+    BadRequest(String),
+    /// Unauthorized mutation attempt.
+    #[error("{0}")]
+    Unauthorized(String),
+    /// Not found.
+    #[error("{0}")]
+    NotFound(String),
+    /// Repository error.
+    #[error(transparent)]
+    Repo(#[from] anyhow::Error),
+    /// Realtime gateway error.
+    #[error(transparent)]
+    Gateway(anyhow::Error),
+    /// Notification dispatch error.
+    #[error(transparent)]
+    Notification(anyhow::Error),
+    /// Contacts dispatch error.
+    #[error(transparent)]
+    Contacts(anyhow::Error),
 }

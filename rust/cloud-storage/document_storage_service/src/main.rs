@@ -24,8 +24,16 @@ use call::{
     },
 };
 use channels::{
-    domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
-    outbound::pg_channels_repo::PgChannelMessagesRepo,
+    domain::service::{ChannelMessagesServiceImpl, ChannelMutationsServiceImpl},
+    inbound::axum_router::ChannelsRouterState,
+    outbound::{
+        channel_mutations::{
+            ConnectionGatewayChannelRealtimeGateway, ContactsChannelDispatcher,
+            EntityAccessChannelSharePermissions, NotificationChannelDispatcher,
+            PgChannelMutationsRepo, SqsChannelSearchIndexer,
+        },
+        pg_channels_repo::PgChannelMessagesRepo,
+    },
 };
 use comms::{
     domain::service::ChannelServiceImpl,
@@ -531,8 +539,11 @@ async fn main() -> anyhow::Result<()> {
         PgCallRepo::new(readonly_db.clone()),
     );
 
+    let sqs_client = Arc::new(sqs_client);
+    let conn_gateway_client = Arc::new(conn_gateway_client);
+
     let api_context = ApiContext {
-        contacts_ingress,
+        contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
                 PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
@@ -550,9 +561,9 @@ async fn main() -> anyhow::Result<()> {
         s3_client: s3,
         dynamodb_client: Arc::new(dynamodb_client),
         dynamo_db,
-        sqs_client: Arc::new(sqs_client),
-        notification_ingress_service,
-        conn_gateway_client: Arc::new(conn_gateway_client),
+        sqs_client: sqs_client.clone(),
+        notification_ingress_service: notification_ingress_service.clone(),
+        conn_gateway_client: conn_gateway_client.clone(),
         sync_service_client: sync_service_client.clone(),
         system_properties_service: system_properties_service.clone(),
         properties_service: properties_service.clone(),
@@ -575,9 +586,17 @@ async fn main() -> anyhow::Result<()> {
                 documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
             ),
         },
-        channels_state: ChannelsRouterState::new(
+        channels_state: ChannelsRouterState::with_mutations(
             ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(db.clone())),
             (*entity_access_service).clone(),
+            ChannelMutationsServiceImpl::new(
+                PgChannelMutationsRepo::new(db.clone()),
+                ConnectionGatewayChannelRealtimeGateway::new(conn_gateway_client.clone()),
+                NotificationChannelDispatcher::new(db.clone(), notification_ingress_service.clone()),
+                ContactsChannelDispatcher::new(contacts_ingress.clone()),
+                SqsChannelSearchIndexer::new(sqs_client.clone()),
+                EntityAccessChannelSharePermissions::new(db.clone(), entity_access_service.clone()),
+            ),
         ),
         call_state,
         call_webhook_state,
