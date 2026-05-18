@@ -210,13 +210,13 @@
   }
 
 
-  :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
-    user-select: text;
-  }
-
   /* scuffed: stops text from being selectable by default for mobile usage */
   :where(*, ::before, ::after) {
     user-select: none;
+  }
+
+  :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
+    user-select: text;
   }
 
   *:focus-visible {
