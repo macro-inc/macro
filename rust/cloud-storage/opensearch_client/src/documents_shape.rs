@@ -1,18 +1,47 @@
-//! Dispatch helper for the documents index migration from a flat-chunk
+//! Dispatch helpers for the documents index migration from a flat-chunk
 //! shape (`documents_v1`) to a parent/child join shape (`documents_v2`).
 //!
-//! For now, only writes targeted explicitly at `documents_v2` (via the
-//! backfill's `index_override`) take the join-shape code path. Reads, the
-//! default-destination write path, and the eventual alias-swap dispatch
-//! will come in follow-up changes.
+//! There are two dispatch points:
+//!
+//! * `destination_uses_join_shape(dest)` — used by writers that take an
+//!   explicit `index_override`. Returns `true` for the literal v2 name so
+//!   the backfill can target v2 in join-shape mode while normal traffic
+//!   keeps flowing flat-shape to v1.
+//!
+//! * `alias_uses_join_shape()` — used by callers that always target the
+//!   `documents` alias (search reads, owner-id deletes, metadata
+//!   updates). Driven by the `DOCUMENTS_INDEX_USES_JOIN` env var so we can
+//!   flip the alias contract atomically with the alias swap without
+//!   per-call introspection.
+
+use std::sync::OnceLock;
 
 /// Physical index name of the join-shape documents index.
 pub const DOCUMENTS_V2: &str = "documents_v2";
 
 /// Whether writes targeting this destination should use the parent/child
-/// join shape. True only for the explicit `documents_v2` name today;
-/// writes via the `documents` alias keep the flat-chunk shape until we
-/// also switch the read path.
+/// join shape. True for the explicit `documents_v2` name and, when
+/// configured via env var, for the `documents` alias too.
 pub fn destination_uses_join_shape(destination: &str) -> bool {
-    destination == DOCUMENTS_V2
+    if destination == DOCUMENTS_V2 {
+        return true;
+    }
+    if destination == "documents" {
+        return alias_uses_join_shape();
+    }
+    false
+}
+
+/// Whether the `documents` alias currently resolves to a join-shape index.
+///
+/// Controlled by the `DOCUMENTS_INDEX_USES_JOIN` env var, cached once per
+/// process. Operators set it `true` at the alias swap; before then it
+/// defaults to `false` so the existing flat-shape paths stay active.
+pub fn alias_uses_join_shape() -> bool {
+    static ALIAS_USES_JOIN: OnceLock<bool> = OnceLock::new();
+    *ALIAS_USES_JOIN.get_or_init(|| {
+        std::env::var("DOCUMENTS_INDEX_USES_JOIN")
+            .map(|v| v == "true")
+            .unwrap_or(false)
+    })
 }

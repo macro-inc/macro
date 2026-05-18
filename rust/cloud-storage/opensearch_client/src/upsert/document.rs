@@ -4,7 +4,9 @@ use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
 use crate::{
-    Result, date_format::EpochSeconds, documents_shape::destination_uses_join_shape,
+    Result,
+    date_format::EpochSeconds,
+    documents_shape::{alias_uses_join_shape, destination_uses_join_shape},
     error::OpensearchClientError,
 };
 
@@ -383,7 +385,24 @@ async fn upsert_document_join(
     Ok(())
 }
 
+/// Update the denormalized `document_name` for an existing document.
+///
+/// Flat shape: `update_by_query` fans the new name across every chunk
+/// doc. Join shape: a single partial-update on the parent (children
+/// don't carry `document_name`).
 pub(crate) async fn update_document_metadata(
+    client: &opensearch::OpenSearch,
+    document_id: &str,
+    document_name: &str,
+) -> Result<()> {
+    if alias_uses_join_shape() {
+        update_document_metadata_join(client, document_id, document_name).await
+    } else {
+        update_document_metadata_flat(client, document_id, document_name).await
+    }
+}
+
+async fn update_document_metadata_flat(
     client: &opensearch::OpenSearch,
     document_id: &str,
     document_name: &str,
@@ -414,7 +433,7 @@ pub(crate) async fn update_document_metadata(
         .await
         .map_err(|err| OpensearchClientError::DeserializationFailed {
             details: err.to_string(),
-            method: Some("update_document_metadata".to_string()),
+            method: Some("update_document_metadata_flat".to_string()),
         })?;
 
     let status_code = response.status_code();
@@ -425,7 +444,7 @@ pub(crate) async fn update_document_metadata(
                 .await
                 .map_err(|err| OpensearchClientError::DeserializationFailed {
                     details: err.to_string(),
-                    method: Some("update_document_metadata".to_string()),
+                    method: Some("update_document_metadata_flat".to_string()),
                 })?;
 
         let updated_count = response_body["updated"].as_u64().unwrap_or(0);
@@ -433,32 +452,92 @@ pub(crate) async fn update_document_metadata(
             document_id=%document_id,
             document_name=%document_name,
             updated_count=%updated_count,
-            "document metadata updated successfully"
+            "document metadata updated successfully (flat)"
         );
-    } else {
-        let body =
-            response
-                .text()
-                .await
-                .map_err(|err| OpensearchClientError::DeserializationFailed {
-                    details: err.to_string(),
-                    method: Some("update_document_metadata".to_string()),
-                })?;
-
-        tracing::error!(
-            status_code=?status_code,
-            body=?body,
-            document_id=%document_id,
-            "error updating document metadata",
-        );
-
-        return Err(OpensearchClientError::Unknown {
-            details: body,
-            method: Some("update_document_metadata".to_string()),
-        });
+        return Ok(());
     }
 
-    Ok(())
+    let body =
+        response
+            .text()
+            .await
+            .map_err(|err| OpensearchClientError::DeserializationFailed {
+                details: err.to_string(),
+                method: Some("update_document_metadata_flat".to_string()),
+            })?;
+
+    tracing::error!(
+        status_code=?status_code,
+        body=?body,
+        document_id=%document_id,
+        "error updating document metadata (flat)",
+    );
+
+    Err(OpensearchClientError::Unknown {
+        details: body,
+        method: Some("update_document_metadata_flat".to_string()),
+    })
+}
+
+/// Partial update on the parent doc. Routing must match the parent's
+/// routing (= parent _id = document_id).
+async fn update_document_metadata_join(
+    client: &opensearch::OpenSearch,
+    document_id: &str,
+    document_name: &str,
+) -> Result<()> {
+    use serde_json::json;
+
+    let body = json!({
+        "doc": {
+            "document_name": document_name,
+        }
+    });
+
+    let response = client
+        .update(opensearch::UpdateParts::IndexId(
+            SearchIndex::Documents.as_ref(),
+            document_id,
+        ))
+        .routing(document_id)
+        .body(body)
+        .send()
+        .await
+        .map_err(|err| OpensearchClientError::DeserializationFailed {
+            details: err.to_string(),
+            method: Some("update_document_metadata_join".to_string()),
+        })?;
+
+    let status_code = response.status_code();
+    if status_code.is_success() {
+        tracing::info!(
+            document_id=%document_id,
+            document_name=%document_name,
+            "document metadata updated successfully (join)"
+        );
+        return Ok(());
+    }
+
+    let body =
+        response
+            .text()
+            .await
+            .map_err(|err| OpensearchClientError::DeserializationFailed {
+                details: err.to_string(),
+                method: Some("update_document_metadata_join".to_string()),
+            })?;
+
+    tracing::error!(
+        status_code=?status_code,
+        body=?body,
+        document_id=%document_id,
+        "error updating document metadata (join)",
+    );
+
+    Err(OpensearchClientError::Unknown {
+        details: body,
+        method: Some("update_document_metadata_join".to_string()),
+    })
 }
 
 #[cfg(test)]

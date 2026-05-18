@@ -224,6 +224,11 @@ const CHANNEL_BODY = {
   },
 };
 
+// `documents_v2` uses an OpenSearch parent/child `join` field so we can
+// AND multi-term searches across chunks of the same document via
+// `has_child` queries. Parents carry the document's metadata; children
+// carry per-chunk content. All children must be written with
+// `routing = parent _id` so the pair lands on the same shard.
 const DOCUMENT_BODY = {
   settings: {
     ...SHARD_SETTINGS,
@@ -235,21 +240,7 @@ const DOCUMENT_BODY = {
       entity_id: {
         type: 'keyword',
       },
-      node_id: {
-        type: 'keyword',
-        index: false,
-        doc_values: true,
-      },
-      file_type: {
-        type: 'keyword',
-        index: false,
-        doc_values: true,
-      },
-      owner_id: {
-        type: 'keyword',
-        index: true,
-        doc_values: true,
-      },
+      // Parent-only metadata
       document_name: {
         type: 'text',
         fields: {
@@ -259,16 +250,13 @@ const DOCUMENT_BODY = {
           },
         },
       },
-      raw_content: {
-        type: 'text',
+      owner_id: {
+        type: 'keyword',
+        index: true,
+        doc_values: true,
       },
-      content: {
-        type: 'text',
-        analyzer: 'standard',
-      },
-      updated_at_seconds: {
-        type: 'date',
-        format: 'epoch_second',
+      file_type: {
+        type: 'keyword',
         index: false,
         doc_values: true,
       },
@@ -276,6 +264,30 @@ const DOCUMENT_BODY = {
         type: 'keyword',
         index: true,
         doc_values: true,
+      },
+      updated_at_seconds: {
+        type: 'date',
+        format: 'epoch_second',
+        index: false,
+        doc_values: true,
+      },
+      // Child-only fields
+      node_id: {
+        type: 'keyword',
+        index: false,
+        doc_values: true,
+      },
+      content: {
+        type: 'text',
+        analyzer: 'standard',
+      },
+      raw_content: {
+        type: 'text',
+      },
+      // Join relationship
+      document_relation: {
+        type: 'join',
+        relations: { document: 'chunk' },
       },
     },
   },
