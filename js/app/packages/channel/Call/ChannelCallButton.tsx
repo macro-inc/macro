@@ -4,7 +4,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import PhoneIcon from '@icon/wide-call.svg';
 import PhoneDisconnectIcon from '@icon/wide-call-disconnect.svg';
 import { useActiveCallQuery } from '@queries/call/call';
-import { Button } from '@ui';
+import { Button, cn } from '@ui';
 import { Show } from 'solid-js';
 import { useCall } from './use-call';
 
@@ -46,12 +46,14 @@ export function ChannelCallButton(props: { channelId: string }) {
       onClick={handleClick}
       disabled={isPending()}
       tooltip={tooltip()}
-      class={
-        isHighlighted()
-          ? 'px-1 bg-accent/20 hover:bg-accent/30 text-accent'
-          : 'px-1'
-      }
+      variant="base"
       size={isTouchDevice() ? 'icon-md' : 'icon-sm'}
+      depth={2}
+      class={cn(
+        'bg-surface',
+        isHighlighted() &&
+          'bg-accent/20 hover:bg-accent/30 text-accent border-accent/30'
+      )}
     >
       <Show when={call.isInThisChannel()} fallback={<PhoneIcon />}>
         <PhoneDisconnectIcon />
