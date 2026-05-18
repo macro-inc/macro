@@ -40,8 +40,19 @@ export function ProfileStep() {
     if (!validate()) return;
     setAuthPending(true);
 
+    sessionStorage.setItem(
+      'onboarding_profile',
+      JSON.stringify({
+        firstName: ctx.firstName(),
+        lastName: ctx.lastName(),
+        email: ctx.email(),
+        teamName: ctx.teamName(),
+      })
+    );
+
     const success = await startSsoLogin({
       returnPath: `${ROUTER_BASE_CONCAT}welcome?google=1`,
+      loginHint: ctx.email().trim() || undefined,
     });
 
     if (success) {

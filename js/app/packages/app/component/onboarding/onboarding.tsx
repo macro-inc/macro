@@ -2,6 +2,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { analytics } from '@app/lib/analytics/analytics';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import { toast } from '@core/component/Toast/Toast';
 import { initAndStartEmailSync } from '@core/email-link';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { throwOnErr } from '@core/util/maybeResult';
@@ -63,7 +64,21 @@ function OnboardingInner() {
     if (params.has('google')) {
       cleanParam('google');
 
-      fetchToken().then(() => {
+      const saved = sessionStorage.getItem('onboarding_profile');
+      if (saved) {
+        try {
+          const profile = JSON.parse(saved);
+          if (profile.firstName) ctx.setFirstName(profile.firstName);
+          if (profile.lastName) ctx.setLastName(profile.lastName);
+          if (profile.email) ctx.setEmail(profile.email);
+          if (profile.teamName) ctx.setTeamName(profile.teamName);
+        } catch {
+          // ignore malformed data
+        }
+        sessionStorage.removeItem('onboarding_profile');
+      }
+
+      fetchToken().then(async () => {
         initAndStartEmailSync().match(
           () => analytics.track('email_authorized'),
           (e) => {
@@ -74,6 +89,15 @@ function OnboardingInner() {
             }
           }
         );
+
+        if (ctx.firstName() || ctx.lastName()) {
+          await authServiceClient
+            .putUserName({
+              first_name: ctx.firstName() || undefined,
+              last_name: ctx.lastName() || undefined,
+            })
+            .catch(() => {});
+        }
       });
 
       const teamStepIndex = STEPS.findIndex((s) => s.id === 'team');
@@ -221,7 +245,12 @@ async function createPendingTeamOnReturn(): Promise<boolean> {
       .map((m) => ({ email: m.email }));
 
     if (invites.length > 0) {
-      await throwOnErr(() => authServiceClient.inviteToTeam({ invites }));
+      try {
+        await throwOnErr(() => authServiceClient.inviteToTeam({ invites }));
+      } catch (inviteError) {
+        console.error('Failed to send team invites:', inviteError);
+        toast.failure('Team created, but some invites failed to send.');
+      }
     }
 
     await invalidateUserTeams();
@@ -235,7 +264,8 @@ async function createPendingTeamOnReturn(): Promise<boolean> {
     return true;
   } catch (error) {
     console.error('Failed to create team:', error);
+    toast.failure('Failed to create team. You can set it up later in Settings.');
     clearPendingTeam();
-    return true;
+    return false;
   }
 }
