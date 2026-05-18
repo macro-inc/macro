@@ -44,7 +44,10 @@ const Grid: Component<{
 }> = (props) => (
   <div>
     <div class="text-xs text-ink-muted mb-2">{props.title}</div>
-    <div class="grid gap-3" style={{ 'grid-template-columns': 'repeat(4, minmax(0, 1fr))' }}>
+    <div
+      class="grid gap-3"
+      style={{ 'grid-template-columns': 'repeat(4, minmax(0, 1fr))' }}
+    >
       <For each={props.properties}>
         {(p) => (
           <div class="border border-edge-muted/30 rounded p-2 flex flex-col gap-1 min-w-0">
@@ -105,7 +108,12 @@ const PropertyDebug: Component = () => {
         <Section title="Primitives — filled (canEdit=true)">
           <Grid title="Property.Text + fallback" properties={PROPERTIES_FILLED}>
             {(p) => (
-              <Property.Root property={get(p)} canEdit onSave={onSave} onEdit={onEdit}>
+              <Property.Root
+                property={get(p)}
+                canEdit
+                onSave={onSave}
+                onEdit={onEdit}
+              >
                 <Property.Text
                   property={get(p)}
                   fallback={<Property.Empty label="None" />}
@@ -113,9 +121,17 @@ const PropertyDebug: Component = () => {
               </Property.Root>
             )}
           </Grid>
-          <Grid title="Property.Icon + Property.Text" properties={PROPERTIES_FILLED}>
+          <Grid
+            title="Property.Icon + Property.Text"
+            properties={PROPERTIES_FILLED}
+          >
             {(p) => (
-              <Property.Root property={get(p)} canEdit onSave={onSave} onEdit={onEdit}>
+              <Property.Root
+                property={get(p)}
+                canEdit
+                onSave={onSave}
+                onEdit={onEdit}
+              >
                 <div class="inline-flex items-center gap-1.5 min-w-0">
                   <Property.Icon property={get(p)} class="size-3 shrink-0" />
                   <Property.Text
@@ -129,12 +145,24 @@ const PropertyDebug: Component = () => {
         </Section>
 
         <Section title="Primitives — empty">
-          <Grid title="Property.Text with fallback" properties={PROPERTIES_EMPTY}>
+          <Grid
+            title="Property.Text with fallback"
+            properties={PROPERTIES_EMPTY}
+          >
             {(p) => (
-              <Property.Root property={get(p)} canEdit onSave={onSave} onEdit={onEdit}>
+              <Property.Root
+                property={get(p)}
+                canEdit
+                onSave={onSave}
+                onEdit={onEdit}
+              >
                 <Property.Text
                   property={get(p)}
-                  fallback={<Property.Empty label={`Set ${p.displayName.toLowerCase()}`} />}
+                  fallback={
+                    <Property.Empty
+                      label={`Set ${p.displayName.toLowerCase()}`}
+                    />
+                  }
                 />
               </Property.Root>
             )}
@@ -142,9 +170,17 @@ const PropertyDebug: Component = () => {
         </Section>
 
         <Section title="Primitives — read-only (isMetadata)">
-          <Grid title="No edit affordances should render" properties={PROPERTIES_METADATA}>
+          <Grid
+            title="No edit affordances should render"
+            properties={PROPERTIES_METADATA}
+          >
             {(p) => (
-              <Property.Root property={get(p)} canEdit onSave={onSave} onEdit={onEdit}>
+              <Property.Root
+                property={get(p)}
+                canEdit
+                onSave={onSave}
+                onEdit={onEdit}
+              >
                 <div class="inline-flex items-center gap-1.5">
                   <Property.Icon property={get(p)} class="size-3 shrink-0" />
                   <Property.Text property={get(p)} />
@@ -156,9 +192,17 @@ const PropertyDebug: Component = () => {
         </Section>
 
         <Section title="Compositions — inline pill (like InlinePropertyValue)">
-          <Grid title="Tooltip + EditTrigger + Icon + Text + Caret" properties={PROPERTIES_FILLED}>
+          <Grid
+            title="Tooltip + EditTrigger + Icon + Text + Caret"
+            properties={PROPERTIES_FILLED}
+          >
             {(p) => (
-              <Property.Root property={get(p)} canEdit onSave={onSave} onEdit={onEdit}>
+              <Property.Root
+                property={get(p)}
+                canEdit
+                onSave={onSave}
+                onEdit={onEdit}
+              >
                 <Property.Tooltip property={get(p)}>
                   <Property.EditTrigger class={buttonClass}>
                     <Property.Icon property={get(p)} class="size-3 shrink-0" />
@@ -184,7 +228,12 @@ const PropertyDebug: Component = () => {
                 )}
               >
                 {(p) => (
-                  <Property.Root property={get(p)} canEdit onSave={onSave} onEdit={onEdit}>
+                  <Property.Root
+                    property={get(p)}
+                    canEdit
+                    onSave={onSave}
+                    onEdit={onEdit}
+                  >
                     <div class="inline-flex items-center gap-2">
                       <Property.UserStack property={get(p)} maxUsers={2} />
                       <Property.Text property={get(p)} />
@@ -207,7 +256,12 @@ const PropertyDebug: Component = () => {
           >
             {(p) => (
               <Cell label={`${p.displayName} · ${p.valueType}`}>
-                <Property.Root property={get(p)} canEdit onSave={onSave} onEdit={onEdit}>
+                <Property.Root
+                  property={get(p)}
+                  canEdit
+                  onSave={onSave}
+                  onEdit={onEdit}
+                >
                   <Property.Chips property={get(p)} />
                 </Property.Root>
               </Cell>
@@ -216,10 +270,7 @@ const PropertyDebug: Component = () => {
         </Section>
 
         <Section title="Composed (stubs — coming in PR 3-6)">
-          <Show
-            when={true}
-            fallback={null}
-          >
+          <Show when={true} fallback={null}>
             <div class="text-xs text-ink-muted">
               CondensedProperty / InlineProperty / ListProperty / PanelRow will
               land here as their corresponding migration PRs go in.

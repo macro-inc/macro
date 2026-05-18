@@ -15,8 +15,6 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { useEntityProperties } from '@core/component/Properties/hooks';
-import { Property } from '@property';
-import { getEntityValues, hasValue } from '@property/utils';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
@@ -39,6 +37,8 @@ import SparkleIcon from '@icon/regular/sparkle.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import TrashSimple from '@icon/regular/trash-simple.svg';
 import MacroEmbed from '@macro-icons/macro-embed.svg';
+import { Property } from '@property';
+import { getEntityValues, hasValue } from '@property/utils';
 import {
   isAccessiblePreviewItem,
   isChannelPreviewItem,

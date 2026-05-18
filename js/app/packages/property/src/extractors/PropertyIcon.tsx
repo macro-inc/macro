@@ -39,12 +39,7 @@ export function PropertyIcon(props: Props): JSX.Element {
     return (
       <Show when={userId()}>
         {(id) => (
-          <UserIcon
-            id={id()}
-            size="sm"
-            suppressClick
-            class={cn(props.class)}
-          />
+          <UserIcon id={id()} size="sm" suppressClick class={cn(props.class)} />
         )}
       </Show>
     );

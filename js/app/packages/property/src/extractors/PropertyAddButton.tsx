@@ -15,7 +15,9 @@ export function PropertyAddButton(props: Props) {
   const ctx = useProperty();
   const isReadOnly = () => !ctx.canEdit() || ctx.property().isMetadata;
 
-  const handleClick = (e: MouseEvent & { currentTarget: HTMLButtonElement }) => {
+  const handleClick = (
+    e: MouseEvent & { currentTarget: HTMLButtonElement }
+  ) => {
     e.stopPropagation();
     if (isReadOnly()) return;
     ctx.onEdit?.(ctx.property(), e.currentTarget);

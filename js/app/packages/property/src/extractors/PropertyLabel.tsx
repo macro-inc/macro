@@ -11,6 +11,8 @@ type Props = {
  */
 export function PropertyLabel(props: Props) {
   return (
-    <span class={cn('truncate', props.class)}>{props.property.displayName}</span>
+    <span class={cn('truncate', props.class)}>
+      {props.property.displayName}
+    </span>
   );
 }

@@ -3,7 +3,6 @@ import type { Property as PropertyT } from '@core/component/Properties/types';
 import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
 import { Property } from '@property';
 import { getEntityValues, hasValue } from '@property/utils';
-import { cn } from '@ui/utils/classname';
 import { type Component, Match, Show, Switch } from 'solid-js';
 import './list-property-value.css';
 import { Layer } from '@ui';
@@ -13,7 +12,7 @@ type ListPropertyValueProps = {
 };
 
 /**
- * Borderless property pill for list views. Built from @property primitives,
+ * Property pill for list views. Built from @property primitives,
  * with `@max-[840px]/u-list:hidden` collapsing the label and caret on narrow
  * containers so cells reduce to icon-only.
  */

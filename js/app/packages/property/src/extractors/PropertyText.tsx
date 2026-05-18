@@ -1,5 +1,5 @@
-import { cn } from '@ui';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
+import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import type { Property } from '../types';
 import {
@@ -50,10 +50,7 @@ export function PropertyText(props: Props) {
   const empty = () => !text();
 
   return (
-    <Show
-      when={!empty()}
-      fallback={props.fallback ?? null}
-    >
+    <Show when={!empty()} fallback={props.fallback ?? null}>
       <span class={cn('truncate', props.class)}>{text()}</span>
     </Show>
   );

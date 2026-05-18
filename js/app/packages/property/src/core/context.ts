@@ -6,10 +6,7 @@ export type PropertySaveFn = (
   value: PropertyApiValues
 ) => Promise<void>;
 
-export type PropertyEditFn = (
-  property: Property,
-  anchor?: HTMLElement
-) => void;
+export type PropertyEditFn = (property: Property, anchor?: HTMLElement) => void;
 
 export interface PropertyRootContextValue {
   property: () => Property;

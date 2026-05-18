@@ -16,7 +16,9 @@ type Props = {
  */
 export function PropertyEmpty(props: Props) {
   return (
-    <span class={cn('inline-flex items-center gap-1.5 opacity-50', props.class)}>
+    <span
+      class={cn('inline-flex items-center gap-1.5 opacity-50', props.class)}
+    >
       <Show when={!props.hideIcon}>
         <CircleDashedEmpty class="size-3 shrink-0" />
       </Show>

@@ -43,8 +43,7 @@ export function usePropertyDisplay(
   return createMemo(() => {
     const p = property();
     const empty = !hasValue(p);
-    const isUser =
-      isEntityProperty(p) && p.specificEntityType === 'USER';
+    const isUser = isEntityProperty(p) && p.specificEntityType === 'USER';
 
     let text = '';
     let firstOptionId: string | undefined;
@@ -73,7 +72,8 @@ export function usePropertyDisplay(
           const parts = useDisplayNameParts(tryMacroId(firstUserId));
           text = parts.firstName() || 'Unknown';
         } else if (entities.length > 1) {
-          text = entities.length === 2 ? '2 people' : `${entities.length} people`;
+          text =
+            entities.length === 2 ? '2 people' : `${entities.length} people`;
         }
       } else if (entities.length > 0) {
         text = entities.length === 1 ? '1 item' : `${entities.length} items`;
