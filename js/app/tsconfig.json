@@ -227,6 +227,12 @@
       "@entity/*": [
         "./packages/entity/src/*"
       ],
+      "@property": [
+        "./packages/property/src/index.ts"
+      ],
+      "@property/*": [
+        "./packages/property/src/*"
+      ],
     },
     "rootDir": "..",
     "outDir": "./dist"
@@ -261,6 +267,9 @@
     },
     {
       "path": "./packages/entity"
+    },
+    {
+      "path": "./packages/property"
     }
   ]
 }
