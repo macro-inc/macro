@@ -20,7 +20,7 @@ function ReplyActionButton(props: {
     <Button
       variant="base"
       size="sm"
-      class="rounded-lg px-3 py-1.5 text-sm text-ink-muted hover:text-ink border border-ink-muted/8 bg-ink-muted/[0.025] hover:bg-ink-muted/[0.06]"
+      class="rounded-lg px-3 py-1.5 text-sm text-ink-muted hover:text-ink border border-ink-muted/8 bg-ink-muted/2.5 hover:bg-ink-muted/6"
       onClick={props.onClick}
     >
       <props.icon class="size-3.5" />

@@ -541,7 +541,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       class={cn(
         'group/sidebar h-full py-2 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
         isExpanded() &&
-          'max-w-[199px] w-full mobile:max-w-2/3 translate-x-0 opacity-100',
+          'max-w-49.75 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
         props.sidebarState === 'hidden' &&
           '-translate-x-full overflow-hidden opacity-0',
 

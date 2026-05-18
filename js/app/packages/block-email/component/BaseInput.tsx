@@ -1314,7 +1314,7 @@ export function BaseInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative flex flex-col flex-1 bg-ink-muted/[0.025] border border-ink-muted/8 rounded-lg max-w-full"
+      class="relative flex flex-col flex-1 bg-ink-muted/2.5 border border-ink-muted/8 rounded-lg max-w-full"
     >
       {/* Top Bar */}
       <div class="relative flex items-start gap-2 px-3 pt-1.5 pb-0.5">

@@ -57,7 +57,7 @@ export function MessageActions(props: {
     >
       <Show when={!props.hiddenActions?.includes('reply')}>
         <Button
-          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/[0.08]"
+          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
           onClick={onChangeReplyType('reply')}
           tooltip="Reply"
         >
@@ -70,7 +70,7 @@ export function MessageActions(props: {
         }
       >
         <Button
-          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/[0.08]"
+          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
           onClick={onChangeReplyType('reply-all')}
           tooltip="Reply all"
         >
@@ -79,7 +79,7 @@ export function MessageActions(props: {
       </Show>
       <Show when={!props.hiddenActions?.includes('forward')}>
         <Button
-          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/[0.08]"
+          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
           onClick={onChangeReplyType('forward')}
           tooltip="Forward"
         >

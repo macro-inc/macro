@@ -11,8 +11,8 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
-import PaperclipIcon from '@icon/regular/paperclip.svg';
 import PaperPlaneRight from '@icon/regular/paper-plane-right.svg';
+import PaperclipIcon from '@icon/regular/paperclip.svg';
 import Stop from '@icon/regular/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn, Surface } from '@ui';
@@ -166,9 +166,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       disabled={!canSendMessage()}
       onClick={() =>
         sendMessage(
-          isTouchDevice()
-            ? { modelOverride: 'claude-opus-4-6' }
-            : undefined
+          isTouchDevice() ? { modelOverride: 'claude-opus-4-6' } : undefined
         )
       }
     >
