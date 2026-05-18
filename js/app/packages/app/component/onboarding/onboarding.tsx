@@ -1,12 +1,14 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { analytics } from '@app/lib/analytics/analytics';
+import { useIsAuthenticated } from '@core/auth';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { toast } from '@core/component/Toast/Toast';
+import { useUserInfo } from '@core/context/user';
 import { initAndStartEmailSync } from '@core/email-link';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { throwOnErr } from '@core/util/maybeResult';
-import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
+import ArrowLeftIcon from '@icon/arrow-left.svg';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { invalidateUserTeams } from '@queries/team';
 import { authServiceClient } from '@service-auth/client';
@@ -23,7 +25,7 @@ import { STEPS } from './steps';
 
 export default function Onboarding() {
   return (
-    <OnboardingProvider totalSteps={STEPS.length}>
+    <OnboardingProvider steps={STEPS}>
       <OnboardingInner />
     </OnboardingProvider>
   );
@@ -36,8 +38,51 @@ function OnboardingInner() {
   const navigate = useNavigate();
   const splitPanel = useSplitPanel();
   const completeTutorial = useCompleteTutorialMutation();
+  const isAuthenticated = useIsAuthenticated();
+  const userInfo = useUserInfo();
 
   const params = new URLSearchParams(location.search);
+
+  // Restore locally saved profile data (survives Google/Stripe redirects)
+  const saved = sessionStorage.getItem('onboarding_profile');
+  if (saved) {
+    try {
+      const profile = JSON.parse(saved);
+      if (profile.firstName) ctx.setFirstName(profile.firstName);
+      if (profile.lastName) ctx.setLastName(profile.lastName);
+      if (profile.email) ctx.setEmail(profile.email);
+      if (profile.teamName) ctx.setTeamName(profile.teamName);
+    } catch {
+      // ignore malformed data
+    }
+    sessionStorage.removeItem('onboarding_profile');
+  }
+
+  // Fill remaining gaps from authenticated user data
+  createEffect(() => {
+    if (!isAuthenticated()) return;
+
+    ctx.skipStep('verify');
+
+    const info = userInfo();
+    if (!info) return;
+
+    if (info.email && !ctx.email()) ctx.setEmail(info.email);
+  });
+
+  // Fetch first/last name separately (userInfo only has a combined display name)
+  createEffect(() => {
+    if (!isAuthenticated() || ctx.firstName() || ctx.lastName()) return;
+
+    authServiceClient
+      .getUserName()
+      .then(([, name]) => {
+        if (name?.first_name && !ctx.firstName())
+          ctx.setFirstName(name.first_name);
+        if (name?.last_name && !ctx.lastName()) ctx.setLastName(name.last_name);
+      })
+      .catch(() => {});
+  });
 
   const cleanParam = (key: string) => {
     const cleanParams = new URLSearchParams(window.location.search);
@@ -63,20 +108,7 @@ function OnboardingInner() {
   onMount(() => {
     if (params.has('google')) {
       cleanParam('google');
-
-      const saved = sessionStorage.getItem('onboarding_profile');
-      if (saved) {
-        try {
-          const profile = JSON.parse(saved);
-          if (profile.firstName) ctx.setFirstName(profile.firstName);
-          if (profile.lastName) ctx.setLastName(profile.lastName);
-          if (profile.email) ctx.setEmail(profile.email);
-          if (profile.teamName) ctx.setTeamName(profile.teamName);
-        } catch {
-          // ignore malformed data
-        }
-        sessionStorage.removeItem('onboarding_profile');
-      }
+      ctx.skipStep('verify');
 
       fetchToken().then(async () => {
         initAndStartEmailSync().match(
@@ -91,7 +123,7 @@ function OnboardingInner() {
         );
 
         if (ctx.firstName() || ctx.lastName()) {
-          await authServiceClient
+          authServiceClient
             .putUserName({
               first_name: ctx.firstName() || undefined,
               last_name: ctx.lastName() || undefined,
@@ -195,7 +227,7 @@ function OnboardingInner() {
                 <button
                   type="button"
                   onClick={() => ctx.back()}
-                  class="flex items-center gap-1 text-xs text-ink-disabled hover:text-ink transition-colors outline-none"
+                  class="flex items-center gap-1 text-xs text-ink-disabled hover:text-ink transition-colors outline-none rounded-sm focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                 >
                   <ArrowLeftIcon class="size-3" />
                   Back
@@ -264,7 +296,9 @@ async function createPendingTeamOnReturn(): Promise<boolean> {
     return true;
   } catch (error) {
     console.error('Failed to create team:', error);
-    toast.failure('Failed to create team. You can set it up later in Settings.');
+    toast.failure(
+      'Failed to create team. You can set it up later in Settings.'
+    );
     clearPendingTeam();
     return false;
   }

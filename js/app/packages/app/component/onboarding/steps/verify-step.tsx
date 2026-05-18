@@ -5,7 +5,7 @@ import { isErr } from '@core/util/maybeResult';
 import { platformFetch } from '@core/util/platformFetch';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
-import SpinnerIcon from '@icon/regular/spinner.svg';
+import SpinnerIcon from '@icon/spinner.svg';
 import { Button, cn } from '@ui';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 import { useOnboarding } from '../onboarding-context';
@@ -60,7 +60,9 @@ export function VerifyStep() {
       }
 
       if (response.status === 202) {
-        setError('This email requires a different sign-in method. Please use Google instead.');
+        setError(
+          'This email requires a different sign-in method. Please use Google instead.'
+        );
         return;
       }
 
@@ -114,7 +116,7 @@ export function VerifyStep() {
       );
 
       if (ctx.firstName() || ctx.lastName()) {
-        await authServiceClient
+        authServiceClient
           .putUserName({
             first_name: ctx.firstName() || undefined,
             last_name: ctx.lastName() || undefined,
@@ -170,7 +172,15 @@ export function VerifyStep() {
               disabled={sending()}
               class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
             >
-              <Show when={!sending()} fallback={<><SpinnerIcon class="size-4 animate-spin" />Sending...</>}>
+              <Show
+                when={!sending()}
+                fallback={
+                  <>
+                    <SpinnerIcon class="size-4 animate-spin" />
+                    Sending...
+                  </>
+                }
+              >
                 Send verification code
               </Show>
             </Button>

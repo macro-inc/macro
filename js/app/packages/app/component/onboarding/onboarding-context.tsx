@@ -7,10 +7,19 @@ import {
   type ParentProps,
   useContext,
 } from 'solid-js';
+import { createStore, type SetStoreFunction } from 'solid-js/store';
 
 export interface InvitedMember {
   email: string;
   tier: PaidPlanTier;
+}
+
+export type StepStatus = 'pending' | 'completed' | 'skipped';
+
+export interface StepState {
+  id: string;
+  label: string;
+  status: StepStatus;
 }
 
 export interface OnboardingContextValue {
@@ -34,12 +43,19 @@ export interface OnboardingContextValue {
   setStep: (step: number) => void;
   next: () => void;
   back: () => void;
+  steps: StepState[];
+  setSteps: SetStoreFunction<StepState[]>;
+  skipStep: (id: string) => void;
+  completeStep: (id: string) => void;
+  isStepSkipped: (id: string) => boolean;
 }
 
 const OnboardingContext = createContext<OnboardingContextValue>();
 
 export function OnboardingProvider(
-  props: ParentProps & { totalSteps: number }
+  props: ParentProps & {
+    steps: Array<{ id: string; label: string }>;
+  }
 ) {
   const [firstName, setFirstName] = createSignal('');
   const [lastName, setLastName] = createSignal('');
@@ -48,6 +64,10 @@ export function OnboardingProvider(
   const [selectedPlan, setSelectedPlan] = createSignal<PlanTier | null>(null);
   const [invitedMembers, setInvitedMembers] = createSignal<InvitedMember[]>([]);
   const [step, setStep] = createSignal(0);
+
+  const [steps, setSteps] = createStore<StepState[]>(
+    props.steps.map((s) => ({ id: s.id, label: s.label, status: 'pending' }))
+  );
 
   const userSeatCost = createMemo(() => {
     const tier = selectedPlan();
@@ -66,8 +86,32 @@ export function OnboardingProvider(
   const totalCost = () => userSeatCost() + teamSeatsCost();
   const seatCount = () => 1 + invitedMembers().length;
 
-  const next = () => setStep((s) => Math.min(s + 1, props.totalSteps - 1));
-  const back = () => setStep((s) => Math.max(s - 1, 0));
+  const isStepSkipped = (id: string) =>
+    steps.find((s) => s.id === id)?.status === 'skipped';
+
+  const next = () =>
+    setStep((s) => {
+      let n = s + 1;
+      while (n < steps.length && steps[n]?.status === 'skipped') n++;
+      return Math.min(n, steps.length - 1);
+    });
+
+  const back = () =>
+    setStep((s) => {
+      let n = s - 1;
+      while (n > 0 && steps[n]?.status === 'skipped') n--;
+      return Math.max(n, 0);
+    });
+
+  const skipStep = (id: string) => {
+    const idx = steps.findIndex((s) => s.id === id);
+    if (idx !== -1) setSteps(idx, 'status', 'skipped');
+  };
+
+  const completeStep = (id: string) => {
+    const idx = steps.findIndex((s) => s.id === id);
+    if (idx !== -1) setSteps(idx, 'status', 'completed');
+  };
 
   const value: OnboardingContextValue = {
     firstName,
@@ -90,6 +134,11 @@ export function OnboardingProvider(
     setStep,
     next,
     back,
+    steps,
+    setSteps,
+    skipStep,
+    completeStep,
+    isStepSkipped,
   };
 
   return (

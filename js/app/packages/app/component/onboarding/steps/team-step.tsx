@@ -1,7 +1,7 @@
-import ArrowRightIcon from '@icon/regular/arrow-right.svg';
-import PlusIcon from '@icon/regular/plus.svg';
-import UsersIcon from '@icon/regular/users.svg';
-import XIcon from '@icon/regular/x.svg';
+import ArrowRightIcon from '@icon/arrow-right.svg';
+import PlusIcon from '@icon/plus.svg';
+import UsersIcon from '@icon/users.svg';
+import XIcon from '@icon/x.svg';
 import { Button, cn } from '@ui';
 import { createSignal, Index, Show } from 'solid-js';
 import { z } from 'zod';

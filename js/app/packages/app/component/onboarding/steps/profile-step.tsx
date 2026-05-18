@@ -1,7 +1,8 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { useIsAuthenticated } from '@core/auth';
 import { startSsoLogin } from '@core/auth/sso';
 import { isTauri } from '@core/util/platform';
-import ArrowRightIcon from '@icon/regular/arrow-right.svg';
+import ArrowRightIcon from '@icon/arrow-right.svg';
 import IconGoogle from '@macro-icons/macro-google.svg';
 import { Button, cn } from '@ui';
 import { createSignal, onMount, Show } from 'solid-js';
@@ -9,6 +10,7 @@ import { useOnboarding } from '../onboarding-context';
 
 export function ProfileStep() {
   const ctx = useOnboarding();
+  const isAuthenticated = useIsAuthenticated();
   const [errors, setErrors] = createSignal<Record<string, string>>({});
   const [authPending, setAuthPending] = createSignal(false);
 
@@ -67,6 +69,12 @@ export function ProfileStep() {
 
   const handleContinueWithEmail = () => {
     if (!validate()) return;
+    ctx.next();
+  };
+
+  const handleContinueAuthed = () => {
+    if (!validate()) return;
+    ctx.skipStep('verify');
     ctx.next();
   };
 
@@ -166,34 +174,49 @@ export function ProfileStep() {
         </div>
       </div>
 
-      <div class="flex flex-col gap-3">
-        <Button
-          variant="base"
-          size="lg"
-          onClick={handleGoogleAuth}
-          disabled={authPending()}
-          class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface [&_svg]:size-6"
-        >
-          <IconGoogle />
-          {authPending() ? 'Redirecting...' : 'Continue with Google'}
-        </Button>
+      <Show
+        when={!isAuthenticated()}
+        fallback={
+          <Button
+            variant="base"
+            size="lg"
+            onClick={handleContinueAuthed}
+            class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+          >
+            Continue
+            <ArrowRightIcon class="size-4" />
+          </Button>
+        }
+      >
+        <div class="flex flex-col gap-3">
+          <Button
+            variant="base"
+            size="lg"
+            onClick={handleGoogleAuth}
+            disabled={authPending()}
+            class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface [&_svg]:size-6"
+          >
+            <IconGoogle />
+            {authPending() ? 'Redirecting...' : 'Continue with Google'}
+          </Button>
 
-        <div class="flex items-center gap-3 text-xs text-ink-extra-muted">
-          <div class="h-px flex-1 bg-edge-muted" />
-          or
-          <div class="h-px flex-1 bg-edge-muted" />
+          <div class="flex items-center gap-3 text-xs text-ink-extra-muted">
+            <div class="h-px flex-1 bg-edge-muted" />
+            or
+            <div class="h-px flex-1 bg-edge-muted" />
+          </div>
+
+          <Button
+            variant="base"
+            size="lg"
+            onClick={handleContinueWithEmail}
+            class="w-full focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+          >
+            Continue with email
+            <ArrowRightIcon class="size-4" />
+          </Button>
         </div>
-
-        <Button
-          variant="base"
-          size="lg"
-          onClick={handleContinueWithEmail}
-          class="w-full focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
-        >
-          Continue with email
-          <ArrowRightIcon class="size-4" />
-        </Button>
-      </div>
+      </Show>
     </div>
   );
 }

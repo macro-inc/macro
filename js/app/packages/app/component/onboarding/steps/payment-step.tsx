@@ -2,9 +2,9 @@ import { useAnalytics } from '@app/component/analytics-context';
 import type { PaidPlanTier } from '@app/component/paywall/plans';
 import { useIsAuthenticated } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
-import ArrowRightIcon from '@icon/regular/arrow-right.svg';
-import LockIcon from '@icon/regular/lock.svg';
-import SpinnerIcon from '@icon/regular/spinner.svg';
+import ArrowRightIcon from '@icon/arrow-right.svg';
+import LockIcon from '@icon/lock.svg';
+import SpinnerIcon from '@icon/spinner.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import {

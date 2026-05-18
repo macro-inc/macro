@@ -1,4 +1,4 @@
-import ArrowRightIcon from '@icon/regular/arrow-right.svg';
+import ArrowRightIcon from '@icon/arrow-right.svg';
 import LogoIcon from '@macro-icons/macro-logo.svg';
 import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
