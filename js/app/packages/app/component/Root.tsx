@@ -104,9 +104,9 @@ import {
   ShowFeatureFlag,
   usePosthog,
 } from '@app/lib/analytics/posthog';
-import { ENABLE_NEW_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
+import { ENABLE_NEW_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
 import { QuickAccessProvider } from '@core/context/quickAccess';
 import { Button } from '@ui';
 

@@ -3,6 +3,7 @@ import { getViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import type { Query } from '@app/component/next-soup/filters/filter-store/types';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';
 import { useIsAuthenticated } from '@core/auth';
@@ -14,7 +15,6 @@ import {
 } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import type { ViewId } from '@core/types/view';
-import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import NotificationRoute from '@notifications/components/NotificationRoute';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
