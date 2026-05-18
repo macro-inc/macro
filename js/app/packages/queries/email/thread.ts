@@ -420,7 +420,9 @@ async function upsertSenderFilterWithToast(
   });
 
   if (isErr(result)) {
-    toast.failure(`Failed to mark sender as ${label}`, { subtext: senderEmail });
+    toast.failure(`Failed to mark sender as ${label}`, {
+      subtext: senderEmail,
+    });
     return;
   }
 
