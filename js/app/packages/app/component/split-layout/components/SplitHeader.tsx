@@ -1,5 +1,4 @@
 import { isListViewID } from '@app/constants/list-views';
-
 import {
   ENABLE_PREVIEW,
   ENABLE_PROJECT_VIEW_PREVIEW,
@@ -158,13 +157,16 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
   if (!panel)
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
 
+  // Layout / spacing / border / min-height live on <Panel.Header> in
+  // SplitPanel. This wrapper only handles positioning context for the
+  // absolutely-positioned content row and clips overflow.
   return (
     <div
-      class="isolate relative w-full min-h-10.25 touch:min-h-11.25 overflow-clip text-ink shrink-0 border-b border-edge-muted"
+      class="isolate relative w-full h-full overflow-clip text-ink"
       data-split-header
       ref={props.ref}
     >
-      <div class="absolute inset-0 flex justify-start items-center bg-surface">
+      <div class="absolute inset-0 flex justify-start items-center">
         <div class="relative flex items-center pl-2 mobile:pl-0 h-full">
           <div class="mobile:hidden">
             <SplitCloseButton />

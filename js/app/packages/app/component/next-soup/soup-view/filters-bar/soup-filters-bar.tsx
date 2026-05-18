@@ -4,6 +4,10 @@ import { SoupViewContextGroup } from '@app/component/next-soup/soup-view/filters
 import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
+import {
+  SplitToolbarLeft,
+  SplitToolbarRight,
+} from '@app/component/split-layout/components/SplitToolbar';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -60,16 +64,19 @@ export const SoupFiltersBar = () => {
 
   return (
     <Show when={!isMobile()}>
-      <div class="flex items-start gap-2 w-full p-2">
-        <UnifiedFilterDropdown />
-        <ActiveFilterChips
-          filters={activeFiltersList()}
-          onRemove={removeFilter}
-          onReplace={replaceFilter}
-          onClearAll={resetToTabDefaults}
-          isOptionActive={isOptionActive}
-        />
-        <div class="flex-1" />
+      <SplitToolbarLeft>
+        <div class="flex items-start gap-2 min-w-0 flex-1">
+          <UnifiedFilterDropdown />
+          <ActiveFilterChips
+            filters={activeFiltersList()}
+            onRemove={removeFilter}
+            onReplace={replaceFilter}
+            onClearAll={resetToTabDefaults}
+            isOptionActive={isOptionActive}
+          />
+        </div>
+      </SplitToolbarLeft>
+      <SplitToolbarRight>
         <Tooltip label="Preview" hotkey={TOKENS.unifiedList.togglePreview}>
           <Button variant="ghost" size="icon-sm" onClick={togglePreview}>
             <EyeIcon />
@@ -79,7 +86,7 @@ export const SoupFiltersBar = () => {
           <SoupViewContextSort />
           <SoupViewContextGroup />
         </Show>
-      </div>
+      </SplitToolbarRight>
     </Show>
   );
 };

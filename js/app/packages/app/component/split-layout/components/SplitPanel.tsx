@@ -4,13 +4,15 @@ import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isMobile } from '@core/mobile/isMobile';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Panel } from '@ui';
+import { cn, Panel } from '@ui';
 import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,
   createMemo,
   createSignal,
   on,
+  onCleanup,
+  onMount,
   Show,
   Suspense,
 } from 'solid-js';
@@ -80,6 +82,31 @@ export function SplitPanel(props: SplitPanelProps) {
   const toolbarSize = createElementSize(toolbarRef);
   const headerSize = createElementSize(headerRef);
 
+  // Track whether anything has been portaled into the toolbar slots so we can
+  // collapse <Panel.Toolbar>'s border / min-height when there's nothing to show.
+  // SplitToolbar mounts the ref targets during render, so they're available by
+  // the time this component's onMount fires.
+  const [hasToolbarContent, setHasToolbarContent] = createSignal(false);
+  onMount(() => {
+    const checkContent = () => {
+      setHasToolbarContent(
+        Boolean(
+          layoutRefs.toolbarLeft?.hasChildNodes() ||
+            layoutRefs.toolbarRight?.hasChildNodes()
+        )
+      );
+    };
+    checkContent();
+    const observer = new MutationObserver(checkContent);
+    if (layoutRefs.toolbarLeft) {
+      observer.observe(layoutRefs.toolbarLeft, { childList: true });
+    }
+    if (layoutRefs.toolbarRight) {
+      observer.observe(layoutRefs.toolbarRight, { childList: true });
+    }
+    onCleanup(() => observer.disconnect());
+  });
+
   const offsetTop = createMemo(() => {
     const offset = (headerSize.height ?? 0) + (toolbarSize.height ?? 0);
     setContentOffsetTop(offset);
@@ -138,11 +165,16 @@ export function SplitPanel(props: SplitPanelProps) {
               class="rounded-xl"
               depth={1}
             >
-              <Panel.Header class="block min-h-0 p-0 border-b-0 overflow-visible">
+              <Panel.Header class="block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible">
                 <SplitHeader ref={setHeaderRef} />
               </Panel.Header>
 
-              <Panel.Toolbar class="block min-h-0 p-0 border-b-0 overflow-visible">
+              <Panel.Toolbar
+                class={cn(
+                  'items-start py-2 overflow-visible',
+                  (!hasToolbarContent() || previewState()) && 'hidden'
+                )}
+              >
                 <SplitToolbar ref={setToolbarRef} />
               </Panel.Toolbar>
 
