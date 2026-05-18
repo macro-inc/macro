@@ -50,13 +50,10 @@ type ColorOption =
 // Patterns must start with '/' or './', so we use relative paths from this file.
 
 // Dynamically import all arcanum SVG icons
-const arcanumIconModules = import.meta.glob(
-  '../../design/arcanum-*.svg',
-  {
-    eager: true,
-    query: '?component-solid',
-  }
-) as Record<string, { default: Component }>;
+const arcanumIconModules = import.meta.glob('../../design/arcanum-*.svg', {
+  eager: true,
+  query: '?component-solid',
+}) as Record<string, { default: Component }>;
 
 // Dynamically import all static SVG icons
 const staticIconModules = import.meta.glob('../../icon/wide-*.svg', {
