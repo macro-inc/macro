@@ -66,9 +66,13 @@ export function TeamStep() {
     setEntries(next);
     syncMembers(next);
     setErrors((prev) => {
-      const copy = { ...prev };
-      delete copy[index];
-      return copy;
+      const reindexed: Record<number, string> = {};
+      for (const [key, value] of Object.entries(prev)) {
+        const k = Number(key);
+        if (k < index) reindexed[k] = value;
+        else if (k > index) reindexed[k - 1] = value;
+      }
+      return reindexed;
     });
   };
 
