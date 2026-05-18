@@ -164,6 +164,9 @@
       "@icon/*": [
         "./packages/icon/*"
       ],
+      "@design/*": [
+        "./packages/design/*"
+      ],
       "@observability": [
         "./packages/observability/src/"
       ],

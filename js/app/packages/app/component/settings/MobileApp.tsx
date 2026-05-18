@@ -1,4 +1,4 @@
-import AppStoreQr from '@icon/app-store.svg';
+import AppStoreQr from '@design/app-store.svg';
 import { Panel } from '@ui';
 
 export function MobileApp() {

@@ -48,7 +48,7 @@ type ColorOption =
 
 // Dynamically import all arcanum SVG icons
 const arcanumIconModules = import.meta.glob(
-  '@icon/arcanum/arcanum-*.svg',
+  '@design/arcanum/arcanum-*.svg',
   {
     eager: true,
     query: '?component-solid',
