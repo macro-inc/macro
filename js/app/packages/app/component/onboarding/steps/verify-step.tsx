@@ -3,11 +3,11 @@ import { initAndStartEmailSync } from '@core/email-link';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { isErr } from '@core/util/maybeResult';
 import { platformFetch } from '@core/util/platformFetch';
-import SpinnerIcon from '@icon/spinner.svg';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
+import SpinnerIcon from '@icon/spinner.svg';
 import { Button, cn } from '@ui';
-import { createSignal, onCleanup, Show } from 'solid-js';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { useOnboarding } from '../onboarding-context';
 
 const RESEND_TIMER = 45;
@@ -22,7 +22,6 @@ export function VerifyStep() {
   const [error, setError] = createSignal<string>();
   const [verifying, setVerifying] = createSignal(false);
   const [sending, setSending] = createSignal(false);
-  const [sent, setSent] = createSignal(false);
   const [resendTimer, setResendTimer] = createSignal(RESEND_TIMER);
 
   const startTimer = () => {
@@ -66,7 +65,6 @@ export function VerifyStep() {
         return;
       }
 
-      setSent(true);
       startTimer();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to send code.');
@@ -75,9 +73,9 @@ export function VerifyStep() {
     }
   };
 
-  const handleSendCode = () => {
+  onMount(() => {
     sendCode();
-  };
+  });
 
   const handleVerify = async () => {
     const value = code().trim();
@@ -156,90 +154,61 @@ export function VerifyStep() {
           Verify your email
         </h1>
         <p class="text-sm text-ink-disabled">
-          We'll send a 6-digit code to{' '}
+          <Show when={!sending()} fallback="Sending a code to ">
+            We sent a 6-digit code to{' '}
+          </Show>
           <strong class="text-ink font-medium">{ctx.email()}</strong>
         </p>
       </div>
 
-      <Show
-        when={sent()}
-        fallback={
-          <div class="flex flex-col gap-4">
-            <Button
-              variant="base"
-              size="lg"
-              onClick={handleSendCode}
-              disabled={sending()}
-              class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
-            >
-              <Show
-                when={!sending()}
-                fallback={
-                  <>
-                    <SpinnerIcon class="size-4 animate-spin" />
-                    Sending...
-                  </>
-                }
-              >
-                Send verification code
-              </Show>
-            </Button>
-
-            <Show when={error()}>
-              <p class="text-xs text-failure text-center">{error()}</p>
-            </Show>
-          </div>
-        }
-      >
-        <div class="flex flex-col gap-4">
-          <div class="flex flex-col gap-2">
-            <label for="onb-otp" class="text-sm font-medium text-ink">
-              Verification code
-            </label>
-            <input
-              id="onb-otp"
-              type="text"
-              inputMode="numeric"
-              value={code()}
-              onInput={(e) => handleCodeInput(e.currentTarget.value)}
-              placeholder="000000"
-              disabled={verifying()}
-              class={inputClass}
-              autocomplete="one-time-code"
-            />
-          </div>
-
-          <Show when={error()}>
-            <p class="text-xs text-failure text-center">{error()}</p>
-          </Show>
-
-          <Show when={verifying()}>
-            <div class="flex items-center justify-center gap-2 text-sm text-ink-muted">
-              <SpinnerIcon class="size-4 animate-spin" />
-              Verifying...
-            </div>
-          </Show>
-
-          <div class="flex items-center justify-center">
-            <button
-              type="button"
-              tabIndex={0}
-              onClick={handleSendCode}
-              disabled={!canResend()}
-              class={cn(
-                'text-xs transition-colors outline-none rounded-sm focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
-                canResend()
-                  ? 'text-accent hover:text-accent/80'
-                  : 'text-ink-disabled'
-              )}
-            >
-              <Show when={resendTimer() > 0} fallback="Resend code">
-                Resend in {resendTimer()}s
-              </Show>
-            </button>
-          </div>
+      <div class="flex flex-col gap-4">
+        <div class="flex flex-col gap-2">
+          <label for="onb-otp" class="text-sm font-medium text-ink">
+            Verification code
+          </label>
+          <input
+            id="onb-otp"
+            type="text"
+            inputMode="numeric"
+            value={code()}
+            onInput={(e) => handleCodeInput(e.currentTarget.value)}
+            placeholder="000000"
+            disabled={verifying() || sending()}
+            class={inputClass}
+            autocomplete="one-time-code"
+          />
         </div>
-      </Show>
+
+        <Show when={error()}>
+          <p class="text-xs text-failure text-center">{error()}</p>
+        </Show>
+
+        <Show when={verifying()}>
+          <div class="flex items-center justify-center gap-2 text-sm text-ink-muted">
+            <SpinnerIcon class="size-4 animate-spin" />
+            Verifying...
+          </div>
+        </Show>
+
+        <div class="flex items-center justify-center">
+          <button
+            type="button"
+            tabIndex={0}
+            onClick={sendCode}
+            disabled={!canResend()}
+            class={cn(
+              'text-xs transition-colors outline-none rounded-sm focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
+              canResend()
+                ? 'text-accent hover:text-accent/80'
+                : 'text-ink-disabled'
+            )}
+          >
+            <Show when={resendTimer() > 0} fallback="Resend code">
+              Resend in {resendTimer()}s
+            </Show>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
