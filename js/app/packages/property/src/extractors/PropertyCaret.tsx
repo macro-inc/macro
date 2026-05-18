@@ -1,4 +1,4 @@
-import CaretDownIcon from '@icon/regular/caret-down.svg';
+import CaretDownIcon from '@icon/caret-down.svg';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { useProperty } from '../core/context';

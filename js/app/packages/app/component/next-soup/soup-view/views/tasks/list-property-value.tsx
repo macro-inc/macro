@@ -1,6 +1,6 @@
 import { usePropertiesContext } from '@core/component/Properties/context/PropertiesContext';
 import type { Property as PropertyT } from '@core/component/Properties/types';
-import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
+import CircleDashedEmpty from '@icon/circle-dashed.svg';
 import { Property } from '@property';
 import { getEntityValues, hasValue } from '@property/utils';
 import { type Component, Match, Show, Switch } from 'solid-js';
