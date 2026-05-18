@@ -551,7 +551,17 @@ pub(crate) async fn search_unified(
 
     tracing::trace!("search request {:?}", search_request);
 
-    let search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.index_name()).collect();
+    // Documents reads can be redirected to a side alias via
+    // DOCUMENTS_INDEX_NAME for local end-to-end testing; every other
+    // entity type keeps its default alias.
+    let search_indices: Vec<&str> = args
+        .search_indices
+        .iter()
+        .map(|i| match i {
+            OpenSearchEntityType::Documents => crate::documents_shape::documents_search_alias(),
+            other => other.index_name(),
+        })
+        .collect();
 
     let response = async {
         client

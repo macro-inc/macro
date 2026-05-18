@@ -1,10 +1,10 @@
 use crate::{
     Result, delegate_methods,
-    documents_shape::alias_uses_join_shape,
+    documents_shape::{alias_uses_join_shape, documents_search_alias},
     search::builder::{SearchQueryBuilder, SearchQueryConfig},
 };
 
-use models_opensearch::{OpenSearchEntityType, SearchIndex};
+use models_opensearch::OpenSearchEntityType;
 use opensearch_query_builder::{
     BoolQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery, QueryType,
 };
@@ -95,10 +95,12 @@ impl DocumentQueryBuilder {
 
         let mut bool_query = BoolQueryBuilder::new();
 
-        // Restrict to parent documents in the documents alias.
+        // Restrict to parent documents in the documents alias (overridable
+        // via DOCUMENTS_INDEX_NAME for local end-to-end testing against a
+        // side alias).
         bool_query.filter(QueryType::term(
             "_index",
-            SearchIndex::Documents.as_ref().to_string(),
+            documents_search_alias().to_string(),
         ));
         bool_query.filter(QueryType::term(
             "document_relation",
