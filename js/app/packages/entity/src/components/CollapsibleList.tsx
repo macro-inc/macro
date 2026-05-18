@@ -1,4 +1,4 @@
-import ChevronDownIcon from '@icon/regular/caret-down.svg?component-solid';
+import ChevronDownIcon from '@icon/caret-down.svg?component-solid';
 import { cn } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 
@@ -16,7 +16,7 @@ function ToggleButton(props: ToggleButtonProps) {
     <Show when={props.hasMore}>
       <button
         type="button"
-        class="w-full flex items-center gap-1 px-3 py-1.5 text-[0.6875rem] text-ink-muted/70 hover:text-ink-muted hover:bg-ink-muted/[0.06]"
+        class="w-full flex items-center gap-1 px-3 py-1.5 text-[0.6875rem] text-ink-muted/70 hover:text-ink-muted hover:bg-ink-muted/6"
         data-collapsible-toggle
         data-collapsible-state={props.showAll ? 'expanded' : 'collapsed'}
         onClick={props.toggle}

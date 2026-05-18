@@ -1,4 +1,4 @@
-import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
+import ExpandIcon from '@icon/arrows-out-simple.svg';
 import { constrainImageDimensions } from '@lexical-core/utils/media';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';

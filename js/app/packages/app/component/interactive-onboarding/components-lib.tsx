@@ -1,4 +1,4 @@
-import CheckIcon from '@icon/bold/check-bold.svg';
+import CheckIcon from '@icon/check.svg';
 import { cn } from '@ui';
 import {
   type Component,

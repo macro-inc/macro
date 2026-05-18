@@ -1,4 +1,4 @@
-import MagnifyingGlassIcon from '@icon/regular/magnifying-glass.svg';
+import MagnifyingGlassIcon from '@icon/magnifying-glass.svg';
 
 export function ParticipantsSearchInput(props: {
   value: string;

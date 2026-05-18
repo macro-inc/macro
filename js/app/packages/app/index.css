@@ -210,13 +210,13 @@
   }
 
 
-  :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
-    user-select: text;
-  }
-
   /* scuffed: stops text from being selectable by default for mobile usage */
   :where(*, ::before, ::after) {
     user-select: none;
+  }
+
+  :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
+    user-select: text;
   }
 
   *:focus-visible {
@@ -269,10 +269,6 @@
 /* Big hammer fix for cursor pointer. */
 @utility cursor-pointer {
   cursor: default;
-}
-
-@utility hide-scrollbar {
-  scrollbar-width: none;
 }
 
 /* utils for patterned bg images */
@@ -417,23 +413,6 @@ html:not([data-touch-device="true"]) [data-message]:hover{
 [data-message].long-press-animation > .message-accent-bar,
 .long-press-animation [data-accent-bar] {
   animation: long-press-accent-bar 400ms ease-in both;
-}
-
-/* scuffed scrollbar should be killed. use scroll from @ui */
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-edge);
-}
-
-::-webkit-scrollbar-thumb {
-  background: oklch(from var(--color-edge) l c h / 0.5);
-  border-radius: 10px;
-  margin: 2px;
-}
-
-::-webkit-scrollbar {
-  overflow: auto;
-  height: 8px;
-  width: 8px;
 }
 
 :focus-visible {

@@ -9,6 +9,11 @@ export { InlineEntity } from './composed/InlineEntity';
 export { ListEntity, ListLayoutProvider } from './composed/ListEntity';
 export { default as DebugEntityView } from './debug/DebugEntityView';
 export { Entity } from './entity';
+export { NotificationRow } from './extractors-notification';
+export type {
+  NotificationRowProps,
+  NotificationRowVariant,
+} from './extractors-notification/notification-row';
 export {
   getSnippetHit,
   isHitSnippetComplete,

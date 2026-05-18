@@ -5,7 +5,7 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import XIcon from '@icon/regular/x.svg?component-solid';
+import XIcon from '@icon/x.svg?component-solid';
 import { markdownToPlainText } from '@lexical-core/utils/parsers';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import { cn, Hotkey } from '@ui';

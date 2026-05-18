@@ -3,7 +3,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import CheckIcon from '@icon/regular/check.svg';
+import CheckIcon from '@icon/check.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import type { UnifiedNotification } from '@notifications';
 import {
@@ -105,7 +105,7 @@ export function NotificationStackRow(props: {
     <ContextMenu>
       <ContextMenu.Trigger class="size-full">
         <div
-          class="group/notif flex items-center gap-2.5 px-3 py-2 hover:bg-ink-muted/[0.06] min-w-0 overflow-hidden cursor-pointer"
+          class="group/notif flex items-center gap-2.5 px-3 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden cursor-pointer"
           onClick={handleClick}
           role="button"
           tabIndex={0}
@@ -194,7 +194,7 @@ export function NotificationStacks(props: NotificationStacksProps) {
 
   return (
     <Show when={stacks.length > 0}>
-      <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+      <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden">
         <div class="divide-y divide-ink-muted/8">
           <CollapsibleList
             items={stacks}

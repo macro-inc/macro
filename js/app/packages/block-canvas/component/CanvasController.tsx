@@ -20,7 +20,7 @@ import { blockHandleSignal } from '@core/signal/load';
 import { trackMention } from '@core/signal/mention';
 import { useCanEdit } from '@core/signal/permissions';
 import type { EntityDragEvent } from '@entity';
-import TrashSimple from '@icon/regular/trash-simple.svg';
+import TrashSimple from '@icon/trash-simple.svg';
 import Clipboard from '@phosphor-icons/core/regular/clipboard.svg?component-solid';
 import CopySimple from '@phosphor-icons/core/regular/copy-simple.svg?component-solid';
 import GridFour from '@phosphor-icons/core/regular/grid-four.svg?component-solid';

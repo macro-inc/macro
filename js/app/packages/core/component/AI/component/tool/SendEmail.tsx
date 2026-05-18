@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ItemPreview } from '@core/component/ItemPreview';
-import CaretRight from '@icon/regular/caret-right.svg';
+import CaretRight from '@icon/caret-right.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
 import { cn } from '@ui';

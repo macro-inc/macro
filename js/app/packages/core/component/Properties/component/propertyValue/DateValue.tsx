@@ -1,4 +1,4 @@
-import DeleteIcon from '@icon/bold/x-bold.svg';
+import DeleteIcon from '@icon/x.svg';
 import { cn } from '@ui';
 import type { Component } from 'solid-js';
 import { createSignal, Show } from 'solid-js';

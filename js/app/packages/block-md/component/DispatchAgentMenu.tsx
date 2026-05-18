@@ -7,11 +7,11 @@ import { macroIdToEmail, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isOk } from '@core/util/maybeResult';
-import CaretDown from '@icon/regular/caret-down.svg';
-import CopyIcon from '@icon/regular/copy.svg';
-import GitBranch from '@icon/regular/git-branch.svg';
-import PlugIcon from '@icon/regular/plug.svg';
-import TerminalWindowIcon from '@icon/regular/terminal-window.svg';
+import CaretDown from '@icon/caret-down.svg';
+import CopyIcon from '@icon/copy.svg';
+import GitBranch from '@icon/git-branch.svg';
+import PlugIcon from '@icon/plug.svg';
+import TerminalWindowIcon from '@icon/terminal-window.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import ClaudeIcon from '@macro-icons/wide/claude.svg';
 import CodexIcon from '@macro-icons/wide/codex-ide.svg';
@@ -89,6 +89,10 @@ async function generateTaskPrompt(
   lines.push('');
   lines.push(
     'If you have the Macro MCP server enabled, use it to gather additional context about this task.'
+  );
+  lines.push('');
+  lines.push(
+    'When committing, please follow the Conventional Commits spec (e.g. `feat: ...`, `fix: ...`, `chore: ...`) so the history stays consistent.'
   );
 
   return lines.join('\n');

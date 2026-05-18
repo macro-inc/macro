@@ -28,8 +28,8 @@ import { formatDate } from '@core/util/date';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import EyeSlashDuo from '@icon/duotone/eye-slash-duotone.svg';
-import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
+import EyeSlashDuo from '@icon/eye-slash.svg';
+import TrashSimple from '@icon/trash-simple.svg';
 import {
   $convertMentionToCard,
   $isDocumentMentionNode,

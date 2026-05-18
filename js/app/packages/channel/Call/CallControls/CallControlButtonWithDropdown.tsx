@@ -1,5 +1,5 @@
 import { DropdownMenuContent } from '@core/component/Menu';
-import CaretDown from '@icon/regular/caret-down.svg';
+import CaretDown from '@icon/caret-down.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { cn } from '@ui';
 import { createMemo, type JSX, Show } from 'solid-js';

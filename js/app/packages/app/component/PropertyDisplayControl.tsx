@@ -6,8 +6,8 @@ import {
 import { ERROR_MESSAGES } from '@core/component/Properties/utils/errorHandling';
 import { toast } from '@core/component/Toast/Toast';
 import { isErr } from '@core/util/maybeResult';
-import MagnifyingGlassIcon from '@icon/regular/magnifying-glass.svg';
-import XIcon from '@icon/regular/x.svg';
+import MagnifyingGlassIcon from '@icon/magnifying-glass.svg';
+import XIcon from '@icon/x.svg';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { Accessor, Component } from 'solid-js';
 import {

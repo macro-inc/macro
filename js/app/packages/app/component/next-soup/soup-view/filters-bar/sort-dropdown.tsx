@@ -3,7 +3,7 @@ import type {
   SystemSortOption,
 } from '@app/component/next-soup/soup-view/sort-options';
 import { TOKENS } from '@core/hotkey/tokens';
-import CheckIcon from '@icon/regular/check.svg';
+import CheckIcon from '@icon/check.svg';
 import SortIcon from '@phosphor-icons/core/regular/funnel-simple.svg?component-solid';
 import { Dropdown, Layer, Tooltip } from '@ui';
 import { type Component, For, Show } from 'solid-js';

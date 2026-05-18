@@ -36,10 +36,10 @@ import {
 } from '@core/util/currentBlockDocumentName';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { downloadFile } from '@filesystem/download';
-import DownloadSimple from '@icon/regular/download-simple.svg';
-import Info from '@icon/regular/info.svg';
-import Quotes from '@icon/regular/quotes.svg';
-import TagIcon from '@icon/regular/tag.svg';
+import DownloadSimple from '@icon/download-simple.svg';
+import Info from '@icon/info.svg';
+import Quotes from '@icon/quotes.svg';
+import TagIcon from '@icon/tag.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';

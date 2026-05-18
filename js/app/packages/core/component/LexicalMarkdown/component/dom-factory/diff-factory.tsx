@@ -1,6 +1,6 @@
 import { useUserId } from '@core/context/user';
-import CheckIcon from '@icon/regular/check.svg';
-import XIcon from '@icon/regular/x.svg';
+import CheckIcon from '@icon/check.svg';
+import XIcon from '@icon/x.svg';
 import { DiffNode, setDOMFactory } from '@lexical-core';
 import { render } from 'solid-js/web';
 

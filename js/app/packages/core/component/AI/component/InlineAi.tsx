@@ -1,4 +1,4 @@
-import PaperPlaneRight from '@icon/fill/paper-plane-right-fill.svg';
+import PaperPlaneRight from '@icon/paper-plane-right.svg';
 import GridLoader from '@macro-icons/macro-grid-noise-loader-4.svg';
 import { cn } from '@ui';
 import { createSignal, onMount } from 'solid-js';

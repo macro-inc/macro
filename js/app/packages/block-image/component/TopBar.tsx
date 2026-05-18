@@ -28,9 +28,9 @@ import {
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import Download from '@icon/regular/download.svg';
-import Info from '@icon/regular/info.svg';
-import Quotes from '@icon/regular/quotes.svg';
+import Download from '@icon/download.svg';
+import Info from '@icon/info.svg';
+import Quotes from '@icon/quotes.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 

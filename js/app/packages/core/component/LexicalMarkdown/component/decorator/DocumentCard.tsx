@@ -16,13 +16,13 @@ import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { canNestBlock, createBlockInstance } from '@core/orchestrator';
 import { matches } from '@core/util/match';
-import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
-import Minimize from '@icon/regular/arrows-in.svg';
-import Clipboard from '@icon/regular/clipboard.svg';
-import ClockIcon from '@icon/regular/clock.svg';
-import DotsThree from '@icon/regular/list.svg';
-import LoadingSpinner from '@icon/regular/spinner.svg';
-import UserIcon from '@icon/regular/user.svg';
+import Minimize from '@icon/arrows-in.svg';
+import Clipboard from '@icon/clipboard.svg';
+import ClockIcon from '@icon/clock.svg';
+import DotsThree from '@icon/list.svg';
+import LoadingSpinner from '@icon/spinner.svg';
+import TrashSimple from '@icon/trash-simple.svg';
+import UserIcon from '@icon/user.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import {
   $convertCardToMention,

@@ -10,8 +10,8 @@ import {
   useDeleteTab,
   useNavigateToTab,
 } from '@block-pdf/signal/tab';
-import PlusIcon from '@icon/bold/plus-bold.svg';
-import XIcon from '@icon/bold/x-bold.svg';
+import PlusIcon from '@icon/plus.svg';
+import XIcon from '@icon/x.svg';
 import { For, Show } from 'solid-js';
 
 interface IInternalTabProps {

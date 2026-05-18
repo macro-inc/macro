@@ -1,7 +1,7 @@
-import CaretDown from '@icon/regular/caret-down.svg';
-import CaretRight from '@icon/regular/caret-right.svg';
-import GlobeIcon from '@icon/regular/globe-simple.svg';
-import LinkIcon from '@icon/regular/link.svg';
+import CaretDown from '@icon/caret-down.svg';
+import CaretRight from '@icon/caret-right.svg';
+import GlobeIcon from '@icon/globe-simple.svg';
+import LinkIcon from '@icon/link.svg';
 import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import { cn } from '@ui';

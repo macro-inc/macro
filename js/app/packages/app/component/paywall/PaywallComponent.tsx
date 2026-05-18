@@ -3,7 +3,7 @@ import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
 import { usePermissions } from '@core/context/user';
-import IconX from '@icon/regular/x.svg';
+import IconX from '@icon/x.svg';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, cn } from '@ui';

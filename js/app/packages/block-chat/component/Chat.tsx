@@ -40,7 +40,7 @@ import {
 } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
-import ChatDebugIcon from '@icon/regular/chat-text.svg';
+import ChatDebugIcon from '@icon/chat-text.svg';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateUserQuota } from '@queries/auth';
 import { cognitionApiServiceClient } from '@service-cognition/client';

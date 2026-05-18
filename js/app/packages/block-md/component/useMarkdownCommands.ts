@@ -3,14 +3,14 @@ import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
-import TextBold from '@icon/bold/text-b-bold.svg';
-import TextCode from '@icon/regular/code.svg';
-import TextHighlight from '@icon/regular/paint-roller.svg';
-import TextItalic from '@icon/regular/text-italic.svg';
-import TextStrikethrough from '@icon/regular/text-strikethrough.svg';
-import TextSub from '@icon/regular/text-subscript.svg';
-import TextSuper from '@icon/regular/text-superscript.svg';
-import TextUnderline from '@icon/regular/text-underline.svg';
+import TextCode from '@icon/code.svg';
+import TextHighlight from '@icon/paint-roller.svg';
+import TextBold from '@icon/text-b.svg';
+import TextItalic from '@icon/text-italic.svg';
+import TextStrikethrough from '@icon/text-strikethrough.svg';
+import TextSub from '@icon/text-subscript.svg';
+import TextSuper from '@icon/text-superscript.svg';
+import TextUnderline from '@icon/text-underline.svg';
 import {
   FORMAT_TEXT_COMMAND,
   type LexicalEditor,

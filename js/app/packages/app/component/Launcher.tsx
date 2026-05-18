@@ -23,7 +23,7 @@ import {
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { isErr, ok } from '@core/util/maybeResult';
-import ArrowRight from '@icon/bold/arrow-right-bold.svg';
+import ArrowRight from '@icon/arrow-right.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
 import { AnimatedDiagramIcon } from '@macro-icons/wide/animating/diagram';
