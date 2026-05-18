@@ -79,7 +79,7 @@ export function IntroStep() {
             Welcome to Macro
           </h1>
           <p class="text-sm text-ink-disabled">
-            SOC 2 certified · your data is never used to train AI
+            SOC 2 certified · built for teams that move fast
           </p>
         </div>
       </div>
