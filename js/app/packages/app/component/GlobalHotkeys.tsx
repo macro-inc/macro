@@ -15,7 +15,7 @@ import {
 import LogoutIcon from '@phosphor/sign-out.svg';
 import Upload from '@phosphor/upload.svg';
 import UserIcon from '@phosphor/user.svg';
-import IconGear from '@macro-icons/macro-gear.svg';
+import IconGear from '@icon/macro-gear.svg';
 import { AiInstructionsIcon } from '@queries/storage/instructions-md';
 import { useMutationUndoContext } from '@queries/undo';
 import { debounce } from '@solid-primitives/scheduled';

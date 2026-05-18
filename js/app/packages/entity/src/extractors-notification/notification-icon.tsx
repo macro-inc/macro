@@ -6,7 +6,7 @@ import CheckIcon from '@phosphor/check.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FilesIcon from '@phosphor/files.svg';
 import UserPlusIcon from '@phosphor/user-plus.svg';
-import PhoneIcon from '@macro-icons/wide/call.svg';
+import PhoneIcon from '@icon/wide/call.svg';
 import type { NotificationStack } from '@notifications';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';

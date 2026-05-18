@@ -6,7 +6,7 @@ import type { WithCustomUserInput } from '@core/user';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { isErr } from '@core/util/maybeResult';
 import XIcon from '@phosphor/x.svg';
-import PhoneCallIcon from '@macro-icons/wide/call.svg';
+import PhoneCallIcon from '@icon/wide/call.svg';
 import { commsServiceClient } from '@service-comms/client';
 import { Button, Dialog, Surface } from '@ui';
 import { createSignal } from 'solid-js';

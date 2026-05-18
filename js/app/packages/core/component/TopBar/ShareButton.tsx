@@ -47,12 +47,12 @@ import IconShared from '@phosphor/share.svg';
 import IconX from '@phosphor/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import IconComment from '@macro-icons/wide/comment.svg';
-import WideCopy from '@macro-icons/wide/copy.svg';
-import IconEdit from '@macro-icons/wide/edit.svg';
-import IconEye from '@macro-icons/wide/eye.svg';
-import UserCircle from '@macro-icons/wide/user-circle.svg';
-import WideUsers from '@macro-icons/wide/users.svg';
+import IconComment from '@icon/wide/comment.svg';
+import WideCopy from '@icon/wide/copy.svg';
+import IconEdit from '@icon/wide/edit.svg';
+import IconEye from '@icon/wide/eye.svg';
+import UserCircle from '@icon/wide/user-circle.svg';
+import WideUsers from '@icon/wide/users.svg';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
 import {

@@ -5,7 +5,7 @@ import { ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
-import LogoIcon from '@macro-icons/macro-logo.svg';
+import LogoIcon from '@icon/macro-logo.svg';
 import { useUserInfo } from '@queries/auth';
 import {
   useJoinTeamMutation,

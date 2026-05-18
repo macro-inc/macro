@@ -7,7 +7,7 @@ import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownS
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import XIcon from '@phosphor/x.svg?component-solid';
 import { markdownToPlainText } from '@lexical-core/utils/parsers';
-import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import SearchIcon from '@icon/macro-magnifying-glass.svg';
 import { cn, Hotkey } from '@ui';
 import {
   $getRoot,

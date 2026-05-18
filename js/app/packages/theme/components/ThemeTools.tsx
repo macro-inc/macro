@@ -1,5 +1,5 @@
 import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
-import IconLightDark from '@macro-icons/macro-light-dark.svg';
+import IconLightDark from '@icon/macro-light-dark.svg';
 import { invertTheme, saveTheme } from '../utils/themeUtils';
 import { randomizeTheme } from './ThemeEditorBasic';
 import IconDice from '@phosphor-icons/core/regular/dice-five.svg?component-solid';

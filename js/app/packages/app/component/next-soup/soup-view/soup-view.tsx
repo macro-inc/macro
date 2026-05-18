@@ -84,7 +84,7 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import Spinner from '@phosphor/spinner.svg';
-import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import SearchIcon from '@icon/macro-magnifying-glass.svg';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';

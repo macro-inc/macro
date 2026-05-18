@@ -18,7 +18,7 @@ import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
 import CheckIcon from '@phosphor/check.svg?component-solid';
-import PaperPlane from '@macro-icons/wide/paper-plane-cutout.svg';
+import PaperPlane from '@icon/wide/paper-plane-cutout.svg';
 import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';

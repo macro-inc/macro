@@ -17,7 +17,7 @@ import { fetchToken } from '@core/util/fetchWithToken';
 import { isOk } from '@core/util/maybeResult';
 import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import InfoIcon from '@phosphor/info.svg';
-import LogoIcon from '@macro-icons/macro-logo.svg';
+import LogoIcon from '@icon/macro-logo.svg';
 import { useSendMobileWelcomeEmail } from '@queries/auth';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useUserTeamsQuery } from '@queries/team';

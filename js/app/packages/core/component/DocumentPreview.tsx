@@ -37,7 +37,7 @@ import MapPinIcon from '@phosphor/map-pin-simple.svg';
 import SparkleIcon from '@phosphor/sparkle.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import TrashSimple from '@phosphor/trash-simple.svg';
-import MacroEmbed from '@macro-icons/macro-embed.svg';
+import MacroEmbed from '@icon/macro-embed.svg';
 import {
   isAccessiblePreviewItem,
   isChannelPreviewItem,

@@ -32,7 +32,7 @@ import ProhibitIcon from '@phosphor/prohibit.svg';
 import TagIcon from '@phosphor/tag.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import { buildMentionMarkdownString } from '@lexical-core';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
+import { AnimatedTaskIcon } from '../../icon/wide/animating/task';
 import IconShared from '@macro-icons/wide/share.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { useEmailLinksQuery } from '@queries/email/link';

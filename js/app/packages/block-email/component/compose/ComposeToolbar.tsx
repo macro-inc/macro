@@ -13,7 +13,7 @@ import PaperclipIcon from '@phosphor/paperclip.svg?component-solid';
 import TextAa from '@phosphor/text-aa.svg';
 import Trash from '@phosphor/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import PaperPlane from '@macro-icons/wide/paper-plane-cutout.svg';
+import PaperPlane from '@icon/wide/paper-plane-cutout.svg';
 import DotsThreeIcon from '@phosphor-icons/core/bold/dots-three-bold.svg?component-solid';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import PaperclipHorizontalIcon from '@phosphor-icons/core/regular/paperclip-horizontal.svg?component-solid';

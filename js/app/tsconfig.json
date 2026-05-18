@@ -161,8 +161,8 @@
       "@macro-entity": [
         "./packages/macro-entity/src/index.tsx"
       ],
-      "@macro-icons/*": [
-        "./packages/macro-icons/*"
+      "@icon/*": [
+        "./packages/icon/*"
       ],
       "@observability": [
         "./packages/observability/src/"

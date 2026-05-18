@@ -50,7 +50,7 @@ import GitBranch from '@phosphor/git-branch.svg';
 import IconLink from '@phosphor/link.svg';
 import SidePanelIcon from '@phosphor/square-half.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
-import IconShared from '@macro-icons/wide/share.svg';
+import IconShared from '@icon/wide/share.svg';
 import { blockNameToItemType } from '@service-storage/client';
 import { Button, cn } from '@ui';
 import { createEffect, For, on, onCleanup, Show } from 'solid-js';

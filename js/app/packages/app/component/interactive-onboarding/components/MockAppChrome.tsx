@@ -2,15 +2,15 @@ import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import MacroIcon from '@macro-icons/macro-logo.svg';
-import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
-import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
-import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
-import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
-import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
+import { AnimatedChannelIcon } from '../../../../icon/wide/animating/channel';
+import { AnimatedCommandIcon } from '../../../../icon/wide/animating/command';
+import { AnimatedEmailIcon } from '../../../../icon/wide/animating/email';
+import { AnimatedFileMdIcon } from '../../../../icon/wide/animating/fileMd';
+import { AnimatedFolderIcon } from '../../../../icon/wide/animating/folder';
+import { AnimatedGearIcon } from '../../../../icon/wide/animating/gear';
+import { AnimatedPlusIcon } from '../../../../icon/wide/animating/plus';
+import { AnimatedStarIcon } from '../../../../icon/wide/animating/star';
+import { AnimatedTaskIcon } from '../../../../icon/wide/animating/task';
 import { cn, HoverCard } from '@ui';
 import {
   createSignal,
