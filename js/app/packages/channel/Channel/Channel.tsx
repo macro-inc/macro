@@ -484,10 +484,12 @@ export function Channel(props: ChannelProps) {
                         );
                       }}
                     </ThreadList>
-                    <ScrollToBottomOverlay
-                      scrollState={threadListScrollState}
-                      onScrollToBottom={handleScrollToBottom}
-                    />
+                    <Show when={!findBar.isOpen()}>
+                      <ScrollToBottomOverlay
+                        scrollState={threadListScrollState}
+                        onScrollToBottom={handleScrollToBottom}
+                      />
+                    </Show>
                   </div>
                 </Show>
               </div>
