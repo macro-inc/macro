@@ -13,9 +13,10 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { isBlockNameWithLocation } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
-import { PropertyValue } from '@core/component/Properties/component/propertyValue/PropertyValue';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { useEntityProperties } from '@core/component/Properties/hooks';
+import { Property } from '@property';
+import { getEntityValues, hasValue } from '@property/utils';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
@@ -389,7 +390,7 @@ export function TaskPropertiesPreview(props: { taskId: string }) {
   const previewProperties = createMemo(() =>
     TASK_PREVIEW_PROPERTIES.flatMap((id) => {
       const p = properties().find((p) => p.propertyDefinitionId === id);
-      return p ? [p] : [];
+      return p && hasValue(p) ? [p] : [];
     })
   );
 
@@ -397,16 +398,47 @@ export function TaskPropertiesPreview(props: { taskId: string }) {
     <Show when={!isLoading() && previewProperties().length > 0}>
       <div class="px-2 pb-2 flex flex-row flex-wrap gap-1 text-xs justify-start">
         <For each={previewProperties()}>
-          {(property) => (
-            <Show when={property.value !== null}>
-              <div class="w-fit max-w-full">
-                <PropertyValue property={property} />
-              </div>
-            </Show>
-          )}
+          {(property) => <PreviewPropertyPill property={property} />}
         </For>
       </div>
     </Show>
+  );
+}
+
+/**
+ * Compact read-only pill for the document preview popup. The popup itself is
+ * already a tooltip-like surface, so there's no edit trigger or hover-card.
+ */
+function PreviewPropertyPill(props: {
+  property: import('@core/component/Properties/types').Property;
+}) {
+  const isMultiUser = () =>
+    props.property.valueType === 'ENTITY' &&
+    props.property.specificEntityType === 'USER' &&
+    getEntityValues(props.property).length > 1;
+
+  const isUserEntity = () =>
+    props.property.valueType === 'ENTITY' &&
+    props.property.specificEntityType === 'USER';
+
+  return (
+    <Property.Root property={props.property}>
+      <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm bg-hover">
+        <Switch
+          fallback={
+            <Property.Icon property={props.property} class="size-3 shrink-0" />
+          }
+        >
+          <Match when={isMultiUser()}>
+            <Property.UserStack property={props.property} maxUsers={2} />
+          </Match>
+          <Match when={isUserEntity()}>
+            <Property.Icon property={props.property} />
+          </Match>
+        </Switch>
+        <Property.Text property={props.property} class="truncate" />
+      </div>
+    </Property.Root>
   );
 }
 

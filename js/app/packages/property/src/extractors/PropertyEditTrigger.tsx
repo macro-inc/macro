@@ -9,7 +9,6 @@ type Props = Omit<
   'type' | 'disabled' | 'onClick'
 > & {
   onClick?: ButtonClickHandler;
-  /** Skip stopPropagation. Default true (most pills sit inside clickable rows). */
   stopPropagation?: boolean;
 };
 

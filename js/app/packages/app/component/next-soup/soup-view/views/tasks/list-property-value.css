@@ -1,7 +1,7 @@
 .task-grid-row {
   --task-col-status: 7rem;
   --task-col-priority: 7rem;
-  --task-col-assignees: 7rem;
+  --task-col-assignees: 9rem;
   --task-col-created-by: 7rem;
   --task-col-timestamp: 5rem;
 }
@@ -18,7 +18,7 @@
   .task-grid-row {
     --task-col-status: 2rem;
     --task-col-priority: 2rem;
-    --task-col-assignees: 2rem;
+    --task-col-assignees: 3rem;
     --task-col-created-by: 0rem;
     --task-col-timestamp: 5rem;
   }
