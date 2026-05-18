@@ -27,13 +27,13 @@ import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { isMobile } from '@core/mobile/isMobile';
-import CheckIcon from '@icon/check.svg';
-import ProhibitIcon from '@icon/prohibit.svg';
-import TagIcon from '@icon/tag.svg';
-import TrashIcon from '@icon/trash.svg';
+import IconShared from '@icon/wide-share.svg';
+import { AnimatedTaskIcon } from '@icon/wide-task';
 import { buildMentionMarkdownString } from '@lexical-core';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import IconShared from '@macro-icons/wide/share.svg';
+import CheckIcon from '@phosphor/check.svg';
+import ProhibitIcon from '@phosphor/prohibit.svg';
+import TagIcon from '@phosphor/tag.svg';
+import TrashIcon from '@phosphor/trash.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { Button } from '@ui';
@@ -88,10 +88,8 @@ export function TopBar(props: {
       openEntityInSplitFromUnifiedList(nextRow.original, {});
     }
 
-    const toastId = toast.success(
-      'Moved to Trash',
-      undefined,
-      [
+    const toastId = toast.success('Moved to Trash', {
+      actions: [
         {
           label: 'Undo',
           icon: ArrowCounterClockwise,
@@ -104,8 +102,8 @@ export function TopBar(props: {
           },
         },
       ],
-      10_000
-    );
+      duration: 10_000,
+    });
 
     handle.done.catch(() => {
       toast.failure('Failed to move to Trash');

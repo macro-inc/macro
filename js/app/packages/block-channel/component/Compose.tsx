@@ -35,7 +35,7 @@ import {
   handleFileFolderDrop,
   uploadFile,
 } from '@core/util/upload';
-import InfoIcon from '@icon/info.svg';
+import InfoIcon from '@phosphor/info.svg';
 import { commsServiceClient } from '@service-comms/client';
 import { Surface } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';

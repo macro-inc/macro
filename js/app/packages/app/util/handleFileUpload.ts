@@ -37,17 +37,19 @@ export function useHandleFileUpload({
         refetchSoupEntity(createdProjectId, 'project', { includeRoot: true });
         refetchHistory();
 
-        toast.success(`Uploaded ${upload.name}`, undefined, [
-          {
-            label: 'Open folder',
-            onClick: () => {
-              openWithSplit(
-                { type: 'project', id: createdProjectId },
-                { referredFrom: 'file-upload', activate: true }
-              );
+        toast.success(`Uploaded ${upload.name}`, {
+          actions: [
+            {
+              label: 'Open folder',
+              onClick: () => {
+                openWithSplit(
+                  { type: 'project', id: createdProjectId },
+                  { referredFrom: 'file-upload', activate: true }
+                );
+              },
             },
-          },
-        ]);
+          ],
+        });
       });
     }
 

@@ -1,8 +1,8 @@
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import BuildingIcon from '@icon/buildings.svg';
-import UserIcon from '@icon/user.svg';
 import type { ContactMentionDecoratorProps } from '@lexical-core';
+import BuildingIcon from '@phosphor/buildings.svg';
+import UserIcon from '@phosphor/user.svg';
 import { cn } from '@ui';
 import { COMMAND_PRIORITY_NORMAL, KEY_ENTER_COMMAND } from 'lexical';
 import { createSignal, Show, useContext } from 'solid-js';

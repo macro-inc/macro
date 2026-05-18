@@ -8,13 +8,13 @@ import { useEmailLinksStatus } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
 import type { ViewId } from '@core/types/view';
 import { handleFolderSelect } from '@core/util/upload';
-import Arcanum001 from '@macro-icons/arcanum/arcanum-001.svg';
-import Arcanum002 from '@macro-icons/arcanum/arcanum-002.svg';
-import Arcanum004 from '@macro-icons/arcanum/arcanum-004.svg';
-import Arcanum005 from '@macro-icons/arcanum/arcanum-005.svg';
-import Arcanum006 from '@macro-icons/arcanum/arcanum-006.svg';
-import Arcanum007 from '@macro-icons/arcanum/arcanum-007.svg';
-import Arcanum009 from '@macro-icons/arcanum/arcanum-009.svg';
+import Arcanum01 from '@design/arcanum-01.svg';
+import Arcanum02 from '@design/arcanum-02.svg';
+import Arcanum04 from '@design/arcanum-04.svg';
+import Arcanum05 from '@design/arcanum-05.svg';
+import Arcanum06 from '@design/arcanum-06.svg';
+import Arcanum07 from '@design/arcanum-07.svg';
+import Arcanum09 from '@design/arcanum-09.svg';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 
 false && fileSelector;
@@ -26,13 +26,13 @@ function getRandomArcanumGraphic(
   className = 'h-72 m-8 mt-32 @max-sm:mt-20 opacity-60'
 ) {
   const arcanumComponents = [
-    Arcanum001,
-    Arcanum002,
-    Arcanum004,
-    Arcanum005,
-    Arcanum006,
-    Arcanum007,
-    Arcanum009,
+    Arcanum01,
+    Arcanum02,
+    Arcanum04,
+    Arcanum05,
+    Arcanum06,
+    Arcanum07,
+    Arcanum09,
   ];
   const RandomGraphic =
     arcanumComponents[Math.floor(Math.random() * arcanumComponents.length)];

@@ -155,10 +155,9 @@ export function Channel(props: ChannelProps) {
         if (!loadAroundMessageId || !isMissingChannelMessageError(error))
           return;
 
-        toast.alert(
-          'Message no longer available',
-          'Showing the latest messages instead.'
-        );
+        toast.alert('Message no longer available', {
+          subtext: 'Showing the latest messages instead.',
+        });
         clearStaleRestoredChannelData(props.channelId);
         targetMessageController.reset();
       }

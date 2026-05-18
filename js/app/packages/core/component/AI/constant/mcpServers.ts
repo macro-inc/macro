@@ -1,8 +1,8 @@
-import IconDatadog from '@macro-icons/mcp-datadog.svg';
-import IconGrafana from '@macro-icons/mcp-grafana.svg';
-import IconLinear from '@macro-icons/mcp-linear.svg';
-import IconNotion from '@macro-icons/mcp-notion.svg';
-import IconPostHog from '@macro-icons/mcp-posthog.svg';
+import IconDatadog from '@icon/mcp-datadog.svg';
+import IconGrafana from '@icon/mcp-grafana.svg';
+import IconLinear from '@icon/mcp-linear.svg';
+import IconNotion from '@icon/mcp-notion.svg';
+import IconPostHog from '@icon/mcp-posthog.svg';
 import type { Component, JSX } from 'solid-js';
 
 export type SvgIcon = Component<JSX.SvgSVGAttributes<SVGSVGElement>>;

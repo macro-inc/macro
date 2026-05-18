@@ -1,21 +1,5 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { ComposeTaskSuccess } from '@block-md/component/ComposeTask';
-import CheckSquare from '@icon/check-square.svg';
-import CodeBlock from '@icon/code-block.svg';
-import VideoIcon from '@icon/file-video.svg';
-import MathIcon from '@icon/function.svg';
-import TableIcon from '@icon/grid-four.svg';
-import ImageIcon from '@icon/image.svg';
-import LinkIcon from '@icon/link.svg';
-import ListBullets from '@icon/list-bullets.svg';
-import ListChecks from '@icon/list-checks.svg';
-import ListNumbers from '@icon/list-numbers.svg';
-import Minus from '@icon/minus.svg';
-import Quote from '@icon/quotes.svg';
-import TextH1 from '@icon/text-h-one.svg';
-import TextH3 from '@icon/text-h-three.svg';
-import TextH2 from '@icon/text-h-two.svg';
-import TextT from '@icon/text-t.svg';
 import { LinkNode } from '@lexical/link';
 import { ListNode } from '@lexical/list';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
@@ -30,6 +14,22 @@ import {
   ImageNode,
   VideoNode,
 } from '@lexical-core';
+import CheckSquare from '@phosphor/check-square.svg';
+import CodeBlock from '@phosphor/code-block.svg';
+import VideoIcon from '@phosphor/file-video.svg';
+import MathIcon from '@phosphor/function.svg';
+import TableIcon from '@phosphor/grid-four.svg';
+import ImageIcon from '@phosphor/image.svg';
+import LinkIcon from '@phosphor/link.svg';
+import ListBullets from '@phosphor/list-bullets.svg';
+import ListChecks from '@phosphor/list-checks.svg';
+import ListNumbers from '@phosphor/list-numbers.svg';
+import Minus from '@phosphor/minus.svg';
+import Quote from '@phosphor/quotes.svg';
+import TextH1 from '@phosphor/text-h-one.svg';
+import TextH3 from '@phosphor/text-h-three.svg';
+import TextH2 from '@phosphor/text-h-two.svg';
+import TextT from '@phosphor/text-t.svg';
 import type { LexicalEditor } from 'lexical';
 import { nanoid } from 'nanoid';
 import { INSERT_HORIZONTAL_RULE_COMMAND } from '..';

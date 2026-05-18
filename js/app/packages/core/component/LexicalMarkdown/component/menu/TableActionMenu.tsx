@@ -12,15 +12,6 @@ import {
   MenuItem,
   MenuSeparator,
 } from '@core/component/Menu';
-import ArrowLineDown from '@icon/arrow-line-down.svg';
-import ArrowLineLeft from '@icon/arrow-line-left.svg';
-import ArrowLineRight from '@icon/arrow-line-right.svg';
-import ArrowLineUp from '@icon/arrow-line-up.svg';
-import ArrowsIn from '@icon/arrows-in-line-horizontal.svg';
-import ArrowsOut from '@icon/arrows-out-line-horizontal.svg';
-import CaretDown from '@icon/caret-down.svg';
-import TrashCan from '@icon/trash-simple.svg';
-import X from '@icon/x.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import {
   $computeTableMapSkipCellCheck,
@@ -38,6 +29,15 @@ import {
   type TableCellNode,
   type TableSelection,
 } from '@lexical/table';
+import ArrowLineDown from '@phosphor/arrow-line-down.svg';
+import ArrowLineLeft from '@phosphor/arrow-line-left.svg';
+import ArrowLineRight from '@phosphor/arrow-line-right.svg';
+import ArrowLineUp from '@phosphor/arrow-line-up.svg';
+import ArrowsIn from '@phosphor/arrows-in-line-horizontal.svg';
+import ArrowsOut from '@phosphor/arrows-out-line-horizontal.svg';
+import CaretDown from '@phosphor/caret-down.svg';
+import TrashCan from '@phosphor/trash-simple.svg';
+import X from '@phosphor/x.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Tooltip } from '@ui';
 import type { ElementNode, LexicalEditor } from 'lexical';

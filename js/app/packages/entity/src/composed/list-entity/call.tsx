@@ -4,7 +4,7 @@ import { usePropertyEntityDisplay } from '@core/component/Properties/hooks';
 import type { EntityReference } from '@core/component/Properties/types';
 import { UserIcon } from '@core/component/UserIcon';
 import { matches } from '@core/util/match';
-import UserCircleIcon from '@icon/user-circle.svg';
+import UserCircleIcon from '@phosphor/user-circle.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { HoverCard } from '@ui';
 import { For, Show } from 'solid-js';

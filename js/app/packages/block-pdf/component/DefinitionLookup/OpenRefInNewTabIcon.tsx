@@ -1,6 +1,6 @@
 import { useGoToLocation } from '@block-pdf/signal/tab';
 // import { useCreateTab, useOpenLocation, useTabsValue } from '@app/atoms/tab';
-import ArrowSquareOut from '@icon/arrow-square-out.svg';
+import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import { styled } from 'solid-styled-components';
 import type Reference from '../../model/Reference';
 import type Term from '../../model/Term';

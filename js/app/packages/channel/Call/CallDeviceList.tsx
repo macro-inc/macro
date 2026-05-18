@@ -1,6 +1,6 @@
 import { MENU_ITEM_CLASS } from '@core/component/Menu';
-import CheckIcon from '@icon/check.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import CheckIcon from '@phosphor/check.svg';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';
 import type { MediaDeviceInfo } from './CallContext';

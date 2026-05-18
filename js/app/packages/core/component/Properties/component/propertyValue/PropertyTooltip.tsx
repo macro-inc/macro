@@ -15,7 +15,7 @@ import {
 } from '@core/component/Properties/utils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUnfurl } from '@core/signal/unfurl';
-import LinkIcon from '@icon/link.svg';
+import LinkIcon from '@phosphor/link.svg';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { proxyResource } from '@service-unfurl/client';

@@ -33,11 +33,11 @@ import {
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import Download from '@icon/download-simple.svg';
-import Info from '@icon/info.svg';
-import Quotes from '@icon/quotes.svg';
-import TagIcon from '@icon/tag.svg';
-import IconShared from '@macro-icons/wide/share.svg';
+import IconShared from '@icon/wide-share.svg';
+import Download from '@phosphor/download-simple.svg';
+import Info from '@phosphor/info.svg';
+import Quotes from '@phosphor/quotes.svg';
+import TagIcon from '@phosphor/tag.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { TabbedControl } from '@ui';
 import type { Component } from 'solid-js';

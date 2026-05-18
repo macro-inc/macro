@@ -1,4 +1,4 @@
-import FileTextIcon from '@icon/file-text.svg';
+import FileTextIcon from '@phosphor/file-text.svg';
 import { cn } from '@ui';
 import { Dynamic } from 'solid-js/web';
 import type { ContentHitData } from '../types/search';

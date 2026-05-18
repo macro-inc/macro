@@ -39,9 +39,9 @@ import {
 import { isMobile } from '@core/mobile/isMobile';
 import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import Info from '@icon/info.svg';
-import TagIcon from '@icon/tag.svg';
-import IconShared from '@macro-icons/wide/share.svg';
+import IconShared from '@icon/wide-share.svg';
+import Info from '@phosphor/info.svg';
+import TagIcon from '@phosphor/tag.svg';
 import { toast } from 'core/component/Toast/Toast';
 import { createMemo, For, Show } from 'solid-js';
 import { ProjectCreateMenu, useProjectCreateTools } from './ProjectCreateMenu';

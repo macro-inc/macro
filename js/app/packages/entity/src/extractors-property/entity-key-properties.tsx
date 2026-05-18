@@ -1,16 +1,17 @@
 import { Modals } from '@core/component/Properties/component/modal';
-import { PropertyValue } from '@core/component/Properties/component/propertyValue/PropertyValue';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
+  usePropertiesContext,
 } from '@core/component/Properties/context/PropertiesContext';
 import type {
   Property,
   PropertyApiValues,
 } from '@core/component/Properties/types';
+import { Property as PropertyComponent } from '@property';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { createMemo, For, Show, Suspense } from 'solid-js';
+import { type Accessor, createMemo, For, Show, Suspense } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   type EntityData,
@@ -46,19 +47,10 @@ export interface EntityKeyPropertiesProps {
 }
 
 /**
- * Displays key properties (Status, Priority, Assignees) for an entity.
- *
- * This is an opinionated, high-level component that:
- * - Takes only an entity as input
- * - Automatically extracts properties from the entity
- * - Filters to only show Status, Priority, and Assignees
- * - Renders them in a consistent order
- * - Handles save mutations internally
- *
- * @example
- * ```tsx
- * <EntityKeyProperties entity={taskEntity} />
- * ```
+ * Displays key properties (Status, Priority, Assignees) for an entity as a
+ * row of condensed icon-only pills. Click routes through the legacy modal
+ * stack via `openPropertyEditor` so the existing PropertyEditModal (now
+ * itself a thin bridge over Property.PopoverEditor) handles editing.
  */
 export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
   const entityType = createMemo(() => getEntityType(props.entity));
@@ -99,19 +91,41 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
         onPropertyDeleted={() => {}}
         saveHandler={saveHandler}
       >
-        <div class="flex items-center gap-1 justify-start overflow-hidden">
-          <For each={keyProperties()}>
-            {(property) => (
-              <div class="relative">
-                <PropertyValue property={property} condensed />
-              </div>
-            )}
-          </For>
-        </div>
+        <KeyPropertiesRow
+          properties={keyProperties}
+          onRefresh={props.onRefresh}
+        />
         <Suspense>
           <Modals />
         </Suspense>
       </PropertiesProvider>
     </Show>
+  );
+}
+
+function KeyPropertiesRow(props: {
+  properties: Accessor<Property[]>;
+  onRefresh?: () => void;
+}) {
+  const { saveHandler, openPropertyEditor } = usePropertiesContext();
+
+  return (
+    <div class="flex items-center gap-1 justify-start overflow-hidden">
+      <For each={props.properties()}>
+        {(property) => (
+          <div class="relative">
+            <PropertyComponent.Root
+              property={property}
+              canEdit
+              onSave={(p, v) => saveHandler.saveProperty(p, v)}
+              onEdit={openPropertyEditor}
+              onRefresh={props.onRefresh}
+            >
+              <PropertyComponent.DisplayCondensed />
+            </PropertyComponent.Root>
+          </div>
+        )}
+      </For>
+    </div>
   );
 }

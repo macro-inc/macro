@@ -8,12 +8,12 @@ import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import { fileSelector } from '@core/directive/fileSelector';
 import { isMobile } from '@core/mobile/isMobile';
 import { plural } from '@core/util/string';
-import PaperPlaneRight from '@icon/paper-plane-right.svg?component-solid';
-import PaperclipIcon from '@icon/paperclip.svg?component-solid';
-import TextAa from '@icon/text-aa.svg';
-import Trash from '@icon/trash.svg';
+import PaperPlane from '@icon/wide-paper-plane-cutout.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import PaperPlane from '@macro-icons/wide/paper-plane-cutout.svg';
+import PaperPlaneRight from '@phosphor/paper-plane-right.svg?component-solid';
+import PaperclipIcon from '@phosphor/paperclip.svg?component-solid';
+import TextAa from '@phosphor/text-aa.svg';
+import Trash from '@phosphor/trash.svg';
 import DotsThreeIcon from '@phosphor-icons/core/bold/dots-three-bold.svg?component-solid';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import PaperclipHorizontalIcon from '@phosphor-icons/core/regular/paperclip-horizontal.svg?component-solid';
@@ -53,10 +53,9 @@ export function EmailComposeToolbar(props: {
       currentAttachmentsByteSize + attachmentsToAddByteSize >=
       MAX_ATTACHMENTS_BYTES_SIZE
     ) {
-      toast.failure(
-        "Can't add more attachments",
-        'Total attachments exceed 18MB limit'
-      );
+      toast.failure("Can't add more attachments", {
+        subtext: 'Total attachments exceed 18MB limit',
+      });
       return;
     }
 

@@ -1,5 +1,6 @@
 pub mod date_format;
 pub mod delete;
+pub mod documents_shape;
 pub mod error;
 pub mod search;
 pub mod unified;

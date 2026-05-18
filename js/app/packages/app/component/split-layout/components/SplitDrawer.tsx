@@ -1,7 +1,7 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
 
 import { TOKENS } from '@core/hotkey/tokens';
-import CloseIcon from '@icon/x.svg';
+import CloseIcon from '@phosphor/x.svg';
 import { Button, Layer } from '@ui';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { type JSX, type ParentProps, Show } from 'solid-js';

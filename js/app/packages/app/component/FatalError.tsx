@@ -1,6 +1,6 @@
-import ResetIcon from '@icon/arrow-clockwise.svg';
-import HomeIcon from '@icon/house.svg';
 import { logger } from '@observability';
+import ResetIcon from '@phosphor/arrow-clockwise.svg';
+import HomeIcon from '@phosphor/house.svg';
 import { Button, Dialog, Surface } from '@ui';
 import { Show } from 'solid-js';
 

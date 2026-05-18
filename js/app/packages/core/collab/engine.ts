@@ -58,13 +58,13 @@ export function createSyncEngine<
   awareness: Awareness<D>,
   source: SyncSource,
   bindings: EngineBindings<S, D>,
-  readonly: boolean = false
+  readonly: Accessor<boolean> = () => false
 ): Engine<S, D> {
   const [running, setRunning] = createSignal(false);
   const syncLock = new Mutex();
 
   const handleLocalUpdates = async (update: LoroRawUpdate) => {
-    if (readonly) return;
+    if (readonly()) return;
     const peerId = loroManager.getPeerId();
     await source.pushUpdate(update, peerId).mapErr((err) => {
       logger.error('failed to push local update to remote', {

@@ -6,19 +6,6 @@ import { isInBlock, useIsNestedBlock } from '@core/block';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
-import Braces from '@icon/brackets-curly.svg';
-import Copy from '@icon/copy.svg';
-import FileC from '@icon/file-c.svg';
-import FileCode from '@icon/file-code.svg';
-import FileCpp from '@icon/file-cpp.svg';
-import FileCss from '@icon/file-css.svg';
-import FileHtml from '@icon/file-html.svg';
-import FileJs from '@icon/file-js.svg';
-import FileMd from '@icon/file-md.svg';
-import FilePy from '@icon/file-py.svg';
-import FileRs from '@icon/file-rs.svg';
-import FileSql from '@icon/file-sql.svg';
-import FileTs from '@icon/file-ts.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Switch } from '@kobalte/core/switch';
 import { $isCodeNode, CodeNode } from '@lexical/code';
@@ -28,6 +15,19 @@ import {
   normalizedLanguage,
   type SupportedLanguage,
 } from '@lexical-core';
+import Braces from '@phosphor/brackets-curly.svg';
+import Copy from '@phosphor/copy.svg';
+import FileC from '@phosphor/file-c.svg';
+import FileCode from '@phosphor/file-code.svg';
+import FileCpp from '@phosphor/file-cpp.svg';
+import FileCss from '@phosphor/file-css.svg';
+import FileHtml from '@phosphor/file-html.svg';
+import FileJs from '@phosphor/file-js.svg';
+import FileMd from '@phosphor/file-md.svg';
+import FilePy from '@phosphor/file-py.svg';
+import FileRs from '@phosphor/file-rs.svg';
+import FileSql from '@phosphor/file-sql.svg';
+import FileTs from '@phosphor/file-ts.svg';
 import { Button, cn } from '@ui';
 import {
   $getNodeByKey,

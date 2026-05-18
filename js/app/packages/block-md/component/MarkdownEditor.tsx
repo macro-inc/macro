@@ -139,7 +139,6 @@ import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
 import type { EntityDragEvent } from '@entity';
-import WarningIcon from '@icon/warning.svg';
 import {
   $createDocumentMentionNode,
   $isInlineSearchNode,
@@ -150,6 +149,7 @@ import {
   type PeerIdValidator,
   peerIdPlugin,
 } from '@lexical-core';
+import WarningIcon from '@phosphor/warning.svg';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { isIOS } from '@solid-primitives/platform';
 import { createCallback } from '@solid-primitives/rootless';

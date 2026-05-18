@@ -17,8 +17,8 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
-import CheckIcon from '@icon/check.svg?component-solid';
-import PaperPlane from '@macro-icons/wide/paper-plane-cutout.svg';
+import PaperPlane from '@icon/wide-paper-plane-cutout.svg';
+import CheckIcon from '@phosphor/check.svg?component-solid';
 import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
@@ -309,12 +309,14 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           submitChannelPermissions(channelId);
 
           props.refetch?.();
-          toast.success('Message sent successfully', undefined, [
-            {
-              label: 'View in channel',
-              onClick: navigateToChannel,
-            },
-          ]);
+          toast.success('Message sent successfully', {
+            actions: [
+              {
+                label: 'View in channel',
+                onClick: navigateToChannel,
+              },
+            ],
+          });
           analytics.track('share_entity', { location: 'forward_to_channel' });
         });
       } else {
@@ -340,12 +342,14 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               props.refetch?.();
               if (!multipleMessages) {
                 const { navigateToChannel } = res;
-                toast.success('Message sent successfully', undefined, [
-                  {
-                    label: 'View in channel',
-                    onClick: () => navigateToChannel(),
-                  },
-                ]);
+                toast.success('Message sent successfully', {
+                  actions: [
+                    {
+                      label: 'View in channel',
+                      onClick: () => navigateToChannel(),
+                    },
+                  ],
+                });
               }
               analytics.track('share_entity', {
                 location: 'forward_to_channel',
@@ -369,12 +373,14 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
             props.refetch?.();
             if (!multipleMessages) {
-              toast.success('Message sent successfully', undefined, [
-                {
-                  label: 'View in channel',
-                  onClick: () => navigateToChannel(),
-                },
-              ]);
+              toast.success('Message sent successfully', {
+                actions: [
+                  {
+                    label: 'View in channel',
+                    onClick: () => navigateToChannel(),
+                  },
+                ],
+              });
             }
             analytics.track('share_entity', { location: 'forward_to_channel' });
           });

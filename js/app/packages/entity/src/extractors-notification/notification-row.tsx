@@ -4,13 +4,13 @@ import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import type { NotificationType } from '@core/types';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import CheckIcon from '@icon/check.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
   getChannelNotificationParams,
   openNotification,
   type UnifiedNotification,
 } from '@notifications';
+import CheckIcon from '@phosphor/check.svg';
 import { Button, cn } from '@ui';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import { Layout } from '../core/Layout';

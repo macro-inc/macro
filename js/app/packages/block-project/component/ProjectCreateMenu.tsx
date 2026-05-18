@@ -15,8 +15,8 @@ import {
   createMarkdownFile,
   createTask,
 } from '@core/util/create';
-import PlusIcon from '@icon/plus.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import PlusIcon from '@phosphor/plus.svg';
 import { createProject } from '@queries/storage/projects';
 import { Button, cn, Dialog, Layer, Surface } from '@ui';
 import { type Component, createSignal, For } from 'solid-js';

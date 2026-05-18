@@ -1,8 +1,8 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { tryMacroId, useDisplayName } from '@core/user';
-import UserCircle from '@icon/user-circle.svg';
 import { Popover } from '@kobalte/core/popover';
+import UserCircle from '@phosphor/user-circle.svg';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { cn, Surface } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';

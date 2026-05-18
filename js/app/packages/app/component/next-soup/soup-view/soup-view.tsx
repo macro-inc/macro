@@ -66,12 +66,16 @@ import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { Resize } from '@core/component/Resize';
+import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { useDisplayName } from '@core/user/displayName';
+import type { MacroId } from '@core/user/macroId';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
   type EntityData,
@@ -80,12 +84,12 @@ import {
   type ProjectEntity,
   type SearchLocation,
 } from '@entity';
-import CaretDownIcon from '@icon/caret-down.svg';
-import ChevronRightIcon from '@icon/caret-right.svg';
-import CheckIcon from '@icon/check.svg';
-import Spinner from '@icon/spinner.svg';
-import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import SearchIcon from '@icon/macro-magnifying-glass.svg';
 import { createEffectOnEntityTypeNotification } from '@notifications';
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import ChevronRightIcon from '@phosphor/caret-right.svg';
+import CheckIcon from '@phosphor/check.svg';
+import Spinner from '@phosphor/spinner.svg';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -122,6 +126,21 @@ import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 
+// Property values for entity-reference properties (e.g. assignees) are stored
+// as `{"entity_id": "...", "entity_type": "USER"}` and arrive in group keys as
+// the JSON-encoded text of that object.
+const parseEntityRefId = (key: string): string | null => {
+  try {
+    const parsed: unknown = JSON.parse(key);
+    if (typeof parsed === 'string') return parsed;
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const id = (parsed as Record<string, unknown>).entity_id;
+    return typeof id === 'string' ? id : null;
+  } catch {
+    return null;
+  }
+};
+
 export const SoupSectionHeader = (props: {
   children: JSX.Element;
   onClick?: () => void;
@@ -149,6 +168,21 @@ export const SoupSectionHeader = (props: {
 const DefaultGroupHeader = (
   props: GroupHeaderProps & { highlighted?: boolean }
 ) => {
+  const { groupByField } = useSoupView();
+  const field = groupByField();
+  const isAssigneeGroup =
+    field?.type === 'property' &&
+    field.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES &&
+    props.group.key !== '';
+  const assigneeId = isAssigneeGroup ? parseEntityRefId(props.group.key) : null;
+  const [assigneeName] = useDisplayName(
+    assigneeId ? (assigneeId as MacroId) : null
+  );
+  const label = () =>
+    isAssigneeGroup
+      ? assigneeName() || assigneeId || props.group.label
+      : props.group.label;
+
   return (
     <SoupSectionHeader
       onClick={() => props.group.toggle()}
@@ -163,11 +197,23 @@ const DefaultGroupHeader = (
           />
         </div>
       </Layer>
-      <PropertyValueIcon
-        optionId={props.group.value as string}
-        class="size-3.5"
-      />
-      <span class="truncate">{props.group.label}</span>
+      <Show
+        when={isAssigneeGroup && assigneeId}
+        fallback={
+          <PropertyValueIcon
+            optionId={props.group.value as string}
+            class="size-3.5"
+          />
+        }
+      >
+        <UserIcon
+          id={assigneeId as string}
+          size="sm"
+          suppressClick
+          showTooltip={false}
+        />
+      </Show>
+      <span class="truncate">{label()}</span>
       <span
         class={cn(
           'shrink-0 tabular-nums text-xs font-medium',

@@ -1,5 +1,5 @@
 import { useBlockId } from '@core/block';
-import LoadingSpinner from '@icon/spinner.svg';
+import LoadingSpinner from '@phosphor/spinner.svg';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { type Accessor, Show } from 'solid-js';
 import { Modals } from './component/modal/Modals';

@@ -1,4 +1,5 @@
 import { filterSoupItemByRequestBody } from '@app/component/next-soup/filters/query-filters';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { throwOnErr } from '@core/util/maybeResult';
 import type { EntityData } from '@entity';
 import {
@@ -181,13 +182,7 @@ export const useSoupAstItemsQuery = (
           return mapSoupPageToEntityList(page, { instructionsIdQuery });
         });
         const rawGroups = data.pages[0]?.groups;
-        // Sort groups by displayOrder (nulls last)
-        const groups = rawGroups?.slice().sort((a, b) => {
-          if (a.displayOrder === null && b.displayOrder === null) return 0;
-          if (a.displayOrder === null) return 1;
-          if (b.displayOrder === null) return -1;
-          return a.displayOrder - b.displayOrder;
-        });
+        const groups = rawGroups?.slice().sort(makeGroupComparator(groupBy));
 
         return { entities, groups, items };
       },
@@ -198,3 +193,72 @@ export const useSoupAstItemsQuery = (
     };
   });
 };
+
+// Empty group key from backend (rust/cloud-storage/soup/src/domain/models/grouping.rs)
+// for items missing a value for the grouped property.
+const NOT_SET_GROUP_KEY = '';
+
+// Stable UUIDs from migrations/20251128000001_seed_system_properties.sql.
+// Custom (user-created) options fall through to displayOrder.
+const STATUS_OPTION_ORDER: readonly string[] = [
+  '00000001-0000-0000-0002-000000000001', // Not Started
+  '00000001-0000-0000-0002-000000000002', // In Progress
+  '00000001-0000-0000-0002-000000000003', // In Review
+  NOT_SET_GROUP_KEY,
+  '00000001-0000-0000-0002-000000000004', // Completed
+  '00000001-0000-0000-0002-000000000005', // Canceled
+];
+
+const PRIORITY_OPTION_ORDER: readonly string[] = [
+  '00000001-0000-0000-0003-000000000004', // Critical
+  '00000001-0000-0000-0003-000000000003', // High
+  '00000001-0000-0000-0003-000000000002', // Medium
+  '00000001-0000-0000-0003-000000000001', // Low
+  NOT_SET_GROUP_KEY,
+];
+
+function keyRank(order: readonly string[], key: string): number {
+  const i = order.indexOf(key);
+  return i === -1 ? order.length : i;
+}
+
+function byDisplayOrderNullsLast(a: GroupMeta, b: GroupMeta): number {
+  if (a.displayOrder === null && b.displayOrder === null) return 0;
+  if (a.displayOrder === null) return 1;
+  if (b.displayOrder === null) return -1;
+  return a.displayOrder - b.displayOrder;
+}
+
+function makeGroupComparator(
+  groupBy: GroupByField | undefined
+): (a: GroupMeta, b: GroupMeta) => number {
+  if (groupBy?.type === 'property') {
+    if (groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS) {
+      return (a, b) => {
+        const diff =
+          keyRank(STATUS_OPTION_ORDER, a.key) -
+          keyRank(STATUS_OPTION_ORDER, b.key);
+        return diff !== 0 ? diff : byDisplayOrderNullsLast(a, b);
+      };
+    }
+    if (groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PRIORITY) {
+      return (a, b) => {
+        const diff =
+          keyRank(PRIORITY_OPTION_ORDER, a.key) -
+          keyRank(PRIORITY_OPTION_ORDER, b.key);
+        return diff !== 0 ? diff : byDisplayOrderNullsLast(a, b);
+      };
+    }
+    if (groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES) {
+      return (a, b) => {
+        const aNotSet = a.key === NOT_SET_GROUP_KEY;
+        const bNotSet = b.key === NOT_SET_GROUP_KEY;
+        if (aNotSet && bNotSet) return 0;
+        if (aNotSet) return 1;
+        if (bNotSet) return -1;
+        return a.label.localeCompare(b.label);
+      };
+    }
+  }
+  return byDisplayOrderNullsLast;
+}

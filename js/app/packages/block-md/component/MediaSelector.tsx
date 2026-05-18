@@ -8,8 +8,8 @@ import {
 } from '@core/constant/allBlocks';
 import { fileDrop } from '@core/directive/fileDrop';
 import { fileSelector } from '@core/directive/fileSelector';
-import ImageIcon from '@icon/image.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import ImageIcon from '@phosphor/image.svg';
 import UploadSimple from '@phosphor-icons/core/bold/upload-simple-bold.svg?component-solid';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import { useHistoryQuery } from '@queries/history/history';
