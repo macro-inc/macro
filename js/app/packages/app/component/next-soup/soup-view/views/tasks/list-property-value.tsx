@@ -1,18 +1,9 @@
 import { usePropertiesContext } from '@core/component/Properties/context/PropertiesContext';
-import type { Property } from '@core/component/Properties/types';
-import {
-  formatPropertyValue,
-  getEntityValues,
-  getSelectValues,
-} from '@core/component/Properties/utils';
-import { UserGroup } from '@core/component/UserGroup';
-import { UserIcon } from '@core/component/UserIcon';
-import { tryMacroId, useDisplayNameParts } from '@core/user';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import { getEntityValues, hasValue } from '@core/component/Properties/utils';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import { HoverCard } from '@ui';
-import { cn } from '@ui/utils/classname';
-import { type Component, Show } from 'solid-js';
+import { Property } from '@property';
+import type { Property as PropertyT } from '@property/types';
+import { type Component, Match, Show, Switch } from 'solid-js';
 import './list-property-value.css';
 import { Layer } from '@ui';
 

@@ -1,4 +1,4 @@
-import CircleDashedEmpty from '@icon/circle-dashed.svg';
+import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 import { Show } from 'solid-js';
