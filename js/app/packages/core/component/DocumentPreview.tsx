@@ -15,6 +15,7 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { useEntityProperties } from '@core/component/Properties/hooks';
+import { getEntityValues, hasValue } from '@core/component/Properties/utils';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
@@ -22,23 +23,22 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { matches } from '@core/util/match';
 import { isErr } from '@core/util/maybeResult';
-import CollapseInlinePreview from '@icon/arrows-in-line-horizontal.svg';
-import OpenIcon from '@icon/arrows-out.svg';
-import ExpandInlinePreview from '@icon/arrows-out-line-horizontal.svg';
-import MessageIcon from '@icon/chat-circle.svg';
-import ThreadIcon from '@icon/chats-circle.svg';
-import Clipboard from '@icon/clipboard.svg';
-import ClockIcon from '@icon/clock.svg';
-import ColumnsPlusRight from '@icon/columns-plus-right.svg';
-import GitBranchIcon from '@icon/git-branch.svg';
-import HighlightIcon from '@icon/highlighter-circle.svg';
-import MapPinIcon from '@icon/map-pin-simple.svg';
-import SparkleIcon from '@icon/sparkle.svg';
-import LoadingSpinner from '@icon/spinner.svg';
-import TrashSimple from '@icon/trash-simple.svg';
-import MacroEmbed from '@macro-icons/macro-embed.svg';
+import MacroEmbed from '@icon/macro-embed.svg';
+import CollapseInlinePreview from '@phosphor/arrows-in-line-horizontal.svg';
+import OpenIcon from '@phosphor/arrows-out.svg';
+import ExpandInlinePreview from '@phosphor/arrows-out-line-horizontal.svg';
+import MessageIcon from '@phosphor/chat-circle.svg';
+import ThreadIcon from '@phosphor/chats-circle.svg';
+import Clipboard from '@phosphor/clipboard.svg';
+import ClockIcon from '@phosphor/clock.svg';
+import ColumnsPlusRight from '@phosphor/columns-plus-right.svg';
+import GitBranchIcon from '@phosphor/git-branch.svg';
+import HighlightIcon from '@phosphor/highlighter-circle.svg';
+import MapPinIcon from '@phosphor/map-pin-simple.svg';
+import SparkleIcon from '@phosphor/sparkle.svg';
+import LoadingSpinner from '@phosphor/spinner.svg';
+import TrashSimple from '@phosphor/trash-simple.svg';
 import { Property } from '@property';
-import { getEntityValues, hasValue } from '@property/utils';
 import {
   isAccessiblePreviewItem,
   isChannelPreviewItem,

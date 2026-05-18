@@ -2,10 +2,10 @@ import { PropertyValueIcon } from '@core/component/Properties/component/property
 import { useSearchInputFocus } from '@core/component/Properties/utils';
 import { ERROR_MESSAGES } from '@core/component/Properties/utils/errorHandling';
 import { useKeyPressed } from '@core/util/useKeyPressed';
-import CircleDashedEmpty from '@icon/circle-dashed.svg';
-import SearchIcon from '@icon/magnifying-glass.svg';
-import PlusIcon from '@icon/plus.svg';
-import LoadingSpinner from '@icon/spinner.svg';
+import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
+import SearchIcon from '@phosphor/magnifying-glass.svg';
+import PlusIcon from '@phosphor/plus.svg';
+import LoadingSpinner from '@phosphor/spinner.svg';
 import { Hotkey } from '@ui';
 import { cn } from '@ui/utils/classname';
 import type { JSX, ParentComponent } from 'solid-js';

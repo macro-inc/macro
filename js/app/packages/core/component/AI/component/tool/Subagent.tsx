@@ -1,7 +1,7 @@
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { PulsingStar } from '@entity/components/PulsingStar';
-import CaretRight from '@icon/caret-right.svg?component-solid';
-import StarIcon from '@macro-icons/wide/star.svg';
+import StarIcon from '@icon/wide-star.svg';
+import CaretRight from '@phosphor/caret-right.svg?component-solid';
 import { createSignal, Show } from 'solid-js';
 import { createToolRenderer, useToolError } from './ToolRenderer';
 

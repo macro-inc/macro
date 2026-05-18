@@ -1,5 +1,5 @@
-import Subtitles from '@icon/subtitles.svg';
-import UsersThree from '@icon/users-three.svg';
+import Subtitles from '@phosphor/subtitles.svg';
+import UsersThree from '@phosphor/users-three.svg';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { cn } from '@ui';
 import type { Accessor } from 'solid-js';

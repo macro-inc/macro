@@ -1,8 +1,8 @@
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
 import { TabsInset } from '@core/component/TabsInset';
 import { isMobile } from '@core/mobile/isMobile';
-import CaretRight from '@icon/caret-right.svg';
 import { Accordion } from '@kobalte/core/accordion';
+import CaretRight from '@phosphor/caret-right.svg';
 import { Panel, Scroll } from '@ui';
 import {
   type Accessor,

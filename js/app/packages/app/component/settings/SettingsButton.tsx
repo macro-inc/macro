@@ -5,7 +5,7 @@ import { Button } from "@ui";
 import { cn } from "@ui";
 
 import { TOKENS } from "@core/hotkey/tokens";
-import IconGear from '@macro-icons/macro-gear.svg';
+import IconGear from '@icon/macro-gear.svg';
 
 
 export function SettingsButton() {

@@ -37,16 +37,6 @@ import { trackMention } from '@core/signal/mention';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { plural } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
-import ReplyAll from '@icon/arrow-bend-double-up-left.svg';
-import Reply from '@icon/arrow-bend-up-left.svg';
-import Forward from '@icon/arrow-bend-up-right.svg';
-import ChevronDown from '@icon/caret-down.svg';
-import PaperPlaneRight from '@icon/paper-plane-right.svg';
-import Paperclip from '@icon/paperclip.svg';
-import Quotes from '@icon/quotes.svg';
-import Spinner from '@icon/spinner-gap.svg';
-import TextAa from '@icon/text-aa.svg';
-import Trash from '@icon/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import { $generateHtmlFromNodes } from '@lexical/html';
@@ -55,6 +45,16 @@ import {
   $removeAllWatermarkNodes,
 } from '@lexical-core';
 import { logger } from '@observability';
+import ReplyAll from '@phosphor/arrow-bend-double-up-left.svg';
+import Reply from '@phosphor/arrow-bend-up-left.svg';
+import Forward from '@phosphor/arrow-bend-up-right.svg';
+import ChevronDown from '@phosphor/caret-down.svg';
+import PaperPlaneRight from '@phosphor/paper-plane-right.svg';
+import Paperclip from '@phosphor/paperclip.svg';
+import Quotes from '@phosphor/quotes.svg';
+import Spinner from '@phosphor/spinner-gap.svg';
+import TextAa from '@phosphor/text-aa.svg';
+import Trash from '@phosphor/trash.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {
@@ -547,10 +547,8 @@ export function BaseInput(props: {
       if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
       pendingSend = false;
       const draftId = message.db_id;
-      const toastId = toast.success(
-        'Email sent',
-        undefined,
-        draftId
+      const toastId = toast.success('Email sent', {
+        actions: draftId
           ? [
               {
                 label: 'Undo',
@@ -562,8 +560,9 @@ export function BaseInput(props: {
               },
             ]
           : undefined,
-        10_000
-      );
+        duration: 10_000,
+        mobile: true,
+      });
       pendingMentions.forEach((mention) => {
         trackMention(blockId, 'document', mention.documentId);
       });
@@ -1200,10 +1199,9 @@ export function BaseInput(props: {
       currentAttachmentsByteSize + attachmentsToAddByteSize >=
       MAX_ATTACHMENTS_BYTES_SIZE
     ) {
-      toast.failure(
-        "Can't add more attachments",
-        'Total attachments exceed 18MB limit'
-      );
+      toast.failure("Can't add more attachments", {
+        subtext: 'Total attachments exceed 18MB limit',
+      });
       return;
     }
 
@@ -1275,7 +1273,9 @@ export function BaseInput(props: {
       // Ensure draft is saved before scheduling
       const draftID = currentDraft ?? (await executeSaveDraft());
       if (!draftID) {
-        toast.failure('Failed to schedule message', 'Draft required');
+        toast.failure('Failed to schedule message', {
+          subtext: 'Draft required',
+        });
         return;
       }
 

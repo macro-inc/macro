@@ -9,7 +9,7 @@ import {
 import { PropertiesView } from '@core/component/Properties/PropertiesView';
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import TagIcon from '@icon/tag.svg';
+import TagIcon from '@phosphor/tag.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Button } from '@ui';
 import { createEffect, createSignal, Suspense } from 'solid-js';

@@ -2,11 +2,11 @@ import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer'
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import clickOutside from '@core/directive/clickOutside';
 import type { Entity } from '@core/types';
-import Bell from '@icon/bell.svg';
 import {
   type NotificationSource,
   useNotificationsForEntity,
 } from '@notifications';
+import Bell from '@phosphor/bell.svg';
 import { Button, cn } from '@ui';
 import { createMemo, Show, Suspense } from 'solid-js';
 import { Notifications } from './Notifications';

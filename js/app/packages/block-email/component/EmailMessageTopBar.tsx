@@ -1,7 +1,7 @@
 import { useEmail } from '@core/context/user';
 import type { DateValue } from '@core/util/date';
-import CaretDown from '@icon/caret-down.svg';
-import CaretUp from '@icon/caret-up.svg';
+import CaretDown from '@phosphor/caret-down.svg';
+import CaretUp from '@phosphor/caret-up.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { Button, Tooltip } from '@ui';
 import {

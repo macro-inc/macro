@@ -1,4 +1,4 @@
-import DeleteIcon from '@icon/x.svg';
+import DeleteIcon from '@phosphor/x.svg';
 import { cn } from '@ui';
 import { createSignal } from 'solid-js';
 import { useProperty } from '../core/context';

@@ -41,7 +41,7 @@ const sizeStyles: Record<ButtonSize, string> = {
   'sm':      'h-6       px-2   [&_:where(svg)]:size-4 gap-1   text-xs  ',
   'icon-lg': 'size-11   p-2    [&_:where(svg)]:size-7                  ', /* unused */
   'icon-md': 'size-9    p-1.5  [&_:where(svg)]:size-6                  ',
-  'icon-sm': 'size-6    p-0.5    [&_:where(svg)]:size-5                  ',
+  'icon-sm': 'size-6    p-0.5  [&_:where(svg)]:size-5                  ',
 };
 
 export const Button = (props: ButtonProps) => {

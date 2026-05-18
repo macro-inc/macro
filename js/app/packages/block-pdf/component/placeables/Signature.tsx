@@ -4,8 +4,8 @@ import {
 } from '@block-pdf/signal/placeables';
 import { blockElementSignal } from '@core/signal/blockElement';
 import Dialog from '@corvu/dialog';
-import Check from '@icon/check.svg';
-import Trash from '@icon/trash-simple.svg';
+import Check from '@phosphor/check.svg';
+import Trash from '@phosphor/trash-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn } from '@ui';
 import SignaturePad from 'signature_pad';

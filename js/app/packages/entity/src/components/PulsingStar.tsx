@@ -1,4 +1,4 @@
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
+import { AnimatedStarIcon } from '@icon/wide-star';
 import type { StreamEvent } from '@service-connection/generated/schemas';
 import { createSignal, onCleanup } from 'solid-js';
 

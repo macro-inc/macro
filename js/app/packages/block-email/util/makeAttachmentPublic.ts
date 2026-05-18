@@ -21,15 +21,13 @@ export const makeAttachmentPublic = async (attachmentId: string) => {
     },
   });
   if (!isErr(result)) {
-    toast.success(
-      'Recipients can now view this file',
-      'File share permissions have been updated to public view-only'
-    );
+    toast.success('Recipients can now view this file', {
+      subtext: 'File share permissions have been updated to public view-only',
+    });
   } else {
-    toast.alert(
-      'Recipients may not be able to view this file',
-      'Please consult the document owner to change share permissions'
-    );
+    toast.alert('Recipients may not be able to view this file', {
+      subtext: 'Please consult the document owner to change share permissions',
+    });
     logger.error('Failed to make attachment public', result);
   }
 };

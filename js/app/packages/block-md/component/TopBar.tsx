@@ -44,13 +44,13 @@ import { useCanEdit } from '@core/signal/permissions';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import ClockIcon from '@icon/clock-counter-clockwise.svg';
-import Download from '@icon/download.svg';
-import GitBranch from '@icon/git-branch.svg';
-import IconLink from '@icon/link.svg';
-import SidePanelIcon from '@icon/square-half.svg';
-import TerminalWindowIcon from '@icon/terminal-window.svg';
-import IconShared from '@macro-icons/wide/share.svg';
+import IconShared from '@icon/wide-share.svg';
+import ClockIcon from '@phosphor/clock-counter-clockwise.svg';
+import Download from '@phosphor/download.svg';
+import GitBranch from '@phosphor/git-branch.svg';
+import IconLink from '@phosphor/link.svg';
+import SidePanelIcon from '@phosphor/square-half.svg';
+import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { blockNameToItemType } from '@service-storage/client';
 import { Button, cn } from '@ui';
 import { createEffect, For, on, onCleanup, Show } from 'solid-js';
@@ -77,10 +77,10 @@ export function TopBar() {
   const copyLink = () => {
     const url = buildSimpleEntityUrl({ id: blockId, type: blockAliasedName });
     navigator.clipboard.writeText(url);
-    toast.success(
-      'Link copied to clipboard.',
-      'Sending this link in a Macro message will automatically update permissions to include recipients.'
-    );
+    toast.success('Link copied to clipboard.', {
+      subtext:
+        'Sending this link in a Macro message will automatically update permissions to include recipients.',
+    });
   };
 
   const copyBranchName = () => copyBranchNameToClipboard(blockId);

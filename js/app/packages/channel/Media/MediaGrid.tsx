@@ -1,5 +1,5 @@
-import ExpandIcon from '@icon/arrows-out-simple.svg';
 import { constrainImageDimensions } from '@lexical-core/utils/media';
+import ExpandIcon from '@phosphor/arrows-out-simple.svg';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { MediaImage } from './MediaImage';

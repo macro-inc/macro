@@ -2,12 +2,12 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import { compareDateDesc } from '@core/util/date';
-import Bell from '@icon/bell.svg';
 import {
   type NotificationSource,
   openNotification,
   useUnreadNotifications,
 } from '@notifications';
+import Bell from '@phosphor/bell.svg';
 import { Show } from 'solid-js';
 
 export type GlobalNotificationBellProps = {

@@ -45,7 +45,6 @@ import {
 import { useCanEdit } from '@core/signal/permissions';
 import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
-import WarningIcon from '@icon/warning.svg';
 import {
   AwaitNode,
   CommentNode,
@@ -54,6 +53,7 @@ import {
   type PeerIdValidator,
   peerIdPlugin,
 } from '@lexical-core';
+import WarningIcon from '@phosphor/warning.svg';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
 import { createMethodRegistration } from 'core/orchestrator';

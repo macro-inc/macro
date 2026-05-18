@@ -1,14 +1,14 @@
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { UserIcon } from '@core/component/UserIcon';
 import { VList } from 'virtua/solid';
-import PlusIcon from '@icon/plus.svg';
-import UsersIcon from '@icon/users.svg';
-import TrashIcon from '@icon/trash.svg';
-import SpinnerIcon from '@icon/spinner.svg';
-import EnvelopeIcon from '@icon/envelope.svg';
-import XIcon from '@icon/x.svg';
-import CaretDownIcon from '@icon/caret-down.svg';
-import CheckIcon from '@icon/check.svg';
+import PlusIcon from '@phosphor/plus.svg';
+import UsersIcon from '@phosphor/users.svg';
+import TrashIcon from '@phosphor/trash.svg';
+import SpinnerIcon from '@phosphor/spinner.svg';
+import EnvelopeIcon from '@phosphor/envelope.svg';
+import XIcon from '@phosphor/x.svg';
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import CheckIcon from '@phosphor/check.svg';
 
 import { Tooltip } from '@ui';
 import { Button } from '@ui';

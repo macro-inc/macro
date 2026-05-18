@@ -6,7 +6,7 @@ import {
 import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
 import { ENABLE_APP_STORE_QR_CODE } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import AppStoreQr from '@macro-icons/app-store.svg';
+import AppStoreQr from '@design/app-store.svg';
 import { useSearchParams } from '@solidjs/router';
 import { SegmentedControl } from '@ui';
 import { createSignal, onMount, Show } from 'solid-js';

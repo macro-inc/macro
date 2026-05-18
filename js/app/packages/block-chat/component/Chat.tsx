@@ -40,8 +40,8 @@ import {
 } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
-import ChatDebugIcon from '@icon/chat-text.svg';
 import { createRenameDssEntityMutation } from '@macro-entity';
+import ChatDebugIcon from '@phosphor/chat-text.svg';
 import { invalidateUserQuota } from '@queries/auth';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';

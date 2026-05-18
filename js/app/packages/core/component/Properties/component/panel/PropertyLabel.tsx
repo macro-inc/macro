@@ -1,8 +1,8 @@
 import { useMaybeBlockAliasedName, useMaybeBlockId } from '@core/block';
-import PinIcon from '@icon/push-pin.svg';
-import UnpinIcon from '@icon/push-pin-slash.svg';
-import DeleteIcon from '@icon/x.svg';
-import XIcon from '@icon/x.svg';
+import PinIcon from '@phosphor/push-pin.svg';
+import UnpinIcon from '@phosphor/push-pin-slash.svg';
+import DeleteIcon from '@phosphor/x.svg';
+import XIcon from '@phosphor/x.svg';
 import { useDeleteEntityPropertyMutation } from '@queries/properties/entity';
 import { Button, cn, Dialog, Surface } from '@ui';
 import { type Component, createMemo, createSignal, Show } from 'solid-js';

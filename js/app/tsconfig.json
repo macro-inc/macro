@@ -65,7 +65,7 @@
       "@macro/tauri": [
         "./packages/tauri/src"
       ],
-      "@icon/*": [
+      "@phosphor/*": [
         "../node_modules/@phosphor-icons/core/assets/regular/*"
       ],
       "@block-canvas/*": [
@@ -161,8 +161,11 @@
       "@macro-entity": [
         "./packages/macro-entity/src/index.tsx"
       ],
-      "@macro-icons/*": [
-        "./packages/macro-icons/*"
+      "@icon/*": [
+        "./packages/icon/*"
+      ],
+      "@design/*": [
+        "./packages/design/*"
       ],
       "@observability": [
         "./packages/observability/src/"

@@ -1,7 +1,7 @@
 import { usePropertiesContext } from '@core/component/Properties/context/PropertiesContext';
-import type { Property as PropertyT } from '@core/component/Properties/types';
+import { getEntityValues, hasValue } from '@core/component/Properties/utils';
 import { Property } from '@property';
-import { getEntityValues, hasValue } from '@property/utils';
+import type { Property as PropertyT } from '@property/types';
 import { Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { type Component, Match, Switch } from 'solid-js';

@@ -1,5 +1,5 @@
 import { UnfurlLink } from '@core/component/Link';
-import CaretRight from '@icon/caret-right.svg?component-solid';
+import CaretRight from '@phosphor/caret-right.svg?component-solid';
 import Globe from '@phosphor-icons/core/regular/globe.svg';
 import { createSignal, For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';

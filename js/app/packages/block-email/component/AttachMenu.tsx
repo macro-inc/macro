@@ -4,11 +4,11 @@ import { blockAcceptedFileExtensions } from '@core/constant/allBlocks';
 import { fileSelector } from '@core/directive/fileSelector';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getItemBlockName } from '@core/util/getItemBlockName';
-import DeviceMobileIcon from '@icon/device-mobile-speaker.svg';
-import LaptopIcon from '@icon/laptop.svg';
-import SearchIcon from '@icon/magnifying-glass.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { DocumentMentionInfo } from '@lexical-core';
+import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
+import LaptopIcon from '@phosphor/laptop.svg';
+import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
 import fuzzy from 'fuzzy';
 import {

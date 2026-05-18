@@ -1,8 +1,8 @@
 import { usePropertiesContext } from '@core/component/Properties/context/PropertiesContext';
-import type { Property as PropertyT } from '@core/component/Properties/types';
-import CircleDashedEmpty from '@icon/circle-dashed.svg';
+import { getEntityValues, hasValue } from '@core/component/Properties/utils';
+import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import { Property } from '@property';
-import { getEntityValues, hasValue } from '@property/utils';
+import type { Property as PropertyT } from '@property/types';
 import { type Component, Match, Show, Switch } from 'solid-js';
 import './list-property-value.css';
 import { Layer } from '@ui';

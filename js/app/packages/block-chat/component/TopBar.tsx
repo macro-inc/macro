@@ -23,10 +23,10 @@ import {
 } from '@core/component/TopBar/ShareButton';
 import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import Info from '@icon/info.svg';
-import Notepad from '@icon/notepad.svg';
-import Quotes from '@icon/quotes.svg';
-import IconShared from '@macro-icons/wide/share.svg';
+import IconShared from '@icon/wide-share.svg';
+import Info from '@phosphor/info.svg';
+import Notepad from '@phosphor/notepad.svg';
+import Quotes from '@phosphor/quotes.svg';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 
 export function TopBar() {

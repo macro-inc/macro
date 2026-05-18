@@ -1,7 +1,7 @@
 import { observedSize } from '@core/directive/observedSize';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type DateValue, formatDate } from '@core/util/date';
-import IconPlus from '@icon/plus.svg';
+import IconPlus from '@phosphor/plus.svg';
 import { Button, cn } from '@ui';
 import {
   type Accessor,

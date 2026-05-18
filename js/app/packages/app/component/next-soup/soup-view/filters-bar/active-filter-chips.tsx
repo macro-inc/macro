@@ -1,8 +1,8 @@
 import { truncateLabel } from '@core/util/string';
-import CheckIcon from '@icon/check.svg';
-import XIcon from '@icon/x.svg';
 import { Combobox } from '@kobalte/core/combobox';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import CheckIcon from '@phosphor/check.svg';
+import XIcon from '@phosphor/x.svg';
 import { Button, cn, Layer } from '@ui';
 import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 import type { SearchableOption } from './search-filter-controls';

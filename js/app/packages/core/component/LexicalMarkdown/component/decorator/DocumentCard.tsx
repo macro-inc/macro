@@ -16,13 +16,6 @@ import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { canNestBlock, createBlockInstance } from '@core/orchestrator';
 import { matches } from '@core/util/match';
-import Minimize from '@icon/arrows-in.svg';
-import Clipboard from '@icon/clipboard.svg';
-import ClockIcon from '@icon/clock.svg';
-import DotsThree from '@icon/list.svg';
-import LoadingSpinner from '@icon/spinner.svg';
-import TrashSimple from '@icon/trash-simple.svg';
-import UserIcon from '@icon/user.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import {
   $convertCardToMention,
@@ -35,6 +28,13 @@ import {
   setDocumentCardPreviewComponent,
   unsetDocumentCardPreviewCache,
 } from '@lexical-core';
+import Minimize from '@phosphor/arrows-in.svg';
+import Clipboard from '@phosphor/clipboard.svg';
+import ClockIcon from '@phosphor/clock.svg';
+import DotsThree from '@phosphor/list.svg';
+import LoadingSpinner from '@phosphor/spinner.svg';
+import TrashSimple from '@phosphor/trash-simple.svg';
+import UserIcon from '@phosphor/user.svg';
 import {
   type AccessiblePreviewItem,
   isAccessiblePreviewItem,

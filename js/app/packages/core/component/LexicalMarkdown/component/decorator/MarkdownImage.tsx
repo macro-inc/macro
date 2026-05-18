@@ -5,13 +5,13 @@ false && internalDrag;
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
 import { isErr } from '@core/util/maybeResult';
-import ImageIcon from '@icon/image-broken.svg';
-import LoadingSpinner from '@icon/spinner.svg';
-import XIcon from '@icon/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
 import { $isImageNode, type ImageDecoratorProps } from '@lexical-core';
 import { calculateEffectiveDimensions } from '@lexical-core/utils/media';
+import ImageIcon from '@phosphor/image-broken.svg';
+import LoadingSpinner from '@phosphor/spinner.svg';
+import XIcon from '@phosphor/x.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer } from '@ui';
 import {

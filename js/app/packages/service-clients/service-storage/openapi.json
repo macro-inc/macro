@@ -6821,6 +6821,10 @@
             "type": ["string", "null"],
             "description": "Resolved display name for the channel."
           },
+          "customName": {
+            "type": ["string", "null"],
+            "description": "User-supplied or AI-generated display name for the call. Only set on\narchived `call_records`; active calls always return `None`."
+          },
           "endedAt": {
             "type": ["string", "null"],
             "format": "date-time",

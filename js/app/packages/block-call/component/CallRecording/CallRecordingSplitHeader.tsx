@@ -21,8 +21,8 @@ import {
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
-import PhoneCallIcon from '@macro-icons/wide/call.svg';
-import IconShared from '@macro-icons/wide/share.svg';
+import PhoneCallIcon from '@icon/wide-call.svg';
+import IconShared from '@icon/wide-share.svg';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { Accessor } from 'solid-js';
 
