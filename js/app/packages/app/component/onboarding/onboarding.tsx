@@ -2,7 +2,6 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { analytics } from '@app/lib/analytics/analytics';
 import { useIsAuthenticated } from '@core/auth';
-import { useHasPaidAccess } from '@core/auth/license';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserInfo } from '@core/context/user';
@@ -42,7 +41,6 @@ function OnboardingInner() {
   const completeTutorial = useCompleteTutorialMutation();
   const isAuthenticated = useIsAuthenticated();
   const userInfo = useUserInfo();
-  const hasPaidAccess = useHasPaidAccess();
   const userTeamsQuery = useUserTeamsQuery();
 
   const params = new URLSearchParams(location.search);
@@ -100,12 +98,6 @@ function OnboardingInner() {
     }
   });
 
-  // Skip payment step if user already has a paid plan
-  createEffect(() => {
-    if (hasPaidAccess()) {
-      ctx.skipStep('payment');
-    }
-  });
 
   const cleanParam = (key: string) => {
     const cleanParams = new URLSearchParams(window.location.search);

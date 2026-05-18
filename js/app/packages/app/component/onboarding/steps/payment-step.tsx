@@ -1,10 +1,13 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import type { PaidPlanTier } from '@app/component/paywall/plans';
 import { useIsAuthenticated } from '@core/auth';
+import { useHasPaidAccess } from '@core/auth/license';
 import { toast } from '@core/component/Toast/Toast';
+import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import ArrowRightIcon from '@icon/arrow-right.svg';
 import LockIcon from '@icon/lock.svg';
 import SpinnerIcon from '@icon/spinner.svg';
+import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import {
@@ -35,6 +38,16 @@ function planForSeatCount(seats: number): TeamPlan {
 }
 
 export function PaymentStep() {
+  const hasPaidAccess = useHasPaidAccess();
+
+  return (
+    <Show when={!hasPaidAccess()} fallback={<AlreadyPaidView />}>
+      <CheckoutView />
+    </Show>
+  );
+}
+
+function CheckoutView() {
   const ctx = useOnboarding();
   const analytics = useAnalytics();
   const isAuthenticated = useIsAuthenticated();
@@ -116,7 +129,9 @@ export function PaymentStep() {
             </span>
             <span class="text-ink-muted text-sm pb-0.5">/mo</span>
           </div>
-          <span class="text-sm text-ink-muted">Up to {plan().seats} seats</span>
+          <span class="text-sm text-ink-muted">
+            Up to {plan().seats} seats
+          </span>
         </div>
 
         <div class="flex flex-col text-sm">
@@ -171,6 +186,52 @@ export function PaymentStep() {
           <LockIcon class="size-3" />
           Secure checkout via Stripe
         </span>
+      </div>
+    </div>
+  );
+}
+
+function AlreadyPaidView() {
+  const navigate = useNavigate();
+
+  const handleTakeMeThere = () => {
+    navigate('/component/settings', { replace: true });
+  };
+
+  const handleTakeMeHome = () => {
+    navigate(DEFAULT_ROUTE, { replace: true });
+  };
+
+  return (
+    <div class="flex flex-col gap-8 w-full">
+      <div class="flex flex-col gap-1">
+        <h1 class="text-2xl font-semibold text-ink tracking-tight">
+          You're all set
+        </h1>
+        <p class="text-sm text-ink-disabled">
+          You already have an active plan. Invite teammates from Settings
+          anytime.
+        </p>
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <Button
+          variant="base"
+          size="lg"
+          onClick={handleTakeMeThere}
+          class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+        >
+          Take me there
+          <ArrowRightIcon class="size-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="md"
+          onClick={handleTakeMeHome}
+          class="w-full"
+        >
+          Take me home
+        </Button>
       </div>
     </div>
   );
