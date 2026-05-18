@@ -19,7 +19,7 @@ import { matches } from '@core/util/match';
 import Minimize from '@icon/arrows-in.svg';
 import Clipboard from '@icon/clipboard.svg';
 import ClockIcon from '@icon/clock.svg';
-import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
+import TrashSimple from '@icon/trash-simple.svg';
 import DotsThree from '@icon/list.svg';
 import LoadingSpinner from '@icon/spinner.svg';
 import UserIcon from '@icon/user.svg';

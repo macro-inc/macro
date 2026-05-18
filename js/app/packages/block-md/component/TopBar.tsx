@@ -46,7 +46,7 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import ClockIcon from '@icon/clock-counter-clockwise.svg';
 import Download from '@icon/download.svg';
-import SidePanelIcon from '@icon/fill/square-half-fill.svg';
+import SidePanelIcon from '@icon/square-half.svg';
 import GitBranch from '@icon/git-branch.svg';
 import IconLink from '@icon/link.svg';
 import TerminalWindowIcon from '@icon/terminal-window.svg';
