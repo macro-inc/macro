@@ -4,6 +4,7 @@ export { TabbedControl } from './components/TabbedControl';
 export { Avatar, AvatarGroup } from './components/Avatar';
 export { ToggleSwitch } from './components/ToggleSwitch';
 export { ButtonGroup } from './components/ButtonGroup';
+export { ChatInput } from './components/ChatInput';
 export { HoverCard } from './components/HoverCard';
 export { Dropdown } from './components/Dropdown';
 export { Surface } from './components/Surface';
@@ -20,6 +21,7 @@ export type { AvatarSize, AvatarProps, AvatarGroupSize, AvatarGroupProps } from 
 export type { ToggleSwitchProps } from './components/ToggleSwitch';
 export type { ButtonProps } from './components/Button';
 export type { DialogProps } from './components/Dialog';
+export type { ChatInputRows, ChatInputProps } from './components/ChatInput';
 
 /* utils */
 export { cn } from './utils/classname';

@@ -49,12 +49,12 @@ export const theme: EditorThemeClasses = {
   },
   paragraph: `${vertical} md-p text-[1em]`,
   heading: {
-    h1: 'text-3xl text-[1.875em] font-semibold mb-4',
-    h2: 'text-2xl text-[1.5em] font-semibold mb-3',
-    h3: 'text-xl text-[1.25em] font-semibold mb-2',
-    h4: 'text-xl text-[1.25em] font-medium mb-2',
-    h5: 'text-lg text-[1.125em] font-medium mb-1',
-    h6: 'text-base text-[1em] font-medium mb-1',
+    h1: 'text-xl text-[1.25em] font-semibold mb-3',
+    h2: 'text-lg text-[1.125em] font-semibold mb-2',
+    h3: 'text-base text-[1em] font-bold mb-0',
+    h4: 'text-base text-[1em] font-semibold',
+    h5: 'text-base text-[1em] font-medium',
+    h6: 'text-base text-[1em] font-medium',
   },
   list: {
     ul: 'list-none md-list md-bullet',

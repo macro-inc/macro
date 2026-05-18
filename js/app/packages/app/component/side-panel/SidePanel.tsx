@@ -26,7 +26,7 @@ import {
   type SidePanelSectionEntry,
 } from './context';
 
-const NARROW_THRESHOLD_PX = 720;
+const NARROW_THRESHOLD_PX = 1224;
 const SIDE_MIN_PX = 320;
 const SIDE_MAX_PX = 380;
 const MAIN_MIN_PX = 320;
@@ -165,11 +165,13 @@ function SidePanelLayoutInner(
       </Show>
       <Show when={showOverlay()}>
         <div class="absolute inset-0 z-10 flex flex-col bg-surface">
-          <SidePanelOutlet
-            sections={props.sections}
-            openIds={props.openIds}
-            setOpenIds={props.setOpenIds}
-          />
+          <div class="w-full max-w-2xl mx-auto min-w-0">
+            <SidePanelOutlet
+              sections={props.sections}
+              openIds={props.openIds}
+              setOpenIds={props.setOpenIds}
+            />
+          </div>
         </div>
       </Show>
     </>
