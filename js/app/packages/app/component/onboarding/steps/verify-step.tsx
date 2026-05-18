@@ -223,10 +223,11 @@ export function VerifyStep() {
           <div class="flex items-center justify-center">
             <button
               type="button"
+              tabIndex={0}
               onClick={handleSendCode}
               disabled={!canResend()}
               class={cn(
-                'text-xs transition-colors outline-none',
+                'text-xs transition-colors outline-none rounded-sm focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
                 canResend()
                   ? 'text-accent hover:text-accent/80'
                   : 'text-ink-disabled'

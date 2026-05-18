@@ -267,6 +267,7 @@ function OnboardingInner() {
               <div class={showBack() ? 'visible' : 'invisible'}>
                 <button
                   type="button"
+                  tabIndex={0}
                   onClick={() => ctx.back()}
                   class="flex items-center gap-1 text-xs text-ink-disabled hover:text-ink transition-colors outline-none rounded-sm focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                 >
