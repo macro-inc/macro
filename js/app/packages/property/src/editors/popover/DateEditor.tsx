@@ -1,4 +1,4 @@
-import { PropertyDateSelector } from '@core/component/Properties/component/modal/shared/PropertyDateSelector';
+import { PropertyDateSelector } from '../selectors/PropertyDateSelector';
 import { createSignal, Show } from 'solid-js';
 import { useProperty } from '../../core/context';
 import type { DateProperty } from '../../types';

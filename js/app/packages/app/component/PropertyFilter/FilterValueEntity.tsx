@@ -11,7 +11,7 @@ import {
   threadMapper,
   useQuickAccessEntities,
   userToEntity,
-} from '@core/component/Properties/component/modal/shared/entityUtils';
+} from '@property';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
 import { useEmail, useUserId } from '@core/context/user';
 import { useAugmentUserWithDmActivity } from '@core/user';

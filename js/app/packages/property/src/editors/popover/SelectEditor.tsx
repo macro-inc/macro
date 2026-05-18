@@ -1,5 +1,5 @@
 import { usePropertyEditor } from '@core/component/Properties/hooks/usePropertyEditor';
-import { PropertyOptionSelector } from '@core/component/Properties/component/modal/shared/PropertyOptionSelector';
+import { PropertyOptionSelector } from '../selectors/PropertyOptionSelector';
 import {
   useAddPropertyOptionMutation,
   usePropertyOptionsQuery,
@@ -39,8 +39,7 @@ function SelectEditorBody() {
       ? []
       : optionsQuery.data;
 
-  const isLoading = () =>
-    optionsQuery.isLoading || addOptionMutation.isPending;
+  const isLoading = () => optionsQuery.isLoading || addOptionMutation.isPending;
 
   const editor = usePropertyEditor(
     property,
@@ -105,9 +104,7 @@ function SelectEditorBody() {
           error={null}
           selectedOptions={editor.selectedOptions}
           onToggleOption={editor.toggleOption}
-          onAddOption={
-            property.isSystemProperty ? undefined : editor.addOption
-          }
+          onAddOption={property.isSystemProperty ? undefined : editor.addOption}
           clearOption={
             !property.isMultiSelect && !property.isRequired
               ? {

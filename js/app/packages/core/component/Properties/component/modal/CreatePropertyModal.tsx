@@ -21,7 +21,7 @@ import {
   usePropertyNameFocus,
 } from '../../utils';
 import { ERROR_MESSAGES } from '../../utils/errorHandling';
-import { Dropdown, type DropdownOption } from './shared/Dropdown';
+import { Dropdown, type DropdownOption } from '@property';
 
 // Derive DataTypeValue from the dropdown options
 type DataTypeValue = ReturnType<

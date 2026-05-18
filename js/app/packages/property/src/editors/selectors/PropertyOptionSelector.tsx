@@ -18,9 +18,9 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { useSearchInputFocus } from '../../../utils';
-import { ERROR_MESSAGES } from '../../../utils/errorHandling';
-import { PropertyValueIcon } from '../../propertyValue';
+import { useSearchInputFocus } from '@core/component/Properties/utils';
+import { ERROR_MESSAGES } from '@core/component/Properties/utils/errorHandling';
+import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue';
 import { OptionCheckBox } from './OptionCheckBox';
 import type { OptionSelectorConfig, SelectableOption } from './types';
 

@@ -15,6 +15,28 @@ export {
   useBooleanEditor,
   useInlineEditor,
 } from './editors';
+export {
+  type CombinedEntity,
+  createEntitySearchConfig,
+  Dropdown,
+  type DropdownOption,
+  entityDataToEntity,
+  entityTypeToBuckets,
+  type EntityTypeItemMap,
+  getEntityName,
+  getEntitySearchText,
+  getEntityTimestampedItem,
+  getEntityType,
+  isChannelEntity,
+  PropertyDateSelector,
+  PropertyEntitySelector,
+  PropertyOptionSelector,
+  quickAccessItemToEntity,
+  sortEntitiesWithSelfFirst,
+  threadMapper,
+  useQuickAccessEntities,
+  userToEntity,
+} from './editors/selectors';
 export * from './hooks';
 export { Property } from './property';
 export * from './types';

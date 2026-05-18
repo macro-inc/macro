@@ -2,7 +2,7 @@ import {
   type CombinedEntity,
   getEntityName,
   getEntityType,
-} from '@core/component/Properties/component/modal/shared/entityUtils';
+} from '@property';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue';
 import { usePropertySelection } from '@core/component/Properties/hooks';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';

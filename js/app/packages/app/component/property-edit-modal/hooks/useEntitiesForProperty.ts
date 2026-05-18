@@ -10,7 +10,7 @@ import {
   threadMapper,
   useQuickAccessEntities,
   userToEntity,
-} from '@core/component/Properties/component/modal/shared/entityUtils';
+} from '@property';
 import type {
   Property,
   PropertyDefinitionDomain,

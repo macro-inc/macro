@@ -20,7 +20,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { useSearchInputFocus } from '../../../utils';
+import { useSearchInputFocus } from '@core/component/Properties/utils';
 import {
   type CombinedEntity,
   createEntitySearchConfig,
