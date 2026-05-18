@@ -47,7 +47,12 @@ export type SeedDocument = {
 export type SeedChannel = {
   channel_id: string;
   channel_name?: string;
-  channel_type: 'public' | 'private' | 'direct_message' | 'organization' | 'team';
+  channel_type:
+    | 'public'
+    | 'private'
+    | 'direct_message'
+    | 'organization'
+    | 'team';
   participants: string[];
 };
 

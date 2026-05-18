@@ -20,7 +20,10 @@ const SEEDED = {
   },
 } as const;
 
-test.skip(!LOCAL_E2E, 'local smoke tests require LOCAL_E2E=true and seeded local data');
+test.skip(
+  !LOCAL_E2E,
+  'local smoke tests require LOCAL_E2E=true and seeded local data'
+);
 
 test.describe('local app smoke', () => {
   test.describe.configure({ timeout: 60_000 });
@@ -38,7 +41,9 @@ test.describe('local app smoke', () => {
     );
   });
 
-  test('channels view and channel page show seeded channel data', async ({ page }) => {
+  test('channels view and channel page show seeded channel data', async ({
+    page,
+  }) => {
     await gotoApp(page, '/component/channels');
     await expect(page.locator('[data-list-view="channels"]')).toBeVisible({
       timeout: 30_000,

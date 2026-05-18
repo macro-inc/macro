@@ -31,7 +31,10 @@ const SIDEBAR_LIST_VIEWS = [
   { id: 'folders', label: 'Folders', tabs: ['Owned', 'All'] },
 ] as const;
 
-test.skip(!LOCAL_E2E, 'local sidebar tests require LOCAL_E2E=true and seeded local data');
+test.skip(
+  !LOCAL_E2E,
+  'local sidebar tests require LOCAL_E2E=true and seeded local data'
+);
 
 test.describe('local sidebar views', () => {
   test.describe.configure({ timeout: 60_000 });
@@ -96,10 +99,7 @@ async function expectLoadedListView(page: Page, id: string) {
   await expect(page.getByText('Something went terribly wrong')).toHaveCount(0);
 }
 
-async function expectListViewChrome(
-  page: Page,
-  tabs: readonly string[]
-) {
+async function expectListViewChrome(page: Page, tabs: readonly string[]) {
   const header = page.locator('[data-split-header]').first();
   await expect(header).toBeVisible({ timeout: 30_000 });
 

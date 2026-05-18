@@ -8,7 +8,10 @@ import {
   uniqueE2EText,
 } from './helpers/local-app';
 
-test.skip(!LOCAL_E2E, 'local channel action tests require LOCAL_E2E=true and seeded local data');
+test.skip(
+  !LOCAL_E2E,
+  'local channel action tests require LOCAL_E2E=true and seeded local data'
+);
 
 test.describe('local channel actions', () => {
   test.describe.configure({ timeout: 60_000 });
@@ -28,7 +31,9 @@ test.describe('local channel actions', () => {
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test('opens a reply composer for a seeded channel message', async ({ page }) => {
+  test('opens a reply composer for a seeded channel message', async ({
+    page,
+  }) => {
     const channel = localE2ESeed.smoke.generalChannel;
     const message = localE2ESeed.smoke.generalWelcomeMessage;
 
@@ -38,7 +43,9 @@ test.describe('local channel actions', () => {
       `?channel_message_id=${message.message_id}`
     );
 
-    const messageRow = page.locator(`[data-message-id="${message.message_id}"]`);
+    const messageRow = page.locator(
+      `[data-message-id="${message.message_id}"]`
+    );
     await expect(messageRow).toBeVisible({ timeout: 30_000 });
 
     await openReplyInput(messageRow);
@@ -53,7 +60,8 @@ async function openSeededChannel(
   channelId: string,
   searchParams: string = ''
 ) {
-  const channelName = localE2ESeed.smoke.generalChannel.channel_name ?? 'general';
+  const channelName =
+    localE2ESeed.smoke.generalChannel.channel_name ?? 'general';
 
   await gotoApp(page, `/channel/${channelId}${searchParams}`);
   await expect(
@@ -103,4 +111,3 @@ async function openReplyInput(message: Locator) {
 function messageByText(page: Page, text: string) {
   return page.locator('[data-message]').filter({ hasText: text }).last();
 }
-
