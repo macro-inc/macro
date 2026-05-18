@@ -212,7 +212,7 @@ function OnboardingInner() {
   });
 
   return (
-    <div class="flex items-center justify-center size-full relative overflow-y-auto">
+    <div class="flex items-center justify-center size-full relative overflow-y-auto py-8">
       <style>
         {`
         input:-webkit-autofill,
@@ -279,7 +279,7 @@ function OnboardingInner() {
               step={ctx.step()}
               transition={Stepper.transitions.slideFull}
               appear
-              class={cn('overflow-clip p-1 -m-1', ctx.step() > 0 && 'h-125')}
+              class={cn('overflow-clip p-1 -m-1', ctx.step() > 0 && 'min-h-125')}
             >
               <For each={STEPS}>
                 {(stepDef, i) => (
