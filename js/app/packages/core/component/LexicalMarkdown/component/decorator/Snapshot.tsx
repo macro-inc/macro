@@ -11,7 +11,7 @@ import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import EyeSlashDuo from '@icon/duotone/eye-slash-duotone.svg';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
-import LoadingSpinner from '@icon/regular/spinner.svg';
+import LoadingSpinner from '@icon/spinner.svg';
 import { $isSnapshotNode, type SnapshotDecoratorProps } from '@lexical-core';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { blockNameToItemType } from '@service-storage/client';

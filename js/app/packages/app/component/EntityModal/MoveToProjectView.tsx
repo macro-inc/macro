@@ -8,7 +8,7 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import Fragment from '@core/util/Fragment';
 import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
 import type { EntityData } from '@entity';
-import CaretRight from '@icon/regular/caret-right.svg';
+import CaretRight from '@icon/caret-right.svg';
 import { createMoveToProjectDssEntityMutation } from '@macro-entity';
 import ArrowRight from '@phosphor-icons/core/regular/arrow-right.svg?component-solid';
 import { useProjectsQuery } from '@queries/storage/projects';

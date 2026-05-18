@@ -1,7 +1,7 @@
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isErr } from '@core/util/maybeResult';
-import ArrowLeft from '@icon/regular/arrow-left.svg';
-import ArrowRight from '@icon/regular/arrow-right.svg';
+import ArrowLeft from '@icon/arrow-left.svg';
+import ArrowRight from '@icon/arrow-right.svg';
 import { authServiceClient } from '@service-auth/client';
 import { action, useAction, useSubmission } from '@solidjs/router';
 import { cn } from '@ui';

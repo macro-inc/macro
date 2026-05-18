@@ -1,4 +1,4 @@
-import Fallback from '@icon/regular/placeholder.svg';
+import Fallback from '@icon/placeholder.svg';
 import type { UnknownMentionDecoratorProps } from '@lexical-core';
 import { useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';

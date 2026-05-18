@@ -17,7 +17,7 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
-import CheckIcon from '@icon/bold/check-bold.svg?component-solid';
+import CheckIcon from '@icon/check.svg?component-solid';
 import PaperPlane from '@macro-icons/wide/paper-plane-cutout.svg';
 import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';

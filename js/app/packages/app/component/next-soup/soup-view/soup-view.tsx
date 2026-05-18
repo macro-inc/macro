@@ -80,10 +80,10 @@ import {
   type ProjectEntity,
   type SearchLocation,
 } from '@entity';
-import CheckIcon from '@icon/bold/check-bold.svg';
-import CaretDownIcon from '@icon/regular/caret-down.svg';
-import ChevronRightIcon from '@icon/regular/caret-right.svg';
-import Spinner from '@icon/regular/spinner.svg';
+import CheckIcon from '@icon/check.svg';
+import CaretDownIcon from '@icon/caret-down.svg';
+import ChevronRightIcon from '@icon/caret-right.svg';
+import Spinner from '@icon/spinner.svg';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { useQueryClient } from '@queries/client';

@@ -2,7 +2,7 @@ import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer'
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import clickOutside from '@core/directive/clickOutside';
 import type { Entity } from '@core/types';
-import Bell from '@icon/regular/bell.svg';
+import Bell from '@icon/bell.svg';
 import {
   type NotificationSource,
   useNotificationsForEntity,

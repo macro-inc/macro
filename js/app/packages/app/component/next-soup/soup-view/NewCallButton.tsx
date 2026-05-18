@@ -5,7 +5,7 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { isErr } from '@core/util/maybeResult';
-import XIcon from '@icon/regular/x.svg';
+import XIcon from '@icon/x.svg';
 import PhoneCallIcon from '@macro-icons/wide/call.svg';
 import { commsServiceClient } from '@service-comms/client';
 import { Button, Dialog, Surface } from '@ui';

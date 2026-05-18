@@ -27,7 +27,7 @@ import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
-import BellIcon from '@icon/regular/bell.svg';
+import BellIcon from '@icon/bell.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import LogoIcon from '@macro-icons/macro-logo.svg';
 import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';

@@ -1,4 +1,4 @@
-import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
+import SpinnerIcon from '@icon/spinner-gap.svg';
 import PaperPlaneRight from '@phosphor-icons/core/regular/paper-plane-right.svg?component-solid';
 import { Button } from '@ui';
 import { children, type JSX, Show, splitProps } from 'solid-js';

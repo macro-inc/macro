@@ -1,5 +1,5 @@
-import CheckCircle from '@icon/regular/check-circle.svg';
-import Spinner from '@icon/regular/spinner.svg';
+import CheckCircle from '@icon/check-circle.svg';
+import Spinner from '@icon/spinner.svg';
 import { cn } from '@ui';
 import {
   type Accessor,

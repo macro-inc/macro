@@ -1,7 +1,7 @@
 import { SyncSourceStatus } from '@core/collab/source';
 import { blockSyncSourceSignal } from '@core/signal/load';
-import ReconnectingIcon from '@icon/regular/spinner.svg';
-import DisconnectedIcon from '@icon/regular/warning.svg';
+import ReconnectingIcon from '@icon/spinner.svg';
+import DisconnectedIcon from '@icon/warning.svg';
 import { Match, Switch } from 'solid-js';
 
 export function CollabStatus() {

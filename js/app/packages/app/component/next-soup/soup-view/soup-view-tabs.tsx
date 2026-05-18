@@ -10,7 +10,7 @@ import { isListViewID, type ListView } from '@app/constants/list-views';
 import { type TabItem, Tabs } from '@core/component/Tabs';
 import { TabsInset } from '@core/component/TabsInset';
 import { useUserContext } from '@core/context/user';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
+import ChevronDownIcon from '@icon/caret-down.svg';
 import { Dropdown, Layer } from '@ui';
 import { batch, createMemo, For, Match, Switch } from 'solid-js';
 

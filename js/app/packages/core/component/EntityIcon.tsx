@@ -32,7 +32,7 @@ import User from '@icon/duotone/user-duotone.svg';
 import Users from '@icon/duotone/users-duotone.svg';
 import Folder from '@icon/fill/folder-simple-fill.svg';
 import FolderUser from '@icon/fill/folder-user-fill.svg';
-import Check from '@icon/regular/check-fat.svg';
+import Check from '@icon/check-fat.svg';
 import WideBook from '@macro-icons/wide/book.svg';
 import WideCalendar from '@macro-icons/wide/calendar.svg';
 import PhoneCall from '@macro-icons/wide/call.svg';

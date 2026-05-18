@@ -9,7 +9,7 @@ import type { RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
 import { type EntityData, InlineEntity } from '@entity';
-import ArrowLeft from '@icon/regular/arrow-left.svg';
+import ArrowLeft from '@icon/arrow-left.svg';
 import Macro from '@macro-icons/macro-logo.svg';
 import { cn, Dialog, Hotkey, Panel } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';

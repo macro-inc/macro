@@ -2,7 +2,7 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isOk } from '@core/util/maybeResult';
-import IconCheck from '@icon/regular/check.svg';
+import IconCheck from '@icon/check.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
 import WideCopy from '@macro-icons/wide/copy.svg';
 import WideTask from '@macro-icons/wide/task.svg';

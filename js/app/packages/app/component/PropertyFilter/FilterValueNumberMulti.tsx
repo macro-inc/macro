@@ -1,4 +1,4 @@
-import XIcon from '@icon/regular/x.svg';
+import XIcon from '@icon/x.svg';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 

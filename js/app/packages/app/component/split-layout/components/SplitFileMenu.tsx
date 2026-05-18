@@ -7,11 +7,11 @@ import { toast } from '@core/component/Toast/Toast';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { useIsDocumentOwner } from '@core/signal/permissions';
 import { buildEntityData } from '@entity';
-import ArrowRight from '@icon/regular/arrow-right.svg';
-import Copy from '@icon/regular/copy.svg';
-import ThreeDots from '@icon/regular/list.svg';
-import Rename from '@icon/regular/pencil-line.svg';
-import Trash from '@icon/regular/trash-simple.svg';
+import ArrowRight from '@icon/arrow-right.svg';
+import Copy from '@icon/copy.svg';
+import ThreeDots from '@icon/list.svg';
+import Rename from '@icon/pencil-line.svg';
+import Trash from '@icon/trash-simple.svg';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
 import { Button, cn, Layer } from '@ui';
 import {

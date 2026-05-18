@@ -45,7 +45,7 @@ import {
 import { useCanEdit } from '@core/signal/permissions';
 import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
-import WarningIcon from '@icon/regular/warning.svg';
+import WarningIcon from '@icon/warning.svg';
 import {
   AwaitNode,
   CommentNode,

@@ -11,8 +11,8 @@ import {
 import { UserGroup } from '@core/component/UserGroup';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
-import CaretDownIcon from '@icon/regular/caret-down.svg';
-import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
+import CaretDownIcon from '@icon/caret-down.svg';
+import CircleDashedEmpty from '@icon/circle-dashed.svg';
 import { HoverCard } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { type Component, Show } from 'solid-js';

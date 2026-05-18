@@ -1,4 +1,4 @@
-import KeyReturn from '@icon/regular/arrow-elbow-down-left.svg';
+import KeyReturn from '@icon/arrow-elbow-down-left.svg';
 import { Show } from 'solid-js';
 
 export function MentionTooltip(props: { show: boolean; text: string }) {

@@ -1,4 +1,4 @@
-import ChatTeardrop from '@icon/regular/chat-teardrop.svg';
+import ChatTeardrop from '@icon/chat-teardrop.svg';
 import { cn, Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
 import {

@@ -1,6 +1,6 @@
 import { DatePicker } from '@core/component/DatePicker';
 import { formatDate } from '@core/util/dateParser';
-import ClockIcon from '@icon/regular/clock.svg';
+import ClockIcon from '@icon/clock.svg';
 import type { DateMentionDecoratorProps } from '@lexical-core';
 import { $isDateMentionNode } from '@lexical-core';
 import { differenceInCalendarDays } from 'date-fns';

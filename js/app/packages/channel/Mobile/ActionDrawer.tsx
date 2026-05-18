@@ -1,13 +1,13 @@
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
 import { focusInput } from '@core/directive/focusInput';
-import ReplyIcon from '@icon/regular/arrow-bend-up-left.svg';
-import CheckSquareIcon from '@icon/regular/check-square.svg';
-import CopyIcon from '@icon/regular/copy.svg';
-import LinkIcon from '@icon/regular/link.svg';
-import PencilIcon from '@icon/regular/pencil.svg';
-import SmileyIcon from '@icon/regular/smiley.svg';
-import TrashIcon from '@icon/regular/trash.svg';
+import ReplyIcon from '@icon/arrow-bend-up-left.svg';
+import CheckSquareIcon from '@icon/check-square.svg';
+import CopyIcon from '@icon/copy.svg';
+import LinkIcon from '@icon/link.svg';
+import PencilIcon from '@icon/pencil.svg';
+import SmileyIcon from '@icon/smiley.svg';
+import TrashIcon from '@icon/trash.svg';
 import {
   type Component,
   createSignal,

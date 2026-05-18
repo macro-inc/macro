@@ -4,7 +4,7 @@ import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import type { NotificationType } from '@core/types';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import CheckIcon from '@icon/regular/check.svg';
+import CheckIcon from '@icon/check.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
   getChannelNotificationParams,

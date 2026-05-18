@@ -11,7 +11,7 @@ import { debouncedDependent } from '@core/util/debounce';
 import { windowSearchMatch } from '@core/util/searchHighlight';
 import { Entity, type EntityData, type WithSearch } from '@entity';
 import { SearchContent } from '@entity/extractors-search/search-content';
-import ArrowLeft from '@icon/regular/arrow-left.svg';
+import ArrowLeft from '@icon/arrow-left.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
 import { useFullTextSearch } from '@queries/soup/useFullTextSearch';

@@ -1,9 +1,9 @@
 import { isReplyAllEligible } from '@block-email/util/recipientConversion';
 import type { ReplyType } from '@block-email/util/replyType';
 import { useEmail } from '@core/context/user';
-import ArrowBendDoubleUpLeft from '@icon/regular/arrow-bend-double-up-left.svg';
-import ArrowBendUpLeft from '@icon/regular/arrow-bend-up-left.svg';
-import ArrowBendUpRight from '@icon/regular/arrow-bend-up-right.svg';
+import ArrowBendDoubleUpLeft from '@icon/arrow-bend-double-up-left.svg';
+import ArrowBendUpLeft from '@icon/arrow-bend-up-left.svg';
+import ArrowBendUpRight from '@icon/arrow-bend-up-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';

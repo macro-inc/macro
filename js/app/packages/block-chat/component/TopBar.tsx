@@ -23,9 +23,9 @@ import {
 } from '@core/component/TopBar/ShareButton';
 import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import Info from '@icon/regular/info.svg';
-import Notepad from '@icon/regular/notepad.svg';
-import Quotes from '@icon/regular/quotes.svg';
+import Info from '@icon/info.svg';
+import Notepad from '@icon/notepad.svg';
+import Quotes from '@icon/quotes.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 

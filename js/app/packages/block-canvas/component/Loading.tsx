@@ -1,4 +1,4 @@
-import Spinner from '@icon/regular/circle-notch.svg';
+import Spinner from '@icon/circle-notch.svg';
 export function Loading() {
   return (
     <div class="flex flex-col items-center justify-center h-full">

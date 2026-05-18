@@ -2,9 +2,9 @@ import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
-import EnvelopeIcon from '@icon/regular/envelope.svg';
-import SpinnerIcon from '@icon/regular/spinner.svg';
-import UsersThreeIcon from '@icon/regular/users-three.svg';
+import EnvelopeIcon from '@icon/envelope.svg';
+import SpinnerIcon from '@icon/spinner.svg';
+import UsersThreeIcon from '@icon/users-three.svg';
 import LogoIcon from '@macro-icons/macro-logo.svg';
 import { useUserInfo } from '@queries/auth';
 import {

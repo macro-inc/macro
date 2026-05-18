@@ -1,7 +1,7 @@
 import { useBlockId } from '@core/block';
 import { useListKeyBindings } from '@core/util/useListKeyBindings';
-import PlusIcon from '@icon/regular/plus.svg';
-import LoadingSpinner from '@icon/regular/spinner.svg';
+import PlusIcon from '@icon/plus.svg';
+import LoadingSpinner from '@icon/spinner.svg';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import { cn, Dialog, Surface } from '@ui';

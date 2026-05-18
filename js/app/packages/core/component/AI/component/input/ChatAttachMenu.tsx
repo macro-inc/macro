@@ -20,9 +20,9 @@ import {
   offset,
   shift,
 } from '@floating-ui/dom';
-import DeviceMobileIcon from '@icon/regular/device-mobile-speaker.svg';
-import LaptopIcon from '@icon/regular/laptop.svg';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
+import DeviceMobileIcon from '@icon/device-mobile-speaker.svg';
+import LaptopIcon from '@icon/laptop.svg';
+import SearchIcon from '@icon/magnifying-glass.svg';
 import type { HistoryItem } from '@queries/history/history';
 import {
   createEffect,

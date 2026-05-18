@@ -15,7 +15,7 @@ import {
   createMarkdownFile,
   createTask,
 } from '@core/util/create';
-import PlusIcon from '@icon/regular/plus.svg';
+import PlusIcon from '@icon/plus.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { createProject } from '@queries/storage/projects';
 import { Button, cn, Dialog, Layer, Surface } from '@ui';

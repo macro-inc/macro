@@ -1,7 +1,7 @@
-import EnvelopeIcon from '@icon/regular/envelope.svg';
-import FilePdfIcon from '@icon/regular/file-pdf.svg';
-import FileTextIcon from '@icon/regular/file-text.svg';
-import HashIcon from '@icon/regular/hash.svg';
+import EnvelopeIcon from '@icon/envelope.svg';
+import FilePdfIcon from '@icon/file-pdf.svg';
+import FileTextIcon from '@icon/file-text.svg';
+import HashIcon from '@icon/hash.svg';
 import PhoneCallIcon from '@macro-icons/wide/call.svg';
 import { match } from 'ts-pattern';
 import { type ContentHitData, hitHasSender } from '../types/search';

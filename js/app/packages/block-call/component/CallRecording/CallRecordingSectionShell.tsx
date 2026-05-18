@@ -1,7 +1,7 @@
-import Eye from '@icon/regular/eye.svg';
-import EyeSlash from '@icon/regular/eye-slash.svg';
-import UserCircle from '@icon/regular/user-circle.svg';
-import UserCircleMinus from '@icon/regular/user-circle-minus.svg';
+import Eye from '@icon/eye.svg';
+import EyeSlash from '@icon/eye-slash.svg';
+import UserCircle from '@icon/user-circle.svg';
+import UserCircleMinus from '@icon/user-circle-minus.svg';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 import {

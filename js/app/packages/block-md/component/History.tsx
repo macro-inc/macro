@@ -24,7 +24,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isErr } from '@core/util/maybeResult';
-import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
+import ClockIcon from '@icon/clock-counter-clockwise.svg';
 import { CommentNode, InlineSearchNode, peerIdPlugin } from '@lexical-core';
 import { storageServiceClient } from '@service-storage/client';
 import type { SyncServiceVersionID } from '@service-storage/generated/schemas/syncServiceVersionID';

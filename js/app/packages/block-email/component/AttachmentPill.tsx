@@ -1,5 +1,5 @@
 import { EntityIcon } from '@core/component/EntityIcon';
-import X from '@icon/regular/x.svg';
+import X from '@icon/x.svg';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { Show } from 'solid-js';

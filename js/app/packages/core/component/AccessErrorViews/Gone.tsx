@@ -1,4 +1,4 @@
-import Question from '@icon/regular/question.svg';
+import Question from '@icon/question.svg';
 
 /**
  * @description This is the view for when a user tries to access an item that returns a 410 indicating it was not successfully uploaded.
