@@ -1,9 +1,9 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import type { ChannelEntity } from '@entity';
-import ClockIcon from '@icon/regular/clock.svg';
-import EmailIcon from '@icon/regular/envelope.svg';
-import UsersIcon from '@icon/regular/users.svg';
+import ClockIcon from '@icon/clock.svg';
+import EmailIcon from '@icon/envelope.svg';
+import UsersIcon from '@icon/users.svg';
 import { cn } from '@ui';
 import { createEffect } from 'solid-js';
 import type { MentionItem } from '../../../../utils/mentionsUtils';

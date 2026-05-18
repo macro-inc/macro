@@ -5,7 +5,7 @@ import {
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import DownloadSimple from '@icon/regular/download-simple.svg';
+import DownloadSimple from '@icon/download-simple.svg';
 import ShareFat from '@macro-icons/wide/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';

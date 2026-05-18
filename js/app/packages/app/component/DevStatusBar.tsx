@@ -1,4 +1,4 @@
-import GitBranchIcon from '@icon/regular/git-branch.svg';
+import GitBranchIcon from '@icon/git-branch.svg';
 import { makePersisted } from '@solid-primitives/storage';
 import { createMemo, createSignal, Show } from 'solid-js';
 

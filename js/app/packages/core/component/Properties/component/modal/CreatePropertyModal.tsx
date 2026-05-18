@@ -1,7 +1,7 @@
 import { useBlockId } from '@core/block';
 import { useUserId } from '@core/context/user';
-import LoadingSpinner from '@icon/regular/spinner.svg';
-import XIcon from '@icon/regular/x.svg';
+import LoadingSpinner from '@icon/spinner.svg';
+import XIcon from '@icon/x.svg';
 import { useCreatePropertyDefinitionMutation } from '@queries/properties/definitions';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -410,7 +410,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
         if (!open) props.onClose();
       }}
     >
-      <Surface depth={2} class="*:max-h-[75vh]">
+      <Surface depth={2} class="*:max-h-[75vh] rounded-xl">
         <div class="flex flex-col text-sm">
           <div class="flex items-center justify-between gap-2 bg-surface px-2 h-10 border-b border-edge-muted shrink-0">
             <Dialog.Title class="pl-2 text-sm font-medium">

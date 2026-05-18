@@ -1,7 +1,7 @@
 import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
 import { useSearchInputFocus } from '@core/component/Properties/utils';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
+import SearchIcon from '@icon/magnifying-glass.svg';
 import {
   Combobox,
   type ComboboxRootItemComponentProps,

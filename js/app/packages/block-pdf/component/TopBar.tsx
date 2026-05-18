@@ -47,11 +47,11 @@ import { isMobile } from '@core/mobile/isMobile';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import DownloadIcon from '@icon/regular/download-simple.svg';
-import Info from '@icon/regular/info.svg';
-import Printer from '@icon/regular/printer.svg';
-import Quotes from '@icon/regular/quotes.svg';
-import TagIcon from '@icon/regular/tag.svg';
+import DownloadIcon from '@icon/download-simple.svg';
+import Info from '@icon/info.svg';
+import Printer from '@icon/printer.svg';
+import Quotes from '@icon/quotes.svg';
+import TagIcon from '@icon/tag.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import {
   blockNameToItemType,

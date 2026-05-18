@@ -10,12 +10,12 @@ import {
   useCanEdit,
   useIsDocumentOwner,
 } from '@core/signal/permissions';
-import ChatTeardrop from '@icon/regular/chat-teardrop.svg';
-import Signature from '@icon/regular/signature.svg';
-import Tabs from '@icon/regular/tabs.svg';
-import Textbox from '@icon/regular/textbox.svg';
-import Trash from '@icon/regular/trash-simple.svg';
-import Cancel from '@icon/regular/x.svg';
+import ChatTeardrop from '@icon/chat-teardrop.svg';
+import Signature from '@icon/signature.svg';
+import Tabs from '@icon/tabs.svg';
+import Textbox from '@icon/textbox.svg';
+import Trash from '@icon/trash-simple.svg';
+import Cancel from '@icon/x.svg';
 import { Button } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';

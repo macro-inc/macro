@@ -41,6 +41,7 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
+import { TaskListEntity } from '@app/component/next-soup/soup-view/views/tasks/TaskListEntity';
 import { ResponsiveTaskListHeader } from '@app/component/next-soup/soup-view/views/tasks/TaskListHeader';
 import {
   openEntityInNewTab,
@@ -79,10 +80,10 @@ import {
   type ProjectEntity,
   type SearchLocation,
 } from '@entity';
-import CheckIcon from '@icon/bold/check-bold.svg';
-import CaretDownIcon from '@icon/regular/caret-down.svg';
-import ChevronRightIcon from '@icon/regular/caret-right.svg';
-import Spinner from '@icon/regular/spinner.svg';
+import CaretDownIcon from '@icon/caret-down.svg';
+import ChevronRightIcon from '@icon/caret-right.svg';
+import CheckIcon from '@icon/check.svg';
+import Spinner from '@icon/spinner.svg';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { useQueryClient } from '@queries/client';
@@ -95,7 +96,7 @@ import {
 } from '@queries/soup/normalized-cache';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
-import { Button, cn, Tooltip } from '@ui';
+import { Button, cn, Layer, Tooltip } from '@ui';
 import {
   type Accessor,
   batch,
@@ -121,37 +122,61 @@ import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 
+export const SoupSectionHeader = (props: {
+  children: JSX.Element;
+  onClick?: () => void;
+  highlighted?: boolean;
+}) => {
+  return (
+    <Layer depth={2}>
+      <Dynamic
+        component={props.onClick ? 'button' : 'div'}
+        type={props.onClick ? 'button' : undefined}
+        onClick={props.onClick}
+        class={cn(
+          'group/header w-[calc(100%-0.5rem)] mx-1 mb-1 rounded px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
+          'text-text-muted bg-surface border border-edge-muted relative',
+          props.onClick && 'hover:bg-active',
+          props.highlighted && 'ring ring-edge bg-active ring-inset'
+        )}
+      >
+        {props.children}
+      </Dynamic>
+    </Layer>
+  );
+};
+
 const DefaultGroupHeader = (
   props: GroupHeaderProps & { highlighted?: boolean }
 ) => {
   return (
-    <button
-      type="button"
-      class={cn(
-        'w-full px-3 py-3 flex items-center gap-2 text-sm font-medium text-text-muted bg-ink/5 hover:bg-hover relative',
-        {
-          'outline-1 outline-accent/20 -outline-offset-1': props.highlighted,
-        }
-      )}
+    <SoupSectionHeader
       onClick={() => props.group.toggle()}
+      highlighted={props.highlighted}
     >
-      <div
-        class={cn('absolute h-full w-0.75 left-0 top-0 bg-accent opacity-0', {
-          'opacity-100': props.highlighted,
-        })}
-      />
-      <ChevronRightIcon
-        class={cn('size-3 transition-transform', {
-          'rotate-90': props.group.isExpanded(),
-        })}
-      />
+      <Layer depth={3}>
+        <div class="flex items-center justify-center size-4.5 rounded-xs bg-surface group-hover/header:bg-active">
+          <ChevronRightIcon
+            class={cn('size-2.5', {
+              'rotate-90': props.group.isExpanded(),
+            })}
+          />
+        </div>
+      </Layer>
       <PropertyValueIcon
         optionId={props.group.value as string}
         class="size-3.5"
       />
-      <span>{props.group.label}</span>
-      <span class="text-text-subtle">{props.group.count}</span>
-    </button>
+      <span class="truncate">{props.group.label}</span>
+      <span
+        class={cn(
+          'shrink-0 tabular-nums text-xs font-medium',
+          'px-1.5 py-px rounded-full bg-ink/10 text-text-subtle'
+        )}
+      >
+        {props.group.count}
+      </span>
+    </SoupSectionHeader>
   );
 };
 
@@ -330,6 +355,9 @@ export const SoupView = (props: SoupViewProps) => {
                   'flex-1 min-w-0': narrowSearchExpanded(),
                 })}
               >
+                <Show when={!isMobile() && !narrowSearchExpanded()}>
+                  <span class="text-base font-bold">{props.viewName}</span>
+                </Show>
                 <Show
                   when={
                     !narrowSearchExpanded() && !isComponentListView('search')
@@ -1004,9 +1032,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
                             return (
                               <>
                                 <Show when={i() === 0 && featuredCount() > 0}>
-                                  <div class="px-3 py-1.5 text-xs text-text-muted font-medium">
-                                    Featured Results
-                                  </div>
+                                  <SoupSectionHeader>
+                                    <span class="truncate">
+                                      Featured Results
+                                    </span>
+                                  </SoupSectionHeader>
                                 </Show>
                                 <Show
                                   when={
@@ -1014,9 +1044,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     featuredCount() > 0
                                   }
                                 >
-                                  <div class="px-3 py-1.5 text-xs text-text-muted font-medium border-t border-edge-muted mt-1">
-                                    More Results
-                                  </div>
+                                  <SoupSectionHeader>
+                                    <span class="truncate">More Results</span>
+                                  </SoupSectionHeader>
                                 </Show>
 
                                 <Switch>
@@ -1041,37 +1071,49 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     {(group) => {
                                       const highlighted = () => row.isFocused();
                                       return (
-                                        <button
-                                          type="button"
+                                        <div
                                           class={cn(
-                                            'w-full min-h-10 flex items-center justify-center gap-1.5 relative text-sm text-text-muted hover:bg-hover',
-                                            {
-                                              'bg-accent/5 outline-1 outline-accent/20 -outline-offset-1':
-                                                highlighted(),
-                                            }
+                                            'my-1 rounded min-h-9 flex items-center justify-center',
+                                            highlighted()
+                                              ? 'w-[calc(100%-0.5rem)] mx-1 ring ring-edge bg-active/60 ring-inset'
+                                              : 'mx-auto'
                                           )}
-                                          onClick={() => group().loadMore()}
-                                          disabled={group().isLoading()}
                                         >
-                                          <div
-                                            class={cn(
-                                              'absolute h-full w-0.75 left-0 top-0 bg-accent opacity-0',
-                                              { 'opacity-100': highlighted() }
-                                            )}
-                                          />
                                           <Show
                                             when={!group().isLoading()}
                                             fallback={
-                                              <>
+                                              <Button
+                                                variant="base"
+                                                size="sm"
+                                                depth={2}
+                                                class={cn({
+                                                  'bg-surface': !highlighted(),
+                                                  'border-transparent':
+                                                    highlighted(),
+                                                })}
+                                                disabled
+                                              >
                                                 <Spinner class="size-3 animate-spin" />
                                                 Loading...
-                                              </>
+                                              </Button>
                                             }
                                           >
-                                            <CaretDownIcon class="size-3" />
-                                            Load more
+                                            <Button
+                                              variant="base"
+                                              size="sm"
+                                              depth={2}
+                                              class={cn({
+                                                'bg-surface': !highlighted(),
+                                                'border-transparent':
+                                                  highlighted(),
+                                              })}
+                                              onClick={() => group().loadMore()}
+                                            >
+                                              <CaretDownIcon class="size-2.5" />
+                                              Load More
+                                            </Button>
                                           </Show>
-                                        </button>
+                                        </div>
                                       );
                                     }}
                                   </Match>
@@ -1081,7 +1123,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     <SoupEntityContextMenu
                                       entity={row.original}
                                     >
-                                      <ListEntity
+                                      <Dynamic
+                                        component={
+                                          currentView() === 'tasks'
+                                            ? TaskListEntity
+                                            : ListEntity
+                                        }
                                         entity={row.original}
                                         timestamp={timestamp()}
                                         highlighted={row.isFocused()}

@@ -1,5 +1,5 @@
 import { isErr } from '@core/util/maybeResult';
-import XIcon from '@icon/regular/x.svg';
+import XIcon from '@icon/x.svg';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
 import type { Component } from 'solid-js';

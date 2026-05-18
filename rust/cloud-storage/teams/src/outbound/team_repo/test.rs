@@ -130,6 +130,85 @@ async fn test_invite_users_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_get_new_invites_filters_existing_invites(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    let invites = vec![
+        Email::parse_from_str("invite@macro.com")?.lowercase(),
+        Email::parse_from_str("fresh@macro.com")?.lowercase(),
+    ];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+
+    let new_invites = team_repo.get_new_invites(&team_id, invites).await?;
+
+    assert_eq!(new_invites.len(), 1);
+    assert_eq!(new_invites[0].as_ref(), "fresh@macro.com");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_get_new_invites_filters_existing_team_members(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    let invites = vec![
+        Email::parse_from_str("user2@user.com")?.lowercase(),
+        Email::parse_from_str("fresh@macro.com")?.lowercase(),
+    ];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+
+    let new_invites = team_repo.get_new_invites(&team_id, invites).await?;
+
+    assert_eq!(new_invites.len(), 1);
+    assert_eq!(new_invites[0].as_ref(), "fresh@macro.com");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_get_new_invites_keeps_invites_scoped_to_team(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let other_team_id = macro_uuid::string_to_uuid("22222222-2222-2222-2222-222222222222")?;
+
+    sqlx::query!(
+        r#"
+        INSERT INTO team_invite (id, team_id, email, team_role, invited_by, created_at, last_sent_at)
+        VALUES ($1, $2, 'other-team-only@macro.com', 'member', 'macro|user4@user.com', NOW(), NOW())
+        "#,
+        macro_uuid::generate_uuid_v7(),
+        other_team_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let invites = vec![Email::parse_from_str("other-team-only@macro.com")?.lowercase()];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+
+    let new_invites = team_repo.get_new_invites(&team_id, invites).await?;
+
+    assert_eq!(new_invites.len(), 1);
+    assert_eq!(new_invites[0].as_ref(), "other-team-only@macro.com");
+
+    Ok(())
+}
+
 /// Re-inviting an already-invited user within the 5-minute window should not
 /// return them (rate limited), so the result should be empty.
 #[sqlx::test(

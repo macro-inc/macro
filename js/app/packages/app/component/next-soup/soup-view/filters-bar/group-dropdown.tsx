@@ -2,8 +2,8 @@ import type {
   GroupOption,
   GroupOptionId,
 } from '@app/component/next-soup/soup-view/group-options';
-import CheckIcon from '@icon/regular/check.svg';
-import StackSimpleIcon from '@icon/regular/stack-simple.svg';
+import CheckIcon from '@icon/check.svg';
+import StackSimpleIcon from '@icon/stack-simple.svg';
 import { Dropdown, Layer, Tooltip } from '@ui';
 import { type Component, For, Show } from 'solid-js';
 

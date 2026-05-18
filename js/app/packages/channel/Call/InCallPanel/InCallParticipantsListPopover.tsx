@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { tryMacroId, useDisplayName } from '@core/user';
-import UserCircle from '@icon/regular/user-circle.svg';
+import UserCircle from '@icon/user-circle.svg';
 import { Popover } from '@kobalte/core/popover';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { cn, Surface } from '@ui';

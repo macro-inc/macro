@@ -1,7 +1,7 @@
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { ItemPreview } from '@core/component/ItemPreview';
-import PencilIcon from '@icon/regular/note-pencil.svg';
+import PencilIcon from '@icon/note-pencil.svg';
 import QuoteIcon from '@phosphor-icons/core/bold/arrow-elbow-down-right-bold.svg?component-solid';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
 import { Button } from '@ui';

@@ -240,6 +240,20 @@ where
             .get_authenticated_user()
             .map_err(|e| InviteUsersToTeamError::TeamError(TeamError::AccessError(e)))?;
 
+        let team_plan = self.team_repository.get_team_plan(&team_id).await?;
+        let seat_count = self.team_repository.get_team_seat_count(&team_id).await?;
+
+        let new_invites = self
+            .team_repository
+            .get_new_invites(&team_id, invites.clone())
+            .await?;
+
+        if let Some(team_plan) = team_plan
+            && seat_count + new_invites.len() as i32 > team_plan.seat_cap()
+        {
+            return Err(InviteUsersToTeamError::NotEnoughOpenSeats);
+        }
+
         let invited = self
             .team_repository
             .invite_users_to_team(&team_id, invited_by, invites)

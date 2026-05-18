@@ -23,7 +23,7 @@ import {
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { isErr, ok } from '@core/util/maybeResult';
-import ArrowRight from '@icon/bold/arrow-right-bold.svg';
+import ArrowRight from '@icon/arrow-right.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
 import { AnimatedDiagramIcon } from '@macro-icons/wide/animating/diagram';
@@ -669,7 +669,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   };
 
   return (
-    <div class="bg-surface ring-1 ring-edge-muted rounded-sm">
+    <div class="bg-surface ring-1 ring-edge-muted rounded-xl">
       <div class="flex items-center justify-between p-2 px-6 border-b border-edge-muted">
         <h1 class="font-bold text-ink-muted">Create New</h1>
         <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">

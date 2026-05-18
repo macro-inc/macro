@@ -19,10 +19,10 @@ import type {
   PropertyApiValues,
 } from '@core/component/Properties/types';
 import { isMobile } from '@core/mobile/isMobile';
-import CaretDown from '@icon/bold/caret-down-bold.svg';
-import CaretRight from '@icon/bold/caret-right-bold.svg';
-import Plus from '@icon/regular/plus.svg';
-import LoadingSpinner from '@icon/regular/spinner.svg';
+import CaretDown from '@icon/caret-down.svg';
+import CaretRight from '@icon/caret-right.svg';
+import Plus from '@icon/plus.svg';
+import LoadingSpinner from '@icon/spinner.svg';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';

@@ -1,6 +1,6 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import ChevronDownIcon from '@icon/bold/caret-down-bold.svg';
-import CheckIcon from '@icon/bold/check-bold.svg';
+import ChevronDownIcon from '@icon/caret-down.svg';
+import CheckIcon from '@icon/check.svg';
 import { cn, Layer } from '@ui';
 import {
   type Component,

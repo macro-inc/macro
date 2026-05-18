@@ -2,8 +2,8 @@ import { toast } from '@core/component/Toast/Toast';
 import { useReferralCode } from '@core/context/user';
 import { isOk } from '@core/util/maybeResult';
 import { getWebOrigin } from '@core/util/webOrigin';
-import ClipboardIcon from '@icon/regular/clipboard.svg';
-import CloseIcon from '@icon/regular/x.svg';
+import ClipboardIcon from '@icon/clipboard.svg';
+import CloseIcon from '@icon/x.svg';
 import { authServiceClient } from '@service-auth/client';
 import { contactsClient } from '@service-contacts/client';
 import { Button, Dialog, Panel } from '@ui';
@@ -67,7 +67,7 @@ export const InviteModal = () => {
 
   return (
     <Dialog open={inviteModalOpen()} onOpenChange={(o) => !o && handleClose()}>
-      <Panel depth={2} active class="max-h-[75vh] text-ink">
+      <Panel depth={2} active class="max-h-[75vh] text-ink rounded-xl">
         <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
             <CloseIcon />

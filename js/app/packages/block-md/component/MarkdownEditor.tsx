@@ -139,7 +139,7 @@ import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
 import type { EntityDragEvent } from '@entity';
-import WarningIcon from '@icon/regular/warning.svg';
+import WarningIcon from '@icon/warning.svg';
 import {
   $createDocumentMentionNode,
   $isInlineSearchNode,

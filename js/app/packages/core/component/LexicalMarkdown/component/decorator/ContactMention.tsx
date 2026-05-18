@@ -1,7 +1,7 @@
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import BuildingIcon from '@icon/regular/buildings.svg';
-import UserIcon from '@icon/regular/user.svg';
+import BuildingIcon from '@icon/buildings.svg';
+import UserIcon from '@icon/user.svg';
 import type { ContactMentionDecoratorProps } from '@lexical-core';
 import { cn } from '@ui';
 import { COMMAND_PRIORITY_NORMAL, KEY_ENTER_COMMAND } from 'lexical';

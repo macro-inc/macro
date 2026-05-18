@@ -1,7 +1,6 @@
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
-import { deferredGate } from '@core/util/debounce';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import type { ApiThreadReply } from '@service-comms/client';
@@ -27,11 +26,10 @@ export function ChannelThread(props: ThreadProps) {
   const [displayName] = useDisplayName(macroId());
   const thread = () => props.data().thread;
   const hasReplies = () => thread().reply_count > 0;
-  const debouncedFetchRepliesEnabled = deferredGate(hasReplies, 300);
-  // Targeted reply navigation needs the full reply list immediately so the
-  // thread can resolve the reply index and complete the scroll.
   const fetchRepliesEnabled = () =>
-    !!props.targetReplyId || debouncedFetchRepliesEnabled();
+    (!!props.targetReplyId && props.targetThreadId === props.data().id) ||
+    props.isExpanded() ||
+    (hasReplies() && thread().reply_count > DEFAULT_VISIBLE_REPLY_COUNT);
 
   const isSelected = () => props.selectedMessageId?.() === props.data().id;
 

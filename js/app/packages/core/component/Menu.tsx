@@ -1,7 +1,7 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import CheckIcon from '@icon/bold/check-bold.svg?component-solid';
-import CaretRight from '@icon/regular/caret-right.svg?component-solid';
+import CaretRight from '@icon/caret-right.svg?component-solid';
+import CheckIcon from '@icon/check.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { cn, Layer } from '@ui';

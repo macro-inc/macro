@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useTutorialCompleted } from '@core/context/user';
 import { isPlatform } from '@core/util/platform';
-import Bell from '@icon/regular/bell.svg';
+import Bell from '@icon/bell.svg';
 import { useIsAuthenticated } from '@queries/auth';
 import { createMemo, onMount, Show } from 'solid-js';
 import {

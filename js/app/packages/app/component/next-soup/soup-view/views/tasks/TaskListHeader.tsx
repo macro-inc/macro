@@ -1,8 +1,8 @@
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useListLayout } from '@entity/composed/list-entity/shared';
-import ArrowDownIcon from '@icon/regular/arrow-down.svg';
-import UsersIcon from '@icon/regular/users.svg';
+import ArrowDownIcon from '@icon/arrow-down.svg';
+import UsersIcon from '@icon/users.svg';
 import StatusInProgress from '@macro-icons/square/task-in-progress-circle.svg';
 import PriorityHigh from '@macro-icons/wide/priority-high.svg';
 import { cn } from '@ui/utils/classname';

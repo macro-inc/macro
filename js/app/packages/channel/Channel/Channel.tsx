@@ -316,7 +316,18 @@ export function Channel(props: ChannelProps) {
     channelId: () => props.channelId,
     goToMessage,
     clearSelection,
+    isMessageLoaded: (id) => messageIndex.keys.includes(id),
   });
+
+  const handleScrollToBottom = () => {
+    if (messagesQuery.hasPreviousPage) {
+      targetMessageController.reset();
+      const defaultKey = getChannelMessagesQueryKey(props.channelId, null);
+      queryClient.resetQueries({ queryKey: defaultKey });
+    } else {
+      threadListNavigation()?.scrollToBottom('end');
+    }
+  };
 
   const { messageListScopeId, attachMessageListRef, attachInputRef } =
     createChannelHotkeys({
@@ -329,17 +340,8 @@ export function Channel(props: ChannelProps) {
       isInputEmpty: () =>
         (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
       onOpenFindBar: findBar.open,
+      onGoToBottom: handleScrollToBottom,
     });
-
-  const handleScrollToBottom = () => {
-    if (messagesQuery.hasPreviousPage) {
-      targetMessageController.reset();
-      const defaultKey = getChannelMessagesQueryKey(props.channelId, null);
-      queryClient.resetQueries({ queryKey: defaultKey });
-    } else {
-      threadListNavigation()?.scrollToBottom('end');
-    }
-  };
 
   createStickyScrollEffect({
     isNearBottom: () => threadListScrollState()?.isNearBottom ?? false,
@@ -450,6 +452,7 @@ export function Channel(props: ChannelProps) {
                                 channelId={() => props.channelId}
                                 isNewestThread={isNewestThread()}
                                 getMessageActions={getMessageActions}
+                                targetThreadId={targetMessageController.activeTargetMessageId()}
                                 targetReplyId={targetMessageController.pendingTargetReplyId()}
                                 selectedReplyId={targetMessageController.activeTargetMessageReplyId()}
                                 onTargetReplyScrolled={(replyId) => {
@@ -482,10 +485,12 @@ export function Channel(props: ChannelProps) {
                         );
                       }}
                     </ThreadList>
-                    <ScrollToBottomOverlay
-                      scrollState={threadListScrollState}
-                      onScrollToBottom={handleScrollToBottom}
-                    />
+                    <Show when={!findBar.isOpen()}>
+                      <ScrollToBottomOverlay
+                        scrollState={threadListScrollState}
+                        onScrollToBottom={handleScrollToBottom}
+                      />
+                    </Show>
                   </div>
                 </Show>
               </div>

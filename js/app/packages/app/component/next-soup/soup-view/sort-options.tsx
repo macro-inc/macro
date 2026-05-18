@@ -13,11 +13,11 @@ import {
   getTaskPriorityOptionId,
   getTaskStatusOptionId,
 } from '@entity/utils/task-properties';
-import ArrowClockwiseIcon from '@icon/regular/arrow-clockwise.svg';
-import ClockIcon from '@icon/regular/clock.svg';
-import EyeIcon from '@icon/regular/eye.svg';
-import FlagIcon from '@icon/regular/flag.svg';
-import ListChecksIcon from '@icon/regular/list-checks.svg';
+import ArrowClockwiseIcon from '@icon/arrow-clockwise.svg';
+import ClockIcon from '@icon/clock.svg';
+import EyeIcon from '@icon/eye.svg';
+import FlagIcon from '@icon/flag.svg';
+import ListChecksIcon from '@icon/list-checks.svg';
 import type { JSX } from 'solid-js';
 
 export type SystemSortOption =

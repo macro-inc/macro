@@ -6,7 +6,7 @@ import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import type { EmailEntity } from '@entity';
 import { Entity, type EntityData } from '@entity';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
+import SearchIcon from '@icon/magnifying-glass.svg';
 import { createEmailsInfiniteQuery } from '@macro-entity';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';

@@ -308,6 +308,9 @@ pub enum InviteUsersToTeamError {
     /// Too many emails were provided
     #[error("Too many emails were provided")]
     TooManyEmails,
+    /// Not enough open seats
+    #[error("Not enough open seats")]
+    NotEnoughOpenSeats,
     /// Underlying team error
     #[error("Underlying team error {0}")]
     TeamError(#[from] TeamError),

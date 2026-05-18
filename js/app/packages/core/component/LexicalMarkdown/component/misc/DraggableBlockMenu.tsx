@@ -1,5 +1,5 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import Dots from '@icon/bold/dots-six-vertical-bold.svg';
+import Dots from '@icon/dots-six-vertical.svg';
 import { $isListItemNode, $isListNode, type ListItemNode } from '@lexical/list';
 import { $getNearestNodeFromDOMNode } from 'lexical';
 import { Show, useContext } from 'solid-js';

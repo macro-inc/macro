@@ -17,7 +17,7 @@ import { useEmail, useUserId } from '@core/context/user';
 import { useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import type { EmailEntity } from '@entity';
-import XIcon from '@icon/regular/x.svg';
+import XIcon from '@icon/x.svg';
 import { createEmailsInfiniteQuery } from '@macro-entity';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';

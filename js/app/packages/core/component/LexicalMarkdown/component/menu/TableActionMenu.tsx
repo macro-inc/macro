@@ -12,15 +12,15 @@ import {
   MenuItem,
   MenuSeparator,
 } from '@core/component/Menu';
-import ArrowLineDown from '@icon/regular/arrow-line-down.svg';
-import ArrowLineLeft from '@icon/regular/arrow-line-left.svg';
-import ArrowLineRight from '@icon/regular/arrow-line-right.svg';
-import ArrowLineUp from '@icon/regular/arrow-line-up.svg';
-import ArrowsIn from '@icon/regular/arrows-in-line-horizontal.svg';
-import ArrowsOut from '@icon/regular/arrows-out-line-horizontal.svg';
-import CaretDown from '@icon/regular/caret-down.svg';
-import TrashCan from '@icon/regular/trash-simple.svg';
-import X from '@icon/regular/x.svg';
+import ArrowLineDown from '@icon/arrow-line-down.svg';
+import ArrowLineLeft from '@icon/arrow-line-left.svg';
+import ArrowLineRight from '@icon/arrow-line-right.svg';
+import ArrowLineUp from '@icon/arrow-line-up.svg';
+import ArrowsIn from '@icon/arrows-in-line-horizontal.svg';
+import ArrowsOut from '@icon/arrows-out-line-horizontal.svg';
+import CaretDown from '@icon/caret-down.svg';
+import TrashCan from '@icon/trash-simple.svg';
+import X from '@icon/x.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import {
   $computeTableMapSkipCellCheck,

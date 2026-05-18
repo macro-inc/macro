@@ -5,10 +5,14 @@ import type { Placement } from '@floating-ui/dom';
 import type { ParentProps } from 'solid-js';
 import { For, Show } from 'solid-js';
 import { Surface } from '@ui';
-import { tooltipsEnabled } from '../signals/signals';
 
 export type TooltipProps = ParentProps<{
   hotkey?: HotkeyToken | HotkeyToken[];
+  /**
+   * Raw keyboard shortcut(s) to render in the tooltip (e.g. "cmd+enter").
+   * Use this for shortcuts that aren't registered as a `HotkeyToken`.
+   */
+  shortcut?: string | string[];
   placement?: Placement;
   as?: 'div' | 'span';
   label: string;
@@ -25,16 +29,28 @@ export function Tooltip(props: TooltipProps) {
     return props.hotkey == null ? [] : Array.isArray(props.hotkey) ? props.hotkey : [props.hotkey];
   }
 
+  function shortcuts(): string[] {
+    return props.shortcut == null
+      ? []
+      : Array.isArray(props.shortcut)
+        ? props.shortcut
+        : [props.shortcut];
+  }
+
+  function hasHotkey(): boolean {
+    return tokens().length > 0 || shortcuts().length > 0;
+  }
+
   return (
     <KobalteTooltip
       placement={props.placement ?? 'bottom'}
+      ignoreSafeArea={true}
       overflowPadding={16}
       fitViewport={true}
-      closeDelay={250}
-      openDelay={250}
+      openDelay={400}
+      closeDelay={0}
       flip={true}
       gutter={4}
-      open={tooltipsEnabled() ? undefined : false}
     >
       <KobalteTooltip.Trigger
         class="inline-flex items-center"
@@ -50,7 +66,7 @@ export function Tooltip(props: TooltipProps) {
           >
             <div class="flex flex-row items-center gap-2">
               <div class="text-xs capitalize">{props.label}</div>
-              <Show when={tokens().length > 0}>
+              <Show when={hasHotkey()}>
                 <div class="flex items-center gap-1 ml-auto">
                   <For each={tokens()}>
                     {(token, ndx) => (
@@ -60,6 +76,19 @@ export function Tooltip(props: TooltipProps) {
                           theme="subtle"
                         />
                         <Show when={ndx() < tokens().length - 1}>
+                          <span class="text-ink-extra-muted">then</span>
+                        </Show>
+                      </>
+                    )}
+                  </For>
+                  <For each={shortcuts()}>
+                    {(shortcut, ndx) => (
+                      <>
+                        <Hotkey
+                          shortcut={shortcut}
+                          theme="subtle"
+                        />
+                        <Show when={ndx() < shortcuts().length - 1}>
                           <span class="text-ink-extra-muted">then</span>
                         </Show>
                       </>

@@ -40,11 +40,11 @@ import {
   type MaybeResult,
 } from '@core/util/maybeResult';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import CheckIcon from '@icon/bold/check-bold.svg';
-import IconX from '@icon/bold/x-bold.svg';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
-import IconLink from '@icon/regular/link.svg';
-import IconShared from '@icon/regular/share.svg';
+import ChevronDownIcon from '@icon/caret-down.svg';
+import CheckIcon from '@icon/check.svg';
+import IconLink from '@icon/link.svg';
+import IconShared from '@icon/share.svg';
+import IconX from '@icon/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import IconComment from '@macro-icons/wide/comment.svg';
@@ -945,7 +945,7 @@ export function ShareModal(props: ShareModalProps) {
               style={{ width: '800px' }}
             >
               {/* Card 1: Share form — gradient border */}
-              <Panel active>
+              <Panel active depth={2}>
                 <Panel.Header class="px-3">
                   <Dialog.Title class="flex items-center gap-1.5 min-w-0 overflow-hidden whitespace-nowrap w-full text-sm font-medium">
                     <span class="shrink-0">Share:</span>
@@ -981,7 +981,7 @@ export function ShareModal(props: ShareModalProps) {
 
               {/* Card 2: Recipients — plain border */}
               <Show when={(recipients()?.length ?? 0) > 0 || !!props.owner}>
-                <Panel>
+                <Panel depth={2}>
                   <Panel.Header class="px-3">
                     <span class="text-sm font-medium">
                       People with access to this{' '}
@@ -1115,7 +1115,7 @@ export function ShareModal(props: ShareModalProps) {
                   props.itemType !== 'email'
                 }
               >
-                <Panel>
+                <Panel depth={2}>
                   <Panel.Header class="justify-between px-3">
                     <div class="flex items-center gap-2">
                       <span class="text-sm font-medium">Public link</span>
@@ -1408,7 +1408,7 @@ export function ShareOptions(props: {
         <Button
           disabled={props.disabled}
           class={`min-w-16.75 py-1 pl-2 pr-1 rounded-xs flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
-          variant="base"
+          variant="ghost"
         >
           {currentValueText()}
           <ChevronDownIcon class="size-4 text-ink-extra-muted/50" />

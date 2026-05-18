@@ -1,9 +1,9 @@
 import { LIST_VIEW_ID } from '@app/constants/list-views';
 
-import ArrowLeft from '@icon/regular/arrow-left.svg';
-import ArrowRight from '@icon/regular/arrow-right.svg';
-import SplitIcon from '@icon/regular/square-half.svg';
-import CloseIcon from '@icon/regular/x.svg';
+import ArrowLeft from '@icon/arrow-left.svg';
+import ArrowRight from '@icon/arrow-right.svg';
+import SplitIcon from '@icon/square-half.svg';
+import CloseIcon from '@icon/x.svg';
 import { Button } from '@ui';
 import { useContext } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from './context';

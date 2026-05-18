@@ -1,5 +1,5 @@
 import { MENU_ITEM_CLASS } from '@core/component/Menu';
-import CheckIcon from '@icon/bold/check-bold.svg';
+import CheckIcon from '@icon/check.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';

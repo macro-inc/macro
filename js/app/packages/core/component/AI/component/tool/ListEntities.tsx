@@ -1,6 +1,6 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
-import CaretRight from '@icon/regular/caret-right.svg?component-solid';
+import CaretRight from '@icon/caret-right.svg?component-solid';
 import List from '@phosphor-icons/core/regular/list.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { useSplitLayout } from 'app/component/split-layout/layout';

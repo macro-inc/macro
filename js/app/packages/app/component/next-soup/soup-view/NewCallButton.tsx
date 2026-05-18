@@ -5,7 +5,7 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { isErr } from '@core/util/maybeResult';
-import XIcon from '@icon/regular/x.svg';
+import XIcon from '@icon/x.svg';
 import PhoneCallIcon from '@macro-icons/wide/call.svg';
 import { commsServiceClient } from '@service-comms/client';
 import { Button, Dialog, Surface } from '@ui';
@@ -97,7 +97,7 @@ export function NewCallButton() {
         }}
         class="w-lg"
       >
-        <Surface depth={2} active>
+        <Surface depth={2} active class="rounded-xl">
           <div class="*:max-h-[75vh]">
             <div class="flex flex-col text-ink">
               <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">

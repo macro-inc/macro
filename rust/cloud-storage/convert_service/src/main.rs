@@ -16,10 +16,54 @@ mod model;
 mod process;
 mod utils;
 
+/// Smoke-tests LibreOfficeKit by forking a child process that initializes LOK.
+/// Fails fast at startup if the LOK shared libraries cannot be loaded.
+fn smoke_test_lok(lok_path: &str) -> anyhow::Result<()> {
+    use nix::unistd::{ForkResult, fork};
+
+    tracing::info!("running LOK smoke test");
+
+    match unsafe { fork() } {
+        Ok(ForkResult::Parent { child }) => {
+            let status = nix::sys::wait::waitpid(child, None)
+                .context("failed to wait for LOK smoke test child")?;
+            match status {
+                nix::sys::wait::WaitStatus::Exited(_, 0) => {
+                    tracing::info!("LOK smoke test passed");
+                    Ok(())
+                }
+                _ => {
+                    anyhow::bail!("LOK smoke test failed with status: {:?}", status);
+                }
+            }
+        }
+        Ok(ForkResult::Child) => unsafe {
+            std::env::set_var("SAL_LOG", "");
+            let result = rs_libreoffice_bindings::Office::new(lok_path);
+            match result {
+                Ok(office) => {
+                    drop(office);
+                    nix::libc::exit(0);
+                }
+                Err(e) => {
+                    eprintln!("LOK smoke test: failed to initialize LibreOfficeKit: {e}");
+                    nix::libc::exit(1);
+                }
+            }
+        },
+        Err(e) => {
+            anyhow::bail!("LOK smoke test fork failed: {e}");
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let env = Environment::new_or_prod();
     MacroEntrypoint::new(env).init();
+
+    let lok_path = std::env::var("LOK_PATH").context("LOK_PATH must be provided")?;
+    smoke_test_lok(&lok_path)?;
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 

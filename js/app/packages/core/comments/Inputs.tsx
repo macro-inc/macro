@@ -1,7 +1,7 @@
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin';
-import PaperPlaneRight from '@icon/fill/paper-plane-right-fill.svg';
-import XIcon from '@icon/regular/x.svg';
+import PaperPlaneRight from '@icon/paper-plane-right.svg';
+import XIcon from '@icon/x.svg';
 import { Button, cn } from '@ui';
 import { batch, createEffect, createSignal, Show, useContext } from 'solid-js';
 import { CommentsContext, ThreadContext } from './Thread';

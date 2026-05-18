@@ -1,5 +1,5 @@
 import { focusInput } from '@core/directive/focusInput';
-import IconPlus from '@icon/regular/plus.svg';
+import IconPlus from '@icon/plus.svg';
 import { cn } from '@ui';
 import { type JSX, splitProps } from 'solid-js';
 

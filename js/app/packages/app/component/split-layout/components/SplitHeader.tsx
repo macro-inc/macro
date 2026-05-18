@@ -6,12 +6,12 @@ import {
 } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import CollapseIcon from '@icon/regular/arrows-in.svg';
-import ExpandIcon from '@icon/regular/arrows-out.svg';
-import CaretLeft from '@icon/regular/caret-left.svg';
-import CaretRight from '@icon/regular/caret-right.svg';
-import SplitIcon from '@icon/regular/square-half.svg';
-import CloseIcon from '@icon/regular/x.svg';
+import CollapseIcon from '@icon/arrows-in.svg';
+import ExpandIcon from '@icon/arrows-out.svg';
+import CaretLeft from '@icon/caret-left.svg';
+import CaretRight from '@icon/caret-right.svg';
+import SplitIcon from '@icon/square-half.svg';
+import CloseIcon from '@icon/x.svg';
 import { Button, cn } from '@ui';
 import {
   createMemo,

@@ -87,6 +87,8 @@ export function SimpleSearch() {
     hasUnsubmittedChanges: () => searchText() !== submittedQuery(),
     isPending,
     resultsCount: total,
+    canNext: () => total() > 0,
+    canPrevious: () => total() > 0,
     open: () => setIsOpen(true),
     close,
     submit,
