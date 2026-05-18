@@ -446,7 +446,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       if (props.onSuccess) {
         props.onSuccess({ documentId, title: taskTitle, content: taskContent });
       } else {
-        showTaskCreatedToast(documentId, taskTitle, taskContent);
+        showTaskCreatedToast(documentId);
       }
       props.onCreateTask?.(taskTitle, taskContent);
       return;
@@ -471,7 +471,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     if (props.onSuccess) {
       props.onSuccess({ documentId, title: taskTitle, content: taskContent });
     } else {
-      showTaskCreatedToast(documentId, taskTitle, taskContent);
+      showTaskCreatedToast(documentId);
     }
     props.onCreateTask?.(taskTitle, taskContent);
 
