@@ -40,13 +40,13 @@ export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
   });
 
   // Hide toolbar when preview is open
-  // The preview panel renders blocks directly without using SplitContainer,
+  // The preview panel renders blocks directly without using SplitPanel,
   // so this only affects the main unified list toolbar
   return (
     <div
       class={cn(
         'relative w-full flex items-center justify-between shrink-0',
-        hasContent() && 'min-h-10',
+        hasContent() && 'min-h-10 border-b border-edge-muted',
         preview() && 'hidden'
       )}
       data-split-toolbar
