@@ -52,7 +52,7 @@ import Info from '@phosphor/info.svg';
 import Printer from '@phosphor/printer.svg';
 import Quotes from '@phosphor/quotes.svg';
 import TagIcon from '@phosphor/tag.svg';
-import IconShared from '@icon/wide/share.svg';
+import IconShared from '@icon/wide-share.svg';
 import {
   blockNameToItemType,
   storageServiceClient,

@@ -9,7 +9,7 @@ import VideoCamera from '@phosphor/video-camera.svg';
 import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
 import VideoConference from '@phosphor/video-conference.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import PhoneDisconnect from '@icon/wide/call-disconnect.svg';
+import PhoneDisconnect from '@icon/wide-call-disconnect.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { cn, ToggleSwitch, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';

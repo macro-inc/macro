@@ -56,14 +56,14 @@ const arcanumIconModules = import.meta.glob(
 ) as Record<string, { default: Component }>;
 
 // Dynamically import all static SVG icons
-const staticIconModules = import.meta.glob('@icon/wide/*.svg', {
+const staticIconModules = import.meta.glob('@icon/wide-*.svg', {
   eager: true,
   query: '?component-solid',
 }) as Record<string, { default: Component }>;
 
 // Dynamically import all animated icon modules
 const animatedIconModules = import.meta.glob(
-  '@icon/wide/animating/*.tsx',
+  '@icon/wide-*.tsx',
   {
     eager: true,
   }

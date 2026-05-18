@@ -13,7 +13,7 @@ import ChatTextIcon from '@phosphor/chat-text.svg';
 import HashIcon from '@phosphor/hash.svg';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import UsersIcon from '@phosphor/users.svg';
-import PhoneIcon from '@icon/wide/call.svg';
+import PhoneIcon from '@icon/wide-call.svg';
 import type { ChannelParticipant } from '@queries/channel/types';
 import { ChannelTypeEnum } from '@service-comms/client';
 import type { ChannelType } from '@service-comms/generated/models/channelType';

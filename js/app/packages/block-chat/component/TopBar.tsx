@@ -26,7 +26,7 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import Info from '@phosphor/info.svg';
 import Notepad from '@phosphor/notepad.svg';
 import Quotes from '@phosphor/quotes.svg';
-import IconShared from '@icon/wide/share.svg';
+import IconShared from '@icon/wide-share.svg';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 
 export function TopBar() {

@@ -1,11 +1,11 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import type { ListView } from '@app/constants/list-views';
 import { hapticImpact } from '@core/mobile/haptics';
-import { AnimatedChannelIcon } from '@icon/wide/animating/channel';
-import { AnimatedEmailIcon } from '@icon/wide/animating/email';
-import { AnimatedPlusIcon } from '@icon/wide/animating/plus';
-import { AnimatedStarIcon } from '@icon/wide/animating/star';
-import { AnimatedTaskIcon } from '@icon/wide/animating/task';
+import { AnimatedChannelIcon } from '@icon/wide-channel';
+import { AnimatedEmailIcon } from '@icon/wide-email';
+import { AnimatedPlusIcon } from '@icon/wide-plus';
+import { AnimatedStarIcon } from '@icon/wide-star';
+import { AnimatedTaskIcon } from '@icon/wide-task';
 import { Layer } from '@ui';
 import {
   type Component,

@@ -31,7 +31,7 @@ import { downloadFile } from '@filesystem/download';
 import Download from '@phosphor/download.svg';
 import Info from '@phosphor/info.svg';
 import Quotes from '@phosphor/quotes.svg';
-import IconShared from '@icon/wide/share.svg';
+import IconShared from '@icon/wide-share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 
 export function TopBar() {

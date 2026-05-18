@@ -30,7 +30,7 @@ import { downloadFile } from '@filesystem/download';
 import DownloadSimple from '@phosphor/download-simple.svg';
 import Info from '@phosphor/info.svg';
 import Quotes from '@phosphor/quotes.svg';
-import IconShared from '@icon/wide/share.svg';
+import IconShared from '@icon/wide-share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
 import { useGetFileBlob } from '../signal/blockData';

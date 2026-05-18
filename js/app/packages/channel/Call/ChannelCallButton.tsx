@@ -1,8 +1,8 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import PhoneIcon from '@icon/wide/call.svg';
-import PhoneDisconnectIcon from '@icon/wide/call-disconnect.svg';
+import PhoneIcon from '@icon/wide-call.svg';
+import PhoneDisconnectIcon from '@icon/wide-call-disconnect.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
