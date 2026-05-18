@@ -25,7 +25,7 @@ export function MessageList(props: MessageListProps) {
 
   return (
     <div
-      class="pt-1 pb-6 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden hide-scrollbar text-sm gap-1.5"
+      class="pt-1 pb-6 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden scrollbar-hidden text-sm gap-1.5"
       ref={context.registerMessagesList}
       onscroll={(e) => {
         // Since the list is reversed, calculate scroll from visual top

@@ -1,7 +1,7 @@
 import { useBlockId } from '@core/block';
 import { useUserId } from '@core/context/user';
-import LoadingSpinner from '@icon/regular/spinner.svg';
-import XIcon from '@icon/regular/x.svg';
+import LoadingSpinner from '@phosphor/spinner.svg';
+import XIcon from '@phosphor/x.svg';
 import { useCreatePropertyDefinitionMutation } from '@queries/properties/definitions';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';

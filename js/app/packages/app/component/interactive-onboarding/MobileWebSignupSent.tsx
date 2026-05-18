@@ -2,7 +2,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { MOBILE_WEB_SIGNUP_LEAD_VALUE } from '@app/lib/analytics/leadValues';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { getWebOrigin } from '@core/util/webOrigin';
-import LogoIcon from '@macro-icons/macro-logo.svg';
+import LogoIcon from '@icon/macro-logo.svg';
 import { onMount } from 'solid-js';
 
 type Props = {

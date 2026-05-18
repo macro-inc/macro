@@ -13,7 +13,7 @@ export function InputActionButton(props: {
       aria-label={props.label}
       label={props.label}
       variant={props.active ? 'active' : 'ghost'}
-      size="icon-md"
+      size="icon-sm"
       onPointerDown={(event: PointerEvent) => event.preventDefault()}
       onClick={(event) => props.onClick?.(event)}
     >

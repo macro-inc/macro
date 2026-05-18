@@ -184,6 +184,7 @@ export function stringToItemType(str: string): ItemType | undefined {
     case 'thread': {
       return 'email';
     }
+    case 'call':
     case 'chat':
     case 'document':
     case 'project':
@@ -281,7 +282,7 @@ export const storageServiceClient = {
 
     const body: Record<string, unknown> = { ...args.body };
     if (args.params.group_by) body.group_by = args.params.group_by;
-    if (args.params.group_key) body.group_key = args.params.group_key;
+    if (args.params.group_key != null) body.group_key = args.params.group_key;
 
     return await dssFetch<
       SoupPage & {

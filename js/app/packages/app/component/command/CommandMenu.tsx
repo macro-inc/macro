@@ -9,8 +9,8 @@ import type { RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
 import { type EntityData, InlineEntity } from '@entity';
-import ArrowLeft from '@icon/regular/arrow-left.svg';
-import Macro from '@macro-icons/macro-logo.svg';
+import Macro from '@icon/macro-logo.svg';
+import ArrowLeft from '@phosphor/arrow-left.svg';
 import { cn, Dialog, Hotkey, Panel } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
@@ -168,6 +168,7 @@ export function CommandMenuInner(props: {
 
     if (isCommandItem(item)) {
       const command = item.data;
+      trackCommandUsage(item.id);
 
       // Check if this is a multi-stage command
       if (command.activateCommandScopeId) {
@@ -188,7 +189,6 @@ export function CommandMenuInner(props: {
       }
 
       // Regular command - close and run
-      trackCommandUsage(item.id);
       CommandState.close();
       CommandState.setQuery('');
       runCommand(command);

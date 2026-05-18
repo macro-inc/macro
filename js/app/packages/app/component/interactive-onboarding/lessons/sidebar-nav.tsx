@@ -1,5 +1,5 @@
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
+import { AnimatedEmailIcon } from '@icon/wide-email';
 import { createEffect, createSignal } from 'solid-js';
 import { MockAppChrome } from '../components/MockAppChrome';
 import { ClickCallout, HotkeyCallout } from '../components-lib';

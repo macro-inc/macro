@@ -46,28 +46,25 @@ type ColorOption =
   | (typeof THEME_COLORS)[number]
   | { name: 'Custom'; value: 'custom'; css: string };
 
+// Note: import.meta.glob does not support TS path aliases (e.g. @design/*, @icon/*).
+// Patterns must start with '/' or './', so we use relative paths from this file.
+
 // Dynamically import all arcanum SVG icons
-const arcanumIconModules = import.meta.glob(
-  '../../macro-icons/arcanum/arcanum-*.svg',
-  {
-    eager: true,
-    query: '?component-solid',
-  }
-) as Record<string, { default: Component }>;
+const arcanumIconModules = import.meta.glob('../../design/arcanum-*.svg', {
+  eager: true,
+  query: '?component-solid',
+}) as Record<string, { default: Component }>;
 
 // Dynamically import all static SVG icons
-const staticIconModules = import.meta.glob('../../macro-icons/wide/*.svg', {
+const staticIconModules = import.meta.glob('../../icon/wide-*.svg', {
   eager: true,
   query: '?component-solid',
 }) as Record<string, { default: Component }>;
 
 // Dynamically import all animated icon modules
-const animatedIconModules = import.meta.glob(
-  '../../macro-icons/wide/animating/*.tsx',
-  {
-    eager: true,
-  }
-) as Record<string, Record<string, Component<{ triggerAnimation?: boolean }>>>;
+const animatedIconModules = import.meta.glob('../../icon/wide-*.tsx', {
+  eager: true,
+}) as Record<string, Record<string, Component<{ triggerAnimation?: boolean }>>>;
 
 // Extract icon name from file path
 function getIconName(path: string): string {

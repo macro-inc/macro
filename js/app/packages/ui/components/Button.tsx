@@ -16,6 +16,10 @@ export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> &
   tooltip?: string;
   label?: string;
   hotkey?: HotkeyToken | HotkeyToken[];
+  /**
+   * Raw shortcut string(s) shown in the tooltip when no `hotkey` token is available.
+   */
+  shortcut?: string | string[];
   size?: ButtonSize;
   class?: string;
 };
@@ -47,6 +51,7 @@ export const Button = (props: ButtonProps) => {
     'tooltip',
     'variant',
     'hotkey',
+    'shortcut',
     'class',
     'depth',
     'label',
@@ -85,6 +90,7 @@ export const Button = (props: ButtonProps) => {
       {(label) => (
         <Tooltip
           hotkey={local.hotkey}
+          shortcut={local.shortcut}
           placement={placement()}
           label={label()}
         >

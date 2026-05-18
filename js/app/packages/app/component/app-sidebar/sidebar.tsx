@@ -27,25 +27,24 @@ import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
-import BellIcon from '@icon/regular/bell.svg';
+import LogoIcon from '@icon/macro-logo.svg';
+import { AnimatedCallIcon } from '@icon/wide-call';
+import { AnimatedChannelIcon } from '@icon/wide-channel';
+import { AnimatedCommandIcon } from '@icon/wide-command';
+import { AnimatedEmailIcon } from '@icon/wide-email';
+import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
+import { AnimatedFolderIcon } from '@icon/wide-folder';
+import { AnimatedGearIcon } from '@icon/wide-gear';
+import { AnimatedInboxIcon } from '@icon/wide-inbox';
+import { AnimatedNewSplitIcon } from '@icon/wide-newSplit';
+import { AnimatedPlusIcon } from '@icon/wide-plus';
+import { AnimatedSearchIcon } from '@icon/wide-search';
+import { AnimatedSidebarIcon } from '@icon/wide-sidebar';
+import { AnimatedStarIcon } from '@icon/wide-star';
+import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import LogoIcon from '@macro-icons/macro-logo.svg';
-import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
-import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
-import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
-import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
-import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
-import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
-import { AnimatedNewSplitIcon } from '@macro-icons/wide/animating/newSplit';
-import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
-import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
-import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
 import { useNotificationSettings } from '@notifications';
+import BellIcon from '@phosphor/bell.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { useLocation } from '@solidjs/router';
 import { Button, cn, Hotkey } from '@ui';
@@ -541,7 +540,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       class={cn(
         'group/sidebar h-full py-2 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
         isExpanded() &&
-          'max-w-[199px] w-full mobile:max-w-2/3 translate-x-0 opacity-100',
+          'max-w-49.75 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
         props.sidebarState === 'hidden' &&
           '-translate-x-full overflow-hidden opacity-0',
 
@@ -631,13 +630,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
             icon={() => <BellIcon class="size-4" />}
           />
         </Show>
-        <SidebarActionButton
-          label="Invite"
-          isSlim={isSlim}
-          onClick={() => setInviteModalOpen(true)}
-          icon={AnimatedUsersIcon}
-        />
-
         <SidebarActionButton
           label="New Split"
           hotkeyToken={TOKENS.global.createNewSplit}

@@ -3,6 +3,7 @@ import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import { formatDate } from '@core/util/date';
+import { NotificationRow } from '@entity';
 import { Button } from '@ui';
 import {
   type Component,
@@ -343,6 +344,7 @@ function NotificationList(props: {
 
 function NotificationDetail(props: {
   notification: UnifiedNotification;
+  siblings: UnifiedNotification[];
   onTest: (notification: UnifiedNotification) => void;
 }) {
   return (
@@ -370,57 +372,90 @@ function NotificationDetail(props: {
       </div>
 
       <section class="mb-10">
-        <h3 class="text-lg font-semibold text-ink mb-4">Preview Mode</h3>
-        <div class="p-4 bg-surface rounded-xl border border-edge-muted">
-          <div class="flex items-start gap-3">
-            <div
-              class={`size-2 mt-1 shrink-0  ${
-                !props.notification.viewed_at
-                  ? 'bg-accent'
-                  : 'bg-ink-extra-muted'
-              }`}
-            />
-            <div class="flex-1 min-w-0">
-              <NotificationRenderer
-                notification={props.notification}
-                mode="preview"
-              />
-            </div>
+        <h3 class="text-lg font-semibold text-ink mb-2">Compact Row</h3>
+        <p class="text-xs text-ink-muted mb-4">
+          One-line variant used in the right-panel notifications card. Hover for
+          the mark-done button; right-click for the context menu.
+        </p>
+        <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+          <NotificationRow notification={props.notification} />
+        </div>
+      </section>
+
+      <section class="mb-10">
+        <h3 class="text-lg font-semibold text-ink mb-2">Notifications Card</h3>
+        <p class="text-xs text-ink-muted mb-4">
+          What the right-panel card looks like when several notifications of
+          this type land on the same entity.
+        </p>
+        <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+          <div class="divide-y divide-ink-muted/8">
+            <For each={props.siblings.slice(0, 5)}>
+              {(n) => <NotificationRow notification={n} />}
+            </For>
           </div>
         </div>
       </section>
 
       <section class="mb-10">
-        <h3 class="text-lg font-semibold text-ink mb-4">Full Mode</h3>
-        <div
-          class={`p-6 rounded-xl border border-edge-muted ${
-            !props.notification.viewed_at ? 'bg-surface-hover' : 'bg-surface'
-          }`}
-        >
-          <div class="flex justify-start items-center gap-3 mb-4 font-mono text-ink-muted text-xs uppercase">
-            <div
-              class={`size-2 ${
-                !props.notification.viewed_at
-                  ? 'bg-accent'
-                  : 'bg-ink-extra-muted'
-              }`}
-            />
-            <div class="font-medium">
-              {
-                NOTIFICATION_LABEL_BY_TYPE[
-                  props.notification
-                    .notification_event_type as keyof typeof NOTIFICATION_LABEL_BY_TYPE
-                ]
-              }
+        <h3 class="text-lg font-semibold text-ink mb-2">Expanded Row</h3>
+        <p class="text-xs text-ink-muted mb-4">
+          Same header as compact, but the content moves below and renders as
+          multi-line markdown aligned under the description.
+        </p>
+        <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+          <NotificationRow
+            notification={props.notification}
+            variant="expanded"
+          />
+        </div>
+      </section>
+
+      <section class="mb-10">
+        <h3 class="text-lg font-semibold text-ink mb-2">
+          Expanded Row · no mark-done
+        </h3>
+        <p class="text-xs text-ink-muted mb-4">
+          Same variant with <code>showMarkDone=&#123;false&#125;</code> — the
+          check button is suppressed and the timestamp stays put on hover.
+        </p>
+        <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+          <NotificationRow
+            notification={props.notification}
+            variant="expanded"
+            showMarkDone={false}
+          />
+        </div>
+      </section>
+
+      <section class="mb-10">
+        <h3 class="text-lg font-semibold text-ink mb-2">
+          Both variants side by side
+        </h3>
+        <p class="text-xs text-ink-muted mb-4">
+          Same notification in both variants — fonts, colors, indicator, icon,
+          sender, and mark-done affordance are identical; only the content
+          layout differs.
+        </p>
+        <div class="flex flex-col gap-4">
+          <div>
+            <div class="text-[10px] font-mono uppercase text-ink-extra-muted tracking-wider mb-1.5">
+              compact
             </div>
-            <div class="grow" />
-            <div>{formatDate(props.notification.created_at)}</div>
+            <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+              <NotificationRow notification={props.notification} />
+            </div>
           </div>
-          <div class="ml-5">
-            <NotificationRenderer
-              notification={props.notification}
-              mode="full"
-            />
+          <div>
+            <div class="text-[10px] font-mono uppercase text-ink-extra-muted tracking-wider mb-1.5">
+              expanded
+            </div>
+            <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+              <NotificationRow
+                notification={props.notification}
+                variant="expanded"
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -676,6 +711,7 @@ function PlaygroundContent() {
             {(notification) => (
               <NotificationDetail
                 notification={notification()}
+                siblings={selectedNotifications()}
                 onTest={handleTestNotification}
               />
             )}

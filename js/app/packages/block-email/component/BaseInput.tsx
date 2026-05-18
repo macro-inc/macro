@@ -37,16 +37,6 @@ import { trackMention } from '@core/signal/mention';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { plural } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
-import ArrowUp from '@icon/bold/arrow-up-bold.svg';
-import Spinner from '@icon/bold/spinner-gap-bold.svg';
-import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
-import Reply from '@icon/regular/arrow-bend-up-left.svg';
-import Forward from '@icon/regular/arrow-bend-up-right.svg';
-import ChevronDown from '@icon/regular/caret-down.svg';
-import Paperclip from '@icon/regular/paperclip.svg';
-import Quotes from '@icon/regular/quotes.svg';
-import TextAa from '@icon/regular/text-aa.svg';
-import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import { $generateHtmlFromNodes } from '@lexical/html';
@@ -55,6 +45,16 @@ import {
   $removeAllWatermarkNodes,
 } from '@lexical-core';
 import { logger } from '@observability';
+import ReplyAll from '@phosphor/arrow-bend-double-up-left.svg';
+import Reply from '@phosphor/arrow-bend-up-left.svg';
+import Forward from '@phosphor/arrow-bend-up-right.svg';
+import ChevronDown from '@phosphor/caret-down.svg';
+import PaperPlaneRight from '@phosphor/paper-plane-right.svg';
+import Paperclip from '@phosphor/paperclip.svg';
+import Quotes from '@phosphor/quotes.svg';
+import Spinner from '@phosphor/spinner-gap.svg';
+import TextAa from '@phosphor/text-aa.svg';
+import Trash from '@phosphor/trash.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {
@@ -1314,7 +1314,7 @@ export function BaseInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative flex flex-col flex-1 bg-ink-muted/[0.025] border border-ink-muted/8 rounded-lg max-w-full"
+      class="relative flex flex-col flex-1 bg-ink-muted/2.5 border border-ink-muted/8 rounded-lg max-w-full"
     >
       {/* Top Bar */}
       <div class="relative flex items-start gap-2 px-3 pt-1.5 pb-0.5">
@@ -1737,29 +1737,29 @@ export function BaseInput(props: {
             <Button
               onclick={deleteDraftAndReset}
               tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
-              class="aspect-square p-1"
+              size="icon-sm"
             >
-              <Trash class="h-5" />
+              <Trash />
             </Button>
           </div>
 
-          <Tooltip label={form().sendTime() ? 'Send time is scheduled' : ''}>
-            <button
+          <Tooltip label="Send">
+            <Button
+              size="icon-sm"
               disabled={
                 uploadAttachmentMutation.isPending ||
                 sendMutation.isPending ||
                 !!form().sendTime()
               }
               onClick={() => sendEmail()}
-              class="flex items-center justify-center rounded-full size-7 bg-accent hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <Show
                 when={!sendMutation.isPending}
-                fallback={<Spinner class="size-4 animate-spin text-surface" />}
+                fallback={<Spinner class="animate-spin" />}
               >
-                <ArrowUp class="text-surface! fill-surface! size-4" />
+                <PaperPlaneRight />
               </Show>
-            </button>
+            </Button>
           </Tooltip>
         </div>
       </div>

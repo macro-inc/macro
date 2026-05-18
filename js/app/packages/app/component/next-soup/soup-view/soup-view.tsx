@@ -66,12 +66,16 @@ import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { Resize } from '@core/component/Resize';
+import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { useDisplayName } from '@core/user/displayName';
+import type { MacroId } from '@core/user/macroId';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
   type EntityData,
@@ -80,12 +84,12 @@ import {
   type ProjectEntity,
   type SearchLocation,
 } from '@entity';
-import CheckIcon from '@icon/bold/check-bold.svg';
-import CaretDownIcon from '@icon/regular/caret-down.svg';
-import ChevronRightIcon from '@icon/regular/caret-right.svg';
-import Spinner from '@icon/regular/spinner.svg';
-import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import SearchIcon from '@icon/macro-magnifying-glass.svg';
 import { createEffectOnEntityTypeNotification } from '@notifications';
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import ChevronRightIcon from '@phosphor/caret-right.svg';
+import CheckIcon from '@phosphor/check.svg';
+import Spinner from '@phosphor/spinner.svg';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -122,47 +126,103 @@ import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 
+// Property values for entity-reference properties (e.g. assignees) are stored
+// as `{"entity_id": "...", "entity_type": "USER"}` and arrive in group keys as
+// the JSON-encoded text of that object.
+const parseEntityRefId = (key: string): string | null => {
+  try {
+    const parsed: unknown = JSON.parse(key);
+    if (typeof parsed === 'string') return parsed;
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const id = (parsed as Record<string, unknown>).entity_id;
+    return typeof id === 'string' ? id : null;
+  } catch {
+    return null;
+  }
+};
+
+export const SoupSectionHeader = (props: {
+  children: JSX.Element;
+  onClick?: () => void;
+  highlighted?: boolean;
+}) => {
+  return (
+    <Layer depth={2}>
+      <Dynamic
+        component={props.onClick ? 'button' : 'div'}
+        type={props.onClick ? 'button' : undefined}
+        onClick={props.onClick}
+        class={cn(
+          'group/header w-[calc(100%-0.5rem)] mx-1 mb-1 rounded px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
+          'text-text-muted bg-surface border border-edge-muted relative',
+          props.onClick && 'hover:bg-active',
+          props.highlighted && 'ring ring-edge bg-active ring-inset'
+        )}
+      >
+        {props.children}
+      </Dynamic>
+    </Layer>
+  );
+};
+
 const DefaultGroupHeader = (
   props: GroupHeaderProps & { highlighted?: boolean }
 ) => {
+  const { groupByField } = useSoupView();
+  const field = groupByField();
+  const isAssigneeGroup =
+    field?.type === 'property' &&
+    field.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES &&
+    props.group.key !== '';
+  const assigneeId = isAssigneeGroup ? parseEntityRefId(props.group.key) : null;
+  const [assigneeName] = useDisplayName(
+    assigneeId ? (assigneeId as MacroId) : null
+  );
+  const label = () =>
+    isAssigneeGroup
+      ? assigneeName() || assigneeId || props.group.label
+      : props.group.label;
+
   return (
-    <Layer depth={2}>
-      <button
-        type="button"
-        class={cn(
-          'group/header w-[calc(100%-0.5rem)] mx-1 mb-1 rounded px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
-          'text-text-muted bg-surface hover:bg-active border border-edge-muted',
-          'relative',
-          {
-            'ring ring-edge bg-active ring-inset': props.highlighted,
-          }
-        )}
-        onClick={() => props.group.toggle()}
+    <SoupSectionHeader
+      onClick={() => props.group.toggle()}
+      highlighted={props.highlighted}
+    >
+      <Layer depth={3}>
+        <div class="flex items-center justify-center size-4.5 rounded-xs bg-surface group-hover/header:bg-active">
+          <ChevronRightIcon
+            class={cn('size-2.5', {
+              'rotate-90': props.group.isExpanded(),
+            })}
+          />
+        </div>
+      </Layer>
+      <Show
+        when={isAssigneeGroup && assigneeId}
+        fallback={
+          <PropertyValueIcon
+            optionId={props.group.value as string}
+            class="size-3.5"
+          />
+        }
       >
-        <Layer depth={3}>
-          <div class="flex items-center justify-center size-4.5 rounded-xs bg-surface group-hover/header:bg-active">
-            <ChevronRightIcon
-              class={cn('size-2.5', {
-                'rotate-90': props.group.isExpanded(),
-              })}
-            />
-          </div>
-        </Layer>
-        <PropertyValueIcon
-          optionId={props.group.value as string}
-          class="size-3.5"
+        <UserIcon
+          id={assigneeId as string}
+          size="sm"
+          suppressClick
+          showTooltip={false}
         />
-        <span class="truncate">{props.group.label}</span>
-        <span
-          class={cn(
-            'shrink-0 tabular-nums text-xs font-medium',
-            'px-1.5 py-px rounded-full bg-ink/10 text-text-subtle'
-          )}
-        >
-          {props.group.count}
-        </span>
-      </button>
-    </Layer>
+      </Show>
+      <span class="truncate">{label()}</span>
+      <span
+        class={cn(
+          'shrink-0 tabular-nums text-xs font-medium',
+          'px-1.5 py-px rounded-full bg-ink/10 text-text-subtle'
+        )}
+      >
+        {props.group.count}
+      </span>
+    </SoupSectionHeader>
   );
 };
 
@@ -1018,9 +1078,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
                             return (
                               <>
                                 <Show when={i() === 0 && featuredCount() > 0}>
-                                  <div class="px-3 py-1.5 text-xs text-text-muted font-medium">
-                                    Featured Results
-                                  </div>
+                                  <SoupSectionHeader>
+                                    <span class="truncate">
+                                      Featured Results
+                                    </span>
+                                  </SoupSectionHeader>
                                 </Show>
                                 <Show
                                   when={
@@ -1028,9 +1090,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     featuredCount() > 0
                                   }
                                 >
-                                  <div class="px-3 py-1.5 text-xs text-text-muted font-medium border-t border-edge-muted mt-1">
-                                    More Results
-                                  </div>
+                                  <SoupSectionHeader>
+                                    <span class="truncate">More Results</span>
+                                  </SoupSectionHeader>
                                 </Show>
 
                                 <Switch>

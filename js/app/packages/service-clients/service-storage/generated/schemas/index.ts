@@ -95,6 +95,7 @@ export * from './callRecordParticipantLeftAt';
 export * from './callRecordPreview';
 export * from './callRecordPreviewData';
 export * from './callRecordPreviewDataChannelName';
+export * from './callRecordPreviewDataCustomName';
 export * from './callRecordPreviewDataEndedAt';
 export * from './callRecordPreviewOneOf';
 export * from './callRecordPreviewOneOfAllOf';

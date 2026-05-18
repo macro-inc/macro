@@ -362,6 +362,11 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
+    'props-debug',
+    lazy(() => import('@property/debug/PropertyDebug'))
+  );
+
+  registerComponent(
     'entity-debug',
     lazy(() => import('@entity/debug/DebugEntityView'))
   );
