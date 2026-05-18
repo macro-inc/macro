@@ -171,6 +171,10 @@ const renameCallRecordSetData = (
 
 const renamePreviewSetData = (entities: EntityRenameOptimisticInfo[]) => {
   entities.forEach(({ id, newName, itemType }) => {
+    // Call previews display the channel name rather than the call's
+    // `customName` (which is the user-supplied or AI-generated title shown
+    // elsewhere), so renaming a call must not overwrite the preview cache.
+    if (itemType === 'call') return;
     setPreviewName({
       itemId: id,
       name: newName,
