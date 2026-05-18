@@ -15,6 +15,7 @@ import { authServiceClient } from '@service-auth/client';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Button, cn, Layer, LogoProgress } from '@ui';
 import { Stepper } from '@ui/components/Stepper';
+import { useQuery } from '@tanstack/solid-query';
 import { createEffect, createMemo, For, on, onMount, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
@@ -73,17 +74,20 @@ function OnboardingInner() {
   });
 
   // Fetch first/last name separately (userInfo only has a combined display name)
-  createEffect(() => {
-    if (!isAuthenticated() || ctx.firstName() || ctx.lastName()) return;
+  const userNameQuery = useQuery(() => ({
+    queryKey: ['userName'],
+    queryFn: async () => {
+      const [, name] = await authServiceClient.getUserName();
+      return name ?? null;
+    },
+    enabled: isAuthenticated() === true && !ctx.firstName() && !ctx.lastName(),
+  }));
 
-    authServiceClient
-      .getUserName()
-      .then(([, name]) => {
-        if (name?.first_name && !ctx.firstName())
-          ctx.setFirstName(name.first_name);
-        if (name?.last_name && !ctx.lastName()) ctx.setLastName(name.last_name);
-      })
-      .catch(() => {});
+  createEffect(() => {
+    const name = userNameQuery.data;
+    if (!name) return;
+    if (name.first_name && !ctx.firstName()) ctx.setFirstName(name.first_name);
+    if (name.last_name && !ctx.lastName()) ctx.setLastName(name.last_name);
   });
 
   // Prefill team name and skip team step if user already has a team
