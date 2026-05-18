@@ -547,10 +547,8 @@ export function BaseInput(props: {
       if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
       pendingSend = false;
       const draftId = message.db_id;
-      const toastId = toast.success(
-        'Email sent',
-        undefined,
-        draftId
+      const toastId = toast.success('Email sent', {
+        actions: draftId
           ? [
               {
                 label: 'Undo',
@@ -562,8 +560,9 @@ export function BaseInput(props: {
               },
             ]
           : undefined,
-        10_000
-      );
+        duration: 10_000,
+        mobile: true,
+      });
       pendingMentions.forEach((mention) => {
         trackMention(blockId, 'document', mention.documentId);
       });
@@ -1200,10 +1199,9 @@ export function BaseInput(props: {
       currentAttachmentsByteSize + attachmentsToAddByteSize >=
       MAX_ATTACHMENTS_BYTES_SIZE
     ) {
-      toast.failure(
-        "Can't add more attachments",
-        'Total attachments exceed 18MB limit'
-      );
+      toast.failure("Can't add more attachments", {
+        subtext: 'Total attachments exceed 18MB limit',
+      });
       return;
     }
 
@@ -1275,7 +1273,9 @@ export function BaseInput(props: {
       // Ensure draft is saved before scheduling
       const draftID = currentDraft ?? (await executeSaveDraft());
       if (!draftID) {
-        toast.failure('Failed to schedule message', 'Draft required');
+        toast.failure('Failed to schedule message', {
+          subtext: 'Draft required',
+        });
         return;
       }
 

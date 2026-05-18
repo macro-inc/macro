@@ -77,10 +77,10 @@ export function TopBar() {
   const copyLink = () => {
     const url = buildSimpleEntityUrl({ id: blockId, type: blockAliasedName });
     navigator.clipboard.writeText(url);
-    toast.success(
-      'Link copied to clipboard.',
-      'Sending this link in a Macro message will automatically update permissions to include recipients.'
-    );
+    toast.success('Link copied to clipboard.', {
+      subtext:
+        'Sending this link in a Macro message will automatically update permissions to include recipients.',
+    });
   };
 
   const copyBranchName = () => copyBranchNameToClipboard(blockId);

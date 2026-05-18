@@ -583,10 +583,10 @@ export function ShareModal(props: ShareModalProps) {
       params
     );
     navigator.clipboard.writeText(url);
-    toast.success(
-      'Link copied to clipboard.',
-      'Sending this link in a Macro message will automatically update permissions to include recipients.'
-    );
+    toast.success('Link copied to clipboard.', {
+      subtext:
+        'Sending this link in a Macro message will automatically update permissions to include recipients.',
+    });
   });
 
   const [channelNamesResource] = createResource(
@@ -659,12 +659,13 @@ export function ShareModal(props: ShareModalProps) {
       });
       if (!isErr(result)) {
         refetch();
-        toast.success(
-          'Removed channel access',
-          'Channel no longer has access to this chat'
-        );
+        toast.success('Removed channel access', {
+          subtext: 'Channel no longer has access to this chat',
+        });
       } else {
-        toast.alert('Failed to remove channel access', 'Please try again');
+        toast.alert('Failed to remove channel access', {
+          subtext: 'Please try again',
+        });
         console.error(result);
       }
     } else if (props.itemType === 'document') {
@@ -681,12 +682,13 @@ export function ShareModal(props: ShareModalProps) {
       });
       if (!isErr(result)) {
         refetch();
-        toast.success(
-          'Removed channel access',
-          'Channel no longer has access to this document'
-        );
+        toast.success('Removed channel access', {
+          subtext: 'Channel no longer has access to this document',
+        });
       } else {
-        toast.alert('Failed to remove channel access', 'Please try again');
+        toast.alert('Failed to remove channel access', {
+          subtext: 'Please try again',
+        });
         console.error(result);
       }
     } else if (props.itemType === 'project') {
@@ -705,7 +707,9 @@ export function ShareModal(props: ShareModalProps) {
         refetch();
         toast.success('Removed folder access');
       } else {
-        toast.alert('Failed to remove folder access', 'Please try again');
+        toast.alert('Failed to remove folder access', {
+          subtext: 'Please try again',
+        });
         console.error(result);
       }
     }
@@ -777,13 +781,14 @@ export function ShareModal(props: ShareModalProps) {
       if (result && isOk(result)) {
         refetch();
         if (!hideSuccessToast) {
-          toast.success(
-            'Changed channel access level',
-            accessLevelText(accessLevel)
-          );
+          toast.success('Changed channel access level', {
+            subtext: accessLevelText(accessLevel),
+          });
         }
       } else {
-        toast.alert('Failed to change channel access', 'Please try again');
+        toast.alert('Failed to change channel access', {
+          subtext: 'Please try again',
+        });
         console.error(result);
       }
     }
@@ -813,15 +818,13 @@ export function ShareModal(props: ShareModalProps) {
           refetch();
 
           if (accessLevel === null) {
-            toast.success(
-              'Made chat private',
-              'Only shared users can access this chat'
-            );
+            toast.success('Made chat private', {
+              subtext: 'Only shared users can access this chat',
+            });
           } else {
-            toast.success(
-              'Updated public link sharing',
-              `Anyone with the link can ${accessLevel} this chat`
-            );
+            toast.success('Updated public link sharing', {
+              subtext: `Anyone with the link can ${accessLevel} this chat`,
+            });
 
             analytics.track('share_entity', {
               entityType: 'chat',
@@ -830,7 +833,9 @@ export function ShareModal(props: ShareModalProps) {
             });
           }
         } else {
-          toast.alert('Failed to change chat access', 'Please try again');
+          toast.alert('Failed to change chat access', {
+            subtext: 'Please try again',
+          });
           console.error(result);
         }
       } else if (props.itemType === 'document') {
@@ -844,15 +849,13 @@ export function ShareModal(props: ShareModalProps) {
         if (!isErr(result)) {
           refetch();
           if (accessLevel === null) {
-            toast.success(
-              'Made document private',
-              'Only shared users can access this document'
-            );
+            toast.success('Made document private', {
+              subtext: 'Only shared users can access this document',
+            });
           } else {
-            toast.success(
-              'Updated public link sharing',
-              `Anyone with the link can ${accessLevel} this document`
-            );
+            toast.success('Updated public link sharing', {
+              subtext: `Anyone with the link can ${accessLevel} this document`,
+            });
 
             analytics.track('share_entity', {
               entityType: 'document',
@@ -861,7 +864,9 @@ export function ShareModal(props: ShareModalProps) {
             });
           }
         } else {
-          toast.alert('Failed to change document access', 'Please try again');
+          toast.alert('Failed to change document access', {
+            subtext: 'Please try again',
+          });
           console.error(result);
         }
       } else if (props.itemType === 'project') {
@@ -875,15 +880,13 @@ export function ShareModal(props: ShareModalProps) {
         if (!isErr(result)) {
           refetch();
           if (accessLevel === null) {
-            toast.success(
-              'Made folder private',
-              'Only shared users can access this folder'
-            );
+            toast.success('Made folder private', {
+              subtext: 'Only shared users can access this folder',
+            });
           } else {
-            toast.success(
-              'Updated public link sharing',
-              `Anyone with the link can ${accessLevel} this folder`
-            );
+            toast.success('Updated public link sharing', {
+              subtext: `Anyone with the link can ${accessLevel} this folder`,
+            });
 
             analytics.track('share_entity', {
               entityType: 'project',
@@ -892,7 +895,9 @@ export function ShareModal(props: ShareModalProps) {
             });
           }
         } else {
-          toast.alert('Failed to change folder access', 'Please try again');
+          toast.alert('Failed to change folder access', {
+            subtext: 'Please try again',
+          });
           console.error(result);
         }
       }
@@ -1226,10 +1231,10 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
     if (props.copyLink) return props.copyLink();
     navigator.clipboard.writeText(defaultUrl());
     analytics.track('copy_share_link', { blockType });
-    toast.success(
-      'Link copied to clipboard.',
-      'Sending this link in a Macro message will automatically update permissions to include recipients.'
-    );
+    toast.success('Link copied to clipboard.', {
+      subtext:
+        'Sending this link in a Macro message will automatically update permissions to include recipients.',
+    });
   });
 
   const ShareLinkAction = createMemo(() => ({

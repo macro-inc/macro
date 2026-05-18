@@ -88,10 +88,8 @@ export function TopBar(props: {
       openEntityInSplitFromUnifiedList(nextRow.original, {});
     }
 
-    const toastId = toast.success(
-      'Moved to Trash',
-      undefined,
-      [
+    const toastId = toast.success('Moved to Trash', {
+      actions: [
         {
           label: 'Undo',
           icon: ArrowCounterClockwise,
@@ -104,8 +102,8 @@ export function TopBar(props: {
           },
         },
       ],
-      10_000
-    );
+      duration: 10_000,
+    });
 
     handle.done.catch(() => {
       toast.failure('Failed to move to Trash');

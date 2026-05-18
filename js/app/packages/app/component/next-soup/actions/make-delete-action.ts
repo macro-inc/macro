@@ -78,21 +78,22 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
         emailEntities.length > 1
           ? `Moved ${emailEntities.length} items to Trash`
           : 'Moved to Trash',
-        undefined,
-        [
-          {
-            label: 'Undo',
-            icon: ArrowCounterClockwise,
-            onClick: () => {
-              if (toastId != null) toast.dismiss(toastId);
-              handle.undo().then(
-                () => toast.success('Restored from Trash'),
-                () => toast.failure('Failed to restore from Trash')
-              );
+        {
+          actions: [
+            {
+              label: 'Undo',
+              icon: ArrowCounterClockwise,
+              onClick: () => {
+                if (toastId != null) toast.dismiss(toastId);
+                handle.undo().then(
+                  () => toast.success('Restored from Trash'),
+                  () => toast.failure('Failed to restore from Trash')
+                );
+              },
             },
-          },
-        ],
-        10_000
+          ],
+          duration: 10_000,
+        }
       );
 
       // Surface background API failures

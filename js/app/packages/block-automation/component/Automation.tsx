@@ -148,7 +148,9 @@ export function Automation() {
 
   const updateMutation = useUpdateScheduleMutation({
     onError: (error) =>
-      toast.alert('Failed to update automation', getErrorMessage(error)),
+      toast.alert('Failed to update automation', {
+        subtext: getErrorMessage(error),
+      }),
   });
 
   const save = () => {
@@ -192,7 +194,7 @@ export function Automation() {
 
   const runNowMutation = useRunScheduleNowMutation({
     onError: (error) =>
-      toast.alert('Failed to start run', getErrorMessage(error)),
+      toast.alert('Failed to start run', { subtext: getErrorMessage(error) }),
   });
 
   // Treat an action as "running" when the server has a fresh claim on it.

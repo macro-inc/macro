@@ -309,12 +309,14 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           submitChannelPermissions(channelId);
 
           props.refetch?.();
-          toast.success('Message sent successfully', undefined, [
-            {
-              label: 'View in channel',
-              onClick: navigateToChannel,
-            },
-          ]);
+          toast.success('Message sent successfully', {
+            actions: [
+              {
+                label: 'View in channel',
+                onClick: navigateToChannel,
+              },
+            ],
+          });
           analytics.track('share_entity', { location: 'forward_to_channel' });
         });
       } else {
@@ -340,12 +342,14 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               props.refetch?.();
               if (!multipleMessages) {
                 const { navigateToChannel } = res;
-                toast.success('Message sent successfully', undefined, [
-                  {
-                    label: 'View in channel',
-                    onClick: () => navigateToChannel(),
-                  },
-                ]);
+                toast.success('Message sent successfully', {
+                  actions: [
+                    {
+                      label: 'View in channel',
+                      onClick: () => navigateToChannel(),
+                    },
+                  ],
+                });
               }
               analytics.track('share_entity', {
                 location: 'forward_to_channel',
@@ -369,12 +373,14 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
             props.refetch?.();
             if (!multipleMessages) {
-              toast.success('Message sent successfully', undefined, [
-                {
-                  label: 'View in channel',
-                  onClick: () => navigateToChannel(),
-                },
-              ]);
+              toast.success('Message sent successfully', {
+                actions: [
+                  {
+                    label: 'View in channel',
+                    onClick: () => navigateToChannel(),
+                  },
+                ],
+              });
             }
             analytics.track('share_entity', { location: 'forward_to_channel' });
           });

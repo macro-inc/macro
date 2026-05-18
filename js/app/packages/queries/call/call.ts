@@ -27,10 +27,9 @@ export function useJoinCallMutation() {
         error instanceof MaybeResultError &&
         error.errors[0]?.code === 'CONFLICT'
       ) {
-        toast.alert(
-          "You're already in another call",
-          'Leave your current call before joining a new one.'
-        );
+        toast.alert("You're already in another call", {
+          subtext: 'Leave your current call before joining a new one.',
+        });
         return;
       }
       toast.failure('Failed to join call');
