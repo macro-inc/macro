@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT plan as \"plan?: TeamPlan\"\n            FROM team\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "plan?: TeamPlan",
+        "type_info": {
+          "Custom": {
+            "name": "team_plan",
+            "kind": {
+              "Enum": [
+                "idea",
+                "pre_seed",
+                "seed",
+                "series_a",
+                "growth"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "c396a4e1c32ab75bdb9a1bb4b3bb0f550620554bab6862d4ec9731236c227cfc"
+}

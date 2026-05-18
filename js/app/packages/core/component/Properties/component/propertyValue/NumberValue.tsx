@@ -52,7 +52,7 @@ export const NumberValue: Component<PropertyValueProps> = (props) => {
       fallback={
         <button
           onClick={handleClick}
-          class="text-left px-2 py-0.5 border border-edge-muted bg-transparent block max-w-full wrap-break-word cursor-default"
+          class="text-left px-2 py-0.5 bg-transparent block max-w-full wrap-break-word cursor-default rounded-sm"
           classList={{
             'text-ink': supportsInline(),
             'text-ink-muted': !supportsInline(),
@@ -78,7 +78,7 @@ export const NumberValue: Component<PropertyValueProps> = (props) => {
         onKeyDown={handleKeyDown}
         disabled={editor.isSaving()}
         placeholder="Enter number..."
-        class="w-full text-left text-ink px-2 py-0.5 border border-edge-muted bg-transparent focus:outline-none focus:border-accent"
+        class="w-full text-left text-ink px-2 py-0.5 bg-transparent focus:outline-none rounded-sm"
       />
     </Show>
   );

@@ -1,7 +1,7 @@
 import { useBlockId } from '@core/block';
 import { useListKeyBindings } from '@core/util/useListKeyBindings';
-import PlusIcon from '@icon/regular/plus.svg';
-import LoadingSpinner from '@icon/regular/spinner.svg';
+import PlusIcon from '@phosphor/plus.svg';
+import LoadingSpinner from '@phosphor/spinner.svg';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import { cn, Dialog, Surface } from '@ui';
@@ -156,7 +156,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
       }}
       contentRef={setDialogRef}
     >
-      <Surface depth={2} class="*:max-h-[75vh]">
+      <Surface depth={2} class="*:max-h-[75vh] rounded-xl">
         <div class="flex flex-col text-sm">
           <div class="flex items-center gap-2 bg-surface px-2 h-10 border-b border-edge-muted shrink-0">
             <span class="pl-2 pointer-events-none text-ink-extra-muted">❯</span>

@@ -1,14 +1,14 @@
-import ArrowUpIcon from '@icon/regular/arrow-up.svg';
-import CalendarBlankIcon from '@icon/regular/calendar-blank.svg';
+import ArrowUpIcon from '@phosphor/arrow-up.svg';
+import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 
-import CheckIcon from '@icon/regular/check.svg';
-import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
-import ClockIcon from '@icon/regular/clock.svg';
-import FlagIcon from '@icon/regular/flag.svg';
-import PaperclipIcon from '@icon/regular/paperclip.svg';
-import PlusIcon from '@icon/regular/plus.svg';
-import TextAaIcon from '@icon/regular/text-aa.svg';
-import UsersIcon from '@icon/regular/users.svg';
+import CheckIcon from '@phosphor/check.svg';
+import CircleDashedIcon from '@phosphor/circle-dashed.svg';
+import ClockIcon from '@phosphor/clock.svg';
+import FlagIcon from '@phosphor/flag.svg';
+import PaperclipIcon from '@phosphor/paperclip.svg';
+import PlusIcon from '@phosphor/plus.svg';
+import TextAaIcon from '@phosphor/text-aa.svg';
+import UsersIcon from '@phosphor/users.svg';
 import { onMount } from 'solid-js';
 import type { LessonContentProps, LessonDefinition } from '../types';
 

@@ -1,7 +1,7 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import { Entity, type EntityData } from '@entity';
-import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import SearchIcon from '@icon/macro-magnifying-glass.svg';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,

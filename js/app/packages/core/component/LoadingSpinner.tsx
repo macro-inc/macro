@@ -1,4 +1,4 @@
-import Macro from '@macro-icons/macro-logo.svg';
+import Macro from '@icon/macro-logo.svg';
 import { createSignal, onMount } from 'solid-js';
 import { PcNoiseGrid } from './PcNoiseGrid';
 

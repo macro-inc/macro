@@ -37,6 +37,23 @@ COPY ./prebuilt/nix-store/ /nix/store/
 COPY ./prebuilt/${SERVICE_NAME} /app/svc
 RUN chmod +x /app/svc
 
+# The nix-built binary uses the nix dynamic linker, which doesn't search system
+# library paths (/usr/lib, /lib). LibreOfficeKit's libmergedlo.so is loaded via
+# dlopen at runtime and depends on system libraries (libz, libfreetype, etc.).
+# We symlink system shared libs into the LOK program dir so they are found via
+# LD_LIBRARY_PATH, but skip libs that the nix binary provides (glibc, OpenSSL,
+# gcc) to avoid version conflicts between nix and system libraries.
+RUN for lib in /usr/lib/x86_64-linux-gnu/*.so* /lib/x86_64-linux-gnu/*.so*; do \
+      name="$(basename "$lib")"; \
+      case "$name" in \
+        libc.so*|libm.so*|libdl.so*|librt.so*|libpthread.so*|ld-linux*) continue ;; \
+        libssl.so*|libcrypto.so*) continue ;; \
+        libgcc_s.so*) continue ;; \
+      esac; \
+      [ ! -e "/app/lok/instdir/program/$name" ] && ln -s "$lib" "/app/lok/instdir/program/$name" 2>/dev/null || true; \
+    done
+
 ENV PORT=8080
+ENV LD_LIBRARY_PATH=/app/lok/instdir/program
 EXPOSE ${PORT}
 ENTRYPOINT ["dumb-init", "./svc"]

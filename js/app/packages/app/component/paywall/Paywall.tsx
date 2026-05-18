@@ -61,7 +61,7 @@ export function Paywall() {
       position="center"
       class="w-225"
     >
-      <Surface active depth={2}>
+      <Surface active depth={2} class="rounded-xl">
         <div
           class="*:max-h-[85vh] font-sans"
           ref={paywallContentEl}

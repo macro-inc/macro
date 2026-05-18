@@ -1,4 +1,4 @@
-import CheckIcon from '@icon/bold/check-bold.svg';
+import CheckIcon from '@phosphor/check.svg';
 import { type Component, Show } from 'solid-js';
 
 /**

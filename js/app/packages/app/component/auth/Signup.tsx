@@ -3,7 +3,7 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { toast } from '@core/component/Toast/Toast';
 import { useEmailLinks } from '@core/email-link';
-import LogoIcon from '@macro-icons/macro-logo.svg';
+import LogoIcon from '@icon/macro-logo.svg';
 import { useUserInfo } from '@queries/auth';
 import { useNavigate } from '@solidjs/router';
 import { Surface } from '@ui';

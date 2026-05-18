@@ -1,5 +1,5 @@
-import Trash from '@icon/regular/x.svg';
 import type { HorizontalRuleDecoratorProps } from '@lexical-core';
+import Trash from '@phosphor/x.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button } from '@ui';
 import {

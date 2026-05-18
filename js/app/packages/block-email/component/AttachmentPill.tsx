@@ -1,5 +1,5 @@
 import { EntityIcon } from '@core/component/EntityIcon';
-import X from '@icon/regular/x.svg';
+import X from '@phosphor/x.svg';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { Show } from 'solid-js';
@@ -26,7 +26,7 @@ export function EmailAttachmentPill(props: EmailAttachmentPillProps) {
   return (
     <div
       ref={parentDiv}
-      class="items-center text-xs flex flex-row p-2 w-36 rounded border border-edge hover:bg-hover hover-transition-bg"
+      class="items-center text-xs flex flex-row p-2 w-36 rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 hover:bg-ink-muted/6 cursor-pointer"
       classList={{
         'pl-2': props.removable,
       }}

@@ -6,17 +6,16 @@ import { toast } from '@core/component/Toast/Toast';
 import { macroIdToEmail, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-
-import CaretDown from '@icon/regular/caret-down.svg';
-import CopyIcon from '@icon/regular/copy.svg';
-import GitBranch from '@icon/regular/git-branch.svg';
-import PlugIcon from '@icon/regular/plug.svg';
-import TerminalWindowIcon from '@icon/regular/terminal-window.svg';
+import ClaudeIcon from '@icon/wide-claude.svg';
+import CodexIcon from '@icon/wide-codex-ide.svg';
+import CursorIcon from '@icon/wide-cursor-ide.svg';
+import ZedIcon from '@icon/wide-zed-ide.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import ClaudeIcon from '@macro-icons/wide/claude.svg';
-import CodexIcon from '@macro-icons/wide/codex-ide.svg';
-import CursorIcon from '@macro-icons/wide/cursor-ide.svg';
-import ZedIcon from '@macro-icons/wide/zed-ide.svg';
+import CaretDown from '@phosphor/caret-down.svg';
+import CopyIcon from '@phosphor/copy.svg';
+import GitBranch from '@phosphor/git-branch.svg';
+import PlugIcon from '@phosphor/plug.svg';
+import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { storageServiceClient } from '@service-storage/client';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
 import { createCallback } from '@solid-primitives/rootless';
@@ -89,6 +88,10 @@ async function generateTaskPrompt(
   lines.push('');
   lines.push(
     'If you have the Macro MCP server enabled, use it to gather additional context about this task.'
+  );
+  lines.push('');
+  lines.push(
+    'When committing, please follow the Conventional Commits spec (e.g. `feat: ...`, `fix: ...`, `chore: ...`) so the history stays consistent.'
   );
 
   return lines.join('\n');

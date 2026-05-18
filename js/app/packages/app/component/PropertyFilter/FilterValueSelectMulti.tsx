@@ -1,4 +1,4 @@
-import XIcon from '@icon/regular/x.svg';
+import XIcon from '@phosphor/x.svg';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
 import type { Component } from 'solid-js';

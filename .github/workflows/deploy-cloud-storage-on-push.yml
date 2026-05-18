@@ -257,6 +257,7 @@ jobs:
         ssh=false,
         'run-id=${{github.run_id}}-${{ matrix.service }}',
       ]
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       max-parallel: 20

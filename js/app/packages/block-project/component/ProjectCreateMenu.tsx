@@ -15,8 +15,8 @@ import {
   createMarkdownFile,
   createTask,
 } from '@core/util/create';
-import PlusIcon from '@icon/regular/plus.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import PlusIcon from '@phosphor/plus.svg';
 import { createProject } from '@queries/storage/projects';
 import { Button, cn, Dialog, Layer, Surface } from '@ui';
 import { type Component, createSignal, For } from 'solid-js';
@@ -220,7 +220,7 @@ function ProjectCreateDialog(props: {
 
   return (
     <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
-      <Surface depth={2} active>
+      <Surface depth={2} active class="rounded-xl">
         <div class="*:max-h-[75vh]">
           <div class="p-2">
             <Dialog.Title class="text-md font-semibold text-ink pb-3">

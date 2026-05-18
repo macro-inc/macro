@@ -14,10 +14,9 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fetchToken } from '@core/util/fetchWithToken';
-
-import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
-import InfoIcon from '@icon/regular/info.svg';
-import LogoIcon from '@macro-icons/macro-logo.svg';
+import LogoIcon from '@icon/macro-logo.svg';
+import ArrowLeftIcon from '@phosphor/arrow-left.svg';
+import InfoIcon from '@phosphor/info.svg';
 import { useSendMobileWelcomeEmail } from '@queries/auth';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useUserTeamsQuery } from '@queries/team';

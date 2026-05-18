@@ -2,9 +2,8 @@ import { clamp } from '@block-canvas/util/math';
 import { LoadErrors } from '@core/block';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { staticFileIdEndpoint } from '@core/constant/servers';
-
-import PauseIcon from '@icon/regular/pause.svg';
-import PlayIcon from '@icon/regular/play.svg';
+import PauseIcon from '@phosphor/pause.svg';
+import PlayIcon from '@phosphor/play.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import LockKey from '@phosphor-icons/core/regular/lock-key.svg?component-solid';
 import Question from '@phosphor-icons/core/regular/question.svg?component-solid';

@@ -1,9 +1,10 @@
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
+use model_user::axum_extractor::MacroUserExtractor;
 
 use crate::domain::{model::Team, team_repo::TeamService};
 
-use super::{TeamRouterState, middleware::TeamPremiumUserExtractor};
+use super::TeamRouterState;
 
 /// The request body to create a new team
 #[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
@@ -26,12 +27,12 @@ pub struct CreateTeamRequest {
 #[tracing::instrument(skip_all, err)]
 pub async fn handler<T: TeamService, Eas: EntityAccessService>(
     State(state): State<TeamRouterState<T, Eas>>,
-    premium_user: TeamPremiumUserExtractor<T, Eas>,
+    user: MacroUserExtractor,
     Json(req): Json<CreateTeamRequest>,
 ) -> Result<Json<Team>, crate::domain::model::CreateTeamError> {
     let team = state
         .service
-        .create_team(&premium_user.user_context.macro_user_id, &req.name)
+        .create_team(&user.macro_user_id, &req.name)
         .await?;
 
     Ok(Json(team))

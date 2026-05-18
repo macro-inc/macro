@@ -1,8 +1,8 @@
 import { useMaybeBlockAliasedName, useMaybeBlockId } from '@core/block';
-import DeleteIcon from '@icon/bold/x-bold.svg';
-import PinIcon from '@icon/regular/push-pin.svg';
-import UnpinIcon from '@icon/regular/push-pin-slash.svg';
-import XIcon from '@icon/regular/x.svg';
+import PinIcon from '@phosphor/push-pin.svg';
+import UnpinIcon from '@phosphor/push-pin-slash.svg';
+import DeleteIcon from '@phosphor/x.svg';
+import XIcon from '@phosphor/x.svg';
 import { useDeleteEntityPropertyMutation } from '@queries/properties/entity';
 import { Button, cn, Dialog, Surface } from '@ui';
 import { type Component, createMemo, createSignal, Show } from 'solid-js';
@@ -154,7 +154,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
         open={deleteConfirmVisible()}
         onOpenChange={setDeleteConfirmVisible}
       >
-        <Surface depth={2} active>
+        <Surface depth={2} active class="rounded-xl">
           <div class="*:max-h-[75vh]">
             <div class="flex flex-col overflow-hidden text-sm">
               <div class="flex items-center justify-between gap-2 bg-surface px-2 h-10 border-b border-edge-muted shrink-0">

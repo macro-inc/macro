@@ -1,7 +1,6 @@
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-
-import ArrowLeft from '@icon/regular/arrow-left.svg';
-import ArrowRight from '@icon/regular/arrow-right.svg';
+import ArrowLeft from '@phosphor/arrow-left.svg';
+import ArrowRight from '@phosphor/arrow-right.svg';
 import { authServiceClient } from '@service-auth/client';
 import { action, useAction, useSubmission } from '@solidjs/router';
 import { cn } from '@ui';

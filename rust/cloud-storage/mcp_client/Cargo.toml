@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[features]
+default = ["providers"]
+providers = ["macro_env_var"]
+
 [dependencies]
 aes-gcm = "0.10"
 ai = { path = "../ai" }
@@ -14,6 +18,7 @@ base64.workspace = true
 async-openai.workspace = true
 axum.workspace = true
 futures.workspace = true
+macro_env_var = { path = "../macro_env_var", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 model-error-response = { path = "../model-error-response" }
 model_user = { path = "../model_user", features = ["axum"] }

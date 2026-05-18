@@ -134,15 +134,20 @@ async function fetchCallPreviews(ids: string[]): Promise<PreviewItem[]> {
     } as const;
 
     switch (call.type) {
-      case 'exists':
+      case 'exists': {
+        // Match the call block (CallRecordingSplitHeader / CallRecordingBody):
+        // prefer the user-supplied / AI-generated `customName`, fall back to
+        // the channel the call lives in.
+        const displayName = call.customName ?? call.channelName;
         return {
           ...base,
           access: 'access' as const,
           loading: false,
-          rawName: call.channelName ?? '',
-          name: call.channelName ?? 'Unknown Call',
+          rawName: displayName ?? '',
+          name: displayName ?? 'Unknown Call',
           updatedAt: call.startedAt,
         };
+      }
       case 'does_not_exist':
         return {
           ...base,

@@ -17,6 +17,7 @@ import {
   propertiesServiceClient,
 } from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
+import type { SoupProperty } from '../../service-clients/service-storage/generated/schemas/soupProperty';
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
 import { queryClient } from '../client';
 import {
@@ -80,7 +81,7 @@ function getPropertyDefinitionId(
 
 function optimisticUpdateSoupEntityProperty(
   entityId: string,
-  propertyDefinitionId: string,
+  property: Property | PropertyDefinitionDomain,
   value: SoupPropertyValue
 ): SoupTransaction | undefined {
   const current = getSoupEntityById(entityId);
@@ -93,16 +94,57 @@ function optimisticUpdateSoupEntityProperty(
     return undefined;
   }
 
+  const propertyDefinitionId = getPropertyDefinitionId(property);
+  const existing = current.data.properties;
+  const isAlreadyAttached = existing.some(
+    (prop) => prop.definition.id === propertyDefinitionId
+  );
+
+  // If the property is already attached, swap its value. Otherwise append a
+  // fabricated SoupProperty so the row updates without waiting for the
+  // settled-refetch — necessary when editing a previously-unset property
+  // that the entity didn't ship with (e.g. via `buildStubProperty`).
+  const nextProperties: SoupProperty[] = isAlreadyAttached
+    ? existing.map((prop) =>
+        prop.definition.id === propertyDefinitionId ? { ...prop, value } : prop
+      )
+    : [...existing, fabricateSoupProperty(property, value)];
+
   return optimisticUpdateSoupEntity({
     tag: current.tag,
     data: {
       ...current.data,
-      properties: current.data.properties.map((prop) =>
-        prop.definition.id === propertyDefinitionId ? { ...prop, value } : prop
-      ),
+      properties: nextProperties,
     },
     frecency_score: current.frecency_score,
   });
+}
+
+function fabricateSoupProperty(
+  property: Property | PropertyDefinitionDomain,
+  value: SoupPropertyValue
+): SoupProperty {
+  const now = new Date().toISOString();
+  const instantiated = isInstantiatedProperty(property);
+  return {
+    definition: {
+      id: getPropertyDefinitionId(property),
+      display_name: property.displayName,
+      data_type: property.valueType,
+      is_metadata: instantiated
+        ? (property.isMetadata ?? false)
+        : property.isMetadata,
+      is_multi_select: property.isMultiSelect,
+      is_system: instantiated
+        ? (property.isSystemProperty ?? false)
+        : property.isSystem,
+      owner: property.owner,
+      specific_entity_type: property.specificEntityType ?? undefined,
+      created_at: now,
+      updated_at: now,
+    },
+    value,
+  };
 }
 
 /**
@@ -289,7 +331,7 @@ export function useBulkSaveEntityPropertiesMutation(
             for (const item of vars.properties) {
               const txn = optimisticUpdateSoupEntityProperty(
                 item.entityId,
-                getPropertyDefinitionId(item.property),
+                item.property,
                 apiValuesToSoupPropertyValue(item.apiValues)
               );
               if (txn) txns.push(txn);

@@ -1,21 +1,5 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { ComposeTaskSuccess } from '@block-md/component/ComposeTask';
-import CheckSquare from '@icon/regular/check-square.svg';
-import CodeBlock from '@icon/regular/code-block.svg';
-import VideoIcon from '@icon/regular/file-video.svg';
-import MathIcon from '@icon/regular/function.svg';
-import TableIcon from '@icon/regular/grid-four.svg';
-import ImageIcon from '@icon/regular/image.svg';
-import LinkIcon from '@icon/regular/link.svg';
-import ListBullets from '@icon/regular/list-bullets.svg';
-import ListChecks from '@icon/regular/list-checks.svg';
-import ListNumbers from '@icon/regular/list-numbers.svg';
-import Minus from '@icon/regular/minus.svg';
-import Quote from '@icon/regular/quotes.svg';
-import TextH1 from '@icon/regular/text-h-one.svg';
-import TextH3 from '@icon/regular/text-h-three.svg';
-import TextH2 from '@icon/regular/text-h-two.svg';
-import TextT from '@icon/regular/text-t.svg';
 import { LinkNode } from '@lexical/link';
 import { ListNode } from '@lexical/list';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
@@ -30,6 +14,22 @@ import {
   ImageNode,
   VideoNode,
 } from '@lexical-core';
+import CheckSquare from '@phosphor/check-square.svg';
+import CodeBlock from '@phosphor/code-block.svg';
+import VideoIcon from '@phosphor/file-video.svg';
+import MathIcon from '@phosphor/function.svg';
+import TableIcon from '@phosphor/grid-four.svg';
+import ImageIcon from '@phosphor/image.svg';
+import LinkIcon from '@phosphor/link.svg';
+import ListBullets from '@phosphor/list-bullets.svg';
+import ListChecks from '@phosphor/list-checks.svg';
+import ListNumbers from '@phosphor/list-numbers.svg';
+import Minus from '@phosphor/minus.svg';
+import Quote from '@phosphor/quotes.svg';
+import TextH1 from '@phosphor/text-h-one.svg';
+import TextH3 from '@phosphor/text-h-three.svg';
+import TextH2 from '@phosphor/text-h-two.svg';
+import TextT from '@phosphor/text-t.svg';
 import type { LexicalEditor } from 'lexical';
 import { nanoid } from 'nanoid';
 import { INSERT_HORIZONTAL_RULE_COMMAND } from '..';

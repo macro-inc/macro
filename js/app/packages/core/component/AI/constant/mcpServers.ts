@@ -1,7 +1,8 @@
-import IconDatadog from '@macro-icons/mcp-datadog.svg';
-import IconGrafana from '@macro-icons/mcp-grafana.svg';
-import IconLinear from '@macro-icons/mcp-linear.svg';
-import IconPostHog from '@macro-icons/mcp-posthog.svg';
+import IconDatadog from '@icon/mcp-datadog.svg';
+import IconGrafana from '@icon/mcp-grafana.svg';
+import IconLinear from '@icon/mcp-linear.svg';
+import IconNotion from '@icon/mcp-notion.svg';
+import IconPostHog from '@icon/mcp-posthog.svg';
 import type { Component, JSX } from 'solid-js';
 
 export type SvgIcon = Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
@@ -11,6 +12,16 @@ export const QUICK_CONNECT_SERVERS = [
     server_name: 'Linear',
     url: 'https://mcp.linear.app/mcp',
     icon: IconLinear as SvgIcon,
+  },
+  // {
+  //   server_name: 'Slack',
+  //   url: 'https://mcp.slack.com/mcp',
+  //   icon: IconSlack as SvgIcon,
+  // },
+  {
+    server_name: 'Notion',
+    url: 'https://mcp.notion.com/mcp',
+    icon: IconNotion as SvgIcon,
   },
   {
     server_name: 'PostHog',

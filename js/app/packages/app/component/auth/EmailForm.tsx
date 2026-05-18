@@ -1,9 +1,8 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-
-import ArrowLeft from '@icon/regular/arrow-left.svg';
-import ArrowRight from '@icon/regular/arrow-right.svg';
+import ArrowLeft from '@phosphor/arrow-left.svg';
+import ArrowRight from '@phosphor/arrow-right.svg';
 import { authServiceClient } from '@service-auth/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { action, useSearchParams, useSubmission } from '@solidjs/router';

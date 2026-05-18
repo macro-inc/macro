@@ -9,9 +9,9 @@ use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr
 
 use crate::domain::model::{
     AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
-    PatchTeamRequest, PatchTeamUserTierRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
+    PatchTeamPlanRequest, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
     RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team, TeamError,
-    TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamUserTier, TeamWithMembers,
+    TeamInvite, TeamInviteDetails, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
 };
 
 /// The TeamChannelsRepository defines a set of actions related to team channels
@@ -50,7 +50,6 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
-        team_user_tier: &TeamUserTier,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
     /// Invites users to a team.
@@ -60,8 +59,16 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
         invited_by: &MacroUserIdStr<'_>,
-        invites: non_empty::NonEmpty<&[(Email<Lowercase<'_>>, TeamUserTier)]>,
+        invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
+
+    /// Compares the list of users you are trying to invite to ones already invited
+    /// to return a list of emails who will be newly invited
+    fn get_new_invites(
+        &self,
+        team_id: &uuid::Uuid,
+        invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+    ) -> impl Future<Output = Result<Vec<Email<Lowercase<'static>>>, InviteUsersToTeamError>> + Send;
 
     /// Marks the given team invites as sent by updating their last_sent_at timestamp.
     fn mark_invites_sent(
@@ -203,20 +210,31 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<TeamMember<'_>, TeamError>> + Send;
 
-    /// Patches the tier of the provided user id for the team
-    fn patch_team_tier(
-        &self,
-        team_id: &uuid::Uuid,
-        user_id: &MacroUserIdStr<'_>,
-        team_tier: TeamUserTier,
-    ) -> impl Future<Output = Result<(), TeamError>> + Send;
-
     /// Patches the role of the provided user id for the team
     fn patch_team_user_role(
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
         team_role: TeamRole,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Get the teams current seat count
+    fn get_team_seat_count(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<i32, TeamError>> + Send;
+
+    /// Gets the teams current plan
+    fn get_team_plan(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<TeamPlan>, TeamError>> + Send;
+
+    /// Patches the teams current plan
+    fn patch_team_plan(
+        &self,
+        team_id: &uuid::Uuid,
+        team_plan: TeamPlan,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 }
 
@@ -235,7 +253,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     fn invite_users_to_team(
         &self,
         entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
-        invites: non_empty::NonEmpty<&[(Email<Lowercase<'_>>, TeamUserTier)]>,
+        invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
 
     /// Remove user from a team.
@@ -327,10 +345,10 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         Output = Result<HashSet<roles_and_permissions::domain::model::PermissionId>, TeamError>,
     > + Send;
 
-    /// Patches the team users tier and updates the stripe subscription accordingly
-    fn patch_team_user_tier(
+    /// Updates the teams plan
+    fn update_team_plan(
         &self,
         entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
-        request: &PatchTeamUserTierRequest,
+        req: &PatchTeamPlanRequest,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 }

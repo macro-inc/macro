@@ -16,7 +16,7 @@ INSERT INTO team(id, name, owner_id, subscription_id, seat_count)
 VALUES ('aaaa1111-1111-1111-1111-111111111111', 'Team A', 'macro|owner@test.com', 'sub_a', 2),
        ('bbbb2222-2222-2222-2222-222222222222', 'Team B', 'macro|single@test.com', 'sub_b', 1);
 
-INSERT INTO team_user (team_id, user_id, team_role, tier)
+INSERT INTO team_user (team_id, user_id, team_role)
 VALUES
-    ('aaaa1111-1111-1111-1111-111111111111', 'macro|owner@test.com', 'owner', 'haiku'),
-    ('bbbb2222-2222-2222-2222-222222222222', 'macro|single@test.com', 'owner', 'sonnet');
+    ('aaaa1111-1111-1111-1111-111111111111', 'macro|owner@test.com', 'owner'),
+    ('bbbb2222-2222-2222-2222-222222222222', 'macro|single@test.com', 'owner');

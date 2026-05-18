@@ -1,10 +1,10 @@
 // Organized imports alphabetically
-import Article from '@icon/regular/article-medium.svg';
-import CheckList from '@icon/regular/list-checks.svg';
-import Microscope from '@icon/regular/microscope.svg';
-import NoteBook from '@icon/regular/notebook.svg';
-import NotePad from '@icon/regular/notepad.svg';
-import Chart from '@icon/regular/projector-screen-chart.svg';
+import Article from '@phosphor/article-medium.svg';
+import CheckList from '@phosphor/list-checks.svg';
+import Microscope from '@phosphor/microscope.svg';
+import NoteBook from '@phosphor/notebook.svg';
+import NotePad from '@phosphor/notepad.svg';
+import Chart from '@phosphor/projector-screen-chart.svg';
 import type { Component, JSX } from 'solid-js';
 
 export type Template = {

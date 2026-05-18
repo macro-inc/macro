@@ -1,7 +1,7 @@
-import CaretDown from '@icon/regular/caret-down.svg';
-import CaretUp from '@icon/regular/caret-up.svg';
-import MagnifyingGlass from '@icon/regular/magnifying-glass.svg';
-import X from '@icon/regular/x.svg';
+import CaretDown from '@phosphor/caret-down.svg';
+import CaretUp from '@phosphor/caret-up.svg';
+import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
+import X from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
 import {
@@ -200,6 +200,11 @@ function FindBarPreviousButton() {
       size="icon-sm"
       variant="ghost"
       aria-label={direction() === 'desc' ? 'Next match' : 'Previous match'}
+      disabled={
+        direction() === 'desc'
+          ? !controller.canNext()
+          : !controller.canPrevious()
+      }
       onClick={() =>
         direction() === 'desc' ? controller.next() : controller.previous()
       }
@@ -216,6 +221,11 @@ function FindBarNextButton() {
       size="icon-sm"
       variant="ghost"
       aria-label={direction() === 'desc' ? 'Previous match' : 'Next match'}
+      disabled={
+        direction() === 'desc'
+          ? !controller.canPrevious()
+          : !controller.canNext()
+      }
       onClick={() =>
         direction() === 'desc' ? controller.previous() : controller.next()
       }

@@ -18,12 +18,10 @@ pub mod get_user_teams;
 pub mod invite_to_team;
 /// Join a team via invite.
 pub mod join_team;
-/// Team access control middleware.
-pub mod middleware;
 /// Update a team.
 pub mod patch_team;
-/// Patch a team users tier.
-pub mod patch_team_user_tier;
+/// Update team plan.
+pub mod patch_team_plan;
 /// Reject a team invitation.
 pub mod reject_invitation;
 /// Remove a user from a team.
@@ -90,7 +88,7 @@ where
         .route("/user/invites", get(get_user_invites::handler::<T, Eas>))
         .route("/", get(get_team::handler::<T, Eas>))
         .route("/", patch(patch_team::handler::<T, Eas>))
-        .route("/tier", patch(patch_team_user_tier::handler::<T, Eas>))
+        .route("/plan", patch(patch_team_plan::handler::<T, Eas>))
         .route("/", delete(delete_team::handler::<T, Eas>))
         .route("/invites", get(get_team_invites::handler::<T, Eas>))
         .route("/invite", post(invite_to_team::handler::<T, Eas>))

@@ -36,7 +36,7 @@ export type ThreadProps = {
   listMeta?: ChannelMessageListMeta;
   threadActions?: ThreadActions;
   messageEditor?: MessageEditor;
-  targetMessageId?: string;
+  targetThreadId?: string;
   /** One-shot scroll target. Caller must clear via `onTargetReplyScrolled`. */
   targetReplyId?: string;
   onTargetReplyScrolled?: (replyId: string) => void;

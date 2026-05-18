@@ -85,7 +85,7 @@ export function SplitContainer(
           when={!isMobile()}
           fallback={
             <Layer depth={1}>
-              <div class="flex flex-col min-h-0 size-full bg-surface overflow-hidden">
+              <div class="flex flex-col min-h-0 size-full bg-surface overflow-hidden rounded-xl">
                 <SplitHeader ref={setHeaderRef} />
                 <SplitToolbar ref={setToolbarRef} />
                 <div class="@container/split size-full overflow-hidden relative">
@@ -102,8 +102,9 @@ export function SplitContainer(
               !panel.handle.isSpotLight()
             }
             depth={1}
+            class="rounded-xl"
           >
-            <div class="flex flex-col min-h-0 size-full bg-surface overflow-hidden">
+            <div class="flex flex-col min-h-0 size-full bg-surface overflow-hidden rounded-xl">
               <SplitHeader ref={setHeaderRef} />
               <SplitToolbar ref={setToolbarRef} />
               <div class="@container/split size-full overflow-hidden relative">

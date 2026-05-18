@@ -4,7 +4,6 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
-import type { TeamUserTier } from './teamUserTier';
 
 /**
  * A single invite entry with email and tier
@@ -12,6 +11,4 @@ import type { TeamUserTier } from './teamUserTier';
 export interface InviteEntry {
   /** The email of the user to invite */
   email: string;
-  /** The tier for this user (defaults to Haiku if not provided) */
-  tier?: TeamUserTier;
 }

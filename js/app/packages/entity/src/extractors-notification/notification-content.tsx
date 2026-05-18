@@ -4,12 +4,12 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import CheckIcon from '@icon/regular/check.svg';
 import {
   type NotificationStack,
   openNotification,
   type UnifiedNotification,
 } from '@notifications';
+import CheckIcon from '@phosphor/check.svg';
 import { Button } from '@ui';
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import type { Notification } from '../types/notification';
@@ -22,7 +22,9 @@ interface NotificationContentProps {
   singleLine?: boolean;
 }
 
-function DocumentMentionPill(props: { notification: UnifiedNotification }) {
+export function DocumentMentionPill(props: {
+  notification: UnifiedNotification;
+}) {
   const notificationSource = useGlobalNotificationSource();
   const { markAsDone } = useNotificationActions({
     notification: props.notification,
@@ -50,7 +52,7 @@ function DocumentMentionPill(props: { notification: UnifiedNotification }) {
 
   return (
     <div
-      class="group relative flex items-center gap-1.5 px-2 py-1 rounded-md bg-ink-muted/[0.06] hover:bg-ink-muted/10 text-xs text-ink-muted min-w-0 max-w-48 shrink-0"
+      class="group relative flex items-center gap-1.5 px-2 py-1 rounded-md bg-ink-muted/6 hover:bg-ink-muted/10 text-xs text-ink-muted min-w-0 max-w-48 shrink-0"
       onClick={handleClick}
       role="button"
       tabIndex={0}
@@ -212,27 +214,42 @@ export function NotificationContent(props: NotificationContentProps) {
     return '';
   };
 
+  const singleDocMention = () => {
+    if (!props.notification) return null;
+    if (props.notification.notification_metadata.tag !== 'document_mention') {
+      return null;
+    }
+    return props.notification as UnifiedNotification;
+  };
+
   return (
     <Show
       when={props.stack?.type === 'document_mention'}
       fallback={
-        <Show when={content()}>
-          {(text) => (
-            <Show
-              when={text().trim()}
-              fallback={
-                <span class="italic text-ink-disabled">Attached items</span>
-              }
-            >
-              {(trimmedContent) => (
-                <StaticMarkdown
-                  markdown={trimmedContent()}
-                  theme={unifiedListMarkdownTheme}
-                  singleLine={props.singleLine ?? true}
-                />
+        <Show
+          when={singleDocMention()}
+          fallback={
+            <Show when={content()}>
+              {(text) => (
+                <Show
+                  when={text().trim()}
+                  fallback={
+                    <span class="italic text-ink-disabled">Attached items</span>
+                  }
+                >
+                  {(trimmedContent) => (
+                    <StaticMarkdown
+                      markdown={trimmedContent()}
+                      theme={unifiedListMarkdownTheme}
+                      singleLine={props.singleLine ?? true}
+                    />
+                  )}
+                </Show>
               )}
             </Show>
-          )}
+          }
+        >
+          {(n) => <DocumentMentionPill notification={n()} />}
         </Show>
       }
     >
