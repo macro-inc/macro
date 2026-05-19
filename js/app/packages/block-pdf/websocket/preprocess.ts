@@ -2,7 +2,7 @@ import type {
   PreprocessInvoke,
   PreprocessResponseData,
 } from '@coparse/document-processing-types';
-import { isErr } from '@core/util/maybeResult';
+
 import {
   type ProcessingResultResponseType,
   storageServiceClient,
@@ -17,12 +17,11 @@ export async function preprocess({
   documentVersionId: number;
 }) {
   try {
-    const [, parseResult] =
-      await storageServiceClient.getDocumentProcessingResult({
-        documentId,
-        type: 'PREPROCESS',
-      });
-    if (parseResult) return parseResult.preprocess;
+    const parseResult = await storageServiceClient.getDocumentProcessingResult({
+      documentId,
+      type: 'PREPROCESS',
+    });
+    if (parseResult.isOk()) return parseResult.value.preprocess;
   } catch (e) {
     console.error('preprocess fetch error', e);
   }
@@ -48,10 +47,10 @@ export async function preprocess({
         jobId,
         type: 'PREPROCESS',
       });
-      if (isErr(result)) {
+      if (result.isErr()) {
         throw result;
       }
-      return result[1].preprocess;
+      return result.value.preprocess;
     },
   });
 }

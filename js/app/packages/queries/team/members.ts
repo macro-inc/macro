@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import type { TeamWithMembers } from '@service-auth/generated/schemas/teamWithMembers';
 import { useMutation } from '@tanstack/solid-query';

@@ -4,8 +4,7 @@ import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useEmailLinks } from '@core/email-link';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
-import { isOk } from '@core/util/maybeResult';
-import LogoIcon from '@macro-icons/macro-logo.svg';
+import LogoIcon from '@icon/macro-logo.svg';
 import { useUserInfo } from '@queries/auth';
 import {
   invalidateAllAfterLogin,
@@ -91,7 +90,7 @@ export function Login() {
       unsetTokenPromise();
       authServiceClient.sessionLogin({ session_code }).then(async (res) => {
         console.log({ res });
-        if (isOk(res)) {
+        if (res.isOk()) {
           await invalidateAllAfterLogin();
           await initEmailLink().match(
             () => {},

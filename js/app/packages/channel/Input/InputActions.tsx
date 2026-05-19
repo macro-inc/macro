@@ -1,5 +1,5 @@
-import FormatIcon from '@icon/regular/text-aa.svg';
-import TrashIcon from '@icon/regular/trash.svg';
+import FormatIcon from '@phosphor/text-aa.svg';
+import TrashIcon from '@phosphor/trash.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import type { JSX } from 'solid-js';
 import { InputActionButton } from './ActionButton';

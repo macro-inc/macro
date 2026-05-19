@@ -18,7 +18,6 @@ macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
-openssl = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
@@ -31,5 +30,3 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 urlencoding = { workspace = true }
 
-[package.metadata.cargo-machete]
-ignored = ["openssl"]

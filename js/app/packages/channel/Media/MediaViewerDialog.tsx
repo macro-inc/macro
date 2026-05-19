@@ -2,10 +2,10 @@ import { Lightbox, LightboxToolbar } from '@core/component/Lightbox';
 
 import * as stackingContext from '@core/constant/stackingContext';
 import { isMobile } from '@core/mobile/isMobile';
-import ChevronLeftIcon from '@icon/regular/caret-left.svg';
-import ChevronRightIcon from '@icon/regular/caret-right.svg';
-import XIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
+import ChevronLeftIcon from '@phosphor/caret-left.svg';
+import ChevronRightIcon from '@phosphor/caret-right.svg';
+import XIcon from '@phosphor/x.svg';
 import { Button, cn } from '@ui';
 import { type Accessor, createMemo, Show } from 'solid-js';
 import type { MediaItem } from './media-items';

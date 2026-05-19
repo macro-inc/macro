@@ -1,8 +1,7 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import clickOutside from '@core/directive/clickOutside';
-import { isErr } from '@core/util/maybeResult';
-import Quotes from '@icon/regular/quotes.svg';
+import Quotes from '@phosphor/quotes.svg';
 import { commsServiceClient } from '@service-comms/client';
 import type { ItemType } from '@service-storage/client';
 import { Button, Tooltip } from '@ui';
@@ -92,12 +91,12 @@ export function ReferencesModal(props: ReferencesModalProps) {
         entity_id: id,
       });
 
-      if (isErr(response)) {
+      if (response.isErr()) {
         console.error(response);
         return 0;
       }
 
-      return response[1].references.length;
+      return response.value.references.length;
     }
   );
 

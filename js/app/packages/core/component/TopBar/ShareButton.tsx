@@ -33,26 +33,21 @@ import {
 } from '@core/signal/permissions';
 import { idToEmail } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import {
-  isErr,
-  isOk,
-  type MaybeError,
-  type MaybeResult,
-} from '@core/util/maybeResult';
+import type { ResultError } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import CheckIcon from '@icon/bold/check-bold.svg';
-import IconX from '@icon/bold/x-bold.svg';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
-import IconLink from '@icon/regular/link.svg';
-import IconShared from '@icon/regular/share.svg';
+import IconComment from '@icon/wide-comment.svg';
+import WideCopy from '@icon/wide-copy.svg';
+import IconEdit from '@icon/wide-edit.svg';
+import IconEye from '@icon/wide-eye.svg';
+import UserCircle from '@icon/wide-user-circle.svg';
+import WideUsers from '@icon/wide-users.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import IconComment from '@macro-icons/wide/comment.svg';
-import WideCopy from '@macro-icons/wide/copy.svg';
-import IconEdit from '@macro-icons/wide/edit.svg';
-import IconEye from '@macro-icons/wide/eye.svg';
-import UserCircle from '@macro-icons/wide/user-circle.svg';
-import WideUsers from '@macro-icons/wide/users.svg';
+import ChevronDownIcon from '@phosphor/caret-down.svg';
+import CheckIcon from '@phosphor/check.svg';
+import IconLink from '@phosphor/link.svg';
+import IconShared from '@phosphor/share.svg';
+import IconX from '@phosphor/x.svg';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
 import {
@@ -65,6 +60,7 @@ import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { Button, ButtonGroup, cn, Panel, ToggleSwitch, Tooltip } from '@ui';
+import type { Result } from 'neverthrow';
 import {
   type Accessor,
   createContext,
@@ -583,19 +579,19 @@ export function ShareModal(props: ShareModalProps) {
       params
     );
     navigator.clipboard.writeText(url);
-    toast.success(
-      'Link copied to clipboard.',
-      'Sending this link in a Macro message will automatically update permissions to include recipients.'
-    );
+    toast.success('Link copied to clipboard.', {
+      subtext:
+        'Sending this link in a Macro message will automatically update permissions to include recipients.',
+    });
   });
 
   const [channelNamesResource] = createResource(
     () => {
       const result = permissionsResource.latest;
-      if (!result || isErr(result)) {
+      if (!result || result.isErr()) {
         return;
       }
-      const [, sharePermission] = result;
+      const sharePermission = result.value;
       if (!sharePermission?.channelSharePermissions?.length) {
         return;
       }
@@ -611,11 +607,11 @@ export function ShareModal(props: ShareModalProps) {
   // Create a map of channel IDs to channel names
   const channelNameMap = createMemo(() => {
     const result = channelNamesResource.latest;
-    if (!result || isErr(result)) {
+    if (!result || result.isErr()) {
       return new Map();
     }
 
-    const [, data] = result;
+    const data = result.value;
     const map = new Map();
 
     data.previews.forEach((preview) => {
@@ -631,10 +627,10 @@ export function ShareModal(props: ShareModalProps) {
   });
 
   const recipients = createMemo(() => {
-    const maybeResult = permissionsResource.latest;
-    if (!maybeResult || isErr(maybeResult)) return;
+    const result = permissionsResource.latest;
+    if (!result || result.isErr()) return;
 
-    const [, sharePermission] = maybeResult;
+    const sharePermission = result.value;
     return sharePermission.channelSharePermissions;
   });
 
@@ -657,14 +653,15 @@ export function ShareModal(props: ShareModalProps) {
           ],
         },
       });
-      if (!isErr(result)) {
+      if (!result.isErr()) {
         refetch();
-        toast.success(
-          'Removed channel access',
-          'Channel no longer has access to this chat'
-        );
+        toast.success('Removed channel access', {
+          subtext: 'Channel no longer has access to this chat',
+        });
       } else {
-        toast.alert('Failed to remove channel access', 'Please try again');
+        toast.alert('Failed to remove channel access', {
+          subtext: 'Please try again',
+        });
         console.error(result);
       }
     } else if (props.itemType === 'document') {
@@ -679,14 +676,15 @@ export function ShareModal(props: ShareModalProps) {
           ],
         },
       });
-      if (!isErr(result)) {
+      if (!result.isErr()) {
         refetch();
-        toast.success(
-          'Removed channel access',
-          'Channel no longer has access to this document'
-        );
+        toast.success('Removed channel access', {
+          subtext: 'Channel no longer has access to this document',
+        });
       } else {
-        toast.alert('Failed to remove channel access', 'Please try again');
+        toast.alert('Failed to remove channel access', {
+          subtext: 'Please try again',
+        });
         console.error(result);
       }
     } else if (props.itemType === 'project') {
@@ -701,11 +699,13 @@ export function ShareModal(props: ShareModalProps) {
           ],
         },
       });
-      if (!isErr(result)) {
+      if (!result.isErr()) {
         refetch();
         toast.success('Removed folder access');
       } else {
-        toast.alert('Failed to remove folder access', 'Please try again');
+        toast.alert('Failed to remove folder access', {
+          subtext: 'Please try again',
+        });
         console.error(result);
       }
     }
@@ -719,7 +719,10 @@ export function ShareModal(props: ShareModalProps) {
     ) => {
       if (props.userPermissions !== Permissions.OWNER) return;
 
-      let result: MaybeResult<any, any> | MaybeError<any> | null = null;
+      let result:
+        | Result<any, ResultError<any>[]>
+        | Result<void, ResultError<any>[]>
+        | null = null;
       if (props.itemType === 'chat') {
         result = await cognitionApiServiceClient.updateChatPermissions({
           sharePermission: {
@@ -774,16 +777,17 @@ export function ShareModal(props: ShareModalProps) {
         });
       }
 
-      if (result && isOk(result)) {
+      if (result && result.isOk()) {
         refetch();
         if (!hideSuccessToast) {
-          toast.success(
-            'Changed channel access level',
-            accessLevelText(accessLevel)
-          );
+          toast.success('Changed channel access level', {
+            subtext: accessLevelText(accessLevel),
+          });
         }
       } else {
-        toast.alert('Failed to change channel access', 'Please try again');
+        toast.alert('Failed to change channel access', {
+          subtext: 'Please try again',
+        });
         console.error(result);
       }
     }
@@ -791,11 +795,11 @@ export function ShareModal(props: ShareModalProps) {
 
   const publicAccessLevel = createMemo(() => {
     const currentPermissions = permissionsResource.latest;
-    if (!currentPermissions || isErr(currentPermissions)) {
+    if (!currentPermissions || currentPermissions.isErr()) {
       return;
     }
 
-    const [, sharePermission] = currentPermissions;
+    const sharePermission = currentPermissions.value;
     return sharePermission.publicAccessLevel;
   });
 
@@ -809,19 +813,17 @@ export function ShareModal(props: ShareModalProps) {
           },
           chat_id: props.id,
         });
-        if (!isErr(result)) {
+        if (!result.isErr()) {
           refetch();
 
           if (accessLevel === null) {
-            toast.success(
-              'Made chat private',
-              'Only shared users can access this chat'
-            );
+            toast.success('Made chat private', {
+              subtext: 'Only shared users can access this chat',
+            });
           } else {
-            toast.success(
-              'Updated public link sharing',
-              `Anyone with the link can ${accessLevel} this chat`
-            );
+            toast.success('Updated public link sharing', {
+              subtext: `Anyone with the link can ${accessLevel} this chat`,
+            });
 
             analytics.track('share_entity', {
               entityType: 'chat',
@@ -830,7 +832,9 @@ export function ShareModal(props: ShareModalProps) {
             });
           }
         } else {
-          toast.alert('Failed to change chat access', 'Please try again');
+          toast.alert('Failed to change chat access', {
+            subtext: 'Please try again',
+          });
           console.error(result);
         }
       } else if (props.itemType === 'document') {
@@ -841,18 +845,16 @@ export function ShareModal(props: ShareModalProps) {
           },
           documentId: props.id,
         });
-        if (!isErr(result)) {
+        if (!result.isErr()) {
           refetch();
           if (accessLevel === null) {
-            toast.success(
-              'Made document private',
-              'Only shared users can access this document'
-            );
+            toast.success('Made document private', {
+              subtext: 'Only shared users can access this document',
+            });
           } else {
-            toast.success(
-              'Updated public link sharing',
-              `Anyone with the link can ${accessLevel} this document`
-            );
+            toast.success('Updated public link sharing', {
+              subtext: `Anyone with the link can ${accessLevel} this document`,
+            });
 
             analytics.track('share_entity', {
               entityType: 'document',
@@ -861,7 +863,9 @@ export function ShareModal(props: ShareModalProps) {
             });
           }
         } else {
-          toast.alert('Failed to change document access', 'Please try again');
+          toast.alert('Failed to change document access', {
+            subtext: 'Please try again',
+          });
           console.error(result);
         }
       } else if (props.itemType === 'project') {
@@ -872,18 +876,16 @@ export function ShareModal(props: ShareModalProps) {
           },
           id: props.id,
         });
-        if (!isErr(result)) {
+        if (!result.isErr()) {
           refetch();
           if (accessLevel === null) {
-            toast.success(
-              'Made folder private',
-              'Only shared users can access this folder'
-            );
+            toast.success('Made folder private', {
+              subtext: 'Only shared users can access this folder',
+            });
           } else {
-            toast.success(
-              'Updated public link sharing',
-              `Anyone with the link can ${accessLevel} this folder`
-            );
+            toast.success('Updated public link sharing', {
+              subtext: `Anyone with the link can ${accessLevel} this folder`,
+            });
 
             analytics.track('share_entity', {
               entityType: 'project',
@@ -892,7 +894,9 @@ export function ShareModal(props: ShareModalProps) {
             });
           }
         } else {
-          toast.alert('Failed to change folder access', 'Please try again');
+          toast.alert('Failed to change folder access', {
+            subtext: 'Please try again',
+          });
           console.error(result);
         }
       }
@@ -1226,10 +1230,10 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
     if (props.copyLink) return props.copyLink();
     navigator.clipboard.writeText(defaultUrl());
     analytics.track('copy_share_link', { blockType });
-    toast.success(
-      'Link copied to clipboard.',
-      'Sending this link in a Macro message will automatically update permissions to include recipients.'
-    );
+    toast.success('Link copied to clipboard.', {
+      subtext:
+        'Sending this link in a Macro message will automatically update permissions to include recipients.',
+    });
   });
 
   const ShareLinkAction = createMemo(() => ({
@@ -1241,9 +1245,9 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
   }));
 
   const shareAccessLevelText = createMemo(() => {
-    const maybeResult = permissionsBlockResource[0].latest;
-    if (!maybeResult || isErr(maybeResult)) return '';
-    const [, sharePermission] = maybeResult;
+    const result = permissionsBlockResource[0].latest;
+    if (!result || result.isErr()) return '';
+    const sharePermission = result.value;
     if (sharePermission.isPublic) return 'Public';
     if (sharePermission.channelSharePermissions?.length) return 'Shared';
     return 'Just me';

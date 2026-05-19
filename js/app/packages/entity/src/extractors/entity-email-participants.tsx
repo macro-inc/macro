@@ -9,7 +9,7 @@ import {
   highlightTermsInText,
   mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
-import WideCopy from '@macro-icons/wide/copy.svg';
+import WideCopy from '@icon/wide-copy.svg';
 import { Surface } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { EmailEntity, EmailThreadParticipants } from '../types/entity';

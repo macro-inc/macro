@@ -1,9 +1,9 @@
 import { isReplyAllEligible } from '@block-email/util/recipientConversion';
 import type { ReplyType } from '@block-email/util/replyType';
 import { useEmail } from '@core/context/user';
-import ArrowBendDoubleUpLeft from '@icon/regular/arrow-bend-double-up-left.svg';
-import ArrowBendUpLeft from '@icon/regular/arrow-bend-up-left.svg';
-import ArrowBendUpRight from '@icon/regular/arrow-bend-up-right.svg';
+import ArrowBendDoubleUpLeft from '@phosphor/arrow-bend-double-up-left.svg';
+import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
+import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
@@ -57,7 +57,7 @@ export function MessageActions(props: {
     >
       <Show when={!props.hiddenActions?.includes('reply')}>
         <Button
-          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/[0.08]"
+          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
           onClick={onChangeReplyType('reply')}
           tooltip="Reply"
         >
@@ -70,7 +70,7 @@ export function MessageActions(props: {
         }
       >
         <Button
-          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/[0.08]"
+          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
           onClick={onChangeReplyType('reply-all')}
           tooltip="Reply all"
         >
@@ -79,7 +79,7 @@ export function MessageActions(props: {
       </Show>
       <Show when={!props.hiddenActions?.includes('forward')}>
         <Button
-          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/[0.08]"
+          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
           onClick={onChangeReplyType('forward')}
           tooltip="Forward"
         >

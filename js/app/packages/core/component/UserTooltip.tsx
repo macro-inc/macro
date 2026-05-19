@@ -1,11 +1,10 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { isOk } from '@core/util/maybeResult';
-import IconCheck from '@icon/regular/check.svg';
-import WideChat from '@macro-icons/wide/chat.svg';
-import WideCopy from '@macro-icons/wide/copy.svg';
-import WideTask from '@macro-icons/wide/task.svg';
+import WideChat from '@icon/wide-chat.svg';
+import WideCopy from '@icon/wide-copy.svg';
+import WideTask from '@icon/wide-task.svg';
+import IconCheck from '@phosphor/check.svg';
 import { commsServiceClient } from '@service-comms/client';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, Surface } from '@ui';
@@ -46,7 +45,7 @@ export function UserTooltip(props: UserTooltipProps) {
         const result = await commsServiceClient.getOrCreateDirectMessage({
           recipient_id: props.id,
         });
-        const channelId = isOk(result) && result[1]?.channel_id;
+        const channelId = result.isOk() && result.value?.channel_id;
         if (channelId) {
           openWithSplit(
             { type: 'channel', id: channelId },

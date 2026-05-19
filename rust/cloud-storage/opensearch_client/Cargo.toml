@@ -16,7 +16,7 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 models_opensearch = { path = "../models_opensearch" }
 models_search_cursor = { path = "../models_search_cursor" }
-opensearch = { version = "2.3.0" }
+opensearch = { version = "2.3.0", default-features = false, features = ["rustls-tls"] }
 opensearch_query_builder = { path = "../opensearch_query_builder", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -56,11 +56,6 @@ You can self-host Macro for development and evaluation. If you want to run Macro
 
 We strongly recommend the hosted version for most teams. Macro gets better when it can connect teams to each other, and the managed service is where you get the latest features, Google Workspace integrations, SOC 2 controls, Apple App Store distribution, LiveKit-backed calls, and the sublicenses needed for production video. If you are in the military, government, or another environment where managed hosting is not possible, email us and we can talk through a deployment that fits.
 
-# Stack
-
-<img width="100%" alt="Macro stack diagram" src=".github/readme/CRM Feature Grid Request (1).png" />
-
-Thanks to the teams behind SolidJS, Rust, Tauri, LiveKit, Axum, Tokio, PostgreSQL, OpenSearch, Pulumi, Datadog, Biome, Vitest, Playwright, and the rest of the open-source infrastructure Macro is built on.
 
 # Community
 

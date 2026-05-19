@@ -1,7 +1,7 @@
 import { useEmail } from '@core/context/user';
-import ArrowBendDoubleUpLeft from '@icon/regular/arrow-bend-double-up-left.svg';
-import ArrowBendUpLeft from '@icon/regular/arrow-bend-up-left.svg';
-import ArrowBendUpRight from '@icon/regular/arrow-bend-up-right.svg';
+import ArrowBendDoubleUpLeft from '@phosphor/arrow-bend-double-up-left.svg';
+import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
+import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
@@ -20,7 +20,7 @@ function ReplyActionButton(props: {
     <Button
       variant="base"
       size="sm"
-      class="rounded-lg px-3 py-1.5 text-sm text-ink-muted hover:text-ink border border-ink-muted/8 bg-ink-muted/[0.025] hover:bg-ink-muted/[0.06]"
+      class="rounded-lg px-3 py-1.5 text-sm text-ink-muted hover:text-ink border border-ink-muted/8 bg-ink-muted/2.5 hover:bg-ink-muted/6"
       onClick={props.onClick}
     >
       <props.icon class="size-3.5" />

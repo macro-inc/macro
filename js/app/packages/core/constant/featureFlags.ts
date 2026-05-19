@@ -330,6 +330,8 @@ export function ENABLE_CALLS(): boolean {
   return analytics.posthog.isFeatureEnabled('enable-calls') ?? false;
 }
 
+export const ENABLE_NEW_ONBOARDING_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+
 export const ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE = DEV_MODE_ENV
   ? true
   : undefined;
@@ -350,9 +352,4 @@ export const ENABLE_CALLKIT = resolveFeatureFlag('ENABLE_CALLKIT', false);
 export const ENABLE_MARKDOWN_SIDE_PANEL = resolveFeatureFlag(
   'ENABLE_MARKDOWN_SIDE_PANEL',
   true
-);
-
-export const ENABLE_MOBILE_TOAST = resolveFeatureFlag(
-  'ENABLE_MOBILE_TOAST',
-  false
 );

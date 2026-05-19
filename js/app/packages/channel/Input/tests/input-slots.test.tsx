@@ -35,19 +35,19 @@ vi.mock('@phosphor-icons/core/regular/paperclip.svg?component-solid', () => ({
   default: () => <span data-testid="paperclip-icon" />,
 }));
 
-vi.mock('@icon/regular/text-aa.svg', () => ({
+vi.mock('@phosphor/text-aa.svg', () => ({
   default: () => <span data-testid="format-icon" />,
 }));
 
-vi.mock('@icon/regular/trash.svg', () => ({
+vi.mock('@phosphor/trash.svg', () => ({
   default: () => <span data-testid="trash-icon" />,
 }));
 
-vi.mock('@icon/regular/x.svg', () => ({
+vi.mock('@phosphor/x.svg', () => ({
   default: () => <span data-testid="close-icon" />,
 }));
 
-vi.mock('@icon/bold/arrow-up-bold.svg', () => ({
+vi.mock('@phosphor/arrow-up.svg', () => ({
   default: () => <span data-testid="send-icon" />,
 }));
 
@@ -58,7 +58,7 @@ vi.mock(
   })
 );
 
-vi.mock('@icon/bold/spinner-gap-bold.svg', () => ({
+vi.mock('@phosphor/spinner-gap.svg', () => ({
   default: () => <span data-testid="spinner-icon" />,
 }));
 

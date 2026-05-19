@@ -4,12 +4,12 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import CheckIcon from '@icon/regular/check.svg';
 import {
   type NotificationStack,
   openNotification,
   type UnifiedNotification,
 } from '@notifications';
+import CheckIcon from '@phosphor/check.svg';
 import { Button } from '@ui';
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import type { Notification } from '../types/notification';
@@ -52,7 +52,7 @@ export function DocumentMentionPill(props: {
 
   return (
     <div
-      class="group relative flex items-center gap-1.5 px-2 py-1 rounded-md bg-ink-muted/[0.06] hover:bg-ink-muted/10 text-xs text-ink-muted min-w-0 max-w-48 shrink-0"
+      class="group relative flex items-center gap-1.5 px-2 py-1 rounded-md bg-ink-muted/6 hover:bg-ink-muted/10 text-xs text-ink-muted min-w-0 max-w-48 shrink-0"
       onClick={handleClick}
       role="button"
       tabIndex={0}

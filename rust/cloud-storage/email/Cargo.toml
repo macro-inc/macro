@@ -70,7 +70,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
 authentication_service_client = { path = "../authentication_service_client", optional = true }
-redis = { workspace = true, features = ["tokio-native-tls-comp"], optional = true }
+redis = { workspace = true, features = ["tokio-rustls-comp"], optional = true }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }

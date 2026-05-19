@@ -1,0 +1,2 @@
+export const CALL_PANEL_MEDIUM_NARROW_PX = 720;
+export const CALL_PANEL_VERY_NARROW_PX = 420;

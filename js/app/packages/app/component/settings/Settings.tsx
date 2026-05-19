@@ -1,4 +1,4 @@
-import { createEffect, createMemo, For, onMount, Show, Suspense } from 'solid-js';
+import { createEffect, onMount, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isMobile } from '@core/mobile/isMobile';
@@ -7,7 +7,8 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MobileApp } from './MobileApp';
 import { Agent } from './Agent';
 import { Appearance } from './Appearance';
-import { Tabs } from '@core/component/Tabs';
+import { TabsInset } from '@core/component/TabsInset';
+import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import { Account } from './Account';
 import { Shortcuts } from './Shortcuts';
 import { Team } from './Team';
@@ -17,7 +18,6 @@ import { SplitHeaderLeft, SplitHeaderRight } from '../split-layout/components/Sp
 import { CollapsibleHeaderItem } from '../split-layout/components/CollapsibleHeaderItem';
 import { SettingsButton } from './SettingsButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { Dropdown, Layer } from '@ui';
 
 export function SettingsPanelComponentWrapper() {
   return (
@@ -159,14 +159,12 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   function BottomTabs() {
     return (
-    <div class="bg-surface border-t border-edge-muted h-11 shrink-0 px-1">
-      <Tabs
+    <div class="bg-surface border-t border-edge-muted h-11 shrink-0 px-1 flex items-center">
+      <TabsInset
         list={settingsTabs()}
         value={activeTabId()}
         defaultValue="Appearance"
         onChange={handleTabChange}
-        indicatorPosition="top"
-        class="**:data-indicator:h-0.75"
       />
     </div>
     );
@@ -190,7 +188,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
               priority={1}
               containerClass="h-full"
               expanded={() => (
-                <Tabs
+                <TabsInset
                   list={settingsTabs()}
                   value={activeTabId()}
                   defaultValue="Appearance"
@@ -198,9 +196,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 />
               )}
               collapsed={() => (
-                <CollapsedSettingsTabs
-                  tabs={settingsTabs()}
+                <TabsInsetDropdown
+                  list={settingsTabs()}
                   value={activeTabId()}
+                  defaultValue="Appearance"
                   onChange={handleTabChange}
                 />
               )}
@@ -242,44 +241,3 @@ export function SettingsPanel(props: SettingsPanelProps) {
   );
 }
 
-type CollapsedSettingsTabsProps = {
-  tabs: { value: string; label: string }[];
-  value: string;
-  onChange: (value: string) => void;
-};
-
-function CollapsedSettingsTabs(props: CollapsedSettingsTabsProps) {
-  const activeLabel = createMemo(() => {
-    return (
-      props.tabs.find((item) => item.value === props.value)?.label ??
-      props.tabs[0]?.label
-    );
-  });
-
-  return (
-    <Dropdown placement="bottom-start" gutter={4}>
-      <Dropdown.Trigger>
-        <span class="truncate">{activeLabel()}</span>
-      </Dropdown.Trigger>
-      <Dropdown.Portal>
-        <Layer depth={2}>
-          <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-sm p-1">
-            <For each={props.tabs}>
-              {(item) => (
-                <Dropdown.Item
-                  class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
-                  classList={{
-                    'font-semibold': props.value === item.value,
-                  }}
-                  onSelect={() => props.onChange(item.value)}
-                >
-                  {item.label}
-                </Dropdown.Item>
-              )}
-            </For>
-          </Dropdown.Content>
-        </Layer>
-      </Dropdown.Portal>
-    </Dropdown>
-  );
-}

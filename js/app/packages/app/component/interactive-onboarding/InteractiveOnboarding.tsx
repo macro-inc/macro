@@ -14,10 +14,9 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fetchToken } from '@core/util/fetchWithToken';
-import { isOk } from '@core/util/maybeResult';
-import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
-import InfoIcon from '@icon/regular/info.svg';
-import LogoIcon from '@macro-icons/macro-logo.svg';
+import LogoIcon from '@icon/macro-logo.svg';
+import ArrowLeftIcon from '@phosphor/arrow-left.svg';
+import InfoIcon from '@phosphor/info.svg';
 import { useSendMobileWelcomeEmail } from '@queries/auth';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useUserTeamsQuery } from '@queries/team';
@@ -66,15 +65,15 @@ export default function InteractiveOnboarding() {
 
     const result = await sendMobileWelcomeEmail.mutateAsync(email);
 
-    if (isOk(result)) {
-      if (result[1].sent) {
+    if (result.isOk()) {
+      if (result.value.sent) {
         setSubmittedEmail(email);
         setMobileWebStep('signup-sent');
       } else {
         toast.alert('Email already sent.');
       }
     } else {
-      const code = result[0]?.[0]?.code;
+      const code = result.error?.[0]?.code;
       if (code === 'RATE_LIMITED') {
         toast.failure('Rate limit exceeded.');
       } else if (code === 'INVALID_EMAIL') {
@@ -213,8 +212,7 @@ function InteractiveOnboardingInner() {
   });
   const allLessons = createMemo(() =>
     LESSONS.filter((l) => {
-      if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
-        return false;
+      if (l.id === 'choose-plan' && hasPaid()) return false;
       if (l.id === 'about-us' && isAuthenticated()) return false;
       // Skip team/payment lessons when feature flag disabled
       if (
@@ -307,7 +305,7 @@ function InteractiveOnboardingInner() {
   // Skip the redirect when returning from external flow — we just marked it
   // complete ourselves and still have remaining lessons to show.
   createEffect(() => {
-    if (tutorialCompleted() && !returningLesson && !testMode) {
+    if (tutorialCompleted() && hasPaid() && !returningLesson && !testMode) {
       navigateAway();
     }
   });

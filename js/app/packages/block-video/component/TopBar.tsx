@@ -26,11 +26,11 @@ import {
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import Download from '@icon/regular/download.svg';
-import Info from '@icon/regular/info.svg';
-import Quotes from '@icon/regular/quotes.svg';
-import Spinner from '@icon/regular/spinner.svg';
-import IconShared from '@macro-icons/wide/share.svg';
+import IconShared from '@icon/wide-share.svg';
+import Download from '@phosphor/download.svg';
+import Info from '@phosphor/info.svg';
+import Quotes from '@phosphor/quotes.svg';
+import Spinner from '@phosphor/spinner.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
 import { createSignal } from 'solid-js';

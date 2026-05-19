@@ -19,7 +19,7 @@ RUN rm -rf ./src
 FROM debian:bookworm-slim AS runner
 
 # Install ssl certs so we can connect to the DB with ssl true
-RUN apt-get update && apt install -y ca-certificates openssl
+RUN apt-get update && apt install -y ca-certificates
 
 COPY --from=builder /app/target/release/sha_cleanup_worker .
 

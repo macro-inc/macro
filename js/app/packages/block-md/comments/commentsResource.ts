@@ -5,7 +5,7 @@ import {
   useBlockName,
 } from '@core/block';
 import { compareDateAsc } from '@core/util/date';
-import { isErr } from '@core/util/maybeResult';
+
 import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
 import { storageServiceClient } from '@service-storage/client';
 import type { AnnotationIncrementalUpdate } from '@service-storage/generated/schemas/annotationIncrementalUpdate';
@@ -43,7 +43,7 @@ async function fetchComments() {
   const commentThreads = await storageServiceClient.annotations.getComments({
     documentId,
   });
-  return commentThreads[1]?.data ?? [];
+  return commentThreads.isOk() ? commentThreads.value.data : [];
 }
 
 function useHandleCreateComment() {
@@ -80,17 +80,17 @@ function useCreateComment() {
   const handleCreateComment = useHandleCreateComment();
 
   return async (body: CreateCommentRequest) => {
-    const maybeResult = await storageServiceClient.annotations.createComment({
+    const result = await storageServiceClient.annotations.createComment({
       documentId,
       body,
     });
 
-    if (isErr(maybeResult)) {
+    if (result.isErr()) {
       console.error('Unable to create comment');
       return null;
     }
 
-    const response = maybeResult[1];
+    const response = result.value;
 
     handleCreateComment(response);
 
@@ -130,17 +130,17 @@ export function useEditCommentResource() {
   const handleEditComment = useHandleEditComment();
 
   return async (commentId: number, body: EditCommentRequest) => {
-    const maybeResult = await storageServiceClient.annotations.editComment({
+    const result = await storageServiceClient.annotations.editComment({
       commentId,
       body,
     });
 
-    if (isErr(maybeResult)) {
+    if (result.isErr()) {
       console.error('Unable to edit comment');
       return false;
     }
 
-    const [, response] = maybeResult;
+    const response = result.value;
 
     handleEditComment(response);
 
@@ -188,17 +188,17 @@ export function useDeleteCommentResource() {
   const handleDeleteComment = useHandleDeleteComment();
 
   return async (commentId: number, body: DeleteCommentRequest) => {
-    const maybeResult = await storageServiceClient.annotations.deleteComment({
+    const result = await storageServiceClient.annotations.deleteComment({
       commentId,
       body,
     });
 
-    if (isErr(maybeResult)) {
+    if (result.isErr()) {
       console.error('Unable to delete comment');
       return;
     }
 
-    const [, response] = maybeResult;
+    const response = result.value;
 
     return handleDeleteComment(response);
   };

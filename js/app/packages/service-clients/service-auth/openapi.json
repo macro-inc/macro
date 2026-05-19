@@ -1603,6 +1603,55 @@
         }
       }
     },
+    "/team/checkout": {
+      "post": {
+        "tags": ["teams::inbound::axum_router::create_team_checkout_session"],
+        "summary": "Creates a new team.",
+        "operationId": "create_team_checkout_session",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamCheckoutSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Team"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/invite": {
       "post": {
         "tags": ["teams::inbound::axum_router::invite_to_team"],
@@ -3680,6 +3729,62 @@
           },
           "owner_id": {
             "type": "string"
+          }
+        }
+      },
+      "TeamCheckoutSessionMetadata": {
+        "type": "object",
+        "description": "Team checkout session metadata",
+        "properties": {
+          "fbc": {
+            "type": ["string", "null"],
+            "description": "Meta (Facebook) click ID from _fbc cookie"
+          },
+          "fbp": {
+            "type": ["string", "null"],
+            "description": "Meta (Facebook) browser ID from _fbp cookie"
+          },
+          "ga_client_id": {
+            "type": ["string", "null"],
+            "description": "Google Analytics client ID for conversion tracking"
+          }
+        }
+      },
+      "TeamCheckoutSessionRequest": {
+        "type": "object",
+        "description": "Team checkout session request",
+        "required": ["success_url", "cancel_url", "team_plan"],
+        "properties": {
+          "cancel_url": {
+            "type": "string",
+            "description": "The URL to redirect to if checkout is cancelled"
+          },
+          "discount": {
+            "type": ["string", "null"],
+            "description": "Optional discount/promo code to apply"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/TeamCheckoutSessionMetadata",
+            "description": "Tracking metadata for conversion attribution"
+          },
+          "success_url": {
+            "type": "string",
+            "description": "The URL to redirect to on successful checkout"
+          },
+          "team_plan": {
+            "$ref": "#/components/schemas/TeamPlan",
+            "description": "The team plan the user wants to purchase for their team"
+          }
+        }
+      },
+      "TeamCheckoutSessionResponse": {
+        "type": "object",
+        "description": "Team checkout session response",
+        "required": ["url"],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The checkout url"
           }
         }
       },

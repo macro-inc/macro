@@ -1,4 +1,4 @@
-import PhoneCallIcon from '@macro-icons/wide/call.svg';
+import PhoneCallIcon from '@icon/wide-call.svg';
 import { useCall } from './use-call';
 
 export function CallAgainButton(props: { channelId: string; class?: string }) {

@@ -2,11 +2,12 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use anyhow::Context;
 use stripe::{CreateSubscription, CreateSubscriptionItems, UpdateSubscription};
 
 use crate::domain::{
     customer_repo::CustomerRepository,
-    model::{CreateSubscriptionArgs, CustomerError, TeamPlan},
+    model::{CreateSubscriptionArgs, CustomerError, TeamCheckoutSessionRequest, TeamPlan},
 };
 
 /// The stripe price ids for all tiers
@@ -230,5 +231,96 @@ impl CustomerRepository for CustomerRepositoryImpl {
             .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
 
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn create_team_checkout_session(
+        &self,
+        team_id: &uuid::Uuid,
+        customer_id: stripe::CustomerId,
+        req: &TeamCheckoutSessionRequest,
+    ) -> Result<String, CustomerError> {
+        let promo_code_id = if let Some(discount) = req.discount.as_ref() {
+            let mut list_params = stripe::ListPromotionCodes::new();
+            list_params.code = Some(discount);
+            list_params.active = Some(true);
+            list_params.limit = Some(1);
+
+            let promo_codes = stripe::PromotionCode::list(&self.client, &list_params)
+                .await
+                .context("unable to list promotion codes")?;
+
+            let promo_code = promo_codes
+                .data
+                .into_iter()
+                .next()
+                .ok_or(CustomerError::InvalidPromotionCode(discount.clone()))?;
+
+            Some(promo_code.id)
+        } else {
+            None
+        };
+
+        let mut metadata: HashMap<String, String> = HashMap::new();
+        // Insert team id metadata
+        metadata.insert("team_id".to_string(), team_id.to_string());
+
+        // Insert tracking metadata
+        if let Some(ga_client_id) = req.metadata.ga_client_id.as_ref() {
+            metadata.insert("ga_client_id".to_string(), ga_client_id.clone());
+        }
+
+        if let Some(fbp) = req.metadata.fbp.as_ref() {
+            metadata.insert("fbp".to_string(), fbp.clone());
+        }
+
+        if let Some(fbc) = req.metadata.fbc.as_ref() {
+            metadata.insert("fbc".to_string(), fbc.clone());
+        }
+
+        // Only set subscription_data if we have metadata to include
+        let subscription_data =
+            (!metadata.is_empty()).then_some(stripe::CreateCheckoutSessionSubscriptionData {
+                metadata: Some(metadata),
+                ..Default::default()
+            });
+
+        let price_id = self
+            .team_plan_stripe_price_ids
+            .try_get_price_id_for_team_plan(req.team_plan)?;
+
+        // Create the checkout session
+        let params = stripe::CreateCheckoutSession {
+            customer: Some(customer_id),
+            mode: Some(stripe::CheckoutSessionMode::Subscription),
+            success_url: Some(req.success_url.as_str()),
+            cancel_url: Some(req.cancel_url.as_str()),
+            allow_promotion_codes: promo_code_id.is_none().then_some(true),
+            discounts: promo_code_id.map(|id| {
+                vec![stripe::CreateCheckoutSessionDiscounts {
+                    promotion_code: Some(id.to_string()),
+                    ..Default::default()
+                }]
+            }),
+            line_items: Some(vec![stripe::CreateCheckoutSessionLineItems {
+                price: Some(price_id.to_string()),
+                quantity: Some(1),
+                ..Default::default()
+            }]),
+            subscription_data,
+            ..Default::default()
+        };
+
+        let session = stripe::CheckoutSession::create(&self.client, params)
+            .await
+            .context("could not create checkout session")?;
+
+        let url = session.url.context("expected url")?;
+
+        // Validate but return the exact URL Stripe gave us — session URLs are signed/opaque
+        // and `Url::parse(...).to_string()` can normalize in ways that break the signature.
+        url::Url::parse(&url).context("expected valid url")?;
+
+        Ok(url)
     }
 }

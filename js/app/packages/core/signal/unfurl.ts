@@ -1,5 +1,5 @@
 import { debounce } from '@core/util/debounce';
-import { isErr } from '@core/util/maybeResult';
+
 import { UnfurlServiceClient } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import {
@@ -75,7 +75,7 @@ async function batchFetchUnfurls(urls: string[]) {
 
   const result = await UnfurlServiceClient.unfurlBulk({ url_list: urls });
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     console.error('Failed to fetch unfurl bulk data');
     const errorUpdates: UnfurlStore = {};
     urls.forEach((url) => {
@@ -85,7 +85,7 @@ async function batchFetchUnfurls(urls: string[]) {
     return;
   }
 
-  const [, data] = result;
+  const data = result.value;
   const successUpdates: UnfurlStore = {};
 
   data.responses.forEach((unfurl) => {

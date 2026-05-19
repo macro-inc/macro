@@ -11,13 +11,12 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
-import ArrowUp from '@icon/bold/arrow-up-bold.svg';
-import PlusIcon from '@icon/regular/plus.svg';
-import XIcon from '@icon/regular/x.svg';
-import Stop from '@phosphor-icons/core/regular/stop.svg';
+import PaperPlaneRight from '@phosphor/paper-plane-right.svg';
+import PaperclipIcon from '@phosphor/paperclip.svg';
+import Stop from '@phosphor/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button, cn, Hotkey, Surface, Tooltip } from '@ui';
-import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
+import { Button, cn, Surface } from '@ui';
+import { createEffect, createSignal, Show } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { useAiDataConsentGate } from './useAiDataConsent';
@@ -30,7 +29,6 @@ export type ChatInputProps = {
   showActiveTabs?: boolean;
   autoFocusOnMount?: boolean;
   chatId?: string;
-  extraRightControls?: () => import('solid-js').JSX.Element;
 };
 
 export type ChatInputComponentProps = {
@@ -136,11 +134,11 @@ export function ChatInput(props: ChatInputComponentProps) {
     <div ref={setAttachMenuAnchorRef} class="shrink-0">
       <Button
         variant="ghost"
-        size="icon-md"
+        size="icon-sm"
         class="text-ink"
         onClick={() => setShowAttachMenu((prev) => !prev)}
       >
-        {showAttachMenu() ? <XIcon /> : <PlusIcon />}
+        <PaperclipIcon />
       </Button>
     </div>
   );
@@ -157,46 +155,31 @@ export function ChatInput(props: ChatInputComponentProps) {
     </Button>
   );
 
+  const SendButton = () => (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      aria-label="Send"
+      tooltip="Send in background"
+      shortcut="cmd+enter"
+      tooltipPlacement="top"
+      disabled={!canSendMessage()}
+      onClick={() =>
+        sendMessage(
+          isTouchDevice() ? { modelOverride: 'claude-opus-4-6' } : undefined
+        )
+      }
+    >
+      <PaperPlaneRight />
+    </Button>
+  );
+
   const RightControls = () => (
-    <Switch>
-      <Match when={!isTouchDevice()}>
-        <Show
-          when={generating() && props.onStop}
-          fallback={
-            <div class="flex flex-row items-center gap-3 text-xs text-ink-disabled opacity-70 shrink-0">
-              {props.extraRightControls?.()}
-              <Tooltip label="Enter to send" placement="top">
-                <div class="flex items-center">
-                  <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1 py-0.5">
-                    <Hotkey shortcut="enter" />
-                  </div>
-                </div>
-              </Tooltip>
-            </div>
-          }
-        >
-          <div class="flex flex-row items-center gap-1 shrink-0">
-            <StopButton />
-          </div>
-        </Show>
-      </Match>
-      <Match when={isTouchDevice()}>
-        <div class="flex flex-row gap-1 items-center shrink-0">
-          <Show when={!generating()}>
-            <Button
-              onClick={() => sendMessage({ modelOverride: 'claude-opus-4-6' })}
-            >
-              <div class="group hover:bg-accent transition ease-in-out size-6 p-0.5 border border-accent rounded-full flex items-center justify-center">
-                <ArrowUp class="group-hover:text-surface! group-hover:fill-surface! text-accent! fill-accent! size-4 transition ease-in-out" />
-              </div>
-            </Button>
-          </Show>
-          <Show when={generating()}>
-            <StopButton />
-          </Show>
-        </div>
-      </Match>
-    </Switch>
+    <div class="shrink-0">
+      <Show when={generating() && props.onStop} fallback={<SendButton />}>
+        <StopButton />
+      </Show>
+    </div>
   );
 
   return (
@@ -234,7 +217,7 @@ export function ChatInput(props: ChatInputComponentProps) {
             id="chat-input-text-area"
             class={cn('text-sm sm:text-sm text-ink')}
             classList={{
-              'pl-12': !isMultiline(),
+              'pl-8': !isMultiline(),
               'pr-12': !isMultiline() && isTouchDevice(),
               'pr-32.5': !isMultiline() && !isTouchDevice(),
               'px-0  pb-8': isMultiline(),
@@ -253,23 +236,11 @@ export function ChatInput(props: ChatInputComponentProps) {
             />
           </div>
 
-          <div
-            class="absolute left-2"
-            classList={{
-              'top-1/2 -translate-y-1/2': !isMultiline(),
-              'bottom-1.5 top-auto translate-y-0': isMultiline(),
-            }}
-          >
+          <div class="absolute left-2 bottom-1.5">
             <LeftButton />
           </div>
 
-          <div
-            class="absolute right-2"
-            classList={{
-              'top-1/2 -translate-y-1/2': !isMultiline(),
-              'bottom-1.5 top-auto translate-y-0': isMultiline(),
-            }}
-          >
+          <div class="absolute right-2 bottom-1.5">
             <RightControls />
           </div>
         </div>

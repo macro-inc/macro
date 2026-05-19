@@ -2,6 +2,8 @@
 
 /// Create a new team.
 pub mod create_team;
+/// Create team checkout session.
+pub mod create_team_checkout_session;
 /// Delete a team.
 pub mod delete_team;
 /// Delete a team invite.
@@ -92,6 +94,10 @@ where
         .route("/", delete(delete_team::handler::<T, Eas>))
         .route("/invites", get(get_team_invites::handler::<T, Eas>))
         .route("/invite", post(invite_to_team::handler::<T, Eas>))
+        .route(
+            "/checkout",
+            post(create_team_checkout_session::handler::<T, Eas>),
+        )
         .route(
             "/join/{team_invite_id}",
             delete(reject_invitation::handler::<T, Eas>),

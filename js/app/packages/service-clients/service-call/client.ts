@@ -1,6 +1,6 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
-import { mapOk } from '@core/util/maybeResult';
+
 import type { CallActiveResponse } from '@service-storage/generated/schemas/callActiveResponse';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { CallTokenResponse } from '@service-storage/generated/schemas/callTokenResponse';
@@ -17,51 +17,48 @@ const host: string = SERVER_HOSTS['document-storage-service'];
 
 export const callServiceClient = {
   async getOrCreateCall(channelId: string) {
-    return mapOk(
+    return (
       await fetchWithToken<CallTokenResponse>(`${host}/call/${channelId}`, {
         method: 'GET',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 
   async leaveCall(channelId: string) {
-    return mapOk(
+    return (
       await fetchWithToken<LeaveCallResponse>(`${host}/call/${channelId}`, {
         method: 'DELETE',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 
   async checkActiveCall(channelId: string) {
-    return mapOk(
+    return (
       await fetchWithToken<CallActiveResponse>(
         `${host}/call/${channelId}/active`,
         { method: 'GET' }
-      ),
+      )
+    ).map(
       // safeFetch returns {} for 204 (no Content-Type header)
       (data) => ('callId' in data ? (data as CallActiveResponse) : null)
     );
   },
 
   async getCallRecord(callId: string) {
-    return mapOk(
+    return (
       await fetchWithToken<CallRecord>(`${host}/call/record/${callId}`, {
         method: 'GET',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 
   async deleteCallRecord(callId: string) {
-    return mapOk(
+    return (
       await fetchWithToken<Record<string, never>>(
         `${host}/call/record/${callId}`,
         { method: 'DELETE' }
-      ),
-      () => undefined
-    );
+      )
+    ).map(() => undefined);
   },
 
   async toggleShareWithTeam(callId: string) {
@@ -72,19 +69,18 @@ export const callServiceClient = {
       `${host}/call/record/${callId}/share-with-team/toggle`,
       { method: 'POST' }
     );
-    return mapOk(result, (r) => r as unknown as boolean);
+    return result.map((r) => r as unknown as boolean);
   },
 
   async editCallRecord(params: { callId: string; customName: string }) {
-    return mapOk(
+    return (
       await fetchWithToken<Record<string, never>>(
         `${host}/call/record/${params.callId}`,
         {
           method: 'PATCH',
           body: JSON.stringify({ customName: params.customName }),
         }
-      ),
-      () => undefined
-    );
+      )
+    ).map(() => undefined);
   },
 };

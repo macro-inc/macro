@@ -19,10 +19,10 @@ import type {
   PropertyApiValues,
 } from '@core/component/Properties/types';
 import { isMobile } from '@core/mobile/isMobile';
-import CaretDown from '@icon/bold/caret-down-bold.svg';
-import CaretRight from '@icon/bold/caret-right-bold.svg';
-import Plus from '@icon/regular/plus.svg';
-import LoadingSpinner from '@icon/regular/spinner.svg';
+import CaretDown from '@phosphor/caret-down.svg';
+import CaretRight from '@phosphor/caret-right.svg';
+import Plus from '@phosphor/plus.svg';
+import LoadingSpinner from '@phosphor/spinner.svg';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';

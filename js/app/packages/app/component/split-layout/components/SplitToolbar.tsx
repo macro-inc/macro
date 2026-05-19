@@ -1,9 +1,6 @@
-import { cn } from '@ui';
 import {
   createRenderEffect,
   createSignal,
-  onCleanup,
-  onMount,
   type ParentProps,
   type Setter,
   Show,
@@ -13,53 +10,25 @@ import { useSplitPanelOrThrow } from '../layoutUtils';
 
 export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
   const panel = useSplitPanelOrThrow();
-  const [preview] = panel.previewState;
-  const [hasContent, setHasContent] = createSignal(false);
 
-  const checkContent = () => {
-    const leftHasContent =
-      panel.layoutRefs.toolbarLeft?.hasChildNodes() || false;
-    const rightHasContent =
-      panel.layoutRefs.toolbarRight?.hasChildNodes() || false;
-    setHasContent(leftHasContent || rightHasContent);
-  };
-
-  onMount(() => {
-    checkContent();
-    const observer = new MutationObserver(checkContent);
-
-    if (panel.layoutRefs.toolbarLeft) {
-      observer.observe(panel.layoutRefs.toolbarLeft, { childList: true });
-    }
-
-    if (panel.layoutRefs.toolbarRight) {
-      observer.observe(panel.layoutRefs.toolbarRight, { childList: true });
-    }
-
-    onCleanup(() => observer.disconnect());
-  });
-
-  // Hide toolbar when preview is open
-  // The preview panel renders blocks directly without using SplitContainer,
-  // so this only affects the main unified list toolbar
+  // Layout / spacing / border / min-height live on <Panel.Toolbar> in
+  // SplitPanel. This wrapper only mounts the portal targets so consumers
+  // (<SplitToolbarLeft />, <SplitToolbarRight />) have somewhere to render
+  // into.
   return (
     <div
-      class={cn(
-        'relative w-full flex items-center justify-between shrink-0',
-        hasContent() && 'min-h-10',
-        preview() && 'hidden'
-      )}
+      class="flex items-start justify-between w-full"
       data-split-toolbar
       ref={props.ref}
     >
       <div
-        class="flex-1 h-full flex items-center gap-1 px-2"
+        class="flex-1 flex items-start gap-1"
         ref={(ref) => {
           panel.layoutRefs.toolbarLeft = ref;
         }}
       />
       <div
-        class="flex h-full items-center gap-1 px-2"
+        class="flex items-start gap-1"
         ref={(ref) => {
           panel.layoutRefs.toolbarRight = ref;
         }}

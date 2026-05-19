@@ -23,7 +23,7 @@ rate_limit = { path = "../rate_limit", features = ["testing"] }
 redis = { workspace = true, features = [
   "aio",
   "tokio-comp",
-  "tokio-native-tls-comp",
+  "tokio-rustls-comp",
 ] }
 rootcause = { workspace = true }
 serde = { workspace = true }

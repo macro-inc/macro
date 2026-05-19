@@ -1,11 +1,11 @@
 import * as stackingContext from '@core/constant/stackingContext';
 import { isMobile } from '@core/mobile/isMobile';
-import ChevronLeftIcon from '@icon/regular/caret-left.svg';
-import ChevronRightIcon from '@icon/regular/caret-right.svg';
-import ClipboardIcon from '@icon/regular/clipboard.svg';
-import DownloadIcon from '@icon/regular/download-simple.svg';
-import XIcon from '@icon/regular/x.svg';
 import { Dialog, useDialogContext } from '@kobalte/core/dialog';
+import ChevronLeftIcon from '@phosphor/caret-left.svg';
+import ChevronRightIcon from '@phosphor/caret-right.svg';
+import ClipboardIcon from '@phosphor/clipboard.svg';
+import DownloadIcon from '@phosphor/download-simple.svg';
+import XIcon from '@phosphor/x.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { isIOS } from '@solid-primitives/platform';
 import { Button, cn } from '@ui';

@@ -2,7 +2,8 @@
  * *DO NOT EDIT MANUALLY*
  */
 
-import { err, type MaybeResult, ok } from 'core/util/maybeResult';
+import type { ResultError } from 'core/util/result';
+import { err, ok, type Result } from 'neverthrow';
 import * as schemas from './schemas';
 import type * as types from './types';
 
@@ -284,9 +285,11 @@ export type NamedTool<
 function deserializeTool<T extends NamedTool>(
   tool: NamedRawTool,
   direction: 'call' | 'response'
-): MaybeResult<'parse_error' | 'not_found', T> {
+): Result<T, ResultError<'parse_error' | 'not_found'>[]> {
   if (!(tool.name in toolParserMap)) {
-    return err('not_found', `tool name not found ${tool.name}`);
+    return err([
+      { code: 'not_found', message: `tool name not found ${tool.name}` },
+    ]);
   }
   const parser = toolParserMap[tool.name as ToolName];
   const maybeToolCall = parser[direction].safeParse(tool.json);
@@ -297,17 +300,23 @@ function deserializeTool<T extends NamedTool>(
       data: maybeToolCall.data,
     } as T);
   }
-  return err('parse_error', 'tool parsing failed');
+  return err([{ code: 'parse_error', message: 'tool parsing failed' }]);
 }
 
 export function deserializeToolCall(
   tool: NamedRawTool
-): MaybeResult<'parse_error' | 'not_found', NamedTool<ToolName, 'call'>> {
+): Result<
+  NamedTool<ToolName, 'call'>,
+  ResultError<'parse_error' | 'not_found'>[]
+> {
   return deserializeTool(tool, 'call');
 }
 
 export function deserializeToolResponse(
   tool: NamedRawTool
-): MaybeResult<'parse_error' | 'not_found', NamedTool<ToolName, 'response'>> {
+): Result<
+  NamedTool<ToolName, 'response'>,
+  ResultError<'parse_error' | 'not_found'>[]
+> {
   return deserializeTool(tool, 'response');
 }

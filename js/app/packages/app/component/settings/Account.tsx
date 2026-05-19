@@ -89,12 +89,8 @@ function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
 
 function useUserName() {
   const fetchUserName = async () => {
-    const [_, response] = await authServiceClient.getUserName();
-    if (response) {
-      return response;
-    }
-
-    return null;
+    const response = await authServiceClient.getUserName();
+    return response.isOk() ? response.value : null;
   };
 
   const [userNameResource] = createResource(fetchUserName);
@@ -135,14 +131,14 @@ export function Account() {
   const emailActive = useEmailLinksStatus();
 
   const [githubLinkExists, { refetch: refetchGithubLink }] = createResource(async () => {
-    const [_, response] = await authServiceClient.checkLinkExists({ idp_name: 'github' });
-    return response?.link_exists ?? false;
+    const response = await authServiceClient.checkLinkExists({ idp_name: 'github' });
+    return response.isOk() ? response.value.link_exists : false;
   });
 
   const handleGithubEnable = async () => {
-    const [_, url] = await authServiceClient.initGithubLink(window.location.href);
-    if (url) {
-      window.location.href = url;
+    const url = await authServiceClient.initGithubLink(window.location.href);
+    if (url.isOk()) {
+      window.location.href = url.value;
     }
   };
 

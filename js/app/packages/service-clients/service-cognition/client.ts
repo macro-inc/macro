@@ -5,18 +5,11 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import {
-  err,
-  isErr,
-  type MaybeError,
-  type MaybeResult,
-  mapOk,
-  type ObjectLike,
-  ok,
-} from '@core/util/maybeResult';
 import { platformFetch } from '@core/util/platformFetch';
+import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { DocumentTextPart } from '@service-cognition/generated/schemas/documentTextPart';
+import { err, ok, type Result } from 'neverthrow';
 import type OpenAI from 'openai';
 import type { AddServerRequest } from './generated/schemas/addServerRequest';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
@@ -53,17 +46,17 @@ type WithProjectId = { project_id: string };
 export function dcsFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeError<FetchWithTokenErrorCode>>;
+): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
 export function dcsFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeResult<FetchWithTokenErrorCode, T>>;
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
 export function dcsFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
-  | Promise<MaybeError<FetchWithTokenErrorCode>> {
+  | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
+  | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${dcsHost}${url}`, init);
 }
 export type Success = { success: boolean };
@@ -74,35 +67,32 @@ export const cognitionApiServiceClient = {
   /** Creates a mapping from source_id to target_id */
   async createIdMapping(args: { source_id: string; target_id: string }) {
     const { source_id, target_id } = args;
-    return mapOk(
+    return (
       await dcsFetch<{ success: boolean }>(`/id_mapping/${source_id}`, {
         method: 'POST',
         body: JSON.stringify({ target_id }),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 
   /** Gets the target_id for a given source_id */
   async getIdMapping(args: { source_id: string }) {
     const { source_id } = args;
-    return mapOk(
+    return (
       await dcsFetch<IdMappingResponse>(`/id_mapping/${source_id}`, {
         method: 'GET',
-      }),
-      (result) => result.target_id
-    );
+      })
+    ).map((result) => result.target_id);
   },
 
   getChat: cache(
     async function getChat(args: WithChatId) {
       const { chat_id } = args;
-      return mapOk(
+      return (
         await dcsFetch<GetChatResponse>(`/chats/${chat_id}`, {
           method: 'GET',
-        }),
-        (result) => result
-      );
+        })
+      ).map((result) => result);
     },
     {
       seconds: 5,
@@ -111,15 +101,14 @@ export const cognitionApiServiceClient = {
 
   async editChatProject(args: WithChatId & WithProjectId) {
     const { chat_id, project_id } = args;
-    return mapOk(
+    return (
       await dcsFetch<{ success: boolean }>(`/chats/${chat_id}`, {
         method: 'PATCH',
         body: JSON.stringify({
           projectId: project_id,
         }),
-      }),
-      () => ({ success: true })
-    );
+      })
+    ).map(() => ({ success: true }));
   },
 
   async updateChatPermissions(args: PatchChatRequest & WithChatId) {
@@ -133,43 +122,40 @@ export const cognitionApiServiceClient = {
   },
   async renameChat(args: WithChatId & { new_name: string }) {
     const { chat_id, new_name } = args;
-    return mapOk(
+    return (
       await dcsFetch<{ success: boolean }>(`/chats/${chat_id}`, {
         method: 'PATCH',
         body: JSON.stringify({
           name: new_name,
         }),
-      }),
-      () => ({ success: true })
-    );
+      })
+    ).map(() => ({ success: true }));
   },
   async copyChat(args: WithChatId & WithName) {
     const { chat_id, name } = args;
-    return mapOk(
+    return (
       await dcsFetch<StringIDResponse>(`/chats/${chat_id}/copy`, {
         method: 'POST',
         body: JSON.stringify({
           name,
         }),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async createChat(args: CreateChatRequest) {
-    return mapOk(
+    return (
       await dcsFetch<StringIDResponse>(`/chats`, {
         method: 'POST',
         body: JSON.stringify({
           name: args.name,
           projectId: args.projectId,
         }),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async deleteChat(args: WithChatId) {
     const { chat_id } = args;
-    const maybeResult = await dcsFetch(`/chats/${chat_id}`, {
+    const result = await dcsFetch(`/chats/${chat_id}`, {
       method: 'DELETE',
     });
 
@@ -178,18 +164,21 @@ export const cognitionApiServiceClient = {
     // delete chat returns a 200 with an empty body on success
     // which return INVALID_JSON error on response.json()
     // so we return no error instead to signal success
-    if (isErr(maybeResult, 'INVALID_JSON')) maybeResult;
+    if (
+      result.isErr() &&
+      result.error.some((error) => error.code === 'INVALID_JSON')
+    )
+      result;
 
-    return maybeResult;
+    return result;
   },
   async getChatPermissions(args: { id: string }) {
     const { id } = args;
-    return mapOk(
+    return (
       await dcsFetch<GetChatPermissionsResponse>(`/chats/${id}/permissions`, {
         method: 'GET',
-      }),
-      (result) => result.permissions
-    );
+      })
+    ).map((result) => result.permissions);
   },
   async permanentlyDeleteChat(args: WithChatId) {
     const { chat_id } = args;
@@ -202,30 +191,27 @@ export const cognitionApiServiceClient = {
   },
   async revertDeleteChat(args: WithChatId) {
     const { chat_id } = args;
-    return mapOk(
+    return (
       await dcsFetch<Success>(`/chats/${chat_id}/revert_delete`, {
         method: 'PUT',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async getChatsForAttachment(args: { attachment_id: string }) {
     const { attachment_id } = args;
-    return mapOk(
+    return (
       await dcsFetch<GetChatsForAttachmentResponse>(
         `/attachments/${attachment_id}/chats`,
         {
           method: 'GET',
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
 
   getCitation: cache(
     async function getCitation(args) {
-      return mapOk(
-        await dcsFetch<DocumentTextPart>(`/citations/${args.id}`),
+      return (await dcsFetch<DocumentTextPart>(`/citations/${args.id}`)).map(
         (result) => result
       );
     },
@@ -234,13 +220,12 @@ export const cognitionApiServiceClient = {
     }
   ),
   async getBatchChatPreviews(args: GetBatchPreviewRequest) {
-    return mapOk(
+    return (
       await dcsFetch<GetBatchPreviewResponse>(`/preview`, {
         method: 'POST',
         body: JSON.stringify(args),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   /** Update a tool call's arguments (validates against tool schema server-side). */
   async updateToolCall<T extends keyof ToolCallArgs>(args: {
@@ -283,7 +268,7 @@ export const cognitionApiServiceClient = {
     toolCallId: string;
     args?: ToolCallArgs[T];
   }) {
-    return mapOk(
+    return (
       await dcsFetch<{ result: unknown }>(`/chats/${args.chat_id}/tool/call`, {
         method: 'POST',
         body: JSON.stringify({
@@ -291,9 +276,8 @@ export const cognitionApiServiceClient = {
           toolCallId: args.toolCallId,
           args: args.args,
         }),
-      }),
-      (result) => result.result
-    );
+      })
+    ).map((result) => result.result);
   },
 
   /** Reject a pending tool call. */
@@ -313,52 +297,47 @@ export const cognitionApiServiceClient = {
 
   /** Send a chat message via HTTP stream API. Response chunks arrive via connection_gateway. */
   async sendStreamChatMessage(args: HttpSendChatMessageRequest) {
-    return mapOk(
+    return (
       await dcsFetch<SendChatMessageResponse>(`/stream/chat/message`, {
         method: 'POST',
         body: JSON.stringify(args),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 
   /** Stops an in-flight AI chat stream. The streaming task persists whatever
    * the user has already seen and emits StreamEnd. */
   async stopChatStream(args: StopChatStreamRequest) {
-    return mapOk(
+    return (
       await dcsFetch<StopChatStreamResponse>(`/stream/chat/message/stop`, {
         method: 'POST',
         body: JSON.stringify(args),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 
   async listMcpServers() {
-    return mapOk(
-      await dcsFetch<ServerResponse[]>(`/mcp/servers`, { method: 'GET' }),
-      (result) => result
-    );
+    return (
+      await dcsFetch<ServerResponse[]>(`/mcp/servers`, { method: 'GET' })
+    ).map((result) => result);
   },
 
   async addMcpServer(args: AddServerRequest) {
-    return mapOk(
+    return (
       await dcsFetch<ServerResponse>(`/mcp/servers`, {
         method: 'POST',
         body: JSON.stringify(args),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 
   async updateMcpServer(args: UpdateServerRequest) {
-    return mapOk(
+    return (
       await dcsFetch<ServerResponse>(`/mcp/servers`, {
         method: 'PUT',
         body: JSON.stringify(args),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 
   async deleteMcpServer(args: { url: string }) {
@@ -368,13 +347,12 @@ export const cognitionApiServiceClient = {
   },
 
   async startMcpAuth(args: StartAuthRequest) {
-    return mapOk(
+    return (
       await dcsFetch<StartAuthResponse>(`/mcp/servers/auth/start`, {
         method: 'POST',
         body: JSON.stringify(args),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 };
 
@@ -390,12 +368,12 @@ export async function generateTitle(text: string): Promise<string | undefined> {
     max_tokens: 100,
   });
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     console.error('Error generating title');
     return undefined;
   }
 
-  return result[1].choices[0]?.message?.content?.trim() || undefined;
+  return result.value.choices[0]?.message?.content?.trim() || undefined;
 }
 
 type DcsCompletionErrorCode = 'NETWORK_ERROR' | 'OPENAI_ERROR';
@@ -403,9 +381,9 @@ type DcsCompletionErrorCode = 'NETWORK_ERROR' | 'OPENAI_ERROR';
 export async function dcsCompletion(
   body: Omit<OpenAI.ChatCompletionCreateParamsNonStreaming, 'stream'>
 ): Promise<
-  MaybeResult<
-    FetchWithTokenErrorCode | DcsCompletionErrorCode,
-    OpenAI.ChatCompletion
+  Result<
+    OpenAI.ChatCompletion,
+    ResultError<FetchWithTokenErrorCode | DcsCompletionErrorCode>[]
   >
 > {
   let response: Response;
@@ -417,7 +395,9 @@ export async function dcsCompletion(
       body: JSON.stringify({ ...body, stream: false }),
     });
   } catch {
-    return err('NETWORK_ERROR', 'Failed to reach completions proxy');
+    return err([
+      { code: 'NETWORK_ERROR', message: 'Failed to reach completions proxy' },
+    ]);
   }
 
   const data = await response.json();
@@ -426,7 +406,7 @@ export async function dcsCompletion(
     const message =
       data?.error?.message ??
       `Completion failed with status ${response.status}`;
-    return err('OPENAI_ERROR', message);
+    return err([{ code: 'OPENAI_ERROR', message: message }]);
   }
   return ok(data as OpenAI.ChatCompletion);
 }

@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import type {

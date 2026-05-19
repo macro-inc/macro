@@ -27,7 +27,7 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { invalidateContacts } from '@core/user/contactService';
 import { getDestinationFromOptions } from '@core/util/destination';
-import { isErr, throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import {
   chatRuleset,
   handleFileFolderDrop,
@@ -269,12 +269,12 @@ function IosShareSheetComposer(props: {
             recipients: destination.users,
           });
 
-    if (isErr(result)) {
+    if (result.isErr()) {
       toast.failure('Failed to open channel');
       throw new Error('Failed to resolve share destination channel');
     }
 
-    return result[1].channel_id;
+    return result.value.channel_id;
   };
 
   const handleSend = async (snapshot: InputSnapshot) => {
@@ -292,7 +292,7 @@ function IosShareSheetComposer(props: {
       message,
     });
 
-    if (isErr(result)) {
+    if (result.isErr()) {
       toast.failure('Failed to send message');
       throw new Error('Failed to post shared message');
     }

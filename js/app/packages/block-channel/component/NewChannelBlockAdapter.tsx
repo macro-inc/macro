@@ -221,7 +221,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
 
       if (targetMessageId && messagesChannelHandle.current) {
         setActiveTab(DEFAULT_CHANNEL_TAB);
-        await messagesChannelHandle.current.goToMessage(
+        messagesChannelHandle.current.goToMessage(
           targetMessageId,
           targetMessageReplyId
         );
@@ -269,7 +269,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
           pendingJoinCall={pendingJoinCall}
           onHandled={() => setPendingJoinCall(false)}
         />
-        <div class="h-full flex flex-col">
+        <div class="h-full flex flex-col px-2 mobile:px-0">
           <Switch>
             <Match when={activeTab() === 'messages'}>
               <NewChannel

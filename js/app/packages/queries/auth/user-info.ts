@@ -1,6 +1,6 @@
 import { enableUserInfoQuery } from '@core/context/user-info-gate';
 import { hasLoginCookie } from '@core/util/cookies';
-import { catchToResult, throwOnErr } from '@core/util/maybeResult';
+import { catchToResult, type ResultType, throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import { useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
@@ -10,9 +10,9 @@ export { authKeys } from './keys';
 
 const USER_INFO_STALE_TIME = 15_000; // 15 seconds
 
-export type UserInfoData = Awaited<
-  ReturnType<typeof authServiceClient.getLegacyUserPermissions>
->[1];
+export type UserInfoData = ResultType<
+  Awaited<ReturnType<typeof authServiceClient.getLegacyUserPermissions>>
+>;
 
 type UseUserInfoQueryOptions = {
   /** Whether the query should be enabled. Can be a boolean or accessor for reactivity. */
