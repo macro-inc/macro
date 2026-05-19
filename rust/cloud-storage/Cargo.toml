@@ -152,15 +152,15 @@ askama = "0.14"
 async-openai = { version = "0.36.1", features = ["byot", "chat-completion", "completions"] }
 async-stream = "0.3.6"
 async-trait = "0.1.86"
-aws-config = { version = "1.8.12", features = ["behavior-version-latest"] }
-aws-sdk-dynamodb = "1.98.0"
-aws-sdk-lambda = "1.104.0"
-aws-sdk-s3 = "1.121.0"
-aws-sdk-secretsmanager = "1.93.0"
-aws-sdk-sesv2 = "1.103.0"
-aws-sdk-sns = "1.90.0"
-aws-sdk-sqs = "1.91.0"
-aws-smithy-types = "1.2.13"
+aws-config = { version = "1.8.16", features = ["behavior-version-latest"] }
+aws-sdk-dynamodb = "1.111.0"
+aws-sdk-lambda = "1.122.0"
+aws-sdk-s3 = "1.132.0"
+aws-sdk-secretsmanager = "1.104.0"
+aws-sdk-sesv2 = "1.118.0"
+aws-sdk-sns = "1.99.0"
+aws-sdk-sqs = "1.98.0"
+aws-smithy-types = "1.4.7"
 aws_lambda_events = { version = "0.16.0", default-features = false }
 axum = { version = "0.8", features = ["tower-log"] }
 axum-extra = { version = "0.10" }
@@ -265,7 +265,7 @@ uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v7"] }
 async-stripe = { version = "0.41", default-features = false, features = [
   "billing",
   "checkout",
-  "runtime-tokio-hyper-rustls",
+  "runtime-tokio-hyper-rustls-webpki",
 ] }
 axum-macros = "0.5"
 bytes = "1.11.1"
