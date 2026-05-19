@@ -10,7 +10,6 @@ import {
   propertyValueToApi,
 } from '@core/component/Properties/api/converters';
 import { Modals } from '@core/component/Properties/component/modal';
-import { PropertyGrid } from '@core/component/Properties/component/panel';
 import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
@@ -29,11 +28,11 @@ import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createTask } from '@core/util/create';
 import { filterMap } from '@core/util/list';
-
 import { buildSimpleEntityUrl } from '@core/util/url';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
+import ArrowsInIcon from '@phosphor/arrows-in-simple.svg';
+import ArrowsOutIcon from '@phosphor/arrows-out-simple.svg';
 import SplitIcon from '@phosphor/square-half.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import XIcon from '@phosphor/x.svg';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { refetchSoupEntity } from '@queries/soup/cache';
@@ -41,9 +40,16 @@ import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { debounce } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
-import { Button, Hotkey, ToggleSwitch } from '@ui';
+import { Button, Hotkey, Scroll, ToggleSwitch } from '@ui';
 import type { LexicalEditor } from 'lexical';
-import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  For,
+  onMount,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
 import {
@@ -52,13 +58,14 @@ import {
   saveTaskComposerDraft,
   updateDraftTimestamp,
 } from '../util/taskComposerStorage';
+import { InlinePropertyValue } from './InlinePropertyValue';
 
-// Show these props in the composer.
+// Show these props in the composer (Linear-style left-to-right order).
 const COMPOSER_PROPERTIES = [
-  SYSTEM_PROPERTY_IDS.ASSIGNEES,
   SYSTEM_PROPERTY_IDS.STATUS,
-  SYSTEM_PROPERTY_IDS.DUE_DATE,
   SYSTEM_PROPERTY_IDS.PRIORITY,
+  SYSTEM_PROPERTY_IDS.ASSIGNEES,
+  SYSTEM_PROPERTY_IDS.DUE_DATE,
 ];
 
 /**
@@ -563,38 +570,61 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   return (
     <div
-      class="flex flex-col relative h-full max-h-full min-h-0"
+      class="flex flex-col relative h-full max-h-full min-h-0 p-4"
       tabIndex={-1}
       ref={setContainerRef}
     >
-      <div class="flex items-center gap-1 p-2">
+      <div class="flex items-center gap-1">
+        <div class="flex-1 text-sm text text-ink-extra-muted flex items-center gap-2">
+          <EntityIcon targetType="task" size="xs" />
+        </div>
+        <Show when={content().trim() || title()}>
+          <Button
+            onMouseDown={handleClearDraft}
+            tabIndex={-1}
+            tooltip="Clear Draft"
+            size="sm"
+          >
+            Clear Draft
+          </Button>
+        </Show>
+        <Show
+          when={splitPanel?.handle.isPopover() && splitPanel.popoverExpansion}
+        >
+          <Button
+            onMouseDown={() =>
+              splitPanel.popoverExpansion?.setExpanded((v) => !v)
+            }
+            tabIndex={-1}
+            tooltip={
+              splitPanel.popoverExpansion?.expanded() ? 'Collapse' : 'Expand'
+            }
+            size="icon-sm"
+          >
+            <Show
+              when={splitPanel.popoverExpansion?.expanded()}
+              fallback={<ArrowsOutIcon />}
+            >
+              <ArrowsInIcon />
+            </Show>
+          </Button>
+        </Show>
         <Show when={splitPanel?.handle.isPopover()}>
-          <Button onMouseDown={handleClose} tabIndex={-1} size="icon-sm">
+          <Button
+            onMouseDown={handleClose}
+            tabIndex={-1}
+            tooltip="Close"
+            size="icon-sm"
+          >
             <XIcon />
           </Button>
         </Show>
-        <div class="flex items-center gap-2 flex-1">
-          <span class="text-sm font-medium text-ink-disabled/50">
-            Create Task
-          </span>
-        </div>
-        <Button
-          onMouseDown={handleClearDraft}
-          tabIndex={-1}
-          tooltip="Clear Draft"
-          size="icon-sm"
-          disabled={!(content().trim() || title())}
-        >
-          <TrashIcon />
-        </Button>
       </div>
-      <div class="border-b border-edge-muted" />
-      <div class="p-2 flex-1 min-h-0 flex flex-col">
-        <div class="shrink-0 flex p-2 gap-2 items-center">
-          <EntityIcon targetType="task" size="sm" />
+      <div class="mt-6 flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div class="shrink-0 flex gap-2 items-center">
           <input
             type="text"
-            placeholder="Task Title"
+            placeholder="Task name"
             value={title()}
             onInput={(e) => {
               setTitle(e.currentTarget.value);
@@ -625,18 +655,21 @@ export function ComposeTask(props: ComposeTaskProps) {
           />
         </div>
 
-        <MarkdownShell
-          config={editorConfig}
-          initialState={initialState.editorState}
-          initialValue={
-            initialState.editorState
-              ? undefined
-              : initialState.content || undefined
-          }
-          placeholder={props.placeholder ?? 'Add description...'}
-          portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
-          class="shrink min-h-0 h-[unset] text-base px-2 overflow-y-auto"
-        />
+        <Scroll class="">
+          <div class="h-9000 w-5 bg-[teal]" />
+          {/*<MarkdownShell
+            config={editorConfig}
+            initialState={initialState.editorState}
+            initialValue={
+              initialState.editorState
+                ? undefined
+                : initialState.content || undefined
+            }
+            placeholder={props.placeholder ?? 'Add description...'}
+            portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
+            class="h-auto overflow-visible"
+          />*/}
+        </Scroll>
 
         <Suspense>
           <PropertiesProvider
@@ -648,15 +681,17 @@ export function ComposeTask(props: ComposeTaskProps) {
             onPropertyDeleted={() => {}}
             saveHandler={saveHandler}
           >
-            <div class="text-sm">
-              <PropertyGrid
-                properties={properties()}
-                columns={2}
-                withDelete={false}
-                withPin={false}
-              ></PropertyGrid>
-              <Modals />
+            <div class="flex flex-row flex-wrap items-center gap-2 text-sm mb-6">
+              <For each={properties()}>
+                {(property) => (
+                  <InlinePropertyValue
+                    property={property}
+                    emptyLabel={property.displayName}
+                  />
+                )}
+              </For>
             </div>
+            <Modals />
           </PropertiesProvider>
         </Suspense>
       </div>
@@ -668,8 +703,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         </div>
       </Show>
 
-      <div class="w-full border-b border-edge-muted" />
-      <div class="shrink-0 flex justify-between items-center p-2 gap-2">
+      <div class="shrink-0 flex justify-between items-center gap-2">
         <ToggleSwitch
           labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
           onChange={setCreateMore}
@@ -678,20 +712,11 @@ export function ComposeTask(props: ComposeTaskProps) {
         />
         <Button
           onClick={handleCreateTask}
-          class="px-3 pr-2"
-          disabled={title().trim().length === 0 || isCreating()}
+          // disabled={title().trim().length === 0 || isCreating()}
           variant="base"
         >
-          <Show
-            when={isCreating()}
-            fallback={<EntityIcon targetType="task" theme="monochrome" />}
-          >
-            <CircleSpinner width={16} height={16} />
-          </Show>
           Create Task
-          <div class="text-xxs text-ink-extra-muted ml-auto border border-edge-muted px-1.5 py-1 font-sans rounded-xs">
-            <Hotkey shortcut="cmd+enter" />
-          </div>
+          <Hotkey shortcut="cmd+enter" />
         </Button>
       </div>
     </div>

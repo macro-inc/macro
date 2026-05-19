@@ -4,10 +4,12 @@ import { Property } from '@property';
 import type { Property as PropertyT } from '@property/types';
 import { Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
-import { type Component, Match, Switch } from 'solid-js';
+import { type Component, type JSX, Match, Switch } from 'solid-js';
 
 type InlinePropertyValueProps = {
   property: PropertyT;
+  /** Label rendered when the property is empty. Defaults to "None". */
+  emptyLabel?: JSX.Element;
 };
 
 /**
@@ -67,7 +69,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
             </Switch>
             <Property.Text
               property={props.property}
-              fallback={<Property.Empty label="None" />}
+              fallback={<Property.Empty label={props.emptyLabel ?? 'None'} />}
             />
             <Property.Caret />
           </Property.EditTrigger>
