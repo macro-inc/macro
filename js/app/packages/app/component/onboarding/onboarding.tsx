@@ -77,8 +77,9 @@ function OnboardingInner() {
   const userNameQuery = useQuery(() => ({
     queryKey: ['userName'],
     queryFn: async () => {
-      const [, name] = await authServiceClient.getUserName();
-      return name ?? null;
+      const result = await authServiceClient.getUserName();
+      if (result.isErr()) return null;
+      return result.value;
     },
     enabled: isAuthenticated() === true && !ctx.firstName() && !ctx.lastName(),
   }));
