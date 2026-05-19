@@ -28,7 +28,7 @@ export function ToolsetSelector(props: {
       <Show when={toolset().type === 'all'}>
         <div class="flex">
           <Dropdown>
-            <Dropdown.Trigger size="sm">
+            <Dropdown.Trigger>
               <span>SOURCE</span>
             </Dropdown.Trigger>
               <Dropdown.Content>

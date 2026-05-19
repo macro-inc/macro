@@ -395,9 +395,9 @@ const SearchableFilterSubmenu = (props: {
   });
 
   return (
-    <Dropdown.Sub gutter={4} open={isOpen()} onOpenChange={setIsOpen}>
+    <Dropdown.Sub open={isOpen()} onOpenChange={setIsOpen}>
       <Dropdown.SubTrigger
-        class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+        class="justify-between py-2"
         onPointerEnter={(e: PointerEvent & { currentTarget: HTMLElement }) => {
           // Kobalte's "grace polygon" keeps an open sub alive when the
           // pointer crosses toward its content. For sibling In/From triggers,
@@ -436,8 +436,8 @@ function SingleValueSubmenu<T>(props: {
   onSelect: (value: T) => void;
 }) {
   return (
-    <Dropdown.Sub gutter={4}>
-      <Dropdown.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover">
+    <Dropdown.Sub>
+      <Dropdown.SubTrigger class="justify-between">
         <span class="text-ink">{props.label}</span>
         <CaretRightIcon class="size-3 text-ink-muted" />
       </Dropdown.SubTrigger>
@@ -618,9 +618,8 @@ const SearchIndexSubRow = (props: {
   closeRoot: () => void;
   children: JSX.Element;
 }) => (
-  <Dropdown.Sub gutter={4}>
+  <Dropdown.Sub>
     <Dropdown.SubTrigger
-      class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
       onPointerDown={props.onSelect}
       onKeyDown={(e: KeyboardEvent) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -800,8 +799,8 @@ export const UnifiedFilterDropdown = () => {
                   <>
                     <For each={categories()}>
                       {(category) => (
-                        <Dropdown.Sub gutter={4}>
-                          <Dropdown.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover">
+                        <Dropdown.Sub>
+                          <Dropdown.SubTrigger class="justify-between">
                             <span class="text-ink">{category.label}</span>
                             <CaretRightIcon class="size-3 text-ink-muted" />
                           </Dropdown.SubTrigger>
