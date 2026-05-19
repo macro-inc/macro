@@ -241,6 +241,7 @@ time = "0.3.37"
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.17" }
 tokio-util = "0.7.13"
+tungstenite = { version = "0.28", features = ["url"] }
 tower = { version = "0.5.1", features = ["util"] }
 tower-http = { version = "0.6.1", features = [
   "compression-gzip",
