@@ -18,19 +18,18 @@ import { Button, Tooltip } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { useSoup } from '../../soup-context';
 
-export const SoupFiltersBar = () => {
+export function SoupFiltersBar() {
   const {
     resetToTabDefaults,
     activeFiltersList,
-    removeFilter,
-    replaceFilter,
     isOptionActive,
+    replaceFilter,
+    removeFilter,
   } = useFilterRefinements();
 
-  const analytics = useAnalytics();
-
-  const soup = useSoup();
   const panel = useSplitPanelOrThrow();
+  const analytics = useAnalytics();
+  const soup = useSoup();
 
   const togglePreview = () => {
     const currentPreview = soup.previewEntity();
@@ -38,24 +37,23 @@ export const SoupFiltersBar = () => {
       soup.setPreviewEntity(undefined);
       return;
     }
-
     const focused = soup.focus.id();
-
-    if (!focused) return;
-
+    if (!focused) {
+      return;
+    }
     analytics.track('preview_panel_use');
     soup.setPreviewEntity(focused);
   };
 
   registerHotkey({
-    hotkey: 'space',
+    hotkeyToken: TOKENS.unifiedList.togglePreview,
     scopeId: panel.splitHotkeyScope,
     description: 'Toggle preview',
-    hotkeyToken: TOKENS.unifiedList.togglePreview,
     keyDownHandler: () => {
       togglePreview();
       return true;
     },
+    hotkey: 'space',
   });
 
   const isSearchView = createMemo(() => {
@@ -69,17 +67,17 @@ export const SoupFiltersBar = () => {
         <div class="flex items-start gap-2 min-w-0 flex-1">
           <UnifiedFilterDropdown />
           <ActiveFilterChips
-            filters={activeFiltersList()}
-            onRemove={removeFilter}
-            onReplace={replaceFilter}
-            onClearAll={resetToTabDefaults}
             isOptionActive={isOptionActive}
+            onClearAll={resetToTabDefaults}
+            filters={activeFiltersList()}
+            onReplace={replaceFilter}
+            onRemove={removeFilter}
           />
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <Tooltip label="Preview" hotkey={TOKENS.unifiedList.togglePreview}>
-          <Button variant="ghost" size="icon-sm" onClick={togglePreview}>
+        <Tooltip hotkey={TOKENS.unifiedList.togglePreview} label="Preview">
+          <Button onClick={togglePreview} variant="ghost" size="icon-sm">
             {soup.previewEntity() ? <EyeSlashIcon /> : <EyeIcon />}
           </Button>
         </Tooltip>
@@ -90,4 +88,4 @@ export const SoupFiltersBar = () => {
       </SplitToolbarRight>
     </Show>
   );
-};
+}
