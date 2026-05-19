@@ -96,22 +96,15 @@ function optimisticUpdateSoupEntityProperty(
 
   const propertyDefinitionId = getPropertyDefinitionId(property);
   const existing = current.data.properties;
-  const existingProp = existing.find(
+  const isAlreadyAttached = existing.some(
     (prop) => prop.definition.id === propertyDefinitionId
   );
 
-  // Always remove + append (rather than map+swap). normy's deep-merge skips
-  // mutations whose only changed field was previously `undefined` in the
-  // cache, which would drop the update when transitioning a property from
-  // unset to a value. Shifting array positions forces normy to see a real
-  // diff at some index.
-  const nextProp: SoupProperty = existingProp
-    ? { ...existingProp, value }
-    : fabricateSoupProperty(property, value);
-  const nextProperties: SoupProperty[] = [
-    ...existing.filter((prop) => prop.definition.id !== propertyDefinitionId),
-    nextProp,
-  ];
+  const nextProperties: SoupProperty[] = isAlreadyAttached
+    ? existing.map((prop) =>
+        prop.definition.id === propertyDefinitionId ? { ...prop, value } : prop
+      )
+    : [...existing, fabricateSoupProperty(property, value)];
 
   return optimisticUpdateSoupEntity({
     tag: current.tag,

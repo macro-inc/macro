@@ -28,6 +28,25 @@ import type {
 } from './types';
 
 /**
+ * Replace `undefined` property values with `null` so subsequent optimistic
+ * updates aren't filtered out by normy's `isMutationObjectDifferent`, which
+ * treats `undefined` cache fields as "nothing to update" and silently drops
+ * the mutation. Mutates in place — safe because callers pass freshly
+ * deserialized response data that isn't yet shared.
+ */
+export function normalizeSoupItemForCache(item: SoupApiItem): SoupApiItem {
+  if (item.tag === 'channel' || item.tag === 'call') return item;
+  const properties = item.data.properties;
+  if (!properties) return item;
+  for (const prop of properties) {
+    if (prop.value === undefined) {
+      prop.value = null;
+    }
+  }
+  return item;
+}
+
+/**
  * Optimistically update a single soup entity across all queries that reference it.
  * Returns a transaction whose `rollback()` restores only the affected queries
  * Channels: `{ tag: 'channel', data: { channel: { id, ...fields } }, frecency_score }`
@@ -115,6 +134,7 @@ export function getSoupItemId(item: SoupApiItem): string {
  * `optimisticUpdateSoupEntity` (deep-merge) instead.
  */
 export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
+  normalizeSoupItemForCache(item);
   const previous = snapshotSoup();
 
   queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
@@ -251,6 +271,7 @@ export async function refetchSoupEntity(
   if (!page.items.length) return;
 
   for (const item of page.items) {
+    normalizeSoupItemForCache(item);
     const itemId = getSoupItemId(item);
     if (hasSoupEntity(itemId)) {
       optimisticUpdateSoupEntity(item);
