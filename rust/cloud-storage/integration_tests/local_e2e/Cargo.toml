@@ -4,7 +4,7 @@ name = "local_e2e_integration_tests"
 publish = false
 version = "0.1.0"
 
-[dependencies]
+[dev-dependencies]
 anyhow = { workspace = true }
 futures = { workspace = true }
 local_e2e_test_support = { path = "../../local_e2e_test_support" }
