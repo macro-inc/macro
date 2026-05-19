@@ -75,7 +75,7 @@ export function IntroStep() {
       <div class="flex flex-col items-center gap-5">
         <LogoIcon class="size-12 text-accent" />
         <div class="flex flex-col gap-2">
-          <h1 class="text-4xl font-semibold text-ink tracking-tight">
+          <h1 class="text-4xl mobile:text-2xl font-semibold text-ink tracking-tight">
             Welcome to Macro
           </h1>
           <p class="text-sm text-ink-disabled">
@@ -84,20 +84,20 @@ export function IntroStep() {
         </div>
       </div>
 
-      <div class="grid grid-cols-3 mobile:grid-cols-2 gap-3 w-full">
+      <div class="grid grid-cols-3 gap-3 w-full mobile:grid-cols-1 mobile:gap-4 mobile:flex-1 mobile:min-h-0 mobile:overflow-y-auto mobile:scrollbar-hidden">
         <For each={BLOCKS}>
           {(item) => (
             <div
               class={cn(
                 'group flex-1 flex flex-col gap-2.5 p-4 rounded-sm border border-edge-muted text-left transition-colors',
-                'mobile:gap-2 mobile:p-3',
+                'mobile:flex-row mobile:items-center mobile:gap-3 mobile:p-0 mobile:border-0 mobile:rounded-none',
                 item.hoverBg,
                 item.hoverBorder
               )}
             >
               <div
                 class={cn(
-                  'size-8 mobile:size-7 rounded-sm bg-ink/5 flex items-center justify-center transition-colors',
+                  'size-8 rounded-sm bg-ink/5 flex items-center justify-center transition-colors shrink-0',
                   item.hoverIconBg
                 )}
               >
