@@ -135,7 +135,7 @@ export const SoupViewContextProvider: FlowComponent<
       : 'created_at';
 
     return {
-      limit: 100,
+      limit: soup.grouping.activeGroupId() ? 2_000 : 100,
       sort_method: sortMethod,
     };
   });
