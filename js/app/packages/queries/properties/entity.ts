@@ -105,9 +105,9 @@ function optimisticUpdateSoupEntityProperty(
         ...existingProp,
         definition: {
           ...existingProp.definition,
-          // HACK (seamus): we need to change something other than the value in
-          // order to get normy tp update the cache. Changing definition.updated_at
-          // is INCORRECT, but it's currently harmless.
+          // HACK (seamus): we need to change something other than value in
+          // order to get normy to update the cache. Changing
+          // definition.updated_at is INCORRECT, but it's currently harmless.
           updated_at: new Date().toISOString(),
         },
         value,
