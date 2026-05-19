@@ -162,7 +162,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
   return (
     <div
       class={cn(
-        'isolate relative w-full h-full overflow-clip text-ink shrink-0 border-b border-edge-muted',
+        'isolate relative w-full h-full overflow-clip text-ink',
         isMobile() && isListViewID(panel.handle.content().id) && 'hidden'
       )}
       data-split-header
