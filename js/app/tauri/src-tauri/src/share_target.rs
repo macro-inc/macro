@@ -40,6 +40,7 @@ pub(crate) struct StagedSharedFile {
     mime_type: String,
     size: u64,
     preview_path: Option<String>,
+    shared_text: Option<String>,
 }
 
 pub(crate) trait ShareTargetPlatform {

@@ -17,6 +17,7 @@ interface StagedSharedFileData {
   mime_type: string;
   size: number;
   preview_path?: string | null;
+  shared_text?: string | null;
 }
 
 export interface PendingShareFile {
@@ -25,6 +26,7 @@ export interface PendingShareFile {
   mimeType: string;
   size: number;
   previewSrc?: string;
+  sharedText?: string;
 }
 
 export interface UploadPendingShareFileArgs {
@@ -57,13 +59,16 @@ async function popSharedFiles(
   const results = await invoke<StagedSharedFileData[]>('pop_shared_files', {
     filenames,
   });
-  return results.map(({ token, name, mime_type, size, preview_path }) => ({
-    token,
-    name,
-    mimeType: mime_type,
-    size,
-    previewSrc: preview_path ? convertFileSrc(preview_path) : undefined,
-  }));
+  return results.map(
+    ({ token, name, mime_type, size, preview_path, shared_text }) => ({
+      token,
+      name,
+      mimeType: mime_type,
+      size,
+      previewSrc: preview_path ? convertFileSrc(preview_path) : undefined,
+      sharedText: shared_text ?? undefined,
+    })
+  );
 }
 
 async function clearSharedFiles(tokens: string[]): Promise<void> {

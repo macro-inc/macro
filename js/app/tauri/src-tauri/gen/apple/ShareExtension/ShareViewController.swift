@@ -40,6 +40,7 @@ class ShareViewController: UIViewController {
         for provider in attachments {
             let imageType = UTType.image.identifier
             let movieType = UTType.movie.identifier
+            let urlType = UTType.url.identifier
 
             if provider.hasItemConformingToTypeIdentifier(imageType) {
                 group.enter()
@@ -54,6 +55,14 @@ class ShareViewController: UIViewController {
                 loadData(from: provider, typeIdentifier: movieType, defaultExt: "mp4") { [weak self] data, ext in
                     defer { group.leave() }
                     if let data, let name = self?.saveToAppGroup(data: data, ext: ext) {
+                        lock.withLock { savedFilenames.append(name) }
+                    }
+                }
+            } else if provider.hasItemConformingToTypeIdentifier(urlType) {
+                group.enter()
+                loadURLData(from: provider, typeIdentifier: urlType) { [weak self] data in
+                    defer { group.leave() }
+                    if let data, let name = self?.saveToAppGroup(data: data, ext: "url") {
                         lock.withLock { savedFilenames.append(name) }
                     }
                 }
@@ -100,6 +109,28 @@ class ShareViewController: UIViewController {
                     completion(nil, defaultExt)
                 }
             }
+        }
+    }
+
+    private func loadURLData(
+        from provider: NSItemProvider,
+        typeIdentifier: String,
+        completion: @escaping (Data?) -> Void
+    ) {
+        provider.loadItem(forTypeIdentifier: typeIdentifier, options: nil) { item, _ in
+            let url: URL?
+            if let itemURL = item as? URL {
+                url = itemURL
+            } else if let itemString = item as? String {
+                url = URL(string: itemString)
+            } else if let itemData = item as? Data,
+                      let itemString = String(data: itemData, encoding: .utf8) {
+                url = URL(string: itemString.trimmingCharacters(in: .whitespacesAndNewlines))
+            } else {
+                url = nil
+            }
+
+            completion(url?.absoluteString.appending("\n").data(using: .utf8))
         }
     }
 

@@ -146,6 +146,9 @@ fn stage_shared_file(
     let preview_path = mime_type
         .starts_with("image/")
         .then(|| staged_path.to_string_lossy().into_owned());
+    let shared_text = (mime_type == "text/uri-list" || mime_type == "text/plain")
+        .then(|| std::fs::read_to_string(source_path).ok())
+        .flatten();
 
     move_file_to_path(source_path, &staged_path)
         .map_err(|error| format!("failed to stage shared file: {error}"))?;
@@ -156,6 +159,7 @@ fn stage_shared_file(
         mime_type,
         size,
         preview_path,
+        shared_text,
     })
 }
 
@@ -237,6 +241,8 @@ fn mime_type_from_path(path: &std::path::Path) -> &'static str {
         "heic" | "heif" => "image/heic",
         "mov" => "video/quicktime",
         "mp4" => "video/mp4",
+        "url" => "text/uri-list",
+        "txt" => "text/plain",
         _ => "application/octet-stream",
     }
 }
