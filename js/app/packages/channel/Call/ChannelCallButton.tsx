@@ -6,8 +6,8 @@ import PhoneDisconnectIcon from '@icon/wide-call-disconnect.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { Button, cn } from '@ui';
 import { Show } from 'solid-js';
-import { useCall } from './use-call';
 import { CALL_PANEL_VERY_NARROW_PX } from './call-panel-breakpoints';
+import { useCall } from './use-call';
 
 export function ChannelCallButton(props: { channelId: string }) {
   const { setActiveTab } = useChannelTab();

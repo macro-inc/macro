@@ -9,11 +9,11 @@ import { type RemoteParticipant, Track } from 'livekit-client';
 import { For, type JSXElement, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
-import { TrackView } from './TrackView';
 import {
   CALL_PANEL_MEDIUM_NARROW_PX,
   CALL_PANEL_VERY_NARROW_PX,
 } from './call-panel-breakpoints';
+import { TrackView } from './TrackView';
 
 function VideoTag(props: {
   children: JSXElement;
