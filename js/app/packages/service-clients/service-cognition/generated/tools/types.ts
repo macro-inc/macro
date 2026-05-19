@@ -1261,6 +1261,49 @@ export interface NotificationItem {
   senderId?: string | null;
 }
 /**
+ * List the current members and pending invites for the authenticated user's team. Requires the caller to be a team member.
+ */
+export type ListTeamMembers = {};
+/**
+ * Response from [`ListTeamMembers`].
+ */
+export interface ListTeamMembersResponse {
+  /**
+   * Pending team invites.
+   */
+  invited: ToolTeamInvite[];
+  /**
+   * Current accepted team members.
+   */
+  members: ToolTeamMember[];
+}
+/**
+ * A pending team invite returned by [`ListTeamMembers`].
+ */
+export interface ToolTeamInvite {
+  /**
+   * The invited email address.
+   */
+  email: string;
+  /**
+   * The role the invited user will receive.
+   */
+  role: string;
+}
+/**
+ * A current team member returned by [`ListTeamMembers`].
+ */
+export interface ToolTeamMember {
+  /**
+   * The user's role in the team.
+   */
+  role: string;
+  /**
+   * The user's Macro user id.
+   */
+  userId: string;
+}
+/**
  * Mark one or more notifications as done or not done for the current user. Use this when the user has completed the action associated with a notification.
  */
 export interface MarkNotificationsDone {
