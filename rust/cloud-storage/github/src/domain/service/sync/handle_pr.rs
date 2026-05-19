@@ -170,8 +170,11 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
 
     /// Handle `pull_request` events with action `closed`.
     ///
-    /// Gathers all tracked task IDs from the repo plus any from PR text,
-    /// then updates status to "Completed" (if merged) or "Canceled".
+    /// If the PR was merged, gathers all tracked task IDs from the repo plus any
+    /// from PR text, then updates their status to "Completed".
+    ///
+    /// If the PR was closed without being merged, leaves associated task statuses
+    /// unchanged. Closing/abandoning one PR should not cancel the underlying task.
     /// Does NOT post a new bot comment.
     #[tracing::instrument(skip(self, event), err)]
     pub(crate) async fn handle_pr_close(
@@ -180,6 +183,11 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
     ) -> Result<(), GithubError> {
         let is_merged = event.is_merged();
         tracing::trace!(is_merged, "handling PR close");
+
+        if !is_merged {
+            tracing::trace!("PR closed without merge; leaving task statuses unchanged");
+            return Ok(());
+        }
 
         // Gather task IDs from PR title/body/branch
         let searchable_texts = event.extract_searchable_text();
@@ -227,13 +235,13 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
         let resolved = self.resolve_tasks(&all_task_ids).await;
 
         // No bot comment on close
-        let status = if is_merged { "Completed" } else { "Canceled" };
         tracing::trace!(
-            status,
+            status = "Completed",
             doc_count = resolved.doc_ids.len(),
-            "updating task statuses for PR close"
+            "updating task statuses for merged PR close"
         );
-        self.update_task_statuses(&resolved.doc_ids, status).await;
+        self.update_task_statuses(&resolved.doc_ids, "Completed")
+            .await;
 
         tracing::trace!("PR close handler complete");
         Ok(())
