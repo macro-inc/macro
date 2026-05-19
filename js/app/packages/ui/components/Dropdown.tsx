@@ -15,6 +15,15 @@ import { splitProps, type ComponentProps } from 'solid-js';
 </Dropdown>
 */
 
+/*
+// Kobalte's "grace polygon" keeps an open sub alive when the
+// pointer crosses toward its content. For sibling In/From triggers,
+// that means moving between them leaves the prior sub stuck open
+// and the prior trigger stuck with data-highlighted. Force focus
+// + open so Kobalte's parent selection manager updates to this
+// trigger and the shared signal closes the sibling.
+*/
+
 export type DropdownSubContentProps = ComponentProps<typeof KobalteDropdownMenu.SubContent> & { depth?: SurfaceProps['depth']; mount?: PortalMount; };
 export type DropdownContentProps = ComponentProps<typeof KobalteDropdownMenu.Content> & { depth?: SurfaceProps['depth']; mount?: PortalMount; };
 export type DropdownTriggerProps = ComponentProps<typeof KobalteDropdownMenu.Trigger> & ButtonProps;
@@ -41,8 +50,6 @@ function DropdownSubTrigger(props: DropdownSubTriggerProps) {
     />
   );
 }
-
-
 
 function DropdownContent(props: DropdownContentProps) {
   const [local, rest] = splitProps(props, ['depth', 'class', 'mount']);
