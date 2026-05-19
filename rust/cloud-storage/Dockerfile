@@ -35,7 +35,6 @@ RUN : \
   && apt-get update \
   && apt-get install -y --no-install-recommends \
   ca-certificates \
-  openssl \
   dumb-init \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*

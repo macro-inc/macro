@@ -18,7 +18,7 @@ fn main() -> anyhow::Result<()> {
     let mut rng = OsRng;
     let private_key = RsaPrivateKey::new(&mut rng, 2048).context("unable to generate rsa key")?;
 
-    // Convert private key to PEM format (PKCS#1 format to match openssl genrsa)
+    // Convert private key to PEM format
     let private_pem = private_key
         .to_pkcs1_pem(Pkcs1LineEnding::LF)
         .context("unable to convert private key to pem")?;

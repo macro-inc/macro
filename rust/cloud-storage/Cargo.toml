@@ -30,6 +30,7 @@ members = [
   "delete_chat_handler",
   "deleted_item_poller",
   "document_cognition_service",
+  "document_cognition_service/load-test",
   "document_cognition_service_client",
   "document_storage_service",
   "document_storage_service_client",
