@@ -332,6 +332,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
             });
           }}
           contentEditable={props.editable()}
+          class="flow-root"
         />
 
         <DecoratorRenderer editor={editor} />
