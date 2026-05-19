@@ -6,11 +6,10 @@ use reqwest::cookie::CookieStore;
 use reqwest::header::{COOKIE, ORIGIN};
 use rootcause::{Report, report};
 use serde::Serialize;
-#[cfg(target_os = "ios")]
-use share_target::cleanup_stale_staged_shared_files;
 use share_target::{
-    PendingShareFilesState, clear_shared_files, get_pending_share_filenames,
-    maybe_handle_share_deep_link, pop_shared_files, upload_shared_file_to_presigned_url,
+    PendingShareFilesState, cleanup_stale_staged_shared_files, clear_shared_files,
+    get_pending_share_filenames, maybe_handle_share_deep_link, pop_shared_files,
+    upload_shared_file_to_presigned_url,
 };
 use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime};
@@ -219,7 +218,6 @@ pub fn run() {
             }
 
             app.chain(attach_deep_link_handler);
-            #[cfg(target_os = "ios")]
             cleanup_stale_staged_shared_files(&app.handle());
 
             Ok(())
