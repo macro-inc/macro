@@ -4,6 +4,7 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChannelInviteMetadataMessageContent } from './channelInviteMetadataMessageContent';
 import type { ChannelInviteMetadataSenderProfilePictureUrl } from './channelInviteMetadataSenderProfilePictureUrl';
 
 /**
@@ -14,6 +15,8 @@ export interface ChannelInviteMetadata {
   channelName?: string;
   /** The user who sent the invitation */
   invitedBy: string;
+  /** Message content to show in the invite email, when the invite was triggered by a message. */
+  messageContent?: ChannelInviteMetadataMessageContent;
   /** The sender's profile picture URL, if available. */
   senderProfilePictureUrl?: ChannelInviteMetadataSenderProfilePictureUrl;
 }
