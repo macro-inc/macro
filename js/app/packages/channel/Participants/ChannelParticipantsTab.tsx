@@ -2,7 +2,7 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useChannelType } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { idToEmail } from '@core/user';
-import { isOk } from '@core/util/maybeResult';
+
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import {
   useAddParticipantsMutation,
@@ -65,7 +65,7 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
     const result = await commsServiceClient.getOrCreateDirectMessage({
       recipient_id: participantId,
     });
-    const channelId = isOk(result) && result[1]?.channel_id;
+    const channelId = result.isOk() && result.value?.channel_id;
 
     if (channelId) {
       replaceOrInsertSplit({

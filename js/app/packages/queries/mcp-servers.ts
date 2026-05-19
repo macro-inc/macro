@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type {

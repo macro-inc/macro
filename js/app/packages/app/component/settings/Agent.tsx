@@ -1,9 +1,12 @@
 import { createSignal, For, Show, Suspense } from 'solid-js';
-import { Tabs } from '@core/component/Tabs';
+import { TabsInset } from '@core/component/TabsInset';
 import { Button, Layer, Panel } from '@ui';
 import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
 import { toast } from '@core/component/Toast/Toast';
-import type { ServerResponse } from '@service-cognition/generated/schemas';
+import type {
+  ServerResponse,
+  StartAuthResponse,
+} from '@service-cognition/generated/schemas';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
   useMcpServersQuery,
@@ -44,7 +47,7 @@ function AddServerForm(props: {
     authMutation.mutate(
       { server_name: serverName, server_url: serverUrl },
       {
-        onSuccess: (result) => {
+        onSuccess: (result: StartAuthResponse) => {
           window.open(result.authorization_url, '_blank');
         },
         onError: () => {
@@ -232,7 +235,7 @@ function ServerRow(props: { server: ServerResponse }) {
         server_name: props.server.server_name,
       },
       {
-        onSuccess: (result) => {
+        onSuccess: (result: StartAuthResponse) => {
           window.open(result.authorization_url, '_blank');
         },
         onError: () => {
@@ -409,7 +412,7 @@ export function Agent() {
       <div class="max-w-200 size-full">
         <Panel depth={2} class="relative portal-scope">
           <Panel.Header>
-            <Tabs
+            <TabsInset
               list={tabList}
               value={agentSettingsSubTab()}
               defaultValue="connectors"

@@ -23,7 +23,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { isErr } from '@core/util/maybeResult';
+
 import { CommentNode, InlineSearchNode, peerIdPlugin } from '@lexical-core';
 import ClockIcon from '@phosphor/clock-counter-clockwise.svg';
 import { storageServiceClient } from '@service-storage/client';
@@ -59,9 +59,9 @@ async function forkDocumentAtVersion(
     syncServiceVersion: version,
   });
 
-  if (isErr(response)) return;
+  if (response.isErr()) return;
 
-  const [, data] = response;
+  const data = response.value;
 
   return data.documentId;
 }
@@ -73,12 +73,12 @@ async function getLoroDocFromId(documentId: string) {
 
   const doc = new LoroDoc();
 
-  if (isErr(maybeSnapshot)) {
+  if (maybeSnapshot.isErr()) {
     console.error("Couldn't get snapshot", maybeSnapshot);
     return doc;
   }
 
-  const [, snapshot] = maybeSnapshot;
+  const snapshot = maybeSnapshot.value;
 
   doc.import(snapshot);
   return doc;

@@ -1,6 +1,7 @@
+import type { ResultError } from '@core/util/result';
+import type { Result } from 'neverthrow';
 import { z } from 'zod';
 import type { FlattenObject } from './util/flatten';
-import type { MaybeError, MaybeResult } from './util/maybeResult';
 
 type ErrorDef = {
   code: string;
@@ -262,13 +263,13 @@ type ClientFunctionArgs<T> =
     : never;
 
 type ClientFunctionResult<T> =
-  T extends FunctionDefinition<any, any, infer Result, infer Throws>
-    ? Result extends z.ZodRawShape | AnyZodType
+  T extends FunctionDefinition<any, any, infer Output, infer Throws>
+    ? Output extends z.ZodRawShape | AnyZodType
       ? Throws extends string[]
-        ? MaybeResult<Throws[number], ZodResultToType<Result>>
-        : ZodResultToType<Result>
+        ? Result<ZodResultToType<Output>, ResultError<Throws[number]>[]>
+        : ZodResultToType<Output>
       : Throws extends string[]
-        ? MaybeError<Throws[number]>
+        ? Result<void, ResultError<Throws[number]>[]>
         : void
     : never;
 

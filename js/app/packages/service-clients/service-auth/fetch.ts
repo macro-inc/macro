@@ -1,12 +1,5 @@
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
-import {
-  err,
-  type HybridResultError,
-  type ObjectLike,
-  ok,
-  type ResultError,
-  toHybridError,
-} from '@core/util/maybeResult';
+import type { ObjectLike, ResultError } from '@core/util/result';
 import {
   type BaseFetchErrorCode,
   type ErrorResponseHandler,
@@ -14,6 +7,7 @@ import {
   safeFetch,
   type TextResponse,
 } from '@core/util/safeFetch';
+import { err, ok, type Result } from 'neverthrow';
 import { authServiceClient } from './client';
 
 function isExpired(token: string) {
@@ -40,13 +34,11 @@ export async function getMacroApiToken() {
   }
 
   macroApiTokenPromise = new Promise((resolve, reject) =>
-    authServiceClient.macroApiToken().then(([err, result]) => {
-      if (err) {
-        reject(err);
-      } else if (result) {
-        resolve(result.macro_api_token);
+    authServiceClient.macroApiToken().then((result) => {
+      if (result.isErr()) {
+        reject(result.error);
       } else {
-        reject(new Error('No result from macroApiToken'));
+        resolve(result.value.macro_api_token);
       }
     })
   );
@@ -74,24 +66,18 @@ type fetchWithAuthOptions<
   ) => Promise<ResultError<BaseFetchErrorCode | CustomErrorCode>>;
   headers?: AcceptHeader<T>;
 };
-type HybridMaybeResult<ErrorCode extends string, T> =
-  | [null, T]
-  | [HybridResultError<ErrorCode>, null];
-
 export async function fetchWithAuth<
   T extends ObjectLike | TextContentType = {},
   CustomErrorCode extends string = never,
 >(
   input: RequestInfo,
   init?: fetchWithAuthOptions<T, CustomErrorCode>
-): Promise<HybridMaybeResult<BaseFetchErrorCode | CustomErrorCode, T>> {
+): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
   const apiToken = await getMacroApiToken();
   if (!apiToken) {
-    const [noTokenError] = err(
-      'UNAUTHORIZED',
-      'No access and/or refresh token found'
-    );
-    return [toHybridError(noTokenError), null];
+    return err([
+      { code: 'UNAUTHORIZED', message: 'No access and/or refresh token found' },
+    ]);
   }
 
   const safeFetchInit = {
@@ -144,16 +130,15 @@ export async function fetchWithAuth<
   };
 
   // TODO: move safeFetch code to here
-  const [errors, result] = await safeFetch<SafeFetchT<T>, CustomErrorCode>(
+  const result = await safeFetch<SafeFetchT<T>, CustomErrorCode>(
     input,
     safeFetchInit,
     safeFetchErrorHandler
   );
 
-  // TODO: Refactor when backward compatibility is no longer needed
-  if (!!errors && errors.length > 0) {
-    return [toHybridError(errors), null];
+  if (result.isErr()) {
+    return err(result.error);
   }
 
-  return ok(result as T);
+  return ok(result.value as T);
 }

@@ -33,12 +33,7 @@ import {
 } from '@core/signal/permissions';
 import { idToEmail } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import {
-  isErr,
-  isOk,
-  type MaybeError,
-  type MaybeResult,
-} from '@core/util/maybeResult';
+import type { ResultError } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import IconComment from '@icon/wide-comment.svg';
 import WideCopy from '@icon/wide-copy.svg';
@@ -65,6 +60,7 @@ import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { Button, ButtonGroup, cn, Panel, ToggleSwitch, Tooltip } from '@ui';
+import type { Result } from 'neverthrow';
 import {
   type Accessor,
   createContext,
@@ -592,10 +588,10 @@ export function ShareModal(props: ShareModalProps) {
   const [channelNamesResource] = createResource(
     () => {
       const result = permissionsResource.latest;
-      if (!result || isErr(result)) {
+      if (!result || result.isErr()) {
         return;
       }
-      const [, sharePermission] = result;
+      const sharePermission = result.value;
       if (!sharePermission?.channelSharePermissions?.length) {
         return;
       }
@@ -611,11 +607,11 @@ export function ShareModal(props: ShareModalProps) {
   // Create a map of channel IDs to channel names
   const channelNameMap = createMemo(() => {
     const result = channelNamesResource.latest;
-    if (!result || isErr(result)) {
+    if (!result || result.isErr()) {
       return new Map();
     }
 
-    const [, data] = result;
+    const data = result.value;
     const map = new Map();
 
     data.previews.forEach((preview) => {
@@ -631,10 +627,10 @@ export function ShareModal(props: ShareModalProps) {
   });
 
   const recipients = createMemo(() => {
-    const maybeResult = permissionsResource.latest;
-    if (!maybeResult || isErr(maybeResult)) return;
+    const result = permissionsResource.latest;
+    if (!result || result.isErr()) return;
 
-    const [, sharePermission] = maybeResult;
+    const sharePermission = result.value;
     return sharePermission.channelSharePermissions;
   });
 
@@ -657,7 +653,7 @@ export function ShareModal(props: ShareModalProps) {
           ],
         },
       });
-      if (!isErr(result)) {
+      if (!result.isErr()) {
         refetch();
         toast.success('Removed channel access', {
           subtext: 'Channel no longer has access to this chat',
@@ -680,7 +676,7 @@ export function ShareModal(props: ShareModalProps) {
           ],
         },
       });
-      if (!isErr(result)) {
+      if (!result.isErr()) {
         refetch();
         toast.success('Removed channel access', {
           subtext: 'Channel no longer has access to this document',
@@ -703,7 +699,7 @@ export function ShareModal(props: ShareModalProps) {
           ],
         },
       });
-      if (!isErr(result)) {
+      if (!result.isErr()) {
         refetch();
         toast.success('Removed folder access');
       } else {
@@ -723,7 +719,10 @@ export function ShareModal(props: ShareModalProps) {
     ) => {
       if (props.userPermissions !== Permissions.OWNER) return;
 
-      let result: MaybeResult<any, any> | MaybeError<any> | null = null;
+      let result:
+        | Result<any, ResultError<any>[]>
+        | Result<void, ResultError<any>[]>
+        | null = null;
       if (props.itemType === 'chat') {
         result = await cognitionApiServiceClient.updateChatPermissions({
           sharePermission: {
@@ -778,7 +777,7 @@ export function ShareModal(props: ShareModalProps) {
         });
       }
 
-      if (result && isOk(result)) {
+      if (result && result.isOk()) {
         refetch();
         if (!hideSuccessToast) {
           toast.success('Changed channel access level', {
@@ -796,11 +795,11 @@ export function ShareModal(props: ShareModalProps) {
 
   const publicAccessLevel = createMemo(() => {
     const currentPermissions = permissionsResource.latest;
-    if (!currentPermissions || isErr(currentPermissions)) {
+    if (!currentPermissions || currentPermissions.isErr()) {
       return;
     }
 
-    const [, sharePermission] = currentPermissions;
+    const sharePermission = currentPermissions.value;
     return sharePermission.publicAccessLevel;
   });
 
@@ -814,7 +813,7 @@ export function ShareModal(props: ShareModalProps) {
           },
           chat_id: props.id,
         });
-        if (!isErr(result)) {
+        if (!result.isErr()) {
           refetch();
 
           if (accessLevel === null) {
@@ -846,7 +845,7 @@ export function ShareModal(props: ShareModalProps) {
           },
           documentId: props.id,
         });
-        if (!isErr(result)) {
+        if (!result.isErr()) {
           refetch();
           if (accessLevel === null) {
             toast.success('Made document private', {
@@ -877,7 +876,7 @@ export function ShareModal(props: ShareModalProps) {
           },
           id: props.id,
         });
-        if (!isErr(result)) {
+        if (!result.isErr()) {
           refetch();
           if (accessLevel === null) {
             toast.success('Made folder private', {
@@ -1246,9 +1245,9 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
   }));
 
   const shareAccessLevelText = createMemo(() => {
-    const maybeResult = permissionsBlockResource[0].latest;
-    if (!maybeResult || isErr(maybeResult)) return '';
-    const [, sharePermission] = maybeResult;
+    const result = permissionsBlockResource[0].latest;
+    if (!result || result.isErr()) return '';
+    const sharePermission = result.value;
     if (sharePermission.isPublic) return 'Public';
     if (sharePermission.channelSharePermissions?.length) return 'Shared';
     return 'Just me';

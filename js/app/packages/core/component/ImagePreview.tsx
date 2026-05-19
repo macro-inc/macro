@@ -4,7 +4,7 @@ false && internalDrag;
 
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { maybeThrow } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { constrainImageDimensions } from '@lexical-core/utils/media';
@@ -55,13 +55,12 @@ const THEMES = {
 
 // NOTE: copied logic from block-image
 const getDssImageBlob = async (documentId: string) => {
-  const maybeDocument = await fetchBinaryDocumentData(documentId);
-  const documentResult = maybeThrow(maybeDocument);
+  const documentResult = await throwOnErr(() =>
+    fetchBinaryDocumentData(documentId)
+  );
   // presigned url with expiry
   const { blobUrl } = documentResult;
-  const blobResult = await fetchBinary(blobUrl, 'blob');
-  const blob = maybeThrow(blobResult);
-  return blob;
+  return throwOnErr(() => fetchBinary(blobUrl, 'blob'));
 };
 
 /** Max width for single image preview containers (matches MediaPreview max-w-[400px]) */

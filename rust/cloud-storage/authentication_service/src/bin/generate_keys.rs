@@ -1,7 +1,12 @@
 use anyhow::Context;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use openssl::{pkey::PKey, rsa::Rsa};
-use rsa::{RsaPrivateKey, pkcs1::DecodeRsaPrivateKey, traits::PublicKeyParts};
+use rsa::{
+    RsaPrivateKey,
+    pkcs1::{DecodeRsaPrivateKey, EncodeRsaPrivateKey, LineEnding as Pkcs1LineEnding},
+    pkcs8::{EncodePublicKey, LineEnding as Pkcs8LineEnding},
+    rand_core::OsRng,
+    traits::PublicKeyParts,
+};
 use serde_json::json;
 use std::fs;
 
@@ -10,26 +15,27 @@ fn main() -> anyhow::Result<()> {
     println!("Generating keys for environment {env}");
 
     // Generate 2048-bit RSA private key
-    let rsa = Rsa::generate(2048).context("unable to generate rsa key")?;
-    let private_key = PKey::from_rsa(rsa).context("unable to convert rsa key to pkey")?;
+    let mut rng = OsRng;
+    let private_key = RsaPrivateKey::new(&mut rng, 2048).context("unable to generate rsa key")?;
 
-    // Convert private key to PEM format (PKCS#1 format to match openssl genrsa)
+    // Convert private key to PEM format
     let private_pem = private_key
-        .rsa()?
-        .private_key_to_pem()
-        .context("unable to convert pkey to pem")?;
+        .to_pkcs1_pem(Pkcs1LineEnding::LF)
+        .context("unable to convert private key to pem")?;
 
     // Write private key to file
-    fs::write("./output/private.pem", &private_pem)
+    fs::write("./output/private.pem", private_pem.as_bytes())
         .context("unable to write private key to file")?;
 
     // Extract public key from private key
     let public_key = private_key
-        .public_key_to_pem()
-        .context("unable to convert pkey to pem")?;
+        .to_public_key()
+        .to_public_key_pem(Pkcs8LineEnding::LF)
+        .context("unable to convert public key to pem")?;
 
     // Write public key to file
-    fs::write("./output/public.pem", &public_key).context("unable to write public key to file")?;
+    fs::write("./output/public.pem", public_key.as_bytes())
+        .context("unable to write public key to file")?;
 
     // Read the private key PEM file
     let private_key_pem =

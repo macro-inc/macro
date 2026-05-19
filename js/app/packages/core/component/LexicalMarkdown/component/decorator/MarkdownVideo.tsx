@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
-import { isErr } from '@core/util/maybeResult';
+
 import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
 import { $isVideoNode, type VideoDecoratorProps } from '@lexical-core';
@@ -92,15 +92,24 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
       id: props.id,
       url: props.url,
     }).then((maybeUrl) => {
-      if (isErr(maybeUrl)) {
+      if (maybeUrl.isErr()) {
         setState('error');
-        if (isErr(maybeUrl, 'UNAUTHORIZED')) setVideoError('UNAUTHORIZED');
-        else if (isErr(maybeUrl, 'MISSING')) setVideoError('MISSING');
-        else if (isErr(maybeUrl, 'GONE')) setVideoError('GONE');
+        if (
+          maybeUrl.isErr() &&
+          maybeUrl.error.some((error) => error.code === 'UNAUTHORIZED')
+        )
+          setVideoError('UNAUTHORIZED');
+        else if (maybeUrl.error.some((error) => error.code === 'NOT_FOUND'))
+          setVideoError('MISSING');
+        else if (
+          maybeUrl.isErr() &&
+          maybeUrl.error.some((error) => error.code === 'GONE')
+        )
+          setVideoError('GONE');
         else setVideoError('FALLBACK');
         return;
       }
-      const url = maybeUrl[1];
+      const url = maybeUrl.value;
       setVideoUrl(url);
       if (props.srcType === 'dss') {
         editor()?.update(

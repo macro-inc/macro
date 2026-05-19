@@ -54,5 +54,3 @@ loro =  "1.5.6"
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = ["rust_crypto"] }
 matchit =  "0.8.4"
 
-[build-dependencies]
-bebop-tools = "3.1.3"

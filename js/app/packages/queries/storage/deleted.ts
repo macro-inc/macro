@@ -1,6 +1,6 @@
 import { buildFileTree } from '@core/component/FileList/buildFileTree';
 import { itemToSafeName } from '@core/constant/allBlocks';
-import { isOk } from '@core/util/maybeResult';
+
 import { storageServiceClient } from '@service-storage/client';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { useQuery } from '@tanstack/solid-query';
@@ -16,8 +16,8 @@ type DeletedItemsQueryResponse = {
 
 async function fetchDeletedItems(): Promise<DeletedItemsQueryResponse> {
   const result = await storageServiceClient.getDeletedItems();
-  if (isOk(result)) {
-    return result[1];
+  if (result.isOk()) {
+    return result.value;
   }
   return { items: [] };
 }

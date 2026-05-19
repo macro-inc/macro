@@ -168,23 +168,41 @@ export const SoupSectionHeader = (props: {
   );
 };
 
+const AssigneeGroupContent = (props: {
+  assigneeId: MacroId;
+  fallbackLabel: string;
+}) => {
+  const [assigneeName] = useDisplayName(props.assigneeId);
+  return (
+    <>
+      <UserIcon
+        id={props.assigneeId}
+        size="sm"
+        suppressClick
+        showTooltip={false}
+      />
+      <span class="truncate">
+        {assigneeName() || props.assigneeId || props.fallbackLabel}
+      </span>
+    </>
+  );
+};
+
 const DefaultGroupHeader = (
   props: GroupHeaderProps & { highlighted?: boolean }
 ) => {
   const { groupByField } = useSoupView();
-  const field = groupByField();
-  const isAssigneeGroup =
-    field?.type === 'property' &&
-    field.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES &&
-    props.group.key !== '';
-  const assigneeId = isAssigneeGroup ? parseEntityRefId(props.group.key) : null;
-  const [assigneeName] = useDisplayName(
-    assigneeId ? (assigneeId as MacroId) : null
-  );
-  const label = () =>
-    isAssigneeGroup
-      ? assigneeName() || assigneeId || props.group.label
-      : props.group.label;
+  const assigneeId = createMemo(() => {
+    const field = groupByField();
+    if (
+      field?.type !== 'property' ||
+      field.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.ASSIGNEES ||
+      props.group.key === ''
+    ) {
+      return null;
+    }
+    return parseEntityRefId(props.group.key);
+  });
 
   return (
     <SoupSectionHeader
@@ -201,22 +219,24 @@ const DefaultGroupHeader = (
         </div>
       </Layer>
       <Show
-        when={isAssigneeGroup && assigneeId}
+        when={assigneeId()}
         fallback={
-          <PropertyValueIcon
-            optionId={props.group.value as string}
-            class="size-3.5"
-          />
+          <>
+            <PropertyValueIcon
+              optionId={props.group.value as string}
+              class="size-3.5"
+            />
+            <span class="truncate">{props.group.label}</span>
+          </>
         }
       >
-        <UserIcon
-          id={assigneeId as string}
-          size="sm"
-          suppressClick
-          showTooltip={false}
-        />
+        {(id) => (
+          <AssigneeGroupContent
+            assigneeId={id() as MacroId}
+            fallbackLabel={props.group.label}
+          />
+        )}
       </Show>
-      <span class="truncate">{label()}</span>
       <span
         class={cn(
           'shrink-0 tabular-nums text-xs font-medium',
@@ -291,7 +311,7 @@ type PersistedSoupViewState = {
   collapsedGroups: string[];
 };
 
-const PERSISTED_STATE_VERSION = 7;
+const PERSISTED_STATE_VERSION = 8;
 
 const listStateCache = new Map<
   string,
@@ -308,6 +328,12 @@ interface SoupViewProps {
   initialClientFilters?: SetPredicatesInput<string>;
   initialFilters?: Partial<QueryState>;
   initialSearchText?: string;
+  /**
+   * Initial group-by id (same format as `soup.grouping.setActiveGroupId`,
+   * e.g. `property:<definition-id>`). Applied only when no persisted state
+   * exists for this view.
+   */
+  initialGroupBy?: string;
   /** Ignore localStorage on mount and use the supplied `initial*` values. */
   skipPersistedState?: boolean;
   disableLocalSearch?: boolean;
@@ -533,6 +559,7 @@ export const SoupView = (props: SoupViewProps) => {
               <SoupViewFileDropzone>
                 <SoupViewList
                   initialClientFilters={props.initialClientFilters}
+                  initialGroupBy={props.initialGroupBy}
                   skipPersistedState={props.skipPersistedState}
                   onScrollOffsetBaseline={resetFloatingButtonScrollTracking}
                   onScrollOffsetChange={handleSoupScrollOffsetChange}
@@ -574,6 +601,7 @@ interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
   initialClientFilters?: SetPredicatesInput<string>;
+  initialGroupBy?: string;
   skipPersistedState?: boolean;
   onScrollOffsetBaseline?: (offset: number) => void;
   onScrollOffsetChange?: (offset: number) => void;
@@ -936,6 +964,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
       if (props.initialClientFilters) {
         soup.predicates.set(props.initialClientFilters);
       }
+      if (props.initialGroupBy) {
+        soup.grouping.setActiveGroupId(props.initialGroupBy);
+      }
       // Set default tab for list views when no persisted state exists
       if (isListViewID(contentId)) {
         const defaultTab = VIEW_TAB_PRESETS[contentId].default;
@@ -1018,6 +1049,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
       (!!soup.previewEntity() || panel.previewState[0]()) && !!soup.focus.item()
   );
 
+  createEffect(() => {
+    const hasPreviewEntity = !!soup.previewEntity();
+    const [getPreview, setPreview] = panel.previewState;
+    if (hasPreviewEntity !== getPreview()) {
+      setPreview(hasPreviewEntity);
+    }
+  });
+
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
@@ -1041,11 +1080,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
             maxSize={previewVisible() ? 840 : undefined}
           >
             <div
-              class="@container/u-list size-full unified-list-root flex flex-col"
-              classList={{
-                'border-r border-edge-muted':
-                  soup.previewEntity() !== undefined,
-              }}
+              class={cn(
+                '@container/u-list size-full unified-list-root flex flex-col',
+                soup.previewEntity() !== undefined &&
+                  'border-r border-edge-muted'
+              )}
             >
               <StaticMarkdownContext>
                 <Switch>
@@ -1105,7 +1144,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
                         <SoupList
                           cache={listStateCache.get(cacheKey)?.virtualCache}
                           ref={setLocalEntityListRef}
-                          virtualizerClass="scrollbar-hidden"
+                          virtualizerClass={cn(
+                            previewVisible() && 'pt-1' /* scuffed */,
+                            'scrollbar-hidden'
+                          )}
                           class="overflow-hidden flex min-w-0"
                           virtualizerRef={registerVirtualizerHandler}
                           onScrollOffsetChange={props.onScrollOffsetChange}
@@ -1170,7 +1212,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
                                   {/* Load more row */}
                                   <Match
-                                    when={row.getIsLoadMore() && row.group}
+                                    when={
+                                      row.group?.isExpanded() &&
+                                      row.getIsLoadMore() &&
+                                      row.group
+                                    }
                                   >
                                     {(group) => {
                                       const highlighted = () => row.isFocused();
@@ -1223,7 +1269,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                   </Match>
 
                                   {/* Entity row */}
-                                  <Match when={true}>
+                                  <Match
+                                    when={!row.group || row.group?.isExpanded()}
+                                  >
                                     <SoupEntityContextMenu
                                       entity={row.original}
                                     >

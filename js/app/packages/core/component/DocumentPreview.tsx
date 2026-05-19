@@ -22,7 +22,6 @@ import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { matches } from '@core/util/match';
-import { isErr } from '@core/util/maybeResult';
 import MacroEmbed from '@icon/macro-embed.svg';
 import CollapseInlinePreview from '@phosphor/arrows-in-line-horizontal.svg';
 import OpenIcon from '@phosphor/arrows-out.svg';
@@ -314,8 +313,8 @@ function ImageCoverStrip(props: {
     let objectUrl: string | undefined;
     fetchBinary(presignedUrl, 'blob', { signal: controller.signal }).then(
       (result) => {
-        if (controller.signal.aborted || isErr(result)) return;
-        const [, blob] = result;
+        if (controller.signal.aborted || result.isErr()) return;
+        const blob = result.value;
         objectUrl = URL.createObjectURL(
           new Blob([blob], { type: 'image/svg+xml' })
         );

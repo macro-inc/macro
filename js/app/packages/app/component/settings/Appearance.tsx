@@ -5,7 +5,7 @@ import ThemeTools from '@theme/components/ThemeTools';
 import ThemeList from '@theme/components/ThemeList';
 import { isMobile } from '@core/mobile/isMobile';
 import { createSignal, Show } from 'solid-js';
-import { Tabs } from '@core/component/Tabs';
+import { TabsInset } from '@core/component/TabsInset';
 import { Panel, ToggleSwitch } from '@ui';
 
 type PanelA = 'basic' | 'advanced';
@@ -51,7 +51,7 @@ export function Appearance() {
       >
         <Panel depth={2}>
           <Panel.Header>
-            <Tabs
+            <TabsInset
               onChange={(value) => setActiveTabA(value as PanelA)}
               list={[
                 { value: 'basic', label: 'Basic' },
@@ -83,7 +83,7 @@ export function Appearance() {
 
         <Panel depth={2}>
           <Panel.Header>
-            <Tabs
+            <TabsInset
             onChange={(value) => setActiveTabB(value as PanelB)}
               list={[
                 { value: 'themes', label: 'Themes' },

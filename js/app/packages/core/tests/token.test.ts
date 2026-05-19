@@ -1,3 +1,4 @@
+import { err, ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -36,7 +37,7 @@ describe('getPermissionToken', () => {
     const mockToken = 'new-token';
     vi.mocked(
       storageServiceClient.permissionsTokens.createPermissionToken
-    ).mockResolvedValue([null, { token: mockToken }]);
+    ).mockResolvedValue(ok({ token: mockToken }));
 
     const token = await createRoot(async () => {
       return await getPermissionToken('document', 'block-123');
@@ -80,7 +81,7 @@ describe('getPermissionToken', () => {
 
     vi.mocked(
       storageServiceClient.permissionsTokens.createPermissionToken
-    ).mockResolvedValue([null, { token: newToken }]);
+    ).mockResolvedValue(ok({ token: newToken }));
 
     const token = await createRoot(async () => {
       return await getPermissionToken('document', 'block-123', [
@@ -100,10 +101,9 @@ describe('getPermissionToken', () => {
   it('should return undefined when token fetch fails', async () => {
     vi.mocked(
       storageServiceClient.permissionsTokens.createPermissionToken
-    ).mockResolvedValue([
-      [{ code: 'NETWORK_ERROR', message: 'Failed to create token' }],
-      null,
-    ]);
+    ).mockResolvedValue(
+      err([{ code: 'NETWORK_ERROR', message: 'Failed to create token' }])
+    );
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -114,7 +114,7 @@ describe('getPermissionToken', () => {
     expect(token).toBeUndefined();
     expect(consoleSpy).toHaveBeenCalledWith(
       'Failed to create permission token:',
-      [[{ code: 'NETWORK_ERROR', message: 'Failed to create token' }], null]
+      [{ code: 'NETWORK_ERROR', message: 'Failed to create token' }]
     );
     expect(consoleSpy).toHaveBeenCalledWith('Failed to fetch permission token');
   });

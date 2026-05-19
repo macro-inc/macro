@@ -93,7 +93,7 @@ redis = { workspace = true, features = [
   "aio",
   "streams",
   "tokio-comp",
-  "tokio-native-tls-comp",
+  "tokio-rustls-comp",
 ] }
 regex = { workspace = true }
 reqwest.workspace = true

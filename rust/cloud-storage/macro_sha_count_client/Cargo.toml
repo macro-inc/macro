@@ -12,7 +12,7 @@ anyhow = { workspace = true }
 model = { path = "../model" }
 redis = { workspace = true, features = [
   "aio",
-  "tokio-native-tls-comp",
+  "tokio-rustls-comp",
 ] }
 tokio = { workspace = true }
 tracing = { workspace = true }

@@ -1,4 +1,3 @@
-import { isOk } from '@core/util/maybeResult';
 import { registerClient } from '@core/util/mockClient';
 import {
   authServiceClient,
@@ -70,13 +69,13 @@ export const stripeServiceClient = {
       tier,
     });
 
-    if (!isOk(result)) {
+    if (!result.isOk()) {
       throw new Error(
-        result[0]?.[0]?.message ?? 'Failed to create checkout session'
+        result.error?.[0]?.message ?? 'Failed to create checkout session'
       );
     }
 
-    return result[1];
+    return result.value;
   },
   /**
    * Creates a portal session
@@ -87,18 +86,18 @@ export const stripeServiceClient = {
       returnUrl: `${window.location.origin}/app`,
     });
 
-    if (!isOk(result)) {
+    if (!result.isOk()) {
       throw new Error(
-        result[0]?.[0]?.message ?? 'Failed to create portal session'
+        result.error?.[0]?.message ?? 'Failed to create portal session'
       );
     }
 
-    return result[1];
+    return result.value;
   },
   /**
    * Changes the current user's subscription tier. Returns a narrow discriminated union so
-   * callers get a type-checked error `code` without drilling into the MaybeResult tuple
-   * shape (`result[0]?.[0]?.code`), which would silently fall through to the default case
+   * callers get a type-checked error `code` without drilling into the Result
+   * error array (`result.error?.[0]?.code`), which would silently fall through to the default case
    * if the shape ever changes. Callers should invalidate the user info query on success.
    */
   updateSubscriptionTier: async (
@@ -107,12 +106,12 @@ export const stripeServiceClient = {
     const result = await authServiceClient.patchSubscriptionTier({
       newTier: tier,
     });
-    if (isOk(result)) return { ok: true };
+    if (result.isOk()) return { ok: true };
     // Narrow the first error's code to our known union; anything else (NETWORK_ERROR,
     // UNAUTHORIZED, SERVER_ERROR, etc.) collapses to 'UNKNOWN'. `match` + the explicit
     // P.union of `PatchSubscriptionTierErrorCode` members means adding a new backend
     // code without widening this union is a compile error.
-    const code = match(result[0]?.code)
+    const code = match(result.error[0]?.code)
       .with(
         P.union(
           'TIER_UNCHANGED',

@@ -4,7 +4,7 @@ false && internalDrag;
 
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
-import { isErr } from '@core/util/maybeResult';
+
 import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
 import { $isImageNode, type ImageDecoratorProps } from '@lexical-core';
@@ -109,15 +109,24 @@ export function MarkdownImage(props: ImageDecoratorProps) {
       id: props.id,
       url: props.url,
     }).then((maybeUrl) => {
-      if (isErr(maybeUrl)) {
+      if (maybeUrl.isErr()) {
         setState('error');
-        if (isErr(maybeUrl, 'UNAUTHORIZED')) setImageError('UNAUTHORIZED');
-        else if (isErr(maybeUrl, 'MISSING')) setImageError('MISSING');
-        else if (isErr(maybeUrl, 'GONE')) setImageError('GONE');
+        if (
+          maybeUrl.isErr() &&
+          maybeUrl.error.some((error) => error.code === 'UNAUTHORIZED')
+        )
+          setImageError('UNAUTHORIZED');
+        else if (maybeUrl.error.some((error) => error.code === 'NOT_FOUND'))
+          setImageError('MISSING');
+        else if (
+          maybeUrl.isErr() &&
+          maybeUrl.error.some((error) => error.code === 'GONE')
+        )
+          setImageError('GONE');
         else setImageError('FALLBACK');
         return;
       }
-      const url = maybeUrl[1];
+      const url = maybeUrl.value;
       setImageUrl(url);
       if (props.srcType === 'dss') {
         editor()?.update(

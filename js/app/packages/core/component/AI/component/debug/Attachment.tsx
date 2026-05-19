@@ -1,5 +1,5 @@
 import type { Attachment, Model } from '@core/component/AI/types';
-import { isErr } from '@core/util/maybeResult';
+
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
@@ -139,10 +139,10 @@ async function sendRequest(simple: SimpleRequest): Promise<SendResult> {
     model: simple.model,
     attachments: simple.attachments.length > 0 ? simple.attachments : undefined,
   });
-  if (isErr(response)) {
+  if (response.isErr()) {
     return { type: 'error' };
   }
-  const [, { stream_id, chat_id }] = response;
+  const { stream_id, chat_id } = response.value;
   const connectionStream = subscribe('chat', chat_id, stream_id);
   if (!connectionStream) {
     return { type: 'error' };

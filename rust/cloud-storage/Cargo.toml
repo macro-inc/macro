@@ -30,6 +30,7 @@ members = [
   "delete_chat_handler",
   "deleted_item_poller",
   "document_cognition_service",
+  "document_cognition_service/load-test",
   "document_cognition_service_client",
   "document_storage_service",
   "document_storage_service_client",
@@ -151,15 +152,15 @@ askama = "0.14"
 async-openai = { version = "0.36.1", features = ["byot", "chat-completion", "completions"] }
 async-stream = "0.3.6"
 async-trait = "0.1.86"
-aws-config = { version = "1.8.12", features = ["behavior-version-latest"] }
-aws-sdk-dynamodb = "1.98.0"
-aws-sdk-lambda = "1.104.0"
-aws-sdk-s3 = "1.121.0"
-aws-sdk-secretsmanager = "1.93.0"
-aws-sdk-sesv2 = "1.103.0"
-aws-sdk-sns = "1.90.0"
-aws-sdk-sqs = "1.91.0"
-aws-smithy-types = "1.2.13"
+aws-config = { version = "1.8.16", features = ["behavior-version-latest"] }
+aws-sdk-dynamodb = "1.111.0"
+aws-sdk-lambda = "1.122.0"
+aws-sdk-s3 = "1.132.0"
+aws-sdk-secretsmanager = "1.104.0"
+aws-sdk-sesv2 = "1.118.0"
+aws-sdk-sns = "1.99.0"
+aws-sdk-sqs = "1.98.0"
+aws-smithy-types = "1.4.7"
 aws_lambda_events = { version = "0.16.0", default-features = false }
 axum = { version = "0.8", features = ["tower-log"] }
 axum-extra = { version = "0.10" }
@@ -188,14 +189,24 @@ jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features
 ] }
 lambda_runtime = "0.13.0"
 lazy_static = "1.5.0"
-livekit-api = "0.4.16"
+livekit-api = { version = "0.4.16", default-features = false, features = [
+  "services-tokio",
+  "access-token",
+  "webhooks",
+  "rustls-tls-webpki-roots",
+] }
 livekit-protocol = "0.7.2"
 log = "0.4.26"
 mockall = "0.13"
 nom = "8"
-openssl = { version = "0.10.71", features = ["vendored"] }
 opentelemetry = "0.31.0"
-opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic"] }
+opentelemetry-otlp = { version = "0.31.0", default-features = false, features = [
+  "grpc-tonic",
+  "trace",
+  "metrics",
+  "logs",
+  "internal-logs",
+] }
 opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
 ordered-float = "5"
 paste = "1"
@@ -206,7 +217,7 @@ recursion = "0.5.4"
 redis = "1.0.3"
 regex = "1.11.1"
 rmcp = "1.6.0"
-reqwest = { version = "0.13", features = ["form", "hickory-dns", "json"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "form", "hickory-dns", "json"] }
 rootcause = { version = "0.12" }
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }
@@ -230,6 +241,7 @@ time = "0.3.37"
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.17" }
 tokio-util = "0.7.13"
+tungstenite = { version = "0.28", features = ["url"] }
 tower = { version = "0.5.1", features = ["util"] }
 tower-http = { version = "0.6.1", features = [
   "compression-gzip",
@@ -254,7 +266,7 @@ uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v7"] }
 async-stripe = { version = "0.41", default-features = false, features = [
   "billing",
   "checkout",
-  "runtime-tokio-hyper",
+  "runtime-tokio-hyper-rustls-webpki",
 ] }
 axum-macros = "0.5"
 bytes = "1.11.1"

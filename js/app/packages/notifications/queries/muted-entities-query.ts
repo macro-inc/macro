@@ -1,14 +1,13 @@
-import { isErr } from '@core/util/maybeResult';
 import { notificationServiceClient } from '@service-notification/client';
 import { useQuery } from '@tanstack/solid-query';
 
 const fetchUnsubscriptions = async () => {
   const response = await notificationServiceClient.getUnsubscribes();
 
-  if (isErr(response))
+  if (response.isErr())
     throw new Error('Failed to fetch unsubscribers', { cause: response });
 
-  const result = response[1].data;
+  const result = response.value.data;
   return result;
 };
 

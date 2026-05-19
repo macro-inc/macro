@@ -4,8 +4,8 @@ import {
   LoadErrors,
   loadResult,
 } from '@core/block';
-import { isErr, ok } from '@core/util/maybeResult';
 import { storageServiceClient } from '@service-storage/client';
+import { err, ok } from 'neverthrow';
 import BlockUnknown from './component/Block';
 
 export const definition = defineBlock({
@@ -25,9 +25,9 @@ export const definition = defineBlock({
         });
       }
 
-      if (isErr(maybeDocument)) return maybeDocument;
+      if (maybeDocument.isErr()) return err(maybeDocument.error);
 
-      const [, documentResult] = maybeDocument;
+      const documentResult = maybeDocument.value;
 
       const { documentMetadata, userAccessLevel } = documentResult;
 

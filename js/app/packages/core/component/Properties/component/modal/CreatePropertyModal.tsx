@@ -2,6 +2,7 @@ import { useBlockId } from '@core/block';
 import { useUserId } from '@core/context/user';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import XIcon from '@phosphor/x.svg';
+import { Dropdown, type DropdownOption } from '@property';
 import { useCreatePropertyDefinitionMutation } from '@queries/properties/definitions';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -14,14 +15,12 @@ import {
   Index,
   Show,
 } from 'solid-js';
-
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import {
   getPropertyDataTypeDropdownOptions,
   usePropertyNameFocus,
 } from '../../utils';
 import { ERROR_MESSAGES } from '../../utils/errorHandling';
-import { Dropdown, type DropdownOption } from './shared/Dropdown';
 
 // Derive DataTypeValue from the dropdown options
 type DataTypeValue = ReturnType<

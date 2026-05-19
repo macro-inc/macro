@@ -1,5 +1,5 @@
 import { debounce } from '@core/util/debounce';
-import { isErr } from '@core/util/maybeResult';
+
 import { authServiceClient } from '@service-auth/client';
 import {
   type Accessor,
@@ -51,12 +51,12 @@ async function fetchProfilePictures(
   const result = await authServiceClient.postProfilePictures({
     user_id_list: ids,
   });
-  if (isErr(result)) {
+  if (result.isErr()) {
     console.error('Failed to fetch user profile pictures');
     return [];
   }
 
-  const [, { pictures }] = result;
+  const { pictures } = result.value;
   return pictures.map(({ id, url }) => ({
     _createdAt: new Date(),
     id,

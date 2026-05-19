@@ -5,7 +5,6 @@ import {
 } from '@core/component/Properties/utils';
 import { ERROR_MESSAGES } from '@core/component/Properties/utils/errorHandling';
 import { toast } from '@core/component/Toast/Toast';
-import { isErr } from '@core/util/maybeResult';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import XIcon from '@phosphor/x.svg';
 import { propertiesServiceClient } from '@service-properties/client';
@@ -178,16 +177,13 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
         include_options: false,
       });
 
-      if (isErr(result)) {
+      if (result.isErr()) {
         setError(ERROR_MESSAGES.PROPERTY_FETCH);
         setIsLoading(false);
         return;
       }
 
-      const [, data] = result;
-      const properties = Array.isArray(data) ? data : [];
-
-      const normalizedProperties = properties.map((item) => {
+      const normalizedProperties = result.value.map((item) => {
         const definition = 'definition' in item ? item.definition : item;
         return toPropertyDefinitionDomain(definition);
       });

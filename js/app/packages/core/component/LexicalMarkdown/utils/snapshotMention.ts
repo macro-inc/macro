@@ -2,7 +2,7 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { entityPropertyFromApi } from '@core/component/Properties/api/converters';
 import type { Property } from '@core/component/Properties/types';
 import { trackMention } from '@core/signal/mention';
-import { isErr, isOk } from '@core/util/maybeResult';
+
 import type { HistoryItem as Item } from '@queries/history/history';
 import { fetchDocumentAsMarkdown } from '@queries/sync/markdownText';
 import { propertiesServiceClient } from '@service-properties/client';
@@ -179,8 +179,10 @@ export async function handleSnapshotMention(
     }
     text = contentResult;
 
-    if (propsResult && isOk(propsResult)) {
-      const properties = propsResult[1].properties.map(entityPropertyFromApi);
+    if (propsResult && propsResult.isOk()) {
+      const properties = propsResult.value.properties.map(
+        entityPropertyFromApi
+      );
       propertiesFrontMatter = formatPropertiesAsYamlFrontMatter(properties);
     }
   } else {
@@ -189,7 +191,7 @@ export async function handleSnapshotMention(
       documentId: item.id,
     });
 
-    if (isErr(result)) {
+    if (result.isErr()) {
       // Fall back to regular mention on error
       console.error(
         'Failed to fetch document content for SnapshotNode:',
@@ -197,7 +199,7 @@ export async function handleSnapshotMention(
       );
       return;
     }
-    text = result[1].text;
+    text = result.value.text;
   }
 
   let mentionId: string | undefined;

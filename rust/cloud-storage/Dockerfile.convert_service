@@ -51,7 +51,6 @@ RUN : \
   libreoffice \
   libreofficekit-dev \
   ca-certificates \
-  openssl \
   dumb-init \
   libkrb5-3 \
   ttf-mscorefonts-installer \

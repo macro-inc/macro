@@ -1,8 +1,3 @@
-import {
-  type CombinedEntity,
-  getEntityName,
-  getEntityType,
-} from '@core/component/Properties/component/modal/shared/entityUtils';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue';
 import { usePropertySelection } from '@core/component/Properties/hooks';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
@@ -25,6 +20,7 @@ import {
   useListKeyBindings,
 } from '@core/util/useListKeyBindings';
 import { type EntityData, InlineEntity } from '@entity';
+import { type CombinedEntity, getEntityName, getEntityType } from '@property';
 import { useEntityPropertiesQuery } from '@queries/properties/entity';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { mergeRefs } from '@solid-primitives/refs';

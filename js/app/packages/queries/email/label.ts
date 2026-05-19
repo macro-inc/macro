@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { emailClient } from '@service-email/client';
 import { useQuery } from '@tanstack/solid-query';

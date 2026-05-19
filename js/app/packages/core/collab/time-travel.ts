@@ -1,4 +1,3 @@
-import { isErr } from '@core/util/maybeResult';
 import { syncServiceClient } from '@service-sync/client';
 import {
   type Change,
@@ -150,24 +149,24 @@ function createGroup(
 
 async function fetchRawHistory(documentId: string): Promise<BaseHistory[]> {
   const maybeSnapshot = await syncServiceClient.getSnapshot({ documentId });
-  if (isErr(maybeSnapshot)) {
+  if (maybeSnapshot.isErr()) {
     console.error('Failed to get snapshot', maybeSnapshot);
     return [];
   }
 
   const doc = new LoroDoc();
-  doc.import(maybeSnapshot[1]);
+  doc.import(maybeSnapshot.value);
 
   const maybeMetadata = await syncServiceClient.getDocumentMetadata({
     documentId,
   });
 
-  if (isErr(maybeMetadata)) {
+  if (maybeMetadata.isErr()) {
     console.error('Failed to get document metadata', maybeMetadata);
     return [];
   }
 
-  const metadata = maybeMetadata[1];
+  const metadata = maybeMetadata.value;
   const peerToUserId = new Map(
     metadata.peers.map((p) => [String(p.peer_id), p.user_id])
   );

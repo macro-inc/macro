@@ -80,7 +80,7 @@ export function InlineTaskProperties() {
           onPropertyDeleted={refetch}
           saveHandler={saveHandler}
         >
-          <div class="flex flex-row flex-wrap items-center gap-1 text-base mb-6">
+          <div class="flex flex-row flex-wrap items-center gap-2 text-sm mb-6">
             <For each={inlineProperties()}>
               {(property) => <InlinePropertyValue property={property} />}
             </For>

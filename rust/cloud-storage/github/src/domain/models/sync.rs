@@ -126,7 +126,8 @@ impl ValidatedGithubWebhookEvent {
     /// Derive the task status string based on the event, if applicable.
     ///
     /// For `pull_request` events: `opened`/`reopened` → `"In Review"`,
-    /// `closed` + merged → `"Completed"`, `closed` → `"Canceled"`.
+    /// `closed` + merged → `"Completed"`, `closed` without merge →
+    /// `"Not Started"` (the TODO status).
     ///
     /// For comment/review events that newly associate a task with an open PR,
     /// returns `"In Review"`.
@@ -137,7 +138,7 @@ impl ValidatedGithubWebhookEvent {
             GithubWebhookEventType::PullRequest => match self.action() {
                 Some("opened" | "reopened" | "edited") => Some("In Review"),
                 Some("closed") if self.is_merged() => Some("Completed"),
-                Some("closed") => Some("Canceled"),
+                Some("closed") => Some("Not Started"),
                 _ => None,
             },
             GithubWebhookEventType::IssueComment

@@ -1,8 +1,9 @@
+import { err as resultErr } from 'neverthrow';
 /**
  * @vitest-environment jsdom
  */
 
-import { MaybeResultError } from '@core/util/maybeResult';
+import { ThrownResultError } from '@core/util/result';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -43,10 +44,9 @@ describe('channelMessagesQueryOptions', () => {
     'NOT_FOUND',
     'GONE',
   ] as const)('throws missing load-around messages without retrying them for %s', async (code) => {
-    mocks.getChannelMessages.mockResolvedValueOnce([
-      [{ code, message: 'Message unavailable' }],
-      null,
-    ]);
+    mocks.getChannelMessages.mockResolvedValueOnce(
+      resultErr([{ code, message: 'Message unavailable' }])
+    );
 
     const options = channelMessagesQueryOptions('channel-1', 'message-missing');
 
@@ -61,7 +61,7 @@ describe('channelMessagesQueryOptions', () => {
       throw new Error('Expected queryFn to throw an Error');
     }
 
-    expect(error).toBeInstanceOf(MaybeResultError);
+    expect(error).toBeInstanceOf(ThrownResultError);
     expect(isMissingChannelMessageError(error)).toBe(true);
     expect(options.retry(0, error)).toBe(false);
     expect(mocks.getChannelMessages).toHaveBeenCalledTimes(1);

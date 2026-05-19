@@ -3,14 +3,9 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import {
-  type MaybeError,
-  type MaybeResult,
-  mapOk,
-  type ObjectLike,
-} from '@core/util/maybeResult';
-
+import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
+import type { Result } from 'neverthrow';
 
 const searchServiceHost = `${SERVER_HOSTS['document-storage-service']}`;
 
@@ -24,17 +19,17 @@ export type { ChannelSearchRequest, ChannelSearchResponse };
 export function searchServiceFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeError<FetchWithTokenErrorCode>>;
+): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
 export function searchServiceFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeResult<FetchWithTokenErrorCode, T>>;
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
 export function searchServiceFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
-  | Promise<MaybeError<FetchWithTokenErrorCode>> {
+  | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
+  | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${searchServiceHost}${url}`, init);
 }
 
@@ -68,25 +63,23 @@ const buildSearchQuery = (params: SearchParams) => {
 export const searchClient = {
   async search(args: SearchArgs, init?: SafeFetchInit) {
     const url = `/search${buildSearchQuery(args.params)}`;
-    return mapOk(
+    return (
       await searchServiceFetch<UnifiedSearchResponse>(url, {
         method: 'POST',
         body: JSON.stringify(args.request),
         ...init,
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 
   async searchChannel(args: ChannelSearchArgs, init?: SafeFetchInit) {
     const url = `/search/channel${buildSearchQuery(args.params)}`;
-    return mapOk(
+    return (
       await searchServiceFetch<ChannelSearchResponse>(url, {
         method: 'POST',
         body: JSON.stringify(args.request),
         ...init,
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 };

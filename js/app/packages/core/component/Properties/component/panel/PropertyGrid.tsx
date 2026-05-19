@@ -1,7 +1,6 @@
 import { useMaybeBlockAliasedName } from '@core/block';
 import { type Component, createMemo, For, Show } from 'solid-js';
 import { getBuiltinPropertyIds } from '../../constants';
-import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
 import { PropertyRow } from './PropertyRow';
 
@@ -13,8 +12,6 @@ interface PropertiesListProps {
 }
 
 export const PropertyGrid: Component<PropertiesListProps> = (props) => {
-  const { openPropertyEditor } = usePropertiesContext();
-
   const blockName = useMaybeBlockAliasedName();
   const builtinPropertyIds = blockName ? getBuiltinPropertyIds(blockName) : [];
 
@@ -54,18 +51,6 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
       propertyGroups().userProperties.length > 0
   );
 
-  const handleValueClick = (property: Property, anchor?: HTMLElement) => {
-    if (
-      property.valueType === 'DATE' ||
-      property.valueType === 'SELECT_STRING' ||
-      property.valueType === 'SELECT_NUMBER' ||
-      property.valueType === 'ENTITY'
-    ) {
-      openPropertyEditor(property, anchor);
-    }
-    // LINK, STRING, NUMBER, BOOLEAN handle their own inline editing
-  };
-
   return (
     <Show
       when={props.properties.length > 0}
@@ -84,26 +69,14 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
         {/* Metadata properties */}
         <Show when={propertyGroups().metadata.length > 0}>
           <For each={propertyGroups().metadata}>
-            {(property) => (
-              <PropertyRow
-                property={property}
-                onValueClick={handleValueClick}
-                withPin
-              />
-            )}
+            {(property) => <PropertyRow property={property} withPin />}
           </For>
         </Show>
 
         {/* Builtin properties (block-specific, non-removable) */}
         <Show when={propertyGroups().builtinProperties.length > 0}>
           <For each={propertyGroups().builtinProperties}>
-            {(property) => (
-              <PropertyRow
-                property={property}
-                onValueClick={handleValueClick}
-                withPin
-              />
-            )}
+            {(property) => <PropertyRow property={property} withPin />}
           </For>
         </Show>
 
@@ -118,7 +91,6 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
             {(property) => (
               <PropertyRow
                 property={property}
-                onValueClick={handleValueClick}
                 withDelete={props.withDelete}
                 withPin={props.withPin}
               />

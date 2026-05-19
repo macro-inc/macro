@@ -1,5 +1,4 @@
 import { isListViewID } from '@app/constants/list-views';
-
 import {
   ENABLE_PREVIEW,
   ENABLE_PROJECT_VIEW_PREVIEW,
@@ -10,7 +9,8 @@ import CollapseIcon from '@phosphor/arrows-in.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
 import CaretLeft from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
-import SplitIcon from '@phosphor/square-half.svg';
+import EyeIcon from '@phosphor/eye.svg';
+import EyeSlashIcon from '@phosphor/eye-slash.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { Button, cn } from '@ui';
 import {
@@ -134,7 +134,7 @@ function _SplitPreviewToggle() {
           tabIndex={-1}
           onClick={() => setPreview((prev) => !prev)}
         >
-          <SplitIcon class="h-4" />
+          {preview() ? <EyeSlashIcon /> : <EyeIcon />}
         </Button>
       </div>
     </Show>
@@ -155,19 +155,20 @@ function _SplitControlButtons() {
 
 export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
   const panel = useContext(SplitPanelContext);
-  if (!panel)
+  if (!panel) {
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
+  }
 
   return (
     <div
       class={cn(
-        'isolate relative w-full min-h-10.25 touch:min-h-11.25 overflow-clip text-ink shrink-0 border-b border-edge-muted',
+        'isolate relative w-full h-full overflow-clip text-ink shrink-0 border-b border-edge-muted',
         isMobile() && isListViewID(panel.handle.content().id) && 'hidden'
       )}
       data-split-header
       ref={props.ref}
     >
-      <div class="absolute inset-0 flex justify-start items-center bg-surface">
+      <div class="absolute inset-0 flex justify-start items-center">
         <div class="relative flex items-center pl-2 mobile:pl-0 h-full">
           <div class="mobile:hidden">
             <SplitCloseButton />

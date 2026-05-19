@@ -1,4 +1,3 @@
-import { isErr } from '@core/util/maybeResult';
 import { type InferType, SyncDirection } from '@loro-mirror/packages/core/src';
 import { logger } from '@observability/logger';
 import { Mutex } from 'async-mutex';
@@ -91,7 +90,7 @@ export function createSyncEngine<
     await syncLock.runExclusive(async () => {
       let importResult = loroManager.importUpdate(update);
       await Promise.resolve();
-      if (isErr(importResult)) {
+      if (importResult.isErr()) {
         logger.error('failed to import remote update', {
           resolution: 'reset engine',
           scope: 'sync_engine',
@@ -140,7 +139,7 @@ export function createSyncEngine<
       const syncResult = await loroManager.syncToLoro(state);
 
       // Failed to sync, try to reset the engine
-      if (isErr(syncResult)) {
+      if (syncResult.isErr()) {
         let error = syncResult;
         logger.error('failed to sync state to remote', {
           resolution: 'reset engine',
@@ -176,7 +175,7 @@ export function createSyncEngine<
       }
 
       let resetResult = await loroManager.reset(snapshot.value);
-      if (isErr(resetResult)) {
+      if (resetResult.isErr()) {
         logger.error('failed to reset engine or loro manager', {
           resolution: 'fail',
           scope: 'sync_engine',

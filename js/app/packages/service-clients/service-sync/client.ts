@@ -4,17 +4,12 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import {
-  isErr,
-  type MaybeError,
-  type MaybeResult,
-  type ObjectLike,
-  ok,
-} from '@core/util/maybeResult';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
+import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { SerializedEditorState } from 'lexical';
+import { err, ok, type Result } from 'neverthrow';
 import { InitializeFromSnapshotRequest } from './generated/schema';
 
 const SYNC_SERVICE_WORKER_URL = `${SYNC_SERVICE_HOSTS['worker']}`;
@@ -47,17 +42,17 @@ const cancelIdleTask =
 export function syncFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeError<FetchWithTokenErrorCode>>;
+): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
 export function syncFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeResult<FetchWithTokenErrorCode, T>>;
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
 export function syncFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
-  | Promise<MaybeError<FetchWithTokenErrorCode>> {
+  | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
+  | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${SYNC_SERVICE_WORKER_URL}${url}`, {
     ...init,
     headers: {
@@ -135,8 +130,11 @@ export const syncServiceClient = {
       method: 'HEAD',
     });
 
-    if (isErr(res)) {
-      if (isErr(res, 'NOT_FOUND')) {
+    if (res.isErr()) {
+      if (
+        res.isErr() &&
+        res.error.some((error) => error.code === 'NOT_FOUND')
+      ) {
         return ok({ exists: false });
       }
       return res;
@@ -175,13 +173,11 @@ export const syncServiceClient = {
         method: 'GET',
       }
     );
-    if (isErr(response)) {
-      if (isErr(response, 'NOT_FOUND')) {
-        return response;
-      }
+    if (response.isErr()) {
+      return err(response.error);
     }
 
-    return ok(response[1] as MetadataResponse);
+    return ok(response.value as MetadataResponse);
   },
   async getSnapshot(args: { documentId: string }) {
     const token = await getPermissionToken('document', args.documentId);

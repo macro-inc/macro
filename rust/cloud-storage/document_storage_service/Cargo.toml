@@ -109,7 +109,7 @@ readonly_pool = { path = "../readonly_pool" }
 redis = { workspace = true, features = [
   "aio",
   "cluster-async",
-  "tokio-native-tls-comp",
+  "tokio-rustls-comp",
 ] }
 regex = { workspace = true }
 reqwest = { workspace = true }

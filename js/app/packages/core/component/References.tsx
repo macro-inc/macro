@@ -6,7 +6,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
 import { compareDateDesc, type DateValue } from '@core/util/date';
-import { isErr } from '@core/util/maybeResult';
+
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { formatRelativeTimestamp } from '@entity';
 import {
@@ -225,12 +225,12 @@ export function References(props: ReferenceProps) {
       entity_id: props.documentId,
     });
 
-    if (isErr(response)) {
+    if (response.isErr()) {
       console.error(response);
       return [];
     }
 
-    return response[1].references;
+    return response.value.references;
   });
   const { openWithSplit } = useSplitLayout();
   const blockOrchestrator = useGlobalBlockOrchestrator();

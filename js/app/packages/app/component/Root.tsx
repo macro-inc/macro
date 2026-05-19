@@ -87,7 +87,8 @@ import { ReactiveFavicon } from './ReactiveFavicon';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 
-const InteractiveOnboarding = lazy(
+const NewOnboarding = lazy(() => import('./onboarding/onboarding'));
+const OldOnboarding = lazy(
   () => import('./interactive-onboarding/InteractiveOnboarding')
 );
 
@@ -95,9 +96,14 @@ import {
   AnalyticsContextProvider,
   useAnalytics,
 } from '@app/component/analytics-context';
-import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
+import {
+  PosthogProvider,
+  ShowFeatureFlag,
+  usePosthog,
+} from '@app/lib/analytics/posthog';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
+import { ENABLE_NEW_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
 import { QuickAccessProvider } from '@core/context/quickAccess';
 import { Button } from '@ui';
 
@@ -344,7 +350,13 @@ const ROUTES: RouteDefinition[] = [
     path: '/welcome',
     component: () => (
       <div class="flex *:flex-1 size-full overflow-y-hidden">
-        <InteractiveOnboarding />
+        <ShowFeatureFlag
+          key="enable-new-onboarding"
+          enabledOverride={ENABLE_NEW_ONBOARDING_OVERRIDE}
+          fallback={<OldOnboarding />}
+        >
+          <NewOnboarding />
+        </ShowFeatureFlag>
       </div>
     ),
   },
