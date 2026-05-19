@@ -1154,7 +1154,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
                                   {/* Load more row */}
                                   <Match
-                                    when={row.getIsLoadMore() && row.group}
+                                    when={
+                                      row.group?.isExpanded() &&
+                                      row.getIsLoadMore() &&
+                                      row.group
+                                    }
                                   >
                                     {(group) => {
                                       const highlighted = () => row.isFocused();
@@ -1207,7 +1211,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                   </Match>
 
                                   {/* Entity row */}
-                                  <Match when={true}>
+                                  <Match
+                                    when={!row.group || row.group?.isExpanded()}
+                                  >
                                     <SoupEntityContextMenu
                                       entity={row.original}
                                     >
