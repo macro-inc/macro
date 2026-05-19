@@ -32,10 +32,7 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
       <Dropdown.Content class="min-w-35">
         <For each={props.options}>
           {(option) => (
-            <Dropdown.Item
-              class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
-              onSelect={() => props.onChange(option.value)}
-            >
+            <Dropdown.Item onSelect={() => props.onChange(option.value)}>
               <span
                 class="flex-1 truncate"
                 classList={{

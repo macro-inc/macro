@@ -40,10 +40,7 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
       <Dropdown.Content class="min-w-35">
         <For each={options()}>
           {(option) => (
-            <Dropdown.Item
-              class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
-              onSelect={() => props.onChange(option.value)}
-            >
+            <Dropdown.Item onSelect={() => props.onChange(option.value)}>
               <Show when={option.icon}>
                 {(icon) => (
                   <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">

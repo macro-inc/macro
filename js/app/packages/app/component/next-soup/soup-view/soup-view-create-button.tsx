@@ -148,10 +148,7 @@ export const SoupViewCreateButton = () => {
             <Dropdown.Content class="min-w-35">
               <For each={options()}>
                 {(item) => (
-                  <Dropdown.Item
-                    class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
-                    onSelect={() => handleSelect(item)}
-                  >
+                  <Dropdown.Item onSelect={() => handleSelect(item)}>
                     <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
                       <CreateOptionIcon id={item.id} />
                     </span>

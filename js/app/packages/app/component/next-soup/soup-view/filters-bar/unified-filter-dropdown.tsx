@@ -447,7 +447,6 @@ function SingleValueSubmenu<T>(props: {
                 const active = () => props.current() === option.value;
                 return (
                   <Dropdown.Item
-                    class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
                     onSelect={() => props.onSelect(option.value)}
                     closeOnSelect
                   >
@@ -599,11 +598,7 @@ const SearchIndexItem = (props: {
   active: Accessor<boolean>;
   onSelect: () => void;
 }) => (
-  <Dropdown.Item
-    class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
-    onSelect={props.onSelect}
-    closeOnSelect
-  >
+  <Dropdown.Item onSelect={props.onSelect} closeOnSelect>
     <SearchIndexRowLabel option={props.option} active={props.active} />
   </Dropdown.Item>
 );
@@ -818,7 +813,6 @@ export const UnifiedFilterDropdown = () => {
                                       isOptionActive(option.id);
                                     return (
                                       <Dropdown.Item
-                                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
                                         onSelect={() => toggleFilter(option.id)}
                                         closeOnSelect={!category.multiple}
                                       >
@@ -918,7 +912,6 @@ export const UnifiedFilterDropdown = () => {
 
                       {/* All row */}
                       <Dropdown.Item
-                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
                         onSelect={() => handleIndexChange('all')}
                         closeOnSelect
                       >
@@ -942,7 +935,6 @@ export const UnifiedFilterDropdown = () => {
                     const active = () => isOptionActive(option.id);
                     return (
                       <Dropdown.Item
-                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
                         onSelect={() => toggleFilter(option.id)}
                         closeOnSelect={!categories()[0]!.multiple}
                       >

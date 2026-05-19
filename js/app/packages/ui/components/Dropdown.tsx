@@ -19,24 +19,27 @@ export type DropdownSubContentProps = ComponentProps<typeof KobalteDropdownMenu.
 export type DropdownContentProps = ComponentProps<typeof KobalteDropdownMenu.Content> & { depth?: SurfaceProps['depth']; mount?: PortalMount; };
 export type DropdownTriggerProps = ComponentProps<typeof KobalteDropdownMenu.Trigger> & ButtonProps;
 export type DropdownGroupProps = ComponentProps<typeof KobalteDropdownMenu.Group>;
+export type DropdownItemProps = ComponentProps<typeof KobalteDropdownMenu.Item>;
 type PortalMount = ComponentProps<typeof KobalteDropdownMenu.Portal>['mount'];
 
-function DropdownTrigger(props: DropdownTriggerProps) {
+function DropdownItem(props: DropdownItemProps) {
+  const [local, rest] = splitProps(props, ['class']);
   return (
-    <KobalteDropdownMenu.Trigger
-      variant="base"
-      as={Button}
-      {...props}
-      size="sm"
+    <KobalteDropdownMenu.Item
+      class={cn(
+        'w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-xs outline-none hover:bg-hover data-highlighted:bg-hover data-disabled:opacity-50 data-disabled:cursor-not-allowed',
+        local.class,
+      )}
+      {...rest}
     />
   );
 }
 
-function DropdownContent(props: DropdownContentProps) {
+function DropdownSubContent(props: DropdownSubContentProps) {
   const [local, rest] = splitProps(props, ['depth', 'class', 'mount']);
   return (
     <KobalteDropdownMenu.Portal mount={local.mount}>
-      <KobalteDropdownMenu.Content
+      <KobalteDropdownMenu.SubContent
         class={cn('flex flex-col size-auto z-action-menu gap-1 bg-[var(--b3)]', local.class)}
         depth={local.depth ?? 2}
         as={Surface}
@@ -46,11 +49,11 @@ function DropdownContent(props: DropdownContentProps) {
   );
 }
 
-function DropdownSubContent(props: DropdownSubContentProps) {
+function DropdownContent(props: DropdownContentProps) {
   const [local, rest] = splitProps(props, ['depth', 'class', 'mount']);
   return (
     <KobalteDropdownMenu.Portal mount={local.mount}>
-      <KobalteDropdownMenu.SubContent
+      <KobalteDropdownMenu.Content
         class={cn('flex flex-col size-auto z-action-menu gap-1 bg-[var(--b3)]', local.class)}
         depth={local.depth ?? 2}
         as={Surface}
@@ -70,6 +73,17 @@ function DropdownGroup(props: DropdownGroupProps) {
   );
 }
 
+function DropdownTrigger(props: DropdownTriggerProps) {
+  return (
+    <KobalteDropdownMenu.Trigger
+      variant="base"
+      as={Button}
+      {...props}
+      size="sm"
+    />
+  );
+}
+
 export const Dropdown = Object.assign((props: ComponentProps<typeof KobalteDropdownMenu>) => (<KobalteDropdownMenu {...props} />), {
   ItemDescription: KobalteDropdownMenu.ItemDescription, /* todo */
   ItemIndicator: KobalteDropdownMenu.ItemIndicator,     /* todo */
@@ -79,7 +93,6 @@ export const Dropdown = Object.assign((props: ComponentProps<typeof KobalteDropd
   SubTrigger: KobalteDropdownMenu.SubTrigger,           /* todo */
   ItemLabel: KobalteDropdownMenu.ItemLabel,             /* todo */
   RadioItem: KobalteDropdownMenu.RadioItem,             /* todo */
-  Item: KobalteDropdownMenu.Item,                       /* todo */
   Icon: KobalteDropdownMenu.Icon,                       /* todo */
   Sub: KobalteDropdownMenu.Sub,                         /* todo */
 
@@ -87,4 +100,5 @@ export const Dropdown = Object.assign((props: ComponentProps<typeof KobalteDropd
   Content: DropdownContent,
   Trigger: DropdownTrigger,
   Group: DropdownGroup,
+  Item: DropdownItem,
 });
