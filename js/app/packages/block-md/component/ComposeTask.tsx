@@ -655,9 +655,8 @@ export function ComposeTask(props: ComposeTaskProps) {
           />
         </div>
 
-        <Scroll class="">
-          <div class="h-9000 w-5 bg-[teal]" />
-          {/*<MarkdownShell
+        <div class="overflow-y-scroll scrollbar-hidden mb-6">
+          <MarkdownShell
             config={editorConfig}
             initialState={initialState.editorState}
             initialValue={
@@ -667,9 +666,8 @@ export function ComposeTask(props: ComposeTaskProps) {
             }
             placeholder={props.placeholder ?? 'Add description...'}
             portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
-            class="h-auto overflow-visible"
-          />*/}
-        </Scroll>
+          />
+        </div>
 
         <Suspense>
           <PropertiesProvider
