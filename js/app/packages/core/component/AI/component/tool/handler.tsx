@@ -14,6 +14,7 @@ import {
   markNotificationsDoneHandler,
   markNotificationsSeenHandler,
 } from './Notifications';
+import { listTeamMembersHandler } from './ListTeamMembers';
 import {
   getEntityPropertiesHandler,
   setEntityPropertyHandler,
@@ -48,6 +49,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ListCallRecords: listCallRecordsHandler,
   ListEntities: listEntitiesHandler,
   ListNotifications: listNotificationsHandler,
+  ListTeamMembers: listTeamMembersHandler,
   MarkNotificationsDone: markNotificationsDoneHandler,
   MarkNotificationsSeen: markNotificationsSeenHandler,
   bash_code_execution: bashCodeExecutionHandler,
