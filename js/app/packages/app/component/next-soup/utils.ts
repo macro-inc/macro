@@ -9,7 +9,7 @@ import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
 import {
   type EntityData,

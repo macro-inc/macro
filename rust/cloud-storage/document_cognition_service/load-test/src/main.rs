@@ -1,5 +1,5 @@
 mod config;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use futures::{SinkExt, StreamExt};
 use http::uri::Uri;
 use serde::{Deserialize, Serialize};

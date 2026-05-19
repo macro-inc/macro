@@ -15,7 +15,7 @@ hex = { workspace = true }
 redis = { workspace = true, features = [
   "aio",
   "tokio-comp",
-  "tokio-native-tls-comp",
+  "tokio-rustls-comp",
 ] }
 rootcause = { workspace = true }
 serde = { workspace = true }

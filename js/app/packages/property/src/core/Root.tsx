@@ -1,5 +1,5 @@
 import { cn } from '@ui';
-import { type JSX, splitProps } from 'solid-js';
+import { createSignal, type JSX, splitProps } from 'solid-js';
 import type { Property } from '../types';
 import {
   type PropertyEditFn,
@@ -28,6 +28,11 @@ export function Root(props: PropertyRootProps) {
     'children',
   ]);
 
+  const [editorOpen, setEditorOpen] = createSignal(false);
+  const [editorAnchor, setEditorAnchor] = createSignal<HTMLElement | undefined>(
+    undefined
+  );
+
   const value: PropertyRootContextValue = {
     property: () => local.property,
     canEdit: () => local.canEdit ?? false,
@@ -39,6 +44,16 @@ export function Root(props: PropertyRootProps) {
     },
     get onRefresh() {
       return local.onRefresh;
+    },
+    editorOpen,
+    editorAnchor,
+    openEditor: (anchor) => {
+      setEditorAnchor(() => anchor);
+      setEditorOpen(true);
+    },
+    closeEditor: () => {
+      setEditorOpen(false);
+      setEditorAnchor(() => undefined);
     },
   };
 

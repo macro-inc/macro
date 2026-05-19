@@ -19,11 +19,10 @@ lexical_client = { path = "../lexical_client" }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_entrypoint = { path = "../macro_entrypoint" }
 model = { path = "../model" }
-openssl = { workspace = true }
 s3_key = { path = "../s3_key" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sqlx = { workspace = true, features = ["postgres", "runtime-tokio"] }
+sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }
 sync_service_client = { path = "../sync_service_client" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing = { workspace = true }
@@ -33,5 +32,3 @@ urlencoding = { workspace = true }
 name = "document_upload_finalizer_local_worker"
 path = "src/bin/local_worker.rs"
 
-[package.metadata.cargo-machete]
-ignored = ["openssl"]

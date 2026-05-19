@@ -29,7 +29,7 @@ import {
 } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
-import { isErr } from '@core/util/maybeResult';
+
 import {
   chatRuleset,
   handleFileFolderDrop,
@@ -130,10 +130,10 @@ export function ChannelCompose() {
           name: channelName() ?? null,
           participants: destination.users,
         });
-        if (isErr(res)) {
+        if (res.isErr()) {
           throw new Error('Could not create channel');
         }
-        const [, { id }] = res;
+        const { id } = res.value;
         await sendToChannel({
           channelId: id,
           content,

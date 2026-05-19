@@ -1,4 +1,3 @@
-import { isErr } from '@core/util/maybeResult';
 import XIcon from '@phosphor/x.svg';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
@@ -39,12 +38,12 @@ export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
         definition_id: props.propertyId,
       });
 
-      if (isErr(result)) {
+      if (result.isErr()) {
         setOptions([]);
         return;
       }
 
-      const [, data] = result;
+      const data = result.value;
       setOptions(Array.isArray(data) ? data : []);
     } catch (_error) {
       setOptions([]);

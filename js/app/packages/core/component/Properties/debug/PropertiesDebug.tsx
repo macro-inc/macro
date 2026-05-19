@@ -1,7 +1,7 @@
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import { filterMap } from '@core/util/list';
-import { isErr } from '@core/util/maybeResult';
+
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { useQuery } from '@tanstack/solid-query';
@@ -64,10 +64,10 @@ const PropertiesDebug: Component = () => {
         scope: 'system',
         include_options: true,
       });
-      if (isErr(result)) {
+      if (result.isErr()) {
         throw new Error('Failed to fetch system properties');
       }
-      const [, data] = result;
+      const data = result.value;
       return data;
     },
     staleTime: 1000 * 60 * 10,

@@ -16,6 +16,12 @@ export type SoupFiltersPreset = {
   filters: Query;
   /** Client filters to apply */
   clientFilters: { and?: FilterID[]; or?: FilterID[] };
+  /**
+   * Initial group-by to apply when this tab is selected. Uses the same id
+   * format consumed by `soup.grouping.setActiveGroupId` (e.g. `date`,
+   * `entity_type`, `project`, or `property:<definition-id>`).
+   */
+  groupBy?: string;
 };
 
 // Tab preset configuration types
@@ -273,6 +279,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             },
           }),
           clientFilters: { and: ['task', 'assigned-to', 'active-task'] },
+          groupBy: `property:${SYSTEM_PROPERTY_IDS.PRIORITY}`,
         };
       },
       'created-by-me': (ctx) => {
@@ -282,6 +289,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             include: { subType: ['task'], documentOwnerId: [ctx.userId] },
           }),
           clientFilters: { and: ['task', 'active-task', 'owned-entity'] },
+          groupBy: `property:${SYSTEM_PROPERTY_IDS.STATUS}`,
         };
       },
       all: () => ({
@@ -289,6 +297,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           include: { subType: ['task'] },
         }),
         clientFilters: { and: ['task'] },
+        groupBy: `property:${SYSTEM_PROPERTY_IDS.ASSIGNEES}`,
       }),
     },
   },

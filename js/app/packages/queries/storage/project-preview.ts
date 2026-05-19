@@ -1,12 +1,8 @@
-import {
-  catchToResult,
-  isErr,
-  type MaybeResult,
-  ok,
-} from '@core/util/maybeResult';
+import { catchToResult, type ResultError } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { ProjectPreviewData } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
+import { err, ok, type Result } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { projectsKeys } from './keys';
@@ -24,11 +20,11 @@ async function fetchProjectPreview(
     projectIds: [projectId],
   });
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     throw new Error(`Failed to fetch project preview`);
   }
 
-  const projectPreview = result[1].previews.find(
+  const projectPreview = result.value.previews.find(
     (preview) => preview.id === projectId
   );
 
@@ -73,16 +69,16 @@ export function useProjectPreviewQuery(projectId: Accessor<string>) {
  */
 export async function fetchAndCacheProjectPreview(
   projectId: string
-): Promise<MaybeResult<string, { project: ProjectPreviewData }>> {
+): Promise<Result<{ project: ProjectPreviewData }, ResultError<string>[]>> {
   const result = await catchToResult(async () =>
     queryClient.ensureQueryData(projectPreviewQueryOptions(projectId))
   );
 
-  if (isErr(result)) {
-    return result;
+  if (result.isErr()) {
+    return err(result.error);
   }
 
-  return ok({ project: result[1] });
+  return ok({ project: result.value });
 }
 
 /**

@@ -1,5 +1,5 @@
 import type { Maybe } from '@core/types';
-import { type MaybeResult, throwOnErr } from '@core/util/maybeResult';
+import { type ResultError, throwOnErr } from '@core/util/result';
 import type { UnifiedNotification } from '@notifications/types';
 import {
   optimisticUpdateSoupItemUpdatedAt,
@@ -15,6 +15,7 @@ import {
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
+import type { Result } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import { queryClient } from '../client';
 import { notificationKeys } from './keys';
@@ -259,7 +260,7 @@ type NotificationsMutationCallbacks<T> = MutationCallbacks<
 >;
 
 type NotificationsMutationFn<T> = MutationFunction<
-  MaybeResult<string, T>,
+  Result<T, ResultError<string>[]>,
   NotificationsMutationParams
 >;
 

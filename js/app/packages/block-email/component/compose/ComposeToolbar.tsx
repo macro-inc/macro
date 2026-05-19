@@ -141,33 +141,33 @@ export function EmailComposeToolbar(props: {
           <div class="flex items-center gap-2">
             <Show when={ctx.onSaveDraft}>
               <Button
-                variant="base"
-                size="sm"
                 disabled={
                   ctx.isSending() || ctx.isSavingDraft?.() || ctx.disabled()
                 }
                 onClick={() => void ctx.onSaveDraft?.()}
+                variant="base"
+                size="sm"
               >
                 {ctx.isSavingDraft?.() ? 'Saving…' : 'Save Draft'}
               </Button>
             </Show>
             <Tooltip label={ctx.sendTime() ? 'Send time is scheduled' : ''}>
               <Button
+                onClick={() => ctx.onSend()}
+                disabled={
+                  ctx.isSavingDraft?.() ||
+                  !!ctx.sendTime() ||
+                  ctx.isSending() ||
+                  ctx.disabled()
+                }
                 tooltip="Send"
                 size="icon-sm"
-                disabled={
-                  ctx.isSending() ||
-                  ctx.isSavingDraft?.() ||
-                  ctx.disabled() ||
-                  !!ctx.sendTime()
-                }
-                onClick={() => ctx.onSend()}
               >
                 <Show
-                  when={!ctx.isSending()}
                   fallback={<Spinner class="animate-spin" />}
+                  when={!ctx.isSending()}
                 >
-                  <PaperPlaneRight class="text-accent fill-accent" />
+                  <PaperPlaneRight />
                 </Show>
               </Button>
             </Tooltip>

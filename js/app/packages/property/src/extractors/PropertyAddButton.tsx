@@ -20,7 +20,13 @@ export function PropertyAddButton(props: Props) {
   ) => {
     e.stopPropagation();
     if (isReadOnly()) return;
-    ctx.onEdit?.(ctx.property(), e.currentTarget);
+    // External onEdit (legacy modal routing) takes precedence; otherwise
+    // open the local editor so a sibling <Property.PopoverEditor /> can mount.
+    if (ctx.onEdit) {
+      ctx.onEdit(ctx.property(), e.currentTarget);
+    } else {
+      ctx.openEditor(e.currentTarget);
+    }
   };
 
   return (

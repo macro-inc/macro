@@ -1,5 +1,5 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
-import { isErr } from '@core/util/maybeResult';
+
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
 import { emailClient } from '@service-email/client';
@@ -15,12 +15,12 @@ async function fetchChannelPreviews(
     channel_ids: channelIds,
   });
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     console.error('Failed to fetch channel previews');
     return [];
   }
 
-  const [, data] = result;
+  const data = result.value;
   return data.previews.map((channel) => {
     const base = {
       id: channel.channel_id,
@@ -55,11 +55,11 @@ export async function fetchMessageContext(
     message_id: messageId,
   });
 
-  if (isErr(msgResult)) {
+  if (msgResult.isErr()) {
     return null;
   }
 
-  const [, msgData] = msgResult;
+  const msgData = msgResult.value;
   const message = msgData.messages[0];
 
   if (!message) {
@@ -74,12 +74,12 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
     document_ids: ids,
   });
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     console.error('Failed to fetch document previews');
     return [];
   }
 
-  const [, data] = result;
+  const data = result.value;
   return data.previews.map((doc) => {
     const base = {
       id: doc.document_id,
@@ -121,12 +121,12 @@ async function fetchCallPreviews(ids: string[]): Promise<PreviewItem[]> {
     call_ids: ids,
   });
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     console.error('Failed to fetch call previews');
     return [];
   }
 
-  const [, data] = result;
+  const data = result.value;
   return data.previews.map((call) => {
     const base = {
       id: call.callId,
@@ -163,12 +163,12 @@ async function fetchChatPreviews(ids: string[]): Promise<PreviewItem[]> {
     chat_ids: ids,
   });
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     console.error('Failed to fetch chat previews');
     return [];
   }
 
-  const [, data] = result;
+  const data = result.value;
   return data.previews.map((chat) => {
     const base = {
       id: chat.chat_id,
@@ -204,12 +204,12 @@ async function fetchProjectPreviews(
     projectIds,
   });
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     console.error('Failed to fetch projects previews');
     return [];
   }
 
-  return result[1].previews.map((preview) => {
+  return result.value.previews.map((preview) => {
     const { updatedAt, ...rest } = preview as Extract<
       typeof preview,
       { updatedAt?: unknown }
@@ -238,7 +238,7 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
         type: 'email',
       } as const;
 
-      if (isErr(result)) {
+      if (result.isErr()) {
         return {
           ...base,
           access: 'no_access' as const,
@@ -246,7 +246,7 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
         };
       }
 
-      const [, data] = result;
+      const data = result.value;
       const firstMessage = data.thread.messages[0];
       const subject = firstMessage?.subject ?? 'No Subject';
       const sender =

@@ -1,14 +1,9 @@
 import type { FlattenObject } from '@core/util/flatten';
-import {
-  err,
-  isErr,
-  type MaybeResult,
-  ok,
-  type ResultError,
-} from '@core/util/maybeResult';
+import type { ResultError } from '@core/util/result';
 import type { WithRequired } from '@core/util/withRequired';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
+import { err, ok, type Result } from 'neverthrow';
 import { fetchBinary } from './fetchBinary';
 import { getOPFSDocumentStore } from './opfs';
 import type { StorageError } from './storageError';
@@ -40,16 +35,18 @@ export type GetDocxFileResponse = FlattenObject<{
 
 export async function getDocxExpandedParts(
   docxFile: GetDocxFileResponse
-): Promise<MaybeResult<StorageError, DocxExpandedPart[]>> {
+): Promise<Result<DocxExpandedPart[], ResultError<StorageError>[]>> {
   const { documentId, documentBom } = docxFile.metadata;
   let opfsDocumentStore;
   try {
     opfsDocumentStore = await getOPFSDocumentStore();
   } catch (error) {
-    return err(
-      'OPFS_ERROR',
-      `Failed to get OPFS document store: ${error.message}`
-    );
+    return err([
+      {
+        code: 'OPFS_ERROR',
+        message: `Failed to get OPFS document store: ${error.message}`,
+      },
+    ]);
   }
 
   let opfsDocHandle;
@@ -57,27 +54,33 @@ export async function getDocxExpandedParts(
     const result = await opfsDocumentStore.get(documentId, { create: true });
     opfsDocHandle = result.document;
   } catch (error) {
-    return err(
-      'OPFS_ERROR',
-      `Failed to get OPFS document handle for ${documentId}: ${error.message}`
-    );
+    return err([
+      {
+        code: 'OPFS_ERROR',
+        message: `Failed to get OPFS document handle for ${documentId}: ${error.message}`,
+      },
+    ]);
   }
 
   if (!opfsDocHandle) {
-    return err(
-      'OPFS_ERROR',
-      `Failed to get OPFS document handle for ${documentId}`
-    );
+    return err([
+      {
+        code: 'OPFS_ERROR',
+        message: `Failed to get OPFS document handle for ${documentId}`,
+      },
+    ]);
   }
 
   let opfsParts: DocxExpandedPartList;
   try {
     opfsParts = await opfsDocHandle.list();
   } catch (error) {
-    return err(
-      'OPFS_ERROR',
-      `Failed to list OPFS parts for ${documentId}: ${error.message}`
-    );
+    return err([
+      {
+        code: 'OPFS_ERROR',
+        message: `Failed to list OPFS parts for ${documentId}: ${error.message}`,
+      },
+    ]);
   }
 
   const partPromises = docxFile.parts.map(async (location) => {
@@ -119,18 +122,20 @@ export async function getDocxExpandedParts(
       headers: { 'Content-Type': 'application/octet-stream' },
     });
 
-    if (isErr(fetchResult)) {
-      return fetchResult;
+    if (fetchResult.isErr()) {
+      return err(fetchResult.error);
     }
 
-    const [, arrayBuffer] = fetchResult;
+    const arrayBuffer = fetchResult.value;
 
     const shaMatches = documentBom.filter((bom) => bom.sha === sha);
     if (shaMatches.length === 0) {
-      return err(
-        'INVALID_DOCUMENT',
-        `Failed to find path for ${url}, sha: ${sha}`
-      );
+      return err([
+        {
+          code: 'INVALID_DOCUMENT' as const,
+          message: `Failed to find path for ${url}, sha: ${sha}`,
+        },
+      ]);
     }
 
     return ok(
@@ -149,22 +154,21 @@ export async function getDocxExpandedParts(
 
   settledResults.forEach((result) => {
     if (result.status === 'fulfilled') {
-      const [err, part] = result.value;
-      if (err) {
-        errors.push(...err);
+      if (result.value.isErr()) {
+        errors.push(...result.value.error);
       } else {
-        parts.push(...part);
+        parts.push(...result.value.value);
       }
     } else {
       errors.push({
-        code: 'UNKNOWN_ERROR',
+        code: 'UNKNOWN_ERROR' as const,
         message: `Failed to process part: ${result.reason}`,
       });
     }
   });
 
   if (errors.length > 0) {
-    return [errors, null];
+    return err(errors);
   }
 
   return ok(parts);

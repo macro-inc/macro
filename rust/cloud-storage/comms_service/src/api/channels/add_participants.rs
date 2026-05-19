@@ -119,6 +119,7 @@ pub async fn handler(
         parsed_recipients,
         existing_user_ids,
         sender_profile_picture_url,
+        None,
         metadata,
     )
     .await

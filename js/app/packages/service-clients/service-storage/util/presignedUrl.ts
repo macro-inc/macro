@@ -1,4 +1,3 @@
-import { isErr } from '@core/util/maybeResult';
 import { storageServiceClient } from '../client';
 
 // we expire slightly before the actual expiry to avoid race condition
@@ -39,11 +38,11 @@ export const getPresignedUrl = async ({
     documentId,
     versionId,
   });
-  if (isErr(maybeLocation)) {
+  if (maybeLocation.isErr()) {
     throw new Error('unable to retrieve location data');
   }
 
-  const [, { data }] = maybeLocation;
+  const { data } = maybeLocation.value;
   if (data.type !== 'presignedUrl') {
     throw new Error('presignedUrl not found in location data');
   }

@@ -27,7 +27,8 @@ use crate::domain::{
         CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
         PatchTeamPlanRequest, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
         RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
-        TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+        TeamCheckoutError, TeamCheckoutSessionRequest, TeamError, TeamInvite, TeamInviteDetails,
+        TeamMember, TeamPlan, TeamRole, TeamWithMembers,
     },
     team_repo::{TeamChannelsRepository, TeamRepository, TeamService},
 };
@@ -647,5 +648,48 @@ where
         }
 
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn create_checkout_session(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
+        req: &TeamCheckoutSessionRequest,
+    ) -> Result<String, TeamCheckoutError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        let team_plan = self.team_repository.get_team_plan(&team_id).await?;
+
+        if team_plan.is_some() {
+            return Err(TeamCheckoutError::TeamAlreadyHasPlanError);
+        }
+
+        let user_id = entity_access_receipt
+            .get_authenticated_user()
+            .map_err(TeamError::AccessError)?;
+
+        let stripe_customer_id: stripe::CustomerId =
+            match self.team_repository.get_stripe_customer_id(user_id).await? {
+                Some(customer_id) => customer_id,
+                None => return Err(TeamCheckoutError::MissingCustomerId),
+            };
+
+        // If the user has an active subscription id error out
+        if self
+            .customer_repository
+            .get_subscription_id_for_customer(&stripe_customer_id)
+            .await
+            .is_ok()
+        {
+            return Err(TeamCheckoutError::AlreadySubscribed);
+        }
+
+        let url = self
+            .customer_repository
+            .create_team_checkout_session(&team_id, stripe_customer_id, req)
+            .await?;
+
+        Ok(url)
     }
 }

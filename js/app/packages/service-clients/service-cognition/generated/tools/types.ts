@@ -1348,7 +1348,7 @@ export interface ProjectSearchResult {
   score?: number | null;
 }
 /**
- * Retrieve the transcript for a specific call record. Use ListCallRecords first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from ListCallRecords.
+ * Retrieve the transcript for a specific call record. Use ListCallRecords first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from ListCallRecords. In transcript segments, speakerId is the associated user/track, not guaranteed speaker identity; use diarizedSpeakerId to distinguish actual voices, and treat different diarizedSpeakerIds as potentially different speakers even if speakerId is the caller/"you".
  */
 export interface ReadCallRecord {
   /**
@@ -1369,12 +1369,19 @@ export interface ReadCallRecordResponse {
    */
   summary?: string | null;
   /**
-   * Transcript segments in chronological order.
+   * Transcript segments in chronological order. Use `diarized_speaker_id`
+   * alongside `speaker_id` before attributing speech to a person.
    */
   transcript: TranscriptSegment[];
 }
 /**
  * A single transcript segment.
+ *
+ * Speaker attribution is best-effort. `speaker_id` identifies the user/track
+ * associated with the segment, while `diarized_speaker_id` identifies the
+ * diarized voice cluster that likely spoke it. If diarized IDs differ, treat
+ * those segments as potentially different real speakers even when `speaker_id`
+ * is the same (including when `speaker_id` is the caller/"you").
  */
 export interface TranscriptSegment {
   /**
@@ -1383,7 +1390,9 @@ export interface TranscriptSegment {
   content: string;
   /**
    * Stable per-speaker identifier produced by diarization, when available.
-   * Distinguishes multiple speakers sharing one audio track.
+   * Distinguishes multiple speakers sharing one audio track. Different
+   * diarized IDs should be treated as potentially different actual speakers,
+   * even if they share the same `speaker_id`.
    */
   diarizedSpeakerId?: string | null;
   /**
@@ -1391,7 +1400,12 @@ export interface TranscriptSegment {
    */
   endedAt?: string | null;
   /**
-   * The speaker's user id.
+   * The user id associated with the segment's audio track/participant.
+   *
+   * This is not guaranteed to be the human who spoke. Use
+   * `diarized_speaker_id` to distinguish actual diarized voices; when the
+   * same `speaker_id` appears with different diarized IDs, do not assume all
+   * of those utterances were said by this user (or by "you").
    */
   speakerId: string;
   /**

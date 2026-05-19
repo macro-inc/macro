@@ -1,5 +1,5 @@
 import { ENABLE_MENTION_TRACKING } from '@core/constant/featureFlags';
-import { isErr } from '@core/util/maybeResult';
+
 import { commsServiceClient } from '@service-comms/client';
 import type { ItemType } from '@service-storage/client';
 import { getPermissionToken } from './token';
@@ -25,12 +25,12 @@ export async function trackMention(
     token
   );
 
-  if (isErr(response)) {
+  if (response.isErr()) {
     console.error('Failed to track document mention', response);
     return;
   }
 
-  return response[1]?.id;
+  return response.value?.id;
 }
 
 export async function untrackMention(
@@ -48,7 +48,7 @@ export async function untrackMention(
     token
   );
 
-  if (isErr(response)) {
+  if (response.isErr()) {
     console.error('Failed to untrack document mention', response);
   }
 }

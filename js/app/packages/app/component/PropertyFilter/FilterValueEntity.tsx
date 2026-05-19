@@ -1,3 +1,10 @@
+import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
+import { useEmail, useUserId } from '@core/context/user';
+import { useAugmentUserWithDmActivity } from '@core/user';
+import { createFreshSearch } from '@core/util/freshSort';
+import type { EmailEntity } from '@entity';
+import { createEmailsInfiniteQuery } from '@macro-entity';
+import XIcon from '@phosphor/x.svg';
 import {
   type CombinedEntity,
   createEntitySearchConfig,
@@ -11,14 +18,7 @@ import {
   threadMapper,
   useQuickAccessEntities,
   userToEntity,
-} from '@core/component/Properties/component/modal/shared/entityUtils';
-import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
-import { useEmail, useUserId } from '@core/context/user';
-import { useAugmentUserWithDmActivity } from '@core/user';
-import { createFreshSearch } from '@core/util/freshSort';
-import type { EmailEntity } from '@entity';
-import { createEmailsInfiniteQuery } from '@macro-entity';
-import XIcon from '@phosphor/x.svg';
+} from '@property';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';

@@ -1,7 +1,7 @@
 import { analytics } from '@app/lib/analytics';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isPaymentError } from '@core/util/handlePaymentError';
-import { isErr, isOk } from '@core/util/maybeResult';
+
 import { removeHistoryItem } from '@queries/history/history';
 import {
   getDeletedTree,
@@ -36,8 +36,8 @@ export async function getItemAccessLevel({
         await storageServiceClient.projects.getProject({
           id,
         });
-      if (isOk(maybeProjectMetadata)) {
-        return maybeProjectMetadata[1].userAccessLevel;
+      if (maybeProjectMetadata.isOk()) {
+        return maybeProjectMetadata.value.userAccessLevel;
       }
       break;
 
@@ -46,8 +46,8 @@ export async function getItemAccessLevel({
         await storageServiceClient.getDocumentMetadata({
           documentId: id,
         });
-      if (isOk(maybeDocumentMetadata)) {
-        return maybeDocumentMetadata[1].userAccessLevel;
+      if (maybeDocumentMetadata.isOk()) {
+        return maybeDocumentMetadata.value.userAccessLevel;
       }
       break;
 
@@ -55,8 +55,8 @@ export async function getItemAccessLevel({
       const maybeChatMetadata = await cognitionApiServiceClient.getChat({
         chat_id: id,
       });
-      if (isOk(maybeChatMetadata)) {
-        return maybeChatMetadata[1].userAccessLevel;
+      if (maybeChatMetadata.isOk()) {
+        return maybeChatMetadata.value.userAccessLevel;
       }
       break;
     case 'email':
@@ -64,8 +64,8 @@ export async function getItemAccessLevel({
         thread_id: id,
         limit: 1,
       });
-      if (isOk(maybeThread)) {
-        return maybeThread[1].thread.access_level;
+      if (maybeThread.isOk()) {
+        return maybeThread.value.thread.access_level;
       }
       break;
     default:
@@ -124,7 +124,7 @@ export async function renameItem(args: {
     }
   }
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     return false;
   }
 
@@ -143,7 +143,7 @@ export async function setFileType(args: {
     fileType: { set: fileType },
   });
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     return false;
   }
 
@@ -183,7 +183,7 @@ export async function deleteItem(args: {
         return false;
       }
     }
-    if (isErr(result)) {
+    if (result.isErr()) {
       return false;
     }
   } else {
@@ -284,7 +284,7 @@ export async function moveToFolder(args: {
     }
   }
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     return false;
   }
   refetchResources();
@@ -348,8 +348,8 @@ export async function copyItem(args: {
         documentId: id,
         documentName: createCopyName(name),
       });
-      if (isErr(result)) return null;
-      newId = result[1].documentId;
+      if (result.isErr()) return null;
+      newId = result.value.documentId;
       break;
     }
     case 'chat': {
@@ -360,10 +360,10 @@ export async function copyItem(args: {
       if (isPaymentError(result)) {
         showPaywall();
       }
-      if (isErr(result)) {
+      if (result.isErr()) {
         return null;
       }
-      newId = result[1].id;
+      newId = result.value.id;
       break;
     }
     default:
@@ -443,7 +443,7 @@ export async function revertDelete(args: {
     }
   }
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     return false;
   }
 
@@ -503,7 +503,7 @@ export async function permanentlyDelete(args: {
     }
   }
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     return false;
   }
 

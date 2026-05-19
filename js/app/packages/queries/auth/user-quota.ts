@@ -1,4 +1,3 @@
-import { isOk } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';
 import type { UserQuota } from '@service-auth/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
@@ -14,12 +13,12 @@ const USER_QUOTA_STALE_TIME = 1000 * 60 * 5; // 5 minutes
 const getUserQuota = async (): Promise<UserQuota> => {
   const result = await authServiceClient.userQuota();
 
-  if (isOk(result)) {
-    const [, quota] = result;
+  if (result.isOk()) {
+    const quota = result.value;
     return quota;
   }
 
-  const [error] = result;
+  const error = result.error;
   const [{ code, message }] = error;
   console.error('Error getting user quota', error);
   throw new Error(`Failed to get user quota: ${code} - ${message}`);

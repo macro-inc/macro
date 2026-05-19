@@ -65,7 +65,6 @@ sfs_delete = []
 
 [dependencies]
 ammonia = "4.1.0"
-openssl = { workspace = true }
 anyhow = { workspace = true }
 authentication_service_client = { path = "../authentication_service_client" }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3", "sqs"] }
@@ -122,7 +121,7 @@ once_cell = { workspace = true }
 models_properties = { path = "../models_properties" }
 redis = { workspace = true, features = [
   "cluster-async",
-  "tokio-native-tls-comp",
+  "tokio-rustls-comp",
 ] }
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }

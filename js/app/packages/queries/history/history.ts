@@ -1,4 +1,4 @@
-import { catchToResult, isOk, throwOnErr } from '@core/util/maybeResult';
+import { catchToResult, throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
 import type { CloudStorageItemType } from '@service-storage/generated/schemas/cloudStorageItemType';
@@ -174,7 +174,7 @@ export async function postNewHistoryItem(
 
   await refetchHistory();
 
-  return isOk(maybeAdded) && !!maybeAdded[1].success;
+  return maybeAdded.isOk() && !!maybeAdded.value.success;
 }
 
 /** Standalone function to remove an item from history. */
@@ -193,7 +193,7 @@ export async function removeHistoryItem(
 
   await refetchHistory();
 
-  return isOk(maybeRemoved) && !!maybeRemoved[1].success;
+  return maybeRemoved.isOk() && !!maybeRemoved.value.success;
 }
 
 /** Hook to get the updated raw name (no transform) of a HistoryItem */
@@ -242,9 +242,9 @@ export async function insertProjectIntoHistory(projectId: string) {
     const projectContent = await storageServiceClient.projects.getContent({
       id,
     });
-    if (isOk(projectContent)) {
+    if (projectContent.isOk()) {
       ids.push(
-        ...projectContent[1].data.reduce<string[]>((acc, { item }) => {
+        ...projectContent.value.data.reduce<string[]>((acc, { item }) => {
           if (
             item.type === 'project' &&
             !prevData.some(({ id }) => id === item.id)
@@ -255,7 +255,9 @@ export async function insertProjectIntoHistory(projectId: string) {
         }, [])
       );
       newData.push(
-        ...projectContent[1].data.map(({ item }) => transformHistoryItem(item))
+        ...projectContent.value.data.map(({ item }) =>
+          transformHistoryItem(item)
+        )
       );
     }
   }

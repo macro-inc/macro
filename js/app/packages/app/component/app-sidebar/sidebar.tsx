@@ -371,14 +371,12 @@ export const registerSidebarHotkeys = ({
 };
 
 type SidebarActionButtonProps = {
-  label: string;
-  hotkeyToken?: HotkeyToken;
-  /** Whether the sidebar is currently in slim (icon-only) mode. */
-  isSlim: () => boolean;
-  onClick: () => void;
-  disabled?: boolean | (() => boolean);
-  /** Animated icon component that accepts a `triggerAnimation` prop. */
   icon: Component<{ triggerAnimation?: boolean; class?: string }>;
+  onClick: (event?: MouseEvent) => void;
+  disabled?: boolean | (() => boolean);
+  hotkeyToken?: HotkeyToken;
+  isSlim: () => boolean;
+  label: string;
 };
 
 /**
@@ -409,7 +407,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
         if (e.button !== 0) return;
         e.preventDefault();
       }}
-      onClick={props.onClick}
+      onClick={(event: MouseEvent) => props.onClick(event)}
       disabled={isDisabled()}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
@@ -659,11 +657,27 @@ export const AppSidebar = (props: AppSidebarProps) => {
         />
 
         <SidebarActionButton
-          label="Settings"
+          onClick={(event) => {
+            if (event?.shiftKey) {
+              if (!(globalSplitManager()?.canAppendSplit() ?? true)) return;
+              analytics.track('split_created', { from: 'sidebar' });
+              layout.openWithSplit(
+                { type: 'component', id: 'settings' },
+                {
+                  referredFrom: 'sidebar',
+                  allowDuplicate: true,
+                  preferNewSplit: true,
+                  mergeHistory: false,
+                }
+              );
+              return;
+            }
+            toggleSettings();
+          }}
           hotkeyToken={TOKENS.global.toggleSettings}
-          isSlim={isSlim}
-          onClick={toggleSettings}
           icon={AnimatedGearIcon}
+          label="Settings"
+          isSlim={isSlim}
         />
       </div>
       <InviteModal />

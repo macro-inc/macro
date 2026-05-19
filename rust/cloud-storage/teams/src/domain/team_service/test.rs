@@ -416,6 +416,15 @@ impl CustomerRepository for MockCustomerRepository {
     ) -> impl Future<Output = Result<(), CustomerError>> + Send {
         async { unimplemented!() }
     }
+
+    fn create_team_checkout_session(
+        &self,
+        _team_id: &uuid::Uuid,
+        _customer_id: stripe::CustomerId,
+        _req: &TeamCheckoutSessionRequest,
+    ) -> impl Future<Output = Result<String, CustomerError>> + Send {
+        async { unimplemented!() }
+    }
 }
 
 // -- Mock TeamChannelsRepository --

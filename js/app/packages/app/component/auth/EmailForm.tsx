@@ -1,7 +1,6 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { isErr } from '@core/util/maybeResult';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import { authServiceClient } from '@service-auth/client';
@@ -46,7 +45,7 @@ export const sendEmailCode = action(async (formData: FormData) => {
       password,
       email,
     });
-    if (isErr(maybeTokens))
+    if (maybeTokens.isErr())
       throw new Error(
         'Failed to login. Check your email and password then try again.'
       );

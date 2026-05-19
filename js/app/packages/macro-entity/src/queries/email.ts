@@ -4,7 +4,7 @@ import { emailClient } from '@service-email/client';
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import type { PreviewsInboxCursorParams } from '@service-email/generated/schemas/previewsInboxCursorParams';
 import { useInfiniteQuery } from '@tanstack/solid-query';
-import { isErr } from 'core/util/maybeResult';
+
 import { type Accessor, createMemo } from 'solid-js';
 import { createApiTokenQuery, withApiTokenRetry } from './auth';
 import { queryKeys } from './key';
@@ -34,11 +34,11 @@ const fetchPaginatedEmails = async ({
     init
   );
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     throw new Error('Failed to fetch email');
   }
 
-  return result[1];
+  return result.value;
 };
 
 export function createEmailsInfiniteQuery(

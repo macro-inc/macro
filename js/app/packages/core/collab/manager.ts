@@ -1,11 +1,5 @@
-import {
-  err,
-  isErr,
-  type MaybeError,
-  type MaybeResult,
-  ok,
-  onlyErr,
-} from '@core/util/maybeResult';
+import type { ResultError } from '@core/util/result';
+
 import {
   type InferType,
   Mirror,
@@ -21,6 +15,7 @@ import {
   type Side,
   type VersionVector,
 } from 'loro-crdt';
+import { err, ok, type Result } from 'neverthrow';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 import type { GenericRootSchema, LoroRawUpdate } from './shared';
 
@@ -139,56 +134,62 @@ export type LoroManager<S extends GenericRootSchema = GenericRootSchema> = {
    *                   └───────────┘
    *
    * @param state - The state to sync to loro
-   * @returns maybeError - The error if syncing to loro failed
+   * @returns result - The error if syncing to loro failed
    *
    * */
-  syncToLoro(state: InferType<S>): Promise<MaybeError<LoroManagerError>>;
+  syncToLoro(
+    state: InferType<S>
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>>;
 
   /** Retrieve all loro container ids */
-  getAllContainerIds(): MaybeResult<LoroManagerError, ContainerID[]>;
+  getAllContainerIds(): Result<ContainerID[], ResultError<LoroManagerError>[]>;
 
   /**  Retrieve a LoroUpdate with all relavent events/data since the given version vector
    *
    * @param lastVersionVector - The last version vector to sync from
-   * @returns maybeResult - The update if it exists, or an error if it doesn't
+   * @returns result - The update if it exists, or an error if it doesn't
    * */
   getUpdateSince(
     lastVersionVector: VersionVector
-  ): MaybeResult<LoroManagerError, Uint8Array | undefined>;
+  ): Result<Uint8Array | undefined, ResultError<LoroManagerError>[]>;
 
   /** Initializes the manager from a snapshot
    *
    * If this is successful, it will set isInitialized to true
    *
    * @param snapshot - The snapshot to initialize from
-   * @returns maybeError - The error if initializing from the snapshot failed
+   * @returns result - The error if initializing from the snapshot failed
    * */
   initializeFromSnapshot(
     snapshot: LoroRawUpdate
-  ): Promise<MaybeError<LoroManagerError>>;
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>>;
 
   /** Imports a single loro update
    *
    * @param update - The update to import
-   * @returns maybeError - The error if importing the update failed
+   * @returns result - The error if importing the update failed
    * */
-  importUpdate(update: LoroRawUpdate): MaybeResult<LoroManagerError, boolean>;
+  importUpdate(
+    update: LoroRawUpdate
+  ): Result<boolean, ResultError<LoroManagerError>[]>;
 
   /** Imports multiple loro updates at once
    *
    * @param updates - The updates to import
-   * @returns maybeError - The error if importing the updates failed
+   * @returns result - The error if importing the updates failed
    * */
   importBatchUpdates(
     updates: LoroRawUpdate[]
-  ): MaybeResult<LoroManagerError, boolean>;
+  ): Result<boolean, ResultError<LoroManagerError>[]>;
 
   /** Resets the manager to a new state
    *
    * @param snapshot - The snapshot to reset to
-   * @returns maybeError - The error if resetting the manager failed
+   * @returns result - The error if resetting the manager failed
    * */
-  reset(snapshot: LoroRawUpdate): Promise<MaybeError<LoroManagerError>>;
+  reset(
+    snapshot: LoroRawUpdate
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>>;
 
   /** Returns the current version of the manager */
   getVersion(): VersionVector;
@@ -201,16 +202,16 @@ export type LoroManager<S extends GenericRootSchema = GenericRootSchema> = {
   /** Returns the container with the given id if it exists */
   getContainerById(
     id: ContainerID
-  ): MaybeResult<LoroManagerError, Container | undefined>;
+  ): Result<Container | undefined, ResultError<LoroManagerError>[]>;
 
   /** Returns the current cursor position for the given LoroCursor within its container */
-  getCursorPos(cursor: Cursor): MaybeResult<
-    LoroManagerError,
+  getCursorPos(cursor: Cursor): Result<
     {
       update?: Cursor;
       offset: number;
       side: Side;
-    }
+    },
+    ResultError<LoroManagerError>[]
   >;
 };
 
@@ -246,7 +247,7 @@ export function createLoroManager<S extends GenericRootSchema>(
 
   const importUpdate = (
     update: LoroRawUpdate
-  ): MaybeResult<LoroManagerError, boolean> => {
+  ): Result<boolean, ResultError<LoroManagerError>[]> => {
     let importStatus;
 
     try {
@@ -254,17 +255,21 @@ export function createLoroManager<S extends GenericRootSchema>(
     } catch (e) {
       console.error('Failed to import update', e);
       pushError(LoroManagerError.ImportFailed);
-      return err(
-        LoroManagerError.ImportFailed,
-        `Failed to import update: ${e}`
-      );
+      return err([
+        {
+          code: LoroManagerError.ImportFailed,
+          message: `Failed to import update: ${e}`,
+        },
+      ]);
     }
 
     const didChange = Object.keys(importStatus.success).length > 0;
 
     if (Object.keys(importStatus.pending ?? {}).length > 0) {
       pushError(LoroManagerError.ImportFailed);
-      return err(LoroManagerError.ImportFailed, 'Import failed');
+      return err([
+        { code: LoroManagerError.ImportFailed, message: 'Import failed' },
+      ]);
     }
 
     return ok(didChange);
@@ -272,7 +277,7 @@ export function createLoroManager<S extends GenericRootSchema>(
 
   const importBatchUpdates = (
     updates: LoroRawUpdate[]
-  ): MaybeResult<LoroManagerError, boolean> => {
+  ): Result<boolean, ResultError<LoroManagerError>[]> => {
     let importStatus;
 
     try {
@@ -280,17 +285,21 @@ export function createLoroManager<S extends GenericRootSchema>(
     } catch (e) {
       console.error('Failed to import update', e);
       pushError(LoroManagerError.ImportFailed);
-      return err(
-        LoroManagerError.ImportFailed,
-        `Failed to import update: ${e}`
-      );
+      return err([
+        {
+          code: LoroManagerError.ImportFailed,
+          message: `Failed to import update: ${e}`,
+        },
+      ]);
     }
 
     const didChange = Object.keys(importStatus.success).length > 0;
 
     if (Object.keys(importStatus.pending ?? {}).length > 0) {
       pushError(LoroManagerError.ImportFailed);
-      return err(LoroManagerError.ImportFailed, 'Import failed');
+      return err([
+        { code: LoroManagerError.ImportFailed, message: 'Import failed' },
+      ]);
     }
 
     return ok(didChange);
@@ -298,12 +307,12 @@ export function createLoroManager<S extends GenericRootSchema>(
 
   const initializeFromSnapshot = async (
     snapshot: LoroRawUpdate
-  ): Promise<MaybeError<LoroManagerError>> => {
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>> => {
     const importResult = importUpdate(snapshot);
 
-    if (isErr(importResult)) {
-      let error = importResult[0];
-      return onlyErr(error[0].code, error[0].message);
+    if (importResult.isErr()) {
+      const [error] = importResult.error;
+      return err([{ code: error.code, message: error.message }]);
     }
 
     const mirror_ = createMirror(loroDoc(), schema);
@@ -321,25 +330,29 @@ export function createLoroManager<S extends GenericRootSchema>(
     } catch (e) {
       console.error('Failed to sync mirror', e);
       pushError(LoroManagerError.InitializeFailed);
-      return onlyErr(
-        LoroManagerError.InitializeFailed,
-        `Failed to sync mirror: ${e}`
-      );
+      return err([
+        {
+          code: LoroManagerError.InitializeFailed,
+          message: `Failed to sync mirror: ${e}`,
+        },
+      ]);
     }
 
     setInitialized(true);
     setMirror(mirror_);
 
-    return [null];
+    return ok(undefined);
   };
 
   const getUpdateSince = (
     lastVersionVector: VersionVector
-  ): MaybeResult<LoroManagerError, Uint8Array | undefined> => {
+  ): Result<Uint8Array | undefined, ResultError<LoroManagerError>[]> => {
     const mirror_ = mirror();
 
     if (!initialized() || !mirror_) {
-      return err(LoroManagerError.NotInitialized, 'Not initialized');
+      return err([
+        { code: LoroManagerError.NotInitialized, message: 'Not initialized' },
+      ]);
     }
     const currentVersionVector = loroDoc().version();
     /** Comparison between the current state, and the last synced state */
@@ -371,21 +384,25 @@ export function createLoroManager<S extends GenericRootSchema>(
     } catch (e) {
       console.error('Failed to export update', e);
       pushError(LoroManagerError.ExportFailed);
-      return err(
-        LoroManagerError.ExportFailed,
-        `Failed to export update: ${e}`
-      );
+      return err([
+        {
+          code: LoroManagerError.ExportFailed,
+          message: `Failed to export update: ${e}`,
+        },
+      ]);
     }
 
     return ok(update);
   };
 
-  const getAllContainerIds = (): MaybeResult<
-    LoroManagerError,
-    ContainerID[]
+  const getAllContainerIds = (): Result<
+    ContainerID[],
+    ResultError<LoroManagerError>[]
   > => {
     if (!initialized() || !mirror()) {
-      return err(LoroManagerError.NotInitialized, 'Not initialized');
+      return err([
+        { code: LoroManagerError.NotInitialized, message: 'Not initialized' },
+      ]);
     }
 
     return ok(mirror()!.getContainerIds());
@@ -393,10 +410,12 @@ export function createLoroManager<S extends GenericRootSchema>(
 
   const syncToLoro = async (
     state: InferType<S>
-  ): Promise<MaybeError<LoroManagerError>> => {
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>> => {
     const mirror_ = mirror();
     if (!initialized() || !mirror_) {
-      return onlyErr(LoroManagerError.NotInitialized, 'Not initialized');
+      return err([
+        { code: LoroManagerError.NotInitialized, message: 'Not initialized' },
+      ]);
     }
 
     try {
@@ -407,18 +426,20 @@ export function createLoroManager<S extends GenericRootSchema>(
       await awaitMirrorSync();
     } catch (e) {
       console.error('Failed to sync to loro', e);
-      return onlyErr(
-        LoroManagerError.SyncFailed,
-        `Failed to sync to loro: ${e}`
-      );
+      return err([
+        {
+          code: LoroManagerError.SyncFailed,
+          message: `Failed to sync to loro: ${e}`,
+        },
+      ]);
     }
 
-    return [null];
+    return ok(undefined);
   };
 
   const reset = async (
     snapshot: LoroRawUpdate
-  ): Promise<MaybeError<LoroManagerError>> => {
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>> => {
     mirror()?.dispose();
     loroDoc().free();
 
@@ -431,18 +452,22 @@ export function createLoroManager<S extends GenericRootSchema>(
     } catch (e) {
       console.error('Failed to import snapshot', e);
       pushError(LoroManagerError.ImportFailed);
-      return onlyErr(
-        LoroManagerError.ImportFailed,
-        `Failed to import snapshot: ${e}`
-      );
+      return err([
+        {
+          code: LoroManagerError.ImportFailed,
+          message: `Failed to import snapshot: ${e}`,
+        },
+      ]);
     }
 
     if (Object.keys(importStatus.pending ?? {}).length > 0) {
       pushError(LoroManagerError.ImportFailed);
-      return onlyErr(
-        LoroManagerError.ImportFailed,
-        'Snapshot import has pending updates'
-      );
+      return err([
+        {
+          code: LoroManagerError.ImportFailed,
+          message: 'Snapshot import has pending updates',
+        },
+      ]);
     }
 
     const newMirror = createMirror(newDoc, schema);
@@ -461,12 +486,12 @@ export function createLoroManager<S extends GenericRootSchema>(
 
     setInitialized(true);
 
-    return [null];
+    return ok(undefined);
   };
 
   const getContainerById = (
     id: ContainerID
-  ): MaybeResult<LoroManagerError, Container | undefined> => {
+  ): Result<Container | undefined, ResultError<LoroManagerError>[]> => {
     let container: Container | undefined;
 
     try {
@@ -474,7 +499,9 @@ export function createLoroManager<S extends GenericRootSchema>(
     } catch (e) {
       console.error('Failed to get container', e);
       pushError(LoroManagerError.GetContainerByIdFailed);
-      return err(LoroManagerError.GetContainerByIdFailed, e);
+      return err([
+        { code: LoroManagerError.GetContainerByIdFailed, message: e },
+      ]);
     }
 
     return ok(container);
@@ -482,13 +509,13 @@ export function createLoroManager<S extends GenericRootSchema>(
 
   const getCursorPos = (
     cursor: Cursor
-  ): MaybeResult<
-    LoroManagerError,
+  ): Result<
     {
       update?: Cursor;
       offset: number;
       side: Side;
-    }
+    },
+    ResultError<LoroManagerError>[]
   > => {
     let pos: { update?: Cursor; offset: number; side: Side } | undefined;
     try {
@@ -496,7 +523,7 @@ export function createLoroManager<S extends GenericRootSchema>(
     } catch (e) {
       console.error('Failed to get cursor pos', e);
       pushError(LoroManagerError.GetCursorPosFailed);
-      return err(LoroManagerError.GetCursorPosFailed, e);
+      return err([{ code: LoroManagerError.GetCursorPosFailed, message: e }]);
     }
 
     return ok(pos);

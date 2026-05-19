@@ -4,8 +4,8 @@ import {
   LoadErrors,
   loadResult,
 } from '@core/block';
-import { isErr, ok } from '@core/util/maybeResult';
 import { storageServiceClient } from '@service-storage/client';
+import { err, ok } from 'neverthrow';
 import BlockCode from './component/Block';
 import { supportedExtensions } from './util/languageSupport';
 
@@ -32,8 +32,8 @@ export const definition = defineBlock({
         documentId: source.id,
       })
     );
-    if (isErr(document)) return document;
-    const [, result] = document;
+    if (document.isErr()) return err(document.error);
+    const result = document.value;
     return ok(result);
   },
 

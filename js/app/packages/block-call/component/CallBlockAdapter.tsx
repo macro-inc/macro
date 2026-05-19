@@ -4,7 +4,7 @@ import { useBlockId } from '@core/block';
 import Unauthorized from '@core/component/AccessErrorViews/Unauthorized';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
-import { MaybeResultError } from '@core/util/maybeResult';
+import { ThrownResultError } from '@core/util/result';
 import { useCallRecordQuery } from '@queries/call/call';
 import { useSearchParams } from '@solidjs/router';
 import { createSignal, Match, Switch } from 'solid-js';
@@ -13,7 +13,7 @@ import { CallRecordingSplitHeaderLoading } from './CallRecording/CallRecordingSp
 import { ModalsProvider } from './ModalsProvider';
 
 function isUnauthorized(error: Error | null): boolean {
-  if (error instanceof MaybeResultError) {
+  if (error instanceof ThrownResultError) {
     return error.errors[0]?.code === 'UNAUTHORIZED';
   }
   return false;

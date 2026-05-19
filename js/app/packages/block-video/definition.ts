@@ -6,11 +6,11 @@ import {
   type MimeType,
 } from '@core/block';
 import { ENABLE_VIDEO_BLOCK } from '@core/constant/featureFlags';
-import { isErr, ok } from '@core/util/maybeResult';
 import { storageServiceClient } from '@service-storage/client';
 import type { DocumentMetadataFileType } from '@service-storage/generated/schemas/documentMetadataFileType';
 import { getPresignedUrl } from '@service-storage/util/presignedUrl';
 import { toast } from 'core/component/Toast/Toast';
+import { err, ok } from 'neverthrow';
 import BlockVideo from './component/Block';
 
 export const VIDEO_MIMES: Record<
@@ -68,9 +68,9 @@ export const definition = defineBlock({
         });
       }
 
-      if (isErr(maybeDocument)) return maybeDocument;
+      if (maybeDocument.isErr()) return err(maybeDocument.error);
 
-      const [, documentResult] = maybeDocument;
+      const documentResult = maybeDocument.value;
 
       const { documentMetadata, userAccessLevel } = documentResult;
 
@@ -97,4 +97,6 @@ export const definition = defineBlock({
   },
 });
 
-export type VideoFileData = ExtractLoadType<(typeof definition)['load']>;
+export type VideoFileData = ExtractLoadType<(typeof definition)['load']> & {
+  videoUrl?: string;
+};

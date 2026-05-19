@@ -369,6 +369,12 @@ export const listTypedNotificationsResponse = zod
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
+                          messageContent: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Message content to show in the invite email, when the invite was triggered by a message.'
+                            ),
                           senderProfilePictureUrl: zod
                             .string()
                             .nullish()
@@ -879,6 +885,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
+                          messageContent: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Message content to show in the invite email, when the invite was triggered by a message.'
+                            ),
                           senderProfilePictureUrl: zod
                             .string()
                             .nullish()
@@ -1383,6 +1395,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
+                          messageContent: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Message content to show in the invite email, when the invite was triggered by a message.'
+                            ),
                           senderProfilePictureUrl: zod
                             .string()
                             .nullish()
@@ -1880,6 +1898,12 @@ export const getTypedNotificationByIdResponse = zod
                   invitedBy: zod
                     .string()
                     .describe('The user who sent the invitation'),
+                  messageContent: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Message content to show in the invite email, when the invite was triggered by a message.'
+                    ),
                   senderProfilePictureUrl: zod
                     .string()
                     .nullish()

@@ -190,6 +190,7 @@ impl ChannelMessageEvent<'_> {
                     recipients_without_sender_and_mentions.into_iter().collect(),
                     self.existing_user_ids.clone(),
                     self.sender_profile_picture_url.clone(),
+                    Some(self.message.content.clone()),
                     self.channel_metadata.clone(),
                 )
                 .await?;
@@ -224,6 +225,7 @@ impl ChannelMessageEvent<'_> {
     }
 }
 
+#[expect(clippy::too_many_arguments)]
 pub async fn dispatch_notifications_for_invite(
     ingres: &impl NotificationIngress,
     channel_id: &Uuid,
@@ -231,6 +233,7 @@ pub async fn dispatch_notifications_for_invite(
     recipient_user_ids: Vec<MacroUserIdStr<'_>>,
     existing_user_ids: HashSet<String>,
     sender_profile_picture_url: Option<String>,
+    message_content: Option<String>,
     common: CommonChannelMetadata,
 ) -> anyhow::Result<()> {
     let (existing_users, not_existing_users): (HashSet<_>, HashSet<_>) = recipient_user_ids
@@ -244,6 +247,7 @@ pub async fn dispatch_notifications_for_invite(
                 notification: ChannelInviteMetadata {
                     invited_by: invited_by_user_id.clone(),
                     channel_name: common.channel_name.clone(),
+                    message_content: message_content.clone(),
                     sender_profile_picture_url: sender_profile_picture_url.clone(),
                 },
                 sender_id: Some(invited_by_user_id.copied().into_owned()),
@@ -259,6 +263,7 @@ pub async fn dispatch_notifications_for_invite(
                 notification: ChannelInviteMetadata {
                     invited_by: invited_by_user_id.clone(),
                     channel_name: common.channel_name.clone(),
+                    message_content,
                     sender_profile_picture_url,
                 },
                 sender_id: Some(invited_by_user_id.copied().into_owned()),

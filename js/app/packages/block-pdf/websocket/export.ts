@@ -20,12 +20,12 @@ export function exportPdf({
     },
     action: 'pdf_export',
     processResult: async (data) => {
-      const [, blob] = await fetchBinary(data.resultUrl, 'blob');
-      if (!blob) {
-        console.error('unable to retrieve blob');
+      const blob = await fetchBinary(data.resultUrl, 'blob');
+      if (blob.isErr()) {
+        console.error('unable to retrieve blob', blob.error);
         return undefined;
       }
-      return blob;
+      return blob.value;
     },
     handleSuccess: async (blob) => {
       return makeFile({

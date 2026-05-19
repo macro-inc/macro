@@ -4,7 +4,7 @@ import {
   moveToFolder,
 } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import { scheduledActionKeys } from '@queries/agent-schedule/keys';
 import { queryClient } from '@queries/client';

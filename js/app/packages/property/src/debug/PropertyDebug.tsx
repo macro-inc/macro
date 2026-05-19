@@ -2,14 +2,14 @@ import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHea
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import { seedMockDisplayNames } from '@core/user';
 import { cn } from '@ui';
-import { type Component, For, type JSX, Show } from 'solid-js';
+import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import {
   PROPERTIES_EMPTY,
   PROPERTIES_FILLED,
   PROPERTIES_METADATA,
 } from '../../mocks/mockProperties';
 import { Property } from '../property';
-import type { Property as PropertyT } from '../types';
+import type { PropertyApiValues, Property as PropertyT } from '../types';
 
 // Seed mock display names so user properties render real first names.
 seedMockDisplayNames([
@@ -269,6 +269,10 @@ const PropertyDebug: Component = () => {
           </For>
         </Section>
 
+        <Section title="Editors — interactive (click any value)">
+          <EditorsDemo />
+        </Section>
+
         <Section title="Composed (stubs — coming in PR 3-6)">
           <Show when={true} fallback={null}>
             <div class="text-xs text-ink-muted">
@@ -279,6 +283,105 @@ const PropertyDebug: Component = () => {
         </Section>
       </div>
     </>
+  );
+};
+
+/**
+ * Interactive editor demo. Each fixture gets a local signal so the demo
+ * round-trips through save: clicking a value, picking a date, toggling a
+ * checkbox, etc. visibly updates the rendered property. Console logs the
+ * dispatched API values.
+ */
+const EditorsDemo: Component = () => {
+  return (
+    <div
+      class="grid gap-3"
+      style={{ 'grid-template-columns': 'repeat(2, minmax(0, 1fr))' }}
+    >
+      <For each={PROPERTIES_FILLED}>
+        {(initial) => <EditorRow initial={initial} />}
+      </For>
+    </div>
+  );
+};
+
+const EditorRow: Component<{ initial: PropertyT }> = (props) => {
+  const [property, setProperty] = createSignal<PropertyT>(props.initial);
+
+  const applyApiValue = (p: PropertyT, value: PropertyApiValues): PropertyT => {
+    if (p.valueType === 'STRING' && value.valueType === 'STRING') {
+      return { ...p, value: value.value };
+    }
+    if (p.valueType === 'NUMBER' && value.valueType === 'NUMBER') {
+      return { ...p, value: value.value };
+    }
+    if (p.valueType === 'BOOLEAN' && value.valueType === 'BOOLEAN') {
+      return { ...p, value: value.value };
+    }
+    if (p.valueType === 'DATE' && value.valueType === 'DATE') {
+      return { ...p, value: value.value };
+    }
+    if (
+      p.valueType === 'SELECT_STRING' &&
+      value.valueType === 'SELECT_STRING'
+    ) {
+      return { ...p, value: value.values };
+    }
+    if (
+      p.valueType === 'SELECT_NUMBER' &&
+      value.valueType === 'SELECT_NUMBER'
+    ) {
+      return { ...p, value: value.values };
+    }
+    if (p.valueType === 'ENTITY' && value.valueType === 'ENTITY') {
+      return { ...p, value: value.refs };
+    }
+    if (p.valueType === 'LINK' && value.valueType === 'LINK') {
+      return { ...p, value: value.values };
+    }
+    return p;
+  };
+
+  const onSave = async (p: PropertyT, value: PropertyApiValues) => {
+    console.log('[props-debug] save', {
+      property: p.displayName,
+      valueType: p.valueType,
+      value,
+    });
+    setProperty((prev) => applyApiValue(prev, value));
+  };
+
+  const isInline = () => {
+    const t = property().valueType;
+    return t === 'STRING' || t === 'NUMBER' || t === 'BOOLEAN' || t === 'LINK';
+  };
+
+  return (
+    <div class="border border-edge-muted/30 rounded p-2 flex flex-col gap-1 min-w-0">
+      <div class="text-xxs text-ink-extra-muted truncate">
+        {property().displayName} · {property().valueType}
+      </div>
+      <Property.Root property={property()} canEdit onSave={onSave}>
+        <Show
+          when={isInline()}
+          fallback={
+            <>
+              <Property.EditTrigger class={buttonClass}>
+                <Property.Icon property={property()} class="size-3 shrink-0" />
+                <Property.Text
+                  property={property()}
+                  fallback={<Property.Empty label="None" />}
+                />
+                <Property.Caret />
+              </Property.EditTrigger>
+              <Property.PopoverEditor />
+            </>
+          }
+        >
+          <Property.InlineEditor />
+        </Show>
+      </Property.Root>
+    </div>
   );
 };
 

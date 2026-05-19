@@ -3,7 +3,7 @@ import {
   getTextContent,
   initializeEditorWithState,
 } from '@core/component/LexicalMarkdown/utils';
-import { isOk } from '@core/util/maybeResult';
+
 import { storageServiceClient } from '@service-storage/client';
 import { syncServiceClient } from '@service-sync/client';
 import { useQuery } from '@tanstack/solid-query';
@@ -19,12 +19,12 @@ export { default as AiInstructionsIcon } from '@phosphor/notepad.svg';
 const getInstructionsMdId = async (): Promise<string | null | undefined> => {
   const getResult = await storageServiceClient.instructions.get();
 
-  if (isOk(getResult)) {
-    const [, { documentId }] = getResult;
+  if (getResult.isOk()) {
+    const { documentId } = getResult.value;
     return documentId;
   }
 
-  const [error] = getResult;
+  const error = getResult.error;
   const [{ code }] = error;
   if (code === 'NOT_FOUND') {
     return null;
@@ -100,8 +100,8 @@ export function useInstructionsMdTextQuery() {
 export function useCreateInstructionsMd() {
   return async () => {
     const createResult = await storageServiceClient.instructions.create();
-    if (isOk(createResult)) {
-      const [, { documentId }] = createResult;
+    if (createResult.isOk()) {
+      const { documentId } = createResult.value;
       queryClient.setQueryData(instructionsMdKeys.id.queryKey, documentId);
       return documentId;
     }
