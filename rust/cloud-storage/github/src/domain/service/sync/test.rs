@@ -879,7 +879,7 @@ async fn pr_merged_sets_task_status_completed() {
 }
 
 #[tokio::test]
-async fn pr_closed_without_merge_does_not_update_task_status() {
+async fn pr_closed_without_merge_sets_task_status_todo() {
     let (service, doc_service) = make_sync_service_with_doc_service();
     let event = ValidatedGithubWebhookEvent::new(
         "pull_request".to_string(),
@@ -903,14 +903,13 @@ async fn pr_closed_without_merge_does_not_update_task_status() {
     service.process_webhook_event(&event).await.unwrap();
 
     let status_calls = doc_service.task_status_calls();
-    assert!(
-        status_calls.is_empty(),
-        "closing a PR without merge should not cancel the associated task"
-    );
+    assert_eq!(status_calls.len(), 1);
+    assert_eq!(status_calls[0].entity_id, KNOWN_TASK_UUID);
+    assert_eq!(status_calls[0].status, "Not Started");
 }
 
 #[tokio::test]
-async fn pr_closed_without_merge_does_not_cancel_previously_tracked_task() {
+async fn pr_closed_without_merge_sets_previously_tracked_task_status_todo() {
     let (service, doc_service) = make_sync_service_with_doc_service();
 
     let opened_event = ValidatedGithubWebhookEvent::new(
@@ -954,9 +953,11 @@ async fn pr_closed_without_merge_does_not_cancel_previously_tracked_task() {
     service.process_webhook_event(&closed_event).await.unwrap();
 
     let status_calls = doc_service.task_status_calls();
-    assert_eq!(status_calls.len(), 1);
+    assert_eq!(status_calls.len(), 2);
     assert_eq!(status_calls[0].entity_id, KNOWN_TASK_UUID);
     assert_eq!(status_calls[0].status, "In Review");
+    assert_eq!(status_calls[1].entity_id, KNOWN_TASK_UUID);
+    assert_eq!(status_calls[1].status, "Not Started");
 }
 
 #[tokio::test]

@@ -170,11 +170,11 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
 
     /// Handle `pull_request` events with action `closed`.
     ///
-    /// If the PR was merged, gathers all tracked task IDs from the repo plus any
-    /// from PR text, then updates their status to "Completed".
+    /// Gathers all tracked task IDs from the repo plus any from PR text.
     ///
-    /// If the PR was closed without being merged, leaves associated task statuses
-    /// unchanged. Closing/abandoning one PR should not cancel the underlying task.
+    /// If the PR was merged, updates their status to "Completed". If the PR was
+    /// closed without being merged, moves associated tasks back to "Not Started"
+    /// (the TODO status) instead of canceling them.
     /// Does NOT post a new bot comment.
     #[tracing::instrument(skip(self, event), err)]
     pub(crate) async fn handle_pr_close(
@@ -183,11 +183,6 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
     ) -> Result<(), GithubError> {
         let is_merged = event.is_merged();
         tracing::trace!(is_merged, "handling PR close");
-
-        if !is_merged {
-            tracing::trace!("PR closed without merge; leaving task statuses unchanged");
-            return Ok(());
-        }
 
         // Gather task IDs from PR title/body/branch
         let searchable_texts = event.extract_searchable_text();
@@ -235,13 +230,17 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
         let resolved = self.resolve_tasks(&all_task_ids).await;
 
         // No bot comment on close
+        let status = if is_merged {
+            "Completed"
+        } else {
+            "Not Started"
+        };
         tracing::trace!(
-            status = "Completed",
+            status,
             doc_count = resolved.doc_ids.len(),
-            "updating task statuses for merged PR close"
+            "updating task statuses for PR close"
         );
-        self.update_task_statuses(&resolved.doc_ids, "Completed")
-            .await;
+        self.update_task_statuses(&resolved.doc_ids, status).await;
 
         tracing::trace!("PR close handler complete");
         Ok(())
