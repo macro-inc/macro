@@ -71,7 +71,7 @@ export function IntroStep() {
   const ctx = useOnboarding();
 
   return (
-    <div class="flex flex-col items-center text-center gap-10 w-full">
+    <div class="flex flex-col items-center text-center gap-10 w-full mobile:h-full">
       <div class="flex flex-col items-center gap-5">
         <LogoIcon class="size-12 text-accent" />
         <div class="flex flex-col gap-2">
@@ -84,19 +84,20 @@ export function IntroStep() {
         </div>
       </div>
 
-      <div class="grid grid-cols-3 gap-3 w-full">
+      <div class="grid grid-cols-3 mobile:grid-cols-2 gap-3 w-full">
         <For each={BLOCKS}>
           {(item) => (
             <div
               class={cn(
                 'group flex-1 flex flex-col gap-2.5 p-4 rounded-sm border border-edge-muted text-left transition-colors',
+                'mobile:gap-2 mobile:p-3',
                 item.hoverBg,
                 item.hoverBorder
               )}
             >
               <div
                 class={cn(
-                  'size-8 rounded-sm bg-hover flex items-center justify-center transition-colors',
+                  'size-8 mobile:size-7 rounded-sm bg-ink/5 flex items-center justify-center transition-colors',
                   item.hoverIconBg
                 )}
               >
@@ -117,7 +118,7 @@ export function IntroStep() {
         variant="base"
         size="lg"
         onClick={() => ctx.next()}
-        class="px-8 bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+        class="px-8 mobile:mt-auto mobile:w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
       >
         Get started
         <ArrowRightIcon class="size-4" />

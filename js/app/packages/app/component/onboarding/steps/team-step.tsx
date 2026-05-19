@@ -114,7 +114,7 @@ export function TeamStep() {
   };
 
   return (
-    <div class="flex flex-col gap-8 w-full">
+    <div class="flex flex-col gap-8 w-full mobile:h-full">
       <div class="flex flex-col gap-1">
         <h1 class="text-2xl font-semibold text-ink tracking-tight">
           Invite your team
@@ -193,7 +193,7 @@ export function TeamStep() {
         </Show>
       </div>
 
-      <div class="flex flex-col gap-2">
+      <div class="flex flex-col gap-2 mobile:mt-auto">
         <Show
           when={isLargeTeam()}
           fallback={

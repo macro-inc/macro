@@ -152,7 +152,7 @@ export function VerifyStep() {
   );
 
   return (
-    <div class="flex flex-col gap-8 w-full">
+    <div class="flex flex-col gap-8 w-full mobile:h-full">
       <div class="flex flex-col gap-1">
         <h1 class="text-2xl font-semibold text-ink tracking-tight">
           Verify your email

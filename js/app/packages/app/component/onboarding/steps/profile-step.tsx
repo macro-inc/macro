@@ -128,7 +128,7 @@ export function ProfileStep() {
     );
 
   return (
-    <div class="flex flex-col gap-8 w-full">
+    <div class="flex flex-col gap-8 w-full mobile:h-full">
       <div class="flex flex-col gap-1">
         <h1 class="text-2xl font-semibold text-ink tracking-tight">
           {isAuthenticated() ? 'Your workspace' : 'Create your workspace'}
@@ -235,14 +235,14 @@ export function ProfileStep() {
             variant="base"
             size="lg"
             onClick={handleContinueAuthed}
-            class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+            class="w-full mobile:mt-auto bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
           >
             Continue
             <ArrowRightIcon class="size-4" />
           </Button>
         }
       >
-        <div class="flex flex-col gap-3">
+        <div class="flex flex-col gap-3 mobile:mt-auto">
           <Button
             variant="base"
             size="lg"
