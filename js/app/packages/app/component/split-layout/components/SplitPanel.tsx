@@ -182,7 +182,7 @@ export function SplitPanel(props: SplitPanelProps) {
                   'items-start py-2 overflow-visible',
                   !hasToolbarContent() && 'hidden',
                   !previewState() &&
-                    'border-b-0' /* scuffed: this is shit, but we are blided by linear */
+                    'border-b-0' /* scuffed: this is shit, but we are blinded by linear */
                 )}
               >
                 <SplitToolbar ref={setToolbarRef} />

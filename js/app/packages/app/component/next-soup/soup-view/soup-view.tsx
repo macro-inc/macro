@@ -946,11 +946,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
             maxSize={previewVisible() ? 840 : undefined}
           >
             <div
-              class="@container/u-list size-full unified-list-root flex flex-col"
-              classList={{
-                'border-r border-edge-muted':
-                  soup.previewEntity() !== undefined,
-              }}
+              class={cn(
+                '@container/u-list size-full unified-list-root flex flex-col',
+                soup.previewEntity() !== undefined && 'border-r border-edge-muted'
+              )}
             >
               <StaticMarkdownContext>
                 <Switch>
@@ -1010,7 +1009,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
                         <SoupList
                           cache={listStateCache.get(cacheKey)?.virtualCache}
                           ref={setLocalEntityListRef}
-                          virtualizerClass="scrollbar-hidden"
+                          virtualizerClass={cn(
+                            previewVisible() && 'pt-1', /* scuffed: this is shit, but we are blinded by linear */
+                            'scrollbar-hidden'
+                          )}
                           class="overflow-hidden flex min-w-0"
                           virtualizerRef={registerVirtualizerHandler}
                           onScrollBottom={debouncedFetchMore}
