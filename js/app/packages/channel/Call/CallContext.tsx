@@ -74,9 +74,7 @@ type NativeAudioProcessingSupportedConstraints =
     voiceIsolation?: boolean;
   };
 
-function supportedNativeAudioProcessingConstraints():
-  | NativeAudioProcessingSupportedConstraints
-  | null {
+function supportedNativeAudioProcessingConstraints(): NativeAudioProcessingSupportedConstraints | null {
   return (
     (navigator.mediaDevices?.getSupportedConstraints?.() as
       | NativeAudioProcessingSupportedConstraints
@@ -972,10 +970,7 @@ function createCallState() {
     });
   }
 
-  async function finishLocalMediaSetup(
-    targetRoom: Room,
-    setupVersion: number
-  ) {
+  async function finishLocalMediaSetup(targetRoom: Room, setupVersion: number) {
     if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
 
     // Enable microphone by default.
