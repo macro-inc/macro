@@ -8,7 +8,6 @@ import {
 } from '@queries/soup/grouped/api';
 import type { GroupByField, GroupMeta } from '@queries/soup/grouped/types';
 import { soupKeys } from '@queries/soup/keys';
-import { normalizeSoupItemForCache } from '@queries/soup/normalized-cache/operations';
 import { mapSoupPageToEntityList } from '@queries/soup/transform-utils';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
@@ -85,7 +84,7 @@ export const useSoupItemsQuery = (
     queryFn: async (ctx) => {
       const { params, body } = args();
 
-      const page = await throwOnErr(
+      return throwOnErr(
         async () =>
           await storageServiceClient.getSoupItems({
             params: { cursor: ctx.pageParam },
@@ -95,8 +94,6 @@ export const useSoupItemsQuery = (
             },
           })
       );
-      page.items.forEach(normalizeSoupItemForCache);
-      return page;
     },
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => {
@@ -148,7 +145,6 @@ export const useSoupAstItemsQuery = (
               )
             : undefined;
 
-          response.items.forEach(normalizeSoupItemForCache);
           return {
             items: response.items,
             nextCursor: response.next_cursor ?? null,
@@ -169,7 +165,6 @@ export const useSoupAstItemsQuery = (
             })
         );
 
-        response.items.forEach(normalizeSoupItemForCache);
         return {
           items: response.items,
           nextCursor: response.next_cursor ?? null,

@@ -96,15 +96,35 @@ function optimisticUpdateSoupEntityProperty(
 
   const propertyDefinitionId = getPropertyDefinitionId(property);
   const existing = current.data.properties;
-  const isAlreadyAttached = existing.some(
+  const existingProp = existing.find(
     (prop) => prop.definition.id === propertyDefinitionId
   );
 
-  const nextProperties: SoupProperty[] = isAlreadyAttached
-    ? existing.map((prop) =>
-        prop.definition.id === propertyDefinitionId ? { ...prop, value } : prop
-      )
-    : [...existing, fabricateSoupProperty(property, value)];
+  const nextProp: SoupProperty = existingProp
+    ? {
+        ...existingProp,
+        definition: {
+          ...existingProp.definition,
+          // HACK (seamus): we need to change something other than the value in
+          // order to get normy tp update the cache. Changing definition.updated_at
+          // is INCORRECT, but it's currently harmless.
+          updated_at: new Date().toISOString(),
+        },
+        value,
+      }
+    : buildSoupProperty(property, value);
+
+  const nextProperties = existing.map((prop) =>
+    prop.definition.id === nextProp.definition.id ? nextProp : prop
+  );
+
+  if (
+    nextProperties.every(
+      (prop) => prop.definition.id !== nextProp.definition.id
+    )
+  ) {
+    nextProperties.push(nextProp);
+  }
 
   return optimisticUpdateSoupEntity({
     tag: current.tag,
@@ -116,7 +136,7 @@ function optimisticUpdateSoupEntityProperty(
   });
 }
 
-function fabricateSoupProperty(
+function buildSoupProperty(
   property: Property | PropertyDefinitionDomain,
   value: SoupPropertyValue
 ): SoupProperty {
