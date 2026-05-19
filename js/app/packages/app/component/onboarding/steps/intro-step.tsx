@@ -6,6 +6,7 @@ import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
+import { A } from '@solidjs/router';
 import { Button, cn } from '@ui';
 import { For } from 'solid-js';
 import { useOnboarding } from '../onboarding-context';
@@ -114,15 +115,26 @@ export function IntroStep() {
         </For>
       </div>
 
-      <Button
-        variant="base"
-        size="lg"
-        onClick={() => ctx.next()}
-        class="px-8 mobile:mt-auto mobile:w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
-      >
-        Get started
-        <ArrowRightIcon class="size-4" />
-      </Button>
+      <div class="flex flex-col items-center gap-3 mobile:mt-auto mobile:w-full">
+        <Button
+          variant="base"
+          size="lg"
+          onClick={() => ctx.next()}
+          class="px-8 mobile:w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+        >
+          Get started
+          <ArrowRightIcon class="size-4" />
+        </Button>
+        <p class="text-sm text-ink-disabled">
+          Already have an account?{' '}
+          <A
+            href="/login"
+            class="text-accent hover:text-accent/80 font-medium outline-none rounded-sm focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+          >
+            Sign in
+          </A>
+        </p>
+      </div>
     </div>
   );
 }
