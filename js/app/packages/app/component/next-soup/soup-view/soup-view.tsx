@@ -915,6 +915,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
       (!!soup.previewEntity() || panel.previewState[0]()) && !!soup.focus.item()
   );
 
+  createEffect(() => {
+    const hasPreviewEntity = !!soup.previewEntity();
+    const [getPreview, setPreview] = panel.previewState;
+    if (hasPreviewEntity !== getPreview()) {
+      setPreview(hasPreviewEntity);
+    }
+  });
+
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div

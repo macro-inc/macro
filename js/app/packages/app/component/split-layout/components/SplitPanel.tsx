@@ -68,7 +68,6 @@ export function SplitPanel(props: SplitPanelProps) {
     initialPredicates: { and: ['explicit-noise'] },
   });
 
-  // Focus the panel root on mount (non-mobile only).
   createEffect(
     on([panelRef], () => {
       if (isMobile()) return;
@@ -76,16 +75,11 @@ export function SplitPanel(props: SplitPanelProps) {
     })
   );
 
-  // Measure header + toolbar so drawers can offset themselves below them.
   const [toolbarRef, setToolbarRef] = createSignal<HTMLDivElement | null>(null);
   const [headerRef, setHeaderRef] = createSignal<HTMLDivElement | null>(null);
   const toolbarSize = createElementSize(toolbarRef);
   const headerSize = createElementSize(headerRef);
 
-  // Track whether anything has been portaled into the toolbar slots so we can
-  // collapse <Panel.Toolbar>'s border / min-height when there's nothing to show.
-  // SplitToolbar mounts the ref targets during render, so they're available by
-  // the time this component's onMount fires.
   const [hasToolbarContent, setHasToolbarContent] = createSignal(false);
   onMount(() => {
     const checkContent = () => {
@@ -172,7 +166,8 @@ export function SplitPanel(props: SplitPanelProps) {
               <Panel.Toolbar
                 class={cn(
                   'items-start py-2 overflow-visible',
-                  (!hasToolbarContent() || previewState()) && 'hidden'
+                  !hasToolbarContent() && 'hidden',
+                  !previewState() && 'border-b-0', /* scuffed: this is shit, but we are blided by linear */
                 )}
               >
                 <SplitToolbar ref={setToolbarRef} />
