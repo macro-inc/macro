@@ -1,6 +1,4 @@
-use super::{
-    PendingShareFilesState, ShareTargetPlatform, StagedSharedFile, lock_pending_share_filenames,
-};
+use super::{PendingShareFilesState, ShareTargetPlatform, StagedSharedFile};
 use tauri::AppHandle;
 use url::Url;
 
@@ -10,7 +8,7 @@ impl ShareTargetPlatform for ShareTargetPlatformImpl {
     fn cleanup_stale_staged_shared_files(_app: &AppHandle) {}
 
     fn get_pending_share_filenames(_app: AppHandle, state: &PendingShareFilesState) -> Vec<String> {
-        lock_pending_share_filenames(state).clone()
+        state.with_data(|d| d.clone())
     }
 
     fn pop_shared_files(

@@ -20,6 +20,19 @@ pub(crate) struct PendingShareFilesState {
     filenames: Mutex<Vec<String>>,
 }
 
+impl PendingShareFilesState {
+    pub(crate) fn with_data<F, U>(&self, f: F) -> U
+    where
+        F: FnOnce(&mut Vec<String>) -> U,
+    {
+        let mut filenames = self
+            .filenames
+            .lock()
+            .expect("pending share files mutex poisoned");
+        f(&mut filenames)
+    }
+}
+
 #[derive(Serialize)]
 pub(crate) struct StagedSharedFile {
     token: String,

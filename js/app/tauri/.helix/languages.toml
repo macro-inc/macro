@@ -3,4 +3,4 @@
 # without changing the compilation/link target on Linux.
 
 [language-server.rust-analyzer.config.cargo]
-cfgs = ["target_os=ios", 'target_os="ios"']
+cfgs = ["target_os=ios"]

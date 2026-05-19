@@ -206,10 +206,7 @@ fn consume_pending_share_filenames(
         .filter_map(|name| sanitize_shared_filename(name).map(str::to_owned))
         .collect();
 
-    {
-        let mut pending_filenames = lock_pending_share_filenames(state);
-        pending_filenames.retain(|name| !filenames.contains(name));
-    }
+    state.with_data(|files| files.retain(|name| !filenames.contains(name)));
 
     for name in filenames {
         let path = container_path.join(name);
@@ -250,10 +247,7 @@ impl ShareTargetPlatform for ShareTargetPlatformImpl {
     }
 
     fn get_pending_share_filenames(app: AppHandle, state: &PendingShareFilesState) -> Vec<String> {
-        let pending = {
-            let pending_filenames = lock_pending_share_filenames(state);
-            pending_filenames.clone()
-        };
+        let pending = state.with_data(|f| f.clone());
 
         if !pending.is_empty() {
             if let Some(container_path) = ios_app_group_container_path() {
@@ -263,7 +257,10 @@ impl ShareTargetPlatform for ShareTargetPlatformImpl {
                     .filter(|name| container_path.join(name).is_file())
                     .collect();
 
-                replace_pending_share_filenames(state, existing_pending.clone());
+                let existing_pending_clone = existing_pending.clone();
+                state.with_data(|files| {
+                    *files = existing_pending_clone;
+                });
 
                 if !existing_pending.is_empty() {
                     return existing_pending;
