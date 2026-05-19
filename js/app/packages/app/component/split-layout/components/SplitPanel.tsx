@@ -35,7 +35,9 @@ export type SplitPanelProps = {
 };
 
 export function SplitPanel(props: SplitPanelProps) {
-  const [attachHotKeys, splitHotkeyScope] = useHotkeyDOMScope(`split=${props.split.id}`);
+  const [attachHotKeys, splitHotkeyScope] = useHotkeyDOMScope(
+    `split=${props.split.id}`
+  );
   const [panelRef, setPanelRef] = createSignal<HTMLDivElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
   const [previewState, setPreviewState] = createSignal(false);
@@ -50,8 +52,15 @@ export function SplitPanel(props: SplitPanelProps) {
   const splitLayoutHelpers = useSplitLayout();
 
   registerSplitHotkeys({
-    goHome: () => props.handle.replace({ next: { type: 'component', id: LIST_VIEW_ID.inbox }, referredFrom: 'hotkey' }),
-    isNotUnifiedList: () => {const content = props.handle.content(); return !isListViewID(content.id); },
+    goHome: () =>
+      props.handle.replace({
+        next: { type: 'component', id: LIST_VIEW_ID.inbox },
+        referredFrom: 'hotkey',
+      }),
+    isNotUnifiedList: () => {
+      const content = props.handle.content();
+      return !isListViewID(content.id);
+    },
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
     toggleSpotlight: () => props.handle.toggleSpotlight(),
     canGoForward: () => props.handle.canGoForward(),
@@ -155,7 +164,12 @@ export function SplitPanel(props: SplitPanelProps) {
             tabindex={-1}
           >
             <Panel
-              active={!isMobile() && props.active && multipleSplits() && !props.handle.isSpotLight()}
+              active={
+                !isMobile() &&
+                props.active &&
+                multipleSplits() &&
+                !props.handle.isSpotLight()
+              }
               class="rounded-xl"
               depth={1}
             >
@@ -167,7 +181,8 @@ export function SplitPanel(props: SplitPanelProps) {
                 class={cn(
                   'items-start py-2 overflow-visible',
                   !hasToolbarContent() && 'hidden',
-                  !previewState() && 'border-b-0', /* scuffed: this is shit, but we are blided by linear */
+                  !previewState() &&
+                    'border-b-0' /* scuffed: this is shit, but we are blided by linear */
                 )}
               >
                 <SplitToolbar ref={setToolbarRef} />

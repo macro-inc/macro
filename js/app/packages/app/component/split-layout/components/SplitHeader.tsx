@@ -155,7 +155,9 @@ function _SplitControlButtons() {
 
 export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
   const panel = useContext(SplitPanelContext);
-  if (!panel) { throw new Error('<SplitHeader> must be used within a <SplitLayout>'); }
+  if (!panel) {
+    throw new Error('<SplitHeader> must be used within a <SplitLayout>');
+  }
 
   return (
     <div
