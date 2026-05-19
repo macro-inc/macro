@@ -167,7 +167,7 @@ export function EmailComposeToolbar(props: {
                   when={!ctx.isSending()}
                   fallback={<Spinner class="animate-spin" />}
                 >
-                  <PaperPlaneRight class="text-accent fill-accent" />
+                  <PaperPlaneRight />
                 </Show>
               </Button>
             </Tooltip>
