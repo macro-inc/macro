@@ -378,7 +378,7 @@ export async function generateTitle(text: string): Promise<string | undefined> {
 
 type DcsCompletionErrorCode = 'NETWORK_ERROR' | 'OPENAI_ERROR';
 
-async function dcsCompletion(
+export async function dcsCompletion(
   body: Omit<OpenAI.ChatCompletionCreateParamsNonStreaming, 'stream'>
 ): Promise<
   Result<
