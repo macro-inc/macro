@@ -6,7 +6,7 @@ import {
 } from '@tanstack/solid-query';
 import { SERVER_HOSTS } from 'core/constant/servers';
 import { fetchWithToken } from 'core/util/fetchWithToken';
-import { isOk } from 'core/util/maybeResult';
+
 import { queryKeys } from './key';
 
 const authHost = SERVER_HOSTS['auth-service'];
@@ -50,11 +50,11 @@ export const fetchApiToken = async () => {
     `${authHost}/jwt/macro_api_token`
   );
 
-  if (!isOk(result)) {
-    throw new Error('Failed to fetch API token', { cause: result[0] });
+  if (!result.isOk()) {
+    throw new Error('Failed to fetch API token', { cause: result.error });
   }
 
-  return result[1].macro_api_token;
+  return result.value.macro_api_token;
 };
 
 type ApiTokenQueryOptions = SolidQueryOptions<

@@ -38,7 +38,7 @@ export function MessageFlag(props: MessageFlagProps) {
         />
         <span
           class={cn(
-            'text-xs px-3 ring py-1.5 rounded-sm',
+            'text-xs px-3 ring py-1 rounded-sm',
             props.highlightBelow
               ? 'text-accent ring-accent'
               : 'text-ink-extra-muted ring-rail'

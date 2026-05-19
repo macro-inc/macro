@@ -1,14 +1,18 @@
-import { isErr, type MaybeError, type MaybeResult } from './maybeResult';
+import type { Result } from 'neverthrow';
+import type { ResultError } from './result';
 
 export function isPaymentError<T>(
-  result: MaybeResult<string, T> | MaybeError<string>
+  result: Result<T, ResultError<string>[]> | Result<void, ResultError<string>[]>
 ): boolean {
-  if (!isErr(result)) {
+  if (!result.isErr()) {
     return false;
   }
 
-  if (isErr(result, 'HTTP_ERROR')) {
-    const errorMessage = result[0][0].message;
+  if (
+    result.isErr() &&
+    result.error.some((error) => error.code === 'HTTP_ERROR')
+  ) {
+    const errorMessage = result.error[0].message;
     if (
       errorMessage.includes('402') ||
       errorMessage.includes('payment_required') ||

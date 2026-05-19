@@ -1,7 +1,7 @@
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { compareDateDesc } from '@core/util/date';
-import { isOk } from '@core/util/maybeResult';
+
 import {
   refetchHistory,
   useUpsertToHistoryMutation,
@@ -29,8 +29,8 @@ async function fetchProjects(): Promise<ProjectsQueryResponse> {
     storageServiceClient.projects.getPending(),
   ]);
 
-  const projects = isOk(projectsResult) ? projectsResult[1].data : [];
-  const pending = isOk(pendingResult) ? pendingResult[1].data : [];
+  const projects = projectsResult.isOk() ? projectsResult.value.data : [];
+  const pending = pendingResult.isOk() ? pendingResult.value.data : [];
 
   return { projects, pending };
 }
@@ -92,14 +92,14 @@ export async function createProject(params: {
   parentId?: string;
   sharePermission?: null;
 }): Promise<string | undefined> {
-  const maybeResult = await storageServiceClient.projects.create({
+  const result = await storageServiceClient.projects.create({
     name: params.name,
     projectParentId: params.parentId,
     sharePermission: params.sharePermission,
   });
 
-  if (isOk(maybeResult)) {
-    const projectId = maybeResult[1].id;
+  if (result.isOk()) {
+    const projectId = result.value.id;
     setPreviewOnCreate({
       itemId: projectId,
       itemType: 'project',
@@ -141,14 +141,14 @@ export function useCreateProjectMutation(
     mutationFn: async (
       params: CreateProjectParams
     ): Promise<string | undefined> => {
-      const maybeResult = await storageServiceClient.projects.create({
+      const result = await storageServiceClient.projects.create({
         name: params.name,
         projectParentId: params.parentId,
         sharePermission: params.sharePermission,
       });
 
-      if (isOk(maybeResult)) {
-        return maybeResult[1].id;
+      if (result.isOk()) {
+        return result.value.id;
       }
       return undefined;
     },

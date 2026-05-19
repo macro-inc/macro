@@ -14,6 +14,7 @@ export * from './apiUserNotificationAllOfViewedAt';
 export * from './bulkGetByEventItemIdsRequest';
 export * from './bulkGetTypedNotificationsByEventItemIdsParams';
 export * from './channelInviteMetadata';
+export * from './channelInviteMetadataMessageContent';
 export * from './channelInviteMetadataSenderProfilePictureUrl';
 export * from './channelMentionMetadata';
 export * from './channelMentionMetadataAllOf';

@@ -1,5 +1,4 @@
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { isErr } from '@core/util/maybeResult';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import { authServiceClient } from '@service-auth/client';
@@ -16,13 +15,15 @@ const verifyCode = action(async (formData: FormData) => {
   const email = formData.get('email');
   if (typeof email !== 'string') throw new Error('Invalid email');
 
-  const maybeResult = await authServiceClient.passwordlessCallback({
+  const result = await authServiceClient.passwordlessCallback({
     code,
     email,
   });
-  const [err] = maybeResult;
-  if (err) {
-    if (isErr([err], 'UNAUTHORIZED')) {
+  if (result.isErr()) {
+    if (
+      result.isErr() &&
+      result.error.some((error) => error.code === 'UNAUTHORIZED')
+    ) {
       throw new Error('Invalid code.');
     }
     throw new Error('Unable to perform verification.');

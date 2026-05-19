@@ -1,6 +1,6 @@
 import type { LoroManager } from '@core/collab/manager';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { isErr } from '@core/util/maybeResult';
+
 import { $getNodeById, type NodeIdMappings } from '@lexical-core';
 import {
   $createPoint,
@@ -159,12 +159,12 @@ export function $convertLexicalSelectionToCursors(
     // Create cursor at the start of the first node
     const firstContainerResult = loroManager.getContainerById(firstContainerId);
 
-    if (isErr(firstContainerResult)) {
+    if (firstContainerResult.isErr()) {
       warn('Failed to get first container', firstContainerResult);
       return undefined;
     }
 
-    const firstContainer = firstContainerResult[1];
+    const firstContainer = firstContainerResult.value;
     if (firstContainer instanceof LoroText) {
       anchorCursor = firstContainer.getCursor(0);
     } else if (firstContainer instanceof LoroMovableList) {
@@ -174,12 +174,12 @@ export function $convertLexicalSelectionToCursors(
     // Create cursor at the end of the last node
     const lastContainerResult = loroManager.getContainerById(lastContainerId);
 
-    if (isErr(lastContainerResult)) {
+    if (lastContainerResult.isErr()) {
       warn('Failed to get last container', lastContainerResult);
       return undefined;
     }
 
-    const lastContainer = lastContainerResult[1];
+    const lastContainer = lastContainerResult.value;
 
     if (lastContainer instanceof LoroText) {
       focusCursor = lastContainer.getCursor(lastContainer.length);
@@ -236,12 +236,12 @@ function lexicalPointToCursor(
 
   // Get the container and create the cursor
   const maybeContainer = loroManager.getContainerById(containerId);
-  if (isErr(maybeContainer)) {
+  if (maybeContainer.isErr()) {
     warn('Failed to get container', maybeContainer);
     return undefined;
   }
 
-  let container = maybeContainer[1];
+  let container = maybeContainer.value;
 
   let cursor: Cursor | undefined;
   if (container instanceof LoroText) {
@@ -312,12 +312,12 @@ export function $cursorToLexicalPoint(
 
   let maybeContainer = loroManager.getContainerById(cursorContainerID);
 
-  if (isErr(maybeContainer)) {
+  if (maybeContainer.isErr()) {
     warn('Failed to get container', maybeContainer);
     return null;
   }
 
-  if (!maybeContainer[1]) {
+  if (!maybeContainer.value) {
     warn("no container for cursor's containe id");
     return null;
   }
@@ -327,12 +327,12 @@ export function $cursorToLexicalPoint(
   // Get position info from the cursor
   const posResult = loroManager.getCursorPos(cursor.cursor);
 
-  if (isErr(posResult)) {
+  if (posResult.isErr()) {
     warn('Failed to get cursor position', posResult);
     return null;
   }
 
-  let pos = posResult[1];
+  let pos = posResult.value;
 
   // Create a Point for the Lexical node
   return $createPointFromKeyAndOffset(nodeKey, pos.offset);

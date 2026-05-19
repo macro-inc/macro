@@ -2,7 +2,6 @@ import { clamp } from '@block-canvas/util/math';
 import { LoadErrors } from '@core/block';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { staticFileIdEndpoint } from '@core/constant/servers';
-import { isErr } from '@core/util/maybeResult';
 import PauseIcon from '@phosphor/pause.svg';
 import PlayIcon from '@phosphor/play.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
@@ -172,28 +171,32 @@ export function DSSMedia(props: { node: MediaNode; mode: RenderMode }) {
     if (props.node.status === 'dss' || !props.node.status) {
       const res = await fetchBinaryDocumentData(props.node.uuid);
 
-      if (isErr(res, 'UNAUTHORIZED') || isErr(res, 'HTTP_ERROR')) {
+      if (
+        (res.isErr() &&
+          res.error.some((error) => error.code === 'UNAUTHORIZED')) ||
+        (res.isErr() && res.error.some((error) => error.code === 'HTTP_ERROR'))
+      ) {
         setError();
         setError('UNAUTHORIZED');
         return LoadErrors.UNAUTHORIZED;
       }
-      if (isErr(res)) {
+      if (res.isErr()) {
         setError();
         setError('MISSING');
         return LoadErrors.MISSING;
       }
 
-      const [, documentResult] = res;
+      const documentResult = res.value;
 
       const { blobUrl } = documentResult;
 
       const blobResult = await fetchBinary(blobUrl, 'blob');
 
-      if (isErr(blobResult)) {
+      if (blobResult.isErr()) {
         return LoadErrors.MISSING;
       }
 
-      const url = URL.createObjectURL(blobResult[1]);
+      const url = URL.createObjectURL(blobResult.value);
       setUrl(url);
       setError();
 

@@ -1,4 +1,3 @@
-import { isErr } from '@core/util/maybeResult';
 import { dcsCompletion } from '@service-cognition/client';
 import {
   type SolidMutationOptions,
@@ -263,11 +262,11 @@ async function generateAIObject<Schema extends z.ZodType, Variables>(
     },
   });
 
-  if (isErr(response)) {
-    throw new Error(response[0].map((error) => error.message).join(', '));
+  if (response.isErr()) {
+    throw new Error(response.error.map((error) => error.message).join(', '));
   }
 
-  const content = response[1].choices[0]?.message?.content;
+  const content = response.value.choices[0]?.message?.content;
   if (!content) {
     throw new Error('AI object completion returned no content');
   }

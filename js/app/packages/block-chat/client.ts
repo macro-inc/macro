@@ -1,7 +1,7 @@
 import type { BlockName } from '@core/block';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isPaymentError } from '@core/util/handlePaymentError';
-import { isErr } from '@core/util/maybeResult';
+
 import { cognitionApiServiceClient } from '@service-cognition/client';
 
 export function useOpenChatForAttachment() {
@@ -18,8 +18,8 @@ export function useOpenChatForAttachment() {
     const res = await cognitionApiServiceClient.getChatsForAttachment({
       attachment_id: attachmentId,
     });
-    if (isErr(res)) return;
-    const [, data] = res;
+    if (res.isErr()) return;
+    const data = res.value;
 
     let recent_id = data?.recent_chat?.id;
 
@@ -33,10 +33,10 @@ export function useOpenChatForAttachment() {
         showPaywall();
         return;
       }
-      if (isErr(res)) {
+      if (res.isErr()) {
         return;
       }
-      const [, data] = res;
+      const data = res.value;
       recent_id = data?.id;
     } else if (!recent_id || !data?.recent_chat?.isPersistent) {
       const res = await cognitionApiServiceClient.createChat({});
@@ -45,10 +45,10 @@ export function useOpenChatForAttachment() {
         showPaywall();
         return;
       }
-      if (isErr(res)) {
+      if (res.isErr()) {
         return;
       }
-      const [, data] = res;
+      const data = res.value;
       recent_id = data?.id;
     }
   };

@@ -22,7 +22,6 @@ import {
   createMarkdownFile,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { isErr, ok } from '@core/util/maybeResult';
 import { AnimatedChatIcon } from '@icon/wide-chat';
 import WideChat from '@icon/wide-chat.svg';
 import { AnimatedDiagramIcon } from '@icon/wide-diagram';
@@ -168,8 +167,7 @@ export function runCreateAction(
             title: 'New Canvas',
           });
           if ('error' in result) return;
-          const [_, id] = ok(result.documentId);
-          return id;
+          return result.documentId ?? undefined;
         },
         shouldInsert,
       });
@@ -222,9 +220,8 @@ export function runCreateAction(
             extension: 'py',
             title: 'New Code File',
           });
-          if (isErr(result)) return;
-          const [, id] = ok(result[1]?.documentId);
-          return id;
+          if (result.isErr()) return;
+          return result.value.documentId ?? undefined;
         },
         shouldInsert,
       });

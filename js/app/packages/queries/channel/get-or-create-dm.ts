@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { commsServiceClient } from '@service-comms/client';
 import type { GetOrCreateDmResponse } from '@service-comms/generated/models';

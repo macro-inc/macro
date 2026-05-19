@@ -1,5 +1,7 @@
-import type { MaybeError } from '@core/util/maybeResult';
+import type { ResultError } from '@core/util/result';
+
 import { platformFetch } from 'core/util/platformFetch';
+import { err, ok, type Result } from 'neverthrow';
 
 export async function uploadToPresignedUrl({
   presignedUrl,
@@ -13,7 +15,7 @@ export async function uploadToPresignedUrl({
   sha: string;
   type: string;
   signal?: AbortSignal;
-}): Promise<MaybeError<'SERVER_ERROR'>> {
+}): Promise<Result<void, ResultError<'SERVER_ERROR'>[]>> {
   const blob = new Blob([buffer], { type });
 
   const base64Sha = btoa(
@@ -35,15 +37,8 @@ export async function uploadToPresignedUrl({
 
   if (!response.ok) {
     const message = await response.text();
-    return [
-      [
-        {
-          code: 'SERVER_ERROR',
-          message,
-        },
-      ],
-    ];
+    return err([{ code: 'SERVER_ERROR', message: message }]);
   }
 
-  return [null];
+  return ok(undefined);
 }

@@ -4,9 +4,11 @@ import {
   LoadErrors,
   loadResult,
 } from '@core/block';
-import { isErr, ok } from '@core/util/maybeResult';
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
+import type { GetDocumentResponseDataViewLocation } from '@service-storage/generated/schemas/getDocumentResponseDataViewLocation';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
+import { err, ok } from 'neverthrow';
+import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
 import BlockPdf from './component/Block';
 import PdfJsWorker from './PdfViewer/pdfjs-worker?worker';
 
@@ -35,13 +37,13 @@ export const definition = defineBlock({
           origin: source,
         });
 
-      if (isErr(maybeDocument)) return maybeDocument;
-      const [, { blobUrl, ...documentFile }] = maybeDocument;
+      if (maybeDocument.isErr()) return err(maybeDocument.error);
+      const { blobUrl, ...documentFile } = maybeDocument.value;
 
       const maybeBlob = await loadResult(fetchBinary(blobUrl, 'blob'));
-      if (isErr(maybeBlob)) return maybeBlob;
+      if (maybeBlob.isErr()) return err(maybeBlob.error);
 
-      const [, blob] = maybeBlob;
+      const blob = maybeBlob.value;
 
       const buffer = await blob.arrayBuffer();
       const data = new Uint8Array(buffer);
@@ -58,4 +60,7 @@ export const definition = defineBlock({
   },
 });
 
-export type PdfBlockData = ExtractLoadType<(typeof definition)['load']>;
+export type PdfBlockData = ExtractLoadType<(typeof definition)['load']> & {
+  documentProxy: PDFDocumentProxy;
+  viewLocation?: GetDocumentResponseDataViewLocation;
+};

@@ -1,5 +1,5 @@
 import { debounce } from '@core/util/debounce';
-import { isErr } from '@core/util/maybeResult';
+
 import { authServiceClient } from '@service-auth/client';
 import { createEffect, createSignal } from 'solid-js';
 import { createStore, unwrap } from 'solid-js/store';
@@ -55,12 +55,12 @@ async function fetchDisplayNames(ids: string[]): Promise<UserNameItem[]> {
   const result = await authServiceClient.getUserNamesWithEmail({
     user_ids: ids,
   });
-  if (isErr(result)) {
+  if (result.isErr()) {
     console.error('Failed to fetch user display names');
     return [];
   }
 
-  const [, data] = result;
+  const data = result.value;
   return data.names.map((name) => {
     return {
       _createdAt: new Date(),

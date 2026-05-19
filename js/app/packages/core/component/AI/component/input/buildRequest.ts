@@ -3,7 +3,7 @@ import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { useAdditionalInstructions } from '@core/component/AI/constant/prompts';
 import type { Attachment, Model, ToolSet } from '@core/component/AI/types';
 import { isPaymentError } from '@core/util/handlePaymentError';
-import { isErr } from '@core/util/maybeResult';
+
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
@@ -45,11 +45,11 @@ export function useSendChatMessage() {
     if (isPaymentError(response)) {
       return { error: true, paymentError: true };
     }
-    if (isErr(response)) {
+    if (response.isErr()) {
       return { error: true };
     }
 
-    const [, { stream_id, chat_id }] = response;
+    const { stream_id, chat_id } = response.value;
 
     const connectionStream = subscribe('chat', chat_id, stream_id);
     if (!connectionStream) {

@@ -11,7 +11,7 @@ import {
 } from '@core/collab/source';
 import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
 import { arrayEquals } from '@core/util/compareUtils';
-import { isErr as isChaseError } from '@core/util/maybeResult';
+
 import { storageServiceClient } from '@service-storage/client';
 import { createEventBus } from '@solid-primitives/event-bus';
 import { raceTimeout, until } from '@solid-primitives/promise';
@@ -74,12 +74,12 @@ function createSyncServiceSocket(documentId: string, initialToken: string) {
         document_id: documentId,
       });
 
-    if (isChaseError(response)) {
+    if (response.isErr()) {
       console.error('failed to fetch permission token', response);
       return fallbackUrl;
     }
 
-    const refreshedUrl = connectUrl(response[1].token);
+    const refreshedUrl = connectUrl(response.value.token);
     fallbackUrl = refreshedUrl;
     return refreshedUrl;
   };
@@ -89,8 +89,8 @@ function createSyncServiceSocket(documentId: string, initialToken: string) {
     .withBackoff(new ConstantBackoff(500))
     .withMaxRetries(20)
     .withHeartbeat({
-      interval: 3_000,
-      timeout: 2_000,
+      interval: 10_000,
+      timeout: 5_000,
       pingMessage: 'ping',
       pongMessage: 'pong',
       maxMissedHeartbeats: 2,

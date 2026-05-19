@@ -5,13 +5,24 @@ import {
   usePropertiesContext,
 } from '@core/component/Properties/context/PropertiesContext';
 import type {
-  Property,
   PropertyApiValues,
+  Property as PropertyT,
 } from '@core/component/Properties/types';
-import { Property as PropertyComponent } from '@property';
+import { ScopedPortal } from '@core/component/ScopedPortal';
+import { Property } from '@property';
+import { getEntityValues, hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { type Accessor, createMemo, For, Show, Suspense } from 'solid-js';
+import { cn, Layer } from '@ui';
+import {
+  type Accessor,
+  createMemo,
+  For,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   type EntityData,
@@ -55,14 +66,14 @@ export interface EntityKeyPropertiesProps {
 export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
   const entityType = createMemo(() => getEntityType(props.entity));
 
-  const keyProperties = createMemo((): Property[] => {
+  const keyProperties = createMemo((): PropertyT[] => {
     const soupProperties = props.entity.properties ?? [];
     return getSortedKeyProperties(soupProperties.map(soupPropertyToProperty));
   });
 
   const saveMutation = useBulkSaveEntityPropertiesMutation();
 
-  const saveOne = (property: Property, apiValues: PropertyApiValues) =>
+  const saveOne = (property: PropertyT, apiValues: PropertyApiValues) =>
     saveMutation.mutateAsync({
       properties: [
         {
@@ -95,36 +106,82 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
           properties={keyProperties}
           onRefresh={props.onRefresh}
         />
-        <Suspense>
-          <Modals />
-        </Suspense>
+        <ScopedPortal scope="split">
+          <Suspense>
+            <Modals />
+          </Suspense>
+        </ScopedPortal>
       </PropertiesProvider>
     </Show>
   );
 }
 
 function KeyPropertiesRow(props: {
-  properties: Accessor<Property[]>;
+  properties: Accessor<PropertyT[]>;
   onRefresh?: () => void;
 }) {
-  const { saveHandler, openPropertyEditor } = usePropertiesContext();
+  const ctx = usePropertiesContext();
 
   return (
-    <div class="flex items-center gap-1 justify-start overflow-hidden">
+    <div class="flex items-center gap-1 justify-start text-xs">
       <For each={props.properties()}>
-        {(property) => (
-          <div class="relative">
-            <PropertyComponent.Root
+        {(property) => {
+          const isEmpty = () => !hasValue(property);
+
+          const isUserEntity = () =>
+            property.valueType === 'ENTITY' &&
+            property.specificEntityType === 'USER';
+
+          const isMultiUserEntity = () =>
+            isUserEntity() && getEntityValues(property).length > 1;
+
+          return (
+            <Property.Root
               property={property}
-              canEdit
-              onSave={(p, v) => saveHandler.saveProperty(p, v)}
-              onEdit={openPropertyEditor}
-              onRefresh={props.onRefresh}
+              canEdit={ctx.canEdit}
+              onEdit={ctx.openPropertyEditor}
             >
-              <PropertyComponent.DisplayCondensed />
-            </PropertyComponent.Root>
-          </div>
-        )}
+              <Property.Tooltip property={property}>
+                <Layer depth={2}>
+                  <Property.EditTrigger
+                    class={cn(
+                      'flex items-center gap-1 min-w-0 ring ring-edge-muted/50 ring-inset',
+                      'px-1.5 py-1 leading-tight text-left rounded-full',
+                      {
+                        'hover:bg-hover': ctx.canEdit,
+                        'text-ink-extra-muted/50': isEmpty(),
+                      }
+                    )}
+                  >
+                    <div class="h-4" />
+                    <Switch
+                      fallback={
+                        <Property.Icon
+                          property={property}
+                          class="size-3 shrink-0"
+                        />
+                      }
+                    >
+                      <Match when={isMultiUserEntity()}>
+                        <Property.UserStack property={property} maxUsers={2} />
+                      </Match>
+                      <Match when={isUserEntity()}>
+                        <Property.Icon property={property} />
+                      </Match>
+                    </Switch>
+                    <span class="@max-2xl/u-list:hidden">
+                      <Property.Text
+                        property={property}
+                        fallback={<Property.Empty label="None" />}
+                      />
+                    </span>
+                    <Property.Caret />
+                  </Property.EditTrigger>
+                </Layer>
+              </Property.Tooltip>
+            </Property.Root>
+          );
+        }}
       </For>
     </div>
   );

@@ -17,7 +17,7 @@ import { createSearchState } from '@app/component/next-soup/soup-view/create-sea
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import {
   type EntityData,
   getPropertyOptionLabel,

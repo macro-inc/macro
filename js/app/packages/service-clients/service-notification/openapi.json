@@ -1116,6 +1116,10 @@
             "type": "string",
             "description": "The user who sent the invitation"
           },
+          "messageContent": {
+            "type": ["string", "null"],
+            "description": "Message content to show in the invite email, when the invite was triggered by a message."
+          },
           "senderProfilePictureUrl": {
             "type": ["string", "null"],
             "description": "The sender's profile picture URL, if available."

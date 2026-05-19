@@ -5,7 +5,7 @@ import {
   getSaveState,
 } from '@core/component/LexicalMarkdown/utils';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { isErr } from '@core/util/maybeResult';
+
 import { utf8Encode } from '@core/util/string';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { refetchHistory } from '@queries/history/history';
@@ -34,7 +34,7 @@ export function useSaveMarkdownDocument() {
       file: new Blob([buffer], { type: 'text/markdown' }),
     });
 
-    if (isErr(saveRes)) {
+    if (saveRes.isErr()) {
       console.error('error on markdown save');
       return;
     }

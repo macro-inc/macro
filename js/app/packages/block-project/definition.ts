@@ -4,10 +4,10 @@ import {
   LoadErrors,
   loadResult,
 } from '@core/block';
-import { isErr, ok } from '@core/util/maybeResult';
 import { storageServiceClient } from '@service-storage/client';
 import type { GetProjectResponseData } from '@service-storage/generated/schemas/getProjectResponseData';
 import { ProjectType } from '@service-storage/generated/schemas/projectType';
+import { ok } from 'neverthrow';
 import { lazy } from 'solid-js';
 
 export const definition = defineBlock({
@@ -48,10 +48,10 @@ export const definition = defineBlock({
       const maybeProject = await loadResult(
         storageServiceClient.projects.getProject({ id: source.id })
       );
-      if (isErr(maybeProject)) {
+      if (maybeProject.isErr()) {
         return maybeProject;
       }
-      const [, project] = maybeProject;
+      const project = maybeProject.value;
 
       return ok(project);
     }

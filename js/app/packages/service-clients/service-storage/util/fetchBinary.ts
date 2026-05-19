@@ -1,5 +1,7 @@
-import { err, type MaybeResult, ok } from '@core/util/maybeResult';
+import type { ResultError } from '@core/util/result';
+
 import { platformFetch } from 'core/util/platformFetch';
+import { err, ok, type Result } from 'neverthrow';
 import type { DocumentMetadata } from '../generated/schemas/documentMetadata';
 import type { StorageError } from './storageError';
 
@@ -7,30 +9,39 @@ export async function fetchBinary(
   url: string,
   responseType: 'arraybuffer',
   init?: RequestInit
-): Promise<MaybeResult<StorageError, ArrayBuffer>>;
+): Promise<Result<ArrayBuffer, ResultError<StorageError>[]>>;
 export async function fetchBinary(
   url: string,
   responseType: 'blob',
   init?: RequestInit
-): Promise<MaybeResult<StorageError, Blob>>;
+): Promise<Result<Blob, ResultError<StorageError>[]>>;
 export async function fetchBinary<T extends ArrayBuffer | Blob>(
   url: string,
   responseType: 'arraybuffer' | 'blob',
   init?: RequestInit
-): Promise<MaybeResult<StorageError, T>> {
+): Promise<Result<T, ResultError<StorageError>[]>> {
   try {
     const response = await platformFetch(url, init);
 
     if (!response.ok) {
       switch (response.status) {
         case 404:
-          return err('NOT_FOUND', 'Resource not found');
+          return err([{ code: 'NOT_FOUND', message: 'Resource not found' }]);
         case 401:
-          return err('UNAUTHORIZED', 'Unauthorized access');
+          return err([
+            { code: 'UNAUTHORIZED', message: 'Unauthorized access' },
+          ]);
         case 500:
-          return err('SERVER_ERROR', 'Internal server error');
+          return err([
+            { code: 'SERVER_ERROR', message: 'Internal server error' },
+          ]);
         default:
-          return err('HTTP_ERROR', `HTTP error! status: ${response.status}`);
+          return err([
+            {
+              code: 'HTTP_ERROR',
+              message: `HTTP error! status: ${response.status}`,
+            },
+          ]);
       }
     }
 
@@ -40,9 +51,16 @@ export async function fetchBinary<T extends ArrayBuffer | Blob>(
     return ok(data as T);
   } catch (error) {
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      return err('NETWORK_ERROR', 'Network error occurred');
+      return err([
+        { code: 'NETWORK_ERROR', message: 'Network error occurred' },
+      ]);
     } else {
-      return err('UNKNOWN_ERROR', `An unknown error occurred: ${error}`);
+      return err([
+        {
+          code: 'UNKNOWN_ERROR',
+          message: `An unknown error occurred: ${error}`,
+        },
+      ]);
     }
   }
 }

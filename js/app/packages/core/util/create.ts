@@ -21,6 +21,7 @@ import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
+import { err, ok } from 'neverthrow';
 import { isPaymentError } from './handlePaymentError';
 import { contentHash } from './hash';
 import {
@@ -28,7 +29,6 @@ import {
   isCodeEditorExtensionSupported,
   isCodeEditorLanguageSupported,
 } from './languageQuery';
-import { err, isErr, ok } from './maybeResult';
 
 type CreateMarkdownFileArgs = {
   title?: string;
@@ -51,9 +51,9 @@ export async function createMarkdownFile(
 
   invalidateUserQuota();
 
-  if (isErr(result)) return;
+  if (result.isErr()) return;
 
-  const { documentId } = result[1];
+  const { documentId } = result.value;
 
   setPreviewOnCreate({
     itemId: documentId,
@@ -107,9 +107,9 @@ export async function createTask(
 
   invalidateUserQuota();
 
-  if (isErr(result)) return;
+  if (result.isErr()) return;
 
-  const { documentId } = result[1];
+  const { documentId } = result.value;
 
   setPreviewOnCreate({
     itemId: documentId,
@@ -141,25 +141,31 @@ export async function createCodeFileFromText({
 
   if (language && !extension) {
     if (!isCodeEditorLanguageSupported(language))
-      return err(
-        'UNSUPPORTED_LANGUAGE',
-        `${language} is not supported by the code block`
-      );
+      return err([
+        {
+          code: 'UNSUPPORTED_LANGUAGE',
+          message: `${language} is not supported by the code block`,
+        },
+      ]);
 
     finalExtension = getExtensionForLanguage(language) ?? undefined;
     if (!finalExtension) {
-      return err(
-        'UNSUPPORTED_LANGUAGE',
-        `Could not find file extension for language: ${language}`
-      );
+      return err([
+        {
+          code: 'UNSUPPORTED_LANGUAGE',
+          message: `Could not find file extension for language: ${language}`,
+        },
+      ]);
     }
   }
 
   if (!finalExtension || !isCodeEditorExtensionSupported(finalExtension))
-    return err(
-      'UNSUPPORTED_EXTENSION',
-      `${finalExtension ?? 'undefined'} is not supported by the code block`
-    );
+    return err([
+      {
+        code: 'UNSUPPORTED_EXTENSION',
+        message: `${finalExtension ?? 'undefined'} is not supported by the code block`,
+      },
+    ]);
 
   const mimeType = 'text/plain';
 
@@ -172,18 +178,20 @@ export async function createCodeFileFromText({
   invalidateUserQuota();
 
   // TODO: this is kind of odd, since there's an actual code we could use for the paywall, 402 Payment Required
-  if (isErr(maybeCode) && maybeCode[0][0].message.includes('403')) {
-    return err('UNAUTHORIZED', maybeCode[0][0].message);
+  if (maybeCode.isErr() && maybeCode.error[0].message.includes('403')) {
+    return err([{ code: 'UNAUTHORIZED', message: maybeCode.error[0].message }]);
   }
-  if (isErr(maybeCode)) return err('SERVER_ERROR', maybeCode[0][0].message);
-  const [, document] = maybeCode;
+  if (maybeCode.isErr())
+    return err([{ code: 'SERVER_ERROR', message: maybeCode.error[0].message }]);
+  const document = maybeCode.value;
   const uploadResult = await uploadToPresignedUrl({
     presignedUrl: document.presignedUrl,
     buffer,
     sha,
     type: mimeType,
   });
-  if (isErr(uploadResult)) return err('SERVER_ERROR', 'Failed to upload file');
+  if (uploadResult.isErr())
+    return err([{ code: 'SERVER_ERROR', message: 'Failed to upload file' }]);
   postNewHistoryItem('document', document.metadata.documentId);
   setPreviewOnCreate({
     itemId: document.metadata.documentId,
@@ -212,8 +220,8 @@ export async function createCanvasFileFromJsonString(args: {
     projectId,
   });
   invalidateUserQuota();
-  if (isErr(maybeCanvas)) return { error: 'Document creation failed.' };
-  const [, canvas] = maybeCanvas;
+  if (maybeCanvas.isErr()) return { error: 'Document creation failed.' };
+  const canvas = maybeCanvas.value;
 
   const uploadResult = await uploadToPresignedUrl({
     presignedUrl: canvas.presignedUrl,
@@ -222,7 +230,7 @@ export async function createCanvasFileFromJsonString(args: {
     type: 'application/x-macro-canvas',
   });
 
-  if (isErr(uploadResult)) return { error: 'Failed to upload file.' };
+  if (uploadResult.isErr()) return { error: 'Failed to upload file.' };
 
   postNewHistoryItem('document', canvas.metadata.documentId);
   setPreviewOnCreate({
@@ -252,13 +260,13 @@ export async function createChat(args?: CreateChatRequest) {
   const maybeChat = await cognitionApiServiceClient.createChat(args ?? {});
 
   invalidateUserQuota();
-  if (isErr(maybeChat)) {
+  if (maybeChat.isErr()) {
     if (isPaymentError(maybeChat)) {
       showPaywall(PaywallKey.CHAT_LIMIT);
     }
     return { error: 'Failed to create chat.' };
   }
-  const [, chat] = maybeChat;
+  const chat = maybeChat.value;
   postNewHistoryItem('chat', chat.id);
   setPreviewOnCreate({
     itemId: chat.id,
@@ -276,9 +284,9 @@ export async function createStaticFile(file: File): Promise<string> {
     content_type: file.type,
   });
   invalidateUserQuota();
-  if (isErr(result)) throw new Error('Failed to upload file');
+  if (result.isErr()) throw new Error('Failed to upload file');
 
-  const { upload_url, id } = result[1];
+  const { upload_url, id } = result.value;
   const uploadResult = await staticFileClient.uploadToPresignedUrl({
     url: upload_url,
     blob: file,

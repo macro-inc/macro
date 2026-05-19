@@ -1,4 +1,4 @@
-import type { ObjectLike } from '@core/util/maybeResult';
+import type { ObjectLike } from '@core/util/result';
 import { getOwner, onCleanup } from 'solid-js';
 import type { Websocket } from '../core/websocket';
 import { WebsocketEvent } from '../core/websocket-event';

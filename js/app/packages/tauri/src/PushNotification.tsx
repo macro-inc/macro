@@ -1,4 +1,3 @@
-import { isOk } from '@core/util/maybeResult';
 import { whenSettled } from '@core/util/whenSettled';
 import {
   checkPermissions,
@@ -47,7 +46,7 @@ function usePushNotifications(
       deviceType,
       token,
     });
-    const result = isOk(res) ? ('granted' as const) : ('denied' as const);
+    const result = res.isOk() ? ('granted' as const) : ('denied' as const);
     setPermission(result);
     return result;
   }

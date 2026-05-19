@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import { MaybeResultError, throwOnErr } from '@core/util/maybeResult';
+import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { callServiceClient } from '@service-call/client';
 import { useMutation, useQuery } from '@tanstack/solid-query';
@@ -24,7 +24,7 @@ export function useJoinCallMutation() {
     },
     onError(error: Error) {
       if (
-        error instanceof MaybeResultError &&
+        error instanceof ThrownResultError &&
         error.errors[0]?.code === 'CONFLICT'
       ) {
         toast.alert("You're already in another call", {

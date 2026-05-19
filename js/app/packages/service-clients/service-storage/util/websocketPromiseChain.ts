@@ -1,4 +1,6 @@
-import { isErr, type MaybeError, onlyErr } from '@core/util/maybeResult';
+import type { ResultError } from '@core/util/result';
+
+import { err, ok, type Result } from 'neverthrow';
 import { v7 as uuid7 } from 'uuid';
 
 type PromiseHandler = Promise<any> & {
@@ -36,23 +38,25 @@ export function createWebsocketPromiseChain<
 
   const websocketErrorFilter = (
     response: any
-  ): MaybeError<'INVALID_RESPONSE' | 'SERVICE_ERROR'> => {
+  ): Result<void, ResultError<'INVALID_RESPONSE' | 'SERVICE_ERROR'>[]> => {
     if (isJobSubmissionErrorResponse(response)) {
-      return onlyErr('SERVICE_ERROR', response.error);
+      return err([{ code: 'SERVICE_ERROR', message: response.error }]);
     }
 
     if (!isJobSubmissionSuccessResponse(response)) {
-      return onlyErr('INVALID_RESPONSE', 'Invalid response format');
+      return err([
+        { code: 'INVALID_RESPONSE', message: 'Invalid response format' },
+      ]);
     }
 
     if (
       isDocumentProcessResponse(response.data) &&
       isDocumentProcessResponseError(response.data)
     ) {
-      return onlyErr('SERVICE_ERROR', response.data.message);
+      return err([{ code: 'SERVICE_ERROR', message: response.data.message }]);
     }
 
-    return [null];
+    return ok(undefined);
   };
 
   const createResultPromise = (): PromiseHandler => {
@@ -87,9 +91,9 @@ export function createWebsocketPromiseChain<
         if (response?.macroRequestId !== requestId) return;
 
         const errorCheck = websocketErrorFilter(response);
-        if (isErr(errorCheck)) {
+        if (errorCheck.isErr()) {
           for (const [promise] of promiseHandlerListeners) {
-            console.error(errorCheck[1]);
+            console.error(errorCheck.error);
             if (!promise.resolved) promise.resolve(undefined);
           }
           return;

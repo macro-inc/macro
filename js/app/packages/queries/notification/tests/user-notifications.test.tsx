@@ -1,8 +1,8 @@
+import { err, ok } from 'neverthrow';
 /**
  * @vitest-environment jsdom
  */
 
-import { err, ok } from '@core/util/maybeResult';
 import type { UnifiedNotification } from '@notifications/types';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
@@ -186,7 +186,7 @@ describe('notification mutations', () => {
       seedQueryCache([createMockNotificationPage([n1])]);
 
       mockBulkMarkNotificationAsSeen.mockResolvedValue(
-        err('SERVER_ERROR', 'Failed to mark as seen')
+        err([{ code: 'SERVER_ERROR', message: 'Failed to mark as seen' }])
       );
 
       let mutatePromise: Promise<unknown> | undefined;
@@ -275,7 +275,7 @@ describe('notification mutations', () => {
       seedQueryCache([createMockNotificationPage([n1, n2])]);
 
       mockBulkMarkNotificationAsDone.mockResolvedValue(
-        err('NETWORK_ERROR', 'Connection failed')
+        err([{ code: 'NETWORK_ERROR', message: 'Connection failed' }])
       );
 
       let mutatePromise: Promise<unknown> | undefined;

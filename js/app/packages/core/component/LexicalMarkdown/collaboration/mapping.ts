@@ -1,6 +1,6 @@
 import type { LoroManager } from '@core/collab/manager';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { isErr } from '@core/util/maybeResult';
+
 import type { NodeIdMappings } from '@lexical-core';
 import { $getNodeByKey, type LexicalNode } from 'lexical';
 import { type ContainerID, LoroMap } from 'loro-crdt';
@@ -22,12 +22,12 @@ export function $findLexicalNodeForLoroContainer(
 ): LexicalNode | null {
   let maybeContainer = loroManager.getContainerById(containerId);
 
-  if (isErr(maybeContainer)) {
+  if (maybeContainer.isErr()) {
     warn('Failed to get container', maybeContainer);
     return null;
   }
 
-  let container = maybeContainer[1];
+  let container = maybeContainer.value;
 
   container = container?.getAttached();
 
@@ -108,22 +108,22 @@ function smartSearchContainersForNode(
 ): ContainerID | undefined {
   const res = loroManager.getAllContainerIds();
 
-  if (isErr(res)) {
+  if (res.isErr()) {
     warn('Failed to get all container ids', res);
     return undefined;
   }
 
-  const containerIds: ContainerID[] = res[1].reverse();
+  const containerIds: ContainerID[] = res.value.reverse();
 
   for (const containerId of containerIds) {
     const maybeContainer = loroManager.getContainerById(containerId);
 
-    if (isErr(maybeContainer)) {
+    if (maybeContainer.isErr()) {
       warn('Failed to get container', maybeContainer);
       return undefined;
     }
 
-    let container = maybeContainer[1];
+    let container = maybeContainer.value;
 
     container = container?.getAttached();
 

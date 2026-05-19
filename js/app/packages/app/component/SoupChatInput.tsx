@@ -13,7 +13,7 @@ import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isPaymentError } from '@core/util/handlePaymentError';
-import { isErr } from '@core/util/maybeResult';
+
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -74,14 +74,14 @@ function SoupChatInputInner() {
 
     // Create a new persistent chat
     const response = await cognitionApiServiceClient.createChat({});
-    if (isErr(response)) {
+    if (response.isErr()) {
       if (isPaymentError(response)) {
         const { showPaywall } = usePaywallState();
         showPaywall(PaywallKey.CHAT_LIMIT);
       }
       return;
     }
-    const [, { id: chatId }] = response;
+    const { id: chatId } = response.value;
 
     // Rename via mutation for optimistic cache updates (history, preview, soup)
     const name = deriveChatName(request.content);

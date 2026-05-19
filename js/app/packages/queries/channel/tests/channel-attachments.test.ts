@@ -1,4 +1,5 @@
 import { commsServiceClient } from '@service-comms/client';
+import { ok } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   channelAttachmentsQueryOptions,
@@ -33,10 +34,9 @@ describe('channel attachment queries', () => {
 
   it('passes attachment type, cursor, and abort signal to the service client', async () => {
     const page = { items: [], next_cursor: null };
-    vi.mocked(commsServiceClient.getChannelAttachments).mockResolvedValue([
-      null,
-      page,
-    ]);
+    vi.mocked(commsServiceClient.getChannelAttachments).mockResolvedValue(
+      ok(page)
+    );
     const signal = new AbortController().signal;
 
     await expect(

@@ -3,7 +3,7 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { toast } from '@core/component/Toast/Toast';
 import { invalidateContacts } from '@core/user/contactService';
-import { isErr } from '@core/util/maybeResult';
+
 import { invalidateListChannels } from '@queries/channel/channels';
 import { commsServiceClient, type IdResponse } from '@service-comms/client';
 import type {
@@ -53,13 +53,13 @@ export function useSendMessageToPeople() {
       },
     });
 
-    if (isErr(message) || !message.at(1)) {
+    if (message.isErr()) {
       toast.failure('Failed to send message to people');
-      console.error('failed to post message to channel', message);
+      console.error('failed to post message to channel', message.error);
       return;
     }
 
-    const messageResponse = message.at(1) as IdResponse;
+    const messageResponse = message.value as IdResponse;
 
     invalidateListChannels();
     invalidateContacts();
@@ -95,14 +95,14 @@ export function useSendMessageToPeople() {
             recipients: args.users,
           });
 
-    if (isErr(result)) {
+    if (result.isErr()) {
       toast.failure('Failed to send message to people');
       console.error('failed to create new channel to forward', result);
       return;
     }
 
     return sendAndNavigateToChannel(
-      result[1].channel_id,
+      result.value.channel_id,
       args.content,
       args.mentions,
       args.attachments ?? [],

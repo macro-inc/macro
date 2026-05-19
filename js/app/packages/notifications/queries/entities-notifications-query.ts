@@ -1,5 +1,5 @@
 import type { Entity } from '@core/types';
-import { isErr } from '@core/util/maybeResult';
+
 import { notificationServiceClient } from '@service-notification/client';
 import type { ApiUserNotification } from '@service-notification/generated/schemas';
 
@@ -15,13 +15,13 @@ export const fetchNotificationsForEntities = async (
       eventItemIds,
     });
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     console.error(
       'failed to fetch notifications for specific event item ids',
-      result[0]
+      result.error
     );
     return [];
   }
 
-  return result[1].items;
+  return result.value.items;
 };

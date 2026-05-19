@@ -48,21 +48,6 @@ static PREFIX: &str = r#"
 
 // -- Lightweight top clauses: only id + sort_ts (plus filter-required joins) --
 
-static DOCUMENT_TOP_CLAUSE: &str = r#"
-                SELECT
-                    'document'::text as item_type,
-                    d.id,
-                    CASE $2
-                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", d."updatedAt")
-                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
-                        WHEN 'created_at' THEN d."createdAt"
-                        ELSE d."updatedAt"
-                    END::timestamptz as sort_ts
-                FROM AccessibleItems ai
-                INNER JOIN "Document" d ON d.id = ai.item_id AND ai.item_type = 'document'
-                LEFT JOIN document_sub_type dt ON dt.document_id = d.id
-"#;
-
 static DOCUMENT_TASK_PROPERTY_JOINS: &str = r#"
                 LEFT JOIN entity_properties ep_assignees
                     ON dt.sub_type = 'task'
@@ -79,41 +64,6 @@ static DOCUMENT_TASK_PROPERTY_JOINS: &str = r#"
 static DOCUMENT_TOP_WHERE_CLAUSE: &str = r#"
                 LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
                 WHERE d."deletedAt" IS NULL
-"#;
-
-static CHAT_TOP_CLAUSE: &str = r#"
-                SELECT
-                    'chat'::text as item_type,
-                    c.id,
-                    CASE $2
-                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", c."updatedAt")
-                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
-                        WHEN 'created_at' THEN c."createdAt"
-                        ELSE c."updatedAt"
-                    END::timestamptz as sort_ts
-                FROM AccessibleItems ai
-                INNER JOIN "Chat" c ON c.id = ai.item_id AND ai.item_type = 'chat'
-                LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
-                WHERE c."deletedAt" IS NULL
-"#;
-
-static PROJECT_TOP_CLAUSE: &str = r#"
-                SELECT
-                    'project'::text as item_type,
-                    p.id,
-                    CASE $2
-                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", p."updatedAt")
-                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
-                        WHEN 'created_at' THEN p."createdAt"
-                        ELSE p."updatedAt"
-                    END::timestamptz as sort_ts
-                FROM AccessibleItems ai
-                INNER JOIN "Project" p ON p.id = ai.item_id AND ai.item_type = 'project'
-                LEFT JOIN "UserHistory" uh
-                    ON uh."itemId" = p.id
-                    AND uh."itemType" = 'project'
-                    AND uh."userId" = $1
-                WHERE p."deletedAt" IS NULL
 "#;
 
 // -- Grouped top clauses: include project_id for grouping support --
@@ -487,6 +437,134 @@ fn build_notification_seen_clause(entity_id_sql: &str, entity_type: &str, seen: 
     )
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NotificationPredicate {
+    Done(bool),
+    Seen(bool),
+}
+
+impl NotificationPredicate {
+    fn sql(self) -> &'static str {
+        match self {
+            NotificationPredicate::Done(true) => "un.done = true",
+            NotificationPredicate::Done(false) => "un.done = false",
+            NotificationPredicate::Seen(true) => "un.seen_at IS NOT NULL",
+            NotificationPredicate::Seen(false) => "un.seen_at IS NULL",
+        }
+    }
+}
+
+fn expr_contains_notification<T>(
+    expr: &Expr<T>,
+    notification_predicate: impl Fn(&T) -> Option<NotificationPredicate> + Copy,
+) -> bool {
+    match expr {
+        Expr::And(a, b) | Expr::Or(a, b) => {
+            expr_contains_notification(a, notification_predicate)
+                || expr_contains_notification(b, notification_predicate)
+        }
+        Expr::Not(a) => expr_contains_notification(a, notification_predicate),
+        Expr::Literal(lit) => notification_predicate(lit).is_some(),
+    }
+}
+
+fn clone_expr<T: Clone>(expr: &Expr<T>) -> Expr<T> {
+    match expr {
+        Expr::And(a, b) => Expr::and(clone_expr(a), clone_expr(b)),
+        Expr::Or(a, b) => Expr::or(clone_expr(a), clone_expr(b)),
+        Expr::Not(a) => Expr::is_not(clone_expr(a)),
+        Expr::Literal(lit) => Expr::val(lit.clone()),
+    }
+}
+
+fn strip_notification_conjunction<T: Clone>(
+    expr: &Expr<T>,
+    notification_predicate: impl Fn(&T) -> Option<NotificationPredicate> + Copy,
+) -> Option<(NotificationPredicate, Option<Expr<T>>)> {
+    match expr {
+        Expr::Literal(lit) => notification_predicate(lit).map(|pred| (pred, None)),
+        Expr::And(a, b) => {
+            let left = strip_notification_conjunction(a, notification_predicate);
+            let right = strip_notification_conjunction(b, notification_predicate);
+            match (left, right) {
+                (Some((left_pred, left_expr)), Some((right_pred, right_expr)))
+                    if left_pred == right_pred =>
+                {
+                    let stripped = match (left_expr, right_expr) {
+                        (Some(left), Some(right)) => Some(Expr::and(left, right)),
+                        (Some(expr), None) | (None, Some(expr)) => Some(expr),
+                        (None, None) => None,
+                    };
+                    Some((left_pred, stripped))
+                }
+                (Some((pred, left_expr)), None)
+                    if !expr_contains_notification(b, notification_predicate) =>
+                {
+                    let right_expr = clone_expr(b);
+                    Some((
+                        pred,
+                        Some(match left_expr {
+                            Some(left_expr) => Expr::and(left_expr, right_expr),
+                            None => right_expr,
+                        }),
+                    ))
+                }
+                (None, Some((pred, right_expr)))
+                    if !expr_contains_notification(a, notification_predicate) =>
+                {
+                    let left_expr = clone_expr(a);
+                    Some((
+                        pred,
+                        Some(match right_expr {
+                            Some(right_expr) => Expr::and(left_expr, right_expr),
+                            None => left_expr,
+                        }),
+                    ))
+                }
+                _ => None,
+            }
+        }
+        Expr::Or(_, _) | Expr::Not(_) => None,
+    }
+}
+
+fn build_notification_items_cte(
+    builder: &mut QueryBuilder<'_, Postgres>,
+    predicate: NotificationPredicate,
+    item_types: &[&str],
+) {
+    if item_types.is_empty() {
+        return;
+    }
+    let item_types = item_types
+        .iter()
+        .map(|item_type| format!("'{item_type}'"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    builder.push(format!(
+        r#"NotificationItems AS MATERIALIZED (
+        SELECT DISTINCT n.event_item_type, n.event_item_id
+        FROM user_notification un
+        JOIN notification n ON n.id = un.notification_id
+        WHERE un.user_id = $1
+          AND un.deleted_at IS NULL
+          AND {}
+          AND n.event_item_type IN ({item_types})
+    ),
+"#,
+        predicate.sql()
+    ));
+}
+
+fn build_notification_join(entity_alias: &str, item_type: &str) -> String {
+    format!(
+        r#"                INNER JOIN NotificationItems ni_{item_type}
+                    ON ni_{item_type}.event_item_type = '{item_type}'
+                    AND ni_{item_type}.event_item_id = {entity_alias}.id::text
+"#
+    )
+}
+
 fn build_task_include_cbm_atm_nc_clause() -> String {
     r#"(
         dt.sub_type = 'task'
@@ -778,6 +856,109 @@ fn push_union_separator(builder: &mut QueryBuilder<'_, Postgres>, needs_separato
     *needs_separator = true;
 }
 
+fn top_sort_expr(alias: &str, sort_method: SimpleSortMethod) -> String {
+    match sort_method {
+        SimpleSortMethod::ViewedAt => {
+            r#"COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')"#.to_string()
+        }
+        SimpleSortMethod::ViewedUpdated => {
+            format!(r#"COALESCE(uh."updatedAt", {alias}."updatedAt")"#)
+        }
+        SimpleSortMethod::CreatedAt => format!(r#"{alias}."createdAt""#),
+        SimpleSortMethod::UpdatedAt => format!(r#"{alias}."updatedAt""#),
+    }
+}
+
+fn top_needs_user_history(sort_method: SimpleSortMethod) -> bool {
+    matches!(
+        sort_method,
+        SimpleSortMethod::ViewedAt | SimpleSortMethod::ViewedUpdated
+    )
+}
+
+fn document_top_clause(sort_method: SimpleSortMethod) -> String {
+    format!(
+        r#"
+                SELECT
+                    'document'::text as item_type,
+                    d.id,
+                    {}::timestamptz as sort_ts
+                FROM AccessibleItems ai
+                INNER JOIN "Document" d ON d.id = ai.item_id AND ai.item_type = 'document'
+                LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+"#,
+        top_sort_expr("d", sort_method)
+    )
+}
+
+fn document_top_where_clause(sort_method: SimpleSortMethod) -> &'static str {
+    if top_needs_user_history(sort_method) {
+        r#"
+                LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
+                WHERE d."deletedAt" IS NULL
+"#
+    } else {
+        r#"
+                WHERE d."deletedAt" IS NULL
+"#
+    }
+}
+
+fn chat_top_clause(sort_method: SimpleSortMethod) -> String {
+    let user_history_join = if top_needs_user_history(sort_method) {
+        r#"                LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
+"#
+    } else {
+        ""
+    };
+    format!(
+        r#"
+                SELECT
+                    'chat'::text as item_type,
+                    c.id,
+                    {}::timestamptz as sort_ts
+                FROM AccessibleItems ai
+                INNER JOIN "Chat" c ON c.id = ai.item_id AND ai.item_type = 'chat'
+{}"#,
+        top_sort_expr("c", sort_method),
+        user_history_join
+    )
+}
+
+fn chat_top_where_clause() -> &'static str {
+    r#"                WHERE c."deletedAt" IS NULL
+"#
+}
+
+fn project_top_clause(sort_method: SimpleSortMethod) -> String {
+    let user_history_join = if top_needs_user_history(sort_method) {
+        r#"                LEFT JOIN "UserHistory" uh
+                    ON uh."itemId" = p.id
+                    AND uh."itemType" = 'project'
+                    AND uh."userId" = $1
+"#
+    } else {
+        ""
+    };
+    format!(
+        r#"
+                SELECT
+                    'project'::text as item_type,
+                    p.id,
+                    {}::timestamptz as sort_ts
+                FROM AccessibleItems ai
+                INNER JOIN "Project" p ON p.id = ai.item_id AND ai.item_type = 'project'
+{}"#,
+        top_sort_expr("p", sort_method),
+        user_history_join
+    )
+}
+
+fn project_top_where_clause() -> &'static str {
+    r#"                WHERE p."deletedAt" IS NULL
+"#
+}
+
 fn push_accessible_items_cte(
     builder: &mut QueryBuilder<'_, Postgres>,
     include_documents: bool,
@@ -847,7 +1028,11 @@ fn push_accessible_items_cte(
     ));
 }
 
-fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBuilder<'_, Postgres> {
+fn build_query(
+    filter_ast: &EntityFilterAst,
+    exclude_frecency: bool,
+    sort_method: SimpleSortMethod,
+) -> QueryBuilder<'_, Postgres> {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
     let include_documents = !document_filter_is_impossible(filter_ast.document_filter.as_deref())
@@ -866,12 +1051,87 @@ fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBui
             &[PropertyEntityType::Project],
         );
 
+    let document_notification = filter_ast.document_filter.as_deref().and_then(|expr| {
+        strip_notification_conjunction(expr, |lit| match lit {
+            DocumentLiteral::NotificationDone(done) => Some(NotificationPredicate::Done(*done)),
+            DocumentLiteral::NotificationSeen(seen) => Some(NotificationPredicate::Seen(*seen)),
+            _ => None,
+        })
+    });
+    let chat_notification = filter_ast.chat_filter.as_deref().and_then(|expr| {
+        strip_notification_conjunction(expr, |lit| match lit {
+            ChatLiteral::NotificationDone(done) => Some(NotificationPredicate::Done(*done)),
+            ChatLiteral::NotificationSeen(seen) => Some(NotificationPredicate::Seen(*seen)),
+            _ => None,
+        })
+    });
+    let project_notification = filter_ast.project_filter.as_deref().and_then(|expr| {
+        strip_notification_conjunction(expr, |lit| match lit {
+            ProjectLiteral::NotificationDone(done) => Some(NotificationPredicate::Done(*done)),
+            ProjectLiteral::NotificationSeen(seen) => Some(NotificationPredicate::Seen(*seen)),
+            _ => None,
+        })
+    });
+
+    let notification_predicates = [
+        document_notification.as_ref().map(|(pred, _)| *pred),
+        chat_notification.as_ref().map(|(pred, _)| *pred),
+        project_notification.as_ref().map(|(pred, _)| *pred),
+    ];
+    let optimized_notification_predicate = notification_predicates
+        .into_iter()
+        .flatten()
+        .try_fold(None, |acc, pred| match acc {
+            Some(acc) if acc != pred => None,
+            Some(acc) => Some(Some(acc)),
+            None => Some(Some(pred)),
+        })
+        .flatten();
+
+    let document_filter =
+        if optimized_notification_predicate.is_some() && document_notification.is_some() {
+            document_notification
+                .as_ref()
+                .and_then(|(_, expr)| expr.as_ref())
+        } else {
+            filter_ast.document_filter.as_deref()
+        };
+    let chat_filter = if optimized_notification_predicate.is_some() && chat_notification.is_some() {
+        chat_notification
+            .as_ref()
+            .and_then(|(_, expr)| expr.as_ref())
+    } else {
+        filter_ast.chat_filter.as_deref()
+    };
+    let project_filter =
+        if optimized_notification_predicate.is_some() && project_notification.is_some() {
+            project_notification
+                .as_ref()
+                .and_then(|(_, expr)| expr.as_ref())
+        } else {
+            filter_ast.project_filter.as_deref()
+        };
+
     push_accessible_items_cte(
         &mut builder,
         include_documents,
         include_chats,
         include_projects,
     );
+
+    if let Some(predicate) = optimized_notification_predicate {
+        let mut item_types = Vec::with_capacity(3);
+        if include_documents && document_notification.is_some() {
+            item_types.push("document");
+        }
+        if include_chats && chat_notification.is_some() {
+            item_types.push("chat");
+        }
+        if include_projects && project_notification.is_some() {
+            item_types.push("project");
+        }
+        build_notification_items_cte(&mut builder, predicate, &item_types);
+    }
 
     // TopItems CTE: lightweight id + sort_ts with filters, cursor, and limit
     builder.push("TopItems AS (");
@@ -882,12 +1142,15 @@ fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBui
     if include_documents {
         push_union_separator(&mut builder, &mut needs_separator);
         // Document top clause (lightweight)
-        builder.push(DOCUMENT_TOP_CLAUSE);
-        if document_filter_needs_task_property_joins(filter_ast.document_filter.as_deref()) {
+        builder.push(document_top_clause(sort_method));
+        if optimized_notification_predicate.is_some() && document_notification.is_some() {
+            builder.push(build_notification_join("d", "document"));
+        }
+        if document_filter_needs_task_property_joins(document_filter) {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(DOCUMENT_TOP_WHERE_CLAUSE);
-        builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
+        builder.push(document_top_where_clause(sort_method));
+        builder.push(build_document_filter(document_filter));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "d.id",
@@ -897,8 +1160,12 @@ fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBui
     if include_chats {
         push_union_separator(&mut builder, &mut needs_separator);
         // Chat top clause (lightweight)
-        builder.push(CHAT_TOP_CLAUSE);
-        builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
+        builder.push(chat_top_clause(sort_method));
+        if optimized_notification_predicate.is_some() && chat_notification.is_some() {
+            builder.push(build_notification_join("c", "chat"));
+        }
+        builder.push(chat_top_where_clause());
+        builder.push(build_chat_filter(chat_filter));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "c.id",
@@ -908,8 +1175,12 @@ fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBui
     if include_projects {
         push_union_separator(&mut builder, &mut needs_separator);
         // Project top clause (lightweight)
-        builder.push(PROJECT_TOP_CLAUSE);
-        builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
+        builder.push(project_top_clause(sort_method));
+        if optimized_notification_predicate.is_some() && project_notification.is_some() {
+            builder.push(build_notification_join("p", "project"));
+        }
+        builder.push(project_top_where_clause());
+        builder.push(build_project_filter(project_filter));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "p.id",
@@ -1207,7 +1478,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let mut items = build_query(cursor.filter(), exclude_frecency)
+    let mut items = build_query(cursor.filter(), exclude_frecency, *cursor.sort_method())
         .build()
         .bind(user_id.as_ref())
         .bind(sort_method_str)

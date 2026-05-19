@@ -32,9 +32,9 @@ function estimateTextHeight_(
   fontStyle?: TwStyle,
   fontCss?: string
 ) {
-  const maybeResult = globalThis.maxDimPx.get(fontStyleName);
-  if (maybeResult)
-    return calculatePxHeight(text.length, maybeResult, containerWidthPx);
+  const cachedDims = globalThis.maxDimPx.get(fontStyleName);
+  if (cachedDims)
+    return calculatePxHeight(text.length, cachedDims, containerWidthPx);
 
   const el = document.createElement('div');
   if (fontCss) el.className = fontCss;
@@ -75,9 +75,9 @@ function estimateTextHeight_(
     : el.clientHeight - heightPadding;
   document.body.removeChild(el);
 
-  const result: Dims = { glyph: [maxWidth, maxHeight], heightPadding };
-  globalThis.maxDimPx.set(fontStyleName, result);
-  return calculatePxHeight(text.length, result, containerWidthPx);
+  const measuredDims: Dims = { glyph: [maxWidth, maxHeight], heightPadding };
+  globalThis.maxDimPx.set(fontStyleName, measuredDims);
+  return calculatePxHeight(text.length, measuredDims, containerWidthPx);
 }
 
 /**

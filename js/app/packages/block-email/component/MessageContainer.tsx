@@ -11,7 +11,7 @@ import { Message } from '@core/component/Message';
 import { toast } from '@core/component/Toast/Toast';
 import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { isErr } from '@core/util/maybeResult';
+
 import { logger } from '@observability';
 import { refetchSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
@@ -142,28 +142,28 @@ export function MessageContainer(props: MessageContainerProps) {
     const response = await emailClient.getOrCreateAttachmentDocumentId({
       id: dbId,
     });
-    if (isErr(response)) {
+    if (response.isErr()) {
       toast.failure('Failed to get attachment. Please try again.');
       return logger.error('Failed to get or create attachment document id', {
         error: new Error(
-          'Failed to get or create attachment document id: ' + response[0]
+          'Failed to get or create attachment document id: ' + response.error
         ),
       });
     }
-    const { document_id } = response[1];
+    const { document_id } = response.value;
 
     const maybeDocumentMetadata =
       await storageServiceClient.getDocumentMetadata({
         documentId: document_id,
       });
-    if (isErr(maybeDocumentMetadata)) {
+    if (maybeDocumentMetadata.isErr()) {
       toast.failure('Failed to get attachment. Please try again.');
       return logger.error(
         'Failed to get or create attachment document metadata',
         {
           error: new Error(
             'Failed to get or create attachment document metadata: ' +
-              maybeDocumentMetadata[0]
+              maybeDocumentMetadata.error
           ),
         }
       );

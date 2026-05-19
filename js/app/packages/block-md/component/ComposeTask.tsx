@@ -29,7 +29,7 @@ import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createTask } from '@core/util/create';
 import { filterMap } from '@core/util/list';
-import { isErr } from '@core/util/maybeResult';
+
 import { buildSimpleEntityUrl } from '@core/util/url';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import SplitIcon from '@phosphor/square-half.svg';
@@ -284,10 +284,10 @@ export function ComposeTask(props: ComposeTaskProps) {
         scope: 'system',
         include_options: true,
       });
-      if (isErr(result)) {
+      if (result.isErr()) {
         throw new Error('Failed to fetch system properties');
       }
-      const [, data] = result;
+      const data = result.value;
       return data;
     },
     staleTime: 1000 * 60 * 10, // TODO (seamus) Ask daniel what might make us wanna refetch this

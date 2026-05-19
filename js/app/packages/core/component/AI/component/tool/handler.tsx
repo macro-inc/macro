@@ -1,4 +1,3 @@
-import { isErr } from '@core/util/maybeResult';
 import {
   deserializeToolCall,
   deserializeToolResponse,
@@ -101,9 +100,9 @@ export function RenderTool(props: ToolProps) {
     json: props.json,
     name: props.name as ToolName,
   });
-  if (isErr(maybeTool)) return null;
+  if (maybeTool.isErr()) return null;
 
-  const tool = maybeTool[1];
+  const tool = maybeTool.value;
   const handler = toolHandlers[tool.name] as ToolHandler<
     ToolName,
     RenderContext
@@ -125,8 +124,8 @@ export function RenderTool(props: ToolProps) {
       name: props.response.name as ToolName,
     });
 
-    if (isErr(maybeResponse)) return undefined;
-    return maybeResponse[1];
+    if (maybeResponse.isErr()) return undefined;
+    return maybeResponse.value;
   };
 
   return (
@@ -165,9 +164,9 @@ export async function triggerToolCall(args: TriggerToolArgs) {
           name: name as ToolName,
         });
 
-  if (isErr(maybeTool)) return;
+  if (maybeTool.isErr()) return;
 
-  const tool = maybeTool[1];
+  const tool = maybeTool.value;
   const handler = toolHandlers[tool.name] as ToolHandler<
     ToolName,
     RenderContext

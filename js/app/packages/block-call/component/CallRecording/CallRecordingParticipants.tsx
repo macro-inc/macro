@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
-import { isOk } from '@core/util/maybeResult';
+
 import { commsServiceClient } from '@service-comms/client';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { Accessor } from 'solid-js';
@@ -23,7 +23,7 @@ export function CallRecordingParticipantsSection(props: {
     const result = await commsServiceClient.getOrCreateDirectMessage({
       recipient_id: participantId,
     });
-    const channelId = isOk(result) && result[1]?.channel_id;
+    const channelId = result.isOk() && result.value?.channel_id;
     if (!channelId) return;
     replaceOrInsertSplit({
       type: 'channel',

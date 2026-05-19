@@ -161,7 +161,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
         <SearchIcon class="size-4 shrink-0" />
         <div
           data-soup-search
-          class="flex-1 min-w-0 whitespace-nowrap overflow-hidden **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 **:[[contenteditable]]:whitespace-nowrap [&_p]:my-0 [&_p]:whitespace-nowrap"
+          class="flex-1 min-w-0 whitespace-nowrap overflow-hidden **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 **:[[contenteditable]]:whitespace-nowrap **:[[contenteditable]]:min-h-[1lh] [&_p]:my-0 [&_p]:whitespace-nowrap"
         >
           <MarkdownShell
             config={editor}
