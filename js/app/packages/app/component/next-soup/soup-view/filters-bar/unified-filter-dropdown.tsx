@@ -414,7 +414,6 @@ const SearchableFilterSubmenu = (props: {
         <CaretRightIcon class="size-3 text-ink-muted" />
       </Dropdown.SubTrigger>
 
-      <Dropdown.Portal>
         <Layer depth={2}>
           <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl w-65 max-w-[90vw] overflow-hidden">
             <SearchableMultiSelectInline
@@ -427,7 +426,6 @@ const SearchableFilterSubmenu = (props: {
             />
           </Dropdown.SubContent>
         </Layer>
-      </Dropdown.Portal>
     </Dropdown.Sub>
   );
 };
@@ -445,7 +443,6 @@ function SingleValueSubmenu<T>(props: {
         <span class="text-ink">{props.label}</span>
         <CaretRightIcon class="size-3 text-ink-muted" />
       </Dropdown.SubTrigger>
-      <Dropdown.Portal>
         <Layer depth={2}>
           <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
             <For each={props.options}>
@@ -472,7 +469,6 @@ function SingleValueSubmenu<T>(props: {
             </For>
           </Dropdown.SubContent>
         </Layer>
-      </Dropdown.Portal>
     </Dropdown.Sub>
   );
 }
@@ -647,13 +643,11 @@ const SearchIndexSubRow = (props: {
       <SearchIndexRowLabel option={props.option} active={props.active} />
       <CaretRightIcon class="size-3 text-ink-muted" />
     </Dropdown.SubTrigger>
-    <Dropdown.Portal>
       <Layer depth={2}>
         <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
           {props.children}
         </Dropdown.SubContent>
       </Layer>
-    </Dropdown.Portal>
   </Dropdown.Sub>
 );
 
@@ -808,7 +802,6 @@ export const UnifiedFilterDropdown = () => {
           </Dropdown.Trigger>
         </Tooltip>
 
-        <Dropdown.Portal>
           <Layer depth={2}>
             <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
               <Show
@@ -825,7 +818,6 @@ export const UnifiedFilterDropdown = () => {
                             <CaretRightIcon class="size-3 text-ink-muted" />
                           </Dropdown.SubTrigger>
 
-                          <Dropdown.Portal>
                             <Layer depth={2}>
                               <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
                                 <For each={category.options}>
@@ -875,7 +867,6 @@ export const UnifiedFilterDropdown = () => {
                                 </For>
                               </Dropdown.SubContent>
                             </Layer>
-                          </Dropdown.Portal>
                         </Dropdown.Sub>
                       )}
                     </For>
@@ -998,7 +989,6 @@ export const UnifiedFilterDropdown = () => {
               </Show>
             </Dropdown.Content>
           </Layer>
-        </Dropdown.Portal>
       </Dropdown>
     </Show>
   );

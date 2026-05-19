@@ -145,7 +145,6 @@ export const SoupViewCreateButton = () => {
               <span>Create</span>
               <ChevronDownIcon class="size-3" />
             </Dropdown.Trigger>
-            <Dropdown.Portal>
               <Layer depth={2}>
                 <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-sm min-w-35 p-1">
                   <For each={options()}>
@@ -165,7 +164,6 @@ export const SoupViewCreateButton = () => {
                   </For>
                 </Dropdown.Content>
               </Layer>
-            </Dropdown.Portal>
           </Dropdown>
         </Show>
       </Show>

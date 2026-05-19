@@ -31,7 +31,6 @@ export function ToolsetSelector(props: {
             <Dropdown.Trigger size="sm">
               <span>SOURCE</span>
             </Dropdown.Trigger>
-            <Dropdown.Portal>
               <Dropdown.Content>
                 <SegmentedControl
                   size="sm"
@@ -43,7 +42,6 @@ export function ToolsetSelector(props: {
                   }))}
                 />
               </Dropdown.Content>
-            </Dropdown.Portal>
           </Dropdown>
           <span class="bg-edge-muted text-ink font-mono text-xs font-medium px-1 flex items-center">
             {SOURCE_TO_DISPLAY[source()]}

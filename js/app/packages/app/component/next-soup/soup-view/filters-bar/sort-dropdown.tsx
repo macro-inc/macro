@@ -37,7 +37,6 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
           <span>Sort</span>
         </Dropdown.Trigger>
       </Tooltip>
-      <Dropdown.Portal>
         <Layer depth={2}>
           <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-sm min-w-35 p-1">
             <For each={options()}>
@@ -72,7 +71,6 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
             </For>
           </Dropdown.Content>
         </Layer>
-      </Dropdown.Portal>
     </Dropdown>
   );
 };

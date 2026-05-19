@@ -29,7 +29,6 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
           <span>Group</span>
         </Dropdown.Trigger>
       </Tooltip>
-      <Dropdown.Portal>
         <Layer depth={2}>
           <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-sm min-w-35 p-1">
             <For each={props.options}>
@@ -57,7 +56,6 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
             </For>
           </Dropdown.Content>
         </Layer>
-      </Dropdown.Portal>
     </Dropdown>
   );
 };
