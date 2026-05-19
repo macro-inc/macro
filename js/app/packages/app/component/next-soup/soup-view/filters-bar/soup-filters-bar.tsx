@@ -13,6 +13,7 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
+import EyeSlashIcon from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
 import { Button, Tooltip } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { useSoup } from '../../soup-context';
@@ -79,7 +80,7 @@ export const SoupFiltersBar = () => {
       <SplitToolbarRight>
         <Tooltip label="Preview" hotkey={TOKENS.unifiedList.togglePreview}>
           <Button variant="ghost" size="icon-sm" onClick={togglePreview}>
-            <EyeIcon />
+            {soup.previewEntity() ? <EyeSlashIcon /> : <EyeIcon />}
           </Button>
         </Tooltip>
         <Show when={!isSearchView()}>
