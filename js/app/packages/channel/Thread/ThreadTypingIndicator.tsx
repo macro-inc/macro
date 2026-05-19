@@ -37,10 +37,10 @@ function ThreadTypingIndicatorContent(
   props: ThreadTypingIndicatorContentProps
 ) {
   return (
-    <div class="flex items-center">
+    <div class="flex items-center text-ink-extra-muted">
       <ThreadTypingIndicatorConnector />
       <div class="size-0 bg-rail rounded-sm" />
-      <span class="text-xs text-ink-extra-muted ml-2">{props.text}</span>
+      <span class="text-xs ml-2">{props.text}</span>
       <ThreadTypingIndicatorDots />
     </div>
   );
