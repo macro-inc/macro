@@ -50,15 +50,15 @@ export type { ApiThreadReply } from '@service-storage/generated/schemas/apiThrea
 
 const commsHost: string = SERVER_HOSTS['document-storage-service'];
 
-export function commsFetch(
+function commsFetch(
   url: string,
   init?: SafeFetchInit
 ): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
-export function commsFetch<T extends ObjectLike>(
+function commsFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
 ): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
-export function commsFetch<T extends ObjectLike = never>(
+function commsFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):

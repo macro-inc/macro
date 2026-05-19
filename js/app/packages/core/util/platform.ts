@@ -25,11 +25,11 @@ export function isPlatform(target: MacroPlatform | MacroPlatform[]): boolean {
     : platform === target;
 }
 
-export function isMobilePlatform(): boolean;
-export function isMobilePlatform(
+function isMobilePlatform(): boolean;
+function isMobilePlatform(
   platform: MacroPlatform
 ): platform is NativeMobilePlatform;
-export function isMobilePlatform(
+function isMobilePlatform(
   platform: MacroPlatform = getPlatform()
 ): boolean {
   return platform === 'ios' || platform === 'android';

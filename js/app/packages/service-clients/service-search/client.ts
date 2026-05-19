@@ -16,15 +16,15 @@ import type { UnifiedSearchResponse } from './generated/models/unifiedSearchResp
 
 export type { ChannelSearchRequest };
 
-export function searchServiceFetch(
+function searchServiceFetch(
   url: string,
   init?: SafeFetchInit
 ): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
-export function searchServiceFetch<T extends ObjectLike>(
+function searchServiceFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
 ): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
-export function searchServiceFetch<T extends ObjectLike = never>(
+function searchServiceFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):

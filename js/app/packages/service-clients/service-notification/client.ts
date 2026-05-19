@@ -36,15 +36,15 @@ type UnifiedNotification = Omit<ApiUserNotification, 'ownerId'> & {
   new?: boolean;
 };
 
-export function notificationFetch(
+function notificationFetch(
   url: string,
   init?: SafeFetchInit
 ): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
-export function notificationFetch<T extends ObjectLike>(
+function notificationFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
 ): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
-export function notificationFetch<T extends ObjectLike = never>(
+function notificationFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
