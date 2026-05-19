@@ -4,6 +4,7 @@ import {
   InviteModal,
   setInviteModalOpen,
 } from '@app/component/app-sidebar/invite-modal';
+import { badgeSections, clearSidebarBadge } from '@app/signal/sidebarBadges';
 import { CommandState } from '@app/component/command';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
 import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
@@ -50,6 +51,7 @@ import { useLocation } from '@solidjs/router';
 import { Button, cn, Hotkey } from '@ui';
 import {
   type Component,
+  createEffect,
   createMemo,
   createSignal,
   For,
@@ -671,6 +673,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const layoutManager = globalSplitManager();
+  const hasUnread = () => badgeSections().has(props.id);
 
   const location = useLocation();
 
@@ -686,6 +689,10 @@ const SidebarLink = (props: SidebarLinkProps) => {
 
     return activeContent?.id === props.id;
   };
+
+  createEffect(() => {
+    if (isActive()) clearSidebarBadge(props.id);
+  });
 
   const content = () =>
     ({
@@ -728,6 +735,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
         <Button
           draggable={false}
           variant="ghost"
+          data-sidebar-link-id={props.id}
           class={cn(
             'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-sm py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3',
             isActive() && 'bg-ink/6 not-disabled:hover:bg-ink/6 text-ink'
@@ -747,6 +755,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
           onMouseLeave={() => setIsHovering(false)}
           onMouseDown={(e) => {
             if (e.button !== 0) return;
+            clearSidebarBadge(props.id);
             analytics.track('sidebar_click', {
               view: props.id,
             });
@@ -776,8 +785,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
           }}
         >
           <Show when={props.icon}>
-            <div class="shrink-0 [&_svg]:size-4">
+            <div class="relative shrink-0 [&_svg]:size-4">
               <Dynamic component={props.icon} triggerAnimation={isHovering()} />
+              <Show when={hasUnread() && !isActive()}>
+                <div class="absolute -top-0.5 -right-0.5 size-1.5 bg-accent rounded-full ring-surface ring-2" />
+              </Show>
             </div>
           </Show>
 

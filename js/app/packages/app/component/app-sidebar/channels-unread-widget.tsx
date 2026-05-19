@@ -194,6 +194,7 @@ function ChannelGroupItem(props: {
       draggable={false}
       variant="ghost"
       size="sm"
+      data-unread-entity-id={props.group.entityId}
       classList={{
         'opacity-0 -translate-y-2': !isVisible(),
         'opacity-100 translate-y-0': isVisible(),
