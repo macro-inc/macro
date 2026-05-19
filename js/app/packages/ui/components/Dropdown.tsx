@@ -56,7 +56,7 @@ function DropdownContent(props: DropdownContentProps) {
   return (
     <KobalteDropdownMenu.Portal mount={local.mount}>
       <KobalteDropdownMenu.Content
-        class={cn('flex flex-col size-auto z-action-menu gap-1 bg-[var(--b3)]', local.class)}
+        class={cn('flex flex-col size-auto z-action-menu gap-1 bg-edge-muted', local.class)}
         depth={local.depth ?? 2}
         as={Surface}
         {...rest}
@@ -70,7 +70,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
   return (
     <KobalteDropdownMenu.Portal mount={local.mount}>
       <KobalteDropdownMenu.SubContent
-        class={cn('flex flex-col size-auto z-action-menu gap-1 bg-[var(--b3)]', local.class)}
+        class={cn('flex flex-col size-auto z-action-menu gap-1 bg-edge-muted', local.class)}
         depth={local.depth ?? 2}
         as={Surface}
         {...rest}
