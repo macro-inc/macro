@@ -2,7 +2,7 @@
 export {
 
   parseEmailContent,
-  trimTrailingBrs,
+
 } from './parse-email-html';
 
 // Image proxy utilities

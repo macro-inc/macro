@@ -7,10 +7,10 @@ import type { CallTokenResponse } from '@service-storage/generated/schemas/callT
 import type { LeaveCallResponse } from '@service-storage/generated/schemas/leaveCallResponse';
 
 export type {
-  CallActiveResponse,
+
   CallRecord,
   CallTokenResponse,
-  LeaveCallResponse,
+
 };
 
 const host: string = SERVER_HOSTS['document-storage-service'];

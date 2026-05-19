@@ -12,7 +12,7 @@ export {
 
 
 export {
-  EntityEditor,
+
 
 } from './popover/EntityEditor';
 export {

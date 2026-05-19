@@ -3,11 +3,11 @@
 export {
 
 
-  FOCUS_CONFIG,
-  getBuiltinPropertyIds,
-  getDefaultPinnedProperties,
+
+
+
 
   NUMBER_DECIMAL_PLACES,
-  PROPERTY_OPTION_IDS,
-  SYSTEM_PROPERTY_IDS,
+
+
 } from '@core/component/Properties/constants';

@@ -4,8 +4,8 @@ export { CommandState } from './state';
 export type { CategoryFilter } from './types';
 
 export {
-  isCommandItem,
-  isEntityItem,
 
-  useCommandItems,
+
+
+
 } from './useCommandItems';

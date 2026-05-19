@@ -1,5 +1,5 @@
 export {
-  type AnalyticsInterface,
+
   type AnalyticsProvider,
   analytics,
 

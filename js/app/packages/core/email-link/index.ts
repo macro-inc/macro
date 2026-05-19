@@ -14,7 +14,7 @@ import type { UseQueryResult } from '@tanstack/solid-query';
 import { err, okAsync, ResultAsync } from 'neverthrow';
 import { createMemo, createSignal } from 'solid-js';
 
-export const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
+const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
   number | undefined
 >();
 

@@ -10,7 +10,7 @@ import {
 import { createStore } from 'solid-js/store';
 
 type ProfilePictureStore = Record<string, ProfilePictureItem>;
-export const [userProfilePictures, setUserProfilePictures] =
+const [userProfilePictures, setUserProfilePictures] =
   createStore<ProfilePictureStore>({});
 
 const DEFAULT_CACHE_TIME_SECONDS = 60 * 10;

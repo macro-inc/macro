@@ -298,10 +298,10 @@ export function useCommandItems(
 }
 
 export type {
-  Bucket,
-  CommandItem,
+
+
   CommandMenuItem,
-  QuickAccessItem,
+
   SearchItem,
 };
 export { isCommandItem, isEntityItem, isSearchItem };

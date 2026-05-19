@@ -21,8 +21,8 @@ export {
 
 
 export type {
-  EntitySelectorConfig,
-  OptionSelectorConfig,
-  PinnedOption,
-  SelectableOption,
+
+
+
+
 } from './types';

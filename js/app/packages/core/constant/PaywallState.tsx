@@ -32,10 +32,10 @@ export const PaywallMessages: Record<PaywallKey, string> = {
     'Upgrade your plan to remove the Macro signature.',
 };
 
-export const [paywallOpen, setPaywallOpen] = createSignal(false);
+const [paywallOpen, setPaywallOpen] = createSignal(false);
 // export const [paywallOpen, setPaywallOpen] = createControlledOpenSignal(false);
-export const [limitReached, setLimitReached] = createSignal(false);
-export const [paywallKey, setPaywallKey] = createSignal<PaywallKey | null>(
+const [limitReached, setLimitReached] = createSignal(false);
+const [paywallKey, setPaywallKey] = createSignal<PaywallKey | null>(
   null
 );
 

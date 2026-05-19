@@ -1,6 +1,6 @@
 export { defineQueryFilters } from './compile';
 export type {
-  DateRangeFilter,
+
   PropertyFilter,
   Query,
   QueryState,

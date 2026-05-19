@@ -2,12 +2,12 @@ export { QuickAccessProvider, useQuickAccess } from './QuickAccessProvider';
 export type {
   Bucket,
 
-  BucketItemMap,
+
   EntityBucket,
   EntityItem,
-  ItemForBucket,
-  ItemsForBuckets,
-  QuickAccessContextValue,
+
+
+
   QuickAccessItem,
 
 

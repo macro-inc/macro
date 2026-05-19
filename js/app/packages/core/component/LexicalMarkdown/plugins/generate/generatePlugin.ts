@@ -32,10 +32,10 @@ import { theme } from '../../theme';
 import { $traverseNodes, setEditorStateFromMarkdown } from '../../utils';
 
 export {
-  $createCompletionNode,
-  $isCompletionNode,
-  COMPLETION_NODE_TYPE,
-  CompletionNode,
+
+
+
+
 } from '@lexical-core';
 
 import type { createBlockSignal } from '@core/block';

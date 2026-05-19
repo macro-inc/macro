@@ -57,7 +57,7 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}team-invite`,
 ];
 
-export const [sidebarState, setSidebarState] = makePersisted(
+const [sidebarState, setSidebarState] = makePersisted(
   createSignal<SidebarState>(!isMobile() ? 'slim' : 'hidden'),
   {
     name: 'sidebar-state',

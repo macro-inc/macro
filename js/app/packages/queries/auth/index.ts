@@ -1,14 +1,14 @@
 // Re-export user context hooks for backwards compatibility
 export {
-  useAuthor,
-  useEmail,
+
+
 
 
 
   useIsAuthenticated,
-  useLicenseStatus,
-  usePermissions,
-  useTutorialCompleted,
+
+
+
   useUserId,
   useUserInfo,
 } from '@core/context/user';
@@ -19,11 +19,11 @@ export {
 
 } from './mutations';
 export {
-  invalidateAllAfterLogin,
-  invalidateUserInfo,
+
+
   type UserInfoData,
 
-  useUserInfoQuery,
+
 } from './user-info';
 export {
   invalidateUserQuota,

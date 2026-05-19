@@ -16,7 +16,7 @@ export type {
 } from './extractors-notification/notification-row';
 export {
   getSnippetHit,
-  isHitSnippetComplete,
+
   isSnippetEntity,
 
 } from './extractors-search/snippet-entity';
@@ -40,13 +40,13 @@ export {
   getPropertyOptionLabel,
   getTaskAssigneeIds,
   getTaskStatusOptionId,
-  isCurrentUserAssigned,
-  isTaskClosed,
 
-  TASK_STATUS_OPTIONS,
+
+
+
 } from './utils/task-properties';
 export {
   formatDateAndTime,
   formatRelativeTimestamp,
-  formatTimestamp,
+
 } from './utils/timestamp';
