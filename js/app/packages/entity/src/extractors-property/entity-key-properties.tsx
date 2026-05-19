@@ -23,7 +23,6 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { Portal } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import {
   type EntityData,
