@@ -50,7 +50,7 @@ export function EmojiItem(props: {
   return (
     <div
       on:mouseover={() => props.setIndex(props.index)}
-      class={cn('group flex items-center p-1.5 mx-1.5 rounded-xs', {
+      class={cn('group flex items-center px-1.5 py-1 rounded-md', {
         'bg-hover': props.selected,
       })}
       on:mouseup={(e) => {
@@ -69,7 +69,7 @@ export function EmojiItem(props: {
     >
       <p class="flex flex-row gap-2 items-center w-full">
         {props.emoji}
-        <span class="text-ink text-xs font-medium font-sans grow overflow-hidden text-nowrap truncate">
+        <span class="text-ink text-sm grow overflow-hidden text-nowrap truncate">
           {props.name}
         </span>
       </p>
@@ -255,8 +255,11 @@ export function EmojiMenu(props: EmojiMenuProps) {
           on:touchstart={(e) => e.stopPropagation()}
           ref={menuRef}
         >
-          <Surface depth={2} active class="py-2">
-            <div class="flex flex-col gap-1 px-2 w-full">
+          <Surface
+            depth={2}
+            class="py-1.5 shadow-lg shadow-drop-shadow rounded-lg"
+          >
+            <div class="flex flex-col px-1.5 w-full">
               <Show
                 when={emojiOptions().length > 0}
                 fallback={
