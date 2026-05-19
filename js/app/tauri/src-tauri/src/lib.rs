@@ -9,7 +9,7 @@ use serde::Serialize;
 use share_target::{
     PendingShareFilesState, cleanup_stale_staged_shared_files, clear_shared_files,
     get_pending_share_filenames, maybe_handle_share_deep_link, pop_shared_files,
-    upload_shared_file_to_presigned_url,
+    read_shared_file_text, upload_shared_file_to_presigned_url,
 };
 use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime};
@@ -192,6 +192,7 @@ pub fn run() {
             pop_shared_files,
             clear_shared_files,
             upload_shared_file_to_presigned_url,
+            read_shared_file_text,
         ])
         .setup(|app| {
             // Restore persisted bundle root on startup

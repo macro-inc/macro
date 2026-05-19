@@ -17,7 +17,6 @@ interface StagedSharedFileData {
   mime_type: string;
   size: number;
   preview_path?: string | null;
-  shared_text?: string | null;
 }
 
 export interface PendingShareFile {
@@ -26,6 +25,7 @@ export interface PendingShareFile {
   mimeType: string;
   size: number;
   previewSrc?: string;
+  isSharedText?: boolean;
   sharedText?: string;
 }
 
@@ -37,6 +37,10 @@ export interface UploadPendingShareFileArgs {
 
 interface ShareFilesReadyPayload {
   filenames: string[];
+}
+
+function isSharedTextMimeType(mimeType: string): boolean {
+  return mimeType === 'text/uri-list' || mimeType === 'text/plain';
 }
 
 function shareFileNamesMatch(
@@ -59,16 +63,31 @@ async function popSharedFiles(
   const results = await invoke<StagedSharedFileData[]>('pop_shared_files', {
     filenames,
   });
-  return results.map(
-    ({ token, name, mime_type, size, preview_path, shared_text }) => ({
-      token,
-      name,
-      mimeType: mime_type,
-      size,
-      previewSrc: preview_path ? convertFileSrc(preview_path) : undefined,
-      sharedText: shared_text ?? undefined,
+  return Promise.all(
+    results.map(async ({ token, name, mime_type, size, preview_path }) => {
+      const isSharedText = isSharedTextMimeType(mime_type);
+      const sharedText = isSharedText
+        ? await readSharedFileText(token).catch((error) => {
+            console.error('failed to read shared text', { token, error });
+            return undefined;
+          })
+        : undefined;
+
+      return {
+        token,
+        name,
+        mimeType: mime_type,
+        size,
+        previewSrc: preview_path ? convertFileSrc(preview_path) : undefined,
+        isSharedText,
+        sharedText,
+      };
     })
   );
+}
+
+async function readSharedFileText(token: string): Promise<string> {
+  return invoke<string>('read_shared_file_text', { token });
 }
 
 async function clearSharedFiles(tokens: string[]): Promise<void> {

@@ -146,10 +146,6 @@ fn stage_shared_file(
     let preview_path = mime_type
         .starts_with("image/")
         .then(|| staged_path.to_string_lossy().into_owned());
-    let shared_text = (mime_type == "text/uri-list" || mime_type == "text/plain")
-        .then(|| std::fs::read_to_string(source_path).ok())
-        .flatten();
-
     move_file_to_path(source_path, &staged_path)
         .map_err(|error| format!("failed to stage shared file: {error}"))?;
 
@@ -159,7 +155,6 @@ fn stage_shared_file(
         mime_type,
         size,
         preview_path,
-        shared_text,
     })
 }
 
@@ -272,7 +267,8 @@ impl ShareTargetPlatform for ShareTargetPlatformImpl {
                     return existing_pending;
                 }
             } else {
-                return pending;
+                state.with_data(|files| *files = Vec::new());
+                return vec![];
             }
         }
 
@@ -283,9 +279,9 @@ impl ShareTargetPlatform for ShareTargetPlatformImpl {
                     && url.host_str() == Some("share")
                 {
                     let filenames = share_filenames_from_url(url);
-                    let filenames_clone = filename.clone();
-                    state.with_data(|f| {
-                        *f = filenames_clone;
+                    let filenames_clone = filenames.clone();
+                    state.with_data(|files| {
+                        *files = filenames_clone;
                     });
                     return filenames;
                 }
@@ -421,6 +417,16 @@ impl ShareTargetPlatform for ShareTargetPlatformImpl {
         }
 
         Ok(())
+    }
+
+    async fn read_shared_file_text(app: AppHandle, token: String) -> Result<String, String> {
+        let path = staged_shared_file_path(&app, &token)?;
+        tokio::task::spawn_blocking(move || {
+            std::fs::read_to_string(&path)
+                .map_err(|error| format!("failed to read staged shared text file: {error}"))
+        })
+        .await
+        .map_err(|error| format!("failed to join staged shared text file read task: {error}"))?
     }
 
     fn maybe_handle_share_deep_link(handle: &AppHandle, url: &Url) -> bool {

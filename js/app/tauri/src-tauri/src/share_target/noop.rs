@@ -32,6 +32,10 @@ impl ShareTargetPlatform for ShareTargetPlatformImpl {
         Ok(())
     }
 
+    async fn read_shared_file_text(_app: AppHandle, _token: String) -> Result<String, String> {
+        Ok(String::new())
+    }
+
     fn maybe_handle_share_deep_link(_handle: &AppHandle, _url: &Url) -> bool {
         false
     }

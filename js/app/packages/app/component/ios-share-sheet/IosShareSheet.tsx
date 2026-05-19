@@ -58,10 +58,14 @@ function pendingShareBatchKey(files: readonly PendingShareFile[]): string {
   return files.map((file) => file.token).join('|');
 }
 
+function normalizedSharedText(file: Pick<PendingShareFile, 'sharedText'>): string {
+  return file.sharedText?.trim() ?? '';
+}
+
 function pendingShareInitialText(files: readonly PendingShareFile[]): string {
   return files
-    .map((file) => file.sharedText?.trim())
-    .filter((text): text is string => !!text)
+    .map(normalizedSharedText)
+    .filter((text) => text.length > 0)
     .join('\n');
 }
 
@@ -235,7 +239,10 @@ function IosShareSheetComposer(props: {
         void (async () => {
           await Promise.allSettled(
             files
-              .filter((file) => !file.sharedText)
+              .filter(
+                (file) =>
+                  !file.isSharedText && normalizedSharedText(file).length === 0
+              )
               .map((file) =>
                 uploadPendingShareAttachment({
                   file,

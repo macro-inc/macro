@@ -40,7 +40,6 @@ pub(crate) struct StagedSharedFile {
     mime_type: String,
     size: u64,
     preview_path: Option<String>,
-    shared_text: Option<String>,
 }
 
 pub(crate) trait ShareTargetPlatform {
@@ -62,6 +61,8 @@ pub(crate) trait ShareTargetPlatform {
         upload_url: String,
         mime_type: String,
     ) -> Result<(), String>;
+
+    async fn read_shared_file_text(app: AppHandle, token: String) -> Result<String, String>;
 
     fn maybe_handle_share_deep_link(handle: &AppHandle, url: &Url) -> bool;
 }
@@ -121,6 +122,11 @@ pub(crate) async fn upload_shared_file_to_presigned_url(
 ) -> Result<(), String> {
     ShareTargetPlatformImpl::upload_shared_file_to_presigned_url(app, token, upload_url, mime_type)
         .await
+}
+
+#[tauri::command]
+pub(crate) async fn read_shared_file_text(app: AppHandle, token: String) -> Result<String, String> {
+    ShareTargetPlatformImpl::read_shared_file_text(app, token).await
 }
 
 pub(crate) fn maybe_handle_share_deep_link(handle: &AppHandle, url: &Url) -> bool {
