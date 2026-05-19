@@ -1,7 +1,3 @@
-import {
-  ENTITY_ID_DATA_ATTRIBUTE,
-  entityIdSelector,
-} from '@core/dom-selectors';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
@@ -11,6 +7,10 @@ import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import {
+  ENTITY_ID_DATA_ATTRIBUTE,
+  entityIdSelector,
+} from '@core/dom-selectors';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';

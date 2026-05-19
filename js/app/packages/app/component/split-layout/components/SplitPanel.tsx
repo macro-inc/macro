@@ -1,8 +1,8 @@
-import { splitContainerAttribute } from '@core/dom-selectors';
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { splitContainerAttribute } from '@core/dom-selectors';
 import { isMobile } from '@core/mobile/isMobile';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, Panel } from '@ui';

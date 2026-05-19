@@ -3,10 +3,6 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
-import {
-  soupListContainerAttribute,
-  soupListContainerSelector,
-} from '@core/dom-selectors';
 import { EntityRowProvider } from '@app/component/mobile/EntityRow';
 import {
   makeMarkDoneAction,
@@ -78,6 +74,10 @@ import { Resize } from '@core/component/Resize';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import {
+  soupListContainerAttribute,
+  soupListContainerSelector,
+} from '@core/dom-selectors';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';

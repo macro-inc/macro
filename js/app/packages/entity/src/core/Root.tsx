@@ -1,5 +1,5 @@
-import { cn } from '@ui';
 import { entityIdAttribute } from '@core/dom-selectors';
+import { cn } from '@ui';
 import { type JSX, splitProps } from 'solid-js';
 import type { EntityData } from '../types/entity';
 

@@ -1,6 +1,6 @@
-import { entityIdSelector } from '@core/dom-selectors';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
+import { entityIdSelector } from '@core/dom-selectors';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { EntityData } from '@entity';
