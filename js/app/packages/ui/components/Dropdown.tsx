@@ -13,18 +13,13 @@ import { splitProps, type ComponentProps } from 'solid-js';
     </Dropdown.Group>
   </Dropdown.Content>
 </Dropdown>
-
-Content and SubContent portal to <body> automatically. Pass `mount` to
-relocate to a scoped container (e.g. a per-block <ScopedPortal> mount node)
-when you want the menu to inherit a different stacking/focus context.
 */
-
-type PortalMount = ComponentProps<typeof KobalteDropdownMenu.Portal>['mount'];
 
 export type DropdownSubContentProps = ComponentProps<typeof KobalteDropdownMenu.SubContent> & { depth?: SurfaceProps['depth']; mount?: PortalMount; };
 export type DropdownContentProps = ComponentProps<typeof KobalteDropdownMenu.Content> & { depth?: SurfaceProps['depth']; mount?: PortalMount; };
 export type DropdownTriggerProps = ComponentProps<typeof KobalteDropdownMenu.Trigger> & ButtonProps;
 export type DropdownGroupProps = ComponentProps<typeof KobalteDropdownMenu.Group>;
+type PortalMount = ComponentProps<typeof KobalteDropdownMenu.Portal>['mount'];
 
 function DropdownTrigger(props: DropdownTriggerProps) {
   return (

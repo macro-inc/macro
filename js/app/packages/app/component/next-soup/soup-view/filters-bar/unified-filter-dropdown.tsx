@@ -23,7 +23,7 @@ import CheckIcon from '@phosphor/check.svg';
 import CircleDashedIcon from '@phosphor/circle-dashed.svg';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { useContacts } from '@queries/contacts/contacts';
-import { cn, Dropdown, Layer, Tooltip } from '@ui';
+import { cn, Dropdown, Tooltip } from '@ui';
 import {
   type Accessor,
   batch,
@@ -414,18 +414,16 @@ const SearchableFilterSubmenu = (props: {
         <CaretRightIcon class="size-3 text-ink-muted" />
       </Dropdown.SubTrigger>
 
-        <Layer depth={2}>
-          <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl w-65 max-w-[90vw] overflow-hidden">
-            <SearchableMultiSelectInline
-              options={props.options}
-              activeIds={props.activeIds}
-              onChange={props.onChange}
-              placeholder={props.placeholder}
-              inputRef={setInputRef}
-              onRequestClose={() => setIsOpen(false)}
-            />
-          </Dropdown.SubContent>
-        </Layer>
+      <Dropdown.SubContent class="w-65 max-w-[90vw] overflow-hidden">
+        <SearchableMultiSelectInline
+          options={props.options}
+          activeIds={props.activeIds}
+          onChange={props.onChange}
+          placeholder={props.placeholder}
+          inputRef={setInputRef}
+          onRequestClose={() => setIsOpen(false)}
+        />
+      </Dropdown.SubContent>
     </Dropdown.Sub>
   );
 };
@@ -443,8 +441,7 @@ function SingleValueSubmenu<T>(props: {
         <span class="text-ink">{props.label}</span>
         <CaretRightIcon class="size-3 text-ink-muted" />
       </Dropdown.SubTrigger>
-        <Layer depth={2}>
-          <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
+      <Dropdown.SubContent class="min-w-40">
             <For each={props.options}>
               {(option) => {
                 const active = () => props.current() === option.value;
@@ -467,8 +464,7 @@ function SingleValueSubmenu<T>(props: {
                 );
               }}
             </For>
-          </Dropdown.SubContent>
-        </Layer>
+      </Dropdown.SubContent>
     </Dropdown.Sub>
   );
 }
@@ -643,11 +639,9 @@ const SearchIndexSubRow = (props: {
       <SearchIndexRowLabel option={props.option} active={props.active} />
       <CaretRightIcon class="size-3 text-ink-muted" />
     </Dropdown.SubTrigger>
-      <Layer depth={2}>
-        <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
-          {props.children}
-        </Dropdown.SubContent>
-      </Layer>
+    <Dropdown.SubContent class="min-w-45">
+      {props.children}
+    </Dropdown.SubContent>
   </Dropdown.Sub>
 );
 
@@ -802,8 +796,7 @@ export const UnifiedFilterDropdown = () => {
           </Dropdown.Trigger>
         </Tooltip>
 
-          <Layer depth={2}>
-            <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
+        <Dropdown.Content class="min-w-45">
               <Show
                 when={
                   categories().length === 1 && !isTasksView() && !isSearchView()
@@ -818,8 +811,7 @@ export const UnifiedFilterDropdown = () => {
                             <CaretRightIcon class="size-3 text-ink-muted" />
                           </Dropdown.SubTrigger>
 
-                            <Layer depth={2}>
-                              <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
+                          <Dropdown.SubContent class="min-w-40">
                                 <For each={category.options}>
                                   {(option) => {
                                     const active = () =>
@@ -865,8 +857,7 @@ export const UnifiedFilterDropdown = () => {
                                     );
                                   }}
                                 </For>
-                              </Dropdown.SubContent>
-                            </Layer>
+                          </Dropdown.SubContent>
                         </Dropdown.Sub>
                       )}
                     </For>
@@ -987,8 +978,7 @@ export const UnifiedFilterDropdown = () => {
                   }}
                 </For>
               </Show>
-            </Dropdown.Content>
-          </Layer>
+        </Dropdown.Content>
       </Dropdown>
     </Show>
   );

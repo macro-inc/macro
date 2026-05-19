@@ -11,7 +11,7 @@ import {
 } from '@core/util/upload';
 import ChevronDownIcon from '@phosphor/caret-down.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
-import { Button, Dropdown, Layer } from '@ui';
+import { Button, Dropdown } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { NewCallButton } from './NewCallButton';
 
@@ -145,25 +145,23 @@ export const SoupViewCreateButton = () => {
               <span>Create</span>
               <ChevronDownIcon class="size-3" />
             </Dropdown.Trigger>
-              <Layer depth={2}>
-                <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-sm min-w-35 p-1">
-                  <For each={options()}>
-                    {(item) => (
-                      <Dropdown.Item
-                        class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
-                        onSelect={() => handleSelect(item)}
-                      >
-                        <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
-                          <CreateOptionIcon id={item.id} />
-                        </span>
-                        <span class="flex-1 truncate text-ink-muted">
-                          {item.label}
-                        </span>
-                      </Dropdown.Item>
-                    )}
-                  </For>
-                </Dropdown.Content>
-              </Layer>
+            <Dropdown.Content class="min-w-35">
+              <For each={options()}>
+                {(item) => (
+                  <Dropdown.Item
+                    class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
+                    onSelect={() => handleSelect(item)}
+                  >
+                    <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
+                      <CreateOptionIcon id={item.id} />
+                    </span>
+                    <span class="flex-1 truncate text-ink-muted">
+                      {item.label}
+                    </span>
+                  </Dropdown.Item>
+                )}
+              </For>
+            </Dropdown.Content>
           </Dropdown>
         </Show>
       </Show>
