@@ -2,7 +2,9 @@
 
 use macro_user_id::user_id::MacroUserIdStr;
 
-use crate::domain::model::{CreateSubscriptionArgs, CustomerError, TeamPlan};
+use crate::domain::model::{
+    CreateSubscriptionArgs, CustomerError, TeamCheckoutSessionRequest, TeamPlan,
+};
 
 /// The CustomerRepository defines a set of actions to perform on customer data
 pub trait CustomerRepository: Clone + Send + Sync + 'static {
@@ -39,4 +41,13 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         current_team_plan: Option<TeamPlan>,
         team_plan: TeamPlan,
     ) -> impl Future<Output = Result<(), CustomerError>> + Send;
+
+    /// Creates the team plan checkout session
+    /// Returns the checkout url
+    fn create_team_checkout_session(
+        &self,
+        team_id: &uuid::Uuid,
+        customer_id: stripe::CustomerId,
+        req: &TeamCheckoutSessionRequest,
+    ) -> impl Future<Output = Result<String, CustomerError>> + Send;
 }

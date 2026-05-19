@@ -16,7 +16,7 @@ axum = [
 ]
 default = ["axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
-outbound = ["dep:sqlx", "ports"]
+outbound = ["dep:sqlx", "dep:url", "ports"]
 ports = [
   "dep:model-entity",
   "dep:model_notifications",
@@ -62,6 +62,7 @@ notification = { path = "../notification", optional = true, default-features = f
 
 # Outbound dependencies
 sqlx = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

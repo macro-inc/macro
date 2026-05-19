@@ -10,8 +10,8 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Json, Response},
 };
-use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::Email;
+use macro_user_id::{cowlike::CowLike, lowercased::Lowercase};
 use miniserde::json::Value as JsonValue;
 use model::response::ErrorResponse;
 use referral::domain::ports::ReferralService;
@@ -252,6 +252,7 @@ async fn handle_customer_subscription_event(
             subscription_id,
             subscription_status,
             &team_id,
+            &email,
             SubscriptionTrackingData {
                 ga_client_id: ga_client_id.clone(),
                 fbp: fbp.clone(),
@@ -439,17 +440,19 @@ async fn check_and_process_referral(
 /// NOTE: We use strs here because there is a mismatch between stripe crate and
 /// stripe_webhook crate for these types. *sigh*
 #[tracing::instrument(skip(ctx, tracking_data), err, ret)]
-async fn handle_team_subscription_event(
+async fn handle_team_subscription_event<'a>(
     ctx: &ApiContext,
     subscription_id: &str,
     subscription_status: &str,
     team_id: &uuid::Uuid,
+    email: &Email<Lowercase<'a>>,
     tracking_data: SubscriptionTrackingData,
 ) -> anyhow::Result<()> {
     tracing::trace!("handling team subscription");
 
     if subscription_status == "trialing" {
-        anyhow::bail!("unexpected trialing status for team subscription");
+        // set has_trialed in macro_user table
+        macro_db_client::user::patch::update_macro_user_has_trialed(&ctx.db, email, true).await?;
     }
 
     match subscription_status {
