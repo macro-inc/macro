@@ -3,6 +3,10 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
+import {
+  soupListContainerAttribute,
+  soupListContainerSelector,
+} from '@core/e2e-selectors';
 import { EntityRowProvider } from '@app/component/mobile/EntityRow';
 import {
   makeMarkDoneAction,
@@ -1206,7 +1210,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                           const listEl = localEntityListRef();
                           if (!listEl) return undefined;
                           const scrollContainer = listEl.querySelector(
-                            '[data-soup-list-container]'
+                            soupListContainerSelector
                           ) as HTMLElement;
                           return scrollContainer || undefined;
                         }}
@@ -1315,7 +1319,7 @@ const SoupList = (props: SoupListProps) => {
         itemSize={itemSize()}
         bufferSize={overscan() * itemSize()}
         onScroll={handleScroll}
-        data-soup-list-container
+        {...soupListContainerAttribute}
       >
         {(row, i) => props.children(row, i)}
       </VList>

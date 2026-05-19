@@ -1,11 +1,16 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import {
+  entityIdSelector,
+  soupListContainerSelector,
+  splitContainerSelector,
+} from '../../../packages/core/e2e-selectors';
 
 export const LOCAL_E2E = process.env.LOCAL_E2E === 'true';
 
 export async function gotoApp(page: Page, path: `/${string}`) {
   await page.goto(`/app${path}`);
   await expect(page).not.toHaveURL(/\/app\/(welcome|signup|login)/);
-  await expect(page.locator('[data-split-container]').first()).toBeVisible({
+  await expect(page.locator(splitContainerSelector).first()).toBeVisible({
     timeout: 30_000,
   });
 }
@@ -15,8 +20,9 @@ export async function expectEntityInCurrentList(
   entityId: string,
   label: string
 ) {
-  const row = page.locator(`[data-entity-id="${entityId}"]`).first();
-  const scroller = page.locator('[data-soup-list-container]').first();
+  const row = page.locator(entityIdSelector(entityId)).first();
+
+  const scroller = page.locator(soupListContainerSelector).first();
 
   await expect(scroller).toBeVisible({ timeout: 30_000 });
 

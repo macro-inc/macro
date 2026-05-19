@@ -197,6 +197,13 @@ export const createAppViteConfig = (): UserConfigFn => {
           ],
         },
       },
+      preview: {
+        port: Number(process.env.PORT || 3000),
+        host: '0.0.0.0',
+        strictPort: true,
+        allowedHosts: true,
+        cors: true,
+      },
     };
   };
 };

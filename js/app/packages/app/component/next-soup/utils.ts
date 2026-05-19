@@ -1,3 +1,7 @@
+import {
+  ENTITY_ID_DATA_ATTRIBUTE,
+  entityIdSelector,
+} from '@core/e2e-selectors';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
@@ -279,13 +283,13 @@ export const restoreSoupFocus = async (
   // up by focusing the soup container (which has `tabindex={-1}`) — that's
   // what actually reactivates the hotkey scope.
   if (entityId) {
-    const entityEl = domRef.querySelector(`[data-entity-id="${entityId}"]`);
+    const entityEl = domRef.querySelector(entityIdSelector(entityId));
     if (entityEl instanceof HTMLElement) entityEl.focus();
   }
 
   if (document.activeElement && domRef.contains(document.activeElement)) return;
 
-  const firstEntityEl = domRef.querySelector('[data-entity-id]');
+  const firstEntityEl = domRef.querySelector(`[${ENTITY_ID_DATA_ATTRIBUTE}]`);
   if (firstEntityEl instanceof HTMLElement) firstEntityEl.focus();
 
   if (document.activeElement && domRef.contains(document.activeElement)) return;

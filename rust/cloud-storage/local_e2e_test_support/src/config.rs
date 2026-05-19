@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 
 const SEED_DIR_MARKER: &str = "rust/cloud-storage/seed_cli/seed";
 
@@ -16,7 +16,7 @@ pub struct LocalE2eConfig {
 }
 
 impl LocalE2eConfig {
-    /// Load configuration from the nearest repository root.
+    /// Load configuration from the repository root derived from this crate path.
     ///
     /// Values from the process environment override values from `.env`.
     pub fn load() -> anyhow::Result<Self> {
@@ -68,41 +68,10 @@ impl LocalE2eConfig {
 }
 
 fn find_repo_root() -> anyhow::Result<PathBuf> {
-    if let Ok(repo_root) = std::env::var("LOCAL_E2E_REPO_ROOT") {
-        let repo_root = PathBuf::from(repo_root);
-        if repo_root.join(SEED_DIR_MARKER).exists() {
-            return Ok(repo_root);
-        }
-        return Err(anyhow!(
-            "LOCAL_E2E_REPO_ROOT={} does not contain {SEED_DIR_MARKER}",
-            repo_root.display()
-        ));
-    }
-
-    let mut starts = vec![std::env::current_dir().context("failed to read current dir")?];
-    starts.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-
-    for start in starts {
-        if let Some(root) = find_up(start) {
-            return Ok(root);
-        }
-    }
-
-    Err(anyhow!(
-        "could not find repository root containing {SEED_DIR_MARKER}"
-    ))
-}
-
-fn find_up(start: PathBuf) -> Option<PathBuf> {
-    let mut current = start;
-
-    loop {
-        if current.join(SEED_DIR_MARKER).exists() {
-            return Some(current);
-        }
-
-        if !current.pop() {
-            return None;
-        }
-    }
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::parent)
+        .map(Path::to_path_buf)
+        .context("CARGO_MANIFEST_DIR must be under rust/cloud-storage/<crate>")
 }

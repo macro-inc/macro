@@ -114,9 +114,9 @@ run_local *ARGS:
 # Reset and seed deterministic data used by local E2E tests.
 local-e2e-seed:
   just run_dbs -d
-  just rust/cloud-storage/macro_db_client/create_db
-  just rust/cloud-storage/macro_db_client/migrate_db
-  cd rust/cloud-storage/seed_cli && just local-e2e-smoke
+  -just rust/cloud-storage/macro_db_client/drop_db -y -f
+  just rust/cloud-storage/initialize_dbs
+  just rust/cloud-storage/seed_cli/local-e2e-smoke
 
 # Start only the services needed by the local E2E suites. Avoid unrelated
 # local services with extra env/dependency requirements blocking E2E.

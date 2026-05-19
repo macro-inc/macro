@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { soupListContainerSelector } from '../../packages/core/e2e-selectors';
 
 import { localE2ESeed } from './fixtures/local-e2e-seed';
 import {
@@ -94,7 +95,9 @@ async function expectLoadedListView(page: Page, id: string) {
   const view = page.locator(`[data-list-view="${id}"]`).first();
   await expect(view).toBeVisible({ timeout: 30_000 });
   await expect(
-    view.locator('[data-soup-list-container], [data-soup-empty-state]').first()
+    view
+      .locator(`${soupListContainerSelector}, [data-soup-empty-state]`)
+      .first()
   ).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText('Something went terribly wrong')).toHaveCount(0);
 }

@@ -57,6 +57,13 @@ function localE2EWebServerCommand(): string {
   ].join(' ');
 }
 
+function ciPreviewWebServerCommand(): string {
+  return [
+    `PORT=${shellQuote(localE2EPort)}`,
+    'bunx vite preview -c packages/app/vite.config.ts --outDir packages/app/dist',
+  ].join(' ');
+}
+
 const authenticatedProjects = isLocalE2E
   ? [
       {
@@ -179,7 +186,7 @@ export default defineConfig({
     command: isLocalE2E
       ? localE2EWebServerCommand()
       : process.env.CI
-        ? 'bunx vite preview -c packages/app/vite-ci.config.ts --outDir packages/app/dist'
+        ? ciPreviewWebServerCommand()
         : 'bun run dev',
     url: `http://localhost:${localE2EPort}/app`,
     reuseExistingServer: !process.env.CI && !isLocalE2E,

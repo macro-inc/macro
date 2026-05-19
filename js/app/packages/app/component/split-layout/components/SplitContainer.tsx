@@ -1,4 +1,5 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { splitContainerAttribute } from '@core/e2e-selectors';
 import { isMobile } from '@core/mobile/isMobile';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Layer, Surface } from '@ui';
@@ -77,7 +78,7 @@ export function SplitContainer(
           props.ref(ref);
         }}
         data-split-id={props.id}
-        data-split-container
+        {...splitContainerAttribute}
         data-modal={panel.handle.isSpotLight()}
         tabindex={-1}
       >

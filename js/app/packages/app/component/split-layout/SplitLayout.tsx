@@ -1,3 +1,4 @@
+import { splitContainerSelector } from '@core/e2e-selectors';
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { isSidebarVisible } from '@app/component/sidebarVisibility';
 import { activeElement } from '@app/signal/focus';
@@ -44,7 +45,7 @@ type SplitLayoutContainerProps = {
 
 function getParentSplitId(element: Element | null) {
   if (!element || !element.isConnected) return null;
-  const splitParent = element.closest('[data-split-container]');
+  const splitParent = element.closest(splitContainerSelector);
   if (!splitParent) return null;
   const splitId = splitParent.getAttribute('data-split-id');
   if (!splitId) return null;
