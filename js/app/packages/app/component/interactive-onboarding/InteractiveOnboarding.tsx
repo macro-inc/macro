@@ -212,8 +212,7 @@ function InteractiveOnboardingInner() {
   });
   const allLessons = createMemo(() =>
     LESSONS.filter((l) => {
-      if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
-        return false;
+      if (l.id === 'choose-plan' && hasPaid()) return false;
       if (l.id === 'about-us' && isAuthenticated()) return false;
       // Skip team/payment lessons when feature flag disabled
       if (
@@ -306,7 +305,7 @@ function InteractiveOnboardingInner() {
   // Skip the redirect when returning from external flow — we just marked it
   // complete ourselves and still have remaining lessons to show.
   createEffect(() => {
-    if (tutorialCompleted() && !returningLesson && !testMode) {
+    if (tutorialCompleted() && hasPaid() && !returningLesson && !testMode) {
       navigateAway();
     }
   });
