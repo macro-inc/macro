@@ -30,26 +30,28 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
         </Dropdown.Trigger>
       </Tooltip>
       <Dropdown.Content class="min-w-35">
-        <For each={props.options}>
-          {(option) => (
-            <Dropdown.Item onSelect={() => props.onChange(option.value)}>
-              <span
-                class="flex-1 truncate"
-                classList={{
-                  'text-ink font-medium': props.value() === option.value,
-                  'text-ink-muted': props.value() !== option.value,
-                }}
-              >
-                {option.label}
-              </span>
-              <span class="size-3.5 flex items-center justify-center shrink-0">
-                <Show when={props.value() === option.value}>
-                  <CheckIcon class="size-3 text-accent" />
-                </Show>
-              </span>
-            </Dropdown.Item>
-          )}
-        </For>
+        <Dropdown.Group>
+          <For each={props.options}>
+            {(option) => (
+              <Dropdown.Item onSelect={() => props.onChange(option.value)}>
+                <span
+                  classList={{
+                    'text-ink font-medium': props.value() === option.value,
+                    'text-ink-muted': props.value() !== option.value,
+                  }}
+                  class="flex-1 truncate"
+                >
+                  {option.label}
+                </span>
+                <span class="size-3.5 flex items-center justify-center shrink-0">
+                  <Show when={props.value() === option.value}>
+                    <CheckIcon class="size-3 text-accent" />
+                  </Show>
+                </span>
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
   );

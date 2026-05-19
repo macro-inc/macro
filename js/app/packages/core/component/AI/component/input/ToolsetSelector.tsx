@@ -31,17 +31,19 @@ export function ToolsetSelector(props: {
             <Dropdown.Trigger>
               <span>SOURCE</span>
             </Dropdown.Trigger>
-              <Dropdown.Content>
+            <Dropdown.Content>
+              <Dropdown.Group>
                 <SegmentedControl
-                  size="sm"
-                  value={source()}
-                  onChange={(s) => setSource(s)}
                   options={SOURCES.map((s) => ({
                     value: s.value,
                     label: s.label,
                   }))}
+                  onChange={(s) => setSource(s)}
+                  value={source()}
+                  size="sm"
                 />
-              </Dropdown.Content>
+              </Dropdown.Group>
+            </Dropdown.Content>
           </Dropdown>
           <span class="bg-edge-muted text-ink font-mono text-xs font-medium px-1 flex items-center">
             {SOURCE_TO_DISPLAY[source()]}

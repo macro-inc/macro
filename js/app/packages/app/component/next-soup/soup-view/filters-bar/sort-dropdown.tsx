@@ -38,33 +38,35 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
         </Dropdown.Trigger>
       </Tooltip>
       <Dropdown.Content class="min-w-35">
-        <For each={options()}>
-          {(option) => (
-            <Dropdown.Item onSelect={() => props.onChange(option.value)}>
-              <Show when={option.icon}>
-                {(icon) => (
-                  <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
-                    {icon()()}
-                  </span>
-                )}
-              </Show>
-              <span
-                class="flex-1 truncate"
-                classList={{
-                  'text-ink font-medium': props.value() === option.value,
-                  'text-ink-muted': props.value() !== option.value,
-                }}
-              >
-                {option.label}
-              </span>
-              <span class="size-3.5 flex items-center justify-center shrink-0">
-                <Show when={props.value() === option.value}>
-                  <CheckIcon class="size-3 text-accent" />
+        <Dropdown.Group>
+          <For each={options()}>
+            {(option) => (
+              <Dropdown.Item onSelect={() => props.onChange(option.value)}>
+                <Show when={option.icon}>
+                  {(icon) => (
+                    <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
+                      {icon()()}
+                    </span>
+                  )}
                 </Show>
-              </span>
-            </Dropdown.Item>
-          )}
-        </For>
+                <span
+                  class="flex-1 truncate"
+                  classList={{
+                    'text-ink font-medium': props.value() === option.value,
+                    'text-ink-muted': props.value() !== option.value,
+                  }}
+                >
+                  {option.label}
+                </span>
+                <span class="size-3.5 flex items-center justify-center shrink-0">
+                  <Show when={props.value() === option.value}>
+                    <CheckIcon class="size-3 text-accent" />
+                  </Show>
+                </span>
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
   );

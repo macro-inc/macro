@@ -146,18 +146,20 @@ export const SoupViewCreateButton = () => {
               <ChevronDownIcon class="size-3" />
             </Dropdown.Trigger>
             <Dropdown.Content class="min-w-35">
-              <For each={options()}>
-                {(item) => (
-                  <Dropdown.Item onSelect={() => handleSelect(item)}>
-                    <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
-                      <CreateOptionIcon id={item.id} />
-                    </span>
-                    <span class="flex-1 truncate text-ink-muted">
-                      {item.label}
-                    </span>
-                  </Dropdown.Item>
-                )}
-              </For>
+              <Dropdown.Group>
+                <For each={options()}>
+                  {(item) => (
+                    <Dropdown.Item onSelect={() => handleSelect(item)}>
+                      <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
+                        <CreateOptionIcon id={item.id} />
+                      </span>
+                      <span class="flex-1 truncate text-ink-muted">
+                        {item.label}
+                      </span>
+                    </Dropdown.Item>
+                  )}
+                </For>
+              </Dropdown.Group>
             </Dropdown.Content>
           </Dropdown>
         </Show>
