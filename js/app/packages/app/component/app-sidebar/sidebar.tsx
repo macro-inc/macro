@@ -405,6 +405,10 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       tooltipPlacement="right"
       label={props.isSlim() ? props.label : undefined}
       hotkey={props.isSlim() ? props.hotkeyToken : undefined}
+      onMouseDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+      }}
       onClick={props.onClick}
       disabled={isDisabled()}
       onMouseEnter={() => setHovering(true)}
@@ -558,7 +562,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <div class="grow shrink-10 min-w-0" />
           <Button
             class="flex items-center justify-center rounded-xs p-0.5 px-2 bg-surface [&_svg]:size-4"
-            onClick={() => handleSidebarOpenChange(!isExpanded())}
+            onMouseDown={(e) => {
+              if (e.button !== 0) return;
+              e.preventDefault();
+            }}
+            onClick={() => {
+              handleSidebarOpenChange(!isExpanded());
+              globalSplitManager()?.returnFocus();
+            }}
             onMouseEnter={() => setSidebarBtnHovering(true)}
             onMouseLeave={() => setSidebarBtnHovering(false)}
             label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
