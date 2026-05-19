@@ -1,4 +1,5 @@
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
+import CalendarIcon from '@phosphor/calendar-dots.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import UsersIcon from '@phosphor/users.svg';
 import XIcon from '@phosphor/x.svg';
@@ -9,6 +10,9 @@ import type { InvitedMember } from '../onboarding-context';
 import { useOnboarding } from '../onboarding-context';
 
 type InviteEntry = { email: string };
+
+const LARGE_TEAM_THRESHOLD = 25;
+const CONTACT_SALES_URL = 'https://cal.com/jacob-beckerman-b56mrn';
 
 export function TeamStep() {
   const ctx = useOnboarding();
@@ -29,6 +33,8 @@ export function TeamStep() {
       (e) =>
         e.email.trim() !== '' && z.string().email().safeParse(e.email).success
     );
+
+  const isLargeTeam = () => entries().length >= LARGE_TEAM_THRESHOLD;
 
   const emailPlaceholder = () => {
     const email = ctx.email();
@@ -189,30 +195,66 @@ export function TeamStep() {
 
       <div class="flex flex-col gap-2">
         <Show
-          when={hasValidEmail()}
+          when={isLargeTeam()}
           fallback={
-            <Button
-              variant="base"
-              size="lg"
-              onClick={() => {
-                ctx.setInvitedMembers([]);
-                ctx.next();
-              }}
-              class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+            <Show
+              when={hasValidEmail()}
+              fallback={
+                <Button
+                  variant="base"
+                  size="lg"
+                  onClick={() => {
+                    ctx.setInvitedMembers([]);
+                    ctx.next();
+                  }}
+                  class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                >
+                  Maybe later
+                  <ArrowRightIcon class="size-4" />
+                </Button>
+              }
             >
-              Maybe later
-              <ArrowRightIcon class="size-4" />
-            </Button>
+              <Button
+                variant="base"
+                size="lg"
+                onClick={handleContinue}
+                class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+              >
+                Continue
+                <ArrowRightIcon class="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="md"
+                onClick={() => {
+                  ctx.setInvitedMembers([]);
+                  ctx.next();
+                }}
+                class="w-full"
+              >
+                Maybe later
+              </Button>
+            </Show>
           }
         >
+          <div class="rounded-sm border border-ink/10 bg-ink/5 p-3 flex flex-col gap-1">
+            <p class="text-sm font-medium text-ink">
+              Inviting more than {LARGE_TEAM_THRESHOLD} teammates?
+            </p>
+            <p class="text-xs text-ink-muted">
+              Let's chat — we'll set you up with a custom plan that fits.
+            </p>
+          </div>
           <Button
             variant="base"
             size="lg"
-            onClick={handleContinue}
+            onClick={() =>
+              window.open(CONTACT_SALES_URL, '_blank', 'noopener,noreferrer')
+            }
             class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
           >
-            Continue
-            <ArrowRightIcon class="size-4" />
+            <CalendarIcon class="size-4" />
+            Contact us
           </Button>
           <Button
             variant="ghost"
