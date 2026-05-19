@@ -141,7 +141,7 @@ export function TeamStep() {
                   class={cn(
                     'w-full px-2.5 h-9 pr-9 text-sm rounded-sm border bg-transparent text-ink placeholder:text-ink-placeholder transition-colors',
                     'outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:ring-offset-surface',
-                    errors()[index] ? 'border-failure' : 'border-ink/10'
+                    errors()[index] ? 'border-failure' : 'border-edge-muted'
                   )}
                 />
                 <Show when={entry().email.trim() !== ''}>

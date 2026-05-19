@@ -124,7 +124,7 @@ export function ProfileStep() {
     cn(
       'w-full px-2.5 h-9 text-sm rounded-sm border bg-transparent text-ink placeholder:text-ink-placeholder transition-colors',
       'outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:ring-offset-surface',
-      hasError ? 'border-failure' : 'border-ink/10'
+      hasError ? 'border-failure' : 'border-edge-muted'
     );
 
   return (

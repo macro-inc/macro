@@ -150,7 +150,7 @@ export function VerifyStep() {
   const inputClass = cn(
     'w-full px-2.5 h-9 text-sm rounded-sm border bg-transparent text-ink placeholder:text-ink-placeholder transition-colors text-center tracking-widest font-mono',
     'outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:ring-offset-surface',
-    'border-ink/10'
+    'border-edge-muted'
   );
 
   return (

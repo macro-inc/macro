@@ -122,7 +122,7 @@ function CheckoutView() {
           </div>
         </Show>
 
-        <div class="flex items-baseline justify-between pb-4 border-b border-ink/10">
+        <div class="flex items-baseline justify-between pb-4 border-b border-edge-muted">
           <div class="flex items-end gap-1">
             <span class="text-4xl font-bold text-ink leading-none tracking-tight">
               ${plan().price}
@@ -133,13 +133,13 @@ function CheckoutView() {
         </div>
 
         <div class="flex flex-col text-sm">
-          <div class="flex justify-between py-2.5 border-b border-ink/10">
+          <div class="flex justify-between py-2.5 border-b border-edge-muted">
             <span class="text-ink-muted">You</span>
             <span class="text-xs text-ink-disabled">{ctx.email()}</span>
           </div>
           <For each={ctx.invitedMembers()}>
             {(member) => (
-              <div class="flex justify-between py-2.5 border-b border-ink/10">
+              <div class="flex justify-between py-2.5 border-b border-edge-muted">
                 <span class="text-ink-muted font-mono text-xs truncate mr-2">
                   {member.email}
                 </span>

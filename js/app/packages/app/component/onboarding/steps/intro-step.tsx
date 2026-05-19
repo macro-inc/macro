@@ -89,14 +89,14 @@ export function IntroStep() {
           {(item) => (
             <div
               class={cn(
-                'group flex-1 flex flex-col gap-2.5 p-4 rounded-sm border border-ink/10 text-left transition-colors',
+                'group flex-1 flex flex-col gap-2.5 p-4 rounded-sm border border-edge-muted text-left transition-colors',
                 item.hoverBg,
                 item.hoverBorder
               )}
             >
               <div
                 class={cn(
-                  'size-8 rounded-sm bg-hover/50 flex items-center justify-center transition-colors',
+                  'size-8 rounded-sm bg-hover flex items-center justify-center transition-colors',
                   item.hoverIconBg
                 )}
               >
