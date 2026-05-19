@@ -10,6 +10,8 @@ use tauri_plugin_deep_link::DeepLinkExt;
 use url::Url;
 use uuid::Uuid;
 
+pub(super) struct ShareTargetPlatformImpl;
+
 #[derive(Clone, Serialize)]
 struct ShareFilesReadyPayload {
     filenames: Vec<String>,
