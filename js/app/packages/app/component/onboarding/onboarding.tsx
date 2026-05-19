@@ -7,7 +7,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserInfo } from '@core/context/user';
 import { initAndStartEmailSync } from '@core/email-link';
 import { fetchToken } from '@core/util/fetchWithToken';
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { invalidateUserTeams, useUserTeamsQuery } from '@queries/team';

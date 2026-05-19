@@ -1,7 +1,6 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { initAndStartEmailSync } from '@core/email-link';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
-import { isErr } from '@core/util/maybeResult';
 import { platformFetch } from '@core/util/platformFetch';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
@@ -96,9 +95,8 @@ export function VerifyStep() {
         email: ctx.email(),
       });
 
-      const [err] = result;
-      if (err) {
-        if (isErr([err], 'UNAUTHORIZED')) {
+      if (result.isErr()) {
+        if (result.error.some((e) => e.code === 'UNAUTHORIZED')) {
           setError('Invalid code. Please try again.');
         } else {
           setError('Verification failed. Please try again.');
