@@ -59,7 +59,7 @@ export function dcsFetch<T extends ObjectLike = never>(
   | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${dcsHost}${url}`, init);
 }
-export type Success = { success: boolean };
+type Success = { success: boolean };
 
 type IdMappingResponse = { target_id: string | null };
 
@@ -378,7 +378,7 @@ export async function generateTitle(text: string): Promise<string | undefined> {
 
 type DcsCompletionErrorCode = 'NETWORK_ERROR' | 'OPENAI_ERROR';
 
-export async function dcsCompletion(
+async function dcsCompletion(
   body: Omit<OpenAI.ChatCompletionCreateParamsNonStreaming, 'stream'>
 ): Promise<
   Result<

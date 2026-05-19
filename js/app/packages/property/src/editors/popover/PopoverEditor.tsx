@@ -5,7 +5,7 @@ import { DateEditor } from './DateEditor';
 import { EntityEditor } from './EntityEditor';
 import { SelectEditor } from './SelectEditor';
 
-export type PopoverEditorProps = {
+type PopoverEditorProps = {
   /**
    * Forwarded to EntityEditor to filter the owning entity out of the picker.
    * Has no effect for non-entity properties.

@@ -13,7 +13,7 @@ type CompleteOnboardingCallbacks = MutationCallbacks<
 >;
 
 /** Mutation for completing user onboarding. */
-export function useCompleteOnboardingMutation(
+function useCompleteOnboardingMutation(
   callbacks?: CompleteOnboardingCallbacks
 ) {
   return useMutation(() => ({
@@ -38,7 +38,7 @@ export function useCompleteOnboardingMutation(
 type SetGroupCallbacks = MutationCallbacks<void, Error, { group: string }>;
 
 /** Mutation for setting the user's group (for A/B testing). */
-export function useSetGroupMutation(callbacks?: SetGroupCallbacks) {
+function useSetGroupMutation(callbacks?: SetGroupCallbacks) {
   return useMutation(() => ({
     mutationFn: async (args: { group: string }) => {
       await throwOnErr(async () => await authServiceClient.setGroup(args));

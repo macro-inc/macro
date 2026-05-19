@@ -34,6 +34,6 @@ export function useProperty(): PropertyRootContextValue {
   return ctx;
 }
 
-export function useMaybeProperty(): PropertyRootContextValue | undefined {
+function useMaybeProperty(): PropertyRootContextValue | undefined {
   return useContext(PropertyRootContext);
 }

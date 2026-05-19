@@ -7,7 +7,7 @@ import {
 } from './macroId';
 import type { IUser } from './types';
 
-export { emailToMacroId, type MacroId, macroIdToEmail, tryMacroId };
+
 
 // TODO: consolidate idToEmail, see idToEmail in email.ts
 /**

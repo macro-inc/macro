@@ -14,7 +14,7 @@ export type ShareableEntityData = Extract<
   { type: ShareableEntityType }
 >;
 
-export type GlobalShareModalProps = {
+type GlobalShareModalProps = {
   entity: ShareableEntityData;
   onClose?: () => void;
 };
@@ -52,7 +52,7 @@ export const openGlobalShareModal = (props: GlobalShareModalProps) => {
   setModalOpen(true);
 };
 
-export const closeGlobalShareModal = () => {
+const closeGlobalShareModal = () => {
   const props = globalModalProps();
   setModalOpen(false);
   setGlobalModalProps(null);

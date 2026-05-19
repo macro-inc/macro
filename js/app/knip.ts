@@ -38,15 +38,24 @@ const config: KnipConfig = {
     // Type-only packages (global ambient types, no direct imports)
     '@types/facebook-pixel',
     '@types/gtag.js',
+    '@types/ws',
+    '@types/wicg-file-system-access',
     // Code generation tools (invoked via CLI scripts, not imported in source)
     'bebop-tools',
     'orval',
     'json-refs',
     'json-schema-to-typescript',
     'json-schema-to-zod',
+    'typedoc',
     // Build tools used by Vite/bundler internally
     'lightningcss',
     'concurrently',
+    // Runtime tooling invoked via CLI (npm scripts, justfile, etc.)
+    '@biomejs/biome',
+    '@vitest/ui',
+    '@datadog/datadog-ci',
+    // Dynamically imported in .js worker (knip can't see)
+    'libheif-js',
   ],
 
   // Ignore workspaces that are not real app code

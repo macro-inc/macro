@@ -40,9 +40,9 @@ type BarContext = {
   truncation: Accessor<{ stage: TruncationStage; index: number }>;
 };
 
-export const BarContext = createContext<BarContext>();
+const BarContext = createContext<BarContext>();
 
-export type TruncationStage = {
+type TruncationStage = {
   fileNameLength: number;
   hideBreadcrumb?: boolean;
   hideLabels?: boolean;

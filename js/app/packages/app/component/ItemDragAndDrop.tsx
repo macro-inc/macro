@@ -32,7 +32,7 @@ export function useDragOperation() {
   return context;
 }
 
-export function ItemDragOverlay() {
+function ItemDragOverlay() {
   const [state] = useDragDropContext() ?? [];
   const activeDraggable = createMemo(() => {
     return state?.active.draggable;

@@ -39,7 +39,7 @@ function getEntityType(entity: EntityData): EntityType {
     .exhaustive();
 }
 
-export interface EntityKeyPropertiesProps {
+interface EntityKeyPropertiesProps {
   /** Entity with properties attached */
   entity: EntityWithProperties<EntityData>;
   /** Callback when properties are refreshed */

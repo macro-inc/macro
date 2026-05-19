@@ -1,7 +1,7 @@
 import { type Accessor, onCleanup } from 'solid-js';
 import { touchHandler } from './touchHandler';
 
-export interface LongPressHighlightOptions {
+interface LongPressHighlightOptions {
   onLongPress?: () => void;
   /** Delay (ms) before adding the `long-press-animation` class on touch start. If touch ends before this delay, no exit animation plays. Default: 100 */
   enterDelay?: number;

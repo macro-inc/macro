@@ -60,7 +60,7 @@ export type Completion = {
 };
 
 // ai generated content
-export type CompletionSignal = ReturnType<
+type CompletionSignal = ReturnType<
   typeof createSignal<Completion | undefined>
 >;
 // where is this open
@@ -68,23 +68,23 @@ export type GenerateMenuOpen = ReturnType<
   typeof createSignal<boolean | undefined>
 >;
 // done generating and waiting
-export type BooleanSignal = ReturnType<typeof createBlockSignal<boolean>>;
+type BooleanSignal = ReturnType<typeof createBlockSignal<boolean>>;
 
-export const IGNORE_COMPLETION_TYPES = ['inline-search'];
-export const MAKE_COMPLETION: LexicalCommand<Completion> =
+const IGNORE_COMPLETION_TYPES = ['inline-search'];
+const MAKE_COMPLETION: LexicalCommand<Completion> =
   createCommand('MAKE_COMPLETION');
 export const ACCEPT_COMPLETION: LexicalCommand<void> =
   createCommand('ACCEPT_COMPLETION');
 export const REJECT_COMPLETION: LexicalCommand<void> =
   createCommand('REJECT_COMPLETION');
-export const SET_CONTEXT: LexicalCommand<RangeSelection> =
+const SET_CONTEXT: LexicalCommand<RangeSelection> =
   createCommand('SET_CONTEXT');
 
-export interface MenuArgs {
+interface MenuArgs {
   context: string;
 }
 
-export type GeneratePluginArgs = {
+type GeneratePluginArgs = {
   // called when the selection changes
   completionSignal: CompletionSignal;
   isGeneratingSignal: BooleanSignal;

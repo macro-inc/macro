@@ -321,4 +321,4 @@ function Row(props: ParentProps<{ label: JSX.Element }>) {
 }
 
 export const SidePanel = { Layout, Section, Row, NarrowTabs };
-export { useHasSidePanel, useSidePanel };
+export { useSidePanel };

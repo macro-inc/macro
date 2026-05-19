@@ -2,11 +2,11 @@
 // Source of truth lives there for now; a future PR will flip ownership to @property.
 
 export type {
-  ApiError,
+
   BooleanProperty,
-  DataType,
+
   DateProperty,
-  EntityPropertiesResponse,
+
   EntityProperty,
   EntityPropertyWithDefinition,
   EntityReference,
@@ -17,12 +17,12 @@ export type {
   Property,
   PropertyApiValues,
   PropertyDefinitionDomain,
-  PropertyDefinitionResponse,
+
   PropertyEditorProps,
   PropertyOption,
   PropertyOptionValue,
   PropertySelectorProps,
-  PropertyValue,
+
   Result,
   SelectNumberProperty,
   SelectProperty,

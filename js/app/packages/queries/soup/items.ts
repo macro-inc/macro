@@ -46,7 +46,7 @@ export type SoupAstItemsQueryArgs = {
   groupKey?: string;
 };
 
-export type UseSoupQueryResult = UseInfiniteQueryResult<EntityData[], Error>;
+type UseSoupQueryResult = UseInfiniteQueryResult<EntityData[], Error>;
 
 export type SoupApiItemFilter = (item: SoupApiItem) => boolean;
 
@@ -55,13 +55,13 @@ interface SoupItemsQueryOptions {
   staleTime?: StaleTime;
 }
 
-export type SoupAstItemsPage = {
+type SoupAstItemsPage = {
   items: SoupApiItem[];
   nextCursor: string | null;
   groups?: GroupMeta[];
 };
 
-export type SoupAstItemsData = {
+type SoupAstItemsData = {
   entities: EntityData[];
   groups: GroupMeta[] | undefined;
   items: SoupApiItem[];

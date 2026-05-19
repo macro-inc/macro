@@ -141,7 +141,7 @@ const parseEntityRefId = (key: string): string | null => {
   }
 };
 
-export const SoupSectionHeader = (props: {
+const SoupSectionHeader = (props: {
   children: JSX.Element;
   onClick?: () => void;
   highlighted?: boolean;

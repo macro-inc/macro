@@ -1,7 +1,7 @@
 import type { KlassConstructor, LexicalEditor, LexicalNode } from 'lexical';
 import type { Component } from 'solid-js';
 
-export type ActionIcon = string;
+type ActionIcon = string;
 
 export type Action = {
   id: string;
@@ -16,9 +16,7 @@ export type Action = {
 
 // TODO (seamus): Actually organize the items based on category.
 export enum ActionCategory {
-  BASIC = 'Basic',
   FORMAT = 'Formatting',
   ELEMENT = 'Elements',
   MEDIA = 'Media',
-  ADVANCED = 'Advanced',
 }

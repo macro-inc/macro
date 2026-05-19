@@ -43,7 +43,7 @@ export const createDragInsertStore = () => {
  * @param dragListenerRef - A ref to a div that will listen for drag events.
  *     If not provided, the plugin will listen to the root element.
  */
-export type DragInsertPluginProps = {
+type DragInsertPluginProps = {
   onDrop?: (key: NodeKey, position: InsertionMarker, event: DragEvent) => void;
   onDragOver?: (
     key: NodeKey,

@@ -304,4 +304,4 @@ export type {
   QuickAccessItem,
   SearchItem,
 };
-export { isCommandItem, isEntityItem, isSearchItem, isUserItem };
+export { isCommandItem, isEntityItem, isSearchItem };

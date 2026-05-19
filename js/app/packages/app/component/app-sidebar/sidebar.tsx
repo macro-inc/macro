@@ -71,7 +71,7 @@ interface SidebarItem {
   standaloneHotkey?: boolean;
 }
 
-export const SIDEBAR_LINKS = [
+const SIDEBAR_LINKS = [
   {
     id: 'inbox',
     label: 'Inbox',
@@ -234,7 +234,7 @@ type SidebarHotkeyDeps = {
   openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'];
 };
 
-export const registerSidebarHotkeys = ({
+const registerSidebarHotkeys = ({
   links,
   isSlim,
   onOpenChange,

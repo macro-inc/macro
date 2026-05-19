@@ -108,7 +108,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
 };
 
 /** A single entry in the actions row — icon and label rendered as a button */
-export interface ToastAction {
+interface ToastAction {
   label: string;
   icon?: Component<{ class?: string }>;
   onClick: () => void;
@@ -120,7 +120,7 @@ export interface ToastAction {
  * Note: by default, toasts do NOT render on mobile. Pass `mobile: true` to opt
  * in to the mobile-styled toast region (centered above the mobile dock).
  */
-export interface ToastOptions {
+interface ToastOptions {
   subtext?: string;
   /** Auto-dismiss duration in ms. When omitted, the toast uses a default 3s timer. */
   duration?: number;
@@ -128,7 +128,7 @@ export interface ToastOptions {
   mobile?: boolean;
 }
 
-export interface ToastSuccessOptions extends ToastOptions {
+interface ToastSuccessOptions extends ToastOptions {
   actions?: ToastAction[];
   /** When true, bypasses the 3s dedupe so repeated calls stack instead of replacing. */
   stack?: boolean;
@@ -139,7 +139,7 @@ export interface ToastSuccessOptions extends ToastOptions {
  * Replaces the icon, title, and accent color of the standard layout while
  * still using the shared Surface chrome and progress/dismiss machinery.
  */
-export interface CustomToastConfig {
+interface CustomToastConfig {
   title: string;
   content?: () => JSX.Element;
   icon?: Component<{ class?: string }>;

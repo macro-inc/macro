@@ -45,9 +45,9 @@ export type SoupRow = {
   isSelected: () => boolean;
 };
 
-export type NavigationResult = { row: SoupRow; index: number } | undefined;
+type NavigationResult = { row: SoupRow; index: number } | undefined;
 
-export type GroupConfig<T> = {
+type GroupConfig<T> = {
   id: string;
   label: string;
   getValue: (item: T) => unknown;

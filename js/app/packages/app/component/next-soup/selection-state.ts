@@ -1,6 +1,6 @@
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 
-export type CreateSelectionOptions<T> = {
+type CreateSelectionOptions<T> = {
   /** Function to extract ID from item */
   getItemId: (item: T) => string;
   /** Initial selected items */
@@ -8,7 +8,7 @@ export type CreateSelectionOptions<T> = {
   onChange?: (selected: T[]) => void;
 };
 
-export type SelectionState<T> = {
+type SelectionState<T> = {
   readonly selected: Accessor<T[]>;
   readonly selectedIds: Accessor<Set<string>>;
   /** Number of selected items */

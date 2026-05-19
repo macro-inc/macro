@@ -117,7 +117,7 @@ export const isCallRecordHit = (
 ): hit is CallRecordContentHitData => hit.type === 'call_record';
 
 /** Content hits that carry sender + sent_at (channel / email / call_record). */
-export type HitWithSender =
+type HitWithSender =
   | ChannelContentHitData
   | EmailContentHitData
   | CallRecordContentHitData;

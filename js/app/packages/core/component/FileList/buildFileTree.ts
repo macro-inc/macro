@@ -28,7 +28,7 @@ export function buildFileTree(items: Item[]) {
  * @param allItems - The set of all items.
  * @returns The file tree.
  */
-export function buildFileTreeWithAncestors(
+function buildFileTreeWithAncestors(
   filteredItems: Item[],
   allItems: Item[]
 ) {

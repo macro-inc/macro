@@ -114,4 +114,4 @@ export function createOnboardingState(options: OnboardingStateOptions) {
   };
 }
 
-export type OnboardingState = ReturnType<typeof createOnboardingState>;
+type OnboardingState = ReturnType<typeof createOnboardingState>;

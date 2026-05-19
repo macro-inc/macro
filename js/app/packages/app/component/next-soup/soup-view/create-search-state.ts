@@ -298,4 +298,4 @@ export const createSearchState = ({
   };
 };
 
-export type SearchState = ReturnType<typeof createSearchState>;
+type SearchState = ReturnType<typeof createSearchState>;

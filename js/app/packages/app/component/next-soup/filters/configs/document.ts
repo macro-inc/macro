@@ -7,13 +7,13 @@ import {
   VIDEO_EXTENSIONS,
 } from './base';
 
-export const docMarkdownFilter = config({
+const docMarkdownFilter = config({
   id: 'doc-markdown',
   predicate: (e) => isDocumentEntity(e) && e.fileType === 'md',
   query: { include: { fileAssoc: ['assoc:md'] } },
 });
 
-export const docCanvasFilter = config({
+const docCanvasFilter = config({
   id: 'doc-canvas',
   predicate: (e) => isDocumentEntity(e) && e.fileType === 'canvas',
   query: { include: { fileAssoc: ['assoc:canvas'] } },
@@ -35,7 +35,7 @@ export const DOCUMENT_CONTEXTUAL_FILTERS = [
   emailAttachmentsFilter,
 ] as const;
 
-export const fileCodeFilter = config({
+const fileCodeFilter = config({
   id: 'file-code',
   predicate: (e) => {
     if (e.type !== 'document') return false;
@@ -44,7 +44,7 @@ export const fileCodeFilter = config({
   query: { include: { fileAssoc: ['assoc:code'] } },
 });
 
-export const fileImageFilter = config({
+const fileImageFilter = config({
   id: 'file-image',
   predicate: (e) => {
     if (e.type !== 'document') return false;
@@ -53,19 +53,19 @@ export const fileImageFilter = config({
   query: { include: { fileAssoc: ['assoc:image'] } },
 });
 
-export const filePdfFilter = config({
+const filePdfFilter = config({
   id: 'file-pdf',
   predicate: (e) => e.type === 'document' && e.fileType === 'pdf',
   query: { include: { fileAssoc: ['assoc:pdf'] } },
 });
 
-export const fileDocxFilter = config({
+const fileDocxFilter = config({
   id: 'file-docx',
   predicate: (e) => e.type === 'document' && e.fileType === 'docx',
   query: { include: { fileAssoc: ['assoc:document'] } },
 });
 
-export const fileVideoFilter = config({
+const fileVideoFilter = config({
   id: 'file-video',
   predicate: (e) => {
     if (e.type !== 'document') return false;
@@ -74,7 +74,7 @@ export const fileVideoFilter = config({
   query: { include: { fileAssoc: ['assoc:video'] } },
 });
 
-export const fileOtherFilter = config({
+const fileOtherFilter = config({
   id: 'file-other',
   predicate: (e) => {
     if (e.type !== 'document') return false;

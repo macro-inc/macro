@@ -14,7 +14,7 @@ import type { ChannelSearchResponse } from './generated/models/channelSearchResp
 import type { UnifiedSearchRequest } from './generated/models/unifiedSearchRequest';
 import type { UnifiedSearchResponse } from './generated/models/unifiedSearchResponse';
 
-export type { ChannelSearchRequest, ChannelSearchResponse };
+export type { ChannelSearchRequest };
 
 export function searchServiceFetch(
   url: string,
@@ -43,7 +43,7 @@ export type SearchArgs = {
   request: UnifiedSearchRequest;
 };
 
-export type ChannelSearchArgs = {
+type ChannelSearchArgs = {
   params: SearchParams;
   request: ChannelSearchRequest;
 };

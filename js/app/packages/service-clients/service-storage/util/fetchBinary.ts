@@ -65,7 +65,7 @@ export async function fetchBinary<T extends ArrayBuffer | Blob>(
   }
 }
 
-export type BinaryFile = {
+type BinaryFile = {
   blob: Blob;
   metadata: DocumentMetadata;
 };

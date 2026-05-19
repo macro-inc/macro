@@ -7,7 +7,7 @@ import StackSimpleIcon from '@phosphor/stack-simple.svg';
 import { Dropdown, Layer, Tooltip } from '@ui';
 import { type Component, For, Show } from 'solid-js';
 
-export interface GroupDropdownProps {
+interface GroupDropdownProps {
   value: () => GroupOptionId;
   onChange: (value: GroupOptionId) => void;
   options: GroupOption[];

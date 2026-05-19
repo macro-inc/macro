@@ -13,7 +13,7 @@ import { registerSplitHotkeys } from '../registerSplitHotkeys';
 import { createHeaderCollapser } from '../utils/createHeaderCollapser';
 import { SplitContainer } from './SplitContainer';
 
-export type SplitPanelProps = {
+type SplitPanelProps = {
   split: SplitState;
   handle: SplitHandle;
   active: boolean;

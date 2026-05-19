@@ -100,7 +100,7 @@ const createProjectMentionXML = (projectId: string) => {
   });
 };
 
-export const createDateMentionXML = (
+const createDateMentionXML = (
   date: Date,
   displayFormat: string,
   mentionUuid?: string

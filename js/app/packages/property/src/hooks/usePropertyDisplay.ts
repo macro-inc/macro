@@ -19,7 +19,7 @@ import {
   isStringProperty,
 } from '../utils';
 
-export interface PropertyDisplay {
+interface PropertyDisplay {
   isEmpty: boolean;
   isUser: boolean;
   /** Best single-value representation as text. */
@@ -37,7 +37,7 @@ export interface PropertyDisplay {
  * logic that today is duplicated across InlinePropertyValue / ListProperty /
  * Condensed.
  */
-export function usePropertyDisplay(
+function usePropertyDisplay(
   property: () => Property
 ): () => PropertyDisplay {
   return createMemo(() => {

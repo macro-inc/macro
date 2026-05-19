@@ -1,4 +1,4 @@
-export { previewKeys } from './keys';
+
 export {
   getItemPreview,
   invalidatePreview,
@@ -24,5 +24,5 @@ export {
   enqueueDocumentWakeup,
   enqueuePreviewWakeup,
   isWakeableDocument,
-  type WakeableDocument,
+
 } from './wakeup';

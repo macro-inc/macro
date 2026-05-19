@@ -25,7 +25,7 @@ interface Diff {
   markdown_text: string;
 }
 
-export type DiffPluginArgs = {
+type DiffPluginArgs = {
   revisionsSignal: ReturnType<typeof createBlockSignal<Diff[] | undefined>>;
   nodeIdMap: NodeIdMappings;
 };

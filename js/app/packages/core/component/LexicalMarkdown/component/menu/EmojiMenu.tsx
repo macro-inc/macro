@@ -30,7 +30,7 @@ false && floatWithSelection;
 // py-2 on the menu container = 8px top + 8px bottom
 const MENU_DECORATION_HEIGHT = 16;
 
-export type EmojiMenuProps = {
+type EmojiMenuProps = {
   menu: MenuOperations;
   editor: LexicalEditor;
   /** whether the menu checks against block boundary in floating middleware. uses floating-ui default if false. */
@@ -38,7 +38,7 @@ export type EmojiMenuProps = {
   portalScope?: PortalScope;
 };
 
-export function EmojiItem(props: {
+function EmojiItem(props: {
   emoji: string;
   name: string;
   selected: boolean;

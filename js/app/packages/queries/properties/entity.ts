@@ -62,7 +62,7 @@ export function useEntityPropertiesQuery(
   );
 }
 
-export function invalidatePropertiesForEntity(
+function invalidatePropertiesForEntity(
   entityType: EntityType,
   entityId: string
 ) {
@@ -188,7 +188,7 @@ function apiValuesToSoupPropertyValue(
   }
 }
 
-export type DeleteEntityPropertyParams = {
+type DeleteEntityPropertyParams = {
   entityPropertyId: string;
   entityType: EntityType;
   entityId: string;
@@ -224,7 +224,7 @@ export function useDeleteEntityPropertyMutation(
   }));
 }
 
-export type AddEntityPropertyParams = {
+type AddEntityPropertyParams = {
   entityId: string;
   entityType: EntityType;
   propertyDefinitionId: string;
@@ -266,12 +266,12 @@ export function useAddEntityPropertyMutation(
   }));
 }
 
-export type SetPropertyStatusCompleteParams = {
+type SetPropertyStatusCompleteParams = {
   entityType: PropertiesEntityType;
   entityId: string;
 };
 
-export type BulkSaveEntityPropertiesParams = {
+type BulkSaveEntityPropertiesParams = {
   properties: Array<{
     entityId: string;
     entityType: EntityType;

@@ -1,5 +1,5 @@
-export type { NormalizerData } from './normalizer';
-export { getSoupNormalizer, initSoupNormalizer } from './normalizer';
+
+export { initSoupNormalizer } from './normalizer';
 export {
   getSoupEntityById,
   getSoupItemId,

@@ -6,7 +6,7 @@ import { toPropertyApiValue } from '../utils';
  * Clears a property's value (sets to null). Tracks an `isSaving` signal so
  * UI can disable affordances during the call.
  */
-export function usePropertyClear() {
+function usePropertyClear() {
   const ctx = useProperty();
   const [isSaving, setIsSaving] = createSignal(false);
 

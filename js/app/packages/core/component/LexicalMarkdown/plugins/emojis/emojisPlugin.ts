@@ -23,7 +23,7 @@ import {
 } from 'lexical';
 import type { MenuOperations } from '../../shared/inlineMenu';
 
-export const TYPE_EMOJI_SYMBOL_COMMAND: LexicalCommand<void> = createCommand(
+const TYPE_EMOJI_SYMBOL_COMMAND: LexicalCommand<void> = createCommand(
   'EMOJI_SYMBOL_COMMAND'
 );
 
@@ -35,7 +35,7 @@ export const REMOVE_EMOJI_SEARCH_COMMAND: LexicalCommand<void> = createCommand(
   'REMOVE_EMOJI_SEARCH_COMMAND'
 );
 
-export type EmojiPluginProps = {
+type EmojiPluginProps = {
   menu: MenuOperations;
   peerIdValidator?: PeerIdValidator;
 };

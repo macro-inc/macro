@@ -28,7 +28,7 @@ export type Bucket =
 
 export type EntityBucket = Exclude<Bucket, 'person'>;
 
-export const ALL_BUCKETS: Bucket[] = [
+const ALL_BUCKETS: Bucket[] = [
   'channel',
   'dm',
   'person',
@@ -48,7 +48,7 @@ export const BUCKET_COMBINATIONS: Record<BucketCombination, Bucket[]> = {
   documents: ['document', 'note', 'task', 'chat', 'project'],
 };
 
-export type ItemTimestamps = {
+type ItemTimestamps = {
   viewedAt?: DateValue | null;
   updatedAt?: DateValue | null;
   createdAt?: DateValue | null;
@@ -77,29 +77,29 @@ export type UserItem = QuickAccessBase & {
 
 export type QuickAccessItem = EntityItem | UserItem;
 
-export function isEntityItem(item: QuickAccessItem): item is EntityItem {
+function isEntityItem(item: QuickAccessItem): item is EntityItem {
   return item.kind === 'entity';
 }
 
-export function isUserItem(item: QuickAccessItem): item is UserItem {
+function isUserItem(item: QuickAccessItem): item is UserItem {
   return item.kind === 'user';
 }
 
-export function isEntityOfType<T extends EntityData['type']>(
+function isEntityOfType<T extends EntityData['type']>(
   item: QuickAccessItem,
   entityType: T
 ): item is EntityItem<Extract<EntityData, { type: T }>> {
   return item.kind === 'entity' && item.data.type === entityType;
 }
 
-export function isFromBucket<B extends Bucket>(
+function isFromBucket<B extends Bucket>(
   item: QuickAccessItem,
   bucket: B
 ): boolean {
   return item.bucket === bucket;
 }
 
-export type BucketEntityMap = {
+type BucketEntityMap = {
   channel: ChannelEntity;
   dm: ChannelEntity;
   document: DocumentEntity;
@@ -136,20 +136,20 @@ export type ItemsForBuckets<Buckets extends Bucket[]> = Buckets extends [
   ? ItemForBucket<First> | ItemsForBuckets<Rest>
   : never;
 
-export type SearchWeights = {
+type SearchWeights = {
   fuzzy?: number;
   time?: number;
   brevity?: number;
 };
 
-export type SearchOptions = {
+type SearchOptions = {
   query: string;
   limit?: number;
   weights?: SearchWeights;
   minScore?: number;
 };
 
-export type SearchResult<T extends QuickAccessItem = QuickAccessItem> = {
+type SearchResult<T extends QuickAccessItem = QuickAccessItem> = {
   item: T;
   score: number;
   scoreDetails?: {

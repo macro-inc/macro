@@ -83,7 +83,7 @@ interface SoupViewContextValues {
   groupByField: Accessor<GroupByField | undefined>;
 }
 
-export const SoupViewContext = createContext<SoupViewContextValues>();
+const SoupViewContext = createContext<SoupViewContextValues>();
 
 export const useSoupView = () => {
   const context = useContext(SoupViewContext);

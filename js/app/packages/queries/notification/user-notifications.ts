@@ -27,7 +27,7 @@ function stripOwnerId({
   return rest;
 }
 
-export { notificationKeys } from './keys';
+
 
 const DEFAULT_NOTIFICATION_LIMIT = 20;
 const NOTIFICATION_STALE_TIME = 5 * 60 * 1000; // 5 minutes
@@ -115,7 +115,7 @@ function entityNotificationsQueryOptions(eventItemId: string, limit: number) {
 }
 
 /** Paginated query for notifications for a single entity. */
-export function useEntityNotificationsQuery(args: {
+function useEntityNotificationsQuery(args: {
   eventItemId: () => string;
   limit?: number;
 }) {
@@ -169,7 +169,7 @@ function entitiesNotificationsQueryOptions(
 }
 
 /** Paginated query for notifications across multiple entities. */
-export function useEntitiesNotificationsQuery(args: {
+function useEntitiesNotificationsQuery(args: {
   eventItemIds: () => string[];
   limit?: number;
 }) {
@@ -223,7 +223,7 @@ export function invalidateEntityNotifications(eventItemId: string) {
   });
 }
 
-export function invalidateAllNotifications() {
+function invalidateAllNotifications() {
   return queryClient.invalidateQueries({
     queryKey: notificationKeys._def,
   });

@@ -104,7 +104,7 @@ export function EmptyState(props: {
   );
 }
 
-export interface EmptyStateInnerProps {
+interface EmptyStateInnerProps {
   message?: string;
   showDropZone?: boolean;
   cta?: {
@@ -113,7 +113,7 @@ export interface EmptyStateInnerProps {
   };
 }
 
-export function EmptyStateInner(props: EmptyStateInnerProps) {
+function EmptyStateInner(props: EmptyStateInnerProps) {
   const blockName = useMaybeBlockName();
   const blockId = useMaybeBlockId();
   const projectId = createMemo(() => {

@@ -81,7 +81,7 @@ function StaticLabel(props: { language: SupportedLanguage }) {
   );
 }
 
-export function CodeLanguageSelector(props: {
+function CodeLanguageSelector(props: {
   language: Accessor<string | null>;
   setLanguage: (language: string) => void;
   editor?: LexicalEditor;

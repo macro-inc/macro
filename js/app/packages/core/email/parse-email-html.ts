@@ -122,7 +122,7 @@ function parseGmailSignature(htmlElement: Element) {
   };
 }
 
-export interface ParsedEmailContent {
+interface ParsedEmailContent {
   mainContent: string;
   signature: string | null;
   hasTable: boolean;

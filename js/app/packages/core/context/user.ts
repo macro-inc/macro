@@ -4,7 +4,7 @@ import { type Accessor, createMemo } from 'solid-js';
 import { createAssertedContextProvider } from './createContext';
 import { enableUserInfoQuery, shouldQueryUserInfo } from './user-info-gate';
 
-export { enableUserInfoQuery };
+
 
 type UserContextValue = {
   userInfo: Accessor<UserInfoData | undefined>;
@@ -100,15 +100,15 @@ export function useTutorialCompleted() {
   return useUserContext().tutorialCompleted;
 }
 
-export function useGroup() {
+function useGroup() {
   return useUserContext().group;
 }
 
-export function useHasChromeExt() {
+function useHasChromeExt() {
   return useUserContext().hasChromeExt;
 }
 
-export function useHasTrialed() {
+function useHasTrialed() {
   return useUserContext().hasTrialed;
 }
 

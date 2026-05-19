@@ -21,7 +21,7 @@ import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { useAiDataConsentGate } from './useAiDataConsent';
 
-export type ChatInputProps = {
+type ChatInputProps = {
   onSend: (args: ChatSendInput) => void;
   onStop?: () => void;
   onEscape?: (e: KeyboardEvent) => boolean;
@@ -31,7 +31,7 @@ export type ChatInputProps = {
   chatId?: string;
 };
 
-export type ChatInputComponentProps = {
+type ChatInputComponentProps = {
   editor: EditorConfigBuilder;
   initialValue?: string;
   onChange?: (markdown: string) => void;

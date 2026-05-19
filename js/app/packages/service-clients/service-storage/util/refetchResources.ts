@@ -15,7 +15,7 @@ export function refetchResources() {
   invalidatePreview();
 }
 
-export async function refetchProjectResources(_force = false) {
+async function refetchProjectResources(_force = false) {
   await invalidateProjects();
 
   refetchDocumentShareButtonResource();

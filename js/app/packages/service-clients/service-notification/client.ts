@@ -19,17 +19,17 @@ import type { UserUnsubscribe } from './generated/schemas/userUnsubscribe';
 const notificationHost: string = SERVER_HOSTS['notification-service'];
 // const notificationHost: string = 'http://localhost:8086';
 
-export const NOTIFICATION_WEBSOCKET_EVENT = 'notification';
+const NOTIFICATION_WEBSOCKET_EVENT = 'notification';
 type NotificationEventType = typeof NOTIFICATION_WEBSOCKET_EVENT;
 
-export type IncomingNotification = {
+type IncomingNotification = {
   type: NotificationEventType;
   data: string;
 };
 type WithEventItemId = { event_item_id: string };
 type WithItem = { item_id: string; item_type: string };
 
-export type UnifiedNotification = Omit<ApiUserNotification, 'ownerId'> & {
+type UnifiedNotification = Omit<ApiUserNotification, 'ownerId'> & {
   senderId?: string | null;
   // whether the notification is incoming on the websocket and needs processing
   // as opposed to coming from the database or an already processed notification
@@ -52,11 +52,11 @@ export function notificationFetch<T extends ObjectLike = never>(
   | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${notificationHost}${url}`, init);
 }
-export type Success = { success: boolean };
+type Success = { success: boolean };
 
 // message id is set by the notification service
-export type ChannelMentionMetadata = z.infer<typeof channelMentionMetadata>;
-export const channelMentionMetadata = z.object({
+type ChannelMentionMetadata = z.infer<typeof channelMentionMetadata>;
+const channelMentionMetadata = z.object({
   message_id: z.string(),
 });
 

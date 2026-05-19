@@ -12,7 +12,7 @@ interface SearchIconProps {
 /**
  * Displays the appropriate icon for a search content hit
  */
-export function SearchIcon(props: SearchIconProps) {
+function SearchIcon(props: SearchIconProps) {
   const icon = () => {
     if (!props.hit) return FileTextIcon;
     return getSearchIcon(props.hit);

@@ -128,7 +128,7 @@ createEffect(
   )
 );
 
-export function createThemeEffect(cb: () => void) {
+function createThemeEffect(cb: () => void) {
   return createEffect(on(ALL_THEME_SIGNALS, cb));
 }
 

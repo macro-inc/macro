@@ -6,7 +6,7 @@ import { createControlledOpenSignal } from '@core/util/createControlledOpenSigna
 import type { EntityData } from '@entity';
 import { createStore, reconcile } from 'solid-js/store';
 
-export type PropertyEditorMode = 'selector' | 'direct';
+type PropertyEditorMode = 'selector' | 'direct';
 
 export const [propertyEditorOpen, setPropertyEditorOpen] =
   createControlledOpenSignal(false, { id: 'property-edit' });

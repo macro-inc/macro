@@ -213,7 +213,7 @@ function InlineLoading() {
   );
 }
 
-export type ItemPreviewProps = ItemEntity & {
+type ItemPreviewProps = ItemEntity & {
   /** Custom class for the button wrapper */
   class?: string;
   /** Custom class for the icon container */

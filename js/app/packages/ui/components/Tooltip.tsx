@@ -6,7 +6,7 @@ import type { ParentProps } from 'solid-js';
 import { For, Show } from 'solid-js';
 import { Surface } from '@ui';
 
-export type TooltipProps = ParentProps<{
+type TooltipProps = ParentProps<{
   hotkey?: HotkeyToken | HotkeyToken[];
   /**
    * Raw keyboard shortcut(s) to render in the tooltip (e.g. "cmd+enter").

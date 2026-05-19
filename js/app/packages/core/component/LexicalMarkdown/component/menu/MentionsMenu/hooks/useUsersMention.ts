@@ -6,7 +6,7 @@ import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
 import type { GroupMentionItem } from '../../../../utils/mentionsUtils';
 
-export type UseUsersMentionOptions = {
+type UseUsersMentionOptions = {
   /** Custom users list if necessary */
   users?: Accessor<IUser[]>;
   searchTerm: Accessor<string>;
@@ -14,7 +14,7 @@ export type UseUsersMentionOptions = {
   blockId?: string;
 };
 
-export type UseUsersMentionResult = {
+type UseUsersMentionResult = {
   users: Accessor<UserItem[]>;
   currentUserDomain: Accessor<string | undefined>;
   groups: Accessor<GroupMentionItem[]>;

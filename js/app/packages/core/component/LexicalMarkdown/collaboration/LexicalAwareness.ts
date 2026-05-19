@@ -22,13 +22,13 @@ type UserAwareness = {
   color: string;
 };
 
-export type PeerLexicalAwarenessRaw = {
+type PeerLexicalAwarenessRaw = {
   anchor: NodeCursorRaw;
   focus: NodeCursorRaw;
   user: UserAwareness;
 };
 
-export type PeerLexicalAwareness = {
+type PeerLexicalAwareness = {
   anchor: NodeCursor;
   focus: NodeCursor;
   user: UserAwareness;
@@ -50,7 +50,7 @@ function fromRaw(raw: NodeCursorRaw): NodeCursor {
   };
 }
 
-export type LexicalSelectionAwarenessRaw = {
+type LexicalSelectionAwarenessRaw = {
   anchor: NodeCursorRaw;
   focus: NodeCursorRaw;
 };

@@ -11,4 +11,4 @@ export type FlattenObject<T> = T extends infer O
  * FlattenArray<string[]> = string
  * FlattenArray<string> = string
  **/
-export type FlattenArray<Type> = Type extends Array<infer Item> ? Item : Type;
+type FlattenArray<Type> = Type extends Array<infer Item> ? Item : Type;

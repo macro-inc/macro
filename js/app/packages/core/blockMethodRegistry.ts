@@ -4,7 +4,7 @@ import type { MarkdownBlockSpec } from '../block-md/definition';
 import type { BlockName } from './block';
 
 // Base type for all block method specs
-export type BlockMethodSpec = Record<
+type BlockMethodSpec = Record<
   string,
   (...args: any[]) => any | Promise<any>
 >;

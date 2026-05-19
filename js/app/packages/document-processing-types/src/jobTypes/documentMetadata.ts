@@ -33,7 +33,7 @@ export const DocxBomPartSchema = z.object({
   sha: z.string(),
 });
 
-export type DocxBomPart = z.infer<typeof DocxBomPartSchema>;
+type DocxBomPart = z.infer<typeof DocxBomPartSchema>;
 
 export const DocxDocumentMetadataSchema = BaseDocumentMetadataSchema.extend({
   fileType: z.literal(FileType.Docx),

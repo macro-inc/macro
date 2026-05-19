@@ -14,7 +14,7 @@ import {
 import { EnhancedHeicConversionError, HeicLogger } from './logger';
 import { checkWebCodecsSupport } from './utils';
 
-export class HeicConversionError extends Error {
+class HeicConversionError extends Error {
   public originalFilename: string | undefined;
 
   constructor(originalFilename?: string, message?: string) {
@@ -32,7 +32,7 @@ export class HeicConversionError extends Error {
 }
 
 // Types for internal worker communication
-export interface HeicTaskMessage {
+interface HeicTaskMessage {
   readonly action: 'convertHeic';
   readonly arrayBuffer: ArrayBuffer;
   readonly format?: string;
@@ -42,23 +42,23 @@ export interface HeicTaskMessage {
   readonly webCodecsSupportedMimeTypes?: string[];
 }
 
-export interface HeicProgressData {
+interface HeicProgressData {
   percentage?: number;
   message: string;
 }
 
-export interface HeicCompleteData {
+interface HeicCompleteData {
   arrayBuffer: ArrayBuffer;
   width: number;
   height: number;
   format: string;
 }
 
-export interface HeicErrorData {
+interface HeicErrorData {
   message: string;
 }
 
-export interface WorkerMessage {
+interface WorkerMessage {
   taskId: string;
   type: 'progress' | 'complete' | 'error' | 'status';
   data: HeicProgressData | HeicCompleteData | HeicErrorData;

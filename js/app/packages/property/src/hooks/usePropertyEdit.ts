@@ -5,7 +5,7 @@ import { useProperty } from '../core/context';
  * - `open(anchor?)`: invokes the root's onEdit handler.
  * - `isReadOnly()`: combines canEdit + isMetadata.
  */
-export function usePropertyEdit() {
+function usePropertyEdit() {
   const ctx = useProperty();
   return {
     open(anchor?: HTMLElement) {

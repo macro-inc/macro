@@ -44,7 +44,7 @@ import { Paywall } from './paywall/Paywall';
 import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 
-export { isSidebarVisible, SidebarVisibilityContext };
+
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,

@@ -10,7 +10,7 @@ import {
 } from './notification-description-helpers';
 
 // Re-export helpers for backward compatibility and testing
-export { getActionVerb, getTypeNoun, getTypePreposition, getUniqueSenderIds };
+
 
 interface NotificationDescriptionProps {
   notification?: Notification;

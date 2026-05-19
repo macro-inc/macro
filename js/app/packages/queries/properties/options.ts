@@ -33,9 +33,9 @@ export function usePropertyOptionsQuery(
   });
 }
 
-export type PropertyOptionsQuery = ReturnType<typeof usePropertyOptionsQuery>;
+type PropertyOptionsQuery = ReturnType<typeof usePropertyOptionsQuery>;
 
-export function invalidatePropertyOptions(propertyDefinitionId: string) {
+function invalidatePropertyOptions(propertyDefinitionId: string) {
   queryClient.invalidateQueries({
     queryKey: propertiesKeys.options({ propertyDefinitionId }).queryKey,
   });
@@ -45,7 +45,7 @@ export type AddPropertyOptionAsyncMutation = ReturnType<
   typeof useAddPropertyOptionMutation
 >['mutateAsync'];
 
-export type AddPropertyOptionParams = {
+type AddPropertyOptionParams = {
   propertyDefinitionId: string;
   body: AddPropertyOptionRequest;
 };

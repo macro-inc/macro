@@ -19,7 +19,7 @@ import {
   hasValue,
 } from '../utils';
 
-export type PropertyDisplayProps = {
+type PropertyDisplayProps = {
   /**
    * Forwarded to PopoverEditor when the property is an ENTITY type — filters
    * the owning entity out of the picker.

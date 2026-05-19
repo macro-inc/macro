@@ -24,7 +24,7 @@ import { UserIcon } from './UserIcon';
 
 false && observedSize;
 
-export type MessageRootProps = {
+type MessageRootProps = {
   id?: string;
   focused: boolean;
   unfocusable?: boolean;
@@ -70,7 +70,7 @@ type MessageContextValue = {
 };
 
 const MessageContext = createContext<MessageContextValue>();
-export function useMessageContext(): MessageContextValue {
+function useMessageContext(): MessageContextValue {
   const ctx = useContext(MessageContext);
   if (!ctx) throw new Error('Message.* must be used within <Message>');
   return ctx;
@@ -78,18 +78,18 @@ export function useMessageContext(): MessageContextValue {
 
 /* TopBar */
 
-export type MessageTopBarSimpleProps = {
+type MessageTopBarSimpleProps = {
   name: string;
   timestamp?: DateValue | null;
   tagLabel?: string;
   tagIcon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | undefined;
 };
 
-export type MessageTopBarChildrenProps = {
+type MessageTopBarChildrenProps = {
   children: JSX.Element;
 };
 
-export type MessageTopBarProps =
+type MessageTopBarProps =
   | MessageTopBarSimpleProps
   | MessageTopBarChildrenProps;
 
@@ -143,7 +143,7 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
 
 /* Body */
 
-export type MessageBodyProps = {
+type MessageBodyProps = {
   children: JSX.Element;
   isDeleted?: boolean;
 };
@@ -166,7 +166,7 @@ type NestedConnectorLinesProps = {
   isParentNewMessage?: boolean;
 };
 
-export const NestedConnectorLines: Component<NestedConnectorLinesProps> = (
+const NestedConnectorLines: Component<NestedConnectorLinesProps> = (
   props
 ) => {
   const NestedLines: JSX.Element[] = [];

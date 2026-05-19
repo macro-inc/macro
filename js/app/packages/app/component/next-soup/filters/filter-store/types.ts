@@ -79,15 +79,15 @@ export type Query = {
   emailView?: EmailView;
 };
 
-export type FilterPredicate<T> = (entity: T, ctx?: unknown) => boolean;
+type FilterPredicate<T> = (entity: T, ctx?: unknown) => boolean;
 
-export type FilterConfig<T, TId extends string = string> = {
+type FilterConfig<T, TId extends string = string> = {
   readonly id: TId;
   readonly predicate: FilterPredicate<T>;
   readonly query?: Query | ((ctx: unknown) => Query);
 };
 
-export type FilterStoreOptions<
+type FilterStoreOptions<
   T,
   TFilter extends FilterConfig<T>,
   TId extends string = TFilter['id'],
@@ -100,9 +100,9 @@ export type FilterStoreOptions<
   readonly initialQuery?: Query;
 };
 
-export type FilterIdInput<TId extends string> = TId | (string & {});
+type FilterIdInput<TId extends string> = TId | (string & {});
 
-export type SetFiltersInput<TId extends string> = {
+type SetFiltersInput<TId extends string> = {
   readonly and?: readonly FilterIdInput<TId>[];
   readonly or?: readonly FilterIdInput<TId>[];
 };

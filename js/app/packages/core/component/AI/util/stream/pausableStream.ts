@@ -4,7 +4,7 @@ import { createEffect, createSignal, on, onCleanup } from 'solid-js';
 import type { StreamItem } from '.';
 import { MOCK_ID } from './mockStream';
 
-export interface PausableStreamOptions {
+interface PausableStreamOptions {
   isPaused: Accessor<boolean>;
   isSlow: Accessor<boolean>;
   onChunk?: (text: string) => void;

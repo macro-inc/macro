@@ -262,7 +262,7 @@ function freshSort<T>(
   return scoredResults;
 }
 
-export interface CreateFreshSearchArgs<T> {
+interface CreateFreshSearchArgs<T> {
   config?: FreshSortConfig<T>;
   getName: NameFn<T>;
   isChannelItem?: BooleanFn<T>;
@@ -361,7 +361,7 @@ export function createFreshSearch<T>({
  * @param boost - The boost multiplier to apply (default: 0.5 for +50% boost)
  * @param getEmail - Function to extract email from item (default: assumes item.data.email)
  */
-export function createSameDomainBoostFn<T>(
+function createSameDomainBoostFn<T>(
   currentUserDomain: Accessor<string | undefined>,
   boost: number = 0.5,
   getEmail: EmailFn<T>

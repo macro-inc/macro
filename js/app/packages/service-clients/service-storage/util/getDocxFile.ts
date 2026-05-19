@@ -16,12 +16,12 @@ export type DocxBaseExpandedPart<T> = {
 
 export type DocxExpandedPart = DocxBaseExpandedPart<ArrayBuffer>;
 
-export type DocxExpandedPartWithoutSha = Omit<DocxExpandedPart, 'sha'>;
+type DocxExpandedPartWithoutSha = Omit<DocxExpandedPart, 'sha'>;
 
-export type DocxExpandedParts = DocxExpandedPart[];
+type DocxExpandedParts = DocxExpandedPart[];
 export type DocxExpandedPartList = Omit<DocxExpandedPart, 'content'>[];
 
-export type DocxExpandedFile = {
+type DocxExpandedFile = {
   parts: DocxExpandedParts;
   metadata: WithRequired<DocumentMetadata, 'documentBom'>;
 };

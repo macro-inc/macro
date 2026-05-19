@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 
-export const DAILY_LIMIT = 5;
+const DAILY_LIMIT = 5;
 
 export enum PaywallKey {
   PROJECT_LIMIT = 'PROJECT_LIMIT',

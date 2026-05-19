@@ -16,7 +16,7 @@ import type { HeicConversionConfig } from './types';
 import { generateConvertedFilename, isHeicFile } from './utils';
 import { HeicWorkerPool } from './workerPool';
 
-export class HeicConversionService {
+class HeicConversionService {
   private static instance: HeicConversionService | null = null;
   private workerPool: HeicWorkerPool;
 

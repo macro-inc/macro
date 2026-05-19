@@ -25,7 +25,7 @@ export const isTabFocused = createMemo(() => isTabFocused_(), {
   equalFn: (a: boolean | undefined, b: boolean | undefined) => a! === b!,
 });
 
-export function createTabFocusEffect(
+function createTabFocusEffect(
   callback: (isTabFocused: boolean) => void
 ) {
   createEffect(

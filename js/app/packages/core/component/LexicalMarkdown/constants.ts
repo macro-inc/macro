@@ -14,7 +14,7 @@ export enum MarkdownEditorErrors {
   STAGING_VERSION_MISMATCH_ERROR = 'STAGING_VERSION_MISMATCH_ERROR',
 }
 
-export const MarkdownEditorErrorDescriptions: Record<
+const MarkdownEditorErrorDescriptions: Record<
   MarkdownEditorErrors,
   string
 > = {

@@ -14,12 +14,12 @@ export type ConversionQuality = 0.7 | 0.85 | 0.92 | 0.95;
 /**
  * Task status in the worker pool
  */
-export type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed';
+type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
 /**
  * Worker message types
  */
-export type WorkerMessageType = 'progress' | 'complete' | 'error' | 'status';
+type WorkerMessageType = 'progress' | 'complete' | 'error' | 'status';
 
 /**
  * Configuration for HEIC conversion
@@ -33,7 +33,7 @@ export interface HeicConversionConfig {
 /**
  * Result of a successful HEIC conversion
  */
-export interface ConversionResult {
+interface ConversionResult {
   readonly arrayBuffer: ArrayBuffer;
   readonly width: number;
   readonly height: number;
@@ -45,7 +45,7 @@ export interface ConversionResult {
 /**
  * Enhanced task interface with better typing
  */
-export interface EnhancedTask {
+interface EnhancedTask {
   readonly id: string;
   readonly filename: string;
   readonly status: TaskStatus;

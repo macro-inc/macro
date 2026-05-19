@@ -56,7 +56,7 @@ const VIRTUAL_ITEM_HEIGHT = 36;
 // Height consumed by Surface's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
 
-export type MentionsMenuProps = {
+type MentionsMenuProps = {
   editor: LexicalEditor;
   menu: MenuOperations;
   /** pass in a custom users list if necessary */

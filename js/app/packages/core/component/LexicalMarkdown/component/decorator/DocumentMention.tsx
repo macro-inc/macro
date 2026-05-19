@@ -346,7 +346,7 @@ function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
   );
 }
 
-export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
+function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   const currentBlockId = useMaybeBlockId();
   const currentBlockName = useMaybeBlockName();
 

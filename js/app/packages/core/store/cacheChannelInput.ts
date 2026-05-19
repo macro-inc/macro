@@ -6,9 +6,9 @@ import { createStore } from 'solid-js/store';
 export const STATIC_IMAGE = 'static/image' as const;
 export const STATIC_VIDEO = 'static/video' as const;
 
-export type StaticImageType = typeof STATIC_IMAGE;
-export type StaticVideoType = typeof STATIC_VIDEO;
-export type StaticAttachmentType = StaticImageType | StaticVideoType;
+type StaticImageType = typeof STATIC_IMAGE;
+type StaticVideoType = typeof STATIC_VIDEO;
+type StaticAttachmentType = StaticImageType | StaticVideoType;
 
 export function isStaticAttachmentType(
   value: any
@@ -16,9 +16,9 @@ export function isStaticAttachmentType(
   return value === STATIC_IMAGE || value === STATIC_VIDEO;
 }
 
-export type AttachmentType = BlockName | BlockAlias | StaticAttachmentType;
+type AttachmentType = BlockName | BlockAlias | StaticAttachmentType;
 
-export type InputAttachment = {
+type InputAttachment = {
   id: string;
   name: string;
   blockName: AttachmentType;
@@ -26,7 +26,7 @@ export type InputAttachment = {
   file?: File;
 };
 
-export interface DraftMessage {
+interface DraftMessage {
   content: string;
   attachments: InputAttachment[];
   lastModified: number;

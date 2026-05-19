@@ -13,7 +13,7 @@ import type { ComponentProps } from 'solid-js';
 </Dropdown>
 */
 
-export type DropdownTriggerProps = ComponentProps<typeof KobalteDropdownMenu.Trigger> & ButtonProps;
+type DropdownTriggerProps = ComponentProps<typeof KobalteDropdownMenu.Trigger> & ButtonProps;
 
 function DropdownTrigger(props: DropdownTriggerProps) {
   return (

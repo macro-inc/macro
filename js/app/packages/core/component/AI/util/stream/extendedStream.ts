@@ -6,7 +6,7 @@ type StreamLike = { data: Accessor<ChatStream[]> };
 
 type Extended<T, U> = T & U;
 
-export interface TimedStream {
+interface TimedStream {
   timeToFirstMessageMs: () => undefined | number;
 }
 
@@ -28,7 +28,7 @@ export function timeStream<T extends StreamLike>(
   };
 }
 
-export interface IddStream {
+interface IddStream {
   messageId: () => undefined | string;
 }
 

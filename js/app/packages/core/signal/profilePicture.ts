@@ -65,7 +65,7 @@ async function fetchProfilePictures(
   }));
 }
 
-export type ProfilePictureUrlFetcher = [
+type ProfilePictureUrlFetcher = [
   Accessor<string | undefined>,
   {
     refetch: () => void;

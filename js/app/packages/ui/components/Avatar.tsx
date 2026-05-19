@@ -54,7 +54,7 @@ export function Avatar(props: AvatarProps) {
   );
 }
 
-export type AvatarImageProps = {
+type AvatarImageProps = {
   src: string;
   alt?: string;
   class?: string;
@@ -77,7 +77,7 @@ function AvatarImage(props: AvatarImageProps) {
   );
 }
 
-export type AvatarFallbackProps = ParentProps<{
+type AvatarFallbackProps = ParentProps<{
   class?: string;
 }>;
 
@@ -175,7 +175,7 @@ export function AvatarGroup(props: AvatarGroupProps) {
   );
 }
 
-export type AvatarGroupCountProps = ParentProps<{
+type AvatarGroupCountProps = ParentProps<{
   size?: AvatarGroupSize;
   class?: string;
 }>;

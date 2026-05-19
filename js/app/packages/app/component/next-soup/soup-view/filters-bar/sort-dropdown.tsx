@@ -8,7 +8,7 @@ import SortIcon from '@phosphor-icons/core/regular/funnel-simple.svg?component-s
 import { Dropdown, Layer, Tooltip } from '@ui';
 import { type Component, For, Show } from 'solid-js';
 
-export interface SortDropdownProps {
+interface SortDropdownProps {
   /** Current sort value */
   value: () => SystemSortOption;
   /** Handler for sort change */
