@@ -1,4 +1,4 @@
-import { splitContainerAttribute } from '@core/e2e-selectors';
+import { splitContainerAttribute } from '@core/dom-selectors';
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';

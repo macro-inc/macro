@@ -6,7 +6,7 @@ import {
 import {
   soupListContainerAttribute,
   soupListContainerSelector,
-} from '@core/e2e-selectors';
+} from '@core/dom-selectors';
 import { EntityRowProvider } from '@app/component/mobile/EntityRow';
 import {
   makeMarkDoneAction,

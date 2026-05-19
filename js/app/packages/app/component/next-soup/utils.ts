@@ -1,7 +1,7 @@
 import {
   ENTITY_ID_DATA_ATTRIBUTE,
   entityIdSelector,
-} from '@core/e2e-selectors';
+} from '@core/dom-selectors';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';

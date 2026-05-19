@@ -1,4 +1,4 @@
-import { splitContainerSelector } from '@core/e2e-selectors';
+import { splitContainerSelector } from '@core/dom-selectors';
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { isSidebarVisible } from '@app/component/sidebarVisibility';
 import { activeElement } from '@app/signal/focus';

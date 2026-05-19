@@ -1,4 +1,4 @@
-import { entityIdSelector } from '@core/e2e-selectors';
+import { entityIdSelector } from '@core/dom-selectors';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
