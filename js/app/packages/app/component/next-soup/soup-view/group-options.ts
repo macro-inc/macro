@@ -29,6 +29,7 @@ export const TASK_GROUP_OPTIONS: GroupOption[] = [
   { value: 'none', label: 'None' },
   { value: `property:${SYSTEM_PROPERTY_IDS.STATUS}`, label: 'Status' },
   { value: `property:${SYSTEM_PROPERTY_IDS.PRIORITY}`, label: 'Priority' },
+  { value: `property:${SYSTEM_PROPERTY_IDS.ASSIGNEES}`, label: 'Assignee' },
   { value: 'project', label: 'Project' },
   { value: 'date', label: 'Date' },
 ];

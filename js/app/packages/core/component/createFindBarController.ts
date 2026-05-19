@@ -12,6 +12,10 @@ export type FindBarSource<T> = {
   navigate: (result: T) => void;
   validateText?: (text: string) => boolean;
   totalCount?: Accessor<number | undefined>;
+  /** When false, `previous()` stops at index 1. Defaults to true. */
+  wrapPrevious?: Accessor<boolean>;
+  /** When false, `next()` stops at the last result. Defaults to true. */
+  wrapNext?: Accessor<boolean>;
 };
 
 export type FindBarController = {
@@ -23,6 +27,8 @@ export type FindBarController = {
   hasUnsubmittedChanges: Accessor<boolean>;
   isPending: Accessor<boolean>;
   resultsCount: Accessor<number>;
+  canNext: Accessor<boolean>;
+  canPrevious: Accessor<boolean>;
   open: () => void;
   close: () => void;
   submit: () => void;
@@ -68,9 +74,13 @@ export function createFindBarController<T>(
     })
   );
 
+  const wrapNext = () => source.wrapNext?.() ?? true;
+  const wrapPrevious = () => source.wrapPrevious?.() ?? true;
+
   const next = () => {
     const rs = source.results();
     if (rs.length === 0) return;
+    if (activeIndex() >= rs.length && !wrapNext()) return;
     const i = activeIndex() >= rs.length ? 1 : activeIndex() + 1;
     setActiveIndex(i);
     source.navigate(rs[i - 1]);
@@ -79,6 +89,7 @@ export function createFindBarController<T>(
   const previous = () => {
     const rs = source.results();
     if (rs.length === 0) return;
+    if (activeIndex() <= 1 && !wrapPrevious()) return;
     const i = activeIndex() <= 1 ? rs.length : activeIndex() - 1;
     setActiveIndex(i);
     source.navigate(rs[i - 1]);
@@ -119,6 +130,16 @@ export function createFindBarController<T>(
     hasUnsubmittedChanges: () => query().trim() !== submittedQuery(),
     isPending: () => !!submittedQuery() && source.isFetching(),
     resultsCount: () => source.totalCount?.() ?? source.results().length,
+    canNext: () => {
+      const len = source.results().length;
+      if (len === 0) return false;
+      return wrapNext() || activeIndex() < len;
+    },
+    canPrevious: () => {
+      const len = source.results().length;
+      if (len === 0) return false;
+      return wrapPrevious() || activeIndex() > 1;
+    },
     open,
     close,
     submit,

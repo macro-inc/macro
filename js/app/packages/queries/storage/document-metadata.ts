@@ -1,4 +1,3 @@
-import { isErr } from '@core/util/maybeResult';
 import { storageServiceClient } from '@service-storage/client';
 import type { DocumentMetadata } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
@@ -12,10 +11,10 @@ async function fetchDocumentMetadata(
   documentId: string
 ): Promise<DocumentMetadata> {
   const result = await storageServiceClient.getDocumentMetadata({ documentId });
-  if (isErr(result)) {
+  if (result.isErr()) {
     throw new Error('Failed to fetch document metadata');
   }
-  return result[1].documentMetadata;
+  return result.value.documentMetadata;
 }
 
 export function useDocumentMetadataQuery(documentId: Accessor<string>) {

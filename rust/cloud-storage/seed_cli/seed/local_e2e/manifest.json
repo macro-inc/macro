@@ -1,0 +1,18 @@
+{
+  "user": {
+    "email": "e2e@macro.local"
+  },
+  "documents": {
+    "projectRoadmap": {
+      "id": "00000000-0000-0000-0002-000000000001",
+      "name": "Project Roadmap"
+    }
+  },
+  "channels": {
+    "general": {
+      "id": "00000000-0000-0000-0000-000000000001",
+      "name": "general",
+      "message": "Welcome to the general channel everyone!"
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import type { PatchUserOnboardingRequest } from '@service-auth/generated/schemas/patchUserOnboardingRequest';
 import { useMutation } from '@tanstack/solid-query';

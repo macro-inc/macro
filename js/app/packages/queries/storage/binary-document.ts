@@ -1,13 +1,9 @@
 import type { FetchError } from '@core/service';
-import {
-  isErr,
-  type MaybeResult,
-  maybeThrow,
-  ok,
-} from '@core/util/maybeResult';
+import { type ResultError, throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { GetDocumentResponseData } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
+import { err, ok, type Result } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { waitForDocumentPresignedUrlReady } from './document-location';
@@ -21,13 +17,13 @@ type BinaryDocumentError = FetchError | 'INVALID_DOCUMENT';
 
 export async function fetchBinaryDocumentData(
   documentId: string
-): Promise<MaybeResult<BinaryDocumentError, BinaryDocumentData>> {
+): Promise<Result<BinaryDocumentData, ResultError<BinaryDocumentError>[]>> {
   const maybeDocument = await storageServiceClient.getDocumentMetadata({
     documentId,
   });
-  if (isErr(maybeDocument)) return maybeDocument;
+  if (maybeDocument.isErr()) return err(maybeDocument.error);
 
-  const [, documentData] = maybeDocument;
+  const documentData = maybeDocument.value;
   const versionId = documentData.documentMetadata.documentVersionId;
 
   const location = await waitForDocumentPresignedUrlReady({
@@ -44,15 +40,12 @@ export async function fetchBinaryDocumentData(
     location.type !== 'presignedUrl' ||
     !location.presignedUrl
   ) {
-    return [
-      [
-        {
-          code: 'INVALID_DOCUMENT',
-          message: 'Document location is not ready as a presigned URL',
-        },
-      ],
-      null,
-    ];
+    return err([
+      {
+        code: 'INVALID_DOCUMENT',
+        message: 'Document location is not ready as a presigned URL',
+      },
+    ]);
   }
 
   return ok({
@@ -62,8 +55,7 @@ export async function fetchBinaryDocumentData(
 }
 
 async function fetchBinaryDocument(documentId: string): Promise<string> {
-  const result = await fetchBinaryDocumentData(documentId);
-  const data = maybeThrow(result);
+  const data = await throwOnErr(() => fetchBinaryDocumentData(documentId));
   return data.blobUrl;
 }
 

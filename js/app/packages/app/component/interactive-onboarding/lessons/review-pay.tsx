@@ -7,10 +7,10 @@ import {
 import { analytics } from '@app/lib/analytics/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
-import { throwOnErr } from '@core/util/maybeResult';
-import ArrowRightIcon from '@icon/regular/arrow-right.svg';
-import InfoIcon from '@icon/regular/info.svg';
-import LockIcon from '@icon/regular/lock.svg';
+import { throwOnErr } from '@core/util/result';
+import ArrowRightIcon from '@phosphor/arrow-right.svg';
+import InfoIcon from '@phosphor/info.svg';
+import LockIcon from '@phosphor/lock.svg';
 import { invalidateUserTeams } from '@queries/team';
 import { authServiceClient } from '@service-auth/client';
 import { Button, cn, Tooltip } from '@ui';

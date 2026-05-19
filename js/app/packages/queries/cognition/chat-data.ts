@@ -1,4 +1,3 @@
-import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatResponse } from '@service-cognition/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
@@ -10,10 +9,10 @@ const GC_TIME = 10 * 60 * 1000;
 
 async function fetchChatData(chatId: string): Promise<ChatResponse> {
   const result = await cognitionApiServiceClient.getChat({ chat_id: chatId });
-  if (isErr(result)) {
+  if (result.isErr()) {
     throw new Error('Failed to fetch chat');
   }
-  return result[1].chat;
+  return result.value.chat;
 }
 
 export function useChatDataQuery(chatId: Accessor<string>) {

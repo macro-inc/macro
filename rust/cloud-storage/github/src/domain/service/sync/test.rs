@@ -879,7 +879,7 @@ async fn pr_merged_sets_task_status_completed() {
 }
 
 #[tokio::test]
-async fn pr_closed_without_merge_sets_task_status_canceled() {
+async fn pr_closed_without_merge_sets_task_status_todo() {
     let (service, doc_service) = make_sync_service_with_doc_service();
     let event = ValidatedGithubWebhookEvent::new(
         "pull_request".to_string(),
@@ -905,7 +905,59 @@ async fn pr_closed_without_merge_sets_task_status_canceled() {
     let status_calls = doc_service.task_status_calls();
     assert_eq!(status_calls.len(), 1);
     assert_eq!(status_calls[0].entity_id, KNOWN_TASK_UUID);
-    assert_eq!(status_calls[0].status, "Canceled");
+    assert_eq!(status_calls[0].status, "Not Started");
+}
+
+#[tokio::test]
+async fn pr_closed_without_merge_sets_previously_tracked_task_status_todo() {
+    let (service, doc_service) = make_sync_service_with_doc_service();
+
+    let opened_event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "merged": false
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+    service.process_webhook_event(&opened_event).await.unwrap();
+
+    let closed_event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "closed",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "merged": false
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+    service.process_webhook_event(&closed_event).await.unwrap();
+
+    let status_calls = doc_service.task_status_calls();
+    assert_eq!(status_calls.len(), 2);
+    assert_eq!(status_calls[0].entity_id, KNOWN_TASK_UUID);
+    assert_eq!(status_calls[0].status, "In Review");
+    assert_eq!(status_calls[1].entity_id, KNOWN_TASK_UUID);
+    assert_eq!(status_calls[1].status, "Not Started");
 }
 
 #[tokio::test]

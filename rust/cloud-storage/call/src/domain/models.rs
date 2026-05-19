@@ -331,6 +331,9 @@ pub struct CallRecordPreviewData {
     pub channel_id: Uuid,
     /// Resolved display name for the channel.
     pub channel_name: Option<String>,
+    /// User-supplied or AI-generated display name for the call. Only set on
+    /// archived `call_records`; active calls always return `None`.
+    pub custom_name: Option<String>,
     /// When the call started (created_at for active, started_at for archived).
     pub started_at: DateTime<Utc>,
     /// When the call ended (None if still active).

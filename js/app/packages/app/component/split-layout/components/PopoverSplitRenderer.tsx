@@ -130,7 +130,7 @@ function PopoverSplitModal(props: {
         bindHotKeyDom(r);
       }}
     >
-      <Surface depth={2} active>
+      <Surface depth={2} active class="rounded-xl">
         <div class="*:max-h-[75vh]">
           <SplitPanelContext.Provider value={stubPanelContext}>
             <SoupContextProvider>

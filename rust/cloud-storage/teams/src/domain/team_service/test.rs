@@ -127,6 +127,24 @@ impl TeamRepository for MockTeamRepository {
         async move { Ok(invites) }
     }
 
+    fn get_new_invites(
+        &self,
+        _: &uuid::Uuid,
+        invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+    ) -> impl Future<Output = Result<Vec<Email<Lowercase<'static>>>, InviteUsersToTeamError>> + Send
+    {
+        let invites = invites
+            .iter()
+            .map(|email| {
+                Email::parse_from_str(email.as_ref())
+                    .expect("test emails should be valid")
+                    .into_owned()
+                    .lowercase()
+            })
+            .collect();
+        async move { Ok(invites) }
+    }
+
     fn mark_invites_sent(
         &self,
         invite_ids: &[uuid::Uuid],
@@ -335,14 +353,14 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
     ) -> impl Future<Output = Result<i32, TeamError>> + Send {
-        async { unimplemented!() }
+        async { Ok(0) }
     }
 
     fn get_team_plan(
         &self,
         _: &uuid::Uuid,
     ) -> impl Future<Output = Result<Option<TeamPlan>, TeamError>> + Send {
-        async { unimplemented!() }
+        async { Ok(None) }
     }
 
     fn patch_team_plan(
@@ -396,6 +414,15 @@ impl CustomerRepository for MockCustomerRepository {
         _current_team_plan: Option<TeamPlan>,
         _team_plan: TeamPlan,
     ) -> impl Future<Output = Result<(), CustomerError>> + Send {
+        async { unimplemented!() }
+    }
+
+    fn create_team_checkout_session(
+        &self,
+        _team_id: &uuid::Uuid,
+        _customer_id: stripe::CustomerId,
+        _req: &TeamCheckoutSessionRequest,
+    ) -> impl Future<Output = Result<String, CustomerError>> + Send {
         async { unimplemented!() }
     }
 }

@@ -1,5 +1,5 @@
 import type { ItemLike } from '@core/constant/allBlocks';
-import { isErr } from '@core/util/maybeResult';
+
 import { storageServiceClient } from '@service-storage/client';
 import { AsyncBatcher } from '@tanstack/pacer';
 import type { PreviewItem } from './types';
@@ -29,7 +29,7 @@ const documentWakeupBatcher = new AsyncBatcher<string>(
       document_ids: uniqueDocumentIds,
     });
 
-    if (isErr(result)) {
+    if (result.isErr()) {
       throw new Error('Failed to bulk wakeup sync service documents');
     }
   },

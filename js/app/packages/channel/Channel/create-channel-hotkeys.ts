@@ -15,6 +15,7 @@ type CreateChannelHotkeysOptions = {
   isInputEmpty: Accessor<boolean>;
   isEditing: Accessor<boolean>;
   onOpenFindBar: () => void;
+  onGoToBottom: () => void;
 };
 
 export function canReplyToSelectedMessageFromHotkey(input: {
@@ -90,10 +91,8 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     description: 'Go to latest message',
     keyDownHandler: () => {
       options.selection.clear();
-      const id = options.selection.selectPrevious();
-      if (!id) return false;
       options.navigation()?.markUserIntent('down');
-      options.navigation()?.scrollToId(id, { align: 'end' });
+      options.onGoToBottom();
       return true;
     },
   });

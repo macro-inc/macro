@@ -154,9 +154,13 @@
               line-height: 1.4;
             "
           >
+            {% if let Some(content) = message_content %}
+            {{ content }}
+            {% else %}
             You've been invited to join <strong>#{{ channel_name }}</strong> on Macro.
             Collaborate on documents. Stay in sync with tasks. Search over
             everything. AI Assistance with anything.
+            {% endif %}
           </div>
 
           <table

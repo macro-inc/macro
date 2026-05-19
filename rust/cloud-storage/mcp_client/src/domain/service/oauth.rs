@@ -1,6 +1,8 @@
 use crate::domain::models::MCP_CLIENT_NAME;
 use crate::domain::models::{MacroUserIdStr, McpServerRecord, StoredCredentials};
 use crate::domain::ports::{McpServerStore, OAuthClient, OAuthStateStore, PendingAuth};
+#[cfg(feature = "providers")]
+use crate::domain::provider_registry::PreRegisteredProviders;
 use macro_user_id::cowlike::CowLike;
 use rmcp::transport::auth::{
     AuthorizationManager, CredentialStore as _, InMemoryCredentialStore, InMemoryStateStore,
@@ -13,19 +15,88 @@ pub struct OAuthService<S, R> {
     server_store: S,
     state_store: R,
     redirect_uri: String,
+    #[cfg(feature = "providers")]
+    pre_registered: PreRegisteredProviders,
 }
 
 impl<S, R> OAuthService<S, R> {
-    /// Create a new OAuth service.
-    ///
-    /// `redirect_uri` is the callback URL registered with OAuth providers
-    /// (e.g. `https://api.example.com/mcp/auth/callback`).
+    /// Create a new OAuth service with pre-registered provider credentials.
+    #[cfg(feature = "providers")]
+    pub fn new(
+        server_store: S,
+        state_store: R,
+        redirect_uri: String,
+        pre_registered: PreRegisteredProviders,
+    ) -> Self {
+        Self {
+            server_store,
+            state_store,
+            redirect_uri,
+            pre_registered,
+        }
+    }
+
+    /// Create a new OAuth service (DCR only, no pre-registered providers).
+    #[cfg(not(feature = "providers"))]
     pub fn new(server_store: S, state_store: R, redirect_uri: String) -> Self {
         Self {
             server_store,
             state_store,
             redirect_uri,
         }
+    }
+}
+
+/// Resolved client configuration for an OAuth flow.
+struct ResolvedClient {
+    client_id: String,
+    client_secret: Option<String>,
+    scopes: Vec<String>,
+}
+
+impl<S, R> OAuthService<S, R> {
+    #[cfg(feature = "providers")]
+    async fn resolve_client_config(
+        &self,
+        server_url: &str,
+        auth_manager: &mut AuthorizationManager,
+    ) -> anyhow::Result<ResolvedClient> {
+        if let Some(creds) = self.pre_registered.get(server_url) {
+            let mut config =
+                OAuthClientConfig::new(creds.client_id.clone(), self.redirect_uri.clone());
+            config = config.with_client_secret(creds.client_secret.clone());
+            auth_manager.configure_client(config)?;
+            Ok(ResolvedClient {
+                client_id: creds.client_id.clone(),
+                client_secret: Some(creds.client_secret.clone()),
+                scopes: creds.scopes.clone(),
+            })
+        } else {
+            let config = auth_manager
+                .register_client(MCP_CLIENT_NAME, &self.redirect_uri, &[])
+                .await?;
+            Ok(ResolvedClient {
+                client_id: config.client_id,
+                client_secret: config.client_secret,
+                scopes: vec![],
+            })
+        }
+    }
+
+    #[cfg(not(feature = "providers"))]
+    async fn resolve_client_config(
+        &self,
+        _server_url: &str,
+        auth_manager: &mut AuthorizationManager,
+    ) -> anyhow::Result<ResolvedClient> {
+        let config = auth_manager
+            .register_client(MCP_CLIENT_NAME, &self.redirect_uri, &[])
+            .await?;
+        Ok(ResolvedClient {
+            client_id: config.client_id,
+            client_secret: config.client_secret,
+            scopes: vec![],
+        })
     }
 }
 
@@ -50,11 +121,12 @@ where
         auth_manager.set_state_store(in_memory_state.clone());
         auth_manager.set_credential_store(InMemoryCredentialStore::new());
 
-        let client_config = auth_manager
-            .register_client(MCP_CLIENT_NAME, &self.redirect_uri, &[])
+        let resolved = self
+            .resolve_client_config(server_url, &mut auth_manager)
             .await?;
 
-        let auth_url = auth_manager.get_authorization_url(&[]).await?;
+        let scope_refs: Vec<&str> = resolved.scopes.iter().map(|s| s.as_str()).collect();
+        let auth_url = auth_manager.get_authorization_url(&scope_refs).await?;
         let csrf_token = extract_state_param(&auth_url)?;
 
         let pkce_state = in_memory_state
@@ -64,8 +136,8 @@ where
 
         let pending = PendingAuth {
             pkce_verifier: pkce_state.pkce_verifier,
-            client_id: client_config.client_id,
-            client_secret: client_config.client_secret,
+            client_id: resolved.client_id,
+            client_secret: resolved.client_secret,
             user_id: user_id.as_ref().to_string(),
             server_url: server_url.to_string(),
             server_name: server_name.to_string(),

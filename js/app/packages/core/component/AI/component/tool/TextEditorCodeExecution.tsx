@@ -8,7 +8,7 @@ import {
   allSupportedExtensionSet,
   isCodeEditorExtensionSupported,
 } from '@core/util/languageQuery';
-import { isOk } from '@core/util/maybeResult';
+
 import Terminal from '@phosphor-icons/core/regular/terminal.svg';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type {
@@ -68,9 +68,9 @@ function CreateResult(props: {
       source_id: props.toolId,
     });
 
-    if (isOk(result) && result[1]) {
+    if (result.isOk() && result.value) {
       try {
-        const fileInfo = JSON.parse(result[1]) as CreatedFileInfo;
+        const fileInfo = JSON.parse(result.value) as CreatedFileInfo;
         createdFilesMap[props.toolId] = fileInfo;
         setCreatedFile(fileInfo);
       } catch {
@@ -193,8 +193,8 @@ const handler = createToolRenderer({
       title: fileName,
     });
 
-    if (isOk(result)) {
-      const documentId = result[1].documentId;
+    if (result.isOk()) {
+      const documentId = result.value.documentId;
       createdFilesMap[ctx.tool.id] = {
         documentId,
         fileName,

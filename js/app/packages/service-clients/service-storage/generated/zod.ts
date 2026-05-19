@@ -849,6 +849,12 @@ export const getBatchCallRecordPreviewResponse = zod
                   .string()
                   .nullish()
                   .describe('Resolved display name for the channel.'),
+                customName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'User-supplied or AI-generated display name for the call. Only set on\narchived `call_records`; active calls always return `None`.'
+                  ),
                 endedAt: zod.iso
                   .datetime({})
                   .nullish()

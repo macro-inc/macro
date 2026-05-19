@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import { commsServiceClient } from '@service-comms/client';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';

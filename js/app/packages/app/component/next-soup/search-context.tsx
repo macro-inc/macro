@@ -1,5 +1,4 @@
-import { useQuickAccessEntities } from '@core/component/Properties/component/modal';
-import type { EntityTypeItemMap } from '@core/component/Properties/component/modal/shared/entityUtils';
+import { type EntityTypeItemMap, useQuickAccessEntities } from '@property';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import {
   type Accessor,

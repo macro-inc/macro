@@ -3,18 +3,14 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import {
-  type MaybeError,
-  type MaybeResult,
-  mapOk,
-  type ObjectLike,
-} from '@core/util/maybeResult';
+import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { ApiThreadReply } from '@service-storage/generated/schemas';
 import type { ApiChannelAttachmentsPage } from '@service-storage/generated/schemas/apiChannelAttachmentsPage';
 import type { ApiChannelMessagesPage } from '@service-storage/generated/schemas/apiChannelMessagesPage';
 import type { ApiChannelParticipant } from '@service-storage/generated/schemas/apiChannelParticipant';
 import type { ChannelMessageFilters } from '@service-storage/generated/schemas/channelMessageFilters';
+import type { Result } from 'neverthrow';
 import type {
   ApiActivity,
   ApiChannelWithLatest,
@@ -57,17 +53,17 @@ const commsHost: string = SERVER_HOSTS['document-storage-service'];
 export function commsFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeError<FetchWithTokenErrorCode>>;
+): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
 export function commsFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeResult<FetchWithTokenErrorCode, T>>;
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
 export function commsFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
-  | Promise<MaybeError<FetchWithTokenErrorCode>> {
+  | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
+  | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${commsHost}${url}`, init);
 }
 
@@ -92,20 +88,18 @@ export const ChannelTypeEnum = {
 export const commsServiceClient = {
   async getChannel(args: WithChannelId) {
     const { channel_id } = args;
-    return mapOk(
+    return (
       await commsFetch<GetChannelResponse>(`/comms/channels/${channel_id}`, {
         method: 'GET',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async getChannels() {
-    return mapOk(
+    return (
       await commsFetch<ApiChannelWithLatest[]>(`/comms/channels`, {
         method: 'GET',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async getMessageWithContext(args: GetMessageWithContextParams) {
     const { message_id, before, after } = args;
@@ -123,55 +117,51 @@ export const commsServiceClient = {
     const { channel_id, message, nonce } = args;
     const uniqueMentions = Array.from(new Set(message.mentions));
     const sendMessage = { ...message, mentions: uniqueMentions, nonce };
-    return mapOk(
+    return (
       await commsFetch<IdResponse & { nonce?: string }>(
         `/comms/channels/${channel_id}/message`,
         {
           method: 'POST',
           body: JSON.stringify(sendMessage),
         }
-      ),
-      (result) => result ?? {}
-    );
+      )
+    ).map((result) => result ?? {});
   },
   async createChannel(args: CreateChannelRequest) {
-    return mapOk(
+    return (
       await commsFetch<CreateChannelResponse>(`/comms/channels`, {
         method: 'POST',
         body: JSON.stringify(args),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async postTypingUpdate(
     args: PostTypingRequest & WithChannelId & { nonce?: string }
   ) {
     const { channel_id, action, thread_id, nonce } = args;
-    return mapOk(
+    return (
       await commsFetch<MessageResponse>(
         `/comms/channels/${channel_id}/typing`,
         {
           method: 'POST',
           body: JSON.stringify({ action, thread_id, nonce }),
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async postReaction(
     args: PostReactionRequest & WithChannelId & { nonce?: string }
   ) {
     const { channel_id, action, emoji, message_id, nonce } = args;
-    return mapOk(
+    return (
       await commsFetch<MessageResponse>(
         `/comms/channels/${channel_id}/reaction`,
         {
           method: 'POST',
           body: JSON.stringify({ action, emoji, message_id, nonce }),
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async patchMessage(
     args: PatchMessageRequest &
@@ -186,7 +176,7 @@ export const commsServiceClient = {
       attachments_to_add,
       nonce,
     } = args;
-    return mapOk(
+    return (
       await commsFetch<MessageResponse>(
         `/comms/channels/${channel_id}/message/${message_id}`,
         {
@@ -198,9 +188,8 @@ export const commsServiceClient = {
             nonce,
           }),
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async deleteMessage(
     args: WithChannelId & WithMessageId & { nonce?: string }
@@ -209,146 +198,133 @@ export const commsServiceClient = {
     const url = nonce
       ? `/comms/channels/${channel_id}/message/${message_id}?nonce=${encodeURIComponent(nonce)}`
       : `/comms/channels/${channel_id}/message/${message_id}`;
-    return mapOk(
+    return (
       await commsFetch<MessageResponse>(url, {
         method: 'DELETE',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async postActivity(args: PostActivityRequest) {
     const { activity_type, channel_id } = args;
-    return mapOk(
+    return (
       await commsFetch<Activity>(`/comms/activity`, {
         method: 'POST',
         body: JSON.stringify({ activity_type, channel_id }),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async getActivity() {
-    return mapOk(
+    return (
       await commsFetch<ApiActivity[]>(`/comms/activity`, {
         method: 'GET',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async joinChannel(args: WithChannelId) {
     const { channel_id } = args;
-    return mapOk(
+    return (
       await commsFetch<MessageResponse>(`/comms/channels/${channel_id}/join`, {
         method: 'POST',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async leaveChannel(args: WithChannelId) {
     const { channel_id } = args;
-    return mapOk(
+    return (
       await commsFetch<MessageResponse>(`/comms/channels/${channel_id}/leave`, {
         method: 'POST',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async getBatchChannelPreviews(args: GetBatchChannelPreviewRequest) {
     const { channel_ids } = args;
-    return mapOk(
+    return (
       await commsFetch<GetBatchChannelPreviewResponse>(`/comms/preview`, {
         body: JSON.stringify({ channel_ids }),
         method: 'POST',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async addParticipantsToChanenl(args: AddParticipantsRequest & WithChannelId) {
     const { channel_id, participants } = args;
-    return mapOk(
+    return (
       await commsFetch<MessageResponse>(
         `/comms/channels/${channel_id}/participants`,
         {
           method: 'POST',
           body: JSON.stringify({ participants }),
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async getOrCreateDirectMessage(args: GetOrCreateDmRequest) {
     const { recipient_id } = args;
-    return mapOk(
+    return (
       await commsFetch<GetOrCreateDmResponse>(
         `/comms/channels/get_or_create_dm`,
         {
           method: 'POST',
           body: JSON.stringify({ recipient_id }),
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async getOrCreatePrivateChannel(args: GetOrCreatePrivateRequest) {
     const { recipients } = args;
-    return mapOk(
+    return (
       await commsFetch<GetOrCreatePrivateResponse>(
         `/comms/channels/get_or_create_private`,
         {
           method: 'POST',
           body: JSON.stringify({ recipients }),
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async removeParticipantsFromChannel(
     args: RemoveParticipantsRequest & WithChannelId
   ) {
     const { channel_id, participants } = args;
-    return mapOk(
+    return (
       await commsFetch<MessageResponse>(
         `/comms/channels/${channel_id}/participants`,
         {
           method: 'DELETE',
           body: JSON.stringify({ participants }),
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async deleteChannel(args: WithChannelId) {
     const { channel_id } = args;
-    return mapOk(
+    return (
       await commsFetch<MessageResponse>(`/comms/channels/${channel_id}`, {
         method: 'DELETE',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async patchChannel(args: WithChannelId & { channel_name: string }) {
     const { channel_id, channel_name } = args;
-    return mapOk(
+    return (
       await commsFetch<MessageResponse>(`/comms/channels/${channel_id}`, {
         method: 'PATCH',
         body: JSON.stringify({ channel_name }),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async attachmentReferences(args: WithEntity) {
     const { entity_type, entity_id } = args;
-    return mapOk(
+    return (
       await commsFetch<GetAttachmentReferencesResponse>(
         `/comms/attachments/${entity_type}/${entity_id}/references`,
         {
           method: 'GET',
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async createEntityMention(args: CreateEntityMentionRequest, token?: string) {
-    return mapOk(
+    return (
       await commsFetch<CreateEntityMentionResponse>('/comms/mentions', {
         method: 'POST',
         body: JSON.stringify(args),
@@ -357,32 +333,29 @@ export const commsServiceClient = {
               'x-permissions-token': `${token}`,
             }
           : undefined,
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async deleteEntityMention(args: WithMentionId, token?: string) {
-    return mapOk(
+    return (
       await commsFetch<DeleteEntityMentionResponse>(
         `/comms/mentions/${args.mention_id}`,
         {
           method: 'DELETE',
           headers: token ? { 'x-permissions-token': `${token}` } : undefined,
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async getMentions(args: WithChannelId) {
-    return mapOk(
+    return (
       await commsFetch<GetMentionsResponse>(
         `/comms/channels/${args.channel_id}/mentions`,
         {
           method: 'GET',
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async getChannelMessages(
     args: WithChannelId & {
@@ -408,13 +381,12 @@ export const commsServiceClient = {
     } else if (previous_cursor) {
       params.append('previous_cursor', previous_cursor);
     }
-    return mapOk(
+    return (
       await commsFetch<ApiChannelMessagesPage>(
         `/channels/${channel_id}/messages?${params.toString()}`,
         { method: 'GET' }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async postChannelMessages(
     args: WithChannelId & { filters: ChannelMessageFilters; limit?: number }
@@ -423,16 +395,15 @@ export const commsServiceClient = {
     const params = new URLSearchParams();
     if (limit !== undefined) params.append('limit', limit.toString());
     const query = params.toString();
-    return mapOk(
+    return (
       await commsFetch<ApiChannelMessagesPage>(
         `/channels/${channel_id}/messages${query ? `?${query}` : ''}`,
         {
           method: 'POST',
           body: JSON.stringify(filters),
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async getChannelAttachments(
     args: WithChannelId & {
@@ -447,32 +418,29 @@ export const commsServiceClient = {
     params.append('limit', limit.toString());
     if (cursor) params.append('cursor', cursor);
     if (attachment_type) params.append('attachment_type', attachment_type);
-    return mapOk(
+    return (
       await commsFetch<ApiChannelAttachmentsPage>(
         `/channels/${channel_id}/attachments?${params.toString()}`,
         { method: 'GET', signal }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async getThreadReplies(args: WithChannelId & WithMessageId) {
     const { channel_id, message_id } = args;
-    return mapOk(
+    return (
       await commsFetch<Array<ApiThreadReply>>(
         `/channels/${channel_id}/messages/${message_id}/replies`,
         { method: 'GET' }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async getChannelParticipants(args: WithChannelId) {
     const { channel_id } = args;
-    return mapOk(
+    return (
       await commsFetch<ApiChannelParticipant[]>(
         `/channels/${channel_id}/participants`,
         { method: 'GET' }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
 };

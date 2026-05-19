@@ -16,7 +16,7 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
 import { makePersisted } from '@solid-primitives/storage';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
-import { cn } from '@ui';
+import { cn, Layer } from '@ui';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,
@@ -85,6 +85,12 @@ function LayoutInner(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const { paywallOpen, showPaywall } = usePaywallState();
   const location = useLocation();
+  const shouldUsePanelSafeAreaBackground = createMemo(
+    () =>
+      isMobile() &&
+      isAuthenticated() === true &&
+      !AUTH_URLS.includes(location.pathname)
+  );
 
   useAppSquishHandlers();
 
@@ -124,6 +130,11 @@ function LayoutInner(props: RouteSectionProps) {
         }
       )}
     >
+      <Show when={shouldUsePanelSafeAreaBackground()}>
+        <Layer depth={1}>
+          <div class="pointer-events-none absolute inset-x-0 top-0 h-(--safe-top) bg-surface" />
+        </Layer>
+      </Show>
       <BundleUpdateProgressBar />
       <Suspense>
         <Show when={isAuthenticated()}>

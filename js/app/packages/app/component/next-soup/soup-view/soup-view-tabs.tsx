@@ -4,14 +4,15 @@ import {
   VIEW_TAB_PRESETS,
 } from '@app/component/app-sidebar/soup-filter-presets';
 import { useSoup } from '@app/component/next-soup/soup-context';
+import { MobileFilterDrawer } from '@app/component/next-soup/soup-view/filters-bar/mobile-filter-drawer';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { type TabItem, Tabs } from '@core/component/Tabs';
+import { TabsInset } from '@core/component/TabsInset';
+import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import { useUserContext } from '@core/context/user';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
-import { Dropdown, Layer } from '@ui';
-import { batch, createMemo, For, Match, Switch } from 'solid-js';
+import { batch, createEffect, createMemo, For, Match, Switch } from 'solid-js';
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
 export type TabbedListView = Extract<
@@ -104,6 +105,7 @@ export const useApplyPreset = () => {
       setActiveTab(tabId);
       queryFilters.replace(preset.filters);
       soup.predicates.set(preset.clientFilters);
+      soup.grouping.setActiveGroupId(preset.groupBy);
     });
     return true;
   };
@@ -133,7 +135,7 @@ const ViewTabs = (props: { view: TabbedListView }) => {
   const list = () => VIEW_TAB_LISTS[props.view];
 
   return (
-    <Tabs
+    <TabsInset
       list={list()}
       value={activeTab()}
       defaultValue={VIEW_TAB_PRESETS[props.view].default}
@@ -148,46 +150,31 @@ export const CollapsedSoupViewTabs = () => {
   const { applyTabPreset } = useApplyPreset();
   const { activeTab } = useSoupView();
 
-  const list = createMemo(() => {
-    const view = listView();
-    if (!view || !(view in VIEW_TAB_LISTS)) return [];
-    return VIEW_TAB_LISTS[view as TabbedListView];
+  const view = createMemo(() => {
+    const v = listView();
+    return v && v in VIEW_TAB_LISTS ? (v as TabbedListView) : undefined;
   });
 
-  const activeLabel = createMemo(() => {
-    const tab = activeTab();
-    return list().find((item) => item.value === tab)?.label ?? list()[0]?.label;
+  const list = createMemo(() => {
+    const v = view();
+    return v ? VIEW_TAB_LISTS[v] : [];
+  });
+
+  const defaultValue = createMemo(() => {
+    const v = view();
+    return v ? VIEW_TAB_PRESETS[v].default : undefined;
   });
 
   return (
-    <Dropdown placement="bottom-start" gutter={4}>
-      <Dropdown.Trigger class="flex items-center gap-1">
-        <span class="truncate">{activeLabel()}</span>
-        <ChevronDownIcon class="size-3 shrink-0" />
-      </Dropdown.Trigger>
-      <Dropdown.Portal>
-        <Layer depth={2}>
-          <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-sm p-1">
-            <For each={list()}>
-              {(item) => (
-                <Dropdown.Item
-                  class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
-                  classList={{
-                    'font-semibold': activeTab() === item.value,
-                  }}
-                  onSelect={() => {
-                    const view = listView();
-                    if (view) applyTabPreset(view, item.value);
-                  }}
-                >
-                  {item.label}
-                </Dropdown.Item>
-              )}
-            </For>
-          </Dropdown.Content>
-        </Layer>
-      </Dropdown.Portal>
-    </Dropdown>
+    <TabsInsetDropdown
+      list={list()}
+      value={activeTab()}
+      defaultValue={defaultValue()}
+      onChange={(value) => {
+        const v = view();
+        if (v) applyTabPreset(v, value);
+      }}
+    />
   );
 };
 
@@ -195,18 +182,23 @@ export const MobileSoupViewTabs = () => {
   const listView = useCurrentListView();
 
   return (
-    <div class="bg-surface border-t border-edge-muted h-11 px-1">
-      <Switch>
-        <For
-          each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
-        >
-          {(v) => (
-            <Match when={listView() === v}>
-              <MobileViewTabs view={v} />
-            </Match>
-          )}
-        </For>
-      </Switch>
+    <div class="bg-surface border-t border-edge-muted h-11 px-1 flex gap-1">
+      <MobileFilterDrawer />
+      <div class="flex-1 min-w-0 h-full">
+        <Switch>
+          <For
+            each={
+              Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]
+            }
+          >
+            {(v) => (
+              <Match when={listView() === v}>
+                <MobileViewTabs view={v} />
+              </Match>
+            )}
+          </For>
+        </Switch>
+      </div>
     </div>
   );
 };
@@ -216,14 +208,42 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
   const { activeTab } = useSoupView();
   const list = () => VIEW_TAB_LISTS[props.view];
 
+  let wrapperRef: HTMLDivElement | undefined;
+
+  createEffect(() => {
+    activeTab();
+    list();
+    if (!wrapperRef) return;
+    queueMicrotask(() => {
+      const scrollEl = wrapperRef?.firstElementChild as HTMLElement | null;
+      const active = scrollEl?.querySelector(
+        '[data-checked]'
+      ) as HTMLElement | null;
+      if (!scrollEl || !active) return;
+      const itemLeft = active.offsetLeft;
+      const itemRight = itemLeft + active.offsetWidth;
+      const viewRight = scrollEl.scrollLeft + scrollEl.clientWidth;
+      if (itemLeft < scrollEl.scrollLeft) {
+        scrollEl.scrollTo({ left: itemLeft, behavior: 'smooth' });
+      } else if (itemRight > viewRight) {
+        scrollEl.scrollTo({
+          left: itemRight - scrollEl.clientWidth,
+          behavior: 'smooth',
+        });
+      }
+    });
+  });
+
   return (
-    <Tabs
-      list={list()}
-      value={activeTab()}
-      defaultValue={VIEW_TAB_PRESETS[props.view].default}
-      onChange={(value) => applyTabPreset(props.view, value)}
-      indicatorPosition="top"
-      class="**:data-indicator:h-0.75"
-    />
+    <div ref={wrapperRef} class="h-full">
+      <Tabs
+        list={list()}
+        value={activeTab()}
+        defaultValue={VIEW_TAB_PRESETS[props.view].default}
+        onChange={(value) => applyTabPreset(props.view, value)}
+        indicatorPosition="top"
+        class="**:data-indicator:h-0.75 overflow-x-auto scrollbar-hidden [&>div]:w-max"
+      />
+    </div>
   );
 };

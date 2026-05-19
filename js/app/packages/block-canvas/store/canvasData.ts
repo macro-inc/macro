@@ -4,7 +4,7 @@ import {
 } from '@block-canvas/util/connectors';
 import { createBlockSignal, useBlockId } from '@core/block';
 import { filterMapAsync } from '@core/util/list';
-import { isErr } from '@core/util/maybeResult';
+
 import { storageServiceClient } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
@@ -829,7 +829,7 @@ export const useSaveCanvasDataImmediate = sharedInstance(() => {
       file,
     });
 
-    if (isErr(saveRes)) {
+    if (saveRes.isErr()) {
       console.error('error on canvas save');
     }
 

@@ -3,9 +3,10 @@ use crate::domain::{
     model::{
         AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
         RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole,
+        TeamWithMembers,
     },
-    team_repo::TeamRepository,
+    team_repo::{TeamMembersService, TeamRepository},
 };
 use macro_user_id::{
     cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
@@ -160,6 +161,24 @@ impl From<sqlx::Error> for RemoveUserFromTeamError {
 impl From<sqlx::Error> for RemoveTeamInviteError {
     fn from(e: sqlx::Error) -> Self {
         Self::StorageLayerError(e.into())
+    }
+}
+
+impl TeamMembersService for TeamRepositoryImpl {
+    #[tracing::instrument(skip(self), err)]
+    async fn list_team_members(
+        &self,
+        entity_access_receipt: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::MemberTeamRole,
+        >,
+    ) -> Result<TeamMembers, TeamError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        let members = self.get_team_by_id(&team_id).await?.members;
+        let invited = self.get_team_invites(&team_id).await?;
+
+        Ok(TeamMembers { members, invited })
     }
 }
 
@@ -333,6 +352,59 @@ impl TeamRepository for TeamRepositoryImpl {
         transaction.commit().await?;
 
         Ok(all_invites)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_new_invites(
+        &self,
+        team_id: &uuid::Uuid,
+        invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+    ) -> Result<Vec<Email<Lowercase<'static>>>, InviteUsersToTeamError> {
+        let email_strings: Vec<String> = invites
+            .iter()
+            .map(|email| email.as_ref().to_string())
+            .collect();
+
+        let macro_user_ids: Vec<String> = invites
+            .iter()
+            .map(|email| format!("macro|{}", email.as_ref()))
+            .collect();
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT t.email as "email!"
+            FROM UNNEST($2::text[], $3::text[]) WITH ORDINALITY AS t(email, user_id, ord)
+            WHERE NOT EXISTS (
+                SELECT 1 FROM team_invite ti
+                WHERE ti.team_id = $1 AND ti.email = t.email
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM team_user tu
+                WHERE tu.team_id = $1 AND tu.user_id = t.user_id
+            )
+            GROUP BY t.email
+            ORDER BY MIN(t.ord)
+            "#,
+            team_id,
+            &email_strings[..],
+            &macro_user_ids[..],
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut new_invites = Vec::with_capacity(rows.len());
+        for row in rows {
+            let email = Email::parse_from_str(&row.email)
+                .map(|email| email.into_owned().lowercase())
+                .map_err(|e| {
+                    InviteUsersToTeamError::StorageLayerError(anyhow::anyhow!(
+                        "unable to parse email {e}"
+                    ))
+                })?;
+            new_invites.push(email);
+        }
+
+        Ok(new_invites)
     }
 
     #[tracing::instrument(skip(self), err)]

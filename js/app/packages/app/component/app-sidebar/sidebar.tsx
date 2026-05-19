@@ -27,25 +27,24 @@ import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
-import BellIcon from '@icon/regular/bell.svg';
+import LogoIcon from '@icon/macro-logo.svg';
+import { AnimatedCallIcon } from '@icon/wide-call';
+import { AnimatedChannelIcon } from '@icon/wide-channel';
+import { AnimatedCommandIcon } from '@icon/wide-command';
+import { AnimatedEmailIcon } from '@icon/wide-email';
+import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
+import { AnimatedFolderIcon } from '@icon/wide-folder';
+import { AnimatedGearIcon } from '@icon/wide-gear';
+import { AnimatedInboxIcon } from '@icon/wide-inbox';
+import { AnimatedNewSplitIcon } from '@icon/wide-newSplit';
+import { AnimatedPlusIcon } from '@icon/wide-plus';
+import { AnimatedSearchIcon } from '@icon/wide-search';
+import { AnimatedSidebarIcon } from '@icon/wide-sidebar';
+import { AnimatedStarIcon } from '@icon/wide-star';
+import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import LogoIcon from '@macro-icons/macro-logo.svg';
-import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
-import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
-import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
-import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
-import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
-import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
-import { AnimatedNewSplitIcon } from '@macro-icons/wide/animating/newSplit';
-import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
-import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
-import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
 import { useNotificationSettings } from '@notifications';
+import BellIcon from '@phosphor/bell.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { useLocation } from '@solidjs/router';
 import { Button, cn, Hotkey } from '@ui';
@@ -372,14 +371,12 @@ export const registerSidebarHotkeys = ({
 };
 
 type SidebarActionButtonProps = {
-  label: string;
-  hotkeyToken?: HotkeyToken;
-  /** Whether the sidebar is currently in slim (icon-only) mode. */
-  isSlim: () => boolean;
-  onClick: () => void;
-  disabled?: boolean | (() => boolean);
-  /** Animated icon component that accepts a `triggerAnimation` prop. */
   icon: Component<{ triggerAnimation?: boolean; class?: string }>;
+  onClick: (event?: MouseEvent) => void;
+  disabled?: boolean | (() => boolean);
+  hotkeyToken?: HotkeyToken;
+  isSlim: () => boolean;
+  label: string;
 };
 
 /**
@@ -406,7 +403,11 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       tooltipPlacement="right"
       label={props.isSlim() ? props.label : undefined}
       hotkey={props.isSlim() ? props.hotkeyToken : undefined}
-      onClick={props.onClick}
+      onMouseDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+      }}
+      onClick={(event: MouseEvent) => props.onClick(event)}
       disabled={isDisabled()}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
@@ -541,7 +542,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       class={cn(
         'group/sidebar h-full py-2 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
         isExpanded() &&
-          'max-w-[199px] w-full mobile:max-w-2/3 translate-x-0 opacity-100',
+          'max-w-49.75 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
         props.sidebarState === 'hidden' &&
           '-translate-x-full overflow-hidden opacity-0',
 
@@ -559,7 +560,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <div class="grow shrink-10 min-w-0" />
           <Button
             class="flex items-center justify-center rounded-xs p-0.5 px-2 bg-surface [&_svg]:size-4"
-            onClick={() => handleSidebarOpenChange(!isExpanded())}
+            onMouseDown={(e) => {
+              if (e.button !== 0) return;
+              e.preventDefault();
+            }}
+            onClick={() => {
+              handleSidebarOpenChange(!isExpanded());
+              globalSplitManager()?.returnFocus();
+            }}
             onMouseEnter={() => setSidebarBtnHovering(true)}
             onMouseLeave={() => setSidebarBtnHovering(false)}
             label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
@@ -632,13 +640,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
           />
         </Show>
         <SidebarActionButton
-          label="Invite"
-          isSlim={isSlim}
-          onClick={() => setInviteModalOpen(true)}
-          icon={AnimatedUsersIcon}
-        />
-
-        <SidebarActionButton
           label="New Split"
           hotkeyToken={TOKENS.global.createNewSplit}
           isSlim={isSlim}
@@ -656,11 +657,27 @@ export const AppSidebar = (props: AppSidebarProps) => {
         />
 
         <SidebarActionButton
-          label="Settings"
+          onClick={(event) => {
+            if (event?.shiftKey) {
+              if (!(globalSplitManager()?.canAppendSplit() ?? true)) return;
+              analytics.track('split_created', { from: 'sidebar' });
+              layout.openWithSplit(
+                { type: 'component', id: 'settings' },
+                {
+                  referredFrom: 'sidebar',
+                  allowDuplicate: true,
+                  preferNewSplit: true,
+                  mergeHistory: false,
+                }
+              );
+              return;
+            }
+            toggleSettings();
+          }}
           hotkeyToken={TOKENS.global.toggleSettings}
-          isSlim={isSlim}
-          onClick={toggleSettings}
           icon={AnimatedGearIcon}
+          label="Settings"
+          isSlim={isSlim}
         />
       </div>
       <InviteModal />
@@ -736,6 +753,8 @@ const SidebarLink = (props: SidebarLinkProps) => {
         <Button
           draggable={false}
           variant="ghost"
+          data-sidebar-link={props.id}
+          data-active={isActive() ? '' : undefined}
           class={cn(
             'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-sm py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3',
             isActive() && 'bg-ink/6 not-disabled:hover:bg-ink/6 text-ink'

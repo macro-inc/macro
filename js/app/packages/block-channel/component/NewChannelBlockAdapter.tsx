@@ -221,7 +221,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
 
       if (targetMessageId && messagesChannelHandle.current) {
         setActiveTab(DEFAULT_CHANNEL_TAB);
-        await messagesChannelHandle.current.goToMessage(
+        messagesChannelHandle.current.goToMessage(
           targetMessageId,
           targetMessageReplyId
         );

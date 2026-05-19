@@ -316,6 +316,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         notification_tool_context: notification_tool_context.clone(),
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context(pool.clone()),
+        team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
     };
     let all_tools = ai_tools::all_tools();
@@ -397,6 +398,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 mcp_repo.clone(),
                 mcp_state_store,
                 "http://localhost/mcp/servers/auth/callback".to_string(),
+                mcp_client::domain::provider_registry::PreRegisteredProviders::from_env(),
             );
             mcp_client::inbound::McpRouterState::new(mcp_repo, mcp_oauth)
         },

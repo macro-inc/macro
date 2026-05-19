@@ -1,5 +1,5 @@
 import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
-import { isErr } from '@core/util/maybeResult';
+
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type {
   PostSoupRequest,
@@ -239,7 +239,7 @@ export async function refetchSoupEntity(
     body: filter,
   });
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     console.error(
       '[normalized-cache] operations: failed to fetch individual soup item',
       result
@@ -247,7 +247,7 @@ export async function refetchSoupEntity(
     return;
   }
 
-  const [, page] = result;
+  const page = result.value;
   if (!page.items.length) return;
 
   for (const item of page.items) {

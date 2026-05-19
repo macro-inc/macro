@@ -37,16 +37,6 @@ import { trackMention } from '@core/signal/mention';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { plural } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
-import ArrowUp from '@icon/bold/arrow-up-bold.svg';
-import Spinner from '@icon/bold/spinner-gap-bold.svg';
-import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
-import Reply from '@icon/regular/arrow-bend-up-left.svg';
-import Forward from '@icon/regular/arrow-bend-up-right.svg';
-import ChevronDown from '@icon/regular/caret-down.svg';
-import Paperclip from '@icon/regular/paperclip.svg';
-import Quotes from '@icon/regular/quotes.svg';
-import TextAa from '@icon/regular/text-aa.svg';
-import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import { $generateHtmlFromNodes } from '@lexical/html';
@@ -55,6 +45,16 @@ import {
   $removeAllWatermarkNodes,
 } from '@lexical-core';
 import { logger } from '@observability';
+import ReplyAll from '@phosphor/arrow-bend-double-up-left.svg';
+import Reply from '@phosphor/arrow-bend-up-left.svg';
+import Forward from '@phosphor/arrow-bend-up-right.svg';
+import ChevronDown from '@phosphor/caret-down.svg';
+import PaperPlaneRight from '@phosphor/paper-plane-right.svg';
+import Paperclip from '@phosphor/paperclip.svg';
+import Quotes from '@phosphor/quotes.svg';
+import Spinner from '@phosphor/spinner-gap.svg';
+import TextAa from '@phosphor/text-aa.svg';
+import Trash from '@phosphor/trash.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {
@@ -79,7 +79,7 @@ import type {
   ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
-import { Button, cn, HoverCard, Tooltip } from '@ui';
+import { Button, cn, HoverCard, Scroll, Tooltip } from '@ui';
 import {
   defaultSelectionData,
   lazyRegister,
@@ -547,10 +547,8 @@ export function BaseInput(props: {
       if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
       pendingSend = false;
       const draftId = message.db_id;
-      const toastId = toast.success(
-        'Email sent',
-        undefined,
-        draftId
+      const toastId = toast.success('Email sent', {
+        actions: draftId
           ? [
               {
                 label: 'Undo',
@@ -562,8 +560,9 @@ export function BaseInput(props: {
               },
             ]
           : undefined,
-        10_000
-      );
+        duration: 10_000,
+        mobile: true,
+      });
       pendingMentions.forEach((mention) => {
         trackMention(blockId, 'document', mention.documentId);
       });
@@ -1100,6 +1099,40 @@ export function BaseInput(props: {
       });
 
       registerHotkey({
+        hotkey: 'arrowup',
+        scopeId: composeHotkeyScope,
+        description: 'Select last message',
+        runWithInputFocused: true,
+        condition: () => {
+          const ed = editor();
+          if (!ed) return false;
+          const rootEl = ed.getRootElement();
+          if (!rootEl || !rootEl.contains(document.activeElement)) return false;
+          return ed.read(() => {
+            const text = $getRoot().getTextContent();
+            return text.trim().length === 0;
+          });
+        },
+        keyDownHandler: () => {
+          const messages = ctx.messages.list();
+          if (!messages?.length) return false;
+          const lastMsg = messages[messages.length - 1];
+          if (!lastMsg?.db_id) return false;
+          editor()?.blur();
+          ctx.messages.setFocused(lastMsg.db_id);
+          const msgEl = document.querySelector(
+            `[data-message-body-id="${lastMsg.db_id}"]`
+          ) as HTMLElement | null;
+          const focusable = msgEl?.closest(
+            '[tabindex="0"]'
+          ) as HTMLElement | null;
+          focusable?.focus();
+          return true;
+        },
+        hotkeyToken: TOKENS.email.previousMessage,
+      });
+
+      registerHotkey({
         hotkey: 'escape',
         scopeId: composeHotkeyScope,
         description: 'Close reply',
@@ -1166,10 +1199,9 @@ export function BaseInput(props: {
       currentAttachmentsByteSize + attachmentsToAddByteSize >=
       MAX_ATTACHMENTS_BYTES_SIZE
     ) {
-      toast.failure(
-        "Can't add more attachments",
-        'Total attachments exceed 18MB limit'
-      );
+      toast.failure("Can't add more attachments", {
+        subtext: 'Total attachments exceed 18MB limit',
+      });
       return;
     }
 
@@ -1241,7 +1273,9 @@ export function BaseInput(props: {
       // Ensure draft is saved before scheduling
       const draftID = currentDraft ?? (await executeSaveDraft());
       if (!draftID) {
-        toast.failure('Failed to schedule message', 'Draft required');
+        toast.failure('Failed to schedule message', {
+          subtext: 'Draft required',
+        });
         return;
       }
 
@@ -1280,10 +1314,10 @@ export function BaseInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative flex flex-col flex-1 bg-surface border border-edge rounded-md max-w-full"
+      class="relative flex flex-col flex-1 bg-ink-muted/2.5 border border-ink-muted/8 rounded-lg max-w-full"
     >
       {/* Top Bar */}
-      <div class="relative flex items-start gap-2 p-2">
+      <div class="relative flex items-start gap-2 px-3 pt-1.5 pb-0.5">
         <DropdownMenu>
           <DropdownMenu.Trigger>
             <div class="px-1">
@@ -1480,7 +1514,7 @@ export function BaseInput(props: {
       </div>
       <div class="size-full flex flex-col">
         <Show when={showFormatRibbon()}>
-          <div class="flex flex-row w-full gap-2 items-center p-2">
+          <div class="flex flex-row w-full gap-2 items-center px-3 py-1.5">
             <FormatButtons
               selectionState={() => formatState}
               onInlineFormat={(format) => {
@@ -1501,7 +1535,7 @@ export function BaseInput(props: {
           </div>
         </Show>
         <div
-          class="max-h-80 overflow-y-scroll w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-3"
+          class="relative h-18 overflow-hidden w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-4 py-1 [&_.text-ink-placeholder]:left-0 [&_.text-ink-placeholder>p]:my-0"
           onclick={() => {
             editor()?.focus();
           }}
@@ -1537,98 +1571,102 @@ export function BaseInput(props: {
           >
             <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
           </div>
-          <MarkdownTextarea
-            captureEditor={(editor) => {
-              setEditor(editor);
-              form().setCapturedEditor(editor);
-            }}
-            class={cn(
-              'ph-no-capture cursor-text text-sm wrap-break-word text-ink',
-              isDragging() && 'blur'
-            )}
-            editable={() => !sendMutation.isPending}
-            initialValue={props.preloadedBody}
-            initialHtml={restoredSnapshot?.bodyHtml ?? props.preloadedHtml}
-            placeholder="Reply — @mention to share or cc people"
-            watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}
-            onChange={handleChange}
-            onDocumentMention={(item) => {
-              makeAttachmentPublic(item.id);
-              scheduleDraftSave();
-            }}
-            onUserMention={handleUserMention}
-            portalScope="split"
-            formatState={formatState}
-            setFormatState={setFormatState}
-            domRef={props.markdownDomRef}
-            onPasteFilesAndDirs={(files, directories) => {
-              const editor_ = editor();
-              if (!editor_) return;
-              handleFileFolderDrop(
-                files,
-                directories,
-                createFilesReadyHandler(
-                  editor_,
-                  blockId,
-                  'email',
-                  undefined,
-                  (uploadedItemIds) => {
-                    uploadedItemIds.forEach((itemId) => {
-                      makeAttachmentPublic(itemId);
-                    });
-                    scheduleDraftSave();
-                  },
-                  { width: 542, height: 542 }
-                )
-              );
-            }}
-          />
-          <div class="ph-no-capture flex gap-1 flex-wrap w-full py-2">
-            <For each={form().attachments.list()}>
-              {(attachment) => (
-                <Switch>
-                  <Match when={attachment.type === 'local' && attachment}>
-                    {(attachment) => (
-                      <EmailAttachmentPill
-                        attachment={{
-                          fileName: attachment().file.name,
-                          mimeType: attachment().file.type,
-                        }}
-                        removable
-                        onRemove={() => handleRemoveAttachment(attachment())}
-                      />
-                    )}
-                  </Match>
-                  <Match when={attachment.type === 'remote' && attachment}>
-                    {(attachment) => (
-                      <EmailAttachmentPill
-                        attachment={{
-                          fileName: attachment().fileName,
-                          mimeType: attachment().contentType,
-                        }}
-                        removable
-                        onRemove={() => handleRemoveAttachment(attachment())}
-                      />
-                    )}
-                  </Match>
-                  <Match when={attachment.type === 'forwarded' && attachment}>
-                    {(attachment) => (
-                      <EmailAttachmentPill
-                        attachment={{
-                          fileName: attachment().fileName,
-                          mimeType: attachment().mimeType,
-                        }}
-                        removable
-                        onRemove={() => handleRemoveAttachment(attachment())}
-                      />
-                    )}
-                  </Match>
-                </Switch>
+          <Scroll>
+            <MarkdownTextarea
+              captureEditor={(editor) => {
+                setEditor(editor);
+                form().setCapturedEditor(editor);
+              }}
+              class={cn(
+                'ph-no-capture cursor-text text-sm wrap-break-word text-ink h-auto overflow-visible',
+                isDragging() && 'blur'
               )}
-            </For>
-          </div>
+              editable={() => !sendMutation.isPending}
+              initialValue={props.preloadedBody}
+              initialHtml={restoredSnapshot?.bodyHtml ?? props.preloadedHtml}
+              placeholder="Reply — @mention to share or cc people"
+              watermark={
+                !hasPaidAccess() ? <MacroSignatureButton /> : undefined
+              }
+              onChange={handleChange}
+              onDocumentMention={(item) => {
+                makeAttachmentPublic(item.id);
+                scheduleDraftSave();
+              }}
+              onUserMention={handleUserMention}
+              portalScope="split"
+              formatState={formatState}
+              setFormatState={setFormatState}
+              domRef={props.markdownDomRef}
+              onPasteFilesAndDirs={(files, directories) => {
+                const editor_ = editor();
+                if (!editor_) return;
+                handleFileFolderDrop(
+                  files,
+                  directories,
+                  createFilesReadyHandler(
+                    editor_,
+                    blockId,
+                    'email',
+                    undefined,
+                    (uploadedItemIds) => {
+                      uploadedItemIds.forEach((itemId) => {
+                        makeAttachmentPublic(itemId);
+                      });
+                      scheduleDraftSave();
+                    },
+                    { width: 542, height: 542 }
+                  )
+                );
+              }}
+            />
+            <div class="ph-no-capture flex gap-1 flex-wrap w-full py-2">
+              <For each={form().attachments.list()}>
+                {(attachment) => (
+                  <Switch>
+                    <Match when={attachment.type === 'local' && attachment}>
+                      {(attachment) => (
+                        <EmailAttachmentPill
+                          attachment={{
+                            fileName: attachment().file.name,
+                            mimeType: attachment().file.type,
+                          }}
+                          removable
+                          onRemove={() => handleRemoveAttachment(attachment())}
+                        />
+                      )}
+                    </Match>
+                    <Match when={attachment.type === 'remote' && attachment}>
+                      {(attachment) => (
+                        <EmailAttachmentPill
+                          attachment={{
+                            fileName: attachment().fileName,
+                            mimeType: attachment().contentType,
+                          }}
+                          removable
+                          onRemove={() => handleRemoveAttachment(attachment())}
+                        />
+                      )}
+                    </Match>
+                    <Match when={attachment.type === 'forwarded' && attachment}>
+                      {(attachment) => (
+                        <EmailAttachmentPill
+                          attachment={{
+                            fileName: attachment().fileName,
+                            mimeType: attachment().mimeType,
+                          }}
+                          removable
+                          onRemove={() => handleRemoveAttachment(attachment())}
+                        />
+                      )}
+                    </Match>
+                  </Switch>
+                )}
+              </For>
+            </div>
+          </Scroll>
         </div>
-        <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2">
+        <div class="flex flex-row w-full h-9 justify-between items-center px-3 pb-2 pt-0.5 space-x-2">
           <div class="flex flex-row items-center gap-1">
             <div class="relative">
               <Button
@@ -1703,33 +1741,29 @@ export function BaseInput(props: {
             <Button
               onclick={deleteDraftAndReset}
               tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
-              class="aspect-square p-1"
+              size="icon-sm"
             >
-              <Trash class="h-5" />
+              <Trash />
             </Button>
           </div>
 
-          <Tooltip label={form().sendTime() ? 'Send time is scheduled' : ''}>
-            <button
+          <Tooltip label="Send">
+            <Button
+              size="icon-sm"
               disabled={
                 uploadAttachmentMutation.isPending ||
                 sendMutation.isPending ||
                 !!form().sendTime()
               }
               onClick={() => sendEmail()}
-              class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
             >
               <Show
                 when={!sendMutation.isPending}
-                fallback={
-                  <Spinner class="size-6 animate-spin cursor-disabled" />
-                }
+                fallback={<Spinner class="animate-spin" />}
               >
-                <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                  <ArrowUp class="group-hover:text-surface! group-hover:fill-surface! text-accent! fill-accent! size-4 transition ease-in-out" />
-                </div>
+                <PaperPlaneRight />
               </Show>
-            </button>
+            </Button>
           </Tooltip>
         </div>
       </div>

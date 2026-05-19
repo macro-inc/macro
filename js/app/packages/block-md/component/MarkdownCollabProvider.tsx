@@ -109,6 +109,8 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
     }
   );
 
+  const readOnly = () => !(canEdit() || canComment());
+
   const syncEngine = createSyncEngine(
     loroManager()!,
     awareness,
@@ -117,7 +119,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
       syncFromLoro: (state) =>
         syncStateToLexical(state as unknown as SerializedEditorState),
     },
-    !(canEdit() || canComment())
+    readOnly
   );
 
   const { refreshRemoteCursors, RemoteCursorsOverlay } = useRemoteCursors({

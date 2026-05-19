@@ -1,4 +1,4 @@
-import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
+import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import PaperPlaneRight from '@phosphor-icons/core/regular/paper-plane-right.svg?component-solid';
 import { Button } from '@ui';
 import { children, type JSX, Show, splitProps } from 'solid-js';
@@ -16,7 +16,7 @@ export function SendAction(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <Button
       variant="ghost"
-      size="icon-md"
+      size="icon-sm"
       tooltip="Send message"
       aria-label="Send message"
       data-input-action="send"

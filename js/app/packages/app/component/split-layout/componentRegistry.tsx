@@ -3,11 +3,16 @@ import { getViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import type { Query } from '@app/component/next-soup/filters/filter-store/types';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';
 import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
-import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
+import {
+  DEV_MODE_ENV,
+  ENABLE_NEW_ONBOARDING_OVERRIDE,
+  LOCAL_ONLY,
+} from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import type { ViewId } from '@core/types/view';
 import NotificationRoute from '@notifications/components/NotificationRoute';
@@ -112,6 +117,7 @@ registerComponent(
         viewName="Inbox"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
         disableLocalSearch
       />
     );
@@ -133,6 +139,7 @@ registerComponent(
         viewName="Agents"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
         additionalEntities={automationEntities}
       />
     );
@@ -149,6 +156,7 @@ registerComponent(
         viewName="Email"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
       />
     );
   })
@@ -168,6 +176,7 @@ registerComponent(
         viewName="Documents"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
       />
     );
   })
@@ -187,6 +196,7 @@ registerComponent(
         viewName="Tasks"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
       />
     );
   })
@@ -202,6 +212,7 @@ registerComponent(
         viewName="Channels"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
       />
     );
   })
@@ -217,6 +228,7 @@ registerComponent(
         viewName="Calls"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
       />
     );
   })
@@ -236,6 +248,7 @@ registerComponent(
         viewName="Folders"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
       />
     );
   })
@@ -290,12 +303,21 @@ registerComponent(
 );
 registerComponent('settings', () => <SettingsPanelComponentWrapper />);
 registerComponent('notification', () => <NotificationRoute />);
-registerComponent(
-  'welcome',
-  lazy(
-    () => import('@app/component/interactive-onboarding/InteractiveOnboarding')
-  )
+const NewOnboarding = lazy(
+  () => import('@app/component/onboarding/onboarding')
 );
+const OldOnboarding = lazy(
+  () => import('@app/component/interactive-onboarding/InteractiveOnboarding')
+);
+registerComponent('welcome', () => (
+  <ShowFeatureFlag
+    key="enable-new-onboarding"
+    enabledOverride={ENABLE_NEW_ONBOARDING_OVERRIDE}
+    fallback={<OldOnboarding />}
+  >
+    <NewOnboarding />
+  </ShowFeatureFlag>
+));
 
 if (LOCAL_ONLY) {
   registerComponent(
@@ -359,6 +381,11 @@ if (LOCAL_ONLY) {
   registerComponent(
     'properties-debug',
     lazy(() => import('@core/component/Properties/debug/PropertiesDebug'))
+  );
+
+  registerComponent(
+    'props-debug',
+    lazy(() => import('@property/debug/PropertyDebug'))
   );
 
   registerComponent(

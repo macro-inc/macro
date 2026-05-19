@@ -17,8 +17,8 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
-import CheckIcon from '@icon/bold/check-bold.svg?component-solid';
-import PaperPlane from '@macro-icons/wide/paper-plane-cutout.svg';
+import PaperPlane from '@icon/wide-paper-plane-cutout.svg';
+import CheckIcon from '@phosphor/check.svg?component-solid';
 import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
@@ -309,12 +309,14 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           submitChannelPermissions(channelId);
 
           props.refetch?.();
-          toast.success('Message sent successfully', undefined, [
-            {
-              label: 'View in channel',
-              onClick: navigateToChannel,
-            },
-          ]);
+          toast.success('Message sent successfully', {
+            actions: [
+              {
+                label: 'View in channel',
+                onClick: navigateToChannel,
+              },
+            ],
+          });
           analytics.track('share_entity', { location: 'forward_to_channel' });
         });
       } else {
@@ -340,12 +342,14 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               props.refetch?.();
               if (!multipleMessages) {
                 const { navigateToChannel } = res;
-                toast.success('Message sent successfully', undefined, [
-                  {
-                    label: 'View in channel',
-                    onClick: () => navigateToChannel(),
-                  },
-                ]);
+                toast.success('Message sent successfully', {
+                  actions: [
+                    {
+                      label: 'View in channel',
+                      onClick: () => navigateToChannel(),
+                    },
+                  ],
+                });
               }
               analytics.track('share_entity', {
                 location: 'forward_to_channel',
@@ -369,12 +373,14 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
             props.refetch?.();
             if (!multipleMessages) {
-              toast.success('Message sent successfully', undefined, [
-                {
-                  label: 'View in channel',
-                  onClick: () => navigateToChannel(),
-                },
-              ]);
+              toast.success('Message sent successfully', {
+                actions: [
+                  {
+                    label: 'View in channel',
+                    onClick: () => navigateToChannel(),
+                  },
+                ],
+              });
             }
             analytics.track('share_entity', { location: 'forward_to_channel' });
           });
@@ -435,7 +441,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       <Show when={isAuthenticated()}>
         {/* Row 1: Recipient input + ShareOptions */}
         <div class="flex items-center">
-          <div class="min-w-0 flex-1 px-1 py-2 min-h-11">
+          <div class="min-w-0 flex-1 px-1 min-h-11">
             <RecipientSelector<'user' | 'contact' | 'channel'>
               placeholder="To: Email or group"
               setSelectedOptions={setSelectedOptions}
@@ -443,9 +449,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               triedToSubmit={triedToSubmit}
               options={destinationOptions}
               triggerMode="input"
-              class="border border-edge-muted p-1"
               focusOnMount
               horizontalScroll
+              hideBorder
             />
           </div>
           <Show
@@ -454,9 +460,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 Permissions.OWNER && !props.hideAccessLevelSelector
             }
           >
-            <div class="shrink-0 pr-2 flex items-center">
+            <div class="shrink-0 pr-2 flex items-center gap-2">
               <Show when={selectedOptions().length > 0}>
-                <span class="text-sm text-ink-muted pr-2">can</span>
+                <span class="text-sm text-ink-extra-muted">can</span>
               </Show>
               <ShareOptions
                 setPermissions={(accessLevel) =>

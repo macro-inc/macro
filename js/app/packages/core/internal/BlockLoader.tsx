@@ -4,6 +4,7 @@ import type { OwnedBlockHandle } from '@core/orchestrator';
 import { useQueryClient } from '@queries/client';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { createAsync } from '@solidjs/router';
+import { err, ok } from 'neverthrow';
 import { createEffect, type JSX, onCleanup, useContext } from 'solid-js';
 import {
   type BlockDefinition,
@@ -26,7 +27,7 @@ import {
   blockUserAccessSignal,
 } from '../signal/load';
 import type { Source, SourcePreload } from '../source';
-import { err, isErr, type ObjectLike, ok } from '../util/maybeResult';
+import type { ObjectLike } from '../util/result';
 
 export const blockDataSignal = createBlockSignal<unknown>();
 export const blockLiveTrackingEnabledSignal = createBlockSignal<boolean>();
@@ -72,16 +73,21 @@ export function BlockLoader<
 
   const getResult = createAsync(async () => {
     const result = await props.definition.load(props.source, 'initial');
-    if (isErr(result)) {
-      return result;
+    if (result.isErr()) {
+      return err(result.error);
     }
-    const [, data] = result;
+    const data = result.value;
     if ('type' in data && data.type === 'preload') {
       console.error(
         `BlockLoader received a nested preload.
 Check that the load function does not return a preload source when the intent is not preload`
       );
-      return err('INVALID', 'BlockLoader received a nested preload');
+      return err([
+        {
+          code: 'INVALID' as const,
+          message: 'BlockLoader received a nested preload',
+        },
+      ]);
     }
     return ok({
       ...data,
@@ -111,19 +117,22 @@ Check that the load function does not return a preload source when the intent is
       return;
     }
 
-    const [, data] = result;
-    setError(() => {
-      if (isErr(result, 'UNAUTHORIZED')) {
-        return 'UNAUTHORIZED';
-      } else if (isErr(result, 'MISSING')) {
-        return 'MISSING';
-      } else if (isErr(result, 'GONE')) {
-        return 'GONE';
-      } else if (isErr(result)) {
+    if (result.isErr()) {
+      setError(() => {
+        if (result.error.some((error) => error.code === 'UNAUTHORIZED')) {
+          return 'UNAUTHORIZED';
+        } else if (result.error.some((error) => error.code === 'MISSING')) {
+          return 'MISSING';
+        } else if (result.error.some((error) => error.code === 'GONE')) {
+          return 'GONE';
+        }
         return 'INVALID';
-      }
-      return null;
-    });
+      });
+      return;
+    }
+
+    const data = result.value;
+    setError(null);
 
     if (!isNested && !isPreview && data) {
       // we need to pass in a client accessor since the mutation is dynamically imported outside a query context provider

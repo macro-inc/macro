@@ -22,11 +22,11 @@ import { isListViewID } from '@app/constants/list-views';
 import { UserIcon } from '@core/component/UserIcon';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { useUserId } from '@core/context/user';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
-import CheckIcon from '@icon/regular/check.svg';
-import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { Accordion } from '@kobalte/core/accordion';
+import ChevronDownIcon from '@phosphor/caret-down.svg';
+import CheckIcon from '@phosphor/check.svg';
+import CircleDashedIcon from '@phosphor/circle-dashed.svg';
+import SearchIcon from '@phosphor/magnifying-glass.svg';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { useContacts } from '@queries/contacts/contacts';
 import { Button, cn } from '@ui';
@@ -205,7 +205,7 @@ export const MobileFilterDrawer = () => {
           aria-label="Open filters"
           variant="ghost"
           size="sm"
-          class="rounded-xs [&_svg]:size-6 relative"
+          class="rounded-xs [&_svg]:size-6 relative h-full"
         >
           <SlidersHorizontalIcon />
           <Show when={activeCount() > 0}>

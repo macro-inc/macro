@@ -33,7 +33,9 @@ pub struct Cli {
 pub async fn main() -> anyhow::Result<()> {
     // Force to use local tracing
     MacroEntrypoint::new(Environment::Local).init();
+    let cli = Cli::parse();
     let env_vars = EnvVars::new()?;
+    cli.command.validate_environment(&env_vars)?;
     tracing::trace!("initializing");
 
     let db = PgPoolOptions::new()
@@ -69,7 +71,6 @@ pub async fn main() -> anyhow::Result<()> {
         ),
     };
 
-    let cli = Cli::parse();
     cli.command.execute(context).await
 }
 

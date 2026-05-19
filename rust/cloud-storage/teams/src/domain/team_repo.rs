@@ -10,8 +10,9 @@ use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr
 use crate::domain::model::{
     AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
     PatchTeamPlanRequest, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
-    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team, TeamError,
-    TeamInvite, TeamInviteDetails, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
+    TeamCheckoutError, TeamCheckoutSessionRequest, TeamError, TeamInvite, TeamInviteDetails,
+    TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
 };
 
 /// The TeamChannelsRepository defines a set of actions related to team channels
@@ -61,6 +62,14 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         invited_by: &MacroUserIdStr<'_>,
         invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
+
+    /// Compares the list of users you are trying to invite to ones already invited
+    /// to return a list of emails who will be newly invited
+    fn get_new_invites(
+        &self,
+        team_id: &uuid::Uuid,
+        invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+    ) -> impl Future<Output = Result<Vec<Email<Lowercase<'static>>>, InviteUsersToTeamError>> + Send;
 
     /// Marks the given team invites as sent by updating their last_sent_at timestamp.
     fn mark_invites_sent(
@@ -230,6 +239,15 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 }
 
+/// The TeamMembersService defines read-only team membership queries.
+pub trait TeamMembersService: Clone + Send + Sync + 'static {
+    /// Lists current members and pending invites for a team.
+    fn list_team_members(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> impl Future<Output = Result<TeamMembers, TeamError>> + Send;
+}
+
 /// The TeamService defines a set of actions to perform on the teams
 pub trait TeamService: Clone + Send + Sync + 'static {
     /// Creates a new team
@@ -343,4 +361,13 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
         req: &PatchTeamPlanRequest,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Creates a checkout session for the initial team purchase
+    /// This should only be called if the team currently is not on a plan
+    /// Returns the checkout session url
+    fn create_checkout_session(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
+        req: &TeamCheckoutSessionRequest,
+    ) -> impl Future<Output = Result<String, TeamCheckoutError>> + Send;
 }

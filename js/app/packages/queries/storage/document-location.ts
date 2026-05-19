@@ -1,11 +1,11 @@
 import {
-  isErr,
-  type MaybeResult,
+  type ResultError,
   type ResultType,
   throwOnErr,
-} from '@core/util/maybeResult';
+} from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import { DocumentContentState } from '@service-storage/generated/schemas/documentContentState';
+import { ok, type Result } from 'neverthrow';
 import { queryClient } from '../client';
 import { documentLocationKeys } from './keys';
 
@@ -186,10 +186,10 @@ export function waitForDocumentPresignedUrlReady(
   });
 }
 
-export function locationToMaybeResult(
+export function locationToAppResult(
   location: DocumentLocation
-): MaybeResult<string, { data: DocumentLocation }> {
-  return [null, { data: location }];
+): Result<{ data: DocumentLocation }, ResultError<string>[]> {
+  return ok({ data: location });
 }
 
 export function isDocumentLocationReady(location: DocumentLocation) {
@@ -197,7 +197,7 @@ export function isDocumentLocationReady(location: DocumentLocation) {
 }
 
 export function isDocumentLocationResultReady(
-  result: MaybeResult<string, { data: DocumentLocation }>
+  result: Result<{ data: DocumentLocation }, ResultError<string>[]>
 ) {
-  return !isErr(result) && isDocumentLocationReady(result[1].data);
+  return !result.isErr() && isDocumentLocationReady(result.value.data);
 }

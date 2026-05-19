@@ -3,13 +3,9 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import {
-  type MaybeError,
-  type MaybeResult,
-  mapOk,
-  type ObjectLike,
-} from '@core/util/maybeResult';
+import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
+import type { Result } from 'neverthrow';
 import type {
   ActionExecutionRecord,
   CreateScheduledAction,
@@ -23,17 +19,17 @@ const scheduledActionHost: string = SERVER_HOSTS['scheduled-action'];
 export function scheduledActionFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeError<FetchWithTokenErrorCode>>;
+): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
 export function scheduledActionFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeResult<FetchWithTokenErrorCode, T>>;
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
 export function scheduledActionFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
-  | Promise<MaybeError<FetchWithTokenErrorCode>> {
+  | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
+  | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${scheduledActionHost}${url}`, init);
 }
 
@@ -66,7 +62,7 @@ export const scheduledActionClient = {
       `/scheduled-actions/${args.scheduleId}`,
       { method: 'DELETE' }
     );
-    return mapOk(result, () => ({ success: true }));
+    return result.map(() => ({ success: true }));
   },
 
   runNow: async (args: { scheduleId: string }) =>

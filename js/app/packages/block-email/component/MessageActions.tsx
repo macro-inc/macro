@@ -1,9 +1,9 @@
 import { isReplyAllEligible } from '@block-email/util/recipientConversion';
 import type { ReplyType } from '@block-email/util/replyType';
 import { useEmail } from '@core/context/user';
-import ArrowBendDoubleUpLeft from '@icon/regular/arrow-bend-double-up-left.svg';
-import ArrowBendUpLeft from '@icon/regular/arrow-bend-up-left.svg';
-import ArrowBendUpRight from '@icon/regular/arrow-bend-up-right.svg';
+import ArrowBendDoubleUpLeft from '@phosphor/arrow-bend-double-up-left.svg';
+import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
+import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
@@ -49,7 +49,7 @@ export function MessageActions(props: {
 
   return (
     <div
-      class="flex flex-row items-center gap-1 transition-opacity"
+      class="flex flex-row items-center gap-0.5"
       classList={{
         'opacity-0 pointer-events-none': !canShowActions(),
         'opacity-100': canShowActions(),
@@ -57,11 +57,11 @@ export function MessageActions(props: {
     >
       <Show when={!props.hiddenActions?.includes('reply')}>
         <Button
-          class="size-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
+          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
           onClick={onChangeReplyType('reply')}
           tooltip="Reply"
         >
-          <ArrowBendUpLeft class="size-5" />
+          <ArrowBendUpLeft class="size-3.5" />
         </Button>
       </Show>
       <Show
@@ -70,20 +70,20 @@ export function MessageActions(props: {
         }
       >
         <Button
-          class="size-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
+          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
           onClick={onChangeReplyType('reply-all')}
           tooltip="Reply all"
         >
-          <ArrowBendDoubleUpLeft class="size-5" />
+          <ArrowBendDoubleUpLeft class="size-3.5" />
         </Button>
       </Show>
       <Show when={!props.hiddenActions?.includes('forward')}>
         <Button
-          class="size-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
+          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
           onClick={onChangeReplyType('forward')}
           tooltip="Forward"
         >
-          <ArrowBendUpRight class="size-5" />
+          <ArrowBendUpRight class="size-3.5" />
         </Button>
       </Show>
     </div>

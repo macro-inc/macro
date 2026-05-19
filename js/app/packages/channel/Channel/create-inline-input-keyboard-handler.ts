@@ -98,9 +98,7 @@ export function createInlineInputKeyboardHandler(
     on(virtualKeyboardVisible, () => {
       if (!isTouchDevice()) return;
       if (!virtualKeyboardVisible()) {
-        if (activeInputContainer) {
-          reset();
-        }
+        reset();
         return;
       }
       // Mobile web only: scroll active input into view when keyboard appears.

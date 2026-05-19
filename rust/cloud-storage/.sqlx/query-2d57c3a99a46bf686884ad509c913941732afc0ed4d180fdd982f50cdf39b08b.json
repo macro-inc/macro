@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.email as \"email!\"\n            FROM UNNEST($2::text[], $3::text[]) WITH ORDINALITY AS t(email, user_id, ord)\n            WHERE NOT EXISTS (\n                SELECT 1 FROM team_invite ti\n                WHERE ti.team_id = $1 AND ti.email = t.email\n            )\n            AND NOT EXISTS (\n                SELECT 1 FROM team_user tu\n                WHERE tu.team_id = $1 AND tu.user_id = t.user_id\n            )\n            GROUP BY t.email\n            ORDER BY MIN(t.ord)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2d57c3a99a46bf686884ad509c913941732afc0ed4d180fdd982f50cdf39b08b"
+}

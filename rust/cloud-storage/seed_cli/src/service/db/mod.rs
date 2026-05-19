@@ -35,6 +35,39 @@ impl SeedDb {
         Self { inner }
     }
 
+    /// Execute a semicolon-delimited SQL script inside a transaction.
+    #[tracing::instrument(skip(self, sql), err)]
+    pub async fn execute_sql_script(&self, sql: &str) -> anyhow::Result<()> {
+        let mut transaction = self.inner.begin().await?;
+
+        for statement in sql.split(';').map(str::trim).filter(|s| !s.is_empty()) {
+            sqlx::query(statement).execute(&mut *transaction).await?;
+        }
+
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    /// Execute SQL only when the table exists in the current database.
+    #[tracing::instrument(skip(self, sql), err)]
+    pub async fn execute_sql_if_table_exists(
+        &self,
+        table_name: &str,
+        sql: &str,
+    ) -> anyhow::Result<()> {
+        let exists = sqlx::query_scalar::<_, Option<String>>("SELECT to_regclass($1)::text")
+            .bind(table_name)
+            .fetch_one(&self.inner)
+            .await?
+            .is_some();
+
+        if exists {
+            sqlx::query(sql).execute(&self.inner).await?;
+        }
+
+        Ok(())
+    }
+
     /// Create a document in the database.
     #[tracing::instrument(skip(self), err)]
     pub async fn create_document<'a>(

@@ -15,6 +15,22 @@ If you have the [nix](https://nixos.org/learn/) package manager installed on you
 ## Using Claude/Playwright
 To setup the authentication please make sure you create a `.env` file with **REFRESH_TOKEN** environment variable set to your dev macro refresh token. This can be found in your cookies.
 
+For the local smoke suite, prefer the repo-level harness:
+
+```bash
+just local-e2e
+```
+
+This starts the backend with local E2E compose overrides, seeds local fixture data, and runs `bun run local:e2e` with local bearer-token auth.
+
+The local smoke suite can import `localE2ESeed` from `tests/e2e/fixtures/local-e2e-seed.ts`. That helper loads the actual seed files used by `seed_cli` (`local_e2e/users.json`, `documents.json`, `channels.json`, and `channel_messages.json`) and exposes raw rows plus lookup maps by id/name/email. The small `local_e2e/manifest.json` only names the smoke aliases.
+
+For Playwright UI mode, run:
+
+```bash
+just local-e2e-ui
+```
+
 ## Tauri 🤝 Macro
 
 We are currently in the process of bundling the frontend javascript application as a [Tauri](https://tauri.app/) app.
@@ -44,4 +60,3 @@ Run the Android App
 
 Run the iOS App (note: I haven't had the chance to test this yet)
   > `cargo tauri ios dev`
-

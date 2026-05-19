@@ -48,6 +48,7 @@ import type {
   SsoRequiredResponse,
   StripeSessionResponse,
   Team,
+  TeamCheckoutSessionRequest,
   TeamInvitesResponse,
   TeamWithMembers,
   UserLinkResponse,
@@ -1928,6 +1929,66 @@ export const patchTeam = async (
     status: res.status,
     headers: res.headers,
   } as patchTeamResponse;
+};
+
+/**
+ * @summary Creates a new team.
+ */
+export type createTeamCheckoutSessionResponse200 = {
+  data: Team;
+  status: 200;
+};
+
+export type createTeamCheckoutSessionResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type createTeamCheckoutSessionResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createTeamCheckoutSessionResponseSuccess =
+  createTeamCheckoutSessionResponse200 & {
+    headers: Headers;
+  };
+export type createTeamCheckoutSessionResponseError = (
+  | createTeamCheckoutSessionResponse400
+  | createTeamCheckoutSessionResponse500
+) & {
+  headers: Headers;
+};
+
+export type createTeamCheckoutSessionResponse =
+  | createTeamCheckoutSessionResponseSuccess
+  | createTeamCheckoutSessionResponseError;
+
+export const getCreateTeamCheckoutSessionUrl = () => {
+  return `/team/checkout`;
+};
+
+export const createTeamCheckoutSession = async (
+  teamCheckoutSessionRequest: TeamCheckoutSessionRequest,
+  options?: RequestInit
+): Promise<createTeamCheckoutSessionResponse> => {
+  const res = await fetch(getCreateTeamCheckoutSessionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(teamCheckoutSessionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createTeamCheckoutSessionResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createTeamCheckoutSessionResponse;
 };
 
 /**

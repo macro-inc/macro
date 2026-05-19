@@ -31,8 +31,8 @@ export function useAdditionalInstructions() {
   const userInstructionsQuery = useInstructionsMdTextQuery();
   const { email } = useUserContext();
   const [userName] = createResource(async () => {
-    const [, response] = await authServiceClient.getUserName();
-    return response ?? null;
+    const response = await authServiceClient.getUserName();
+    return response.isOk() ? response.value : null;
   });
   return () => {
     let prompt = ABOUT_MACRO;

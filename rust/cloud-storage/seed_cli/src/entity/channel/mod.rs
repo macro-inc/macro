@@ -138,10 +138,19 @@ async fn seed(args: SeedArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
         .as_deref()
         .map(std::path::PathBuf::from)
         .unwrap_or(default_path);
-    seed_from_file(args, ctx, &path).await
+    seed_from_file_ref(&args, &ctx, &path).await
 }
 
+#[cfg(test)]
 async fn seed_from_file(args: SeedArgs, ctx: SeedCliContext, path: &Path) -> anyhow::Result<()> {
+    seed_from_file_ref(&args, &ctx, path).await
+}
+
+pub(crate) async fn seed_from_file_ref(
+    args: &SeedArgs,
+    ctx: &SeedCliContext,
+    path: &Path,
+) -> anyhow::Result<()> {
     tracing::info!("seeding channels");
 
     let content = std::fs::read_to_string(path)

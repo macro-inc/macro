@@ -28,11 +28,11 @@ import { UserIcon } from '@core/component/UserIcon';
 import type { Entity, EntityType } from '@core/types';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
-import { isErr } from '@core/util/maybeResult';
+
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import Plus from '@icon/regular/plus.svg';
-import LoadingSpinner from '@icon/regular/spinner.svg';
 import { useNotificationsForEntity } from '@notifications';
+import Plus from '@phosphor/plus.svg';
+import LoadingSpinner from '@phosphor/spinner.svg';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { commsServiceClient } from '@service-comms/client';
@@ -139,7 +139,7 @@ function DetailsGrid(props: {
   updatedAt: () => DateValue | null | undefined;
 }) {
   return (
-    <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-2 items-center text-sm">
+    <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-2 items-center text-xs">
       <Show when={props.owner()}>
         {(ownerId) => (
           <DetailsRow label="Owner">
@@ -207,7 +207,7 @@ function FolderLink(props: { projectId: string; projectName: string }) {
 function OwnerValue(props: { ownerId: string }) {
   const [displayName] = useDisplayName(tryMacroId(props.ownerId));
   return (
-    <div class="rounded-full flex gap-1 items-center px-1 ring ring-edge-muted">
+    <div class="rounded-full flex gap-1 items-center px-1">
       <div class="flex">
         <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />
       </div>
@@ -368,42 +368,44 @@ function PropertiesSectionContent(props: {
       }
     >
       <Suspense>
-        <PropertiesProvider
-          entityType={entityType}
-          canEdit={props.canEdit}
-          documentName={props.documentName}
-          properties={filteredPinnedProperties}
-          onRefresh={refetch}
-          onPropertyAdded={handlePropertyAdded}
-          onPropertyDeleted={handlePropertyDeleted}
-          onPropertyPinned={handlePropertyPinned}
-          onPropertyUnpinned={handlePropertyUnpinned}
-          pinnedPropertyIds={pinnedPropertyIds}
-          saveHandler={saveHandler}
-        >
-          <Show when={isLoading()}>
-            <div class="flex items-center justify-center py-8">
-              <div class="w-5 h-5 animate-spin">
-                <LoadingSpinner />
+        <div class="text-xs">
+          <PropertiesProvider
+            entityType={entityType}
+            canEdit={props.canEdit}
+            documentName={props.documentName}
+            properties={filteredPinnedProperties}
+            onRefresh={refetch}
+            onPropertyAdded={handlePropertyAdded}
+            onPropertyDeleted={handlePropertyDeleted}
+            onPropertyPinned={handlePropertyPinned}
+            onPropertyUnpinned={handlePropertyUnpinned}
+            pinnedPropertyIds={pinnedPropertyIds}
+            saveHandler={saveHandler}
+          >
+            <Show when={isLoading()}>
+              <div class="flex items-center justify-center py-8">
+                <div class="w-5 h-5 animate-spin">
+                  <LoadingSpinner />
+                </div>
               </div>
-            </div>
-          </Show>
+            </Show>
 
-          <Show when={filteredPinnedProperties().length > 0}>
-            <PanelContainer
-              properties={filteredPinnedProperties}
-              isLoading={isLoading}
-              error={error}
-            />
-          </Show>
+            <Show when={filteredPinnedProperties().length > 0}>
+              <PanelContainer
+                properties={filteredPinnedProperties}
+                isLoading={isLoading}
+                error={error}
+              />
+            </Show>
 
-          <Show when={props.canEdit}>
-            <div class="py-2">
-              <AddPinnedPropertyButton />
-            </div>
-          </Show>
-          <Modals />
-        </PropertiesProvider>
+            <Show when={props.canEdit}>
+              <div class="py-2">
+                <AddPinnedPropertyButton />
+              </div>
+            </Show>
+            <Modals />
+          </PropertiesProvider>
+        </div>
       </Suspense>
     </Show>
   );
@@ -438,7 +440,7 @@ function StatsSectionContent() {
     >
       {(stats) => (
         <Wordcount.Root stats={stats()}>
-          <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 items-center text-sm">
+          <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 items-center text-xs">
             <span class="text-xs text-ink-muted">Words</span>
             <div class="flex items-center gap-2 min-w-0">
               <Wordcount.Words />
@@ -490,10 +492,12 @@ function NotificationsSectionConditional(props: { entity: Entity }) {
             </div>
           }
         >
-          <Notifications
-            entity={props.entity}
-            notificationSource={notificationSource}
-          />
+          <div class="text-xs">
+            <Notifications
+              entity={props.entity}
+              notificationSource={notificationSource}
+            />
+          </div>
         </Suspense>
       </SidePanel.Section>
     </Show>
@@ -513,12 +517,12 @@ function ReferencesSectionConditional(props: { documentId: string }) {
         entity_id: id,
       });
 
-      if (isErr(response)) {
+      if (response.isErr()) {
         console.error(response);
         return [];
       }
 
-      return response[1].references;
+      return response.value.references;
     }
   );
 
@@ -544,7 +548,9 @@ function ReferencesSectionConditional(props: { documentId: string }) {
             </div>
           }
         >
-          <References documentId={props.documentId} />
+          <div class="text-xs">
+            <References documentId={props.documentId} />
+          </div>
         </Suspense>
       </SidePanel.Section>
     </Show>

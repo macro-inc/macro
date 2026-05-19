@@ -1,4 +1,3 @@
-import { isErr } from '@core/util/maybeResult';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
 import type { Component } from 'solid-js';
@@ -36,12 +35,12 @@ export const FilterValueSelect: Component<FilterValueSelectProps> = (props) => {
         definition_id: props.propertyId,
       });
 
-      if (isErr(result)) {
+      if (result.isErr()) {
         setOptions([]);
         return;
       }
 
-      const [, data] = result;
+      const data = result.value;
       setOptions(Array.isArray(data) ? data : []);
     } catch (_error) {
       setOptions([]);

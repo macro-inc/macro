@@ -22,25 +22,24 @@ import {
   createMarkdownFile,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { isErr, ok } from '@core/util/maybeResult';
-import ArrowRight from '@icon/bold/arrow-right-bold.svg';
+import { AnimatedChatIcon } from '@icon/wide-chat';
+import WideChat from '@icon/wide-chat.svg';
+import { AnimatedDiagramIcon } from '@icon/wide-diagram';
+import WideDiagram from '@icon/wide-diagram.svg';
+import { AnimatedEmailIcon } from '@icon/wide-email';
+import WideEmail from '@icon/wide-email.svg';
+import WideFileCode from '@icon/wide-file-code.svg';
+import WideFileMd from '@icon/wide-file-md.svg';
+import { AnimatedFileCodeIcon } from '@icon/wide-fileCode';
+import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
+import { AnimatedFolderIcon } from '@icon/wide-folder';
+import WideFolder from '@icon/wide-folder.svg';
+import { AnimatedStarIcon } from '@icon/wide-star';
+import WideStar from '@icon/wide-star.svg';
+import { AnimatedTaskIcon } from '@icon/wide-task';
+import WideTask from '@icon/wide-task.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
-import { AnimatedDiagramIcon } from '@macro-icons/wide/animating/diagram';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
-import { AnimatedFileCodeIcon } from '@macro-icons/wide/animating/fileCode';
-import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import WideChat from '@macro-icons/wide/chat.svg';
-import WideDiagram from '@macro-icons/wide/diagram.svg';
-import WideEmail from '@macro-icons/wide/email.svg';
-import WideFileCode from '@macro-icons/wide/file-code.svg';
-import WideFileMd from '@macro-icons/wide/file-md.svg';
-import WideFolder from '@macro-icons/wide/folder.svg';
-import WideStar from '@macro-icons/wide/star.svg';
-import WideTask from '@macro-icons/wide/task.svg';
+import ArrowRight from '@phosphor/arrow-right.svg';
 import { createProject } from '@queries/storage/projects';
 import { cn, Hotkey, Layer } from '@ui';
 import { getNormalizedKeyString } from '@ui/components/Hotkey';
@@ -168,8 +167,7 @@ export function runCreateAction(
             title: 'New Canvas',
           });
           if ('error' in result) return;
-          const [_, id] = ok(result.documentId);
-          return id;
+          return result.documentId ?? undefined;
         },
         shouldInsert,
       });
@@ -222,9 +220,8 @@ export function runCreateAction(
             extension: 'py',
             title: 'New Code File',
           });
-          if (isErr(result)) return;
-          const [, id] = ok(result[1]?.documentId);
-          return id;
+          if (result.isErr()) return;
+          return result.value.documentId ?? undefined;
         },
         shouldInsert,
       });
@@ -669,7 +666,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   };
 
   return (
-    <div class="bg-surface ring-1 ring-edge-muted rounded-sm">
+    <div class="bg-surface ring-1 ring-edge-muted rounded-xl">
       <div class="flex items-center justify-between p-2 px-6 border-b border-edge-muted">
         <h1 class="font-bold text-ink-muted">Create New</h1>
         <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">

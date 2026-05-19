@@ -8,11 +8,11 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { RedirectLocation } from '@core/util/authRedirect';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
-import { isOk } from '@core/util/maybeResult';
+
 import { getNativeMobilePlatform } from '@core/util/platform';
-import IconApple from '@macro-icons/macro-apple.svg';
-import IconGoogle from '@macro-icons/macro-google.svg';
-import IconMail from '@macro-icons/macro-mail.svg';
+import IconApple from '@icon/macro-apple.svg';
+import IconGoogle from '@icon/macro-google.svg';
+import IconMail from '@icon/macro-mail.svg';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
 import { useLocation } from '@solidjs/router';
@@ -105,7 +105,7 @@ export function LoginOptions(props: {
         session_code: result.token,
       });
 
-      if (isOk(res)) {
+      if (res.isOk()) {
         await invalidateAllAfterLogin();
         await initEmailLink().match(
           () => {},

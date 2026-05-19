@@ -10,5 +10,3 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 utoipa = { workspace = true }
 
-[package.metadata.cargo-machete]
-ignored = ["openssl"]

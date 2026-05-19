@@ -315,10 +315,8 @@ export function EmailCompose(props: EmailComposeProps) {
   const sendMutation = useSendMessageMutation({
     onSuccess: (data) => {
       const draftId = data.message.db_id;
-      const toastId = toast.success(
-        'Email sent',
-        undefined,
-        draftId
+      const toastId = toast.success('Email sent', {
+        actions: draftId
           ? [
               {
                 label: 'Undo',
@@ -330,8 +328,9 @@ export function EmailCompose(props: EmailComposeProps) {
               },
             ]
           : undefined,
-        10_000
-      );
+        duration: 10_000,
+        mobile: true,
+      });
       if (data.message.thread_db_id) {
         replaceSplit({
           content: { type: 'email', id: data.message.thread_db_id },
@@ -472,7 +471,9 @@ export function EmailCompose(props: EmailComposeProps) {
     if (date) {
       const draftID = currentDraft ?? (await executeSaveDraft());
       if (!draftID) {
-        toast.failure('Failed to schedule message', 'Draft required');
+        toast.failure('Failed to schedule message', {
+          subtext: 'Draft required',
+        });
         return;
       }
 
@@ -652,13 +653,13 @@ export function EmailCompose(props: EmailComposeProps) {
         <Show when={hasLinkError()}>
           <EmailPermissionsBanner />
         </Show>
-        <div class="macro-message-width sm:macro-message-padding mx-auto w-full min-h-120 max-h-full my-2 sm:my-12 mobile:my-0 px-2 sm:px-4 mobile:px-0 overflow-hidden mobile:overflow-y-auto mobile:hide-scrollbar mobile:min-h-full">
+        <div class="macro-message-width sm:macro-message-padding mx-auto w-full min-h-120 max-h-full my-2 sm:my-12 mobile:my-0 px-2 sm:px-4 mobile:px-0 overflow-hidden mobile:overflow-y-auto mobile:scrollbar-hidden mobile:min-h-full">
           <WrapUnlessMobile
             wrapper={(children) => <Surface depth={2}>{children}</Surface>}
           >
             <ComposeLayout
               toolbar={<EmailComposeToolbar editor={editor} />}
-              class="size-full p-4 bg-surface max-h-full mobile:max-h-none overflow-y-auto flex flex-col min-h-0 mobile:min-h-full"
+              class="size-full p-4 bg-surface max-h-full mobile:max-h-none overflow-hidden flex flex-col min-h-0 mobile:min-h-full"
             />
           </WrapUnlessMobile>
         </div>

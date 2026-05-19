@@ -47,12 +47,12 @@ import { isMobile } from '@core/mobile/isMobile';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import DownloadIcon from '@icon/regular/download-simple.svg';
-import Info from '@icon/regular/info.svg';
-import Printer from '@icon/regular/printer.svg';
-import Quotes from '@icon/regular/quotes.svg';
-import TagIcon from '@icon/regular/tag.svg';
-import IconShared from '@macro-icons/wide/share.svg';
+import IconShared from '@icon/wide-share.svg';
+import DownloadIcon from '@phosphor/download-simple.svg';
+import Info from '@phosphor/info.svg';
+import Printer from '@phosphor/printer.svg';
+import Quotes from '@phosphor/quotes.svg';
+import TagIcon from '@phosphor/tag.svg';
 import {
   blockNameToItemType,
   storageServiceClient,
@@ -139,8 +139,8 @@ export function TopBar() {
   const downloadDocx = createCallback(async () => {
     if (!isAuth()) return openLoginModal();
 
-    const [_, data] = await storageServiceClient.exportDocument({ documentId });
-    if (!data) {
+    const data = await storageServiceClient.exportDocument({ documentId });
+    if (data.isErr()) {
       return toast.failure('Unable to download file');
     }
 
@@ -148,7 +148,7 @@ export function TopBar() {
 
     try {
       // Fetch the file from the presigned URL
-      const response = await platformFetch(data.presigned_url);
+      const response = await platformFetch(data.value.presigned_url);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
