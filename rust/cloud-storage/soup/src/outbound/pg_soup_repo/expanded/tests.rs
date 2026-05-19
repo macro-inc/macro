@@ -6108,3 +6108,272 @@ async fn test_date_filter_project_updated_at_range(db: PgPool) -> anyhow::Result
     );
     Ok(())
 }
+
+async fn insert_notification(
+    db: &PgPool,
+    notification_id: &str,
+    user_id: &str,
+    item_type: &str,
+    item_id: &str,
+    done: bool,
+    seen: bool,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO notification (
+            id,
+            notification_event_type,
+            event_item_id,
+            event_item_type,
+            service_sender,
+            created_at,
+            metadata
+        )
+        VALUES ($1::uuid, 'test', $2, $3, 'test', NOW(), '{}')
+        "#,
+    )
+    .bind(notification_id)
+    .bind(item_id)
+    .bind(item_type)
+    .execute(db)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO user_notification (
+            user_id,
+            notification_id,
+            done,
+            seen_at,
+            deleted_at
+        )
+        VALUES ($1, $2::uuid, $3, CASE WHEN $4 THEN NOW() ELSE NULL END, NULL)
+        "#,
+    )
+    .bind(user_id)
+    .bind(notification_id)
+    .bind(done)
+    .bind(seen)
+    .execute(db)
+    .await?;
+
+    Ok(())
+}
+
+async fn run_notification_filter(
+    db: &PgPool,
+    ast: EntityFilterAst,
+) -> anyhow::Result<HashSet<Uuid>> {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    let items = expanded_dynamic_cursor_soup(
+        db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 100,
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, ast),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    Ok(items.into_iter().map(|item| item.id()).collect())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_notification_optimization_preserves_access_control(db: PgPool) -> anyhow::Result<()> {
+    let user_id = "macro|user-1@test.com";
+
+    // Accessible items from entity_filter_tests.
+    let accessible_doc = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    let accessible_chat = "a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1";
+    let accessible_project = "11111111-1111-1111-1111-111111111111";
+
+    // Existing fixture rows intentionally not present in entity_access for user-1.
+    let inaccessible_doc = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+    let inaccessible_chat = "e5e5e5e5-e5e5-e5e5-e5e5-e5e5e5e5e5e5";
+    let inaccessible_project = "55555555-5555-5555-5555-555555555555";
+
+    for (notification_id, item_type, item_id) in [
+        (
+            "10000000-0000-0000-0000-000000000001",
+            "document",
+            accessible_doc,
+        ),
+        (
+            "10000000-0000-0000-0000-000000000002",
+            "chat",
+            accessible_chat,
+        ),
+        (
+            "10000000-0000-0000-0000-000000000003",
+            "project",
+            accessible_project,
+        ),
+        (
+            "10000000-0000-0000-0000-000000000004",
+            "document",
+            inaccessible_doc,
+        ),
+        (
+            "10000000-0000-0000-0000-000000000005",
+            "chat",
+            inaccessible_chat,
+        ),
+        (
+            "10000000-0000-0000-0000-000000000006",
+            "project",
+            inaccessible_project,
+        ),
+    ] {
+        insert_notification(
+            &db,
+            notification_id,
+            user_id,
+            item_type,
+            item_id,
+            false,
+            false,
+        )
+        .await?;
+    }
+
+    let ast = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::NotificationDone(
+            false,
+        )))),
+        chat_filter: Some(Arc::new(Expr::Literal(ChatLiteral::NotificationDone(
+            false,
+        )))),
+        project_filter: Some(Arc::new(Expr::Literal(ProjectLiteral::NotificationDone(
+            false,
+        )))),
+        ..mock_empty_ast()
+    };
+
+    let ids = run_notification_filter(&db, ast).await?;
+
+    assert!(ids.contains(&Uuid::parse_str(accessible_doc)?));
+    assert!(ids.contains(&Uuid::parse_str(accessible_chat)?));
+    assert!(ids.contains(&Uuid::parse_str(accessible_project)?));
+
+    assert!(!ids.contains(&Uuid::parse_str(inaccessible_doc)?));
+    assert!(!ids.contains(&Uuid::parse_str(inaccessible_chat)?));
+    assert!(!ids.contains(&Uuid::parse_str(inaccessible_project)?));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_optimized_notification_filter_matches_unoptimized_equivalent(
+    db: PgPool,
+) -> anyhow::Result<()> {
+    let user_id = "macro|user-1@test.com";
+    for (notification_id, item_type, item_id) in [
+        (
+            "20000000-0000-0000-0000-000000000001",
+            "document",
+            "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        ),
+        (
+            "20000000-0000-0000-0000-000000000002",
+            "document",
+            "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        ),
+        (
+            "20000000-0000-0000-0000-000000000003",
+            "chat",
+            "a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1",
+        ),
+        (
+            "20000000-0000-0000-0000-000000000004",
+            "project",
+            "11111111-1111-1111-1111-111111111111",
+        ),
+    ] {
+        insert_notification(
+            &db,
+            notification_id,
+            user_id,
+            item_type,
+            item_id,
+            false,
+            false,
+        )
+        .await?;
+    }
+
+    let optimized = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::NotificationDone(
+            false,
+        )))),
+        chat_filter: Some(Arc::new(Expr::Literal(ChatLiteral::NotificationDone(
+            false,
+        )))),
+        project_filter: Some(Arc::new(Expr::Literal(ProjectLiteral::NotificationDone(
+            false,
+        )))),
+        ..mock_empty_ast()
+    };
+
+    // This is logically equivalent to NotificationDone(false), but because the
+    // notification predicate appears under OR it intentionally stays on the old
+    // correlated-EXISTS path.
+    let unoptimized_doc = Expr::Or(
+        Box::new(Expr::Literal(DocumentLiteral::NotificationDone(false))),
+        Box::new(Expr::And(
+            Box::new(Expr::Literal(DocumentLiteral::NotificationDone(false))),
+            Box::new(Expr::Literal(DocumentLiteral::UpdatedAt(
+                DateLiteral::GreaterThan(
+                    chrono::DateTime::parse_from_rfc3339("2000-01-01T00:00:00Z")?.into(),
+                ),
+            ))),
+        )),
+    );
+    let unoptimized_chat = Expr::Or(
+        Box::new(Expr::Literal(ChatLiteral::NotificationDone(false))),
+        Box::new(Expr::And(
+            Box::new(Expr::Literal(ChatLiteral::NotificationDone(false))),
+            Box::new(Expr::Literal(ChatLiteral::UpdatedAt(
+                DateLiteral::GreaterThan(
+                    chrono::DateTime::parse_from_rfc3339("2000-01-01T00:00:00Z")?.into(),
+                ),
+            ))),
+        )),
+    );
+    let unoptimized_project = Expr::Or(
+        Box::new(Expr::Literal(ProjectLiteral::NotificationDone(false))),
+        Box::new(Expr::And(
+            Box::new(Expr::Literal(ProjectLiteral::NotificationDone(false))),
+            Box::new(Expr::Literal(ProjectLiteral::UpdatedAt(
+                DateLiteral::GreaterThan(
+                    chrono::DateTime::parse_from_rfc3339("2000-01-01T00:00:00Z")?.into(),
+                ),
+            ))),
+        )),
+    );
+    let unoptimized = EntityFilterAst {
+        document_filter: Some(Arc::new(unoptimized_doc)),
+        chat_filter: Some(Arc::new(unoptimized_chat)),
+        project_filter: Some(Arc::new(unoptimized_project)),
+        ..mock_empty_ast()
+    };
+
+    let optimized_ids = run_notification_filter(&db, optimized).await?;
+    let unoptimized_ids = run_notification_filter(&db, unoptimized).await?;
+
+    assert_eq!(optimized_ids, unoptimized_ids);
+
+    Ok(())
+}

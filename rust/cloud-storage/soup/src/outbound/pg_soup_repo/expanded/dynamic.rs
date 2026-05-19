@@ -48,21 +48,6 @@ static PREFIX: &str = r#"
 
 // -- Lightweight top clauses: only id + sort_ts (plus filter-required joins) --
 
-static DOCUMENT_TOP_CLAUSE: &str = r#"
-                SELECT
-                    'document'::text as item_type,
-                    d.id,
-                    CASE $2
-                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", d."updatedAt")
-                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
-                        WHEN 'created_at' THEN d."createdAt"
-                        ELSE d."updatedAt"
-                    END::timestamptz as sort_ts
-                FROM AccessibleItems ai
-                INNER JOIN "Document" d ON d.id = ai.item_id AND ai.item_type = 'document'
-                LEFT JOIN document_sub_type dt ON dt.document_id = d.id
-"#;
-
 static DOCUMENT_TASK_PROPERTY_JOINS: &str = r#"
                 LEFT JOIN entity_properties ep_assignees
                     ON dt.sub_type = 'task'
@@ -79,41 +64,6 @@ static DOCUMENT_TASK_PROPERTY_JOINS: &str = r#"
 static DOCUMENT_TOP_WHERE_CLAUSE: &str = r#"
                 LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
                 WHERE d."deletedAt" IS NULL
-"#;
-
-static CHAT_TOP_CLAUSE: &str = r#"
-                SELECT
-                    'chat'::text as item_type,
-                    c.id,
-                    CASE $2
-                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", c."updatedAt")
-                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
-                        WHEN 'created_at' THEN c."createdAt"
-                        ELSE c."updatedAt"
-                    END::timestamptz as sort_ts
-                FROM AccessibleItems ai
-                INNER JOIN "Chat" c ON c.id = ai.item_id AND ai.item_type = 'chat'
-                LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
-                WHERE c."deletedAt" IS NULL
-"#;
-
-static PROJECT_TOP_CLAUSE: &str = r#"
-                SELECT
-                    'project'::text as item_type,
-                    p.id,
-                    CASE $2
-                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", p."updatedAt")
-                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
-                        WHEN 'created_at' THEN p."createdAt"
-                        ELSE p."updatedAt"
-                    END::timestamptz as sort_ts
-                FROM AccessibleItems ai
-                INNER JOIN "Project" p ON p.id = ai.item_id AND ai.item_type = 'project'
-                LEFT JOIN "UserHistory" uh
-                    ON uh."itemId" = p.id
-                    AND uh."itemType" = 'project'
-                    AND uh."userId" = $1
-                WHERE p."deletedAt" IS NULL
 "#;
 
 // -- Grouped top clauses: include project_id for grouping support --
