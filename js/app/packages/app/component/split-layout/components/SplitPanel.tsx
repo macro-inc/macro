@@ -121,6 +121,10 @@ export function SplitPanel(props: SplitPanelProps) {
     return Boolean(splits && splits.length > 1);
   }
 
+  const shouldHideSplitHeader = createMemo(
+    () => isMobile() && isListViewID(props.handle.content().id)
+  );
+
   return (
     <SoupContextProvider soup={nextSoup}>
       <SplitPanelContext.Provider
@@ -170,10 +174,15 @@ export function SplitPanel(props: SplitPanelProps) {
                 multipleSplits() &&
                 !props.handle.isSpotLight()
               }
-              class="rounded-xl"
+              class="rounded-xl mobile:rounded-none mobile:after:hidden mobile:!border-0"
               depth={1}
             >
-              <Panel.Header class="block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible">
+              <Panel.Header
+                class={cn(
+                  'block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible',
+                  shouldHideSplitHeader() && 'hidden'
+                )}
+              >
                 <SplitHeader ref={setHeaderRef} />
               </Panel.Header>
 
