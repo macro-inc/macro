@@ -30,7 +30,7 @@ anyhow = { workspace = true }
 async-stripe = { workspace = true, default-features = false, features = [
   "billing",
   "checkout",
-  "runtime-tokio-hyper",
+  "runtime-tokio-hyper-rustls",
 ] }
 chrono = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }

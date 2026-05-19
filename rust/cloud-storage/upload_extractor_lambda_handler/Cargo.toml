@@ -23,7 +23,6 @@ macro_entrypoint = { path = "../macro_entrypoint" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 models_bulk_upload = { path = "../models_bulk_upload" }
-openssl = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
@@ -37,4 +36,4 @@ walkdir = "2.3.2"
 zip = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["connection_gateway_client", "openssl"]
+ignored = ["connection_gateway_client"]

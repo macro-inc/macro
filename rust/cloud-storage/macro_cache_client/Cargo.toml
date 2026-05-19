@@ -25,4 +25,4 @@ verify_email_rate_limit = ["dep:email_validator"]
 anyhow = { workspace = true }
 email_validator = { path = "../email_validator", optional = true }
 macro_redis = { path = "../macro_redis" }
-redis = { workspace = true, features = ["tokio-native-tls-comp"] }
+redis = { workspace = true, features = ["tokio-rustls-comp"] }

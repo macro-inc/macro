@@ -26,7 +26,6 @@ macro_env_var = { path = "../macro_env_var" }
 mockall = { workspace = true }
 model = { path = "../model" }
 s3_key = { path = "../s3_key" }
-openssl = { workspace = true }
 pdfium-render = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -37,5 +36,3 @@ tracing = { workspace = true }
 urlencoding = { workspace = true }
 uuid = { workspace = true }
 
-[package.metadata.cargo-machete]
-ignored = ["openssl"]

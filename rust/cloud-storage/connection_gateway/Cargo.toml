@@ -55,7 +55,7 @@ models_bulk_upload = { path = "../models_bulk_upload" }
 redis = { workspace = true, features = [
   "aio",
   "tokio-comp",
-  "tokio-native-tls-comp",
+  "tokio-rustls-comp",
 ] }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }

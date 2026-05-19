@@ -12,11 +12,8 @@ futures = { workspace = true }
 lambda_runtime = { workspace = true }
 macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
-openssl = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 
-[package.metadata.cargo-machete]
-ignored = ["openssl"]
