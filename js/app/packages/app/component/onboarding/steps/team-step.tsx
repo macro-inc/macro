@@ -3,7 +3,7 @@ import CalendarIcon from '@phosphor/calendar-dots.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import UsersIcon from '@phosphor/users.svg';
 import XIcon from '@phosphor/x.svg';
-import { Button, cn } from '@ui';
+import { Button, cn, Layer } from '@ui';
 import { createSignal, Index, Show } from 'solid-js';
 import { z } from 'zod';
 import type { InvitedMember } from '../onboarding-context';
@@ -12,7 +12,7 @@ import { useOnboarding } from '../onboarding-context';
 type InviteEntry = { email: string };
 
 const LARGE_TEAM_THRESHOLD = 25;
-const CONTACT_SALES_URL = 'https://cal.com/jacob-beckerman-b56mrn';
+const CONTACT_SALES_URL = 'https://cal.com/team/macro/macro-demo-call';
 
 export function TeamStep() {
   const ctx = useOnboarding();
@@ -237,14 +237,16 @@ export function TeamStep() {
             </Show>
           }
         >
-          <div class="rounded-sm border border-ink/10 bg-ink/5 p-3 flex flex-col gap-1">
-            <p class="text-sm font-medium text-ink">
-              Inviting more than {LARGE_TEAM_THRESHOLD} teammates?
-            </p>
-            <p class="text-xs text-ink-muted">
-              Let's chat — we'll set you up with a custom plan that fits.
-            </p>
-          </div>
+          <Layer depth={1}>
+            <div class="rounded-sm border border-edge-muted bg-surface p-3 flex flex-col gap-1">
+              <p class="text-sm font-medium text-ink">
+                Inviting more than {LARGE_TEAM_THRESHOLD} teammates?
+              </p>
+              <p class="text-xs text-ink-muted">
+                Let's chat — we'll set you up with a custom plan that fits.
+              </p>
+            </div>
+          </Layer>
           <Button
             variant="base"
             size="lg"
@@ -254,7 +256,7 @@ export function TeamStep() {
             class="w-full bg-accent text-surface border-accent not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface focus-visible:bg-accent focus-visible:text-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
           >
             <CalendarIcon class="size-4" />
-            Contact us
+            Book a call
           </Button>
           <Button
             variant="ghost"
