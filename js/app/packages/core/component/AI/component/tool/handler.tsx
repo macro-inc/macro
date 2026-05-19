@@ -9,12 +9,12 @@ import { createDocumentHandler } from './CreateDocument';
 import { getThreadHandler } from './GetThread';
 import { listCallRecordsHandler } from './ListCallRecords';
 import { listEntitiesHandler } from './ListEntities';
+import { listTeamMembersHandler } from './ListTeamMembers';
 import {
   listNotificationsHandler,
   markNotificationsDoneHandler,
   markNotificationsSeenHandler,
 } from './Notifications';
-import { listTeamMembersHandler } from './ListTeamMembers';
 import {
   getEntityPropertiesHandler,
   setEntityPropertyHandler,
