@@ -223,7 +223,7 @@ export function ComposeLayout(props: {
         <ComposeSubject inputRef={registerRef('subjectInput')} />
       </div>
 
-      <div class="size-full flex flex-col min-h-0 mt-4">
+      <div class="w-full flex-1 min-h-0 flex flex-col mt-4 mobile:flex-none mobile:h-auto">
         <ComposeBody
           debugName={props.bodyDebugName}
           inputRef={registerRef('messageInput')}
