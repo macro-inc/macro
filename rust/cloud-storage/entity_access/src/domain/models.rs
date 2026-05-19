@@ -269,6 +269,24 @@ pub struct EntityAccessReceipt<T: RequiredPermission> {
 }
 
 impl<T: RequiredPermission> EntityAccessReceipt<T> {
+    /// Creates an access receipt for an authenticated user after validating the provided permission.
+    pub fn try_new_authenticated_user(
+        user_id: MacroUserIdStr<'static>,
+        entity: Entity,
+        entity_permission: EntityPermission,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        if !entity_permission.satisfies::<T>() {
+            return Err(AccessError::Unauthorized);
+        }
+
+        Ok(EntityAccessReceipt {
+            auth: EntityAccessAuth::Authenticated(user_id),
+            entity,
+            entity_permission,
+            _marker: PhantomData,
+        })
+    }
+
     /// get the authenticated user or error
     pub fn get_authenticated_user(&self) -> Result<&MacroUserIdStr<'static>, AccessError> {
         match &self.auth {

@@ -12,7 +12,7 @@ use crate::domain::model::{
     PatchTeamPlanRequest, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
     RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
     TeamCheckoutError, TeamCheckoutSessionRequest, TeamError, TeamInvite, TeamInviteDetails,
-    TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+    TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
 };
 
 /// The TeamChannelsRepository defines a set of actions related to team channels
@@ -237,6 +237,15 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         team_plan: TeamPlan,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
+}
+
+/// The TeamMembersService defines read-only team membership queries.
+pub trait TeamMembersService: Clone + Send + Sync + 'static {
+    /// Lists current members and pending invites for a team.
+    fn list_team_members(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> impl Future<Output = Result<TeamMembers, TeamError>> + Send;
 }
 
 /// The TeamService defines a set of actions to perform on the teams

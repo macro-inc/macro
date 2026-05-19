@@ -5,6 +5,13 @@ publish = false
 version = "0.1.0"
 
 [features]
+ai_tools = [
+  "dep:ai",
+  "dep:async-trait",
+  "dep:schemars",
+  "entity_access/ports",
+  "ports",
+]
 axum = [
   "dep:axum",
   "dep:model-error-response",
@@ -14,7 +21,7 @@ axum = [
   "entity_access/inbound",
   "entity_access/ports",
 ]
-default = ["axum", "inbound", "outbound", "ports"]
+default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
 outbound = ["dep:sqlx", "dep:url", "ports"]
 ports = [
@@ -26,12 +33,14 @@ ports = [
 
 [dependencies]
 # Core
+ai = { path = "../ai", optional = true }
 anyhow = { workspace = true }
 async-stripe = { workspace = true, default-features = false, features = [
   "billing",
   "checkout",
   "runtime-tokio-hyper-rustls-webpki",
 ] }
+async-trait = { workspace = true, optional = true }
 chrono = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
@@ -39,6 +48,7 @@ non_empty = { path = "../non_empty" }
 roles_and_permissions = { path = "../roles_and_permissions", default-features = false, features = [
   "ports",
 ] }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

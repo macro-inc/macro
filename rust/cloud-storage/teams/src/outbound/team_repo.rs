@@ -3,9 +3,10 @@ use crate::domain::{
     model::{
         AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
         RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole,
+        TeamWithMembers,
     },
-    team_repo::TeamRepository,
+    team_repo::{TeamMembersService, TeamRepository},
 };
 use macro_user_id::{
     cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
@@ -160,6 +161,24 @@ impl From<sqlx::Error> for RemoveUserFromTeamError {
 impl From<sqlx::Error> for RemoveTeamInviteError {
     fn from(e: sqlx::Error) -> Self {
         Self::StorageLayerError(e.into())
+    }
+}
+
+impl TeamMembersService for TeamRepositoryImpl {
+    #[tracing::instrument(skip(self), err)]
+    async fn list_team_members(
+        &self,
+        entity_access_receipt: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::MemberTeamRole,
+        >,
+    ) -> Result<TeamMembers, TeamError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        let members = self.get_team_by_id(&team_id).await?.members;
+        let invited = self.get_team_invites(&team_id).await?;
+
+        Ok(TeamMembers { members, invited })
     }
 }
 

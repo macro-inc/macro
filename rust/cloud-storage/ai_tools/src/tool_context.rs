@@ -21,6 +21,7 @@ use notification::inbound::ai_tool::NotificationToolContext;
 use properties::inbound::toolset::PropertiesToolContext;
 use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
 use std::sync::Arc;
+use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamRepositoryImpl};
 
 pub use ai_toolset::RequestContext;
 
@@ -54,6 +55,22 @@ pub type ToolChannelToolContext =
 pub fn build_channel_tool_context(pool: sqlx::PgPool) -> ToolChannelToolContext {
     ChannelToolContext::new(
         ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(pool.clone())),
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(pool),
+        ),
+    )
+}
+
+/// Type alias for the team member listing service used by AI tools.
+pub type ToolTeamService = TeamRepositoryImpl;
+
+/// Type alias for the team AI tool context.
+pub type ToolTeamToolContext = TeamToolContext<ToolTeamService, ToolEntityAccessService>;
+
+/// Build the team AI tool context from a Postgres pool.
+pub fn build_team_tool_context(pool: sqlx::PgPool) -> ToolTeamToolContext {
+    TeamToolContext::new(
+        TeamRepositoryImpl::new(pool.clone()),
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool),
         ),
@@ -421,6 +438,7 @@ pub struct ToolServiceContext {
     pub notification_tool_context: ToolNotificationToolContext,
     pub chat_tool_context: ToolChatToolContext,
     pub channel_tool_context: ToolChannelToolContext,
+    pub team_tool_context: ToolTeamToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
 }
 

@@ -112,6 +112,15 @@ pub struct TeamWithMembers {
     pub members: Vec<TeamMember<'static>>,
 }
 
+/// Current and invited members for a team.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TeamMembers {
+    /// Current accepted members of the team.
+    pub members: Vec<TeamMember<'static>>,
+    /// Pending invites for the team.
+    pub invited: Vec<TeamInviteDetails>,
+}
+
 /// Detailed information about a team invite
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]

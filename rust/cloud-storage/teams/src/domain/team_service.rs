@@ -28,9 +28,9 @@ use crate::domain::{
         PatchTeamPlanRequest, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
         RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
         TeamCheckoutError, TeamCheckoutSessionRequest, TeamError, TeamInvite, TeamInviteDetails,
-        TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+        TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
     },
-    team_repo::{TeamChannelsRepository, TeamRepository, TeamService},
+    team_repo::{TeamChannelsRepository, TeamMembersService, TeamRepository, TeamService},
 };
 
 /// Implementation of the TeamService using a TeamRepository
@@ -208,6 +208,29 @@ impl GetTeamSubscriptionError {
             Self::Customer(e) => TeamError::StorageLayerError(e.into()),
             Self::Storage(e) => TeamError::StorageLayerError(e),
         }
+    }
+}
+
+impl<TR, CR, TCR, URPS, NI> TeamMembersService for TeamServiceImpl<TR, CR, TCR, URPS, NI>
+where
+    TR: TeamRepository,
+    CR: CustomerRepository,
+    TCR: TeamChannelsRepository,
+    URPS: UserRolesAndPermissionsService,
+    NI: NotificationIngress,
+{
+    #[tracing::instrument(skip(self), err)]
+    async fn list_team_members(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> Result<TeamMembers, TeamError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        let members = self.team_repository.get_team_by_id(&team_id).await?.members;
+        let invited = self.team_repository.get_team_invites(&team_id).await?;
+
+        Ok(TeamMembers { members, invited })
     }
 }
 

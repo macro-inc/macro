@@ -13,7 +13,7 @@
 pub mod domain;
 
 /// The inbound module contains the inbound adapters for teams
-#[cfg(feature = "inbound")]
+#[cfg(any(feature = "inbound", feature = "ai_tools"))]
 pub mod inbound;
 
 /// The outbound module contains the outbound logic for teams
