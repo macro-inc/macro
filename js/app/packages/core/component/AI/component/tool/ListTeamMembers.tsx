@@ -7,10 +7,7 @@ import { For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 
-type ListTeamMembersResponse = NamedTool<
-  'ListTeamMembers',
-  'response'
->['data'];
+type ListTeamMembersResponse = NamedTool<'ListTeamMembers', 'response'>['data'];
 
 type TeamMember = ListTeamMembersResponse['members'][number];
 type TeamInvite = ListTeamMembersResponse['invited'][number];
