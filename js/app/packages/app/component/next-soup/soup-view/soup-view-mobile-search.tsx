@@ -34,8 +34,8 @@ export function SoupViewMobileSearchButton(props: {
           !isVisible()
             ? 'pointer-events-none translate-y-2'
             : isExpanded()
-            ? 'opacity-100 -translate-x-[calc(100%+5.25rem)] scale-100'
-            : MOBILE_FLOATING_BUTTON_VISIBLE
+              ? 'opacity-100 -translate-x-[calc(100%+5.25rem)] scale-100'
+              : MOBILE_FLOATING_BUTTON_VISIBLE
         )}
         disabled={!isVisible()}
         aria-hidden={!isVisible()}
