@@ -88,21 +88,19 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
       }}
     >
       <div
-        ref={scrollRef}
-        onScroll={handleScroll}
         style={{
           'scrollbar-width': 'none',
           'overflow-y': 'auto',
           'height': '100%',
         }}
+        onScroll={handleScroll}
+        ref={scrollRef}
       >
         <div ref={contentRef}>{props.children}</div>
       </div>
       <div
-        ref={gutterRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
-        aria-hidden="true"
         style={{
           'width': `${GUTTER_WIDTH}px`,
           'touch-action': 'none',
@@ -111,6 +109,8 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
           'right': '0',
           'top': '0',
         }}
+        aria-hidden="true"
+        ref={gutterRef}
       >
         <div
           style={{
