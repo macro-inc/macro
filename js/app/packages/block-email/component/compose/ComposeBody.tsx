@@ -154,7 +154,7 @@ export function ComposeBody(props: {
             },
           }}
         >
-          <div class={cn('absolute inset-0 z-10', !isDragging() && 'hidden')}>
+          <div class={cn('absolute inset-0', !isDragging() && 'hidden')}>
             <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
           </div>
 

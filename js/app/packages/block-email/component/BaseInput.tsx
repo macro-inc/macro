@@ -1567,10 +1567,7 @@ export function BaseInput(props: {
           }}
         >
           <div
-            class={cn(
-              'absolute size-full inset-0 z-10',
-              !isDragging() && 'hidden'
-            )}
+            class={cn('absolute size-full inset-0', !isDragging() && 'hidden')}
           >
             <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
           </div>
