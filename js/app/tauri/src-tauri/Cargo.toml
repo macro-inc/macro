@@ -31,7 +31,8 @@ serde_json = "1.0"
 tracing-oslog = { version = "0.3" }
 
 nom = "8.0.0"
-reqwest = { workspace = true, features = ["blocking", "cookies"] }
+reqwest = { workspace = true, features = ["cookies", "stream"] }
+tokio-util = { version = "0.7", features = ["io"] }
 serde_qs = "0.15.0"
 tauri = { workspace = true, features = ["devtools", "protocol-asset"] }
 tauri-plugin-deep-link = "=2.4.5"

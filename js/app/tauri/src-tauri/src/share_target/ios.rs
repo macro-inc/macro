@@ -354,7 +354,7 @@ impl ShareTargetPlatform for ShareTargetPlatformImpl {
         upload_url: String,
         mime_type: String,
     ) -> Result<(), String> {
-        use reqwest::header::CONTENT_TYPE;
+        use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE};
 
         let upload_url = Url::parse(&upload_url)
             .map_err(|error| format!("invalid shared file upload URL: {error}"))?;
@@ -363,60 +363,58 @@ impl ShareTargetPlatform for ShareTargetPlatformImpl {
         }
 
         let path = staged_shared_file_path(&app, &token)?;
-        let upload_url = upload_url.to_string();
+        let file = tokio::fs::File::open(&path)
+            .await
+            .map_err(|error| format!("failed to open staged shared file: {error}"))?;
+        let size = file
+            .metadata()
+            .await
+            .map_err(|error| format!("failed to read staged shared file metadata: {error}"))?
+            .len();
 
-        tokio::task::spawn_blocking(move || -> Result<(), String> {
-            let file = std::fs::File::open(&path)
-                .map_err(|error| format!("failed to open staged shared file: {error}"))?;
-            let size = file
-                .metadata()
-                .map_err(|error| format!("failed to read staged shared file metadata: {error}"))?
-                .len();
+        let body = reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(file));
+        let client = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(30))
+            .timeout(std::time::Duration::from_secs(300))
+            .build()
+            .map_err(|error| format!("failed to build HTTP client: {error}"))?;
+        let mut request = client.put(upload_url).body(body);
 
-            let body = reqwest::blocking::Body::sized(file, size);
-            let client = reqwest::blocking::Client::builder()
-                .connect_timeout(std::time::Duration::from_secs(30))
-                .timeout(std::time::Duration::from_secs(300))
-                .build()
-                .map_err(|error| format!("failed to build HTTP client: {error}"))?;
-            let mut request = client.put(upload_url).body(body);
+        if !mime_type.is_empty() {
+            request = request.header(CONTENT_TYPE, mime_type);
+        }
 
-            if !mime_type.is_empty() {
-                request = request.header(CONTENT_TYPE, mime_type);
-            }
+        let response = request
+            .header(CONTENT_LENGTH, size.to_string())
+            .send()
+            .await
+            .map_err(|error| format!("failed to upload staged shared file: {error}"))?;
 
-            let response = request
-                .send()
-                .map_err(|error| format!("failed to upload staged shared file: {error}"))?;
-
-            let status = response.status();
-            if !status.is_success() {
-                let detail = response.text().unwrap_or_default();
-                if detail.trim().is_empty() {
-                    return Err(format!(
-                        "failed to upload staged shared file: HTTP {status}"
-                    ));
-                }
+        let status = response.status();
+        if !status.is_success() {
+            let detail = response.text().await.unwrap_or_default();
+            if detail.trim().is_empty() {
                 return Err(format!(
-                    "failed to upload staged shared file: HTTP {status}: {}",
-                    detail.trim()
+                    "failed to upload staged shared file: HTTP {status}"
                 ));
             }
+            return Err(format!(
+                "failed to upload staged shared file: HTTP {status}: {}",
+                detail.trim()
+            ));
+        }
 
-            if let Err(error) = std::fs::remove_file(&path)
-                && error.kind() != std::io::ErrorKind::NotFound
-            {
-                tracing::warn!(
-                    "failed to delete staged shared file after upload {}: {}",
-                    path.display(),
-                    error
-                );
-            }
+        if let Err(error) = tokio::fs::remove_file(&path).await
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::warn!(
+                "failed to delete staged shared file after upload {}: {}",
+                path.display(),
+                error
+            );
+        }
 
-            Ok(())
-        })
-        .await
-        .map_err(|error| format!("failed to join staged shared file upload task: {error}"))?
+        Ok(())
     }
 
     fn maybe_handle_share_deep_link(handle: &AppHandle, url: &Url) -> bool {
