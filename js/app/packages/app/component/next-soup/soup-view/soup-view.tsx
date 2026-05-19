@@ -1011,8 +1011,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                           cache={listStateCache.get(cacheKey)?.virtualCache}
                           ref={setLocalEntityListRef}
                           virtualizerClass={cn(
-                            previewVisible() &&
-                              'pt-1' /* scuffed: this is shit, but we are blinded by linear */,
+                            previewVisible() && 'pt-1' /* scuffed */,
                             'scrollbar-hidden'
                           )}
                           class="overflow-hidden flex min-w-0"
