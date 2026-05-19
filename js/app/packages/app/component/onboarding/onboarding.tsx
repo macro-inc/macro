@@ -265,7 +265,7 @@ function OnboardingInner() {
                 <LogoProgress
                   level={activeStepPosition()}
                   total={activeStepCount()}
-                  class="w-7 mobile:w-5"
+                  class="w-7"
                 />
                 <Show when={activeStepCount() > 1}>
                   <span class="text-sm font-mono font-semibold text-ink mobile:text-xs mobile:font-normal mobile:text-ink-disabled">

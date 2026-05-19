@@ -187,9 +187,9 @@ export function TeamStep() {
             variant="ghost"
             size="sm"
             onClick={addEntry}
-            class="self-start"
+            class="w-full justify-center [&_svg]:size-3"
           >
-            <PlusIcon class="size-4" />
+            <PlusIcon />
             Add another
           </Button>
         </Show>
