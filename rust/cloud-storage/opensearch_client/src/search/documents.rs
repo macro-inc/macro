@@ -84,8 +84,9 @@ impl DocumentQueryBuilder {
         self.build_bool_query_flat()
     }
 
-    /// Legacy flat-chunk path used by `documents_v1`. The whole user
-    /// query is a single phrase[-prefix] match on `content`.
+    /// Flat-chunk path: every chunk is its own top-level OpenSearch doc
+    /// and the whole user query becomes a single phrase[-prefix] match
+    /// on `content`.
     fn build_bool_query_flat<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         let mut query = self.inner.build_content_bool_query()?;
 
@@ -99,10 +100,10 @@ impl DocumentQueryBuilder {
         Ok(query)
     }
 
-    /// Parent/child join path used by `documents_v2`. One `has_child`
-    /// clause per term, ANDed inside `bool.must`. Parent metadata filters
-    /// (owner, ids, sub_type) sit on `bool.filter` directly because they
-    /// live on the parent doc.
+    /// Parent/child join path: one `has_child` clause per term, ANDed
+    /// inside `bool.must`. Parent metadata filters (owner, ids,
+    /// sub_type) sit on `bool.filter` directly because they live on
+    /// the parent doc.
     fn build_bool_query_join<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         if self.inner.ids_only && self.inner.ids.is_empty() {
             return Err(crate::error::OpensearchClientError::EmptyIdsWithIdsOnly(
@@ -252,11 +253,10 @@ fn build_child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> 
 pub(crate) struct DocumentIndex {
     pub entity_id: uuid::Uuid,
     pub document_name: String,
-    /// Optional because join-shape parents in `documents_v2` have no
-    /// `node_id` in `_source` — that field lives on chunk children.
-    /// Flat-shape `documents_v1` hits always populate it. Join-shape
-    /// callers should consume the chunk's `node_id` from `inner_hits`
-    /// instead.
+    /// Optional because join-shape parents have no `node_id` in
+    /// `_source` — that field lives on chunk children. Flat-shape hits
+    /// always populate it. Join-shape callers should consume the
+    /// chunk's `node_id` from `inner_hits` instead.
     #[serde(default)]
     pub node_id: Option<String>,
     pub raw_content: Option<String>,
@@ -334,7 +334,7 @@ struct InnerHitsList {
     hits: Vec<ChunkInnerHit>,
 }
 
-/// Walk the `inner_hits` block from a parent documents_v2 hit and emit
+/// Walk the `inner_hits` block from a join-shape parent hit and emit
 /// one `SearchHit` per matching chunk, carrying that chunk's
 /// `node_id`, `raw_content`, score, and highlight.
 ///

@@ -282,8 +282,8 @@ where
 
 /// Expand one OpenSearch hit into one or more `SearchHit`s.
 ///
-/// For the documents_v2 join shape, OpenSearch returns one parent hit
-/// per matching document with the matching chunks nested under
+/// For the documents join shape, OpenSearch returns one parent hit per
+/// matching document with the matching chunks nested under
 /// `inner_hits`. The documents module knows how to unpack that into
 /// chunk-level hits; everything else (flat indices, non-document hits)
 /// takes the 1:1 conversion.

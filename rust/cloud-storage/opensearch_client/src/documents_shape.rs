@@ -1,36 +1,40 @@
 //! Dispatch helpers for the documents index migration from a flat-chunk
-//! shape (`documents_v1`) to a parent/child join shape (`documents_v2`).
+//! shape to a parent/child join shape.
 //!
 //! Three dispatch points:
 //!
 //! * `destination_uses_join_shape(dest)` — used by writers that take an
-//!   explicit `index_override`. Returns `true` for the literal v2 name so
-//!   the backfill can target v2 in join-shape mode while normal traffic
-//!   keeps flowing flat-shape to v1.
+//!   explicit `index_override`. Returns `true` when the override names
+//!   the join-shape physical index so the backfill can target it in
+//!   join-shape mode while normal traffic continues writing flat docs
+//!   through the alias.
 //!
 //! * `alias_uses_join_shape()` — used by callers that always target the
 //!   `documents` alias (search reads, owner-id deletes, metadata
-//!   updates). Driven by the `DOCUMENTS_INDEX_USES_JOIN` env var so we can
-//!   flip the alias contract atomically with the alias swap without
+//!   updates). Driven by the `DOCUMENTS_INDEX_USES_JOIN` env var so we
+//!   can flip the alias contract atomically with the alias swap without
 //!   per-call introspection.
 //!
 //! * `documents_search_alias()` — the alias name search reads target.
 //!   Defaults to `documents`. The `DOCUMENTS_INDEX_NAME` env var
 //!   overrides this so local end-to-end tests can read from a side
-//!   alias (e.g. one pointing only at the v2 index) without disturbing
-//!   the main `documents` alias on shared environments.
+//!   alias pointing only at the join-shape index, without disturbing
+//!   the shared `documents` alias on dev/prod.
 
 use std::sync::OnceLock;
 
-/// Physical index name of the join-shape documents index.
+/// Physical name of the join-shape documents index. Used as the
+/// `index_override` value for backfills that should write in the join
+/// shape and as the trigger for `destination_uses_join_shape`.
 pub const DOCUMENTS_V2: &str = "documents_v2";
 
 /// Default alias name reads target. Production code always uses this.
 const DEFAULT_DOCUMENTS_ALIAS: &str = "documents";
 
 /// Whether writes targeting this destination should use the parent/child
-/// join shape. True for the explicit `documents_v2` name and, when
-/// configured via env var, for the `documents` alias too.
+/// join shape. True when the destination is the explicit join-shape
+/// index name and, when configured via env var, when it's the
+/// `documents` alias too.
 pub fn destination_uses_join_shape(destination: &str) -> bool {
     if destination == DOCUMENTS_V2 {
         return true;
@@ -57,8 +61,8 @@ pub fn alias_uses_join_shape() -> bool {
 
 /// Alias name that search reads target for documents. Returns `documents`
 /// by default; the `DOCUMENTS_INDEX_NAME` env var overrides this so local
-/// tests can point at a side alias (e.g. one pointing only at v2) without
-/// disturbing the shared `documents` alias.
+/// tests can point at a side alias pointing only at the join-shape index
+/// without disturbing the shared `documents` alias.
 ///
 /// Only the read path consults this — writes still resolve through
 /// `OpenSearchEntityType::Documents.index_name()` so the alias contract

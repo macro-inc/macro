@@ -225,11 +225,11 @@ pub(in crate::api::search) async fn perform_unified_search(
     // Set terms on each index's search args.
     //
     // Emails always get whitespace-split terms (each term matched
-    // independently across many fields, ANDed inside OpenSearch). Documents
-    // get split terms only once the alias points at the join-shape index
-    // (`documents_v2`), where each term becomes a separate has_child clause
-    // ANDed via bool.must. While the alias still points at the flat
-    // `documents_v1`, the documents branch keeps the single adjacent
+    // independently across many fields, ANDed inside OpenSearch).
+    // Documents get split terms only once the alias points at a
+    // join-shape index, where each term becomes a separate has_child
+    // clause ANDed via bool.must. While the alias still points at the
+    // flat-shape index, the documents branch keeps the single adjacent
     // phrase-prefix behavior.
     let document_terms = if opensearch_client::documents_shape::alias_uses_join_shape() {
         split_search_terms(&terms)
