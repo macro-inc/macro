@@ -464,19 +464,19 @@ export const SoupView = (props: SoupViewProps) => {
           <div class="flex flex-col w-full">
             <SplitHeaderLeft>
               <div
-                class={cn('h-full flex gap-3 items-center', {
+                class={cn('h-full flex gap-2 items-center', {
                   'shrink-0': !narrowSearchExpanded(),
                   'flex-1 min-w-0': narrowSearchExpanded(),
                 })}
               >
-                <Show when={!isMobile() && !narrowSearchExpanded()}>
-                  <span class="text-base font-bold">{props.viewName}</span>
-                </Show>
                 <Show
                   when={
                     !narrowSearchExpanded() && !isComponentListView('search')
                   }
                 >
+                  <Show when={!isMobile()}>
+                    <SoupViewCreateButton />
+                  </Show>
                   <Show when={!isMobile()}>
                     <CollapsibleHeaderItem
                       id="tabs"
@@ -485,9 +485,6 @@ export const SoupView = (props: SoupViewProps) => {
                       collapsed={() => <CollapsedSoupViewTabs />}
                       containerClass="h-full"
                     />
-                  </Show>
-                  <Show when={!isMobile()}>
-                    <SoupViewCreateButton />
                   </Show>
                 </Show>
               </div>

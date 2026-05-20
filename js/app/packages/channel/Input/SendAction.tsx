@@ -1,5 +1,6 @@
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import ArrowUp from '@phosphor/arrow-up.svg';
+import { isMobile } from '@core/mobile/isMobile';
 import { Button, cn } from '@ui';
 import { children, type JSX, Show, splitProps } from 'solid-js';
 import { useInput, useInputCommands } from './context';
@@ -12,6 +13,7 @@ export function SendAction(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
   const resolved = children(() => local.children);
   const isBlockedByPending = () => !!input().hasPendingAttachments;
   const isBlockedByEmptyInput = () => !hasSendableInputContent(input());
+  const hasTextInput = () => (input().value?.trim().length ?? 0) > 0;
 
   return (
     <Button
@@ -22,7 +24,8 @@ export function SendAction(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
       data-input-action="send"
       disabled={isBlockedByPending() || isBlockedByEmptyInput()}
       class={cn(
-        'rounded-xl size-8 bg-edge-muted/60 text-ink-muted not-disabled:bg-[#c86543] not-disabled:text-surface not-disabled:hover:bg-[#b85c3d] data-disabled:opacity-100 data-disabled:bg-edge-muted/60 data-disabled:text-ink-muted',
+        'rounded-[11px] size-[30px] bg-edge-muted/60 text-ink-muted [&_svg]:stroke-[2.5] not-disabled:bg-accent not-disabled:text-surface not-disabled:hover:bg-accent/90 data-disabled:opacity-100 data-disabled:bg-edge-muted/60 data-disabled:text-ink-muted',
+        isMobile() && !hasTextInput() && 'opacity-0!',
         local.class
       )}
       onPointerDown={(event) => {

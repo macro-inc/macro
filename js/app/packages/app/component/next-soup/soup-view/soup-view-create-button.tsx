@@ -10,6 +10,7 @@ import {
   openFolderPicker,
 } from '@core/util/upload';
 import ChevronDownIcon from '@phosphor/caret-down.svg';
+import PlusCircleIcon from '@phosphor/plus-circle.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
 import { Button, Dropdown, Layer } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
@@ -50,6 +51,18 @@ const VIEW_ONLY_BLOCK_LABELS: Partial<Record<BlockName | BlockAlias, string>> =
   {
     automation: 'Automation',
   };
+
+const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
+  agents: 'Agent',
+  channels: 'Channel',
+  documents: 'Document',
+  folders: 'Folder',
+  mail: 'Email',
+  tasks: 'Task',
+};
+
+const CREATE_BUTTON_CLASS =
+  'rounded-md border-accent/30 bg-accent/10 text-accent not-disabled:hover:bg-accent/20 not-disabled:hover:text-accent active:bg-accent/25';
 
 function getViewCreateOptions(view: ListView): CreateOption[] {
   const createNames = VIEW_CREATE_BLOCKNAMES[view] ?? [];
@@ -102,6 +115,11 @@ export const SoupViewCreateButton = () => {
     if (!view) return [];
     return getViewCreateOptions(view);
   });
+  const createLabel = createMemo(() => {
+    const view = currentView();
+    if (!view) return 'Create';
+    return VIEW_CREATE_LABELS[view] ?? 'Create';
+  });
 
   const handleSelect = (option: CreateOption) => {
     if (option.id === 'import-file') {
@@ -133,17 +151,19 @@ export const SoupViewCreateButton = () => {
             <Button
               variant="base"
               size="sm"
+              class={CREATE_BUTTON_CLASS}
               onClick={() => handleSelect(options()[0])}
             >
-              <CreateOptionIcon id={options()[0].id} />
-              <span>Create</span>
+              <PlusCircleIcon class="size-3.5" />
+              <span>{createLabel()}</span>
             </Button>
           }
         >
           <Dropdown placement="bottom-start" gutter={4}>
-            <Dropdown.Trigger>
-              <span>Create</span>
-              <ChevronDownIcon class="size-3" />
+            <Dropdown.Trigger class={CREATE_BUTTON_CLASS}>
+              <PlusCircleIcon class="size-3.5" />
+              <span>{createLabel()}</span>
+              <ChevronDownIcon class="size-2.5" />
             </Dropdown.Trigger>
             <Dropdown.Portal>
               <Layer depth={2}>

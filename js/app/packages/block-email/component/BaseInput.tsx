@@ -1309,6 +1309,8 @@ export function BaseInput(props: {
     )
   );
 
+  const hasBodyText = () => bodyMacro().trim().length > 0;
+
   return (
     <div
       ref={(el) => {
@@ -1756,7 +1758,10 @@ export function BaseInput(props: {
                 sendMutation.isPending ||
                 !!form().sendTime()
               }
-              class="rounded-xl size-8 bg-edge-muted/60 text-ink-muted not-disabled:bg-[#c86543] not-disabled:text-surface not-disabled:hover:bg-[#b85c3d] data-disabled:opacity-100 data-disabled:bg-edge-muted/60 data-disabled:text-ink-muted"
+              class={cn(
+                'translate-x-[6.5px] rounded-[11px] size-[30px] bg-edge-muted/60 text-ink-muted [&_svg]:stroke-[2.5] not-disabled:bg-accent not-disabled:text-surface not-disabled:hover:bg-accent/90 data-disabled:opacity-100 data-disabled:bg-edge-muted/60 data-disabled:text-ink-muted',
+                isMobile() && !hasBodyText() && 'opacity-0!'
+              )}
               onClick={() => sendEmail()}
             >
               <Show

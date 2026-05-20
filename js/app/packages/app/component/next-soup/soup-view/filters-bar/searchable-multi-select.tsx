@@ -15,7 +15,7 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { SearchableOption } from './search-filter-controls';
 
 const ITEM_HEIGHT = 36;
-const LISTBOX_CLASS = 'max-h-[240px] overflow-y-auto';
+const LISTBOX_CLASS = 'max-h-[240px] overflow-y-auto scrollbar-hidden';
 
 export type SearchableMultiSelectProps = {
   options: Accessor<SearchableOption[]>;
@@ -42,7 +42,7 @@ const SearchableMultiSelectItem = (itemProps: {
 }) => (
   <Combobox.Item
     item={itemProps.item}
-    class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xs text-left text-xs data-highlighted:bg-ink/5 group"
+    class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left text-xs data-highlighted:bg-ink/5 group cursor-default"
   >
     <span class="size-4 flex items-center justify-center shrink-0 rounded-xs border border-edge group-data-selected:bg-accent group-data-selected:border-accent">
       <Combobox.ItemIndicator>
@@ -178,7 +178,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       <Combobox.Portal>
         <Combobox.Content
           class={cn(
-            'z-action-menu bg-surface border border-edge-muted rounded-sm shadow-md w-65 max-w-[90vw] overflow-hidden',
+            'z-action-menu bg-surface ring-1 ring-edge-muted rounded-sm shadow-md w-65 max-w-[90vw] overflow-hidden',
             props.contentClass
           )}
         >

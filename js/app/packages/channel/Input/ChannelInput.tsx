@@ -181,7 +181,11 @@ export function ChannelInput(props: ChannelInputProps) {
 
   return (
     <Input.Root input={inputState.view()} commands={inputState.commands}>
-      <Surface depth={2}>
+      <Surface
+        depth={2}
+        class="rounded-xl ring-1 ring-ink-muted/8"
+        style={{ border: '0' }}
+      >
         <Input.DropZone
           onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
           onDragEnd={() => inputState.setIsDraggedOver(false)}

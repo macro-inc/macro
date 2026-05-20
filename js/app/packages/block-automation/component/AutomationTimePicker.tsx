@@ -90,7 +90,7 @@ export function AutomationTimePicker(props: {
       </button>
       <Show when={open()}>
         <div
-          class="absolute inset-x-0 top-full mt-1 z-action-menu bg-surface border border-edge-muted rounded-sm p-3"
+          class="absolute inset-x-0 top-full mt-1 z-action-menu bg-surface ring-1 ring-edge-muted rounded-sm p-3"
           use:clickOutside={() => setOpen(false)}
         >
           <div class="flex items-center gap-2">
