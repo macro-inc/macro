@@ -24,6 +24,7 @@ pub use recipient::{ExclusionReason, FilteredRecipient, RecipientExclusion};
 pub use request::{NotificationResult, SendNotificationRequest, SendNotificationRequestBuilder};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{borrow::Cow, sync::Arc};
+use uuid::Uuid;
 
 /// Notification ID paired with its APNS collapse key, for push clearing.
 #[derive(Debug, Clone)]
@@ -34,18 +35,34 @@ pub struct NotificationIdAndCollapseKey {
     pub apns_collapse_key: String,
 }
 
-/// A compact row describing a user notification whose status changed.
+/// A compact patch describing user notification status fields that changed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NotificationStatusChanged {
-    /// The notification ID.
-    #[serde(rename = "id")]
-    pub notification_id: uuid::Uuid,
+pub struct NotificationStatusPatch {
     /// Whether the notification is marked as done after the update.
     pub done: bool,
     /// When the notification was viewed/seen after the update.
     pub viewed_at: Option<DateTime<Utc>>,
     /// The time this status change was persisted.
     pub updated_at: DateTime<Utc>,
+}
+
+/// A patch-or-delete update for an entity identified by `I`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum PatchDelete<I, T> {
+    /// The value with id I should be patched with data T.
+    Patch {
+        /// The id to patch.
+        id: I,
+        /// The data to patch.
+        #[serde(flatten)]
+        diff: T,
+    },
+    /// The value with id I should be deleted.
+    Delete {
+        /// The id to delete.
+        id: I,
+    },
 }
 
 /// Realtime payload emitted when notification seen/done state changes.
@@ -56,7 +73,17 @@ pub struct NotificationStatusUpdate {
     #[serde(rename = "type")]
     pub event_type: String,
     /// The changed notification rows.
-    pub updates: Vec<NotificationStatusChanged>,
+    pub updates: Vec<PatchDelete<Uuid, NotificationStatusPatch>>,
+}
+
+/// A realtime notification status update scoped to one user.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserNotificationStatusUpdate<'a> {
+    /// The user who should receive the update.
+    pub user: MacroUserIdStr<'a>,
+    /// The status update payload for that user.
+    pub update: NotificationStatusUpdate,
 }
 
 impl NotificationStatusUpdate {
@@ -64,35 +91,10 @@ impl NotificationStatusUpdate {
     pub const MESSAGE_TYPE: &'static str = "notification_status_updated";
 
     /// Build a realtime status update payload.
-    pub fn new(updates: Vec<NotificationStatusChanged>) -> Self {
+    pub fn new(updates: Vec<PatchDelete<Uuid, NotificationStatusPatch>>) -> Self {
         Self {
             event_type: Self::MESSAGE_TYPE.to_string(),
             updates,
-        }
-    }
-}
-
-/// Realtime payload emitted when a notification is deleted.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NotificationDeletedUpdate {
-    /// Constant event discriminator for frontend consumers.
-    #[serde(rename = "type")]
-    pub event_type: String,
-    /// The deleted notification ID.
-    #[serde(rename = "id")]
-    pub notification_id: uuid::Uuid,
-}
-
-impl NotificationDeletedUpdate {
-    /// The connection-gateway message type for notification deletes.
-    pub const MESSAGE_TYPE: &'static str = "notification_deleted";
-
-    /// Build a realtime delete payload.
-    pub fn new(notification_id: uuid::Uuid) -> Self {
-        Self {
-            event_type: Self::MESSAGE_TYPE.to_string(),
-            notification_id,
         }
     }
 }

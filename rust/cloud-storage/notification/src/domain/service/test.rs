@@ -13,9 +13,9 @@ use crate::domain::models::queue_message::{
 use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos,
-    NotificationIdAndCollapseKey, NotificationStatusChanged, RateLimitConfig, RateLimitExceeded,
-    RateLimitKey, RateLimitResult, SendNotificationRequestBuilder, TaggedContent,
-    UserNotificationRow,
+    NotificationIdAndCollapseKey, NotificationStatusPatch, PatchDelete, RateLimitConfig,
+    RateLimitExceeded, RateLimitKey, RateLimitResult, SendNotificationRequestBuilder,
+    TaggedContent, UserNotificationRow,
 };
 use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
@@ -244,7 +244,7 @@ impl NotificationRepository for MockRepository {
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> Result<Vec<NotificationStatusChanged>, Report> {
+    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
         self.mark_seen_calls
             .lock()
             .unwrap()
@@ -257,7 +257,7 @@ impl NotificationRepository for MockRepository {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> Result<Vec<NotificationStatusChanged>, Report> {
+    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
         self.mark_done_calls.lock().unwrap().push((
             user_id.to_string(),
             notification_ids.to_vec(),
@@ -430,7 +430,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> Result<Vec<NotificationStatusChanged>, Report> {
+    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
         (**self)
             .mark_notifications_seen(user_id, notification_ids)
             .await
@@ -441,7 +441,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> Result<Vec<NotificationStatusChanged>, Report> {
+    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
         (**self)
             .mark_notifications_done(user_id, notification_ids, done)
             .await

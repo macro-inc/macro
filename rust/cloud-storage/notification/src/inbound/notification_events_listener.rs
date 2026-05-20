@@ -7,7 +7,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::domain::models::NotificationDeletedUpdate;
+use crate::domain::models::{NotificationStatusUpdate, PatchDelete, UserNotificationStatusUpdate};
 use crate::domain::ports::{NotificationEventsReceiver, NotificationRealtimePublisher};
 
 /// Worker that listens for notification database events and forwards them to realtime clients.
@@ -68,12 +68,17 @@ where
                     return;
                 }
 
-                let update = NotificationDeletedUpdate::new(notification_id);
-                if let Err(err) = self
-                    .realtime
-                    .publish_deleted_update(&user_ids, &update)
-                    .await
-                {
+                let updates = user_ids
+                    .iter()
+                    .map(|user| UserNotificationStatusUpdate {
+                        user: user.copied(),
+                        update: NotificationStatusUpdate::new(vec![PatchDelete::Delete {
+                            id: notification_id,
+                        }]),
+                    })
+                    .collect::<Vec<_>>();
+
+                if let Err(err) = self.realtime.publish_updates(&updates).await {
                     tracing::warn!(error = ?err, "failed to publish notification delete realtime update");
                 }
             }

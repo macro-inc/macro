@@ -7,7 +7,8 @@ use crate::domain::models::device::DeviceType;
 use crate::domain::models::request::NotificationListFilters;
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NotificationIdAndCollapseKey,
-    NotificationStatusChanged, SendNotificationRequestBuilder, TaggedContent, UserNotificationRow,
+    NotificationStatusPatch, PatchDelete, SendNotificationRequestBuilder, TaggedContent,
+    UserNotificationRow,
 };
 use crate::domain::ports::NotificationRepository;
 use crate::outbound::device_registration::DeviceRegistrationDbOps;
@@ -313,7 +314,9 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> impl std::future::Future<Output = Result<Vec<NotificationStatusChanged>, Report>> + Send;
+    ) -> impl std::future::Future<
+        Output = Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report>,
+    > + Send;
 
     /// Mark notifications as done or undone for a user.
     fn mark_notifications_done(
@@ -321,7 +324,9 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> impl std::future::Future<Output = Result<Vec<NotificationStatusChanged>, Report>> + Send;
+    ) -> impl std::future::Future<
+        Output = Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report>,
+    > + Send;
 
     /// Get basic notification data (collapse keys) for push clearing.
     fn get_basic_notifications(
@@ -619,7 +624,7 @@ impl NotificationDbOps for PgPool {
         &self,
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> Result<Vec<NotificationStatusChanged>, Report> {
+    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
         let user_id_str = user_id.to_string();
 
         let rows = sqlx::query!(
@@ -645,11 +650,13 @@ impl NotificationDbOps for PgPool {
 
         Ok(rows
             .into_iter()
-            .map(|row| NotificationStatusChanged {
-                notification_id: row.notification_id,
-                done: row.done,
-                viewed_at: row.viewed_at,
-                updated_at: row.updated_at,
+            .map(|row| PatchDelete::Patch {
+                id: row.notification_id,
+                diff: NotificationStatusPatch {
+                    done: row.done,
+                    viewed_at: row.viewed_at,
+                    updated_at: row.updated_at,
+                },
             })
             .collect())
     }
@@ -659,7 +666,7 @@ impl NotificationDbOps for PgPool {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> Result<Vec<NotificationStatusChanged>, Report> {
+    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
         let user_id_str = user_id.to_string();
 
         let rows = sqlx::query!(
@@ -686,11 +693,13 @@ impl NotificationDbOps for PgPool {
 
         Ok(rows
             .into_iter()
-            .map(|row| NotificationStatusChanged {
-                notification_id: row.notification_id,
-                done: row.done,
-                viewed_at: row.viewed_at,
-                updated_at: row.updated_at,
+            .map(|row| PatchDelete::Patch {
+                id: row.notification_id,
+                diff: NotificationStatusPatch {
+                    done: row.done,
+                    viewed_at: row.viewed_at,
+                    updated_at: row.updated_at,
+                },
             })
             .collect())
     }
@@ -1190,7 +1199,7 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> Result<Vec<NotificationStatusChanged>, Report> {
+    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
         self.db
             .mark_notifications_seen(&user_id, notification_ids)
             .await
@@ -1201,7 +1210,7 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> Result<Vec<NotificationStatusChanged>, Report> {
+    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
         self.db
             .mark_notifications_done(user_id, notification_ids, done)
             .await

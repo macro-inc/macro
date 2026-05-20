@@ -15,15 +15,14 @@ use uuid::Uuid;
 
 use models_pagination::{CreatedAt, Query};
 
-use crate::domain::models::TaggedContent;
 use crate::domain::models::device::DeviceType;
+use crate::domain::models::{PatchDelete, TaggedContent, UserNotificationStatusUpdate};
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::request::NotificationListFilters;
 use crate::domain::models::{
-    DeviceEndpoint, DisabledNotificationType, NotificationDeletedUpdate, NotificationExtEmail,
-    NotificationIdAndCollapseKey, NotificationStatusChanged, NotificationStatusUpdate,
-    SendNotificationRequestBuilder, UserNotificationRow,
+    DeviceEndpoint, DisabledNotificationType, NotificationExtEmail, NotificationIdAndCollapseKey,
+    NotificationStatusPatch, SendNotificationRequestBuilder, UserNotificationRow,
     android::FCMMessage,
     apple::{APNSPushNotification, VoipPushPayload},
     mobile::MessageAttributes,
@@ -99,7 +98,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> impl Future<Output = Result<Vec<NotificationStatusChanged>, Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report>> + Send;
 
     /// Mark notifications as done or undone for a user.
     fn mark_notifications_done(
@@ -107,7 +106,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> impl Future<Output = Result<Vec<NotificationStatusChanged>, Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report>> + Send;
 
     /// Get basic notification data (collapse keys) needed for push clearing.
     fn get_basic_notifications(
@@ -236,18 +235,10 @@ pub trait NotificationEventsReceiver: Send + 'static {
 
 /// Port for publishing realtime notification updates.
 pub trait NotificationRealtimePublisher: Send + Sync + 'static {
-    /// Publish a notification status update to the user who owns the notifications.
-    fn publish_status_update(
+    /// Publish notification status updates to the users who own the notifications.
+    fn publish_updates(
         &self,
-        user_id: MacroUserIdStr<'_>,
-        update: &NotificationStatusUpdate,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
-
-    /// Publish a notification delete update to the users who owned the notification.
-    fn publish_deleted_update(
-        &self,
-        user_ids: &[MacroUserIdStr<'_>],
-        update: &NotificationDeletedUpdate,
+        updates: &[UserNotificationStatusUpdate<'_>],
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
@@ -256,19 +247,7 @@ pub trait NotificationRealtimePublisher: Send + Sync + 'static {
 pub struct NoopNotificationRealtimePublisher;
 
 impl NotificationRealtimePublisher for NoopNotificationRealtimePublisher {
-    async fn publish_status_update(
-        &self,
-        _: MacroUserIdStr<'_>,
-        _: &NotificationStatusUpdate,
-    ) -> Result<(), Report> {
-        Ok(())
-    }
-
-    async fn publish_deleted_update(
-        &self,
-        _: &[MacroUserIdStr<'_>],
-        _: &NotificationDeletedUpdate,
-    ) -> Result<(), Report> {
+    async fn publish_updates(&self, _: &[UserNotificationStatusUpdate<'_>]) -> Result<(), Report> {
         Ok(())
     }
 }
