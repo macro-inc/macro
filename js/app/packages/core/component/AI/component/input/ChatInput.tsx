@@ -183,7 +183,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   );
 
   return (
-    <Surface depth={2}>
+    <Surface depth={2} class="rounded-xl">
       <div id="chat-input" ref={containerRef} class="relative flex flex-col">
         <Show when={hasAttachments()}>
           <div class="px-2 pt-2 w-full">
