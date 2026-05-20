@@ -8,7 +8,6 @@ use connection_gateway_models::{
 use model_entity::Entity;
 
 mod email;
-mod project;
 
 /// HTTP client for communicating with the connection gateway service.
 #[derive(Clone, Debug)]
