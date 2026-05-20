@@ -129,7 +129,7 @@ export type MenuItemProps =
   | CheckboxMenuItemProps
   | RadioMenuItemProps;
 
-export const MENU_ITEM_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1 text-base' : 'py-1 pl-2 pr-2 text-sm'} font-medium justify-between items-center rounded-xs outline-none focus:bg-active data-[highlighted]:bg-active`;
+export const MENU_ITEM_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1.5 text-base' : 'py-1 pl-2.5 pr-2 text-sm'} font-medium justify-between items-center rounded-md outline-none focus:bg-active data-[highlighted]:bg-active`;
 
 /**
  * A menu item component that can be used interchangeably within either a ContextMenu or DropdownMenu.
@@ -359,7 +359,7 @@ const menuWidths: Record<MenuWidth, string> = {
   screen: 'w-screen',
 };
 
-export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start bg-surface shadow-lg ring-1 ring-edge-muted rounded-sm p-1 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal`;
+export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start bg-surface shadow-[0_12px_36px_-14px_rgba(0,0,0,0.4),0_4px_14px_-10px_rgba(0,0,0,0.3)] ring-1 ring-edge rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal`;
 
 type MenuContentProps = ParentProps<{
   class?: string;

@@ -31,11 +31,11 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
       </Tooltip>
       <Dropdown.Portal>
         <Layer depth={2}>
-          <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-sm min-w-35 p-1">
+          <Dropdown.Content class="min-w-35">
             <For each={props.options}>
               {(option) => (
                 <Dropdown.Item
-                  class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
+                  class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
                   onSelect={() => props.onChange(option.value)}
                 >
                   <span

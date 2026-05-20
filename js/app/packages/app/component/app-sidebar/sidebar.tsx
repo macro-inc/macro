@@ -397,7 +397,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
   return (
     <Button
       class={cn(
-        'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-sm py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3'
+        'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-md py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3'
       )}
       variant="ghost"
       tooltipPlacement="right"
@@ -756,7 +756,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
           data-sidebar-link={props.id}
           data-active={isActive() ? '' : undefined}
           class={cn(
-            'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-sm py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3',
+            'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-md py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3',
             isActive() && 'bg-ink/6 not-disabled:hover:bg-ink/6 text-ink'
           )}
           tooltipPlacement="right"

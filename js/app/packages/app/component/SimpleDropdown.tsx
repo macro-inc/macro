@@ -94,7 +94,7 @@ function FloatingContent(props: {
       ref={ref}
       style={{ position: 'fixed', left: `${pos().x}px`, top: `${pos().y}px` }}
       class={cn(
-        'bg-surface w-fit p-1 border border-edge-muted rounded-xs shadow z-highlight-menu',
+        'bg-surface w-fit p-1.5 rounded-xl ring-1 ring-edge-muted shadow-[0_12px_36px_-14px_rgba(0,0,0,0.4),0_4px_14px_-10px_rgba(0,0,0,0.3)] z-highlight-menu',
         props.class
       )}
     >
@@ -134,7 +134,7 @@ export type DropdownItemProps = {
   class?: string;
 };
 
-const ITEM_BASE_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1 text-base' : 'py-1 pl-2 pr-2 text-sm'} font-medium justify-between items-center rounded-xs outline-none focus:bg-active data-[highlighted]:bg-active`;
+const ITEM_BASE_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1.5 text-base' : 'py-1 pl-2.5 pr-2 text-sm'} font-medium justify-between items-center rounded-md outline-none focus:bg-active data-[highlighted]:bg-active`;
 
 function ItemInner(props: Pick<DropdownItemProps, 'icon' | 'text'>) {
   return (
