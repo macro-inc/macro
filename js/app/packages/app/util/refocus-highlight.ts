@@ -1,4 +1,5 @@
 import type { SplitManager } from '@app/component/split-layout/layoutManager';
+import type { ListView } from '@app/constants/list-views';
 import { notificationToSidebarId } from '@app/util/notification-sidebar-id';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { toast } from '@core/component/Toast/Toast';
@@ -13,7 +14,7 @@ const MAX_PULSES = 5;
 const TOAST_DURATION = 6000;
 
 // For new_email, the split is opened with threadId from metadata, not entity_id.
-function getEntityIdForSplit(n: UnifiedNotification): string {
+function getSplitEntityId(n: UnifiedNotification): string {
   const meta = n.notification_metadata;
   if (meta.tag === 'new_email') return meta.content.threadId;
   return n.entity_id;
@@ -63,9 +64,9 @@ function pulseElement(el: Element): void {
     .addEventListener('finish', () => overlay.remove());
 }
 
-type ToastBucketKey = ListView | 'unknown';
+type ToastSection = ListView | 'unknown';
 
-const TOAST_LABEL: Partial<Record<ToastBucketKey, string>> = {
+const TOAST_LABEL: Partial<Record<ToastSection, string>> = {
   channels: 'message',
   mail: 'email',
   tasks: 'task',
@@ -74,21 +75,24 @@ const TOAST_LABEL: Partial<Record<ToastBucketKey, string>> = {
   unknown: 'notification',
 };
 
-function buildToastMessage(bucketByType: Map<ToastBucketKey, number>): string {
+function buildToastMessage(countsBySection: Map<ToastSection, number>): string {
   const parts: string[] = [];
-  for (const [type, count] of bucketByType.entries()) {
+  for (const [type, count] of countsBySection.entries()) {
     const label = TOAST_LABEL[type] ?? 'notification';
     parts.push(`${count} new ${label}${count > 1 ? 's' : ''}`);
   }
   return parts.join(', ');
 }
 
+// Returns true if the notification was handled (element pulsed, or already pulsed
+// by an earlier notification in this batch). Returns false only when the global
+// pulse cap was hit — in that case the caller should fall through to the toast bucket.
 function tryPulse(
   el: Element,
   pulsed: Set<Element>,
   pulseCount: { value: number }
 ): boolean {
-  if (pulsed.has(el)) return true; // already handled, don't toast
+  if (pulsed.has(el)) return true;
   if (pulseCount.value >= MAX_PULSES) return false;
   pulsed.add(el);
   pulseCount.value++;
@@ -119,7 +123,7 @@ export function runRefocusPulses(
 
     // Rule 2: a split is open for this entity → pulse the header
     if (splitManager) {
-      const entityIdForSplit = getEntityIdForSplit(notification);
+      const entityIdForSplit = getSplitEntityId(notification);
       const matchingSplit = splitManager
         .splits()
         .find(
@@ -145,7 +149,7 @@ export function runRefocusPulses(
       continue;
     }
 
-    // Rule 3a: unread sidebar item (e.g. channel/DM entry in the Unread widget)
+    // Rule 4: unread sidebar item (e.g. channel/DM entry in the Unread widget)
     const unreadEl = document.querySelector(
       `[data-unread-entity-id="${CSS.escape(notification.entity_id)}"]`
     );
@@ -154,7 +158,7 @@ export function runRefocusPulses(
       continue;
     }
 
-    // Rule 3b: type-specific sidebar nav entry (never inbox)
+    // Rule 5: type-specific sidebar nav entry (never inbox)
     const sidebarId = notificationToSidebarId(notification);
     if (sidebarId) {
       const sidebarEl = document.querySelector(
@@ -167,31 +171,31 @@ export function runRefocusPulses(
       }
     }
 
-    // Rule 4: no visible affordance
+    // Rule 6: no visible affordance — falls through to grouped toast
     toastBucket.push(notification);
   }
 
   if (toastBucket.length === 0) return;
 
-  const bucketByType = new Map<ToastBucketKey, number>();
+  const countsBySection = new Map<ToastSection, number>();
   let mostRecent = toastBucket[0]!;
   for (const n of toastBucket) {
-    const key: ToastBucketKey = notificationToSidebarId(n) ?? 'unknown';
-    bucketByType.set(key, (bucketByType.get(key) ?? 0) + 1);
+    const key: ToastSection = notificationToSidebarId(n) ?? 'unknown';
+    countsBySection.set(key, (countsBySection.get(key) ?? 0) + 1);
     if (n.created_at > mostRecent.created_at) mostRecent = n;
   }
 
-  const latestNotification = mostRecent;
-
   toast.custom(
     {
-      title: buildToastMessage(bucketByType),
+      title: buildToastMessage(countsBySection),
       actions: [
         {
           label: 'View',
           onClick: () => {
+            // Re-read the split manager at click time — the layout may have
+            // changed between toast creation and the user clicking "View".
             const manager = globalSplitManager();
-            if (manager) openNotification(latestNotification, manager);
+            if (manager) openNotification(mostRecent, manager);
           },
         },
       ],

@@ -4,7 +4,7 @@ import {
   InviteModal,
   setInviteModalOpen,
 } from '@app/component/app-sidebar/invite-modal';
-import { badgeSections, clearSidebarBadge } from '@app/signal/sidebarBadges';
+import { clearSidebarBadge, hasSidebarBadge } from '@app/signal/sidebarBadges';
 import { CommandState } from '@app/component/command';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
 import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
@@ -673,7 +673,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const layoutManager = globalSplitManager();
-  const hasUnread = () => badgeSections().has(props.id);
+  const hasUnread = () => hasSidebarBadge(props.id);
 
   const location = useLocation();
 

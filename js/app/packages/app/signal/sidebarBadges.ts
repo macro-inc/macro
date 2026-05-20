@@ -3,7 +3,9 @@ import type { ListView } from '@app/constants/list-views';
 
 const [badgeSections, setBadgeSections] = createSignal(new Set<ListView>());
 
-export { badgeSections };
+export function hasSidebarBadge(id: ListView): boolean {
+  return badgeSections().has(id);
+}
 
 export function addSidebarBadge(id: ListView): void {
   setBadgeSections((prev) => {
