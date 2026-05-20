@@ -16,7 +16,7 @@ import { Dialog, Panel } from '@ui';
 import { cn } from '@ui';
 import { Select } from '@kobalte/core/select';
 import { useUserId } from '@core/context/user';
-import { useDisplayName, tryMacroId } from '@core/user';
+import { useDisplayName, tryMacroId, macroIdToEmail } from '@core/user';
 import {
   createMemo,
   createSignal,
@@ -288,6 +288,14 @@ function MemberRow(props: {
 }) {
   const [displayName] = useDisplayName(tryMacroId(props.member.user_id));
   const isMemberOwner = () => props.member.role === TeamRole.owner;
+  const email = () => {
+    const id = tryMacroId(props.member.user_id);
+    return id ? macroIdToEmail(id) : undefined;
+  };
+  const showEmail = () => {
+    const e = email();
+    return e && e !== displayName();
+  };
 
   return (
     <div
@@ -306,22 +314,25 @@ function MemberRow(props: {
               <span class="text-ink-muted font-normal"> (you)</span>
             )}
           </div>
-          <Show
-            when={props.isOwner && !isMemberOwner()}
-            fallback={
-              <span class="text-xs text-ink-muted py-0.5 capitalize">
-                {props.member.role}
-              </span>
-            }
-          >
-            <RoleSelect
-              value={props.member.role}
-              onChange={props.onRoleChange}
-            />
+          <Show when={showEmail()}>
+            <div class="text-xs text-ink-muted truncate">{email()}</div>
           </Show>
         </div>
       </div>
       <div class="flex items-center gap-2 shrink-0">
+        <Show
+          when={props.isOwner && !isMemberOwner()}
+          fallback={
+            <span class="text-xs text-ink-muted capitalize">
+              {props.member.role}
+            </span>
+          }
+        >
+          <RoleSelect
+            value={props.member.role}
+            onChange={props.onRoleChange}
+          />
+        </Show>
         <Show when={props.isOwner}>
           <Show
             when={!props.isCurrentUser && !isMemberOwner()}
