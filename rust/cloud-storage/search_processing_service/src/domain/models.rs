@@ -89,6 +89,23 @@ pub struct ChannelBackfillRequest {
     pub index_override: Option<String>,
 }
 
+/// Keyset (seek-method) pagination cursor for document backfills.
+///
+/// `get_documents_for_search` walks `"Document"` in
+/// `(createdAt ASC, id ASC)` order; the cursor carries the last row's
+/// pair so the next page resumes with `WHERE (createdAt, id) > cursor`.
+/// `None` starts at the beginning.
+///
+/// Keyset pagination is what lets the backfill survive against the read
+/// replica: page-fetch latency stays O(log n) regardless of depth, well
+/// under `max_standby_streaming_delay`'s budget. Offset-based pagination
+/// scaled linearly and got cancelled around ~250k rows in.
+#[derive(Debug, Clone)]
+pub struct DocumentBackfillCursor {
+    pub created_at: DateTime<Utc>,
+    pub document_id: String,
+}
+
 /// Document backfill filter. Every field is additive — all `None` means "every
 /// document this service knows about".
 #[derive(Debug, Clone, Default, Deserialize)]

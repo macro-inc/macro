@@ -18,7 +18,7 @@ use sqs_client::search::SearchQueueMessage;
 
 use super::models::{
     BackfillError, CallBackfillRequest, ChannelBackfillRequest, ChatBackfillRequest,
-    DocumentBackfillRequest, EmailBackfillRequest, SourcePage,
+    DocumentBackfillCursor, DocumentBackfillRequest, EmailBackfillRequest, SourcePage,
 };
 
 /// Publishes batches of search-event messages.
@@ -56,11 +56,18 @@ pub trait BackfillSource: Send + Sync + 'static {
         offset: usize,
     ) -> impl Future<Output = Result<SourcePage, BackfillError>> + Send;
 
+    /// Documents use keyset pagination instead of offset because the
+    /// orchestrator must survive against a streaming-replica that may
+    /// cancel any single query taking longer than
+    /// `max_standby_streaming_delay`. Each call passes the cursor of the
+    /// last row from the previous page (or `None` for the first page);
+    /// the implementation returns the page plus the cursor to feed back
+    /// into the next call. An empty page signals end-of-source.
     fn fetch_documents(
         &self,
         req: &DocumentBackfillRequest,
-        offset: usize,
-    ) -> impl Future<Output = Result<SourcePage, BackfillError>> + Send;
+        cursor: Option<DocumentBackfillCursor>,
+    ) -> impl Future<Output = Result<(SourcePage, Option<DocumentBackfillCursor>), BackfillError>> + Send;
 
     fn fetch_emails(
         &self,

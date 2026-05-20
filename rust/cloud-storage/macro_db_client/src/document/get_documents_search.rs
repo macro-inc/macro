@@ -8,18 +8,28 @@ use model::document::{BackfillSearchDocumentInformation, FileType};
 /// Used to get all documents in a paginated format
 /// This will get the latest version of the document for non-pdf documents
 /// For pdf documents, this will get the oldest version of the document
+///
+/// Pagination is **keyset (seek-method)**: pass `cursor` as the last row's
+/// `(created_at, document_id)` pair from the previous page (or `None` for
+/// the first page). Each page is an O(log n) b-tree seek + LIMIT walk
+/// against the `(createdAt, id)` index, regardless of depth. The
+/// orchestrator stops paging when an empty result comes back.
 #[allow(clippy::too_many_arguments)]
 #[tracing::instrument(skip(db))]
 pub async fn get_documents_for_search(
     db: &Pool<Postgres>,
     limit: i64,
-    offset: i64,
+    cursor: Option<(DateTime<Utc>, String)>,
     file_types: &Option<Vec<String>>,
     sub_type: &Option<String>,
     created_after: &Option<DateTime<Utc>>,
     created_before: &Option<DateTime<Utc>>,
     only_deleted: Option<bool>,
 ) -> anyhow::Result<Vec<BackfillSearchDocumentInformation>> {
+    let (cursor_created_at, cursor_id) = match cursor {
+        Some((t, id)) => (Some(t), Some(id)),
+        None => (None, None),
+    };
     let result = sqlx::query!(
         r#"
         SELECT
@@ -75,16 +85,21 @@ pub async fn get_documents_for_search(
                 OR ($7 AND d."deletedAt" IS NOT NULL)
                 OR (NOT $7 AND d."deletedAt" IS NULL)
             )
+            AND (
+                $2::timestamptz IS NULL
+                OR (d."createdAt", d.id) > ($2, $8::text)
+            )
         ORDER BY d."createdAt" ASC, d.id ASC
-        LIMIT $1 OFFSET $2
+        LIMIT $1
     "#,
         limit,
-        offset,
+        cursor_created_at as Option<DateTime<Utc>>,
         file_types.as_deref() as Option<&[String]>,
         sub_type.as_deref() as Option<&str>,
         *created_after as Option<DateTime<Utc>>,
         *created_before as Option<DateTime<Utc>>,
         only_deleted,
+        cursor_id as Option<String>,
     )
     .try_map(|row| {
         Ok(BackfillSearchDocumentInformation {

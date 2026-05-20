@@ -19,6 +19,44 @@ use super::models::{
 };
 use super::ports::{BackfillSource, SearchEventPublisher};
 
+/// Drive a source by repeatedly calling `fetch(cursor)`, publishing each
+/// page's messages, and stopping when the source reports zero rows
+/// consumed. Identical loop shape to [`drain_source`] but the state
+/// advanced between pages is an opaque cursor returned by the fetcher
+/// rather than an integer offset — used by entities (documents) that
+/// paginate by sort-key instead of offset so query duration doesn't
+/// scale with depth.
+async fn drain_source_with_cursor<C, Fut, P>(
+    publisher: &P,
+    progress: &JobProgress,
+    cancel: &CancellationToken,
+    fetch: impl Fn(Option<C>) -> Fut,
+) -> Result<BackfillReceipt, BackfillError>
+where
+    Fut: Future<Output = Result<(SourcePage, Option<C>), BackfillError>>,
+    P: SearchEventPublisher,
+{
+    let mut cursor: Option<C> = None;
+    let mut enqueued = 0usize;
+
+    loop {
+        if cancel.is_cancelled() {
+            tracing::info!(enqueued, "backfill cancelled between pages");
+            break;
+        }
+        let (page, next_cursor) = fetch(cursor).await?;
+        if page.rows_consumed == 0 {
+            break;
+        }
+        publisher.publish(page.messages).await?;
+        enqueued += page.rows_consumed;
+        progress.add(page.rows_consumed).await;
+        cursor = next_cursor;
+    }
+
+    Ok(BackfillReceipt { enqueued })
+}
+
 /// Inbound contract for all backfill HTTP routes. Each call drives a single
 /// orchestration to completion (or to cancellation via `cancel`); the HTTP
 /// layer is responsible for spawning these onto a background task and
@@ -158,8 +196,8 @@ where
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source(&self.publisher, &progress, &cancel, |offset| {
-            self.source.fetch_documents(&req, offset)
+        drain_source_with_cursor(&self.publisher, &progress, &cancel, |cursor| {
+            self.source.fetch_documents(&req, cursor)
         })
         .await
     }
