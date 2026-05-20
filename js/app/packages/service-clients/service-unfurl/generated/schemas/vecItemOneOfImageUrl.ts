@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * The page's preview image URL (from `og:image`), if any.
+ */
 export type VecItemOneOfImageUrl = string | null;

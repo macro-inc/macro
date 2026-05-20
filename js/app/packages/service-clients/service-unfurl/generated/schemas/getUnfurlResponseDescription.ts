@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * The page description (from `og:description`), if any.
+ */
 export type GetUnfurlResponseDescription = string | null;
