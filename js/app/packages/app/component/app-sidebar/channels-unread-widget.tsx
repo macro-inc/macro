@@ -148,11 +148,12 @@ function ChannelGroupItem(props: {
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? false;
 
-  const navigateToLatestNotification = (newSplit = false) => {
+  const navigateToLatestNotification = async (newSplit = false) => {
     const manager = globalSplitManager();
     if (!manager) return;
     const notification = latestNotification();
-    openNotification(notification, manager, newSplit);
+    await openNotification(notification, manager, newSplit);
+    await notificationSource.markAsRead(notification);
   };
 
   const openInCurrentSplit = () => {

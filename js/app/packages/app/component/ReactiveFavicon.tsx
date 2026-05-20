@@ -1,7 +1,10 @@
 import { updateFavicon } from '@app/util/favicon';
 import { runRefocusPulses } from '@app/util/refocus-highlight';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { addSidebarBadge } from '@app/signal/sidebarBadges';
+import {
+  addBadgeNotification,
+  removeBadgeNotifications,
+} from '@app/signal/sidebarBadges';
 import { notificationToSidebarId } from '@app/util/notification-sidebar-id';
 import { ENABLE_REFOCUS_HIGHLIGHT } from '@core/constant/featureFlags';
 import { createBroadcastChannel } from '@solid-primitives/broadcast-channel';
@@ -58,7 +61,7 @@ export function ReactiveFavicon() {
     const unsubscribeNotifications = globalNotifications.subscribe(
       (newNotification) => {
         const sidebarId = notificationToSidebarId(newNotification);
-        if (sidebarId) addSidebarBadge(sidebarId);
+        if (sidebarId) addBadgeNotification(sidebarId, newNotification.id);
 
         if (!isAppFocused()) {
           setShowNotificationBadge(true);
@@ -76,6 +79,14 @@ export function ReactiveFavicon() {
 
   createEffect(() => {
     updateFavicon(accentColor(), badgeColor(), showNotificationBadge());
+  });
+
+  createEffect(() => {
+    const viewedOrDone = globalNotifications
+      .notifications()
+      .filter((n) => n.viewed_at || n.done)
+      .map((n) => n.id);
+    if (viewedOrDone.length > 0) removeBadgeNotifications(viewedOrDone);
   });
 
   return null;
