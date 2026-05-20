@@ -134,7 +134,7 @@ export type DropdownItemProps = {
   class?: string;
 };
 
-const ITEM_BASE_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1.5 text-base' : 'py-1 pl-2.5 pr-2 text-sm'} font-medium justify-between items-center rounded-md outline-none focus:bg-active data-[highlighted]:bg-active`;
+const ITEM_BASE_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1.5 text-base' : 'py-1 pl-2.5 pr-2 text-sm'} font-medium justify-between items-center rounded-md outline-none focus:bg-ink/3 data-[highlighted]:bg-ink/3`;
 
 function ItemInner(props: Pick<DropdownItemProps, 'icon' | 'text'>) {
   return (
@@ -160,7 +160,7 @@ function TouchItem(props: DropdownItemProps) {
         ITEM_BASE_CLASS,
         props.disabled
           ? 'opacity-50 cursor-not-allowed'
-          : 'hover:bg-hover hover-transition-bg',
+          : 'hover:bg-ink/3 hover-transition-bg',
         props.class
       )}
     >
@@ -178,7 +178,7 @@ function KobalteItem(props: DropdownItemProps) {
         ITEM_BASE_CLASS,
         props.disabled
           ? 'opacity-50 cursor-not-allowed'
-          : 'hover:bg-hover hover-transition-bg',
+          : 'hover:bg-ink/3 hover-transition-bg',
         props.class
       )}
     >

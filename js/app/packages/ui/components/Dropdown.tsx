@@ -20,7 +20,7 @@ type DropdownSubContentProps = ComponentProps<typeof KobalteDropdownMenu.SubCont
 type DropdownItemProps = ComponentProps<typeof KobalteDropdownMenu.Item>;
 
 const DROPDOWN_CONTENT_CLASS = 'z-action-menu bg-surface rounded-xl ring-1 ring-edge shadow-[0_8px_24px_-16px_rgba(0,0,0,0.24),0_2px_8px_-6px_rgba(0,0,0,0.18)] p-1.5';
-const DROPDOWN_ITEM_CLASS = 'rounded-md';
+const DROPDOWN_ITEM_CLASS = 'rounded-md hover:bg-ink/3 focus:bg-ink/3 data-[highlighted]:bg-ink/3';
 
 function DropdownContent(props: DropdownContentProps) {
   return <KobalteDropdownMenu.Content {...props} class={cn(DROPDOWN_CONTENT_CLASS, props.class)} />;
@@ -31,7 +31,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
 }
 
 function DropdownItem(props: DropdownItemProps) {
-  return <KobalteDropdownMenu.Item {...props} class={cn(DROPDOWN_ITEM_CLASS, props.class)} />;
+  return <KobalteDropdownMenu.Item {...props} class={cn(props.class, DROPDOWN_ITEM_CLASS)} />;
 }
 
 function DropdownTrigger(props: DropdownTriggerProps) {
