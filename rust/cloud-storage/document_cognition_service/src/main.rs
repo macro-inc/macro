@@ -182,16 +182,17 @@ async fn main() -> anyhow::Result<()> {
         aws_sdk_sqs::Client::new(&aws_config),
         config.notification_queue.clone(),
     );
-    let notification_reader_service = NotificationReaderService::new(
-        DbNotificationRepository::new(db.clone()),
-        ai_tools::ToolNotificationQueue::Sqs(notification_reader_queue),
-        ai_tools::NoOpSnsEndpointManager,
-        PlatformArnConfig {
+    let notification_reader_service = NotificationReaderService {
+        repository: DbNotificationRepository::new(db.clone()),
+        queue: ai_tools::ToolNotificationQueue::Sqs(notification_reader_queue),
+        sns_endpoint: ai_tools::NoOpSnsEndpointManager,
+        platform_config: PlatformArnConfig {
             apns_platform_arn: String::new(),
             fcm_platform_arn: String::new(),
             apns_voip_platform_arn: String::new(),
         },
-    );
+        realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
+    };
     let notification_tool_context =
         notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 

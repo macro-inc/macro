@@ -1405,12 +1405,13 @@ async fn test_mark_seen_publishes_ios_clear_message() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationReaderService::new(
-        repo.clone(),
-        queue.clone(),
-        MockSnsEndpoint,
-        test_platform_config(),
-    );
+    let service = NotificationReaderService {
+        repository: repo.clone(),
+        queue: queue.clone(),
+        sns_endpoint: MockSnsEndpoint,
+        platform_config: test_platform_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    };
 
     let notification_ids = [notif_id];
     service
@@ -1483,12 +1484,13 @@ async fn test_mark_seen_skips_push_when_no_collapse_key() {
         DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob".to_string()),
     ));
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationReaderService::new(
-        repo.clone(),
-        queue.clone(),
-        MockSnsEndpoint,
-        test_platform_config(),
-    );
+    let service = NotificationReaderService {
+        repository: repo.clone(),
+        queue: queue.clone(),
+        sns_endpoint: MockSnsEndpoint,
+        platform_config: test_platform_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    };
 
     let notification_ids = [notif_id];
     service
@@ -1524,12 +1526,13 @@ async fn test_mark_seen_skips_push_when_no_device_endpoints() {
         // No device endpoints registered
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationReaderService::new(
-        repo.clone(),
-        queue.clone(),
-        MockSnsEndpoint,
-        test_platform_config(),
-    );
+    let service = NotificationReaderService {
+        repository: repo.clone(),
+        queue: queue.clone(),
+        sns_endpoint: MockSnsEndpoint,
+        platform_config: test_platform_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    };
 
     let notification_ids = [notif_id];
     service
@@ -1571,12 +1574,13 @@ async fn test_mark_done_updates_db_and_clears_push() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationReaderService::new(
-        repo.clone(),
-        queue.clone(),
-        MockSnsEndpoint,
-        test_platform_config(),
-    );
+    let service = NotificationReaderService {
+        repository: repo.clone(),
+        queue: queue.clone(),
+        sns_endpoint: MockSnsEndpoint,
+        platform_config: test_platform_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    };
 
     let notification_ids = [notif_id];
     service
@@ -1621,12 +1625,13 @@ async fn test_mark_undone_updates_db_no_push_clear() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationReaderService::new(
-        repo.clone(),
-        queue.clone(),
-        MockSnsEndpoint,
-        test_platform_config(),
-    );
+    let service = NotificationReaderService {
+        repository: repo.clone(),
+        queue: queue.clone(),
+        sns_endpoint: MockSnsEndpoint,
+        platform_config: test_platform_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    };
 
     let notification_ids = [notif_id];
     service

@@ -340,7 +340,13 @@ fn make_service(
     db: MockNotifRepo,
     sns: MockSnsManager,
 ) -> NotificationReaderService<MockNotifRepo, MockQueue, MockSnsManager> {
-    NotificationReaderService::new(db, MockQueue, sns, test_config())
+    NotificationReaderService {
+        repository: db,
+        queue: MockQueue,
+        sns_endpoint: sns,
+        platform_config: test_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    }
 }
 
 // ─── Register Tests ──────────────────────────────────────────────────────

@@ -444,34 +444,16 @@ pub struct PlatformArnConfig {
 /// Handles notification queries, status updates, and deletion.
 /// Does not require a bulk-digest state machine.
 pub struct NotificationReaderService<N, Q, S, R = NoopNotificationRealtimePublisher> {
-    pub(crate) repository: N,
-    pub(crate) queue: Q,
-    pub(crate) sns_endpoint: S,
-    pub(crate) platform_config: PlatformArnConfig,
-    pub(crate) realtime: R,
-}
-
-impl<N, Q, S> NotificationReaderService<N, Q, S, NoopNotificationRealtimePublisher>
-where
-    N: NotificationRepository,
-    Q: NotificationQueue,
-    S: SnsEndpointManager,
-{
-    /// Create a new reader service.
-    pub fn new(
-        repository: N,
-        queue: Q,
-        sns_endpoint: S,
-        platform_config: PlatformArnConfig,
-    ) -> Self {
-        Self::new_with_realtime(
-            repository,
-            queue,
-            sns_endpoint,
-            platform_config,
-            NoopNotificationRealtimePublisher,
-        )
-    }
+    /// Notification repository.
+    pub repository: N,
+    /// Queue used to enqueue notification work.
+    pub queue: Q,
+    /// SNS endpoint manager.
+    pub sns_endpoint: S,
+    /// Platform ARN configuration.
+    pub platform_config: PlatformArnConfig,
+    /// Realtime update publisher.
+    pub realtime: R,
 }
 
 impl<N, Q, S, R> NotificationReaderService<N, Q, S, R>
@@ -481,23 +463,6 @@ where
     S: SnsEndpointManager,
     R: NotificationRealtimePublisher,
 {
-    /// Create a new reader service with a realtime publisher.
-    pub fn new_with_realtime(
-        repository: N,
-        queue: Q,
-        sns_endpoint: S,
-        platform_config: PlatformArnConfig,
-        realtime: R,
-    ) -> Self {
-        Self {
-            repository,
-            queue,
-            sns_endpoint,
-            platform_config,
-            realtime,
-        }
-    }
-
     /// Update notification status for a user and optionally enqueue push notification clearing.
     ///
     /// This method performs the following steps:
