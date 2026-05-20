@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use crate::{
     Result,
@@ -282,13 +282,11 @@ where
 
 /// Expand one OpenSearch hit into one or more `SearchHit`s.
 ///
-/// For the join shape, OpenSearch returns one parent hit
+/// For the documents_v2 join shape, OpenSearch returns one parent hit
 /// per matching document with the matching chunks nested under
-/// `inner_hits`. To preserve flat-shape downstream behavior (where each
-/// chunk was its own top-level hit), we walk `inner_hits` and emit one
-/// `SearchHit` per chunk. If no `inner_hits` are present (flat shape,
-/// or non-document hit, or document name match) we fall through
-/// to the 1:1 conversion.
+/// `inner_hits`. The documents module knows how to unpack that into
+/// chunk-level hits; everything else (flat indices, non-document hits)
+/// takes the 1:1 conversion.
 fn expand_hit_into_search_hits(hit: Hit<UnifiedSearchIndex>) -> Vec<SearchHit> {
     let UnifiedSearchIndex::Document(parent) = &hit.source else {
         return vec![hit.into()];
@@ -302,75 +300,14 @@ fn expand_hit_into_search_hits(hit: Hit<UnifiedSearchIndex>) -> Vec<SearchHit> {
         .updated_at_seconds
         .and_then(|s| DateTime::from_timestamp(s, 0));
 
-    // `inner_hits` is keyed by the has_child clause name we passed
-    // (e.g. `term_0`). Multi-term queries produce multiple keys; the
-    // same chunk can appear under more than one. Dedup by chunk _id so
-    // a chunk that matches multiple terms only contributes one
-    // DocumentSearchResult downstream.
-    let mut seen_chunks: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut out: Vec<SearchHit> = Vec::new();
-
-    let groups = inner.as_object().map(|m| m.values()).into_iter().flatten();
-    for group in groups {
-        let chunks = group
-            .pointer("/hits/hits")
-            .and_then(|v| v.as_array())
-            .into_iter()
-            .flatten();
-        for chunk in chunks {
-            let chunk_id = chunk
-                .get("_id")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .to_string();
-            if !seen_chunks.insert(chunk_id) {
-                continue;
-            }
-            let node_id = chunk
-                .pointer("/_source/node_id")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .to_string();
-            let raw_content = chunk
-                .pointer("/_source/raw_content")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            let score = chunk.get("_score").and_then(|v| v.as_f64());
-            let highlight_map = chunk.get("highlight").and_then(|v| {
-                serde_json::from_value::<HashMap<String, Vec<String>>>(v.clone()).ok()
-            });
-            let highlight = highlight_map
-                .map(|h| {
-                    parse_highlight_hit(
-                        h,
-                        Keys {
-                            title_key: DocumentSearchConfig::TITLE_KEY,
-                            content_key: DocumentSearchConfig::CONTENT_KEY,
-                        },
-                    )
-                })
-                .unwrap_or_default();
-            out.push(SearchHit {
-                entity_id,
-                entity_type: SearchEntityType::Documents,
-                score,
-                highlight,
-                goto: Some(SearchGotoContent::Documents(SearchGotoDocument {
-                    node_id,
-                    raw_content,
-                })),
-                updated_at,
-            });
-        }
-    }
-
-    if out.is_empty() {
-        // No usable inner_hits (e.g. malformed JSON or empty groups).
-        // Fall back to a single parent hit so the document still shows
-        // up in results, just without per-chunk drill-down.
+    let expanded =
+        crate::search::documents::expand_inner_hits_to_search_hits(entity_id, updated_at, inner);
+    if expanded.is_empty() {
+        // Malformed or empty inner_hits — fall back to the parent so
+        // the document still surfaces, just without per-chunk drill-down.
         return vec![hit.into()];
     }
-    out
+    expanded
 }
 
 impl From<Hit<UnifiedSearchIndex>> for SearchHit {

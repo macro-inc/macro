@@ -1,13 +1,20 @@
+use std::collections::HashMap;
+
 use crate::{
     Result, delegate_methods,
     documents_shape::{alias_uses_join_shape, documents_search_alias},
-    search::builder::{SearchQueryBuilder, SearchQueryConfig},
+    search::{
+        builder::{SearchQueryBuilder, SearchQueryConfig},
+        model::{Highlight, SearchGotoContent, SearchGotoDocument, SearchHit, parse_highlight_hit},
+        query::Keys,
+    },
 };
 
-use models_opensearch::OpenSearchEntityType;
+use chrono::{DateTime, Utc};
+use models_opensearch::{OpenSearchEntityType, SearchEntityType};
 use opensearch_query_builder::{
-    BoolQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery, QueryType,
-    ToOpenSearchJson,
+    BoolQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery,
+    QueryType, ToOpenSearchJson,
 };
 
 /// Relation names for the join field. Kept in sync with the upsert path
@@ -25,6 +32,12 @@ const MIN_PREFIX_LEN: usize = 3;
 /// with many hits; pick a number well above any reasonable document's
 /// matching-chunk count for a single search.
 const INNER_HITS_PER_TERM: u32 = 100;
+
+/// Cap on terms a `match_phrase_prefix` may expand the last word to.
+/// OpenSearch's default of 50 is too aggressive — a prefix like `wo`
+/// can expand to far more real tokens. Picking a fixed ceiling keeps
+/// query cost bounded without truncating common cases.
+const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
 
 #[derive(Clone)]
 pub(crate) struct DocumentSearchConfig;
@@ -132,7 +145,8 @@ impl DocumentQueryBuilder {
         // ORs every search term, so a chunk returned by any one
         // has_child clause gets tags around *every* term it contains —
         // not just the term whose clause produced it.
-        let highlight_query = build_all_terms_highlight_query(&self.inner.terms, &self.inner.match_type);
+        let highlight_query =
+            build_all_terms_highlight_query(&self.inner.terms, &self.inner.match_type);
         for (idx, term) in self.inner.terms.iter().enumerate() {
             let inner_query = build_child_content_query(term, &self.inner.match_type);
             let inner_hits = InnerHits::new()
@@ -229,7 +243,7 @@ fn build_child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> 
     } else {
         QueryType::MatchPhrasePrefix(
             MatchPhrasePrefixQuery::new("content".to_string(), term.to_string())
-                .max_expansions(256),
+                .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
         )
     }
 }
@@ -276,6 +290,104 @@ impl From<DocumentSearchArgs> for DocumentQueryBuilder {
             .ids_only(args.ids_only)
             .sub_types(args.sub_types)
     }
+}
+
+// ---------------------------------------------------------------------------
+// inner_hits → chunk-level SearchHits
+// ---------------------------------------------------------------------------
+
+/// One child chunk as it appears under `inner_hits.<term_name>.hits.hits[]`.
+/// The fields we deserialize are exactly what we need to build a
+/// `SearchHit` — anything else OpenSearch sends back is dropped.
+#[derive(Debug, serde::Deserialize)]
+struct ChunkInnerHit {
+    #[serde(rename = "_id")]
+    id: String,
+    #[serde(rename = "_score")]
+    score: Option<f64>,
+    #[serde(rename = "_source")]
+    source: ChunkSource,
+    #[serde(default)]
+    highlight: Option<HashMap<String, Vec<String>>>,
+}
+
+/// The chunk-only `_source` fields we surface in a `SearchHit.goto`.
+#[derive(Debug, serde::Deserialize)]
+struct ChunkSource {
+    #[serde(default)]
+    node_id: String,
+    #[serde(default)]
+    raw_content: Option<String>,
+}
+
+/// The shape of one entry under `inner_hits` — keyed by the
+/// `has_child` clause name (e.g. `term_0`).
+#[derive(Debug, serde::Deserialize)]
+struct InnerHitsGroup {
+    #[serde(default)]
+    hits: InnerHitsList,
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct InnerHitsList {
+    #[serde(default)]
+    hits: Vec<ChunkInnerHit>,
+}
+
+/// Walk the `inner_hits` block from a parent documents_v2 hit and emit
+/// one `SearchHit` per matching chunk, carrying that chunk's
+/// `node_id`, `raw_content`, score, and highlight.
+///
+/// A chunk matched by multiple `has_child` clauses (multi-term queries)
+/// appears once per term in the response; we dedup by chunk `_id` so a
+/// single chunk maps to a single `SearchHit` downstream.
+///
+/// Returns an empty vec if `inner_hits` is malformed or carries no
+/// chunks — callers fall back to emitting a single parent hit so the
+/// document still surfaces in results.
+pub(crate) fn expand_inner_hits_to_search_hits(
+    entity_id: uuid::Uuid,
+    updated_at: Option<DateTime<Utc>>,
+    inner_hits: &serde_json::Value,
+) -> Vec<SearchHit> {
+    let groups: HashMap<String, InnerHitsGroup> = match serde_json::from_value(inner_hits.clone()) {
+        Ok(g) => g,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut out: Vec<SearchHit> = Vec::new();
+    for group in groups.into_values() {
+        for chunk in group.hits.hits {
+            if !seen.insert(chunk.id) {
+                continue;
+            }
+            let highlight: Highlight = chunk
+                .highlight
+                .map(|h| {
+                    parse_highlight_hit(
+                        h,
+                        Keys {
+                            title_key: DocumentSearchConfig::TITLE_KEY,
+                            content_key: DocumentSearchConfig::CONTENT_KEY,
+                        },
+                    )
+                })
+                .unwrap_or_default();
+            out.push(SearchHit {
+                entity_id,
+                entity_type: SearchEntityType::Documents,
+                score: chunk.score,
+                highlight,
+                goto: Some(SearchGotoContent::Documents(SearchGotoDocument {
+                    node_id: chunk.source.node_id,
+                    raw_content: chunk.source.raw_content,
+                })),
+                updated_at,
+            });
+        }
+    }
+    out
 }
 
 #[cfg(test)]
