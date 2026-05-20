@@ -6352,6 +6352,7 @@ version = "0.1.0"
 dependencies = [
  "paste",
  "thiserror 2.0.17",
+ "tracing",
 ]
 
 [[package]]
@@ -7246,6 +7247,7 @@ checksum = "bc0287524726960e07b119cebd01678f852f147742ae0d925e6a520dca956126"
 name = "name_search"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "cached",
  "chrono",
  "macro_db_migrator",
@@ -12793,6 +12795,7 @@ dependencies = [
  "macro_aws_config",
  "macro_entrypoint",
  "macro_env",
+ "mockall",
  "serde_json",
  "tokio",
  "tracing",

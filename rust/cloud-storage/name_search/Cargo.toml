@@ -18,5 +18,6 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 tokio = { workspace = true }
