@@ -424,7 +424,7 @@ export function commentPlugin(props: CommentPluginProps) {
   };
 }
 
-function $disposeLocalDraftComments() {
+function _$disposeLocalDraftComments() {
   $traverseNodes($getRoot(), (node) => {
     if ($isCommentNode(node)) {
       if (node.getIsDraft() && node.getIsLocal()) {

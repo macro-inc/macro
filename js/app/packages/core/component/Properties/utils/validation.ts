@@ -1,7 +1,7 @@
 /**
  * Normalize a URL by adding https:// if no protocol is present
  */
-function normalizeUrl(url: string): string {
+function _normalizeUrl(url: string): string {
   const trimmed = url.trim();
   if (!trimmed) return '';
 
@@ -17,7 +17,7 @@ function normalizeUrl(url: string): string {
  * Validate if a string is a valid URL
  * Requires a proper domain with TLD (e.g., example.com)
  */
-function isValidUrl(url: string): boolean {
+function _isValidUrl(url: string): boolean {
   try {
     const urlObj = new URL(url);
 

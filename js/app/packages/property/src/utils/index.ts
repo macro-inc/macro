@@ -8,28 +8,20 @@ export {
   formatDate,
   formatNumber,
   formatOptionValue,
-
   formatPropertyValue,
-
 } from '@core/component/Properties/utils/formatting';
 
 export {
   getEntityValues,
   getLinkValues,
   getSelectValues,
-
-
   hasValue,
   isBooleanProperty,
   isDateProperty,
   isEntityProperty,
   isLinkProperty,
-
   isNumberProperty,
-
   isSelectProperty,
-
-
   isStringProperty,
   toPropertyApiValue,
 } from '@core/component/Properties/utils/typeGuards';

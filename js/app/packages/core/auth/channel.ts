@@ -21,7 +21,7 @@ function getOrCreateAuthChannel(): BroadcastChannel {
   return channel;
 }
 
-function waitForAuthSuccess(channel: BroadcastChannel): Promise<void> {
+function _waitForAuthSuccess(channel: BroadcastChannel): Promise<void> {
   return new Promise((resolve) => {
     channel.onmessage = (event) => {
       if (event.data.type === LOGIN_SUCCESS) {

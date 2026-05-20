@@ -10,13 +10,13 @@ import {
 import { z } from 'zod';
 import * as schemas from './generated/zod';
 
-const ChatMessageSchema = z.object({
+const _ChatMessageSchema = z.object({
   content: z.string().describe('Content of the message'),
   id: z.number().describe('The chat message id'),
   role: z.string().describe('Whether the chat is from the user or system'),
 });
 
-const ChatResponseSchema = z.object({});
+const _ChatResponseSchema = z.object({});
 
 const DocxDocumentPartLocation = z.object({
   sha: z.string(),

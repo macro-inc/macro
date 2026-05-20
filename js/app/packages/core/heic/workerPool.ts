@@ -3,7 +3,6 @@
  * Internal implementation detail, not exposed to consumers
  */
 
-import { analytics } from '@app/lib/analytics';
 import shortUUID from 'short-uuid';
 import {
   ERROR_MESSAGES,
@@ -13,23 +12,6 @@ import {
 } from './constants';
 import { EnhancedHeicConversionError, HeicLogger } from './logger';
 import { checkWebCodecsSupport } from './utils';
-
-class HeicConversionError extends Error {
-  public originalFilename: string | undefined;
-
-  constructor(originalFilename?: string, message?: string) {
-    const errorMessage =
-      message ||
-      `Failed to convert HEIC file${originalFilename ? ` ${originalFilename}` : ''} to PNG`;
-    super(errorMessage);
-    this.name = 'HeicConversionError';
-    this.originalFilename = originalFilename;
-
-    analytics.track('upload_error', {
-      type: this.name,
-    });
-  }
-}
 
 // Types for internal worker communication
 interface HeicTaskMessage {

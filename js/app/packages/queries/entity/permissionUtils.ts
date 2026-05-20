@@ -33,7 +33,7 @@ function isChannelRolePermission(
   return permission.type === 'channel_role';
 }
 
-function getEntityAccessLevel(
+function _getEntityAccessLevel(
   response: EntityPermissionResponse
 ): AccessLevel | null {
   if (!hasEntityAccess(response)) {
@@ -47,7 +47,7 @@ function getEntityAccessLevel(
   return response.permission.access_level;
 }
 
-function getEntityChannelRole(
+function _getEntityChannelRole(
   response: EntityPermissionResponse
 ): ParticipantRole | null {
   if (!hasEntityAccess(response)) {

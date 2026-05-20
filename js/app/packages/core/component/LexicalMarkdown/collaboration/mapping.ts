@@ -15,7 +15,7 @@ const warn = (...args: any[]) => {
  * @param mappings The [LoroLexicalNodeMappings] to search
  * @param containerId The [ContainerID] to search
  */
-function $findLexicalNodeForLoroContainer(
+function _$findLexicalNodeForLoroContainer(
   loroManager: LoroManager,
   mappings: NodeIdMappings,
   containerId: ContainerID

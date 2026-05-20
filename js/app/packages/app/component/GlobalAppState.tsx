@@ -20,7 +20,7 @@ function tryGetContext(): GlobalAppState {
   return context;
 }
 
-function useGlobalAppStateContext(): GlobalAppState {
+function _useGlobalAppStateContext(): GlobalAppState {
   return tryGetContext();
 }
 

@@ -267,7 +267,7 @@ export function addSandboxEntity(entity: EntityData) {
   setEntities((prev) => [entity, ...prev]);
 }
 
-function removeSandboxEntity(id: string) {
+function _removeSandboxEntity(id: string) {
   setEntities((prev) => prev.filter((e) => e.id !== id));
 }
 

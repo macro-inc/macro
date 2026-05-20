@@ -87,7 +87,7 @@ for (const [name, block] of Object.entries(blocks)) {
   }
 }
 
-function blockAcceptsMimeType(blockName: BlockName, mimeType: MimeType) {
+function _blockAcceptsMimeType(blockName: BlockName, mimeType: MimeType) {
   return blockNameToMimeTypeSet[blockName].has(mimeType);
 }
 
@@ -112,13 +112,11 @@ export const blockNameToMimeTypes = Object.fromEntries(
   ])
 ) as Record<BlockName, string[]>;
 
-const blockAcceptedMimeTypes = Object.keys(
+const _blockAcceptedMimeTypes = Object.keys(
   blockAcceptedMimetypeToFileExtension
 );
 
-const blockAcceptedFileExtensions = Array.from(
-  blockAcceptedFileExtensionSet
-);
+const _blockAcceptedFileExtensions = Array.from(blockAcceptedFileExtensionSet);
 
 /**
  * Check if a string is a block alias

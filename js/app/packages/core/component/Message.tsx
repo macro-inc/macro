@@ -89,9 +89,7 @@ type MessageTopBarChildrenProps = {
   children: JSX.Element;
 };
 
-type MessageTopBarProps =
-  | MessageTopBarSimpleProps
-  | MessageTopBarChildrenProps;
+type MessageTopBarProps = MessageTopBarSimpleProps | MessageTopBarChildrenProps;
 
 function isTopBarChildrenProps(
   props: MessageTopBarProps
@@ -166,9 +164,7 @@ type NestedConnectorLinesProps = {
   isParentNewMessage?: boolean;
 };
 
-const NestedConnectorLines: Component<NestedConnectorLinesProps> = (
-  props
-) => {
+const NestedConnectorLines: Component<NestedConnectorLinesProps> = (props) => {
   const NestedLines: JSX.Element[] = [];
   for (let i = 0; i < (props.threadDepth ?? 0); i++) {
     NestedLines.push(

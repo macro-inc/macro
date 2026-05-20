@@ -96,15 +96,11 @@ export function stackedAvatarInnerClass(size: StackedAvatarsSize = 'sm') {
 }
 
 /** Default +N chip shell (no text); pair with {@link stackedAvatarOverflowChipTextClass}. */
-function stackedAvatarOverflowChipClass(
-  size: StackedAvatarsSize = 'sm'
-) {
+function stackedAvatarOverflowChipClass(size: StackedAvatarsSize = 'sm') {
   return STACK_STYLE[size].overflowChip;
 }
 
-function stackedAvatarOverflowChipTextClass(
-  size: StackedAvatarsSize = 'sm'
-) {
+function stackedAvatarOverflowChipTextClass(size: StackedAvatarsSize = 'sm') {
   return STACK_STYLE[size].overflowChipText;
 }
 

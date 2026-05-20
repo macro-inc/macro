@@ -12,10 +12,7 @@ import type {
   PropertyDefinitionDomain,
 } from '../../core/component/Properties/types';
 import { isInstantiatedProperty } from '../../core/component/Properties/utils';
-import {
-  type PropertiesEntityType,
-  propertiesServiceClient,
-} from '../../service-clients/service-properties/client';
+import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '../../service-clients/service-storage/generated/schemas/soupProperty';
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
@@ -265,11 +262,6 @@ export function useAddEntityPropertyMutation(
     ),
   }));
 }
-
-type SetPropertyStatusCompleteParams = {
-  entityType: PropertiesEntityType;
-  entityId: string;
-};
 
 type BulkSaveEntityPropertiesParams = {
   properties: Array<{

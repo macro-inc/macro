@@ -33,10 +33,7 @@ export interface SortOption {
   icon?: () => JSX.Element;
 }
 
-function sortByNotifiedAt<T extends WithNotification<EntityData>>(
-  a: T,
-  b: T
-) {
+function _sortByNotifiedAt<T extends WithNotification<EntityData>>(a: T, b: T) {
   const aNotification = a.notifications?.()[0];
   const bNotification = b.notifications?.()[0];
 

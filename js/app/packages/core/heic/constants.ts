@@ -43,7 +43,7 @@ export const WORKER_POOL_CONFIG = {
 } as const;
 
 // Canvas context options
-const CANVAS_OPTIONS = {
+const _CANVAS_OPTIONS = {
   WILL_READ_FREQUENTLY: false,
 } as const;
 

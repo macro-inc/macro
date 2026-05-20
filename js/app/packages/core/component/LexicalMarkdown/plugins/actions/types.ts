@@ -1,8 +1,6 @@
 import type { KlassConstructor, LexicalEditor, LexicalNode } from 'lexical';
 import type { Component } from 'solid-js';
 
-type ActionIcon = string;
-
 export type Action = {
   id: string;
   name: string;

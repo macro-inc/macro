@@ -24,7 +24,7 @@ import { EditingContext } from './Editable';
 
 false && clickOutside;
 
-const MENU_ITEM_HEIGHT = 28;
+const _MENU_ITEM_HEIGHT = 28;
 
 type BaseMenuItemWrapperProps = {
   children: JSX.Element;
@@ -322,7 +322,7 @@ type MenuItemRenameTriggerProps = Omit<GenericMenuItemProps, 'onClick'> & {
   sideEffect?: () => void;
 };
 
-function MenuItemRenameTrigger(props: MenuItemRenameTriggerProps) {
+function _MenuItemRenameTrigger(props: MenuItemRenameTriggerProps) {
   const [_, setIsRenaming] = useContext(EditingContext);
   return (
     <MenuItem

@@ -433,7 +433,7 @@ async function navigateToLocation(
   }
 }
 
-async function archiveEmail(
+async function _archiveEmail(
   id: string,
   options: { archive: boolean; optimisticallyExclude?: boolean }
 ) {

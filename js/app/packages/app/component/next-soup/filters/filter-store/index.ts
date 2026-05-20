@@ -1,6 +1,5 @@
 export { defineQueryFilters } from './compile';
 export type {
-
   PropertyFilter,
   Query,
   QueryState,

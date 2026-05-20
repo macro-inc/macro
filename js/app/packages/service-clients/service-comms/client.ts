@@ -67,9 +67,8 @@ function commsFetch<T extends ObjectLike = never>(
   return fetchWithToken<T>(`${commsHost}${url}`, init);
 }
 
-type EmptyResponse = {};
 export type IdResponse = { id: string };
-type Success = { success: boolean };
+
 export type MessageResponse = { message: string };
 
 type WithChannelId = { channel_id: string };

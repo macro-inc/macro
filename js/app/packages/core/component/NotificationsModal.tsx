@@ -14,7 +14,7 @@ import { Notifications } from './Notifications';
 false && clickOutside;
 const NOTIFICATIONS_DRAWER_ID = 'notifications';
 
-function NotificationsButton(props: {
+function _NotificationsButton(props: {
   entity: Entity;
   notificationSource: NotificationSource;
   buttonSize?: 'sm';

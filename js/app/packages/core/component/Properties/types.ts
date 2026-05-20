@@ -154,7 +154,6 @@ export type PropertySelectorProps = {
 // Note: EntityType is NOT re-exported to avoid type conflicts with @service-connection
 // Files that need EntityType should import it directly from @service-properties/generated/schemas/entityType
 
-
 export type { EntityPropertyWithDefinition } from '@service-properties/generated/schemas/entityPropertyWithDefinition';
 export type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 

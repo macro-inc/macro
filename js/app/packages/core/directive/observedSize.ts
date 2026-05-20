@@ -34,7 +34,7 @@ export function observedSize(
   onCleanup(() => observer.disconnect());
 }
 
-function observedSizeBorderBox(
+function _observedSizeBorderBox(
   element: Element,
   accessor: () => ObservedSizeDirectiveOptions
 ) {

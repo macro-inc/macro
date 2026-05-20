@@ -310,7 +310,7 @@ type ScheduleMessageParams = {
 /**
  * Mutation to send an email message.
  */
-function useScheduleMessageMutation(
+function _useScheduleMessageMutation(
   callbacks?: MutationCallbacks<
     UpsertScheduledResponse,
     Error,

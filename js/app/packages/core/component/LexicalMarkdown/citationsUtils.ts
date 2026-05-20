@@ -100,7 +100,7 @@ const createProjectMentionXML = (projectId: string) => {
   });
 };
 
-const createDateMentionXML = (
+const _createDateMentionXML = (
   date: Date,
   displayFormat: string,
   mentionUuid?: string

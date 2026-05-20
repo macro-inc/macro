@@ -15,4 +15,3 @@ export type DefaultView = (typeof DEFAULT_VIEWS)[number];
 export type ViewId = DefaultView | string;
 
 /** equal to upper case View type for default view, otherwise a custom string label */
-type ViewLabel = string;

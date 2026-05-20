@@ -36,8 +36,8 @@ export const isAgent = { exclude: { chatId: [NIL_UUID] } };
 export const isTask = { include: { subType: ['task'] } };
 export const isNotTask = { exclude: { subType: ['task'] } };
 export const isEmailAttachment = { include: { isEmailAttachment: true } };
-const isChannel = { exclude: { channelId: [NIL_UUID] } };
-const isFolder = { exclude: { folderId: [NIL_UUID] } };
+const _isChannel = { exclude: { channelId: [NIL_UUID] } };
+const _isFolder = { exclude: { folderId: [NIL_UUID] } };
 
 export type FilterContext = {
   userId?: string;

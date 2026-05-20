@@ -201,7 +201,7 @@ export function sharedEntity(getUserID: () => string | undefined) {
   };
 }
 
-function ownedAgentFilter(getUserID: () => string | undefined) {
+function _ownedAgentFilter(getUserID: () => string | undefined) {
   return function (entity: EntityData): boolean {
     if (entity.type !== 'chat') return false;
     const userID = getUserID();
@@ -211,7 +211,7 @@ function ownedAgentFilter(getUserID: () => string | undefined) {
   };
 }
 
-function sharedAgentFilter(getUserID: () => string | undefined) {
+function _sharedAgentFilter(getUserID: () => string | undefined) {
   return function (entity: EntityData): boolean {
     if (entity.type !== 'chat') return false;
     const userID = getUserID();
@@ -231,12 +231,12 @@ export function taskAssignedToUserFilter(getUserID: () => string | undefined) {
   };
 }
 
-function hasAssignees(entity: EntityData): boolean {
+function _hasAssignees(entity: EntityData): boolean {
   if (!isTaskEntity(entity)) return false;
   return getTaskAssigneeIds(entity).length > 0;
 }
 
-function isAssignedTo(entity: EntityData, userId: string): boolean {
+function _isAssignedTo(entity: EntityData, userId: string): boolean {
   if (!isTaskEntity(entity)) return false;
 
   const assigneeIds = getTaskAssigneeIds(entity);
@@ -245,7 +245,7 @@ function isAssignedTo(entity: EntityData, userId: string): boolean {
   return assigneeIds.includes(userId);
 }
 
-function isUnassigned(entity: EntityData): boolean {
+function _isUnassigned(entity: EntityData): boolean {
   if (!isTaskEntity(entity)) return false;
   return getTaskAssigneeIds(entity).length === 0;
 }
@@ -287,10 +287,7 @@ export function isOpen(entity: EntityData): boolean {
   return !isClosed(entity);
 }
 
-function hasPriority(
-  entity: EntityData,
-  priorityOptionId: string
-): boolean {
+function hasPriority(entity: EntityData, priorityOptionId: string): boolean {
   if (!isTaskEntity(entity)) return false;
 
   return getTaskPriorityOptionId(entity) === priorityOptionId;

@@ -15,8 +15,7 @@ export type SettingsTab =
   | 'Agent'
   | 'Team';
 
-const [activeTabId, setActiveTabId] =
-  createSignal<SettingsTab>('Appearance');
+const [activeTabId, setActiveTabId] = createSignal<SettingsTab>('Appearance');
 
 export type AgentSettingsSubTab = 'connectors' | 'mcp_server';
 export const [agentSettingsSubTab, setAgentSettingsSubTab] =

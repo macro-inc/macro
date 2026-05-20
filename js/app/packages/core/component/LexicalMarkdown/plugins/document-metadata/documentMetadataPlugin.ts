@@ -51,16 +51,14 @@ export function $getDocumentMetadata(): DocumentMetadata {
   return $getState(root, documentMetadataState);
 }
 
-function $setDocumentMetadata(
-  metadata: Partial<DocumentMetadata>
-): void {
+function $setDocumentMetadata(metadata: Partial<DocumentMetadata>): void {
   const root = $getRoot();
   const currentMetadata = $getState(root, documentMetadataState);
   const newMetadata = { ...currentMetadata, ...metadata };
   $setState(root, documentMetadataState, newMetadata);
 }
 
-function $addEnvironmentTags(tags: string[]): void {
+function _$addEnvironmentTags(tags: string[]): void {
   const currentMetadata = $getDocumentMetadata();
   const existingTags = currentMetadata.environmentTags || [];
   const newTags = [...new Set([...existingTags, ...tags])];
@@ -70,7 +68,7 @@ function $addEnvironmentTags(tags: string[]): void {
   });
 }
 
-function $removeEnvironmentTags(tags: string[]): void {
+function _$removeEnvironmentTags(tags: string[]): void {
   const currentMetadata = $getDocumentMetadata();
   const existingTags = currentMetadata.environmentTags || [];
   const filteredTags = existingTags.filter((tag) => !tags.includes(tag));
@@ -84,7 +82,7 @@ function $setDocumentVersion(version: number): void {
   $setDocumentMetadata({ version });
 }
 
-function $hasEnvironmentTag(tag: string): boolean {
+function _$hasEnvironmentTag(tag: string): boolean {
   const metadata = $getDocumentMetadata();
   return metadata.environmentTags?.includes(tag) ?? false;
 }
@@ -92,7 +90,7 @@ function $hasEnvironmentTag(tag: string): boolean {
 /**
  * Get document version
  */
-function $getDocumentVersion(): number {
+function _$getDocumentVersion(): number {
   const metadata = $getDocumentMetadata();
   return metadata.version;
 }

@@ -128,8 +128,6 @@ async function getAccessToken(): Promise<string | null> {
   return accessToken;
 }
 
-
-
 export type PatchSubscriptionTierErrorCode =
   | 'TIER_UNCHANGED'
   | 'USER_IN_TEAM'

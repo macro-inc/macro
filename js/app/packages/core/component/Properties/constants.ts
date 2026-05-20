@@ -91,7 +91,7 @@ export const FOCUS_CONFIG = {
   DELAY: 100, // Delay before focusing element after it's connected to DOM
 } as const;
 
-const MODAL_DIMENSIONS = {
+const _MODAL_DIMENSIONS = {
   DEFAULT_WIDTH: 448, // 28rem
   DEFAULT_HEIGHT: 384, // 24rem
   PROPERTY_EDITOR_HEIGHT: 384,

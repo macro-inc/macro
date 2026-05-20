@@ -1,4 +1,1 @@
-
-
 export { PropertyValueIcon } from './PropertyValueIcon';
-

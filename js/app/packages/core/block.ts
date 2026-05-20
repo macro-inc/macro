@@ -124,7 +124,7 @@ function exclude(excludeSet: BlockName[]) {
 /**
  * Defines the block combinations that are valid.
  */
-const ValidBlockCombinations: BlockCombinationRules = {
+const _ValidBlockCombinations: BlockCombinationRules = {
   call: allBlockNames,
   chat: allBlockNames,
   pdf: ENABLE_PDF_MULTISPLIT ? allBlockNames : exclude(['pdf']),
@@ -234,7 +234,7 @@ export async function loadResult<
  * @param {(value: T) => U} fn - The function to apply to the ok value.
  * @returns {Result<U, ResultError<LoadErrorCodes>[]>} A new Result with the mapped value or a load error.
  */
-function mapLoadResult<T extends ObjectLike, U extends ObjectLike>(
+function _mapLoadResult<T extends ObjectLike, U extends ObjectLike>(
   result: Result<T, ResultError<string>[]>,
   fn: (value: T) => U
 ): Result<U, ResultError<LoadErrorCodes>[]> {
@@ -1077,7 +1077,7 @@ export const blockDataSignalAs = <T extends Record<string, any>>(
  * @param args Block signals or stores
  * @returns New function with bound getters
  */
-function withBlock<A extends any[], B extends any[], R>(
+function _withBlock<A extends any[], B extends any[], R>(
   fn: (...args: [...A, ...B]) => R,
   ...args: A
 ): (...args: B) => R {

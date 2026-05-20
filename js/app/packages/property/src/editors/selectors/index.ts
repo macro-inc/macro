@@ -4,8 +4,6 @@ export {
   type CombinedEntity,
   createEntitySearchConfig,
   type EntityTypeItemMap,
-
-
   getEntityName,
   getEntitySearchText,
   getEntityTimestampedItem,
@@ -18,11 +16,4 @@ export {
   userToEntity,
 } from './entityUtils';
 
-
-
-export type {
-
-
-
-
-} from './types';
+export type {} from './types';

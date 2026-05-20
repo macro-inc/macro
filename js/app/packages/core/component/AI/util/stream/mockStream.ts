@@ -88,7 +88,7 @@ export function delayStream(
 }
 
 // stop a stream at chunk n
-function limitStream(
+function _limitStream(
   stream: ChatMessageStream,
   itemLimit: number
 ): ChatMessageStream {

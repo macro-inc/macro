@@ -6,7 +6,6 @@ import type { Model } from '@core/component/AI/types';
 
 export { Model } from '@core/component/AI/types';
 
-
 type ExhaustiveMap = {
   [K in Model]: any;
 };
@@ -25,6 +24,6 @@ export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
   'claude-opus-4-6': AnthropicIcon,
 };
 
-const SMART_MODE_MODEL: Model = 'claude-opus-4-6';
+const _SMART_MODE_MODEL: Model = 'claude-opus-4-6';
 
 export const DEFAULT_MODEL: Model = 'claude-opus-4-6';

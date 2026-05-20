@@ -23,7 +23,7 @@ if (import.meta.env.DEV && import.meta.hot) {
   import.meta.hot.on('git-branch:update', (data: string) => setGitBranch(data));
 }
 
-const [devStatusBarOpen, setDevStatusBarOpen] = makePersisted(
+const [devStatusBarOpen, _setDevStatusBarOpen] = makePersisted(
   createSignal<boolean>(false),
   { name: 'dev-status-bar-open' }
 );

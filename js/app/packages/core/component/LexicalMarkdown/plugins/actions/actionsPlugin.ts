@@ -33,12 +33,6 @@ export const REMOVE_ACTION_SEARCH_COMMAND: LexicalCommand<void> = createCommand(
   'REMOVE_ACTION_SEARCH_COMMAND'
 );
 
-type ActionInfo = {
-  id: string;
-  name: string;
-  action: () => void;
-};
-
 // Validators for the position of the / trigger.
 const beforeRegex = /\s$/;
 const afterRegex = /^\s/;

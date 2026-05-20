@@ -72,7 +72,7 @@ function $removePinnedProperty(propertyId: string): void {
  * Must be called within an editor.read() or editor.update() callback
  * @param propertyId - Property ID to check
  */
-function $hasPinnedProperty(propertyId: string): boolean {
+function _$hasPinnedProperty(propertyId: string): boolean {
   const currentIds = $getPinnedProperties();
   return currentIds.includes(propertyId);
 }
@@ -81,7 +81,7 @@ function $hasPinnedProperty(propertyId: string): boolean {
  * Clear all property IDs from the root node
  * Must be called within an editor.update() callback
  */
-function $clearPinnedProperties(): void {
+function _$clearPinnedProperties(): void {
   $setPinnedProperties([]);
 }
 
@@ -90,7 +90,7 @@ function $clearPinnedProperties(): void {
  * @param editor - The Lexical editor instance
  * @returns Promise that resolves to array of property IDs
  */
-function getPinnedProperties(editor: LexicalEditor): Promise<string[]> {
+function _getPinnedProperties(editor: LexicalEditor): Promise<string[]> {
   return new Promise((resolve) => {
     editor.getEditorState().read(() => {
       resolve($getPinnedProperties());

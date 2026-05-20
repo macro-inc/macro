@@ -83,7 +83,7 @@ type BulkEditEntityModalProps = {
   entities: Accessor<EntityData[]>;
 };
 
-const BulkEditEntityModal: ParentComponent<BulkEditEntityModalProps> = (
+const _BulkEditEntityModal: ParentComponent<BulkEditEntityModalProps> = (
   props
 ) => {
   return (

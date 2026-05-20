@@ -147,7 +147,7 @@ const itemTypeSet = new Set([
   'thread',
 ]);
 
-function isItemType(str: string): str is ItemType {
+function _isItemType(str: string): str is ItemType {
   return itemTypeSet.has(str);
 }
 
@@ -1355,7 +1355,7 @@ export const storageServiceClient = {
   typeof enhancements &
   Record<string, unknown>;
 
-const uploadFileToPresignedUrl = async (
+const _uploadFileToPresignedUrl = async (
   presignedUrl: URL,
   file: IDocumentStorageServiceFile,
   signal?: AbortSignal

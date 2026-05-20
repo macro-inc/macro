@@ -1,13 +1,3 @@
-export {
-  EntityKeyProperties,
+export { EntityKeyProperties } from './entity-key-properties';
 
-} from './entity-key-properties';
-
-export {
-
-
-
-
-
-  soupPropertyToProperty,
-} from './property-helpers';
+export { soupPropertyToProperty } from './property-helpers';

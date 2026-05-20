@@ -61,7 +61,7 @@ type URLMedia = {
 };
 
 type MediaSource = DSSMedia | SFSMedia | LocalMedia | URLMedia;
-type MediaSourceType = MediaSource['type'];
+
 type MediaCreationPayload = Exclude<MediaSource, 'file'> & {
   alt?: string;
   mediaType: MediaType;

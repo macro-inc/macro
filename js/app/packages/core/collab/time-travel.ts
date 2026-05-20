@@ -1,13 +1,5 @@
 import { syncServiceClient } from '@service-sync/client';
-import {
-  type Change,
-  type JsonOp,
-  type ListOp,
-  LoroDoc,
-  type MapOp,
-  type TextOp,
-  type TreeOp,
-} from 'loro-crdt';
+import { type Change, LoroDoc } from 'loro-crdt';
 
 export type BaseHistory = {
   readonly userId: string;
@@ -15,16 +7,6 @@ export type BaseHistory = {
   readonly humanTimestamp: string;
   readonly change: Change;
 };
-
-type HistoryWithDiff<T> = BaseHistory & {
-  readonly diff: T;
-};
-
-type Op = ListOp | MapOp | TreeOp | TextOp | JsonOp;
-
-interface OpSerializer<T> {
-  serialize(ops: Op[], doc: LoroDoc): T;
-}
 
 type UnixTimestamp = number;
 type Milliseconds = number;

@@ -16,7 +16,7 @@ interface ThreeColumnConfig {
   rightHandWidth: number;
 }
 
-const resizeColumns = (
+const _resizeColumns = (
   centerWidth: number | undefined,
   windowWidth: number | undefined,
   oldColumns: ThreeColumnLayout,

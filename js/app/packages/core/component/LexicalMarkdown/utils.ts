@@ -84,7 +84,7 @@ import { MARKDOWN_VERSION_COUNTER } from './version';
 /**
  * Type guard to check if the object is a LexicalEditor
  */
-function isLexicalEditor(
+function _isLexicalEditor(
   editor: LexicalEditor | EditorState
 ): editor is LexicalEditor {
   return 'getEditorState' in editor;
@@ -106,7 +106,7 @@ export function forceSetTextContent(editor: LexicalEditor, text: string) {
   editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
 }
 
-function insertText(editor: LexicalEditor, text: string) {
+function _insertText(editor: LexicalEditor, text: string) {
   editor.update(() => {
     const root = $getRoot();
     const selection = $getSelection();
@@ -139,9 +139,7 @@ function isSerializedParagraphNode(
   return node.type === 'paragraph';
 }
 
-function stateHasOnlyEmptyParagraphs(
-  state: SerializedEditorState
-): boolean {
+function _stateHasOnlyEmptyParagraphs(state: SerializedEditorState): boolean {
   const { root } = state;
   if (!root || !root.children) return true;
 
@@ -553,7 +551,7 @@ export function isRectFlushWith(
  * @param selection The selection to check
  * @param editor The editor to check
  */
-function $isCaretAtContainingElementBottom(
+function _$isCaretAtContainingElementBottom(
   selection: BaseSelection | null,
   editor: LexicalEditor
 ) {
@@ -583,7 +581,7 @@ function $isCaretAtContainingElementBottom(
  * @param selection The selection to check
  * @param editor The editor to check
  */
-function $isCaretAtContainingElementTop(
+function _$isCaretAtContainingElementTop(
   slection: BaseSelection | null,
   editor: LexicalEditor
 ) {
@@ -616,10 +614,7 @@ export function nodeByKey(editor: LexicalEditor | EditorState, key: NodeKey) {
   return editor.read(() => $getNodeByKey(key));
 }
 
-function nodeTextByKey(
-  editor: LexicalEditor | EditorState,
-  key: NodeKey
-) {
+function _nodeTextByKey(editor: LexicalEditor | EditorState, key: NodeKey) {
   return editor.read(() => $getNodeByKey(key)?.getTextContent());
 }
 
@@ -653,12 +648,10 @@ export function editorFocusSignal(
 
 export const isEmptyOrMatches = (str: string, regex: RegExp) =>
   str === '' || regex.test(str);
-const isEmptyOrEndsWithSpace = (str: string) =>
-  isEmptyOrMatches(str, /\s$/);
-const isEmptyOrStartsWithSpace = (str: string) =>
-  isEmptyOrMatches(str, /^\s/);
+const _isEmptyOrEndsWithSpace = (str: string) => isEmptyOrMatches(str, /\s$/);
+const _isEmptyOrStartsWithSpace = (str: string) => isEmptyOrMatches(str, /^\s/);
 
-function $setCodeLangauge(language: string) {
+function _$setCodeLangauge(language: string) {
   const selection = $getSelection();
   if (!$isRangeSelection(selection)) return;
 
@@ -673,7 +666,7 @@ function $setCodeLangauge(language: string) {
   }
 }
 
-function $getCodeLanguage(): string | null {
+function _$getCodeLanguage(): string | null {
   const selection = $getSelection();
   if (!$isRangeSelection(selection)) return null;
 
@@ -714,7 +707,7 @@ function $getCodeLanguage(): string | null {
 /**
  * Set the selection to a collapsed caret bases on a client position.
  */
-function $setCaretSelecitonFromClientPos(
+function _$setCaretSelecitonFromClientPos(
   clientX: number,
   clientY: number
 ): RangeSelection | null {
@@ -802,10 +795,7 @@ export function $insertWrappedAfter(
  * Moving from this to the cleanState functionality as the bottom of this file.
  * This will work pre-stringification both for current save and coming LORO.
  */
-function stringifyEditorState(
-  editor: LexicalEditor,
-  filters?: string[]
-) {
+function _stringifyEditorState(editor: LexicalEditor, filters?: string[]) {
   if (!filters) return JSON.stringify(editor.getEditorState().toJSON());
 
   const filter = (key: string, value: any) => {
@@ -899,9 +889,7 @@ function transformSerializedEditorState(
  * Transform a serialized editor state into one that is safe to the LORO sync plugin.
  * NOTE: this is no longer true for loro. but is being used for legacy DSS save.
  */
-function cleanState(
-  state: SerializedEditorState
-): SerializedEditorState {
+function cleanState(state: SerializedEditorState): SerializedEditorState {
   return transformSerializedEditorState(state, [
     // custom code nodes must have no children.
     (node) => {
@@ -1284,7 +1272,7 @@ export function forceSingleLine(editor: LexicalEditor) {
  * This is used to determine if a document mention should be converted to a card
  * before sending in channels.
  */
-function $isSingleDocumentMention(): boolean {
+function _$isSingleDocumentMention(): boolean {
   const root = $getRoot();
   const rootChildren = root.getChildren();
 
@@ -1312,9 +1300,7 @@ function $isSingleDocumentMention(): boolean {
  * Useful when you're already inside an implicit update (e.g. command handler)
  * and need the post-commit state.
  */
-function pendingEditorState(
-  editor: LexicalEditor
-): Promise<EditorState> {
+function _pendingEditorState(editor: LexicalEditor): Promise<EditorState> {
   return new Promise<EditorState>((resolve) => {
     const unregister = editor.registerUpdateListener(({ editorState }) => {
       unregister();

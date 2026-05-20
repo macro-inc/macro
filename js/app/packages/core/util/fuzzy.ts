@@ -1,10 +1,5 @@
 import uFuzzy from '@leeoniya/ufuzzy';
 
-interface FuzzyNameMatchResult {
-  nameHighlight: string;
-  score: number;
-}
-
 interface FuzzyNameMatchResultWithItem<T> {
   item: T;
   nameHighlight: string;

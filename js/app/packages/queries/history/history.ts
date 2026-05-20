@@ -225,7 +225,7 @@ export function getHistoryItems() {
  * Recursively fetches project content and adds all items to history.
  * NOTE: this is currently not used since the block loader only calls upsertItemToUserHistory
  */
-async function insertProjectIntoHistory(projectId: string) {
+async function _insertProjectIntoHistory(projectId: string) {
   const prevData = getHistoryItems();
   const newData: HistoryItem[] = [];
   const ids = [projectId];

@@ -1,36 +1,19 @@
 // Public surface for @property. Built up incrementally as primitives land.
 
 export * from './constants';
-export {
-
-
-
-
-  useProperty,
-} from './core/context';
-export {
-
-
-
-
-
-} from './editors';
+export { useProperty } from './core/context';
+export {} from './editors';
 export {
   type CombinedEntity,
   createEntitySearchConfig,
   Dropdown,
   type DropdownOption,
   type EntityTypeItemMap,
-
-
   getEntityName,
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
   isChannelEntity,
-
-
-
   quickAccessItemToEntity,
   sortEntitiesWithSelfFirst,
   threadMapper,

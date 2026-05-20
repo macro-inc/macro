@@ -34,10 +34,8 @@ export const PaywallMessages: Record<PaywallKey, string> = {
 
 const [paywallOpen, setPaywallOpen] = createSignal(false);
 // export const [paywallOpen, setPaywallOpen] = createControlledOpenSignal(false);
-const [limitReached, setLimitReached] = createSignal(false);
-const [paywallKey, setPaywallKey] = createSignal<PaywallKey | null>(
-  null
-);
+const [limitReached, _setLimitReached] = createSignal(false);
+const [paywallKey, setPaywallKey] = createSignal<PaywallKey | null>(null);
 
 export const usePaywallState = () => {
   const showPaywall = (errorKey?: PaywallKey | null) => {

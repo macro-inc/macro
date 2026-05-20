@@ -54,7 +54,7 @@ export function decodePairs(segments: string[]): SplitContent[] {
   return pairs.length ? pairs : [{ type: 'component', id: LIST_VIEW_ID.inbox }];
 }
 
-function encodePairs(splits: ReadonlyArray<SplitContent>): string[] {
+function _encodePairs(splits: ReadonlyArray<SplitContent>): string[] {
   return splits.flatMap((s) => [
     // Use the alias type if available, otherwise use the base type
     s.type === 'component' ? s.type : s.aliasContext?.alias || s.type,
@@ -62,11 +62,11 @@ function encodePairs(splits: ReadonlyArray<SplitContent>): string[] {
   ]);
 }
 
-const isInSplit = createCallback(() => {
+const _isInSplit = createCallback(() => {
   return !!useContext(SplitPanelContext);
 });
 
-const isInSplitLayout = createCallback(() => {
+const _isInSplitLayout = createCallback(() => {
   return !!useContext(SplitLayoutContext);
 });
 
@@ -146,7 +146,7 @@ export function focusAdjacentSplit(direction: 'left' | 'right') {
  * Reactive boolean accessor indicating whether the active split is currently
  * showing a specific component content id.
  */
-function createIsActiveSplitContentMemo(
+function _createIsActiveSplitContentMemo(
   activeSplit: Accessor<SplitHandle | undefined>,
   contentType: SplitContentType,
   id: string

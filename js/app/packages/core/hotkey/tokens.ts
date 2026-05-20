@@ -326,4 +326,4 @@ function buildTokenMap(tokens: typeof TOKENS): Map<string, HotkeyToken> {
   return map;
 }
 
-const tokenMap = buildTokenMap(TOKENS);
+const _tokenMap = buildTokenMap(TOKENS);

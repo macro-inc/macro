@@ -8,7 +8,7 @@ const Convert = z.object({
   toExtension: z.enum(['pdf', 'docx']),
 });
 
-function convert_validate(data: { [name: string]: unknown }) {
+function _convert_validate(data: { [name: string]: unknown }) {
   return Convert.parse(data);
 }
 
@@ -30,11 +30,11 @@ const ConvertResponse = BaseResponse.extend({
   data: ConvertResponseDataSchema.optional(),
 });
 
-function convert_response_validate(data: { [name: string]: unknown }) {
+function _convert_response_validate(data: { [name: string]: unknown }) {
   return ConvertResponse.parse(data);
 }
 
-function convert_response_data_validate(
+function _convert_response_data_validate(
   data: unknown
 ): data is ConvertResponseData {
   return ConvertResponseDataSchema.safeParse(data).success;

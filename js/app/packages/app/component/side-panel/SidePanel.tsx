@@ -303,7 +303,7 @@ function NarrowTabs(props: { contentLabel?: string; infoLabel?: string }) {
 }
 
 /** Indicates whether the current subtree has a SidePanel.Layout ancestor. */
-function useHasSidePanel(): boolean {
+function _useHasSidePanel(): boolean {
   return useContext(SidePanelContext) !== undefined;
 }
 

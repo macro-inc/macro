@@ -2,9 +2,7 @@ import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { queryReadyGate } from '@queries/gate';
 import { type Accessor, createMemo } from 'solid-js';
 import { createAssertedContextProvider } from './createContext';
-import { enableUserInfoQuery, shouldQueryUserInfo } from './user-info-gate';
-
-
+import { shouldQueryUserInfo } from './user-info-gate';
 
 type UserContextValue = {
   userInfo: Accessor<UserInfoData | undefined>;
@@ -100,15 +98,15 @@ export function useTutorialCompleted() {
   return useUserContext().tutorialCompleted;
 }
 
-function useGroup() {
+function _useGroup() {
   return useUserContext().group;
 }
 
-function useHasChromeExt() {
+function _useHasChromeExt() {
   return useUserContext().hasChromeExt;
 }
 
-function useHasTrialed() {
+function _useHasTrialed() {
   return useUserContext().hasTrialed;
 }
 

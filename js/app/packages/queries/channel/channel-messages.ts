@@ -34,12 +34,6 @@ type ChannelMessagesQueryKey = ReturnType<
   typeof channelKeys.messages
 >['queryKey'];
 
-type IndexedChannelMessages = {
-  items: ApiChannelMessage[];
-  keys: string[];
-  byId: Map<string, ApiChannelMessage>;
-};
-
 export type TopLevelMessageSnapshot = {
   itemIndex: number;
   message: ApiChannelMessage;
@@ -555,7 +549,7 @@ export function restoreThreadPreviewReplyInChannelMessages(
 }
 
 /** Finds a top-level message across all cached variants for a channel. */
-function findTopLevelMessageInChannelMessages(
+function _findTopLevelMessageInChannelMessages(
   channelId: string,
   messageId: string
 ): ApiChannelMessage | undefined {

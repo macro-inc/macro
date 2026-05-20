@@ -69,7 +69,7 @@ export const useCanComment = () => usePermissionCan(Permissions.CAN_COMMENT);
 export const useCanEdit = () => usePermissionCan(Permissions.CAN_EDIT);
 export const useIsDocumentOwner = () => useHasAccess(Permissions.OWNER);
 
-const useReadOnly = () => {
+const _useReadOnly = () => {
   const canView = useCanView();
   const canComment = useCanComment();
   return createMemo(() => canView() && !canComment());

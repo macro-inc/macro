@@ -8,7 +8,6 @@ export * from './entity-type';
 export * from './general';
 export * from './task';
 
-
 import type { FilterGroupConfig } from './base';
 import {
   DOCUMENT_CONTEXTUAL_FILTERS,
@@ -90,7 +89,7 @@ export const SOUP_FILTERS = [
   ...FILE_TYPE_FILTERS,
 ] as const;
 
-const SOUP_FILTER_GROUPS: FilterGroupConfig[] = [
+const _SOUP_FILTER_GROUPS: FilterGroupConfig[] = [
   { id: 'focus', allowMultiple: false },
   { id: 'entity-type', allowMultiple: true },
 ];

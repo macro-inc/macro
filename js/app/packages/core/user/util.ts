@@ -1,13 +1,6 @@
 import { useDisplayName } from './displayName';
-import {
-  emailToMacroId,
-  type MacroId,
-  macroIdToEmail,
-  tryMacroId,
-} from './macroId';
+import { tryMacroId } from './macroId';
 import type { IUser } from './types';
-
-
 
 // TODO: consolidate idToEmail, see idToEmail in email.ts
 /**

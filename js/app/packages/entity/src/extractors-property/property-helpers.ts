@@ -265,7 +265,7 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
 /**
  * Convert array of SoupProperty to Property array
  */
-function soupPropertiesToProperties(
+function _soupPropertiesToProperties(
   soupProperties: SoupProperty[]
 ): Property[] {
   return soupProperties.map(soupPropertyToProperty);

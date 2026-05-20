@@ -104,6 +104,6 @@ export function useChatContext(): ChatState {
   return ctx;
 }
 
-function useChatContextOptional(): ChatState | undefined {
+function _useChatContextOptional(): ChatState | undefined {
   return useContext(ChatCtx);
 }

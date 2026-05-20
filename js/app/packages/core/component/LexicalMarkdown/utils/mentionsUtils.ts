@@ -28,7 +28,7 @@ type GroupItem = {
  * Creates a group mention entity from an alias.
  * Use this to define new group aliases (e.g., @here, @team, @online).
  */
-function createGroupAlias(alias: string): Entity<'group'> {
+function _createGroupAlias(alias: string): Entity<'group'> {
   return {
     kind: 'group',
     id: alias,
@@ -66,9 +66,7 @@ type EntityMapper<K extends keyof EntityMap> = (
   data: EntityMap[K]
 ) => PickEntity<K>;
 
-function entityMapper<K extends keyof EntityMap>(
-  kind: K
-): EntityMapper<K> {
+function entityMapper<K extends keyof EntityMap>(kind: K): EntityMapper<K> {
   return (data: EntityMap[K]) => ({ kind, data, id: data.id });
 }
 
@@ -184,7 +182,7 @@ export async function handleUserMention(
  * @param date
  * @param dependencies
  */
-async function handleDateMention(
+async function _handleDateMention(
   date: DateItem,
   dependencies: HandlerDependencies
 ) {
@@ -195,7 +193,7 @@ async function handleDateMention(
   });
 }
 
-async function handleGroupMention(
+async function _handleGroupMention(
   group: GroupItem,
   dependencies: HandlerDependencies
 ) {
@@ -205,7 +203,7 @@ async function handleGroupMention(
   });
 }
 
-async function handleEmailMention(
+async function _handleEmailMention(
   email: EmailEntity,
   dependencies: HandlerDependencies
 ) {
@@ -313,7 +311,7 @@ export async function handleBasicMention(
  * @param channel
  * @param dependencies
  */
-async function handleChannelMention(
+async function _handleChannelMention(
   channel: ChannelWithParticipants,
   dependencies: HandlerDependencies
 ) {
@@ -384,15 +382,13 @@ export type MentionItem = QuickAccessItem | DateMentionItem | GroupMentionItem;
 /**
  * Type guard for DateMentionItem.
  */
-function isDateMentionItem(item: MentionItem): item is DateMentionItem {
+function _isDateMentionItem(item: MentionItem): item is DateMentionItem {
   return item.kind === 'date';
 }
 
 /**
  * Type guard for GroupMentionItem.
  */
-function isGroupMentionItem(
-  item: MentionItem
-): item is GroupMentionItem {
+function _isGroupMentionItem(item: MentionItem): item is GroupMentionItem {
   return item.kind === 'group';
 }

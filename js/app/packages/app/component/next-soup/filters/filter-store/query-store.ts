@@ -4,7 +4,6 @@ import { compileToAst, type TargetAstMap } from './compile';
 import { addFieldValues, removeFieldValues } from './field-values';
 import type { FieldFilters, Query, QueryState } from './types';
 
-
 export type { Query } from './types';
 
 type QueryStoreOptions = {

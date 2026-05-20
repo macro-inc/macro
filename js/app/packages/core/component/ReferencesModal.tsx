@@ -80,7 +80,7 @@ type ReferencesModalProps = {
   entityType?: ItemType;
 };
 
-function ReferencesModal(props: ReferencesModalProps) {
+function _ReferencesModal(props: ReferencesModalProps) {
   const drawerControl = useDrawerControl(REFERENCES_DRAWER_ID);
   const [referenceCount] = createResource(
     () => props.documentId,

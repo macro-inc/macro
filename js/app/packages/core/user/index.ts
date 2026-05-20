@@ -8,7 +8,6 @@ export {
 } from './combinedRecipient';
 export { useContacts } from './contactService';
 export {
-
   seedMockDisplayNames,
   useDisplayName,
   useDisplayNameParts,
@@ -16,7 +15,6 @@ export {
 export { useAugmentUserWithDmActivity } from './dmActivity';
 export {
   emailToMacroId,
-
   type MacroId,
   macroIdToEmail,
   tryMacroId,

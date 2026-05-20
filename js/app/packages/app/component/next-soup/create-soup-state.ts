@@ -47,18 +47,6 @@ export type SoupRow = {
 
 type NavigationResult = { row: SoupRow; index: number } | undefined;
 
-type GroupConfig<T> = {
-  id: string;
-  label: string;
-  getValue: (item: T) => unknown;
-  getLabel?: (value: unknown) => string;
-  renderHeader?: (props: {
-    value: unknown;
-    label: string;
-    count: number;
-  }) => JSX.Element;
-};
-
 export type SortConfig<T> = {
   id: string;
   fn: (a: T, b: T) => number;

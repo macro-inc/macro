@@ -24,7 +24,7 @@ function useGotoLogin() {
   };
 }
 
-function useAuthRedirect() {
+function _useAuthRedirect() {
   const isAuthenticated = useIsAuthenticated();
   const gotoLogin = useGotoLogin();
 

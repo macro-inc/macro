@@ -5,17 +5,6 @@ import { createSignal, onMount } from 'solid-js';
 
 const defaultPlaceholder = 'Generate with AI...';
 
-enum AiState {
-  // pressing enter causes state transition
-  Ready,
-  // pressing enter show spinner, transition on event
-  Processing,
-  // do nothing
-  Disabled,
-  // loading but can be stopped
-  Stopable,
-}
-
 type InlineInputReadyProps = {
   // send message to chat
   sendCallback: (input: string) => void;

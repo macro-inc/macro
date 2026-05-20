@@ -47,7 +47,7 @@ function retryDelay(
   return Math.min(initialDelayMs * 2 ** attempt, maxDelayMs);
 }
 
-function documentLocationQueryOptions(args: DocumentLocationArgs) {
+function _documentLocationQueryOptions(args: DocumentLocationArgs) {
   return {
     queryKey: documentLocationKeys.location(args.documentId, args.versionId)
       .queryKey,
@@ -186,7 +186,7 @@ export function waitForDocumentPresignedUrlReady(
   });
 }
 
-function locationToAppResult(
+function _locationToAppResult(
   location: DocumentLocation
 ): Result<{ data: DocumentLocation }, ResultError<string>[]> {
   return ok({ data: location });
@@ -196,7 +196,7 @@ function isDocumentLocationReady(location: DocumentLocation) {
   return location.content.state === DocumentContentState.ready;
 }
 
-function isDocumentLocationResultReady(
+function _isDocumentLocationResultReady(
   result: Result<{ data: DocumentLocation }, ResultError<string>[]>
 ) {
   return !result.isErr() && isDocumentLocationReady(result.value.data);

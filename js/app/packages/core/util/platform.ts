@@ -29,13 +29,11 @@ function isMobilePlatform(): boolean;
 function isMobilePlatform(
   platform: MacroPlatform
 ): platform is NativeMobilePlatform;
-function isMobilePlatform(
-  platform: MacroPlatform = getPlatform()
-): boolean {
+function isMobilePlatform(platform: MacroPlatform = getPlatform()): boolean {
   return platform === 'ios' || platform === 'android';
 }
 
-function isDesktopPlatform(): boolean {
+function _isDesktopPlatform(): boolean {
   return isPlatform('desktop');
 }
 

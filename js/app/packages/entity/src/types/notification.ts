@@ -22,7 +22,7 @@ export const isWithNotification = <T extends {} = {}>(
   return 'notifications' in item && typeof item.notifications === 'function';
 };
 
-const isWithStackedNotifications = <T extends {} = {}>(
+const _isWithStackedNotifications = <T extends {} = {}>(
   item: T
 ): item is WithStackedNotifications<T> => {
   return (

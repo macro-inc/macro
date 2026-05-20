@@ -229,7 +229,7 @@ function createRectsFromDOMRange(
 /**
  * Get the highlight rects for a selection.
  */
-function getSelectionRects(
+function _getSelectionRects(
   editor: LexicalEditor,
   selection: BaseSelection | null
 ): DOMRect[] {

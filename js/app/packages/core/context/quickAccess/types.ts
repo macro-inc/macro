@@ -77,40 +77,27 @@ export type UserItem = QuickAccessBase & {
 
 export type QuickAccessItem = EntityItem | UserItem;
 
-function isEntityItem(item: QuickAccessItem): item is EntityItem {
+function _isEntityItem(item: QuickAccessItem): item is EntityItem {
   return item.kind === 'entity';
 }
 
-function isUserItem(item: QuickAccessItem): item is UserItem {
+function _isUserItem(item: QuickAccessItem): item is UserItem {
   return item.kind === 'user';
 }
 
-function isEntityOfType<T extends EntityData['type']>(
+function _isEntityOfType<T extends EntityData['type']>(
   item: QuickAccessItem,
   entityType: T
 ): item is EntityItem<Extract<EntityData, { type: T }>> {
   return item.kind === 'entity' && item.data.type === entityType;
 }
 
-function isFromBucket<B extends Bucket>(
+function _isFromBucket<B extends Bucket>(
   item: QuickAccessItem,
   bucket: B
 ): boolean {
   return item.bucket === bucket;
 }
-
-type BucketEntityMap = {
-  channel: ChannelEntity;
-  dm: ChannelEntity;
-  document: DocumentEntity;
-  task: TaskEntity;
-  note: DocumentEntity;
-  chat: ChatEntity;
-  project: ProjectEntity;
-  email: EmailEntity;
-  person: never; // UserItem, not EntityItem
-  command: never; // CommandItem, not EntityItem
-};
 
 /**
  * Maps a bucket to its corresponding QuickAccessItem type
@@ -135,29 +122,6 @@ export type ItemsForBuckets<Buckets extends Bucket[]> = Buckets extends [
 ]
   ? ItemForBucket<First> | ItemsForBuckets<Rest>
   : never;
-
-type SearchWeights = {
-  fuzzy?: number;
-  time?: number;
-  brevity?: number;
-};
-
-type SearchOptions = {
-  query: string;
-  limit?: number;
-  weights?: SearchWeights;
-  minScore?: number;
-};
-
-type SearchResult<T extends QuickAccessItem = QuickAccessItem> = {
-  item: T;
-  score: number;
-  scoreDetails?: {
-    fuzzy: number;
-    time: number;
-    brevity: number;
-  };
-};
 
 export type QuickAccessContextValue = {
   /**

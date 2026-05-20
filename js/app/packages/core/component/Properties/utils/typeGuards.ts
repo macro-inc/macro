@@ -43,13 +43,13 @@ export const isDateProperty = (
   return property.valueType === 'DATE';
 };
 
-const isSelectStringProperty = (
+const _isSelectStringProperty = (
   property: Property
 ): property is SelectStringProperty => {
   return property.valueType === 'SELECT_STRING';
 };
 
-const isSelectNumberProperty = (
+const _isSelectNumberProperty = (
   property: Property
 ): property is SelectNumberProperty => {
   return property.valueType === 'SELECT_NUMBER';
@@ -76,7 +76,7 @@ export const isLinkProperty = (
   return property.valueType === 'LINK';
 };
 
-const isSingleValueProperty = (
+const _isSingleValueProperty = (
   property: Property
 ): property is SingleValueProperty => {
   return (
@@ -87,7 +87,7 @@ const isSingleValueProperty = (
   );
 };
 
-const isMultiValueProperty = (
+const _isMultiValueProperty = (
   property: Property
 ): property is MultiValueProperty => {
   return (
@@ -98,29 +98,29 @@ const isMultiValueProperty = (
   );
 };
 
-const getStringValue = (property: StringProperty): string | null => {
+const _getStringValue = (property: StringProperty): string | null => {
   return property.value;
 };
 
-const getNumberValue = (property: NumberProperty): number | null => {
+const _getNumberValue = (property: NumberProperty): number | null => {
   return property.value;
 };
 
-const getBooleanValue = (property: BooleanProperty): boolean | null => {
+const _getBooleanValue = (property: BooleanProperty): boolean | null => {
   return property.value;
 };
 
-const getDateValue = (property: DateProperty): Date | null => {
+const _getDateValue = (property: DateProperty): Date | null => {
   return property.value;
 };
 
-const getSelectStringValues = (
+const _getSelectStringValues = (
   property: SelectStringProperty
 ): string[] | null => {
   return property.value;
 };
 
-const getSelectNumberValues = (
+const _getSelectNumberValues = (
   property: SelectNumberProperty
 ): string[] | null => {
   return property.value;
@@ -189,7 +189,7 @@ export function isEntityReferenceArray(
  * PropertyDefinitionWithOptions has { definition, property_options } structure
  * PropertyDefinition has { id, data_type, ... } directly
  */
-function isPropertyDefinition(
+function _isPropertyDefinition(
   p: PropertyDefinitionResponse
 ): p is PropertyDefinition {
   return !('definition' in p);
@@ -213,11 +213,11 @@ export const hasValue = (property: Property): boolean => {
   return true;
 };
 
-const hasSingleValue = (property: MultiValueProperty): boolean => {
+const _hasSingleValue = (property: MultiValueProperty): boolean => {
   return property.value !== null && property.value.length === 1;
 };
 
-const hasMultiValue = (property: MultiValueProperty): boolean => {
+const _hasMultiValue = (property: MultiValueProperty): boolean => {
   return property.value !== null && property.value.length > 1;
 };
 

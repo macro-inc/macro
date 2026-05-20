@@ -312,7 +312,7 @@ export function formatDate(date: Date): string {
   return date.toLocaleDateString('en-US', options);
 }
 
-function getDateSuggestions(input: string): ParsedDate[] {
+function _getDateSuggestions(input: string): ParsedDate[] {
   const suggestions: ParsedDate[] = [];
   const normalized = input.toLowerCase().trim();
 

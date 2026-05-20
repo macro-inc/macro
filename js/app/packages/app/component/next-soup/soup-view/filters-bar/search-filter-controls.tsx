@@ -122,10 +122,7 @@ export function useSearchFilterOptions() {
   };
 }
 
-type ChannelSubFilters = Pick<
-  ChannelFilters,
-  'channel_ids' | 'sender_ids'
->;
+type ChannelSubFilters = Pick<ChannelFilters, 'channel_ids' | 'sender_ids'>;
 type EmailSubFilters = Pick<EmailFilters, 'importance'>;
 type CallSubFilters = {
   channel_ids?: string[];
@@ -133,9 +130,7 @@ type CallSubFilters = {
   attended?: boolean | null;
 };
 
-function getCachedChannelSubFilters(
-  contentId: string
-): ChannelSubFilters {
+function getCachedChannelSubFilters(contentId: string): ChannelSubFilters {
   if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return {};
   try {
     const raw = localStorage.getItem(

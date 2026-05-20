@@ -16,15 +16,7 @@ export type DocxBaseExpandedPart<T> = {
 
 export type DocxExpandedPart = DocxBaseExpandedPart<ArrayBuffer>;
 
-type DocxExpandedPartWithoutSha = Omit<DocxExpandedPart, 'sha'>;
-
-type DocxExpandedParts = DocxExpandedPart[];
 export type DocxExpandedPartList = Omit<DocxExpandedPart, 'content'>[];
-
-type DocxExpandedFile = {
-  parts: DocxExpandedParts;
-  metadata: WithRequired<DocumentMetadata, 'documentBom'>;
-};
 
 export type GetDocxFileResponse = FlattenObject<{
   parts: Array<{ sha: string; url: string }>;

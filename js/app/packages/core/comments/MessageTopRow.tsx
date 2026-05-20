@@ -19,21 +19,6 @@ const NewTag = () => {
   );
 };
 
-enum Color {
-  gray,
-  red,
-  amber,
-  yellow,
-  green,
-  teal,
-  sky,
-  blue,
-  indigo,
-  purple,
-  pink,
-  rose,
-}
-
 function MessageRow(
   props: ParentProps<{
     authorId: string | null;

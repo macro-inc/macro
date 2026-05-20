@@ -11,7 +11,6 @@ import {
 
 // Re-export helpers for backward compatibility and testing
 
-
 interface NotificationDescriptionProps {
   notification?: Notification;
   stack?: NotificationStack;

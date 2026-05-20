@@ -68,7 +68,7 @@ interface UnfurledLinkCollection {
   links: GetUnfurlResponse[];
 }
 
-function UnfurledLinkCollection(props: UnfurledLinkCollection) {
+function _UnfurledLinkCollection(props: UnfurledLinkCollection) {
   const [isCollapsed, setIsCollapsed] = createSignal(props.collapsed ?? true);
 
   return (

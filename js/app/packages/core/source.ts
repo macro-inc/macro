@@ -80,19 +80,15 @@ export type SourcePreload<T extends Record<string, any>> = {
 
 export type Source = SourceNotGenerated | SourceGenerated;
 
-function sourceName(
-  source: Source | SourcePreload<any>
-): string | undefined {
+function _sourceName(source: Source | SourcePreload<any>): string | undefined {
   return (source as WithName).name;
 }
 
-function sourceUpload(
-  source: Source | SourcePreload<any>
-): File | undefined {
+function _sourceUpload(source: Source | SourcePreload<any>): File | undefined {
   return (source as SourceDSSWithUpload).upload;
 }
 
-async function sourceToArrayBufferLike(
+async function _sourceToArrayBufferLike(
   source: Source
 ): Promise<ArrayBufferLike | undefined> {
   switch (source.type) {
@@ -101,7 +97,7 @@ async function sourceToArrayBufferLike(
     case 'buffer':
       return source.buffer;
     case 'gen': {
-      return sourceToArrayBufferLike(source.origin);
+      return _sourceToArrayBufferLike(source.origin);
     }
   }
   return undefined;

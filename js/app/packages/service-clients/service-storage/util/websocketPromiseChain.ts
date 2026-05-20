@@ -215,14 +215,6 @@ export type WebsocketJobSubmissionSuccessResponse<T = unknown> = Omit<
   data: T;
 };
 
-type WebsocketJobSubmissionResponse<T = unknown> =
-  | WebsocketJobSubmissionSuccessResponse<T>
-  | WebsocketJobSubmissionErrorResponse;
-
-type ListenerCallback = (
-  response: WebsocketJobSubmissionResponse & { macroRequestId: string }
-) => void | Promise<void>;
-
 // Type Guards
 function isDocumentProcessResponse(data: any): data is DocumentProcessResponse {
   return (

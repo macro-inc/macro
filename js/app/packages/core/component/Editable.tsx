@@ -27,7 +27,7 @@ interface EditableLabelState {
 
 type EditableLabelProps = ComponentProps<'input'> & EditableLabelState;
 
-function EditableLabel(props: EditableLabelProps) {
+function _EditableLabel(props: EditableLabelProps) {
   const [editableLabelProps, inputProps] = splitProps(props, [
     'handleSubmitEdit',
     'handleCancelEdit',
@@ -189,7 +189,7 @@ type EditableComponentProps = {
   | { component?: never; children: JSX.Element }
 );
 
-function EditableProvider(props: EditableComponentProps) {
+function _EditableProvider(props: EditableComponentProps) {
   const [isEditing, setIsEditing] = createSignal(props.isEditing ?? false);
   return (
     <EditingContext.Provider value={[isEditing, setIsEditing]}>

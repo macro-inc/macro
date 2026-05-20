@@ -44,8 +44,6 @@ import { Paywall } from './paywall/Paywall';
 import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 
-
-
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
   `${ROUTER_BASE_CONCAT}login/popup`,

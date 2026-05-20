@@ -168,7 +168,7 @@ export function useUnfurl(url: string | undefined): UnfurlFetcher {
  * Prefetch multiple URLs at once
  * Useful for preloading unfurls when you know multiple URLs will be needed
  */
-function prefetchUnfurls(urls: string[]) {
+function _prefetchUnfurls(urls: string[]) {
   const urlsToFetch = urls.filter((url) => isCacheExpired(unfurlStore[url]));
 
   if (urlsToFetch.length > 0) {
@@ -179,6 +179,6 @@ function prefetchUnfurls(urls: string[]) {
 /**
  * Get unfurl data from cache without triggering a fetch
  */
-function getCachedUnfurl(url: string): UnfurledLinkData | undefined {
+function _getCachedUnfurl(url: string): UnfurledLinkData | undefined {
   return unfurlStore[url];
 }

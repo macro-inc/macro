@@ -30,15 +30,13 @@ function resolveEmojiTerms(emoji: string): string[] {
   return EmojiLib[emoji] ?? [];
 }
 
-const ORDERED_EMOJI_DATA: SimpleEmoji[] = OrderedEmojiData.map(
-  (emoji) => {
-    return {
-      emoji: emoji,
-      slug: resolveEmojiSlug(emoji) ?? emoji,
-      terms: resolveEmojiTerms(emoji),
-    };
-  }
-);
+const ORDERED_EMOJI_DATA: SimpleEmoji[] = OrderedEmojiData.map((emoji) => {
+  return {
+    emoji: emoji,
+    slug: resolveEmojiSlug(emoji) ?? emoji,
+    terms: resolveEmojiTerms(emoji),
+  };
+});
 
 const EMOJI_DATA_GROUPED = GroupedEmojiData.map((group) => {
   return {
@@ -53,9 +51,7 @@ const EMOJI_DATA_GROUPED = GroupedEmojiData.map((group) => {
   };
 });
 
-function resolveEmojiFromUnicode(
-  emoji: string
-): SimpleEmoji | undefined {
+function _resolveEmojiFromUnicode(emoji: string): SimpleEmoji | undefined {
   return ORDERED_EMOJI_DATA.find(({ emoji: emoji_ }) => emoji_ === emoji);
 }
 

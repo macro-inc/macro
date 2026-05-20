@@ -33,14 +33,13 @@ interface DraftMessage {
   threadId?: string;
 }
 
-const [cachedChannelInputStore, setCachedChannelInputStore] =
-  makePersisted(
-    createStore<
-      Partial<{
-        [key: string]: DraftMessage | undefined;
-      }>
-    >({}),
-    {
-      name: 'cachedChannelInputStore',
-    }
-  );
+const [_cachedChannelInputStore, _setCachedChannelInputStore] = makePersisted(
+  createStore<
+    Partial<{
+      [key: string]: DraftMessage | undefined;
+    }>
+  >({}),
+  {
+    name: 'cachedChannelInputStore',
+  }
+);

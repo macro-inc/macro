@@ -79,7 +79,7 @@ export const INSERT_CONTACT_MENTION_COMMAND: LexicalCommand<ContactMentionInfo> 
 export const INSERT_DATE_MENTION_COMMAND: LexicalCommand<DateMentionInfo> =
   createCommand('INSERT_DATE_MENTION_COMMAND');
 
-const OPEN_INLINE_SEARCH_COMMAND: LexicalCommand<void> = createCommand(
+const _OPEN_INLINE_SEARCH_COMMAND: LexicalCommand<void> = createCommand(
   'OPEN_INLINE_SEARCH_COMMAND'
 );
 

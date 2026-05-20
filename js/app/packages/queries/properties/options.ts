@@ -33,8 +33,6 @@ export function usePropertyOptionsQuery(
   });
 }
 
-type PropertyOptionsQuery = ReturnType<typeof usePropertyOptionsQuery>;
-
 function invalidatePropertyOptions(propertyDefinitionId: string) {
   queryClient.invalidateQueries({
     queryKey: propertiesKeys.options({ propertyDefinitionId }).queryKey,

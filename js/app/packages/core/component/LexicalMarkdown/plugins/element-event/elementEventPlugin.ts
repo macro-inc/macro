@@ -60,7 +60,7 @@ function registerElementEventPlugin<T extends LexicalNode, E extends Event>(
  *
  * plugins.use(linkClickPlugin);
  */
-function elementEventPlugin<T extends LexicalNode, E extends Event>(
+function _elementEventPlugin<T extends LexicalNode, E extends Event>(
   props: ElementEventProps<T, E>
 ) {
   return (editor: LexicalEditor) => registerElementEventPlugin(editor, props);

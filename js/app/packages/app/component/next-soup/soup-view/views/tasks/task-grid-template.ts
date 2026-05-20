@@ -51,7 +51,7 @@ export const TASK_GRID_TEMPLATE_COLUMNS_WIDE = `1rem minmax(0, 100%) ${TASK_GRID
 ).join(' ')} ${CREATED_BY_COLUMN_WIDTH} var(--task-col-timestamp, 5rem)`;
 
 /** @deprecated Use TASK_GRID_TEMPLATE_COLUMNS_NARROW or TASK_GRID_TEMPLATE_COLUMNS_WIDE */
-const TASK_GRID_TEMPLATE_COLUMNS = TASK_GRID_TEMPLATE_COLUMNS_NARROW;
+const _TASK_GRID_TEMPLATE_COLUMNS = TASK_GRID_TEMPLATE_COLUMNS_NARROW;
 
 /** Grid template areas for narrow containers (no Created By column) */
 const TASK_GRID_TEMPLATE_AREAS_NARROW = `"indicator content ${TASK_GRID_COLUMNS.map(
@@ -64,4 +64,4 @@ export const TASK_GRID_TEMPLATE_AREAS_WIDE = `"indicator content ${TASK_GRID_COL
 ).join(' ')} createdBy timestamp"`;
 
 /** @deprecated Use TASK_GRID_TEMPLATE_AREAS_NARROW or TASK_GRID_TEMPLATE_AREAS_WIDE */
-const TASK_GRID_TEMPLATE_AREAS = TASK_GRID_TEMPLATE_AREAS_NARROW;
+const _TASK_GRID_TEMPLATE_AREAS = TASK_GRID_TEMPLATE_AREAS_NARROW;

@@ -31,12 +31,7 @@ import { createEffect, createSignal, on, type Setter } from 'solid-js';
 import { theme } from '../../theme';
 import { $traverseNodes, setEditorStateFromMarkdown } from '../../utils';
 
-export {
-
-
-
-
-} from '@lexical-core';
+export {} from '@lexical-core';
 
 import type { createBlockSignal } from '@core/block';
 import type { SetStoreFunction } from 'solid-js/store';
@@ -60,9 +55,7 @@ export type Completion = {
 };
 
 // ai generated content
-type CompletionSignal = ReturnType<
-  typeof createSignal<Completion | undefined>
->;
+type CompletionSignal = ReturnType<typeof createSignal<Completion | undefined>>;
 // where is this open
 export type GenerateMenuOpen = ReturnType<
   typeof createSignal<boolean | undefined>
@@ -70,7 +63,7 @@ export type GenerateMenuOpen = ReturnType<
 // done generating and waiting
 type BooleanSignal = ReturnType<typeof createBlockSignal<boolean>>;
 
-const IGNORE_COMPLETION_TYPES = ['inline-search'];
+const _IGNORE_COMPLETION_TYPES = ['inline-search'];
 const MAKE_COMPLETION: LexicalCommand<Completion> =
   createCommand('MAKE_COMPLETION');
 export const ACCEPT_COMPLETION: LexicalCommand<void> =
@@ -79,10 +72,6 @@ export const REJECT_COMPLETION: LexicalCommand<void> =
   createCommand('REJECT_COMPLETION');
 const SET_CONTEXT: LexicalCommand<RangeSelection> =
   createCommand('SET_CONTEXT');
-
-interface MenuArgs {
-  context: string;
-}
 
 type GeneratePluginArgs = {
   // called when the selection changes

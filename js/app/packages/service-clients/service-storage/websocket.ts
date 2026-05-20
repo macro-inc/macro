@@ -34,7 +34,7 @@ const ws = new WebsocketBuilder(SERVER_HOSTS['websocket-service'])
 
 export const storageWS = ws;
 
-const state = createWebsocketStateSignal(ws);
+const _state = createWebsocketStateSignal(ws);
 
 type WebSocketJobConfig<T, R, D, U> = {
   // websocket request data

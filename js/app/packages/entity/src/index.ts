@@ -1,7 +1,5 @@
 // Export types
 
-
-
 export { MultiSelectCheckbox } from './components/MultiSelectCheckbox';
 export { ProjectBreadCrumb } from './components/ProjectBreadCrumb';
 export { UnreadIndicator } from './components/UnreadIndicator';
@@ -10,15 +8,10 @@ export { ListEntity, ListLayoutProvider } from './composed/ListEntity';
 
 export { Entity } from './entity';
 export { NotificationRow } from './extractors-notification';
-export type {
-
-
-} from './extractors-notification/notification-row';
+export type {} from './extractors-notification/notification-row';
 export {
   getSnippetHit,
-
   isSnippetEntity,
-
 } from './extractors-search/snippet-entity';
 export * from './types/drag';
 export * from './types/entity';
@@ -40,13 +33,8 @@ export {
   getPropertyOptionLabel,
   getTaskAssigneeIds,
   getTaskStatusOptionId,
-
-
-
-
 } from './utils/task-properties';
 export {
   formatDateAndTime,
   formatRelativeTimestamp,
-
 } from './utils/timestamp';

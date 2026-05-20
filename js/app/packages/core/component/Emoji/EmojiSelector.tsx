@@ -27,14 +27,6 @@ function renderEmoji(emoji: string, size?: string): JSX.Element {
   );
 }
 
-type EmojiEventHandler<T extends Event> = (
-  emoji: string,
-  event: T & {
-    currentTarget: HTMLButtonElement;
-    target: Element;
-  }
-) => void;
-
 interface EmojiPickerProps {
   nameFilter?: string;
   onEmojiClick: (emoji: SimpleEmoji) => void;

@@ -16,12 +16,7 @@ export type Entity = {
   type: EntityType;
 };
 
-
-
 import type { NotifEvent } from '@service-notification/generated/schemas';
 export type NotificationType = NotifEvent['tag'] | 'call-started';
 
-type Nullable<T> = T | null;
 export type Maybe<T> = T | undefined;
-
-type MaybePromise<T> = T | Promise<T>;

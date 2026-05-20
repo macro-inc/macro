@@ -1,5 +1,2 @@
-export type {
-
-
-} from './context';
+export type {} from './context';
 export { SidePanel, useSidePanel } from './SidePanel';

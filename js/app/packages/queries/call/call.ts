@@ -14,7 +14,7 @@ export function useActiveCallQuery(channelId: Accessor<string>) {
   }));
 }
 
-function useJoinCallMutation() {
+function _useJoinCallMutation() {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (channelId: string) =>
