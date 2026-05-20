@@ -24,6 +24,7 @@ members = [
   "email_suppression_handler",
   "image_optimizer",
   "image_proxy_service",
+  "integration_tests/local_e2e",
   "mcp_service",
   "memory",
   "notification_sandbox",

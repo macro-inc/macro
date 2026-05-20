@@ -6156,6 +6156,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "local_e2e_integration_tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "local_e2e_test_support",
+ "reqwest 0.13.3",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+]
+
+[[package]]
+name = "local_e2e_test_support"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dotenvy",
+ "macro_auth",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
