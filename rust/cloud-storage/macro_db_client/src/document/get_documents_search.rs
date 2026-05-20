@@ -103,22 +103,34 @@ pub async fn get_documents_for_search(
         only_deleted,
         cursor_id as Option<String>,
     )
-    .try_map(|row| {
-        Ok(BackfillSearchDocumentInformation {
-            document_id: row.document_id,
-            document_version_id: row.document_version_id,
-            owner: row.owner,
-            file_type: FileType::from_str(row.file_type.as_str()).map_err(|e| {
-                sqlx::Error::ColumnDecode {
-                    index: "file_type".to_string(),
-                    source: e.into(),
-                }
-            })?,
-            updated_at: row.updated_at,
-        })
-    })
     .fetch_all(db)
     .await?;
 
-    Ok(result)
+    // Rows whose `fileType` doesn't map to a known `FileType` variant are
+    // skipped with a warning rather than aborting the whole batch: prod has
+    // historical rows with extensions the enum doesn't recognize yet, and
+    // failing the page would stall every backfill behind a single bad row.
+    let mapped = result
+        .into_iter()
+        .filter_map(|row| match FileType::from_str(row.file_type.as_str()) {
+            Ok(file_type) => Some(BackfillSearchDocumentInformation {
+                document_id: row.document_id,
+                document_version_id: row.document_version_id,
+                owner: row.owner,
+                file_type,
+                updated_at: row.updated_at,
+            }),
+            Err(e) => {
+                tracing::warn!(
+                    document_id = %row.document_id,
+                    file_type = %row.file_type,
+                    error = ?e,
+                    "skipping document with unknown file type during search backfill"
+                );
+                None
+            }
+        })
+        .collect();
+
+    Ok(mapped)
 }
