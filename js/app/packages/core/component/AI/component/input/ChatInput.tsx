@@ -12,7 +12,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@phosphor/paperclip.svg';
-import Stop from '@phosphor/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn, Surface, SendButton as UiSendButton } from '@ui';
 import { createEffect, createSignal, Show } from 'solid-js';
