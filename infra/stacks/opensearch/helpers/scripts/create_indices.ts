@@ -174,11 +174,6 @@ const CHANNEL_BODY = {
     refresh_interval: '1s',
     analysis: {
       analyzer: {
-        // Same shape as the built-in `standard` analyzer, but swaps the
-        // `lowercase` token filter for `icu_folding`. ICU folding does case
-        // folding plus UTR#30 character folding, which collapses smart
-        // punctuation (e.g. U+2019 ’) to ASCII so a typed query "can't" matches
-        // a message containing "can’t".
         content_text: {
           type: 'custom',
           tokenizer: 'standard',
