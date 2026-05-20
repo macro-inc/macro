@@ -107,11 +107,16 @@ pub(super) fn is_private_ip(ip: &IpAddr) -> bool {
     }
 }
 
+/// Issue a GET against `url`. The response is returned without inspecting its
+/// status — the caller decides how to handle 3xx (redirect-follow) vs 4xx /
+/// 5xx (error). This is intentional: the redirect loop in
+/// `reqwest_fetcher::extract_meta_tags` needs to see 3xx responses so it can
+/// run [`assert_not_internal`] against each hop before following.
 pub(super) async fn send_request(
     http_client: &reqwest::Client,
     url: &Url,
 ) -> Result<reqwest::Response, FetchError> {
-    let response = http_client.get(url.as_str()).send().await.map_err(|e| {
+    http_client.get(url.as_str()).send().await.map_err(|e| {
         let error_chain = build_error_chain(&e);
         tracing::warn!(url = %url, error = %error_chain, "upstream request failed");
         if e.is_timeout() {
@@ -123,13 +128,38 @@ pub(super) async fn send_request(
         } else {
             FetchError::UpstreamNetwork(error_chain)
         }
+    })
+}
+
+/// Resolve the `Location` header of a 3xx response into the next URL to
+/// fetch, applying the same scheme / fragment hygiene as [`validate_url`].
+///
+/// Does **not** check the target's IPs — the caller must run
+/// [`assert_not_internal`] on the returned URL before issuing the next
+/// request, so a 302 → internal-IP cannot bypass the preflight.
+pub(super) fn redirect_target(
+    current: &Url,
+    response: &reqwest::Response,
+) -> Result<Url, FetchError> {
+    let location = response
+        .headers()
+        .get(reqwest::header::LOCATION)
+        .ok_or_else(|| {
+            FetchError::UpstreamRedirect("redirect response missing Location header".into())
+        })?
+        .to_str()
+        .map_err(|e| FetchError::UpstreamRedirect(format!("invalid Location header: {e}")))?;
+
+    let mut next = current.join(location).map_err(|e| {
+        FetchError::UpstreamRedirect(format!("could not parse redirect target {location}: {e}"))
     })?;
 
-    if !response.status().is_success() {
-        return Err(FetchError::UpstreamStatus(response.status()));
+    if next.scheme() != "http" && next.scheme() != "https" {
+        return Err(FetchError::InvalidScheme);
     }
+    next.set_fragment(None);
 
-    Ok(response)
+    Ok(next)
 }
 
 pub(super) fn content_type_of(response: &reqwest::Response) -> String {

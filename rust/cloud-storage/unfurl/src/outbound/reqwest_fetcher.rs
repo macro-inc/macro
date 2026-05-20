@@ -9,12 +9,16 @@ use url::Url;
 
 use super::http_safety::{
     FetchError, assert_not_internal, build_error_chain, check_content_length, content_type_of,
-    send_request, validate_url,
+    redirect_target, send_request, validate_url,
 };
 use crate::domain::ports::UnfurlFetcher;
 
 /// 1 MB cap on HTML response size for meta-tag extraction.
 const MAX_HTML_SIZE: u64 = 1024 * 1024;
+
+/// Maximum number of redirects to follow per unfurl fetch. Matches the
+/// previous reqwest-managed `Policy::limited(5)` behaviour.
+const MAX_REDIRECTS: u8 = 5;
 
 /// Default request timeout for an unfurl fetch.
 const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
@@ -25,20 +29,21 @@ const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
 /// Concrete [`UnfurlFetcher`] backed by a `reqwest::Client` and the
 /// `scraper` HTML parser.
 ///
-/// The internal client has **redirects disabled** so a `302` pointing at an
-/// internal address cannot bypass the [`assert_not_internal`] guard that
-/// only sees the originally-requested URL. A 3xx upstream response is
-/// surfaced as an error (no automatic follow).
+/// The internal reqwest client has redirects **disabled** at the library
+/// level so the fetcher can run [`assert_not_internal`] on every hop. The
+/// loop in [`extract_meta_tags`] follows up to [`MAX_REDIRECTS`] redirects
+/// manually, re-validating each target before fetching it — this closes
+/// the SSRF vector where a `302` could point at an internal address that
+/// the preflight on the original URL never saw.
 pub struct ReqwestUnfurlFetcher {
     client: reqwest::Client,
 }
 
 impl ReqwestUnfurlFetcher {
-    /// Build a fetcher with a dedicated HTTP client that never follows
-    /// redirects.
+    /// Build a fetcher with a dedicated HTTP client.
     ///
     /// Owning the client construction keeps the SSRF mitigation (no
-    /// redirect-follow + internal-IP preflight on the requested URL)
+    /// reqwest-level redirect-follow + per-hop internal-IP preflight)
     /// inseparable from the fetcher's type — callers can't accidentally
     /// hand in a redirect-following client.
     pub fn new() -> anyhow::Result<Self> {
@@ -74,10 +79,34 @@ async fn extract_meta_tags(
     client: &reqwest::Client,
     raw_url: &str,
 ) -> Result<HashMap<String, String>, UnfurlFetchError> {
-    let url = validate_url(raw_url)?;
-    assert_not_internal(&url).await?;
+    let mut url = validate_url(raw_url)?;
+    let mut redirects_remaining = MAX_REDIRECTS;
 
-    let response = send_request(client, &url).await?;
+    let response = loop {
+        assert_not_internal(&url).await?;
+        let response = send_request(client, &url).await?;
+        let status = response.status();
+
+        if status.is_redirection() {
+            if redirects_remaining == 0 {
+                return Err(FetchError::UpstreamRedirect(format!(
+                    "exceeded maximum of {MAX_REDIRECTS} redirects"
+                ))
+                .into());
+            }
+            let next = redirect_target(&url, &response)?;
+            tracing::debug!(from = %url, to = %next, "following redirect");
+            redirects_remaining -= 1;
+            url = next;
+            continue;
+        }
+
+        if !status.is_success() {
+            return Err(FetchError::UpstreamStatus(status).into());
+        }
+
+        break response;
+    };
 
     let content_type = content_type_of(&response);
     if !is_html_content_type(&content_type) {
