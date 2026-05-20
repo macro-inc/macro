@@ -12,9 +12,9 @@ pub fn group_select_expr(field: &GroupByField) -> Cow<'static, str> {
         GroupByField::Property { .. } => Cow::Borrowed(
             "COALESCE(
                 CASE ep_group.values->>'type'
-                    WHEN 'EntityReference' THEN ep_group.values->'value'->0->>'entity_id'
-                    WHEN 'SelectOption'    THEN ep_group.values->'value'->>0
-                    WHEN 'Link'            THEN ep_group.values->'value'->>0
+                    WHEN 'EntityReference' THEN ep_group.val->>'entity_id'
+                    WHEN 'SelectOption'    THEN ep_group.val#>>'{}'
+                    WHEN 'Link'            THEN ep_group.val#>>'{}'
                     ELSE NULL
                 END,
                 ''
@@ -34,7 +34,7 @@ pub fn group_order_expr(field: &GroupByField) -> Cow<'static, str> {
                 (SELECT po.display_order FROM property_options po
                  WHERE po.id::text =
                    CASE ep_group.values->>'type'
-                        WHEN 'SelectOption' THEN ep_group.values->'value'->>0
+                        WHEN 'SelectOption' THEN ep_group.val#>>'{}'
                         ELSE NULL
                    END),
                 999999
@@ -53,6 +53,11 @@ pub struct GroupJoinClause {
 
 /// Build the JOIN clause for property-based grouping.
 /// Returns SQL with $10 placeholder for entity_type when present.
+///
+/// The clause LATERAL-expands `entity_properties.values->'value'` into one row
+/// per element, so multi-value properties (e.g. assignees) place each item into
+/// every group it belongs to. Items without a matching row, or with an empty
+/// array / scalar value, produce a single row with NULL `val` (→ "Not Set").
 pub fn group_join_clause(field: &GroupByField) -> Option<GroupJoinClause> {
     match field {
         GroupByField::Property {
@@ -60,16 +65,25 @@ pub fn group_join_clause(field: &GroupByField) -> Option<GroupJoinClause> {
             entity_type,
         } => {
             let (entity_type_filter, entity_type_bind) = match entity_type {
-                Some(et) => (
-                    "AND ep_group.entity_type = $10".to_string(),
-                    Some(et.clone()),
-                ),
+                Some(et) => ("AND ep.entity_type = $10".to_string(), Some(et.clone())),
                 None => (String::new(), None),
             };
 
             Some(GroupJoinClause {
                 sql: format!(
-                    "LEFT JOIN entity_properties ep_group ON ep_group.entity_id = t.id::text AND ep_group.property_definition_id = '{}' {}",
+                    "LEFT JOIN LATERAL (
+                        SELECT ep.values, elem.val
+                        FROM entity_properties ep
+                        LEFT JOIN LATERAL jsonb_array_elements(
+                            CASE WHEN jsonb_typeof(ep.values->'value') = 'array'
+                                 THEN ep.values->'value'
+                                 ELSE '[]'::jsonb
+                            END
+                        ) elem(val) ON TRUE
+                        WHERE ep.entity_id = t.id::text
+                          AND ep.property_definition_id = '{}'
+                          {}
+                    ) ep_group ON TRUE",
                     property_definition_id, entity_type_filter
                 ),
                 entity_type_bind,
