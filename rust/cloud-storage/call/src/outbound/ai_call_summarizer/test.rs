@@ -1,6 +1,11 @@
+use std::collections::HashSet;
+
+use macro_user_id::user_id::MacroUserIdStr;
+use uuid::Uuid;
+
 use super::{
-    CALL_NAME_MAX_CHARS, NULL_SUMMARY_SENTINEL, UNTITLED_CALL_SENTINEL, parse_summary,
-    sanitize_call_name,
+    CALL_NAME_MAX_CHARS, NULL_SUMMARY_SENTINEL, UNTITLED_CALL_SENTINEL,
+    parse_custom_speaker_results, parse_summary, sanitize_call_name,
 };
 
 #[test]
@@ -93,4 +98,83 @@ fn sanitize_truncates_to_word_boundary_under_cap() {
 fn sanitize_preserves_short_titles_verbatim() {
     let input = "Rocket Launch Postmortem";
     assert_eq!(sanitize_call_name(input).as_deref(), Some(input));
+}
+
+#[test]
+fn parse_custom_speaker_results_accepts_json_array() {
+    let transcript_id = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaaaaa);
+    let valid_transcript_ids = HashSet::from([transcript_id]);
+    let candidate_user_ids = HashSet::from(["macro|alice@example.com".to_string()]);
+
+    let results = parse_custom_speaker_results(
+        r#"[{"call_transcript_id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","custom_speaker":"macro|alice@example.com"}]"#,
+        &valid_transcript_ids,
+        &candidate_user_ids,
+    )
+    .expect("valid result should parse");
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].call_transcript_id, transcript_id);
+    assert_eq!(results[0].custom_speaker, "macro|alice@example.com");
+}
+
+#[test]
+fn parse_custom_speaker_results_accepts_fenced_json_and_camel_case() {
+    let transcript_id = Uuid::from_u128(0xbbbbbbbb_bbbb_bbbb_bbbb_bbbbbbbbbbbb);
+    let valid_transcript_ids = HashSet::from([transcript_id]);
+    let candidate_user_ids = HashSet::from(["macro|bob@example.com".to_string()]);
+
+    let results = parse_custom_speaker_results(
+        "```json\n[{\"callTranscriptId\":\"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\",\"customSpeaker\":\"macro|bob@example.com\"}]\n```",
+        &valid_transcript_ids,
+        &candidate_user_ids,
+    )
+    .expect("fenced json should parse");
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].call_transcript_id, transcript_id);
+    assert_eq!(results[0].custom_speaker, "macro|bob@example.com");
+}
+
+#[test]
+fn parse_custom_speaker_results_filters_unknown_invalid_and_duplicate_entries() {
+    let transcript_id = Uuid::from_u128(0xcccccccc_cccc_cccc_cccc_cccccccccccc);
+    let unknown_id = Uuid::from_u128(0xdddddddd_dddd_dddd_dddd_dddddddddddd);
+    let valid_transcript_ids = HashSet::from([transcript_id]);
+    let candidate_user_ids = HashSet::from(["macro|carol@example.com".to_string()]);
+
+    let raw = format!(
+        r#"[
+            {{"call_transcript_id":"{transcript_id}","custom_speaker":"macro|carol@example.com"}},
+            {{"call_transcript_id":"{transcript_id}","custom_speaker":"macro|carol@example.com"}},
+            {{"call_transcript_id":"{unknown_id}","custom_speaker":"macro|carol@example.com"}},
+            {{"call_transcript_id":"{transcript_id}","custom_speaker":"macro|mallory@example.com"}},
+            {{"call_transcript_id":"{transcript_id}","custom_speaker":"not-a-user"}}
+        ]"#
+    );
+
+    let results = parse_custom_speaker_results(&raw, &valid_transcript_ids, &candidate_user_ids)
+        .expect("json should parse");
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].call_transcript_id, transcript_id);
+    assert_eq!(results[0].custom_speaker, "macro|carol@example.com");
+}
+
+#[test]
+fn parse_custom_speaker_results_normalizes_candidate_user_ids() {
+    let transcript_id = Uuid::from_u128(0xeeeeeeee_eeee_eeee_eeee_eeeeeeeeeeee);
+    let valid_transcript_ids = HashSet::from([transcript_id]);
+    let candidate = MacroUserIdStr::parse_from_str("macro|dana@example.com").unwrap();
+    let candidate_user_ids = HashSet::from([candidate.as_ref().to_string()]);
+
+    let results = parse_custom_speaker_results(
+        r#"[{"call_transcript_id":"eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee","custom_speaker":"macro|DANA@example.com"}]"#,
+        &valid_transcript_ids,
+        &candidate_user_ids,
+    )
+    .expect("valid result should parse");
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].custom_speaker, "macro|dana@example.com");
 }

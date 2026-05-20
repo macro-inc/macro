@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id,\n                call_record_id,\n                segment_id,\n                speaker_id,\n                diarized_speaker_id,\n                custom_speaker,\n                voice_id,\n                content,\n                started_at,\n                ended_at,\n                sequence_num\n            FROM call_record_transcripts\n            WHERE call_record_id = $1\n            ORDER BY sequence_num ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "call_record_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "segment_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "speaker_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "diarized_speaker_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "custom_speaker",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "voice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "sequence_num",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "c4116c441fc76ecc39a9db7c29da7b5a952ef5031c2737d084da33a24af2c8ad"
+}
