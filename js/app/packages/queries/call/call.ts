@@ -38,11 +38,27 @@ export function useJoinCallMutation() {
   }));
 }
 
+function isNotFoundResultError(error: unknown) {
+  return (
+    error instanceof ThrownResultError &&
+    error.errors.some((err) => err.code === 'NOT_FOUND')
+  );
+}
+
 export function useLeaveCallMutation() {
   return useMutation(() => ({
     gcTime: 0,
-    mutationFn: (channelId: string) =>
-      throwOnErr(() => callServiceClient.leaveCall(channelId)),
+    mutationFn: async (channelId: string) => {
+      try {
+        return await throwOnErr(() => callServiceClient.leaveCall(channelId));
+      } catch (error) {
+        // Leaving a call should be idempotent. If LiveKit/server cleanup already
+        // removed us, the UI should still finish disconnecting instead of
+        // surfacing a noisy "Resource not found" control failure.
+        if (isNotFoundResultError(error)) return undefined;
+        throw error;
+      }
+    },
     onSuccess() {
       queryClient.invalidateQueries({ queryKey: ['call', 'active'] });
     },

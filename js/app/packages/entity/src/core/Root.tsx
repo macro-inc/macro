@@ -1,3 +1,4 @@
+import { entityIdAttribute } from '@core/dom-selectors';
 import { cn } from '@ui';
 import { type JSX, splitProps } from 'solid-js';
 import type { EntityData } from '../types/entity';
@@ -11,7 +12,7 @@ export function Root(
     <div
       class={cn('entity-root group/entity', local.class)}
       data-entity
-      data-entity-id={local.entity.id}
+      {...entityIdAttribute(local.entity.id)}
       {...rest}
     >
       {local.children}

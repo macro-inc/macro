@@ -9,7 +9,7 @@ import { createFilesReadyHandler } from '@core/component/LexicalMarkdown/utils/f
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { logger } from '@observability/logger';
-import { cn } from '@ui';
+import { cn, Scroll } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
   type Accessor,
@@ -139,7 +139,7 @@ export function ComposeBody(props: {
     <>
       <div class="size-full min-h-0 sm:max-h-full mobile:flex-1 flex flex-col flex-1">
         <div
-          class="grow size-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 overflow-auto"
+          class="grow size-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 overflow-hidden relative"
           ref={bodyDiv}
           onclick={() => {
             editor()?.focus();
@@ -158,40 +158,42 @@ export function ComposeBody(props: {
             <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
           </div>
 
-          <MarkdownTextarea
-            domRef={props.inputRef}
-            captureEditor={captureEditor}
-            scrollRef={props.mobileScrollRef}
-            initialHtml={ctx.initialHtml()}
-            initialValue={ctx.initialMarkdown?.()}
-            class="text-sm wrap-break-word text-ink mobile:overflow-auto h-auto"
-            editable={() => !ctx.disabled()}
-            placeholder="Use `@` to reference files"
-            watermark={
-              !ctx.hasPaidAccess() ? <MacroSignatureButton /> : undefined
-            }
-            onChange={ctx.onContentChange}
-            onUserMention={(mention) => {
-              addUserMentionToCc({
-                mention,
-                recipientOptions: ctx.recipientOptions(),
-                toRecipients: ctx.recipients().to,
-                ccRecipients: ctx.recipients().cc,
-                bccRecipients: ctx.recipients().bcc,
-                setCc: (next) => ctx.setRecipients('cc', next),
-              });
-            }}
-            onFocusLeaveStart={(e) => {
-              e.preventDefault();
-              focusSibling('prev');
-            }}
-            onFocusLeaveEnd={(e) => {
-              e.preventDefault();
-              focusSibling('next');
-            }}
-            portalScope="local"
-            onPasteFilesAndDirs={onAddFilesAndDirs}
-          />
+          <Scroll>
+            <MarkdownTextarea
+              domRef={props.inputRef}
+              captureEditor={captureEditor}
+              scrollRef={props.mobileScrollRef}
+              initialHtml={ctx.initialHtml()}
+              initialValue={ctx.initialMarkdown?.()}
+              class="text-sm wrap-break-word text-ink h-auto overflow-visible"
+              editable={() => !ctx.disabled()}
+              placeholder="Use `@` to reference files"
+              watermark={
+                !ctx.hasPaidAccess() ? <MacroSignatureButton /> : undefined
+              }
+              onChange={ctx.onContentChange}
+              onUserMention={(mention) => {
+                addUserMentionToCc({
+                  mention,
+                  recipientOptions: ctx.recipientOptions(),
+                  toRecipients: ctx.recipients().to,
+                  ccRecipients: ctx.recipients().cc,
+                  bccRecipients: ctx.recipients().bcc,
+                  setCc: (next) => ctx.setRecipients('cc', next),
+                });
+              }}
+              onFocusLeaveStart={(e) => {
+                e.preventDefault();
+                focusSibling('prev');
+              }}
+              onFocusLeaveEnd={(e) => {
+                e.preventDefault();
+                focusSibling('next');
+              }}
+              portalScope="local"
+              onPasteFilesAndDirs={onAddFilesAndDirs}
+            />
+          </Scroll>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <For each={ctx.attachments()}>

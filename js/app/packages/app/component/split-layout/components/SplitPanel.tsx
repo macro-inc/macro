@@ -2,6 +2,7 @@ import { createSoupState } from '@app/component/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { splitContainerAttribute } from '@core/dom-selectors';
 import { isMobile } from '@core/mobile/isMobile';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, Panel } from '@ui';
@@ -121,6 +122,10 @@ export function SplitPanel(props: SplitPanelProps) {
     return Boolean(splits && splits.length > 1);
   }
 
+  const shouldHideSplitHeader = createMemo(
+    () => isMobile() && isListViewID(props.handle.content().id)
+  );
+
   return (
     <SoupContextProvider soup={nextSoup}>
       <SplitPanelContext.Provider
@@ -159,7 +164,7 @@ export function SplitPanel(props: SplitPanelProps) {
               attachHotKeys(ref);
             }}
             data-split-id={props.split.id}
-            data-split-container
+            {...splitContainerAttribute}
             data-modal={props.handle.isSpotLight()}
             tabindex={-1}
           >
@@ -170,10 +175,16 @@ export function SplitPanel(props: SplitPanelProps) {
                 multipleSplits() &&
                 !props.handle.isSpotLight()
               }
-              class="rounded-xl"
+              class="rounded-xl mobile:rounded-none mobile:after:hidden mobile:!border-0"
               depth={1}
             >
-              <Panel.Header data-split-header class="block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible">
+              <Panel.Header
+                data-split-header
+                class={cn(
+                  'block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible',
+                  shouldHideSplitHeader() && 'hidden'
+                )}
+              >
                 <SplitHeader ref={setHeaderRef} />
               </Panel.Header>
 

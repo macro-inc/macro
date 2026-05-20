@@ -12,6 +12,8 @@ export type StartSsoLoginParams = {
   idpName?: string;
   /** Where to redirect after auth on web. Ignored on native mobile. */
   returnPath?: string;
+  /** Pre-fill the email field on the OAuth provider's login screen. */
+  loginHint?: string;
 };
 
 /**
@@ -30,6 +32,8 @@ export async function startSsoLogin(
     'referral_code'
   );
   if (referralCode) authUrl.searchParams.set('referral_code', referralCode);
+  if (params.loginHint)
+    authUrl.searchParams.set('login_hint', params.loginHint);
 
   if (isNativeMobilePlatform()) {
     authUrl.searchParams.set('is_mobile', 'true');

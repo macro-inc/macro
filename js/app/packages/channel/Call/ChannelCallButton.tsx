@@ -1,3 +1,4 @@
+import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
 import PhoneIcon from '@icon/wide-call.svg';
@@ -5,6 +6,7 @@ import PhoneDisconnectIcon from '@icon/wide-call-disconnect.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { Button, cn } from '@ui';
 import { Show } from 'solid-js';
+import { CALL_PANEL_VERY_NARROW_PX } from './call-panel-breakpoints';
 import { useCall } from './use-call';
 
 export function ChannelCallButton(props: { channelId: string }) {
@@ -13,6 +15,9 @@ export function ChannelCallButton(props: { channelId: string }) {
     onJoin: () => setActiveTab('call'),
     onLeave: () => setActiveTab(DEFAULT_CHANNEL_TAB),
   });
+  const splitPanel = useSplitPanel();
+  const isVeryNarrow = () =>
+    (splitPanel?.panelSize.width ?? Infinity) < CALL_PANEL_VERY_NARROW_PX;
 
   const activeCallQuery = useActiveCallQuery(() => props.channelId);
   const isCallInProgress = () => !!activeCallQuery.data;
@@ -63,7 +68,9 @@ export function ChannelCallButton(props: { channelId: string }) {
       <Show when={call.isInThisChannel()} fallback={<PhoneIcon />}>
         <PhoneDisconnectIcon />
       </Show>
-      <span>{label()}</span>
+      <Show when={!(isVeryNarrow() && call.isInThisChannel())}>
+        <span>{label()}</span>
+      </Show>
     </Button>
   );
 }

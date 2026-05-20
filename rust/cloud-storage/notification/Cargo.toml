@@ -49,7 +49,7 @@ rate_limit = { path = "../rate_limit" }
 redis = { workspace = true, features = [
   "aio",
   "tokio-comp",
-  "tokio-native-tls-comp",
+  "tokio-rustls-comp",
 ] }
 reqwest = { workspace = true }
 rootcause = { workspace = true }

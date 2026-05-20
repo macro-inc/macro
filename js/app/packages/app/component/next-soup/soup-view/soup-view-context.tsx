@@ -135,7 +135,11 @@ export const SoupViewContextProvider: FlowComponent<
       : 'created_at';
 
     return {
-      limit: 100,
+      // When doing a group by query, the limit will end up cutting off groups.
+      // So, instead we increase the fetch limit for the group by query to make
+      // sure we get as many groups as we can. Alternative would be to implement
+      // paginated loading of groups, but we dont have that right now.
+      limit: soup.grouping.activeGroupId() ? 2_000 : 100,
       sort_method: sortMethod,
     };
   });
@@ -466,7 +470,6 @@ export const SoupViewContextProvider: FlowComponent<
 
     for (const apiGroup of groups) {
       const groupMeta = buildGroupMeta(apiGroup);
-      const isExpanded = soup.grouping.isExpanded(apiGroup.key);
       const query = groupQueries().find((q) => q.key === apiGroup.key);
       const groupEntities = query?.data() ?? [];
 
@@ -486,10 +489,6 @@ export const SoupViewContextProvider: FlowComponent<
           isGrouped: true,
         })
       );
-
-      // We skip building rows for entities that are
-      // not visible because the group is collapsed
-      if (!isExpanded) continue;
 
       // Entity rows
       for (const entity of groupEntities) {

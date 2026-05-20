@@ -559,6 +559,13 @@ export const ListNotificationsResponse = z.object({
   ),
 });
 
+export const ListTeamMembers = z.record(z.any());
+
+export const ListTeamMembersResponse = z.object({
+  invited: z.array(z.object({ email: z.string(), role: z.string() })),
+  members: z.array(z.object({ role: z.string(), userId: z.string() })),
+});
+
 export const MarkNotificationsDone = z.object({
   done: z.boolean(),
   notificationIds: z.array(z.string().uuid()),

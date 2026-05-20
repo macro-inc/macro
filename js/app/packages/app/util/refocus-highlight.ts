@@ -162,7 +162,7 @@ export function runRefocusPulses(
     const sidebarId = notificationToSidebarId(notification);
     if (sidebarId) {
       const sidebarEl = document.querySelector(
-        `[data-sidebar-link-id="${sidebarId}"]`
+        `[data-sidebar-link="${sidebarId}"]`
       );
       if (sidebarEl) {
         if (!tryPulse(sidebarEl, pulsed, pulseCount))

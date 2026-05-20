@@ -51,7 +51,7 @@ utoipa = { workspace = true, optional = true }
 async-stripe = { workspace = true, default-features = false, features = [
   "billing",
   "checkout",
-  "runtime-tokio-hyper",
+  "runtime-tokio-hyper-rustls-webpki",
 ], optional = true } # Outbound dependencies
 sqlx = { workspace = true, optional = true }
 url = { workspace = true }

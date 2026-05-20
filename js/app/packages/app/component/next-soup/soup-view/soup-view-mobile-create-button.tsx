@@ -6,16 +6,21 @@ import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedPlusIcon } from '@icon/wide-plus';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
-import { Layer } from '@ui';
+import { cn, Layer } from '@ui';
 import {
+  type Accessor,
   type Component,
   createMemo,
   createSignal,
   type JSX,
-  Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { runCreateAction, setCreateMenuOpen } from '../../Launcher';
+import {
+  MOBILE_FLOATING_BUTTON_OFFSCREEN_RIGHT,
+  MOBILE_FLOATING_BUTTON_TRANSITION,
+  MOBILE_FLOATING_BUTTON_VISIBLE,
+} from './soup-view-mobile-floating-motion';
 
 const ICON_ANIMATION_DURATION_MS = 500;
 
@@ -34,6 +39,7 @@ const VIEW_CREATE_ICONS: Partial<Record<ListView, IconComponent>> = {
 
 export function SoupViewMobileCreateButton(props: {
   activeView: () => ListView | undefined;
+  visible?: Accessor<boolean>;
 }) {
   const analytics = useAnalytics();
   const [animating, setAnimating] = createSignal(false);
@@ -90,26 +96,35 @@ export function SoupViewMobileCreateButton(props: {
     return (view && VIEW_CREATE_ICONS[view]) ?? AnimatedPlusIcon;
   });
 
+  const isVisible = () => (props.visible?.() ?? true) && !!createAction();
+
   return (
-    <Show when={createAction()}>
-      <Layer depth={1}>
-        <button
-          type="button"
-          class="absolute bottom-4 right-4 z-10 pl-3 pr-4 py-2 rounded-full bg-surface ring text-accent flex items-center justify-center gap-2 shadow-md ring-accent/20"
-          onClick={() => {
-            hapticImpact('light');
-            setAnimating(true);
-            setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
-            // Defer to next frame to avoid focus race with Dialog
-            requestAnimationFrame(() => createAction()?.());
-          }}
-        >
-          <div class="size-5 [&_svg]:size-5">
-            <Dynamic component={createIcon()} triggerAnimation={animating()} />
-          </div>
-          <div>Create</div>
-        </button>
-      </Layer>
-    </Show>
+    <Layer depth={4}>
+      <button
+        type="button"
+        class={cn(
+          'absolute bottom-4 right-4 z-10 h-11 pl-3.5 pr-4.5 rounded-full',
+          'bg-surface text-accent flex items-center justify-center gap-2 shadow-md ring ring-edge',
+          MOBILE_FLOATING_BUTTON_TRANSITION,
+          isVisible()
+            ? MOBILE_FLOATING_BUTTON_VISIBLE
+            : MOBILE_FLOATING_BUTTON_OFFSCREEN_RIGHT
+        )}
+        disabled={!isVisible()}
+        aria-hidden={!isVisible()}
+        onClick={() => {
+          hapticImpact('light');
+          setAnimating(true);
+          setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
+          // Defer to next frame to avoid focus race with Dialog
+          requestAnimationFrame(() => createAction()?.());
+        }}
+      >
+        <div class="size-5 [&_svg]:size-5">
+          <Dynamic component={createIcon()} triggerAnimation={animating()} />
+        </div>
+        <div>Create</div>
+      </button>
+    </Layer>
   );
 }

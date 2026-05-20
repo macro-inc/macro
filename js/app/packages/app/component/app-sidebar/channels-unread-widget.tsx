@@ -188,7 +188,7 @@ function ChannelGroupItem(props: {
   const ButtonContent = () => (
     <Button
       class={cn(
-        'flex items-center cursor-default rounded-xs',
+        'flex items-center cursor-default rounded-sm not-disabled:hover:bg-ink/3',
         isSlim() ? 'justify-center size-8' : 'justify-start gap-3 size-full h-8'
       )}
       draggable={false}

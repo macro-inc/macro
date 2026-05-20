@@ -19,7 +19,7 @@ redis = { workspace = true, features = [
 "streams",
 "aio",
   "tokio-comp",
-  "tokio-native-tls-comp",
+  "tokio-rustls-comp",
 ] }
 async-trait = { workspace = true }
 async-stream = { workspace = true }

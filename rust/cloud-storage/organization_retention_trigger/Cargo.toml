@@ -11,12 +11,9 @@ macro_aws_config = { path = "../macro_aws_config" }
 aws_lambda_events = { workspace = true, features = ["eventbridge"] }
 lambda_runtime = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
-openssl = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client" }
 tokio = { workspace = true }
 tracing = { workspace = true }
 
-[package.metadata.cargo-machete]
-ignored = ["openssl"]

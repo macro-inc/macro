@@ -20,10 +20,9 @@ sqs_client = { path = "../sqs_client" }
 tokio = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
-openssl = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["openssl"]
+ignored = []
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

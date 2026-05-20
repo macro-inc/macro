@@ -28,7 +28,7 @@ anyhow = { workspace = true }
 async-stripe = { workspace = true, default-features = false, features = [
   "billing",
   "checkout",
-  "runtime-tokio-hyper",
+  "runtime-tokio-hyper-rustls-webpki",
 ] }
 async-stripe-webhook = { version = "1.0.0-alpha.4", default-features = false }
 aws-sdk-secretsmanager = { workspace = true }
@@ -92,7 +92,6 @@ models_team = { path = "../models_team" }
 native_app_service = { path = "../native_app_service" }
 non_empty = { path = "../non_empty" }
 notification = { path = "../notification" }
-openssl = { workspace = true }
 rand = { workspace = true }
 rate_limit = { path = "../rate_limit" }
 redis = { workspace = true }
@@ -100,7 +99,7 @@ referral = { path = "../referral" }
 remote_env_var = { path = "../remote_env_var" }
 reqwest = { workspace = true }
 roles_and_permissions = { path = "../roles_and_permissions" }
-rsa = "0.9.10"
+rsa = { version = "0.9.10", features = ["getrandom"] }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
