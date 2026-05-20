@@ -278,7 +278,7 @@ jobs:
           if [ -n "$NEXTEST_FILTER" ]; then
             args+=(-E "$NEXTEST_FILTER")
           fi
-          cargo nextest run "${args[@]}"
+          cargo nextest run --no-tests=pass "${args[@]}"
       - name: show sccache stats
         if: always()
         env:
