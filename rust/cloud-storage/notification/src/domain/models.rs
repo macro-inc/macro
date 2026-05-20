@@ -72,6 +72,31 @@ impl NotificationStatusUpdate {
     }
 }
 
+/// Realtime payload emitted when a notification is deleted.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationDeletedUpdate {
+    /// Constant event discriminator for frontend consumers.
+    #[serde(rename = "type")]
+    pub event_type: String,
+    /// The deleted notification ID.
+    #[serde(rename = "id")]
+    pub notification_id: uuid::Uuid,
+}
+
+impl NotificationDeletedUpdate {
+    /// The connection-gateway message type for notification deletes.
+    pub const MESSAGE_TYPE: &'static str = "notification_deleted";
+
+    /// Build a realtime delete payload.
+    pub fn new(notification_id: uuid::Uuid) -> Self {
+        Self {
+            event_type: Self::MESSAGE_TYPE.to_string(),
+            notification_id,
+        }
+    }
+}
+
 /// A row from the `user_notification` + `notification` join query.
 ///
 /// The metadata field is generic so callers can deserialize it into

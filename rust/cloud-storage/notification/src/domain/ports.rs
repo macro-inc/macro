@@ -21,9 +21,9 @@ use crate::domain::models::device::DeviceType;
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::request::NotificationListFilters;
 use crate::domain::models::{
-    DeviceEndpoint, DisabledNotificationType, NotificationExtEmail, NotificationIdAndCollapseKey,
-    NotificationStatusChanged, NotificationStatusUpdate, SendNotificationRequestBuilder,
-    UserNotificationRow,
+    DeviceEndpoint, DisabledNotificationType, NotificationDeletedUpdate, NotificationExtEmail,
+    NotificationIdAndCollapseKey, NotificationStatusChanged, NotificationStatusUpdate,
+    SendNotificationRequestBuilder, UserNotificationRow,
     android::FCMMessage,
     apple::{APNSPushNotification, VoipPushPayload},
     mobile::MessageAttributes,
@@ -228,6 +228,12 @@ pub trait NotificationRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
+/// Port for receiving realtime notification database events.
+pub trait NotificationEventsReceiver: Send + 'static {
+    /// Receive the next raw notification database event payload.
+    fn receive(&mut self) -> impl Future<Output = Result<String, Report>> + Send;
+}
+
 /// Port for publishing realtime notification updates.
 pub trait NotificationRealtimePublisher: Send + Sync + 'static {
     /// Publish a notification status update to the user who owns the notifications.
@@ -235,6 +241,13 @@ pub trait NotificationRealtimePublisher: Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'_>,
         update: &NotificationStatusUpdate,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Publish a notification delete update to the users who owned the notification.
+    fn publish_deleted_update(
+        &self,
+        user_ids: &[MacroUserIdStr<'_>],
+        update: &NotificationDeletedUpdate,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
@@ -247,6 +260,14 @@ impl NotificationRealtimePublisher for NoopNotificationRealtimePublisher {
         &self,
         _: MacroUserIdStr<'_>,
         _: &NotificationStatusUpdate,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn publish_deleted_update(
+        &self,
+        _: &[MacroUserIdStr<'_>],
+        _: &NotificationDeletedUpdate,
     ) -> Result<(), Report> {
         Ok(())
     }

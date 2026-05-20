@@ -8,7 +8,7 @@ use model_entity::{Entity, EntityType};
 use rootcause::Report;
 use serde::Serialize;
 
-use crate::domain::models::NotificationStatusUpdate;
+use crate::domain::models::{NotificationDeletedUpdate, NotificationStatusUpdate};
 use crate::domain::ports::{NotificationRealtimePublisher, WebSocketSender};
 
 /// WebSocket gateway implementation of the WebSocket sender port.
@@ -182,6 +182,21 @@ impl NotificationRealtimePublisher for WebSocketGatewayAdapter<ConnectionGateway
         let entities = vec![EntityType::User.with_entity_str(user_id.as_ref())];
         self.gateway
             .batch_send_to_entities(NotificationStatusUpdate::MESSAGE_TYPE, update, entities)
+            .await?;
+        Ok(())
+    }
+
+    async fn publish_deleted_update(
+        &self,
+        user_ids: &[MacroUserIdStr<'_>],
+        update: &NotificationDeletedUpdate,
+    ) -> Result<(), Report> {
+        let entities = user_ids
+            .iter()
+            .map(|user_id| EntityType::User.with_entity_str(user_id.as_ref()))
+            .collect();
+        self.gateway
+            .batch_send_to_entities(NotificationDeletedUpdate::MESSAGE_TYPE, update, entities)
             .await?;
         Ok(())
     }
