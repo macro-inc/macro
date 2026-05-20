@@ -51,7 +51,13 @@ where
         publisher.publish(page.messages).await?;
         enqueued += page.rows_consumed;
         progress.add(page.rows_consumed).await;
-        cursor = next_cursor;
+        // Source signals end-of-stream by returning `None` for the next
+        // cursor on a non-empty page (e.g. last row's sort-key column was
+        // unexpectedly NULL). Treat that as termination; otherwise we'd
+        // pass `None` to the next `fetch` and restart pagination from the
+        // beginning.
+        let Some(next) = next_cursor else { break };
+        cursor = Some(next);
     }
 
     Ok(BackfillReceipt { enqueued })

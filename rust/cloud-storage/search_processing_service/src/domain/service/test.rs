@@ -349,6 +349,37 @@ async fn cursor_drain_threads_cursor_through_pages() {
 }
 
 #[tokio::test]
+async fn cursor_drain_stops_when_non_empty_page_returns_no_cursor() {
+    // Defensive path: source returns a non-empty page but `None` for the
+    // next cursor (e.g. the last row's sort-key column came back NULL).
+    // The loop must treat this as terminator — passing `None` back into
+    // `fetch` would restart pagination from page one.
+    let source = CursorFakeSource::new(vec![
+        (
+            page((0..3).map(|i| msg(&format!("p1-{i}"))).collect()),
+            None,
+        ),
+        (
+            page((0..3).map(|i| msg(&format!("never-{i}"))).collect()),
+            Some(99),
+        ),
+    ]);
+    let publisher = RecordingPublisher::default();
+    let (progress, cancel) = detached();
+
+    let receipt = drain_source_with_cursor(&publisher, &progress, &cancel, |cursor| {
+        source.fetch_page(cursor)
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(receipt.enqueued, 3);
+    assert_eq!(publisher.batch_sizes(), vec![3]);
+    // Only the first fetch happens; the loop bails before re-entering with `None`.
+    assert_eq!(source.observed_cursors(), vec![None]);
+}
+
+#[tokio::test]
 async fn cursor_drain_stops_on_empty_page() {
     let source = CursorFakeSource::new(vec![]);
     let publisher = RecordingPublisher::default();
