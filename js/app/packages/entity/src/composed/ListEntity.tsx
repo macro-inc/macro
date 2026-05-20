@@ -52,6 +52,7 @@ import {
   useListLayout,
 } from './list-entity/shared';
 import { WideLayout } from './list-entity/wide-layout';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export { ListLayoutProvider } from './list-entity/shared';
 
@@ -187,10 +188,12 @@ export function ListEntity(props: ListEntityProps) {
         {
           'min-h-10': !isMobile(),
           'bg-accent/8': props.checked,
-          'ring ring-accent/16 ring-inset': props.checked && props.highlighted,
+          'ring ring-accent/16 ring-inset':
+            props.checked && props.highlighted  ,
           'ring ring-edge bg-active/60 ring-inset':
-            props.highlighted && !props.checked,
-          'hover:bg-active/30': !props.highlighted && !props.checked,
+            props.highlighted && !props.checked && !isTouchDevice(),
+          'hover:bg-active/30':
+            !props.highlighted && !props.checked && !isTouchDevice(),
         }
       )}
       onMouseMove={props.onMouseMove}

@@ -128,6 +128,42 @@ import type { CacheSnapshot } from 'virtua/unstable_core';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+
+const NAVIGATION_TOUCH_HIGHLIGHT_CLASS = 'navigation-touch-highlight';
+const NAVIGATION_TOUCH_HIGHLIGHT_TIMEOUT_MS = 500;
+const navigationTouchHighlightTimers = new WeakMap<HTMLElement, number>();
+
+function waitForNavigationHighlightPaint() {
+  return new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
+function persistNavigationTouchHighlight(event: MouseEvent | PointerEvent) {
+  if (!isTouchDevice()) return false;
+
+  const target = event.currentTarget ?? event.target;
+  if (!(target instanceof Element)) return false;
+
+  const trigger = target.closest('[data-soup-entity]');
+  if (!(trigger instanceof HTMLElement)) return false;
+
+  trigger.classList.add(NAVIGATION_TOUCH_HIGHLIGHT_CLASS);
+
+  const existingTimer = navigationTouchHighlightTimers.get(trigger);
+  if (existingTimer !== undefined) {
+    window.clearTimeout(existingTimer);
+  }
+
+  const timer = window.setTimeout(() => {
+    trigger.classList.remove(NAVIGATION_TOUCH_HIGHLIGHT_CLASS);
+    navigationTouchHighlightTimers.delete(trigger);
+  }, NAVIGATION_TOUCH_HIGHLIGHT_TIMEOUT_MS);
+
+  navigationTouchHighlightTimers.set(trigger, timer);
+  return true;
+}
 
 // Property values for entity-reference properties (e.g. assignees) are stored
 // as `{"entity_id": "...", "entity_type": "USER"}` and arrive in group keys as
@@ -784,6 +820,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
     if (soup.previewEntity() && type === 'entity') {
       soup.focus.set(entity.id);
       return;
+    }
+
+    if (persistNavigationTouchHighlight(event)) {
+      await waitForNavigationHighlightPaint();
     }
 
     await openEntityInSplitFromUnifiedList(entity, {

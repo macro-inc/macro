@@ -420,6 +420,17 @@ html:not([data-touch-device="true"]) [data-message]:hover{
   animation: long-press-accent-bar 400ms ease-in both;
 }
 
+/* Immediate touch feedback for mobile soup entity rows */
+[data-soup-entity].touch-highlight [data-swipe-content],
+[data-soup-entity].touch-highlight .soup-list-entity,
+[data-soup-entity].navigation-touch-highlight [data-swipe-content],
+[data-soup-entity].navigation-touch-highlight .soup-list-entity,
+.soup-list-entity.navigation-touch-highlight,
+.soup-list-entity.navigation-touch-highlight [data-swipe-content] {
+  background-color: var(--color-hover);
+  transition: none;
+}
+
 :focus-visible {
   outline: none;
 }
