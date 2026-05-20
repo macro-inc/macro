@@ -49,7 +49,7 @@ import ReplyAll from '@phosphor/arrow-bend-double-up-left.svg';
 import Reply from '@phosphor/arrow-bend-up-left.svg';
 import Forward from '@phosphor/arrow-bend-up-right.svg';
 import ChevronDown from '@phosphor/caret-down.svg';
-import PaperPlaneRight from '@phosphor/paper-plane-right.svg';
+import ArrowUp from '@phosphor/arrow-up.svg';
 import Paperclip from '@phosphor/paperclip.svg';
 import Quotes from '@phosphor/quotes.svg';
 import Spinner from '@phosphor/spinner-gap.svg';
@@ -1314,7 +1314,7 @@ export function BaseInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative flex flex-col flex-1 bg-ink-muted/2.5 border border-ink-muted/8 rounded-xl max-w-full"
+      class="relative flex flex-col flex-1 bg-ink-muted/2.5 ring-1 ring-ink-muted/8 rounded-xl max-w-full"
     >
       {/* Top Bar */}
       <div class="relative flex items-start gap-2 px-3 pt-1.5 pb-0.5">
@@ -1750,18 +1750,20 @@ export function BaseInput(props: {
           <Tooltip label="Send">
             <Button
               size="icon-sm"
+              variant="ghost"
               disabled={
                 uploadAttachmentMutation.isPending ||
                 sendMutation.isPending ||
                 !!form().sendTime()
               }
+              class="rounded-xl size-8 bg-edge-muted/60 text-ink-muted not-disabled:bg-[#c86543] not-disabled:text-surface not-disabled:hover:bg-[#b85c3d] data-disabled:opacity-100 data-disabled:bg-edge-muted/60 data-disabled:text-ink-muted"
               onClick={() => sendEmail()}
             >
               <Show
                 when={!sendMutation.isPending}
                 fallback={<Spinner class="animate-spin" />}
               >
-                <PaperPlaneRight />
+                <ArrowUp />
               </Show>
             </Button>
           </Tooltip>

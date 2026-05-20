@@ -1,6 +1,6 @@
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
-import PaperPlaneRight from '@phosphor-icons/core/regular/paper-plane-right.svg?component-solid';
-import { Button } from '@ui';
+import ArrowUp from '@phosphor/arrow-up.svg';
+import { Button, cn } from '@ui';
 import { children, type JSX, Show, splitProps } from 'solid-js';
 import { useInput, useInputCommands } from './context';
 import { hasSendableInputContent } from './utils/sendable-content';
@@ -21,7 +21,10 @@ export function SendAction(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
       aria-label="Send message"
       data-input-action="send"
       disabled={isBlockedByPending() || isBlockedByEmptyInput()}
-      class={local.class}
+      class={cn(
+        'rounded-xl size-8 bg-edge-muted/60 text-ink-muted not-disabled:bg-[#c86543] not-disabled:text-surface not-disabled:hover:bg-[#b85c3d] data-disabled:opacity-100 data-disabled:bg-edge-muted/60 data-disabled:text-ink-muted',
+        local.class
+      )}
       onPointerDown={(event) => {
         event.preventDefault();
         void commands.send();
@@ -32,7 +35,7 @@ export function SendAction(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
         when={!isBlockedByPending()}
         fallback={<SpinnerIcon class="animate-spin" />}
       >
-        {resolved() ?? <PaperPlaneRight />}
+        {resolved() ?? <ArrowUp />}
       </Show>
     </Button>
   );

@@ -11,7 +11,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
-import PaperPlaneRight from '@phosphor/paper-plane-right.svg';
+import ArrowUp from '@phosphor/arrow-up.svg';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import Stop from '@phosphor/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
@@ -164,13 +164,14 @@ export function ChatInput(props: ChatInputComponentProps) {
       shortcut="cmd+enter"
       tooltipPlacement="top"
       disabled={!canSendMessage()}
+      class="rounded-xl size-8 bg-edge-muted/60 text-ink-muted not-disabled:bg-[#c86543] not-disabled:text-surface not-disabled:hover:bg-[#b85c3d] data-disabled:opacity-100 data-disabled:bg-edge-muted/60 data-disabled:text-ink-muted"
       onClick={() =>
         sendMessage(
           isTouchDevice() ? { modelOverride: 'claude-opus-4-6' } : undefined
         )
       }
     >
-      <PaperPlaneRight />
+      <ArrowUp />
     </Button>
   );
 
