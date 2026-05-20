@@ -9,11 +9,17 @@ pub fn group_select_expr(field: &GroupByField) -> Cow<'static, str> {
         GroupByField::Date => Cow::Owned(date_bucket_sql_key("sort_ts")),
         GroupByField::EntityType => Cow::Borrowed("item_type"),
         GroupByField::Project => Cow::Borrowed("COALESCE(project_id::text, '')"),
-        GroupByField::Property { .. } => {
-            // For select options, value is an array of UUIDs like ["uuid1", "uuid2"]
-            // Extract the first element as text
-            Cow::Borrowed("COALESCE(ep_group.values->'value'->>0, '')")
-        }
+        GroupByField::Property { .. } => Cow::Borrowed(
+            "COALESCE(
+                CASE ep_group.values->>'type'
+                    WHEN 'EntityReference' THEN ep_group.values->'value'->0->>'entity_id'
+                    WHEN 'SelectOption'    THEN ep_group.values->'value'->>0
+                    WHEN 'Link'            THEN ep_group.values->'value'->>0
+                    ELSE NULL
+                END,
+                ''
+            )",
+        ),
     }
 }
 
@@ -23,12 +29,17 @@ pub fn group_order_expr(field: &GroupByField) -> Cow<'static, str> {
         GroupByField::Date => Cow::Owned(date_bucket_sql_order("sort_ts")),
         GroupByField::EntityType => Cow::Borrowed("item_type"),
         GroupByField::Project => Cow::Borrowed("project_id NULLS LAST"),
-        GroupByField::Property { .. } => {
-            // values->'value' is an array of UUID strings, extract first and lookup display_order
-            Cow::Borrowed(
-                "COALESCE((SELECT po.display_order FROM property_options po WHERE po.id::text = (ep_group.values->'value'->>0)), 999999)",
-            )
-        }
+        GroupByField::Property { .. } => Cow::Borrowed(
+            "COALESCE(
+                (SELECT po.display_order FROM property_options po
+                 WHERE po.id::text =
+                   CASE ep_group.values->>'type'
+                        WHEN 'SelectOption' THEN ep_group.values->'value'->>0
+                        ELSE NULL
+                   END),
+                999999
+            )",
+        ),
     }
 }
 
