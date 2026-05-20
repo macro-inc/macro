@@ -24,8 +24,7 @@ use super::ports::{BackfillSource, SearchEventPublisher};
 /// consumed. Identical loop shape to [`drain_source`] but the state
 /// advanced between pages is an opaque cursor returned by the fetcher
 /// rather than an integer offset — used by entities (documents) that
-/// paginate by sort-key instead of offset so query duration doesn't
-/// scale with depth.
+/// paginate by sort-key.
 async fn drain_source_with_cursor<C, Fut, P>(
     publisher: &P,
     progress: &JobProgress,

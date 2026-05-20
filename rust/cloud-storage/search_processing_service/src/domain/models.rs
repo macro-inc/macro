@@ -95,11 +95,6 @@ pub struct ChannelBackfillRequest {
 /// `(createdAt ASC, id ASC)` order; the cursor carries the last row's
 /// pair so the next page resumes with `WHERE (createdAt, id) > cursor`.
 /// `None` starts at the beginning.
-///
-/// Keyset pagination is what lets the backfill survive against the read
-/// replica: page-fetch latency stays O(log n) regardless of depth, well
-/// under `max_standby_streaming_delay`'s budget. Offset-based pagination
-/// scaled linearly and got cancelled around ~250k rows in.
 #[derive(Debug, Clone)]
 pub struct DocumentBackfillCursor {
     pub created_at: DateTime<Utc>,

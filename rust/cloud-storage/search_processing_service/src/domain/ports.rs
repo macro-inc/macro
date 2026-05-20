@@ -56,13 +56,11 @@ pub trait BackfillSource: Send + Sync + 'static {
         offset: usize,
     ) -> impl Future<Output = Result<SourcePage, BackfillError>> + Send;
 
-    /// Documents use keyset pagination instead of offset because the
-    /// orchestrator must survive against a streaming-replica that may
-    /// cancel any single query taking longer than
-    /// `max_standby_streaming_delay`. Each call passes the cursor of the
-    /// last row from the previous page (or `None` for the first page);
-    /// the implementation returns the page plus the cursor to feed back
-    /// into the next call. An empty page signals end-of-source.
+    /// Documents paginate by keyset cursor: each call passes the cursor
+    /// of the last row from the previous page (or `None` for the first
+    /// page), and the implementation returns the page plus the cursor
+    /// to feed back into the next call. An empty page signals
+    /// end-of-source.
     fn fetch_documents(
         &self,
         req: &DocumentBackfillRequest,
