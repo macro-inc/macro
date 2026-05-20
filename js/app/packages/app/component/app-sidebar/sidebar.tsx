@@ -32,6 +32,7 @@ import LogoIcon from '@icon/macro-logo.svg';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedCommandIcon } from '@icon/wide-command';
+import CommandKIcon from '@icon/wide-command-k.svg';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedFolderIcon } from '@icon/wide-folder';
@@ -621,7 +622,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                 hotkey={TOKENS.global.commandMenu}
                 onClick={handleCommandPaletteClick}
               >
-                <AnimatedCommandIcon />
+                <CommandKIcon />
               </Button>
             </div>
           </Show>
