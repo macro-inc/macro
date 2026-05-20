@@ -253,10 +253,6 @@ fn build_child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> 
 pub(crate) struct DocumentIndex {
     pub entity_id: uuid::Uuid,
     pub document_name: String,
-    /// Optional because join-shape parents have no `node_id` in
-    /// `_source` — that field lives on chunk children. Flat-shape hits
-    /// always populate it. Join-shape callers should consume the
-    /// chunk's `node_id` from `inner_hits` instead.
     pub node_id: Option<String>,
     pub raw_content: Option<String>,
     pub owner_id: String,
