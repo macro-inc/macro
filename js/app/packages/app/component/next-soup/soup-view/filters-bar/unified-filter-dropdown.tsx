@@ -826,7 +826,9 @@ export const UnifiedFilterDropdown = () => {
                     <For each={categories()}>
                       {(category) => (
                         <Dropdown.Sub gutter={4}>
-                          <Dropdown.SubTrigger class={FILTER_MENU_SUBTRIGGER_CLASS}>
+                          <Dropdown.SubTrigger
+                            class={FILTER_MENU_SUBTRIGGER_CLASS}
+                          >
                             <span class="text-ink">{category.label}</span>
                             <CaretRightIcon class="size-3 text-ink-muted" />
                           </Dropdown.SubTrigger>

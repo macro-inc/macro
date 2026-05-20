@@ -524,8 +524,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
     });
   };
 
-
-  const openSettingsTab = (tab: 'Keyboard Shortcuts' | 'Appearance' | 'Account & Team' | 'Mobile & MCPs', event?: MouseEvent) => {
+  const openSettingsTab = (
+    tab:
+      | 'Keyboard Shortcuts'
+      | 'Appearance'
+      | 'Account & Team'
+      | 'Mobile & MCPs',
+    event?: MouseEvent
+  ) => {
     if (event?.shiftKey) {
       if (!(globalSplitManager()?.canAppendSplit() ?? true)) return;
       analytics.track('split_created', { from: 'sidebar' });
@@ -592,10 +598,31 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <Show when={isExpanded()}>
             <div class="flex items-center gap-1 mr-1">
               <Show when={showEnableNotifications()}>
-                <Button class="size-7 rounded-xs p-1 [&_svg]:size-4" label="Enable Notifications" onClick={handleEnableNotifications}><BellIcon class="size-4" /></Button>
+                <Button
+                  class="size-7 rounded-xs p-1 [&_svg]:size-4"
+                  label="Enable Notifications"
+                  onClick={handleEnableNotifications}
+                >
+                  <BellIcon class="size-4" />
+                </Button>
               </Show>
-              <Button class="size-7 rounded-xs p-1 [&_svg]:size-4" label="New Split" hotkey={TOKENS.global.createNewSplit} disabled={!canCreateNewSplit()} onClick={handleNewSplitClick}><AnimatedNewSplitIcon /></Button>
-              <Button class="size-7 rounded-xs p-1 [&_svg]:size-4" label="Command" hotkey={TOKENS.global.commandMenu} onClick={handleCommandPaletteClick}><AnimatedCommandIcon /></Button>
+              <Button
+                class="size-7 rounded-xs p-1 [&_svg]:size-4"
+                label="New Split"
+                hotkey={TOKENS.global.createNewSplit}
+                disabled={!canCreateNewSplit()}
+                onClick={handleNewSplitClick}
+              >
+                <AnimatedNewSplitIcon />
+              </Button>
+              <Button
+                class="size-7 rounded-xs p-1 [&_svg]:size-4"
+                label="Command"
+                hotkey={TOKENS.global.commandMenu}
+                onClick={handleCommandPaletteClick}
+              >
+                <AnimatedCommandIcon />
+              </Button>
             </div>
           </Show>
           <Button
@@ -671,10 +698,30 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="w-full px-2 flex flex-col">
-        <SidebarActionButton label="Shortcuts" isSlim={isSlim} onClick={(event) => openSettingsTab('Keyboard Shortcuts', event)} icon={KeyboardShortcutsIcon} />
-        <SidebarActionButton label="Appearance" isSlim={isSlim} onClick={(event) => openSettingsTab('Appearance', event)} icon={AppearanceSettingsIcon} />
-        <SidebarActionButton label="Account & Team" isSlim={isSlim} onClick={(event) => openSettingsTab('Account & Team', event)} icon={AccountTeamSettingsIcon} />
-        <SidebarActionButton label="Mobile & MCPs" isSlim={isSlim} onClick={(event) => openSettingsTab('Mobile & MCPs', event)} icon={MobileMcpsSettingsIcon} />
+        <SidebarActionButton
+          label="Shortcuts"
+          isSlim={isSlim}
+          onClick={(event) => openSettingsTab('Keyboard Shortcuts', event)}
+          icon={KeyboardShortcutsIcon}
+        />
+        <SidebarActionButton
+          label="Appearance"
+          isSlim={isSlim}
+          onClick={(event) => openSettingsTab('Appearance', event)}
+          icon={AppearanceSettingsIcon}
+        />
+        <SidebarActionButton
+          label="Account & Team"
+          isSlim={isSlim}
+          onClick={(event) => openSettingsTab('Account & Team', event)}
+          icon={AccountTeamSettingsIcon}
+        />
+        <SidebarActionButton
+          label="Mobile & MCPs"
+          isSlim={isSlim}
+          onClick={(event) => openSettingsTab('Mobile & MCPs', event)}
+          icon={MobileMcpsSettingsIcon}
+        />
       </div>
       <InviteModal />
     </div>

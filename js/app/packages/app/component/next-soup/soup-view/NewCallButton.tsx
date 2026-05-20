@@ -81,9 +81,9 @@ export function NewCallButton() {
   return (
     <>
       <Button
-        variant="base"
+        variant="accent-reverse"
         size="sm"
-        class="rounded-md whitespace-nowrap px-2 border-accent/30 bg-accent/10 text-accent not-disabled:hover:bg-accent/20 not-disabled:hover:text-accent active:bg-accent/25"
+        class="rounded-md whitespace-nowrap px-2"
         onClick={() => setIsOpen(true)}
       >
         <PlusCircleIcon class="size-3.5" />

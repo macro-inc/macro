@@ -1,4 +1,5 @@
 import { CREATABLE_BLOCKS, runCreateAction } from '@app/component/Launcher';
+import { CollapsibleHeaderItem } from '@app/component/split-layout/components/CollapsibleHeaderItem';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
@@ -61,8 +62,7 @@ const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
   tasks: 'Task',
 };
 
-const CREATE_BUTTON_CLASS =
-  'rounded-md border-accent/30 bg-accent/10 text-accent not-disabled:hover:bg-accent/20 not-disabled:hover:text-accent active:bg-accent/25';
+const CREATE_BUTTON_CLASS = 'rounded-full px-1 py-2 font-bold';
 
 function getViewCreateOptions(view: ListView): CreateOption[] {
   const createNames = VIEW_CREATE_BLOCKNAMES[view] ?? [];
@@ -139,55 +139,76 @@ export const SoupViewCreateButton = () => {
     runCreateAction(option.id);
   };
 
+  const SingleOptionButton = (props: { hideLabel?: boolean }) => (
+    <Button
+      variant="accent-reverse"
+      size="sm"
+      class={CREATE_BUTTON_CLASS}
+      onClick={() => handleSelect(options()[0])}
+    >
+      <PlusCircleIcon class="size-3.5" />
+      <Show when={!props.hideLabel}>
+        <span>{createLabel()}</span>
+      </Show>
+    </Button>
+  );
+
+  const MultiOptionButton = (props: { hideLabel?: boolean }) => (
+    <Dropdown placement="bottom-start" gutter={4}>
+      <Dropdown.Trigger variant="accent-reverse" class={CREATE_BUTTON_CLASS}>
+        <PlusCircleIcon class="size-3.5" />
+        <Show when={!props.hideLabel}>
+          <span>{createLabel()}</span>
+        </Show>
+        <ChevronDownIcon class="size-2.5" />
+      </Dropdown.Trigger>
+      <Dropdown.Portal>
+        <Layer depth={2}>
+          <Dropdown.Content class="min-w-35">
+            <For each={options()}>
+              {(item) => (
+                <Dropdown.Item
+                  class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
+                  onSelect={() => handleSelect(item)}
+                >
+                  <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
+                    <CreateOptionIcon id={item.id} />
+                  </span>
+                  <span class="flex-1 truncate text-ink-muted">
+                    {item.label}
+                  </span>
+                </Dropdown.Item>
+              )}
+            </For>
+          </Dropdown.Content>
+        </Layer>
+      </Dropdown.Portal>
+    </Dropdown>
+  );
+
   return (
     <>
       <Show when={currentView() === 'calls'}>
         <NewCallButton />
       </Show>
       <Show when={options().length > 0}>
-        <Show
-          when={options().length > 1}
-          fallback={
-            <Button
-              variant="base"
-              size="sm"
-              class={CREATE_BUTTON_CLASS}
-              onClick={() => handleSelect(options()[0])}
+        <CollapsibleHeaderItem
+          id="create-button"
+          priority={2}
+          expanded={() => (
+            <Show when={options().length > 1} fallback={<SingleOptionButton />}>
+              <MultiOptionButton />
+            </Show>
+          )}
+          collapsed={() => (
+            <Show
+              when={options().length > 1}
+              fallback={<SingleOptionButton hideLabel />}
             >
-              <PlusCircleIcon class="size-3.5" />
-              <span>{createLabel()}</span>
-            </Button>
-          }
-        >
-          <Dropdown placement="bottom-start" gutter={4}>
-            <Dropdown.Trigger class={CREATE_BUTTON_CLASS}>
-              <PlusCircleIcon class="size-3.5" />
-              <span>{createLabel()}</span>
-              <ChevronDownIcon class="size-2.5" />
-            </Dropdown.Trigger>
-            <Dropdown.Portal>
-              <Layer depth={2}>
-                <Dropdown.Content class="min-w-35">
-                  <For each={options()}>
-                    {(item) => (
-                      <Dropdown.Item
-                        class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
-                        onSelect={() => handleSelect(item)}
-                      >
-                        <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
-                          <CreateOptionIcon id={item.id} />
-                        </span>
-                        <span class="flex-1 truncate text-ink-muted">
-                          {item.label}
-                        </span>
-                      </Dropdown.Item>
-                    )}
-                  </For>
-                </Dropdown.Content>
-              </Layer>
-            </Dropdown.Portal>
-          </Dropdown>
-        </Show>
+              <MultiOptionButton hideLabel />
+            </Show>
+          )}
+        />
       </Show>
     </>
   );
