@@ -334,8 +334,6 @@ generate_file_types!(
     (Repo, "repo", "text/plain", Code),
     (Java, "java", "text/plain", Code),
     (Jav, "jav", "text/plain", Code),
-    (Kt, "kt", "text/plain", Code),
-    (Kts, "kts", "text/plain", Code),
     (Jsx, "jsx", "text/plain", Code),
     (Js, "js", "text/plain", Code),
     (Es6, "es6", "text/plain", Code),
