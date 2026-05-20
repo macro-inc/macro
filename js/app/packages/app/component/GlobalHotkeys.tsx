@@ -193,7 +193,7 @@ export default function GlobalShortcuts() {
     description: 'Account',
     icon: UserIcon,
     keyDownHandler: () => {
-      openSettings('Account & Team');
+      openSettings('Account');
       return true;
     },
     runWithInputFocused: true,

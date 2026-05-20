@@ -20,9 +20,14 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { InCallPanel } from '@channel/Call';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
+import { UserIcon } from '@core/component/UserIcon';
 
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
-import { useSettingsState } from '@core/constant/SettingsState';
+import {
+  type SettingsTab,
+  useSettingsState,
+} from '@core/constant/SettingsState';
+import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -45,12 +50,16 @@ import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { useNotificationSettings } from '@notifications';
 import BellIcon from '@phosphor/bell.svg';
+import CaretUpIcon from '@phosphor/caret-up.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
+import KeyboardIcon from '@phosphor/keyboard.svg';
 import PaintBucketIcon from '@phosphor/paint-bucket.svg';
+import PlugIcon from '@phosphor/plug.svg';
+import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { useLocation } from '@solidjs/router';
-import { Button, cn, Hotkey } from '@ui';
+import { Button, cn, Dropdown, Hotkey, Layer } from '@ui';
 import {
   type Component,
   createEffect,
@@ -383,15 +392,54 @@ type SidebarActionButtonProps = {
   label: string;
 };
 
-const KeyboardShortcutsIcon = (props: { triggerAnimation?: boolean }) => (
-  <AnimatedCommandIcon triggerAnimation={props.triggerAnimation} />
-);
+type SettingsMenuItem = {
+  tab: SettingsTab;
+  label: string;
+  description: string;
+  icon: Component<{ class?: string }>;
+};
 
-const AppearanceSettingsIcon = () => <PaintBucketIcon class="size-4" />;
+const SETTINGS_MENU_TOP_ITEMS: SettingsMenuItem[] = [
+  {
+    tab: 'Mobile App',
+    label: 'App',
+    description: 'Get the mobile app',
+    icon: DeviceMobileIcon,
+  },
+];
 
-const AccountTeamSettingsIcon = () => <UsersThreeIcon class="size-4" />;
-
-const MobileMcpsSettingsIcon = () => <DeviceMobileIcon class="size-4" />;
+const SETTINGS_MENU_BOTTOM_ITEMS: SettingsMenuItem[] = [
+  {
+    tab: 'Agent',
+    label: 'MCPs',
+    description: 'Agent connectors and MCP servers',
+    icon: PlugIcon,
+  },
+  {
+    tab: 'Shortcuts',
+    label: 'Shortcuts',
+    description: 'Keyboard shortcuts',
+    icon: KeyboardIcon,
+  },
+  {
+    tab: 'Appearance',
+    label: 'Appearance',
+    description: 'Theme and UI customization',
+    icon: PaintBucketIcon,
+  },
+  {
+    tab: 'Team',
+    label: 'Team',
+    description: 'Members and invites',
+    icon: UsersThreeIcon,
+  },
+  {
+    tab: 'Account',
+    label: 'Account',
+    description: 'Profile, email, and subscription',
+    icon: UserIconPhosphor,
+  },
+];
 
 /**
  * A normalised action button for the sidebar footer area.
@@ -443,6 +491,97 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
   );
 };
 
+type SidebarSettingsWidgetProps = {
+  isSlim: () => boolean;
+  onSelect: (tab: SettingsTab) => void;
+};
+
+const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
+  const userId = useUserId();
+
+  return (
+    <Dropdown placement="top-start" gutter={6}>
+      <Dropdown.Trigger
+        as={Button}
+        variant="ghost"
+        class={cn(
+          'flex items-center w-full rounded-md cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
+          'justify-start gap-2 px-1.5 py-1',
+          'group-data-[slim=true]/sidebar:justify-center group-data-[slim=true]/sidebar:gap-0'
+        )}
+        label={props.isSlim() ? 'Settings' : undefined}
+        tooltipPlacement="right"
+        onMouseDown={(e: MouseEvent) => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+        }}
+      >
+        <Show
+          when={userId()}
+          fallback={<div class="size-6 shrink-0 rounded-full bg-ink/10" />}
+        >
+          {(id) => (
+            <UserIcon id={id()} size="md" suppressClick showTooltip={false} />
+          )}
+        </Show>
+        <span class="flex-1 min-w-0 text-left whitespace-nowrap text-sm truncate group-data-[slim=true]/sidebar:hidden">
+          Settings
+        </span>
+        <CaretUpIcon class="size-3 text-ink-extra-muted shrink-0 group-data-[slim=true]/sidebar:hidden" />
+      </Dropdown.Trigger>
+      <Dropdown.Portal>
+        <Layer depth={3}>
+        <Dropdown.Content class="min-w-56">
+          <For each={SETTINGS_MENU_TOP_ITEMS}>
+            {(item) => (
+              <Dropdown.Item
+                class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
+                onSelect={() => props.onSelect(item.tab)}
+              >
+                <span class="size-5 flex items-center justify-center">
+                  <Dynamic
+                    component={item.icon}
+                    class="size-4 shrink-0 text-ink-extra-muted"
+                  />
+                </span>
+                <div class="flex flex-col min-w-0">
+                  <span class="text-ink">{item.label}</span>
+                  <span class="text-xxs text-ink-extra-muted leading-tight">
+                    {item.description}
+                  </span>
+                </div>
+              </Dropdown.Item>
+            )}
+          </For>
+          <Dropdown.Separator />
+          <For each={SETTINGS_MENU_BOTTOM_ITEMS}>
+            {(item) => (
+              <Dropdown.Item
+                class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
+                onSelect={() => props.onSelect(item.tab)}
+              >
+                <span class="size-5 flex items-center justify-center">
+                  <Dynamic
+                    component={item.icon}
+                    class="size-4 shrink-0 text-ink-extra-muted"
+                  />
+                </span>
+                <div class="flex flex-col min-w-0">
+                  <span class="text-ink">{item.label}</span>
+                  <span class="text-xxs text-ink-extra-muted leading-tight">
+                    {item.description}
+                  </span>
+                </div>
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Content>
+        </Layer>
+      </Dropdown.Portal>
+    </Dropdown>
+  );
+};
+
 const CALLS_LINK: SidebarItem = {
   id: 'calls',
   label: 'Calls',
@@ -455,7 +594,7 @@ const CALLS_LINK: SidebarItem = {
 export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
-  const { openSettings } = useSettingsState();
+  const { openSettings, setActiveTabId, settingsOpen } = useSettingsState();
   const notificationSettings = useNotificationSettings();
   const callCtx = useCallContextOptional();
 
@@ -526,16 +665,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
     });
   };
 
-  const openSettingsTab = (
-    tab:
-      | 'Keyboard Shortcuts'
-      | 'Appearance'
-      | 'Account & Team'
-      | 'Mobile & MCPs',
-    event?: MouseEvent
-  ) => {
-    if (event?.shiftKey) {
-      if (!(globalSplitManager()?.canAppendSplit() ?? true)) return;
+  const openSettingsTab = (tab: SettingsTab) => {
+    if (settingsOpen()) {
+      setActiveTabId(tab);
+      return;
+    }
+    if (globalSplitManager()?.canAppendSplit() ?? true) {
+      setActiveTabId(tab);
       analytics.track('split_created', { from: 'sidebar' });
       layout.openWithSplit(
         { type: 'component', id: 'settings' },
@@ -699,31 +835,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <hr class="border-transparent mb-2" />
       </div>
 
-      <div class="w-full px-2 flex flex-col">
-        <SidebarActionButton
-          label="Shortcuts"
-          isSlim={isSlim}
-          onClick={(event) => openSettingsTab('Keyboard Shortcuts', event)}
-          icon={KeyboardShortcutsIcon}
-        />
-        <SidebarActionButton
-          label="Appearance"
-          isSlim={isSlim}
-          onClick={(event) => openSettingsTab('Appearance', event)}
-          icon={AppearanceSettingsIcon}
-        />
-        <SidebarActionButton
-          label="Account & Team"
-          isSlim={isSlim}
-          onClick={(event) => openSettingsTab('Account & Team', event)}
-          icon={AccountTeamSettingsIcon}
-        />
-        <SidebarActionButton
-          label="Mobile & MCPs"
-          isSlim={isSlim}
-          onClick={(event) => openSettingsTab('Mobile & MCPs', event)}
-          icon={MobileMcpsSettingsIcon}
-        />
+      <div class="w-full px-2">
+        <SidebarSettingsWidget isSlim={isSlim} onSelect={openSettingsTab} />
       </div>
       <InviteModal />
     </div>
