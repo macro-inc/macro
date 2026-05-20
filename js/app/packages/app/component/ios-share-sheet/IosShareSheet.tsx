@@ -58,7 +58,9 @@ function pendingShareBatchKey(files: readonly PendingShareFile[]): string {
   return files.map((file) => file.token).join('|');
 }
 
-function normalizedSharedText(file: Pick<PendingShareFile, 'sharedText'>): string {
+function normalizedSharedText(
+  file: Pick<PendingShareFile, 'sharedText'>
+): string {
   return file.sharedText?.trim() ?? '';
 }
 
