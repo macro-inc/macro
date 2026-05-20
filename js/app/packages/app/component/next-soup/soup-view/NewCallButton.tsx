@@ -10,7 +10,6 @@ import XIcon from '@phosphor/x.svg';
 import { commsServiceClient } from '@service-comms/client';
 import { Button, Dialog, Surface } from '@ui';
 import { createSignal } from 'solid-js';
-import { CREATE_BUTTON_CLASS } from './create-button-style';
 
 export function NewCallButton() {
   const [isOpen, setIsOpen] = createSignal(false);

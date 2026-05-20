@@ -15,7 +15,6 @@ import PlusCircleIcon from '@phosphor/plus-circle.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
 import { Button, Dropdown, Layer } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
-import { CREATE_BUTTON_CLASS } from './create-button-style';
 import { NewCallButton } from './NewCallButton';
 
 // Which blocks to show as create options per view, in order
