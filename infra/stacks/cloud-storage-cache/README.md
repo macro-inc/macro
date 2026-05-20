@@ -2,6 +2,5 @@
 
 This stack creates an ECR repository for the Cloud Storage cache image.
 
-Note: This stack does not build the cache image itself. It only creates the ECR repository.
-The cache image is built by `.github/workflows/build-cloud-storage-cache.yml` on push to the `main` branch.
-This is because awsx is slow at building images and it's faster to use docker/buildx github action to build the image.
+Note: This stack only creates the legacy ECR repository for the Cloud Storage cache image.
+The cache image is no longer rebuilt by CI; local development uses `Dockerfile.dev` via `just run_local`, and service deployments use prebuilt binaries.

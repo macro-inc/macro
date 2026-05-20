@@ -258,7 +258,6 @@ skip = [
   { crate = "http-body", reason = "Hyper and AWS SDK version mismatch" },
   { crate = "hyper", reason = "AWS SDK uses older hyper version" },
   { crate = "hyper-rustls", reason = "TLS dependencies version mismatch" },
-  { crate = "hyper-tls", reason = "TLS dependencies version mismatch" },
   { crate = "reqwest", reason = "livekit-api pins reqwest 0.12 via services-tokio feature; workspace uses 0.13" },
   { crate = "infer", reason = "File type detection dependencies" },
   { crate = "itertools", reason = "Various dependencies require different versions" },

@@ -371,14 +371,12 @@ const registerSidebarHotkeys = ({
 };
 
 type SidebarActionButtonProps = {
-  label: string;
-  hotkeyToken?: HotkeyToken;
-  /** Whether the sidebar is currently in slim (icon-only) mode. */
-  isSlim: () => boolean;
-  onClick: () => void;
-  disabled?: boolean | (() => boolean);
-  /** Animated icon component that accepts a `triggerAnimation` prop. */
   icon: Component<{ triggerAnimation?: boolean; class?: string }>;
+  onClick: (event?: MouseEvent) => void;
+  disabled?: boolean | (() => boolean);
+  hotkeyToken?: HotkeyToken;
+  isSlim: () => boolean;
+  label: string;
 };
 
 /**
@@ -405,7 +403,11 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       tooltipPlacement="right"
       label={props.isSlim() ? props.label : undefined}
       hotkey={props.isSlim() ? props.hotkeyToken : undefined}
-      onClick={props.onClick}
+      onMouseDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+      }}
+      onClick={(event: MouseEvent) => props.onClick(event)}
       disabled={isDisabled()}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
@@ -558,7 +560,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <div class="grow shrink-10 min-w-0" />
           <Button
             class="flex items-center justify-center rounded-xs p-0.5 px-2 bg-surface [&_svg]:size-4"
-            onClick={() => handleSidebarOpenChange(!isExpanded())}
+            onMouseDown={(e) => {
+              if (e.button !== 0) return;
+              e.preventDefault();
+            }}
+            onClick={() => {
+              handleSidebarOpenChange(!isExpanded());
+              globalSplitManager()?.returnFocus();
+            }}
             onMouseEnter={() => setSidebarBtnHovering(true)}
             onMouseLeave={() => setSidebarBtnHovering(false)}
             label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
@@ -648,11 +657,27 @@ export const AppSidebar = (props: AppSidebarProps) => {
         />
 
         <SidebarActionButton
-          label="Settings"
+          onClick={(event) => {
+            if (event?.shiftKey) {
+              if (!(globalSplitManager()?.canAppendSplit() ?? true)) return;
+              analytics.track('split_created', { from: 'sidebar' });
+              layout.openWithSplit(
+                { type: 'component', id: 'settings' },
+                {
+                  referredFrom: 'sidebar',
+                  allowDuplicate: true,
+                  preferNewSplit: true,
+                  mergeHistory: false,
+                }
+              );
+              return;
+            }
+            toggleSettings();
+          }}
           hotkeyToken={TOKENS.global.toggleSettings}
-          isSlim={isSlim}
-          onClick={toggleSettings}
           icon={AnimatedGearIcon}
+          label="Settings"
+          isSlim={isSlim}
         />
       </div>
       <InviteModal />
@@ -728,6 +753,8 @@ const SidebarLink = (props: SidebarLinkProps) => {
         <Button
           draggable={false}
           variant="ghost"
+          data-sidebar-link={props.id}
+          data-active={isActive() ? '' : undefined}
           class={cn(
             'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-sm py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3',
             isActive() && 'bg-ink/6 not-disabled:hover:bg-ink/6 text-ink'

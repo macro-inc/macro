@@ -1,0 +1,6 @@
+# Project-local Helix configuration for the Tauri Rust workspace.
+# Adds an extra rust-analyzer cfg so iOS-gated code is considered active
+# without changing the compilation/link target on Linux.
+
+[language-server.rust-analyzer.config.cargo]
+cfgs = ["target_os=ios"]

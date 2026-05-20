@@ -33,6 +33,32 @@ async fn test_get_stripe_customer_id(pool: Pool<Postgres>) -> anyhow::Result<()>
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
+async fn test_has_user_trialed(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    sqlx::query("UPDATE macro_user SET has_trialed = FALSE WHERE email = 'user4@user.com'")
+        .execute(&pool)
+        .await?;
+
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let has_trialed = team_repo
+        .has_user_trialed(&MacroUserIdStr::parse_from_str("macro|user@user.com")?)
+        .await?;
+
+    assert!(has_trialed);
+
+    let has_trialed = team_repo
+        .has_user_trialed(&MacroUserIdStr::parse_from_str("macro|user4@user.com")?)
+        .await?;
+
+    assert!(!has_trialed);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
 async fn test_get_team_subscription_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 

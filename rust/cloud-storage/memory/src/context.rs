@@ -211,6 +211,7 @@ pub async fn build_tool_service_context(
         notification_tool_context,
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context(pool.clone()),
+        team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
     })
 }

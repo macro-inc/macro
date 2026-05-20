@@ -14,6 +14,7 @@ export { Button } from './components/Button';
 export { Hotkey } from './components/Hotkey';
 export { Scroll } from './components/Scroll';
 export { Panel  } from './components/Panel';
+export { LogoProgress } from './components/LogoProgress';
 export { Layer } from './components/Layer';
 
 /* types */

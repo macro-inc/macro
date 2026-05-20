@@ -9,7 +9,6 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
-model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 models_pagination = { path = "../models_pagination" }

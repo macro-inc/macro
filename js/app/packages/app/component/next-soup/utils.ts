@@ -7,6 +7,10 @@ import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import {
+  ENTITY_ID_DATA_ATTRIBUTE,
+  entityIdSelector,
+} from '@core/dom-selectors';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
@@ -279,13 +283,13 @@ export const restoreSoupFocus = async (
   // up by focusing the soup container (which has `tabindex={-1}`) — that's
   // what actually reactivates the hotkey scope.
   if (entityId) {
-    const entityEl = domRef.querySelector(`[data-entity-id="${entityId}"]`);
+    const entityEl = domRef.querySelector(entityIdSelector(entityId));
     if (entityEl instanceof HTMLElement) entityEl.focus();
   }
 
   if (document.activeElement && domRef.contains(document.activeElement)) return;
 
-  const firstEntityEl = domRef.querySelector('[data-entity-id]');
+  const firstEntityEl = domRef.querySelector(`[${ENTITY_ID_DATA_ATTRIBUTE}]`);
   if (firstEntityEl instanceof HTMLElement) firstEntityEl.focus();
 
   if (document.activeElement && domRef.contains(document.activeElement)) return;

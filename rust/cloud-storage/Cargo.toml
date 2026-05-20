@@ -2,164 +2,70 @@
 resolver = "2"
 
 members = [
-  "ai",
-  "ai_tools",
-  "ai_toolset",
-  "analytics_client",
-  "anthropic",
-  "attachment",
   "authentication_service",
-  "authentication_service_client",
   "backfill_entity_access",
-  "cal",
-  "call",
-  "channels",
-  "chat",
-  "comms_db_client",
   "comms_service",
-  "comms_service_client",
   "connection_gateway",
-  "connection_gateway_client",
-  "connection_gateway_models",
-  "contacts",
   "contacts_service",
   "convert_service",
-  "cowlike",
   "dataloss_prevention_handler",
-  "decode_jwt",
   "delete_chat_handler",
   "deleted_item_poller",
   "document_cognition_service",
-  "document_cognition_service_client",
+  "document_cognition_service/load-test",
   "document_storage_service",
-  "document_storage_service_client",
-  "document_sub_type",
   "document_text_extractor",
   "document_upload_finalizer_handler",
-  "documents",
   "docx_unzip_handler",
-  "dynamodb_client",
-  "email_db_client",
   "email_refresh_handler",
   "email_scheduled_handler",
   "email_service",
-  "email_service_client",
   "email_sfs_delete_handler",
   "email_suppression_handler",
-  "email_utils",
-  "email_validator",
-  "entity_access",
-  "entity_access_db_utils",
-  "entity_access_management",
-  "frecency",
-  "fusionauth",
-  "github",
-  "gmail_client",
   "image_optimizer",
   "image_proxy_service",
-  "integration_tests/*",
-  "invite_email",
-  "lambda_client",
-  "lexical_client",
-  "macro_auth",
-  "macro_aws_config",
-  "macro_cache_client",
-  "macro_client_errors",
-  "macro_cors",
-  "macro_db_client",
-  "macro_db_migrator",
-  "macro_env",
-  "macro_middleware",
-  "macro_project_utils",
-  "macro_redis",
-  "macro_service_client",
-  "macro_sha_count_client",
-  "macro_uuid",
-  "mcp_auth_proxy",
-  "mcp_client",
+  "integration_tests/local_e2e",
   "mcp_service",
   "memory",
-  "mention_utils",
-  "mobile_welcome_email_db_client",
-  "model",
-  "model_notifications",
-  "model_user",
-  "models_dcs",
-  "models_email",
-  "models_grouping",
-  "models_opensearch",
-  "models_pagination",
-  "models_permissions",
-  "models_properties",
-  "models_search",
-  "models_search_cursor",
-  "models_sfs",
-  "models_soup",
-  "models_team",
-  "name_search",
-  "non_empty",
-  "notification",
-  "notification_db_client",
   "notification_sandbox",
   "notification_service",
-  "opensearch_client",
-  "opensearch_query_builder",
   "organization_retention_handler",
   "organization_retention_trigger",
-  "permission",
-  "properties",
-  "properties_db_client",
   "properties_service",
-  "rate_limit",
-  "readonly_pool",
-  "referral",
-  "roles_and_permissions",
-  "s3_client",
-  "s3_key",
   "scheduled_action",
   "search_processing_service",
   "search_service",
-  "search_service_client",
   "search_upload_handler",
-  "secretsmanager_client",
   "seed_cli",
-  "ses_client",
   "sha_cleanup_worker",
-  "sns_client",
-  "soup",
-  "sqs_client",
-  "sqs_worker",
-  "static_file",
   "static_file_service",
-  "static_file_service_client",
-  "sync_service",
-  "sync_service_client",
-  "system_properties",
-  "teams",
   "tools/native_app_server",
   "unfurl_service",
   "upload_extractor_lambda_handler",
   "upload_extractor_lambda_trigger",
   "user_link_cleanup_handler",
-  "user_quota",
   "worker_trigger",
 ]
 
 [workspace.dependencies]
 anyhow = "1.0.100"
 askama = "0.14"
-async-openai = { version = "0.36.1", features = ["byot", "chat-completion", "completions"] }
+async-openai = { version = "0.36.1", features = [
+  "byot",
+  "chat-completion",
+  "completions",
+] }
 async-stream = "0.3.6"
 async-trait = "0.1.86"
-aws-config = { version = "1.8.12", features = ["behavior-version-latest"] }
-aws-sdk-dynamodb = "1.98.0"
-aws-sdk-lambda = "1.104.0"
-aws-sdk-s3 = "1.121.0"
-aws-sdk-secretsmanager = "1.93.0"
-aws-sdk-sesv2 = "1.103.0"
-aws-sdk-sns = "1.90.0"
-aws-sdk-sqs = "1.91.0"
-aws-smithy-types = "1.2.13"
+aws-config = { version = "1.8.16", features = ["behavior-version-latest"] }
+aws-sdk-dynamodb = "1.111.0"
+aws-sdk-lambda = "1.122.0"
+aws-sdk-s3 = "1.132.0"
+aws-sdk-secretsmanager = "1.104.0"
+aws-sdk-sesv2 = "1.118.0"
+aws-sdk-sns = "1.99.0"
+aws-sdk-sqs = "1.98.0"
+aws-smithy-types = "1.4.7"
 aws_lambda_events = { version = "0.16.0", default-features = false }
 axum = { version = "0.8", features = ["tower-log"] }
 axum-extra = { version = "0.10" }
@@ -188,25 +94,41 @@ jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features
 ] }
 lambda_runtime = "0.13.0"
 lazy_static = "1.5.0"
-livekit-api = "0.4.16"
+livekit-api = { version = "0.4.16", default-features = false, features = [
+  "access-token",
+  "rustls-tls-webpki-roots",
+  "services-tokio",
+  "webhooks",
+] }
 livekit-protocol = "0.7.2"
 log = "0.4.26"
 mockall = "0.13"
 nom = "8"
-openssl = { version = "0.10.71", features = ["vendored"] }
 opentelemetry = "0.31.0"
-opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic"] }
+opentelemetry-otlp = { version = "0.31.0", default-features = false, features = [
+  "grpc-tonic",
+  "internal-logs",
+  "logs",
+  "metrics",
+  "trace",
+] }
 opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
 ordered-float = "5"
 paste = "1"
 pdfium-render = { version = "0.8.28" }
+pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 quote = "1"
 rand = "0.9.0"
 recursion = "0.5.4"
 redis = "1.0.3"
 regex = "1.11.1"
+reqwest = { version = "0.13", default-features = false, features = [
+  "form",
+  "hickory-dns",
+  "json",
+  "rustls",
+] }
 rmcp = "1.6.0"
-reqwest = { version = "0.13", features = ["form", "hickory-dns", "json"] }
 rootcause = { version = "0.12" }
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }
@@ -223,12 +145,15 @@ sqlx = { version = "0.8.6", features = [
   "uuid",
 ] }
 sqlx-core = { version = "0.8.6" }
-pgvector = { version = "0.4", features = ["sqlx", "postgres"] }
 strum = { version = "0.27.1", features = ["derive"] }
 thiserror = "2.0.0"
 time = "0.3.37"
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.17" }
+tokio-tungstenite = { version = "0.28", default-features = false, features = [
+  "connect",
+  "rustls-tls-webpki-roots",
+] }
 tokio-util = "0.7.13"
 tower = { version = "0.5.1", features = ["util"] }
 tower-http = { version = "0.6.1", features = [
@@ -240,6 +165,7 @@ tracing = "0.1.44"
 tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
+tungstenite = { version = "0.28", features = ["url"] }
 unsynn = "0.3"
 urlencoding = "2.1.3"
 utoipa = { version = "5.4.0", features = [
@@ -254,7 +180,7 @@ uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v7"] }
 async-stripe = { version = "0.41", default-features = false, features = [
   "billing",
   "checkout",
-  "runtime-tokio-hyper",
+  "runtime-tokio-hyper-rustls-webpki",
 ] }
 axum-macros = "0.5"
 bytes = "1.11.1"

@@ -659,7 +659,7 @@ export function EmailCompose(props: EmailComposeProps) {
           >
             <ComposeLayout
               toolbar={<EmailComposeToolbar editor={editor} />}
-              class="size-full p-4 bg-surface max-h-full mobile:max-h-none overflow-y-auto flex flex-col min-h-0 mobile:min-h-full"
+              class="size-full p-4 bg-surface max-h-full mobile:max-h-none overflow-hidden flex flex-col min-h-0 mobile:min-h-full"
             />
           </WrapUnlessMobile>
         </div>

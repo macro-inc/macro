@@ -4,11 +4,12 @@ pub mod channel;
 pub mod channel_message;
 pub mod document;
 pub mod email;
+pub mod scenario;
 pub mod user;
 
 use clap::Subcommand;
 
-use crate::config::SeedCliContext;
+use crate::config::{EnvVars, SeedCliContext};
 
 /// Top-level entity subcommands for the seed CLI.
 #[derive(Debug, Subcommand)]
@@ -23,9 +24,19 @@ pub enum EntityCommand {
     Document(document::DocumentArgs),
     /// Manage email seed data
     Email(email::EmailArgs),
+    /// Apply predefined seed scenarios
+    Scenario(scenario::ScenarioArgs),
 }
 
 impl EntityCommand {
+    /// Validate environment-sensitive safety checks before connecting to services.
+    pub fn validate_environment(&self, env_vars: &EnvVars) -> anyhow::Result<()> {
+        match self {
+            EntityCommand::Scenario(args) => args.validate_environment(env_vars),
+            _ => Ok(()),
+        }
+    }
+
     /// Execute the entity command.
     pub async fn execute(self, ctx: SeedCliContext) -> anyhow::Result<()> {
         match self {
@@ -34,6 +45,7 @@ impl EntityCommand {
             EntityCommand::ChannelMessage(args) => args.execute(ctx).await,
             EntityCommand::Document(args) => args.execute(ctx).await,
             EntityCommand::Email(args) => args.execute(ctx).await,
+            EntityCommand::Scenario(args) => args.execute(ctx).await,
         }
     }
 }

@@ -77,6 +77,13 @@ export function MobileSwipeBackContainer(props: MobileSwipeBackContainerProps) {
     if (!mobileSwipeLayout.canGoBack()) return;
     const touch = e.touches[0];
     if (!touch || touch.clientX > SWIPE_EDGE_THRESHOLD) return;
+    // Buttons can sit inside the swipe-edge zone. If we start the gesture, the preventDefault() in touchmove suppresses the synthesized click on iOS.
+    if (
+      e.target instanceof Element &&
+      e.target.closest('button, a, [role="button"]')
+    ) {
+      return;
+    }
     startX = touch.clientX;
     startTime = Date.now();
     setIsDragging(true);
@@ -176,7 +183,7 @@ export function MobileSwipeBackContainer(props: MobileSwipeBackContainerProps) {
               },
               !mobileSwipeLayout.fgIsSlotA() &&
                 !isDragging() &&
-                !isAnimatingOut &&
+                !isAnimatingOut() &&
                 'hidden'
             )}
             style={mobileSwipeLayout.fgIsSlotA() ? fgStyle() : bgStyle()}

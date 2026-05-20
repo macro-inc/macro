@@ -69,6 +69,27 @@ type NativeAudioProcessingSettings = MediaTrackSettings & {
   voiceIsolation?: boolean;
 };
 
+type NativeAudioProcessingSupportedConstraints =
+  MediaTrackSupportedConstraints & {
+    voiceIsolation?: boolean;
+  };
+
+function supportedNativeAudioProcessingConstraints(): NativeAudioProcessingSupportedConstraints | null {
+  return (
+    (navigator.mediaDevices?.getSupportedConstraints?.() as
+      | NativeAudioProcessingSupportedConstraints
+      | undefined) ?? null
+  );
+}
+
+function supportsNativeAudioProcessingConstraint(
+  name: keyof NativeAudioProcessingSupportedConstraints
+): boolean {
+  const supported = supportedNativeAudioProcessingConstraints();
+  if (!supported) return name !== 'voiceIsolation';
+  return supported[name] === true;
+}
+
 function normalizeNoiseSuppressionMode(
   value: unknown
 ): MicNoiseSuppressionMode {
@@ -98,10 +119,16 @@ function microphoneCaptureOptions(
     // AGC can raise residual background artifacts during quiet speech/silence.
     // Keep it disabled for every mode; Krisp/browser NS should not be stacked
     // with a gain stage that makes suppressed noise audible again.
-    autoGainControl: false,
+    ...(supportsNativeAudioProcessingConstraint('autoGainControl')
+      ? { autoGainControl: false }
+      : {}),
     echoCancellation: true,
-    noiseSuppression: useBrowserProcessing,
-    voiceIsolation: useBrowserProcessing,
+    ...(supportsNativeAudioProcessingConstraint('noiseSuppression')
+      ? { noiseSuppression: useBrowserProcessing }
+      : {}),
+    ...(supportsNativeAudioProcessingConstraint('voiceIsolation')
+      ? { voiceIsolation: useBrowserProcessing }
+      : {}),
     ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
   };
 }
@@ -112,15 +139,36 @@ function nativeAudioProcessingConstraints(
   const useBrowserProcessing = mode === 'browser';
 
   return {
-    autoGainControl: false,
-    noiseSuppression: useBrowserProcessing,
-    voiceIsolation: useBrowserProcessing,
+    ...(supportsNativeAudioProcessingConstraint('autoGainControl')
+      ? { autoGainControl: false }
+      : {}),
+    ...(supportsNativeAudioProcessingConstraint('noiseSuppression')
+      ? { noiseSuppression: useBrowserProcessing }
+      : {}),
+    ...(supportsNativeAudioProcessingConstraint('voiceIsolation')
+      ? { voiceIsolation: useBrowserProcessing }
+      : {}),
   };
 }
 
 function getLocalMicTrack(r: Room): LocalTrack | undefined {
   return r.localParticipant.getTrackPublication(Track.Source.Microphone)
     ?.track as LocalTrack | undefined;
+}
+
+function isActiveCallConnectionState(state: ConnectionState): boolean {
+  return (
+    state === ConnectionState.Connecting ||
+    state === ConnectionState.Connected ||
+    state === ConnectionState.Reconnecting ||
+    state === ConnectionState.SignalReconnecting
+  );
+}
+
+function isLiveLocalTrack(
+  track: LocalTrack | null | undefined
+): track is LocalTrack {
+  return track?.mediaStreamTrack?.readyState === 'live';
 }
 
 async function applyNativeAudioProcessingToMicTrack(
@@ -356,6 +404,21 @@ function createCallState() {
   const [blurProcessor, setBlurProcessor] =
     createSignal<BackgroundProcessorWrapper | null>(null);
 
+  let mediaSetupVersion = 0;
+
+  function nextMediaSetupVersion() {
+    mediaSetupVersion += 1;
+    return mediaSetupVersion;
+  }
+
+  function cancelPendingMediaSetup() {
+    mediaSetupVersion += 1;
+  }
+
+  function isCurrentMediaSetup(targetRoom: Room, setupVersion: number) {
+    return room() === targetRoom && mediaSetupVersion === setupVersion;
+  }
+
   function currentMicrophoneCaptureOptions(
     deviceId?: string | null
   ): AudioCaptureOptions {
@@ -409,23 +472,29 @@ function createCallState() {
 
   /** Apply the preferred mic noise suppression mode to the current mic track. */
   async function ensureNoiseSuppressionOnMicTrack(r: Room) {
+    if (room() !== r) return;
+
     const preferredMode = persistedNoiseSuppressionMode();
 
     if (preferredMode === 'off') {
       setStore('noiseSuppressionMode', 'off');
       await detachKrispFromMicTrack(r);
+      if (room() !== r) return;
       await applyNativeAudioProcessingToMicTrack(r, 'off');
+      if (room() !== r) return;
       logMicAudioProcessing('noise-suppression-off', r);
       return;
     }
 
     const micTrack = getLocalMicTrack(r);
-    if (!micTrack) return;
+    if (!isLiveLocalTrack(micTrack)) return;
 
     if (preferredMode === 'browser' || !isKrispNoiseFilterSupported()) {
       setStore('noiseSuppressionMode', 'browser');
       await detachKrispFromMicTrack(r);
+      if (room() !== r) return;
       await applyNativeAudioProcessingToMicTrack(r, 'browser');
+      if (room() !== r) return;
       logMicAudioProcessing('browser-noise-suppression-enabled', r, {
         reason: preferredMode === 'browser' ? 'preferred' : 'krisp-unsupported',
       });
@@ -435,6 +504,7 @@ function createCallState() {
     const existing = krispFilter();
     if (existing && micTrack.getProcessor() === existing) {
       await applyNativeAudioProcessingToMicTrack(r, 'krisp');
+      if (room() !== r || !isLiveLocalTrack(micTrack)) return;
       await existing.setEnabled(true);
       setStore('noiseSuppressionMode', 'krisp');
       logMicAudioProcessing('krisp-noise-suppression-reused', r);
@@ -444,9 +514,11 @@ function createCallState() {
     // Krisp should be the only noise suppression layer. Disable native browser
     // NS / voice isolation / AGC before attaching it to avoid cascaded filters.
     await applyNativeAudioProcessingToMicTrack(r, 'krisp');
+    if (room() !== r || !isLiveLocalTrack(micTrack)) return;
 
     try {
       await detachKrispFromMicTrack(r);
+      if (room() !== r || !isLiveLocalTrack(micTrack)) return;
 
       // `quality` is model size/CPU cost, not suppression strength. The default
       // medium model avoids the CPU pressure/dropouts that made voices sound
@@ -454,15 +526,23 @@ function createCallState() {
       const krisp = KrispNoiseFilter({ quality: 'medium' });
       setKrispFilter(krisp);
       await micTrack.setProcessor(krisp);
+      if (room() !== r || !isLiveLocalTrack(micTrack)) {
+        await krisp.destroy();
+        if (krispFilter() === krisp) setKrispFilter(null);
+        return;
+      }
       await krisp.setEnabled(true);
       setStore('noiseSuppressionMode', 'krisp');
       logMicAudioProcessing('krisp-noise-suppression-attached', r);
     } catch (e) {
+      if (room() !== r) return;
       console.error('failed to re-attach Krisp noise filter', e);
       // Fall back to a single browser-native layer if Krisp fails.
       await detachKrispFromMicTrack(r);
+      if (room() !== r) return;
       setStore('noiseSuppressionMode', 'browser');
       await applyNativeAudioProcessingToMicTrack(r, 'browser');
+      if (room() !== r) return;
       logMicAudioProcessing('browser-noise-suppression-fallback', r, {
         reason: 'krisp-attach-failed',
       });
@@ -511,7 +591,8 @@ function createCallState() {
     if (effect.type === 'none') return true;
 
     const camPub = r.localParticipant.getTrackPublication(Track.Source.Camera);
-    if (!camPub?.track) return true;
+    const camTrack = camPub?.track as LocalTrack | undefined;
+    if (!isLiveLocalTrack(camTrack)) return true;
 
     const processorOptions =
       effect.type === 'blur'
@@ -522,6 +603,8 @@ function createCallState() {
         : { mode: 'virtual-background' as const, imagePath: effect.path };
 
     try {
+      if (room() !== r || !isLiveLocalTrack(camTrack)) return true;
+
       const existing = blurProcessor();
 
       // If we have a processor and the track hasn't changed, use switchTo()
@@ -534,20 +617,28 @@ function createCallState() {
       // Destroy old processor if it exists (track changed or force recreate)
       if (existing) {
         await existing.destroy();
-        setBlurProcessor(null);
+        if (blurProcessor() === existing) setBlurProcessor(null);
       }
+
+      if (room() !== r || !isLiveLocalTrack(camTrack)) return true;
 
       // Create and attach a new processor.
       const { BackgroundProcessor, ProcessorWrapper } = await import(
         '@livekit/track-processors'
       );
       if (!ProcessorWrapper.isSupported) return false;
+      if (room() !== r || !isLiveLocalTrack(camTrack)) return true;
 
       const processor = BackgroundProcessor(processorOptions);
-      await (camPub.track as LocalTrack).setProcessor(processor);
+      await camTrack.setProcessor(processor);
+      if (room() !== r || !isLiveLocalTrack(camTrack)) {
+        await processor.destroy();
+        return true;
+      }
       setBlurProcessor(processor);
       return true;
     } catch (e) {
+      if (room() !== r) return true;
       console.error('failed to attach background effect processor', e);
       return false;
     }
@@ -594,6 +685,11 @@ function createCallState() {
 
   function attachRoomListeners(r: Room) {
     r.on(RoomEvent.ConnectionStateChanged, (state: ConnectionState) => {
+      console.debug('[call] connection state changed', {
+        state,
+        room: store.activeChannelId,
+        call: store.activeCallId,
+      });
       setStore('connectionState', state);
     });
 
@@ -618,10 +714,18 @@ function createCallState() {
       }
       bumpTrackVersion();
     });
-    r.on(RoomEvent.Disconnected, resetState);
+    r.on(RoomEvent.Disconnected, (reason?: unknown) => {
+      console.warn('[call] room disconnected', {
+        reason,
+        room: store.activeChannelId,
+        call: store.activeCallId,
+      });
+      resetState();
+    });
   }
 
   function destroyRoom() {
+    cancelPendingMediaSetup();
     const krisp = krispFilter();
     if (krisp) {
       krisp.destroy().catch((e) => {
@@ -797,23 +901,39 @@ function createCallState() {
   async function connect(tokenResponse: CallTokenResponse) {
     const existingRoom = room();
 
-    // If switching to a different channel, tear down the old room entirely
-    if (existingRoom && store.activeChannelId !== tokenResponse.channelId) {
+    if (
+      existingRoom &&
+      store.activeChannelId === tokenResponse.channelId &&
+      isActiveCallConnectionState(store.connectionState)
+    ) {
+      // A duplicate join can arrive while LiveKit is already connected or
+      // recovering its signaling connection. Do not call room.connect() again;
+      // that replaces the SDK's reconnection attempt and can wedge the peer
+      // connection until the user manually leaves/rejoins.
+      console.debug('[call] ignoring duplicate connect for active room', {
+        channelId: tokenResponse.channelId,
+        state: store.connectionState,
+      });
+      setStore('activeCallId', tokenResponse.callId);
+      setStore('optimisticJoinChannelId', null);
+      setStore('joinError', null);
+      return;
+    }
+
+    // If switching channels, or if a previous disconnected room instance is
+    // still hanging around after a failed reconnect, tear it down and build a
+    // fresh Room. This gives retry/auto-rejoin the same clean slate as a manual
+    // leave + join.
+    if (existingRoom) {
       await existingRoom.disconnect();
       destroyRoom();
     }
 
-    let targetRoom: Room;
-    if (room()) {
-      // Reuse existing room instance (same channel, e.g. leave then rejoin)
-      targetRoom = room()!;
-    } else {
-      targetRoom = new Room({
-        audioCaptureDefaults: currentMicrophoneCaptureOptions(),
-      });
-      attachRoomListeners(targetRoom);
-      setRoom(targetRoom);
-    }
+    const targetRoom = new Room({
+      audioCaptureDefaults: currentMicrophoneCaptureOptions(),
+    });
+    attachRoomListeners(targetRoom);
+    setRoom(targetRoom);
 
     setStore('activeChannelId', tokenResponse.channelId);
     setStore('activeCallId', tokenResponse.callId);
@@ -844,13 +964,14 @@ function createCallState() {
     // join mutation timeout can fire after the user is already in the room and
     // run failed-join cleanup, which calls DELETE /call/:channel and kicks the
     // user out. Run the non-critical setup in the background instead.
-    void finishLocalMediaSetup(targetRoom).catch((e) => {
+    const setupVersion = nextMediaSetupVersion();
+    void finishLocalMediaSetup(targetRoom, setupVersion).catch((e) => {
       console.error('failed to finish local call media setup', e);
     });
   }
 
-  async function finishLocalMediaSetup(targetRoom: Room) {
-    if (room() !== targetRoom) return;
+  async function finishLocalMediaSetup(targetRoom: Room, setupVersion: number) {
+    if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
 
     // Enable microphone by default.
     try {
@@ -861,7 +982,7 @@ function createCallState() {
     } catch (e) {
       console.error('failed to enable microphone', e);
     }
-    if (room() !== targetRoom) return;
+    if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
     if (store.isAudioMuted) {
       // The user muted while the initial enable was in flight; honor their
       // latest intent instead of letting background setup re-open the mic.
@@ -875,17 +996,18 @@ function createCallState() {
       // ensureNoiseSuppressionOnMicTrack is a no-op when the user's pref is off.
       await ensureNoiseSuppressionOnMicTrack(targetRoom);
     }
-    if (room() !== targetRoom) return;
+    if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
 
     // Enumerate available devices and track active ones.
     await enumerateDevices();
-    if (room() !== targetRoom) return;
+    if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
     trackActiveDevices(targetRoom);
   }
 
   async function disconnect() {
     const r = room();
     if (r) {
+      cancelPendingMediaSetup();
       try {
         await r.disconnect();
       } finally {
@@ -1045,6 +1167,7 @@ function createCallState() {
   const handleBeforeUnload = () => {
     const r = room();
     if (r) {
+      cancelPendingMediaSetup();
       r.disconnect();
     }
   };
@@ -1056,6 +1179,7 @@ function createCallState() {
       'devicechange',
       handleDeviceChange
     );
+    cancelPendingMediaSetup();
     const r = room();
     if (r) {
       r.disconnect();
@@ -1070,7 +1194,7 @@ function createCallState() {
     room,
     connectionState: () => store.connectionState,
     isInCall: () =>
-      store.connectionState === ConnectionState.Connected ||
+      isActiveCallConnectionState(store.connectionState) ||
       store.optimisticJoinChannelId !== null,
     activeChannelId: () =>
       store.activeChannelId ?? store.optimisticJoinChannelId,
@@ -1096,7 +1220,11 @@ function createCallState() {
     activeAudioInputDeviceId: () => store.activeAudioInputDeviceId,
     activeAudioOutputDeviceId: () => store.activeAudioOutputDeviceId,
     activeVideoInputDeviceId: () => store.activeVideoInputDeviceId,
-    isConnecting: () => store.optimisticJoinChannelId !== null,
+    isConnecting: () =>
+      store.optimisticJoinChannelId !== null ||
+      store.connectionState === ConnectionState.Connecting ||
+      store.connectionState === ConnectionState.Reconnecting ||
+      store.connectionState === ConnectionState.SignalReconnecting,
 
     // mutations
     connect,

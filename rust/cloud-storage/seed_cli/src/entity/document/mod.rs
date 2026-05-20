@@ -167,10 +167,19 @@ async fn seed(args: SeedArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
         .as_deref()
         .map(std::path::PathBuf::from)
         .unwrap_or(default_path);
-    seed_from_file(args, ctx, &path).await
+    seed_from_file_ref(&args, &ctx, &path).await
 }
 
+#[cfg(test)]
 async fn seed_from_file(args: SeedArgs, ctx: SeedCliContext, path: &Path) -> anyhow::Result<()> {
+    seed_from_file_ref(&args, &ctx, path).await
+}
+
+pub(crate) async fn seed_from_file_ref(
+    args: &SeedArgs,
+    ctx: &SeedCliContext,
+    path: &Path,
+) -> anyhow::Result<()> {
     tracing::info!("seeding documents");
 
     let content = std::fs::read_to_string(path)
@@ -185,13 +194,18 @@ async fn seed_from_file(args: SeedArgs, ctx: SeedCliContext, path: &Path) -> any
 
     println!("Found {} documents to seed", rows.len());
 
-    let owner = MacroUserIdStr::parse_from_str(args.user_id.leak()).context("valid owner id")?;
+    let owner_user_id = args.user_id.clone();
+    let owner = MacroUserIdStr::parse_from_str(owner_user_id.leak()).context("valid owner id")?;
 
     let mut created = 0;
     let mut failed = 0;
+    let files_dir = path
+        .parent()
+        .context("document seed json should have a parent directory")?
+        .join("files");
 
     for row in rows {
-        let file_path = format!("seed/documents/files/{}", row.file_name);
+        let file_path = files_dir.join(&row.file_name);
         let file_type = row
             .file_name
             .split('.')
@@ -238,7 +252,7 @@ async fn seed_from_file(args: SeedArgs, ctx: SeedCliContext, path: &Path) -> any
                     file_type.as_str()
                 );
 
-                match ctx.s3.upload_file(&key, &file_path).await {
+                match ctx.s3.upload_file(&key, &file_path.to_string_lossy()).await {
                     Ok(()) => {
                         println!("Seeded document '{}' with id {}", row.document_name, doc_id);
                         created += 1;

@@ -27,9 +27,10 @@ use crate::domain::{
         CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
         PatchTeamPlanRequest, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
         RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
-        TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+        TeamCheckoutError, TeamCheckoutSessionRequest, TeamError, TeamInvite, TeamInviteDetails,
+        TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
     },
-    team_repo::{TeamChannelsRepository, TeamRepository, TeamService},
+    team_repo::{TeamChannelsRepository, TeamMembersService, TeamRepository, TeamService},
 };
 
 /// Implementation of the TeamService using a TeamRepository
@@ -207,6 +208,29 @@ impl GetTeamSubscriptionError {
             Self::Customer(e) => TeamError::StorageLayerError(e.into()),
             Self::Storage(e) => TeamError::StorageLayerError(e),
         }
+    }
+}
+
+impl<TR, CR, TCR, URPS, NI> TeamMembersService for TeamServiceImpl<TR, CR, TCR, URPS, NI>
+where
+    TR: TeamRepository,
+    CR: CustomerRepository,
+    TCR: TeamChannelsRepository,
+    URPS: UserRolesAndPermissionsService,
+    NI: NotificationIngress,
+{
+    #[tracing::instrument(skip(self), err)]
+    async fn list_team_members(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> Result<TeamMembers, TeamError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        let members = self.team_repository.get_team_by_id(&team_id).await?.members;
+        let invited = self.team_repository.get_team_invites(&team_id).await?;
+
+        Ok(TeamMembers { members, invited })
     }
 }
 
@@ -647,5 +671,50 @@ where
         }
 
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn create_checkout_session(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
+        req: &TeamCheckoutSessionRequest,
+    ) -> Result<String, TeamCheckoutError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        let team_plan = self.team_repository.get_team_plan(&team_id).await?;
+
+        if team_plan.is_some() {
+            return Err(TeamCheckoutError::TeamAlreadyHasPlanError);
+        }
+
+        let user_id = entity_access_receipt
+            .get_authenticated_user()
+            .map_err(TeamError::AccessError)?;
+
+        let has_trialed = self.team_repository.has_user_trialed(user_id).await?;
+
+        let stripe_customer_id: stripe::CustomerId =
+            match self.team_repository.get_stripe_customer_id(user_id).await? {
+                Some(customer_id) => customer_id,
+                None => return Err(TeamCheckoutError::MissingCustomerId),
+            };
+
+        // If the user has an active subscription id error out
+        if self
+            .customer_repository
+            .get_subscription_id_for_customer(&stripe_customer_id)
+            .await
+            .is_ok()
+        {
+            return Err(TeamCheckoutError::AlreadySubscribed);
+        }
+
+        let url = self
+            .customer_repository
+            .create_team_checkout_session(&team_id, stripe_customer_id, req, has_trialed)
+            .await?;
+
+        Ok(url)
     }
 }

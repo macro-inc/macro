@@ -1,5 +1,6 @@
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
+import { entityIdSelector } from '@core/dom-selectors';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { EntityData } from '@entity';
@@ -181,7 +182,7 @@ export const useSoupNavigationHotkeys = (
       `[data-split-id="${splitHandle.id}"]`
     );
     if (!splitEl) return undefined;
-    const entityEl = splitEl.querySelector(`[data-entity-id="${focusedId}"]`);
+    const entityEl = splitEl.querySelector(entityIdSelector(focusedId));
     if (!entityEl) return undefined;
     return entityEl.querySelector(
       'button[data-collapsible-toggle]'

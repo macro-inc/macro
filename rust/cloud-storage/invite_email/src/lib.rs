@@ -134,6 +134,9 @@ pub struct ChannelInviteMetadata {
     #[serde(default)]
     #[serde(alias = "channel_name")]
     pub channel_name: String,
+    /// Message content to show in the invite email, when the invite was triggered by a message.
+    #[serde(default)]
+    pub message_content: Option<String>,
     /// The sender's profile picture URL, if available.
     #[serde(default)]
     pub sender_profile_picture_url: Option<String>,

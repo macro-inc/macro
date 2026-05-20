@@ -28,7 +28,6 @@ axum = { workspace = true }
 chrono = { workspace = true }
 decode_jwt = { path = "../decode_jwt" }
 email_formatting = { path = "../email_formatting" }
-email_validator = { path = "../email_validator" }
 hmac = { workspace = true }
 http-body-util = { workspace = true }
 itertools = { workspace = true }
@@ -63,7 +62,6 @@ regex = { workspace = true }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-ses_client = { path = "../ses_client" }
 sha2 = { workspace = true }
 sns_client = { path = "../sns_client" }
 sqlx = { workspace = true }

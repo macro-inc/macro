@@ -60,7 +60,12 @@
             sqlxFilter = path: _type: builtins.match ".*\\.sqlx/.*\\.json$" path != null;
             pdfiumFilter = path: _type: builtins.match ".*pdfium-lib/.*\\.(so|dylib)$" path != null;
             assetFilter = path: _type: builtins.match ".*\\.(md|html|txt|json|canvas|sql)$" path != null;
-            srcFilter = path: type: (sqlxFilter path type) || (pdfiumFilter path type) || (assetFilter path type) || (craneLib.filterCargoSources path type);
+            srcFilter =
+              path: type:
+              (sqlxFilter path type)
+              || (pdfiumFilter path type)
+              || (assetFilter path type)
+              || (craneLib.filterCargoSources path type);
             cloudStorageSrc = pkgs.lib.cleanSourceWith {
               src = ./rust/cloud-storage;
               filter = srcFilter;
@@ -77,27 +82,26 @@
             cp -rT ${libreofficeBindingsSrc} $out/rs-libreoffice-bindings
           '';
 
-        commonArgs =
-          {
-            inherit src;
-            pname = "cloud-storage";
-            version = "0.1.0";
-            strictDeps = true;
-            buildInputs = libraries;
-            nativeBuildInputs = with pkgs; [ pkg-config ] ++ pkgs.lib.optionals isLinux [ mold ];
-            LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-            OPENSSL_NO_VENDOR = "1";
-            SQLX_OFFLINE = "true";
-            RUSTFLAGS = pkgs.lib.optionalString isLinux "-C link-arg=-fuse-ld=mold";
-            # Build deps + workspace + bins in dev profile so the test job (which runs
-            # `cargo nextest` outside the sandbox using the test profile, inheriting dev)
-            # can reuse the restored target/debug/ instead of recompiling all deps.
-            CARGO_PROFILE = "dev";
-          }
-          // pkgs.lib.optionalAttrs isLinux {
-            LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";
-            BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
-          };
+        commonArgs = {
+          inherit src;
+          pname = "cloud-storage";
+          version = "0.1.0";
+          strictDeps = true;
+          buildInputs = libraries;
+          nativeBuildInputs = with pkgs; [ pkg-config ] ++ pkgs.lib.optionals isLinux [ mold ];
+          LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+          OPENSSL_NO_VENDOR = "1";
+          SQLX_OFFLINE = "true";
+          RUSTFLAGS = pkgs.lib.optionalString isLinux "-C link-arg=-fuse-ld=mold";
+          # Build deps + workspace + bins in dev profile so the test job (which runs
+          # `cargo nextest` outside the sandbox using the test profile, inheriting dev)
+          # can reuse the restored target/debug/ instead of recompiling all deps.
+          CARGO_PROFILE = "dev";
+        }
+        // pkgs.lib.optionalAttrs isLinux {
+          LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";
+          BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
+        };
 
         # Pre-built third-party deps — Cachix caches this; hash is driven by Cargo.lock
         # (workspace member sources are stubbed by crane), so it survives most PRs.
@@ -198,7 +202,8 @@
               cargoArtifacts = deployCargoArtifacts;
               pname = "cloud-storage-${serviceName}-binaries";
               doCheck = false;
-              cargoExtraArgs = "--locked " + pkgs.lib.concatMapStringsSep " " (binary: "--bin ${binary}") binaries;
+              cargoExtraArgs =
+                "--locked " + pkgs.lib.concatMapStringsSep " " (binary: "--bin ${binary}") binaries;
               CARGO_PROFILE = "release";
               installPhaseCommand = ''
                 mkdir -p $out/bin
@@ -211,20 +216,47 @@
           );
 
         deployServiceBinaryPackages = {
-          deploy-service-binaries-agent-schedule-service = deployServiceBinaryPackage "agent-schedule-service" [ "service" ];
-          deploy-service-binaries-authentication-service = deployServiceBinaryPackage "authentication-service" [ "authentication_service" ];
-          deploy-service-binaries-connection-gateway = deployServiceBinaryPackage "connection-gateway" [ "connection_gateway_service" ];
-          deploy-service-binaries-contacts-service = deployServiceBinaryPackage "contacts-service" [ "contacts_service" ];
-          deploy-service-binaries-convert-service = deployServiceBinaryPackage "convert-service" [ "convert_service" ];
-          deploy-service-binaries-document-cognition-service = deployServiceBinaryPackage "document-cognition-service" [ "document_cognition_service" ];
-          deploy-service-binaries-document-storage-service = deployServiceBinaryPackage "document-storage-service" [ "document_storage_service" ];
-          deploy-service-binaries-email-service = deployServiceBinaryPackage "email-service" [ "email_service" "pubsub_workers" ];
-          deploy-service-binaries-image-proxy-service = deployServiceBinaryPackage "image-proxy-service" [ "image_proxy_service" ];
+          deploy-service-binaries-agent-schedule-service =
+            deployServiceBinaryPackage "agent-schedule-service"
+              [ "service" ];
+          deploy-service-binaries-authentication-service =
+            deployServiceBinaryPackage "authentication-service"
+              [ "authentication_service" ];
+          deploy-service-binaries-connection-gateway = deployServiceBinaryPackage "connection-gateway" [
+            "connection_gateway_service"
+          ];
+          deploy-service-binaries-contacts-service = deployServiceBinaryPackage "contacts-service" [
+            "contacts_service"
+          ];
+          deploy-service-binaries-convert-service = deployServiceBinaryPackage "convert-service" [
+            "convert_service"
+          ];
+          deploy-service-binaries-document-cognition-service =
+            deployServiceBinaryPackage "document-cognition-service"
+              [ "document_cognition_service" ];
+          deploy-service-binaries-document-storage-service =
+            deployServiceBinaryPackage "document-storage-service"
+              [ "document_storage_service" ];
+          deploy-service-binaries-email-service = deployServiceBinaryPackage "email-service" [
+            "email_service"
+            "pubsub_workers"
+          ];
+          deploy-service-binaries-image-proxy-service = deployServiceBinaryPackage "image-proxy-service" [
+            "image_proxy_service"
+          ];
           deploy-service-binaries-mcp-server = deployServiceBinaryPackage "mcp-server" [ "mcp_service" ];
-          deploy-service-binaries-notification-service = deployServiceBinaryPackage "notification-service" [ "notification_service" ];
-          deploy-service-binaries-search-processing-service = deployServiceBinaryPackage "search-processing-service" [ "search_processing_service" ];
-          deploy-service-binaries-static-file-service = deployServiceBinaryPackage "static-file-service" [ "static_file_service" ];
-          deploy-service-binaries-unfurl-service = deployServiceBinaryPackage "unfurl-service" [ "unfurl_service" ];
+          deploy-service-binaries-notification-service = deployServiceBinaryPackage "notification-service" [
+            "notification_service"
+          ];
+          deploy-service-binaries-search-processing-service =
+            deployServiceBinaryPackage "search-processing-service"
+              [ "search_processing_service" ];
+          deploy-service-binaries-static-file-service = deployServiceBinaryPackage "static-file-service" [
+            "static_file_service"
+          ];
+          deploy-service-binaries-unfurl-service = deployServiceBinaryPackage "unfurl-service" [
+            "unfurl_service"
+          ];
         };
 
         shellTools =
@@ -394,8 +426,7 @@
             let
               openApiFiles = pkgs.lib.cleanSourceWith {
                 src = ./js/app/packages/service-clients;
-                filter = path: type:
-                  type == "directory" || pkgs.lib.hasSuffix "openapi.json" (baseNameOf path);
+                filter = path: type: type == "directory" || pkgs.lib.hasSuffix "openapi.json" (baseNameOf path);
               };
               crateToDir = {
                 document_storage_service = "service-storage";
@@ -432,9 +463,15 @@
         };
 
         packages = {
-          inherit cargoArtifacts workspaceArtifacts openApiBins nextestArchive;
+          inherit
+            cargoArtifacts
+            workspaceArtifacts
+            openApiBins
+            nextestArchive
+            ;
           default = cargoArtifacts;
-        } // deployServiceBinaryPackages;
+        }
+        // deployServiceBinaryPackages;
 
         devShells = {
           default = pkgs.mkShell (

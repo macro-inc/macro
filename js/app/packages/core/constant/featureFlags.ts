@@ -330,6 +330,8 @@ export function ENABLE_CALLS(): boolean {
   return analytics.posthog.isFeatureEnabled('enable-calls') ?? false;
 }
 
+export const ENABLE_NEW_ONBOARDING_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+
 export const ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE = DEV_MODE_ENV
   ? true
   : undefined;

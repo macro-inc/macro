@@ -278,27 +278,6 @@ pub trait CallRepository: Send + Sync + 'static {
         call_record_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<(Uuid, Uuid)>, Self::Err>> + Send;
 
-    /// Distinct `(diarized_speaker_id, voice_id)` pairs from a call's
-    /// archived transcripts. Used by the post-archive voice matcher; rows
-    /// with NULL `diarized_speaker_id` or NULL `voice_id` are skipped.
-    fn get_distinct_voice_speakers_for_call_record(
-        &self,
-        call_record_id: &Uuid,
-    ) -> impl Future<Output = Result<Vec<(String, Uuid)>, Self::Err>> + Send;
-
-    /// Apply auto-matched speaker assignments to `call_record_transcripts`
-    /// rows, only where `custom_speaker IS NULL` (so manual overrides are
-    /// never clobbered) and the matched macro user shares a team with at least
-    /// one call participant. Each tuple is `(diarized_speaker_id,
-    /// macro_user_id)`; the canonical `User.id` is resolved inline via the
-    /// `User` row whose `macro_user_id` matches and stored in
-    /// `custom_speaker`. Empty `assignments` is a no-op.
-    fn patch_call_transcript_speakers_from_voice_match(
-        &self,
-        call_record_id: &Uuid,
-        assignments: &[(String, Uuid)],
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
     /// Persist the AI-generated summary text on the archived call record.
     ///
     /// Tolerates unknown `call_id` (no row matches): the summarization flow
@@ -671,9 +650,8 @@ pub trait VoiceRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
     /// Same as [`Self::find_nearest_user`] but looks the embedding up by
-    /// `voice_id` in the `voice` table first. Used by the call-finished
-    /// matcher, which already has `voice_id`s on the transcript rows and
-    /// shouldn't need to re-load the embeddings client-side.
+    /// `voice_id` in the `voice` table first, so callers that already have a
+    /// persisted voice id don't need to re-load embeddings client-side.
     fn find_nearest_user_for_voice(
         &self,
         voice_id: &Uuid,

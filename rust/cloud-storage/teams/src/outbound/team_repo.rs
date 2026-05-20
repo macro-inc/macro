@@ -3,9 +3,10 @@ use crate::domain::{
     model::{
         AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
         RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole,
+        TeamWithMembers,
     },
-    team_repo::TeamRepository,
+    team_repo::{TeamMembersService, TeamRepository},
 };
 use macro_user_id::{
     cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
@@ -163,6 +164,24 @@ impl From<sqlx::Error> for RemoveTeamInviteError {
     }
 }
 
+impl TeamMembersService for TeamRepositoryImpl {
+    #[tracing::instrument(skip(self), err)]
+    async fn list_team_members(
+        &self,
+        entity_access_receipt: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::MemberTeamRole,
+        >,
+    ) -> Result<TeamMembers, TeamError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        let members = self.get_team_by_id(&team_id).await?.members;
+        let invited = self.get_team_invites(&team_id).await?;
+
+        Ok(TeamMembers { members, invited })
+    }
+}
+
 impl TeamRepository for TeamRepositoryImpl {
     #[tracing::instrument(skip(self), err)]
     async fn get_stripe_customer_id(
@@ -192,6 +211,23 @@ impl TeamRepository for TeamRepositoryImpl {
         } else {
             Ok(None)
         }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn has_user_trialed(&self, user_id: &MacroUserIdStr<'_>) -> Result<bool, TeamError> {
+        let has_trialed = sqlx::query_scalar::<_, bool>(
+            r#"
+            SELECT mu.has_trialed
+            FROM "User" u
+            INNER JOIN macro_user mu ON mu.id = u.macro_user_id
+            WHERE u.id = $1
+            "#,
+        )
+        .bind(user_id.as_ref())
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(has_trialed)
     }
 
     #[tracing::instrument(skip(self), err)]

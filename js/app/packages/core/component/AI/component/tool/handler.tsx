@@ -9,6 +9,7 @@ import { createDocumentHandler } from './CreateDocument';
 import { getThreadHandler } from './GetThread';
 import { listCallRecordsHandler } from './ListCallRecords';
 import { listEntitiesHandler } from './ListEntities';
+import { listTeamMembersHandler } from './ListTeamMembers';
 import {
   listNotificationsHandler,
   markNotificationsDoneHandler,
@@ -48,6 +49,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ListCallRecords: listCallRecordsHandler,
   ListEntities: listEntitiesHandler,
   ListNotifications: listNotificationsHandler,
+  ListTeamMembers: listTeamMembersHandler,
   MarkNotificationsDone: markNotificationsDoneHandler,
   MarkNotificationsSeen: markNotificationsSeenHandler,
   bash_code_execution: bashCodeExecutionHandler,
