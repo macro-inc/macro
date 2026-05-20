@@ -1351,6 +1351,60 @@
           }
         }
       }
+    },
+    "/structured-completion": {
+      "post": {
+        "tags": ["structured_completion"],
+        "operationId": "structured_completion",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StructuredCompletionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Structured completion result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "Payment required"
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2284,6 +2338,19 @@
           "reference": {
             "$ref": "#/components/schemas/DocumentReference"
           }
+        }
+      },
+      "DynamicSchema": {
+        "type": "object",
+        "required": ["schema", "name"],
+        "properties": {
+          "description": {
+            "type": ["string", "null"]
+          },
+          "name": {
+            "type": "string"
+          },
+          "schema": {}
         }
       },
       "Entity": {
@@ -3364,6 +3431,43 @@
           "id": {
             "type": "string"
           }
+        }
+      },
+      "StructuredCompletionError": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "StructuredCompletionRequest": {
+        "type": "object",
+        "required": ["prompt", "model", "output_schema"],
+        "properties": {
+          "additional_instructions": {
+            "type": ["string", "null"]
+          },
+          "model": {
+            "$ref": "#/components/schemas/Model"
+          },
+          "output_schema": {
+            "$ref": "#/components/schemas/DynamicSchema"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "toolset": {
+            "$ref": "#/components/schemas/ToolSet"
+          }
+        }
+      },
+      "StructuredCompletionResponse": {
+        "type": "object",
+        "required": ["result"],
+        "properties": {
+          "result": {}
         }
       },
       "ToolSchema": {
