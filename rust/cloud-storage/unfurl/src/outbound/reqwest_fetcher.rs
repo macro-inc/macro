@@ -1,6 +1,7 @@
 //! Reqwest + scraper-backed adapter implementing [`UnfurlFetcher`].
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use futures::StreamExt;
 use scraper::{Html, Selector};
@@ -11,6 +12,7 @@ use super::http_safety::{
     FetchError, assert_not_internal, build_error_chain, check_content_length, content_type_of,
     redirect_target, send_request, validate_url,
 };
+use super::resolver::PrivateIpFilteringResolver;
 use crate::domain::ports::UnfurlFetcher;
 
 /// 1 MB cap on HTML response size for meta-tag extraction.
@@ -29,12 +31,16 @@ const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
 /// Concrete [`UnfurlFetcher`] backed by a `reqwest::Client` and the
 /// `scraper` HTML parser.
 ///
-/// The internal reqwest client has redirects **disabled** at the library
-/// level so the fetcher can run [`assert_not_internal`] on every hop. The
-/// loop in [`extract_meta_tags`] follows up to [`MAX_REDIRECTS`] redirects
-/// manually, re-validating each target before fetching it — this closes
-/// the SSRF vector where a `302` could point at an internal address that
-/// the preflight on the original URL never saw.
+/// SSRF mitigations baked into the client:
+///
+/// 1. **Redirects disabled** at the reqwest level so the manual loop in
+///    [`extract_meta_tags`] can run [`assert_not_internal`] on every hop
+///    and follows up to [`MAX_REDIRECTS`] redirects itself.
+/// 2. **Private-IP-filtering DNS resolver** ([`PrivateIpFilteringResolver`])
+///    enforces the same private-IP check at the moment reqwest actually
+///    connects, closing the DNS-rebinding TOCTOU window where the preflight
+///    and the connect attempt could see different answers from the
+///    authoritative DNS server.
 pub struct ReqwestUnfurlFetcher {
     client: reqwest::Client,
 }
@@ -42,13 +48,15 @@ pub struct ReqwestUnfurlFetcher {
 impl ReqwestUnfurlFetcher {
     /// Build a fetcher with a dedicated HTTP client.
     ///
-    /// Owning the client construction keeps the SSRF mitigation (no
-    /// reqwest-level redirect-follow + per-hop internal-IP preflight)
-    /// inseparable from the fetcher's type — callers can't accidentally
-    /// hand in a redirect-following client.
+    /// Owning the client construction keeps the SSRF mitigation
+    /// (no reqwest-level redirect-follow + per-hop internal-IP preflight +
+    /// rebinding-safe DNS resolver) inseparable from the fetcher's type —
+    /// callers can't accidentally hand in a redirect-following or
+    /// unfiltered client.
     pub fn new() -> anyhow::Result<Self> {
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
+            .dns_resolver(Arc::new(PrivateIpFilteringResolver))
             .timeout(REQUEST_TIMEOUT)
             .connect_timeout(CONNECT_TIMEOUT)
             .build()?;

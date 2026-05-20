@@ -102,7 +102,12 @@ pub(super) fn is_private_ip(ip: &IpAddr) -> bool {
             if let Some(mapped_v4) = v6.to_ipv4_mapped() {
                 return is_private_ip(&IpAddr::V4(mapped_v4));
             }
-            v6.is_loopback() || v6.is_unspecified()
+            v6.is_loopback()
+                || v6.is_unspecified()
+                // fc00::/7 — Unique Local Addresses (IPv6 equivalent of RFC1918).
+                || v6.is_unique_local()
+                // fe80::/10 — Link-local; reachable on the local segment only.
+                || v6.is_unicast_link_local()
         }
     }
 }
@@ -200,4 +205,80 @@ pub(super) fn build_error_chain(err: &reqwest::Error) -> String {
         source = cause.source();
     }
     chain
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
+    use super::*;
+
+    #[test]
+    fn ipv6_loopback_is_blocked() {
+        assert!(is_private_ip(&IpAddr::V6(Ipv6Addr::LOCALHOST)));
+    }
+
+    #[test]
+    fn ipv6_unspecified_is_blocked() {
+        assert!(is_private_ip(&IpAddr::V6(Ipv6Addr::UNSPECIFIED)));
+    }
+
+    #[test]
+    fn ipv6_unique_local_is_blocked() {
+        // fc00::/7 — IPv6 equivalent of RFC1918.
+        assert!(is_private_ip(&IpAddr::V6(
+            "fc00::1".parse::<Ipv6Addr>().unwrap()
+        )));
+        assert!(is_private_ip(&IpAddr::V6(
+            "fd12:3456:789a::1".parse::<Ipv6Addr>().unwrap()
+        )));
+    }
+
+    #[test]
+    fn ipv6_link_local_is_blocked() {
+        // fe80::/10 — only reachable on the local link.
+        assert!(is_private_ip(&IpAddr::V6(
+            "fe80::1".parse::<Ipv6Addr>().unwrap()
+        )));
+        assert!(is_private_ip(&IpAddr::V6(
+            "febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff"
+                .parse::<Ipv6Addr>()
+                .unwrap()
+        )));
+    }
+
+    #[test]
+    fn ipv6_mapped_v4_loopback_is_blocked() {
+        // ::ffff:127.0.0.1 should be treated as 127.0.0.1.
+        assert!(is_private_ip(&IpAddr::V6(
+            "::ffff:127.0.0.1".parse::<Ipv6Addr>().unwrap()
+        )));
+        // ::ffff:10.0.0.1 should be treated as RFC1918 10.0.0.0/8.
+        assert!(is_private_ip(&IpAddr::V6(
+            "::ffff:10.0.0.1".parse::<Ipv6Addr>().unwrap()
+        )));
+    }
+
+    #[test]
+    fn ipv6_public_is_allowed() {
+        // 2001:4860:4860::8888 — Google public DNS.
+        assert!(!is_private_ip(&IpAddr::V6(
+            "2001:4860:4860::8888".parse::<Ipv6Addr>().unwrap()
+        )));
+    }
+
+    #[test]
+    fn ipv4_public_is_allowed() {
+        assert!(!is_private_ip(&IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))));
+    }
+
+    #[test]
+    fn ipv4_private_ranges_blocked() {
+        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1))));
+        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1))));
+        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(172, 16, 0, 1))));
+        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::LOCALHOST)));
+        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::UNSPECIFIED)));
+        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::BROADCAST)));
+    }
 }
