@@ -26,14 +26,14 @@ export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> &
 
 export type ButtonSize = 'sm' | 'icon-sm' | 'md' | 'icon-md' | 'lg' | 'icon-lg';
 
-export type ButtonVariant = 'ghost' | 'base' | 'active' | 'danger' | 'accent-reverse';
+export type ButtonVariant = 'ghost' | 'base' | 'active' | 'danger' | 'cta';
 
 const variantStyles: Record<ButtonVariant, string> = {
   danger:           'bg-transparent text-failure    border border-failure/50 not-disabled:hover:bg-failure/10 not-disabled:active:bg-failure/20                   disabled:opacity-30 ',
   base:             'bg-transparent text-ink-muted  border border-edge-muted not-disabled:hover:bg-hover      not-disabled:hover:text-ink        active:bg-active disabled:opacity-30 ',
   active:           'bg-accent-bg   text-accent     border border-accent                                                                                      disabled:opacity-30 ',
   ghost:            'bg-transparent text-ink-muted                           not-disabled:hover:bg-hover      not-disabled:hover:text-ink        active:bg-active disabled:opacity-30 ',
-  'accent-reverse': 'bg-accent      text-surface    border border-transparent not-disabled:hover:bg-accent/90                                  active:bg-accent/80 disabled:opacity-30 ',
+  'cta': 'bg-accent      text-surface    border border-transparent not-disabled:hover:bg-accent/90                                  active:bg-accent/80 disabled:opacity-30 ',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -76,7 +76,7 @@ export const Button = (props: ButtonProps) => {
 
   const variantStyle = (): JSX.CSSProperties | string | undefined => {
     const variant = local.variant ?? group?.variant;
-    if (variant === 'accent-reverse') {
+    if (variant === 'cta') {
       return {
         '--color-edge': 'var(--color-surface)',
         '--color-edge-muted': 'oklch(from var(--color-surface) l c h / 0.5)',

@@ -25,7 +25,7 @@ export function SendButton(props: SendButtonProps) {
   return (
     <Button
       depth={5}
-      variant="accent-reverse"
+      variant="cta"
       size="icon-sm"
       draggable={false}
       aria-label={local['aria-label'] ?? 'Send'}
