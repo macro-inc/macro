@@ -148,11 +148,19 @@ function ChannelGroupItem(props: {
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? false;
 
-  const navigateToLatestNotification = (newSplit = false) => {
+  const navigateToLatestNotification = async (newSplit = false) => {
     const manager = globalSplitManager();
     if (!manager) return;
     const notification = latestNotification();
-    openNotification(notification, manager, newSplit);
+    try {
+      await openNotification(notification, manager, newSplit);
+      await notificationSource.markAsRead(notification);
+    } catch (error) {
+      console.error(
+        'Failed to open unread notification from sidebar widget:',
+        error
+      );
+    }
   };
 
   const openInCurrentSplit = () => {
@@ -188,12 +196,15 @@ function ChannelGroupItem(props: {
   const ButtonContent = () => (
     <Button
       class={cn(
-        'flex items-center cursor-default rounded-sm not-disabled:hover:bg-ink/3',
-        isSlim() ? 'justify-center size-8' : 'justify-start gap-3 size-full h-8'
+        'flex items-center cursor-default rounded-md text-ink-extra-muted not-disabled:hover:bg-ink/3',
+        isSlim()
+          ? 'justify-center size-8'
+          : 'justify-start gap-2 w-full h-8 py-1'
       )}
       draggable={false}
       variant="ghost"
       size="sm"
+      data-unread-entity-id={props.group.entityId}
       classList={{
         'opacity-0 -translate-y-2': !isVisible(),
         'opacity-100 translate-y-0': isVisible(),
@@ -222,12 +233,10 @@ function ChannelGroupItem(props: {
       </div>
 
       <Show when={!isSlim()}>
-        <span class="text-sm font-medium text-ink truncate">
-          {displayName()}
-        </span>
+        <span class="text-sm font-medium truncate">{displayName()}</span>
 
         <Show when={count() > 0}>
-          <span class="shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-accent/10 text-accent rounded ml-auto">
+          <span class="shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-ink/6 text-ink-muted rounded-md ml-auto">
             {count()}
           </span>
         </Show>

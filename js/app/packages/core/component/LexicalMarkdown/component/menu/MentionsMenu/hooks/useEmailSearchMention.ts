@@ -8,12 +8,12 @@ import {
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
 
-export type UseEmailSearchMentionOptions = {
+type UseEmailSearchMentionOptions = {
   searchTerm: Accessor<string>;
   enabled?: Accessor<boolean | undefined>;
 };
 
-export type UseEmailSearchMentionResult = {
+type UseEmailSearchMentionResult = {
   emails: Accessor<EntityItem[]>;
   emailSearchQuery: ReturnType<typeof useSearchSoupQuery>;
 };

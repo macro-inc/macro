@@ -4,10 +4,9 @@ import { compileToAst, type TargetAstMap } from './compile';
 import { addFieldValues, removeFieldValues } from './field-values';
 import type { FieldFilters, Query, QueryState } from './types';
 
-export type { TargetAstMap } from './compile';
-export type { EmailView, FieldFilters, Query, QueryState } from './types';
+export type { Query } from './types';
 
-export type QueryStoreOptions = {
+type QueryStoreOptions = {
   readonly initial?: Query;
 };
 

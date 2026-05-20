@@ -1,6 +1,7 @@
 import { createSignal, For, Index, createMemo, type JSX } from 'solid-js';
 import { IS_MAC } from '@core/constant/isMac';
-import { Hotkey } from '@ui';
+import { enableScreencastHotkeys, setEnableScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
+import { Hotkey, ToggleSwitch } from '@ui';
 import { Panel } from '@ui';
 import { cn } from '@ui';
 
@@ -285,6 +286,13 @@ function ShortcutsContent() {
     <>
       <Panel.Header class="px-6">
         <div class="text-sm font-semibold">Keyboard Shortcuts</div>
+        <div class="flex items-center gap-2 ml-auto">
+          <span class="text-sm text-ink-muted">Screencast Keys</span>
+          <ToggleSwitch
+            onChange={setEnableScreencastHotkeys}
+            checked={enableScreencastHotkeys()}
+          />
+        </div>
       </Panel.Header>
 
       <Panel.Toolbar class="h-full px-6 py-2">

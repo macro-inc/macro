@@ -46,7 +46,7 @@ export function scrollToMessage(
  * @param messagesContainer - The DOM container holding the message elements
  * @param behavior - Scroll behavior ('smooth' | 'instant' | 'auto')
  */
-export function scrollToLastMessage(
+function _scrollToLastMessage(
   messagesContainer: HTMLDivElement,
   behavior: ScrollBehavior | 'instant' = 'instant'
 ): void {
@@ -66,7 +66,7 @@ export function scrollToLastMessage(
  * @param messages - Array of messages in the current thread
  * @returns The db_id of the last message, or undefined if no messages
  */
-export function getLastMessageId(messages: ApiMessage[]): string | undefined {
+function _getLastMessageId(messages: ApiMessage[]): string | undefined {
   const lastMessage = messages[messages.length - 1];
   return lastMessage?.db_id?.toString();
 }

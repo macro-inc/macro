@@ -2,13 +2,13 @@ import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter
 import type { Query } from '@app/component/next-soup/filters/filter-store/types';
 import type { SplitId } from '@app/component/split-layout/layoutManager';
 
-export type SearchSplitOverrides = {
+type SearchSplitOverrides = {
   query: string;
   filters: Query;
   clientFilters: SetPredicatesInput<string>;
 };
 
-export type SearchSplitController = {
+type SearchSplitController = {
   applyOverrides: (overrides: SearchSplitOverrides) => void;
   focus: () => void;
 };

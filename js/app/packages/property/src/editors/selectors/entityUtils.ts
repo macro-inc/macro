@@ -34,7 +34,7 @@ export type EntityTypeItemMap = {
 /**
  * Maps EntityType to quickAccess buckets
  */
-export function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
+function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
   const buckets = match(entityType)
     .with('USER', () => ['person'] as const)
     .with('CHANNEL', () => ['channel', 'dm'] as const)
@@ -91,7 +91,7 @@ export function quickAccessItemToEntity(item: QuickAccessItem): CombinedEntity {
 }
 
 /** Maps an EntityData to a CombinedEntity */
-export function entityDataToEntity(data: EntityData): CombinedEntity {
+function entityDataToEntity(data: EntityData): CombinedEntity {
   return { kind: 'entity', id: data.id, data };
 }
 

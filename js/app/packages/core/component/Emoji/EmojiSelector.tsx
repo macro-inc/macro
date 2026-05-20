@@ -12,7 +12,7 @@ import {
 } from 'solid-js';
 import { type SimpleEmoji, useEmojiData } from './emojis';
 
-export function renderEmoji(emoji: string, size?: string): JSX.Element {
+function renderEmoji(emoji: string, size?: string): JSX.Element {
   return (
     <p
       class={`emoji flex items-center justify-center`}
@@ -27,21 +27,13 @@ export function renderEmoji(emoji: string, size?: string): JSX.Element {
   );
 }
 
-export type EmojiEventHandler<T extends Event> = (
-  emoji: string,
-  event: T & {
-    currentTarget: HTMLButtonElement;
-    target: Element;
-  }
-) => void;
-
-export interface EmojiPickerProps {
+interface EmojiPickerProps {
   nameFilter?: string;
   onEmojiClick: (emoji: SimpleEmoji) => void;
   columns?: number;
 }
 
-export interface EmojiOptionProps {
+interface EmojiOptionProps {
   emoji: SimpleEmoji;
   onEmojiClick: (emoji: SimpleEmoji) => void;
   isSelected: boolean;

@@ -43,15 +43,15 @@ type WithChatId = { chat_id: string };
 type WithName = { name: string };
 type WithProjectId = { project_id: string };
 
-export function dcsFetch(
+function dcsFetch(
   url: string,
   init?: SafeFetchInit
 ): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
-export function dcsFetch<T extends ObjectLike>(
+function dcsFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
 ): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
-export function dcsFetch<T extends ObjectLike = never>(
+function dcsFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
@@ -59,7 +59,7 @@ export function dcsFetch<T extends ObjectLike = never>(
   | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${dcsHost}${url}`, init);
 }
-export type Success = { success: boolean };
+type Success = { success: boolean };
 
 type IdMappingResponse = { target_id: string | null };
 

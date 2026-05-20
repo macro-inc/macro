@@ -7,12 +7,12 @@ import { createFreshSearch } from '@core/util/freshSort';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
 
-export type UseEntityMentionOptions = {
+type UseEntityMentionOptions = {
   searchTerm: Accessor<string>;
   buckets: EntityBucket[];
 };
 
-export type UseEntityMentionResult = {
+type UseEntityMentionResult = {
   searchedEntities: Accessor<EntityItem[]>;
   allEntities: Accessor<EntityItem[]>;
 };
@@ -50,7 +50,7 @@ export function useEntityMention(
   };
 }
 
-export type UseEntityMentionFromListOptions = {
+type UseEntityMentionFromListOptions = {
   items: Accessor<EntityItem[]>;
   searchTerm: Accessor<string>;
   buckets: EntityBucket[];

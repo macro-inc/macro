@@ -10,7 +10,7 @@ import {
 } from '../predicates';
 import { config, isAgent, isEmail, isTask } from './base';
 
-export const documentFilter = config({
+const documentFilter = config({
   id: 'document',
   group: 'entity-type',
   predicate: documentPredicate,
@@ -20,49 +20,49 @@ export const documentFilter = config({
   },
 });
 
-export const agentFilter = config({
+const agentFilter = config({
   id: 'agent',
   group: 'entity-type',
   predicate: agentPredicate,
   query: isAgent,
 });
 
-export const automationFilter = config({
+const automationFilter = config({
   id: 'automation',
   group: 'entity-type',
   predicate: automationPredicate,
   query: {}, // No server query - automations are merged client-side via additionalEntities
 });
 
-export const peopleFilter = config({
+const peopleFilter = config({
   id: 'people',
   group: 'entity-type',
   predicate: peoplePredicate,
   query: { include: { channelType: ['direct_message'] } },
 });
 
-export const teamsFilter = config({
+const teamsFilter = config({
   id: 'teams',
   group: 'entity-type',
   predicate: teamsPredicate,
   query: { exclude: { channelType: ['direct_message'] } },
 });
 
-export const taskFilter = config({
+const taskFilter = config({
   id: 'task',
   group: 'entity-type',
   predicate: taskPredicate,
   query: isTask,
 });
 
-export const emailFilter = config({
+const emailFilter = config({
   id: 'email',
   group: 'entity-type',
   predicate: emailPredicate,
   query: isEmail,
 });
 
-export const fileFilter = config({
+const fileFilter = config({
   id: 'file',
   group: 'entity-type',
   predicate: filePredicate,

@@ -4,7 +4,7 @@ import { NotificationRow } from '@entity';
 import type { NotificationSource } from '@notifications';
 import { createMemo, For, Show } from 'solid-js';
 
-export type NotificationsProps = {
+type NotificationsProps = {
   entity: EntityRef;
   notificationSource: NotificationSource;
 };

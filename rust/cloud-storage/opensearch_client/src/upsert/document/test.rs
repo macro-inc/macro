@@ -86,12 +86,9 @@ fn build_join_bulk_body(documents: &[UpsertDocumentArgs]) -> Vec<serde_json::Val
         let parent_id = doc.document_id.as_str();
         if seen_parents.insert(parent_id) {
             bulk.push(serde_json::json!({
-                "update": { "_id": parent_id, "routing": parent_id }
+                "index": { "_id": parent_id, "routing": parent_id }
             }));
-            bulk.push(serde_json::json!({
-                "doc": parent_doc_body(doc),
-                "doc_as_upsert": true,
-            }));
+            bulk.push(parent_doc_body(doc));
         }
         let child_id = format!("{}:{}", doc.document_id, doc.node_id);
         bulk.push(serde_json::json!({
@@ -109,24 +106,34 @@ fn join_bulk_body_dedupes_parent_within_batch() {
     // 2 parents × 2 ops + 3 children × 2 ops = 10 entries
     assert_eq!(body.len(), 10);
 
-    // First op is doc1's parent update.
-    assert_eq!(body[0]["update"]["_id"], "doc1");
-    assert_eq!(body[0]["update"]["routing"], "doc1");
-    assert_eq!(body[1]["doc_as_upsert"], true);
-    assert_eq!(body[1]["doc"]["entity_id"], "doc1");
+    // First op is doc1's parent index.
+    assert_eq!(body[0]["index"]["_id"], "doc1");
+    assert_eq!(body[0]["index"]["routing"], "doc1");
+    assert_eq!(body[1]["entity_id"], "doc1");
+    assert_eq!(body[1]["document_relation"], "document");
 
     // Then doc1's first child.
     assert_eq!(body[2]["index"]["_id"], "doc1:n1");
     assert_eq!(body[2]["index"]["routing"], "doc1");
     assert_eq!(body[3]["document_relation"]["parent"], "doc1");
 
-    // Doc1's second child — note no second parent update for doc1.
+    // Doc1's second child — note no second parent index for doc1.
     assert_eq!(body[4]["index"]["_id"], "doc1:n2");
     assert_eq!(body[4]["index"]["routing"], "doc1");
 
-    // Now doc2 — new parent so we get an upsert again.
-    assert_eq!(body[6]["update"]["_id"], "doc2");
-    assert_eq!(body[6]["update"]["routing"], "doc2");
+    // Now doc2 — new parent so we get an index op again.
+    assert_eq!(body[6]["index"]["_id"], "doc2");
+    assert_eq!(body[6]["index"]["routing"], "doc2");
     assert_eq!(body[8]["index"]["_id"], "doc2:n1");
     assert_eq!(body[8]["index"]["routing"], "doc2");
+}
+
+#[test]
+fn parent_body_omits_sub_type_when_none_so_index_clears_it() {
+    // The whole point of switching from update+doc_as_upsert to full index
+    // writes: when sub_type becomes None, the new parent body must NOT
+    // include sub_type, so an `index` op will drop any previously-stored
+    // value rather than leaving it stale.
+    let doc = parent_doc_body(&args("doc1", "n1"));
+    assert!(doc.get("sub_type").is_none());
 }

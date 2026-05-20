@@ -183,7 +183,7 @@ export function ListEntity(props: ListEntityProps) {
       }}
       ref={mergeRefs(props.ref, draggable)}
       class={cn(
-        'soup-list-entity rounded @container/entity w-[calc(100%-0.5rem)] mx-1 relative group/narrow flex flex-col py-0.5',
+        'soup-list-entity rounded-lg @container/entity w-[calc(100%-0.5rem)] mx-1 relative group/narrow flex flex-col py-0.5',
         {
           'min-h-10': !isMobile(),
           'bg-accent/8': props.checked,

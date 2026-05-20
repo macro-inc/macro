@@ -7,7 +7,7 @@ import IconSave from '@phosphor-icons/core/regular/floppy-disk-back.svg?componen
 import { createMemo, Show } from 'solid-js';
 import { Button, cn } from '@ui';
 
-export function ThemeTools(props: { class?: string }) {
+function ThemeTools(props: { class?: string }) {
   let themeName!: HTMLDivElement;
 
   const defaultThemeName = 'New Theme';

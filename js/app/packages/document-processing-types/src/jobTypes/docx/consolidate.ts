@@ -58,7 +58,7 @@ export function consolidate_unzip_response(
   return ConsolidateResponseDataUploadUnzippedSchema.safeParse(data).success;
 }
 
-export function consolidate_response_data_validate(
+function _consolidate_response_data_validate(
   data: unknown
 ): data is ConsolidateResponseData {
   return ConsolidateResponseData.safeParse(data).success;

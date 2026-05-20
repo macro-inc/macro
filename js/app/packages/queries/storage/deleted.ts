@@ -35,7 +35,7 @@ function transformItems(items: Item[]): Item[] {
   return items.map((item) => ({ ...item, name: itemToSafeName(item) }));
 }
 
-export function useDeletedItemsQuery() {
+function _useDeletedItemsQuery() {
   return useQuery(() => ({
     ...deletedItemsQueryOptions(),
     placeholderData: (prev) => prev,
@@ -46,7 +46,7 @@ export function useDeletedItemsQuery() {
 
 type FileTree = ReturnType<typeof buildFileTree>;
 
-export function useDeletedTreeQuery() {
+function _useDeletedTreeQuery() {
   return useQuery(() => ({
     ...deletedItemsQueryOptions(),
     placeholderData: (prev) => prev,

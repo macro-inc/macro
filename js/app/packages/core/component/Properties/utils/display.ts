@@ -84,7 +84,7 @@ export const getPropertyDefinitionTypeDisplay = (property: {
  * Get display name for a property's value type
  * For entity types with specificEntityType, returns the specific type (e.g., "User", "Document")
  */
-export const getValueTypeDisplay = (
+const _getValueTypeDisplay = (
   property: Pick<Property, 'valueType' | 'specificEntityType'>
 ): string => {
   // For entity types, use the specific entity type if available

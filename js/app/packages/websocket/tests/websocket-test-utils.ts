@@ -7,7 +7,7 @@ import { WebsocketEvent, type WebsocketEventListenerWithOptions } from '../';
  * @param ms the amount of milliseconds to wait before rejecting
  * @param msg an optional message to include in the error
  */
-export const rejectAfter = (ms: number, msg?: string): Promise<void> =>
+const rejectAfter = (ms: number, msg?: string): Promise<void> =>
   new Promise((_, reject) =>
     setTimeout(
       () => reject(msg ? new Error(`Timeout: ${msg}`) : new Error(`Timeout`)),
@@ -105,7 +105,7 @@ export const getListenersWithOptions = <K extends WebsocketEvent>(
  * @param isBinary whether the message is binary
  * @returns the message as a string
  */
-export const wsMessageToString = (
+const wsMessageToString = (
   message: ArrayBuffer | Blob | Buffer | Buffer[],
   isBinary: boolean
 ): string => {

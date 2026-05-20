@@ -151,7 +151,7 @@ type CodePluginProps = {
   setAccessories: SetStoreFunction<AccessoryStore>;
 };
 
-export type CodePreviewInfo = {
+type CodePreviewInfo = {
   language: string;
   code: string;
 };

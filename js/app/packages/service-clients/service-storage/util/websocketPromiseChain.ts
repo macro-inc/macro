@@ -171,16 +171,6 @@ export function createWebsocketPromiseChain<
 
 // Supporting types and interfaces
 export enum JobTypeEnum {
-  Ping = 'ping',
-  CreateTempFile = 'create_temp_file',
-  PdfExport = 'pdf_export',
-  PdfPreprocess = 'pdf_preprocess',
-  PdfModify = 'pdf_modify',
-  PdfPasswordEncrypt = 'pdf_password_encrypt',
-  PdfSplitTexts = 'pdf_split_texts',
-  PdfRemoveMetadata = 'pdf_remove_metadata',
-  DocxSimpleCompare = 'docx_simple_compare',
-  DocxConsolidate = 'docx_consolidate',
   DocxUpload = 'docx_upload',
 }
 
@@ -201,7 +191,7 @@ type DocumentProcessResponse =
   | DocumentProcessSuccessResponse
   | DocumentProcessErrorResponse;
 
-export type WebsocketJobSubmissionErrorResponse = {
+type WebsocketJobSubmissionErrorResponse = {
   jobId?: string;
   macroRequestId?: string;
   event?: string;
@@ -224,14 +214,6 @@ export type WebsocketJobSubmissionSuccessResponse<T = unknown> = Omit<
 > & {
   data: T;
 };
-
-export type WebsocketJobSubmissionResponse<T = unknown> =
-  | WebsocketJobSubmissionSuccessResponse<T>
-  | WebsocketJobSubmissionErrorResponse;
-
-export type ListenerCallback = (
-  response: WebsocketJobSubmissionResponse & { macroRequestId: string }
-) => void | Promise<void>;
 
 // Type Guards
 function isDocumentProcessResponse(data: any): data is DocumentProcessResponse {

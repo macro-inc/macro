@@ -32,7 +32,7 @@ import type { ObjectLike } from '../util/result';
 export const blockDataSignal = createBlockSignal<unknown>();
 export const blockLiveTrackingEnabledSignal = createBlockSignal<boolean>();
 
-export type BlockLoaderProps<
+type BlockLoaderProps<
   D extends ObjectLike | FileOrTextLike,
   P extends SourcePreload<ObjectLike>,
   L extends LoadFunction<D, P>,

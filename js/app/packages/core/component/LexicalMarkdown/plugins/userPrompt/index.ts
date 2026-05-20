@@ -1,4 +1,1 @@
-export {
-  type UserPromptPluginProps,
-  useUserPromptPlugin,
-} from './userPromptPlugin';
+export { useUserPromptPlugin } from './userPromptPlugin';

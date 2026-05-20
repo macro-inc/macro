@@ -11,7 +11,7 @@ import { Button, Surface } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { UserIcon } from './UserIcon';
 
-export type UserTooltipProps = {
+type UserTooltipProps = {
   displayName: string;
   email?: string;
   id?: string;

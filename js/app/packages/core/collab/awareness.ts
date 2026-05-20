@@ -11,7 +11,7 @@ import type { RawUpdate } from './shared';
 /** The default timeout for a user's awareness is 10 seconds */
 const DEFAULT_AWARENESS_TIMEOUT = 10_000;
 
-export type PeerAwarenessRaw<EncodedSelection extends Value = Value> = {
+type PeerAwarenessRaw<EncodedSelection extends Value = Value> = {
   user: { userId: string | undefined; color: string; peerId: PeerID };
   selection: EncodedSelection | undefined;
 };

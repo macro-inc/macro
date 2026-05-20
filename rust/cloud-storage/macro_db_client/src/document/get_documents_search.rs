@@ -8,18 +8,30 @@ use model::document::{BackfillSearchDocumentInformation, FileType};
 /// Used to get all documents in a paginated format
 /// This will get the latest version of the document for non-pdf documents
 /// For pdf documents, this will get the oldest version of the document
+///
+/// Pagination is **keyset (seek-method)**: pass `cursor` as the last row's
+/// `(updated_at, document_id)` pair from the previous page (or `None` for
+/// the first page).
+///
+/// Sorting and filtering use `updatedAt` rather than `createdAt` so that
+/// incremental backfills (e.g. "anything changed since X") catch documents
+/// that already existed but were modified after the cutoff.
 #[allow(clippy::too_many_arguments)]
 #[tracing::instrument(skip(db))]
 pub async fn get_documents_for_search(
     db: &Pool<Postgres>,
     limit: i64,
-    offset: i64,
+    cursor: Option<(DateTime<Utc>, String)>,
     file_types: &Option<Vec<String>>,
     sub_type: &Option<String>,
-    created_after: &Option<DateTime<Utc>>,
-    created_before: &Option<DateTime<Utc>>,
+    updated_after: &Option<DateTime<Utc>>,
+    updated_before: &Option<DateTime<Utc>>,
     only_deleted: Option<bool>,
 ) -> anyhow::Result<Vec<BackfillSearchDocumentInformation>> {
+    let (cursor_updated_at, cursor_id) = match cursor {
+        Some((t, id)) => (Some(t), Some(id)),
+        None => (None, None),
+    };
     let result = sqlx::query!(
         r#"
         SELECT
@@ -27,7 +39,7 @@ pub async fn get_documents_for_search(
             d.owner as owner,
             d."fileType" as "file_type!",
             COALESCE(db.id, di.id, dipdf.id) as "document_version_id!",
-            d."createdAt"::timestamptz as "created_at"
+            d."updatedAt"::timestamptz as "updated_at"
         FROM
             "Document" d
         LEFT JOIN document_sub_type dst ON dst.document_id = d.id
@@ -68,23 +80,28 @@ pub async fn get_documents_for_search(
             d."fileType" IS NOT NULL
             AND ($3::text[] IS NULL OR d."fileType" = ANY($3))
             AND ($4::text IS NULL OR dst.sub_type::text = $4)
-            AND ($5::timestamptz IS NULL OR d."createdAt" >= $5)
-            AND ($6::timestamptz IS NULL OR d."createdAt" < $6)
+            AND ($5::timestamptz IS NULL OR d."updatedAt" >= $5)
+            AND ($6::timestamptz IS NULL OR d."updatedAt" < $6)
             AND (
                 $7::bool IS NULL
                 OR ($7 AND d."deletedAt" IS NOT NULL)
                 OR (NOT $7 AND d."deletedAt" IS NULL)
             )
-        ORDER BY d."createdAt" ASC, d.id ASC
-        LIMIT $1 OFFSET $2
+            AND (
+                $2::timestamptz IS NULL
+                OR (d."updatedAt", d.id) > ($2, $8::text)
+            )
+        ORDER BY d."updatedAt" ASC, d.id ASC
+        LIMIT $1
     "#,
         limit,
-        offset,
+        cursor_updated_at as Option<DateTime<Utc>>,
         file_types.as_deref() as Option<&[String]>,
         sub_type.as_deref() as Option<&str>,
-        *created_after as Option<DateTime<Utc>>,
-        *created_before as Option<DateTime<Utc>>,
+        *updated_after as Option<DateTime<Utc>>,
+        *updated_before as Option<DateTime<Utc>>,
         only_deleted,
+        cursor_id as Option<String>,
     )
     .try_map(|row| {
         Ok(BackfillSearchDocumentInformation {
@@ -97,7 +114,7 @@ pub async fn get_documents_for_search(
                     source: e.into(),
                 }
             })?,
-            created_at: row.created_at,
+            updated_at: row.updated_at,
         })
     })
     .fetch_all(db)

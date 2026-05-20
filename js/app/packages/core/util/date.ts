@@ -13,7 +13,7 @@ export type DateValue = Date | string;
 
 const EPOCH_ZERO = new Date(0);
 
-export interface FormatDateOptions {
+interface FormatDateOptions {
   /** IANA timezone string (e.g., 'America/New_York', 'UTC'). Defaults to system timezone. */
   timeZone?: string;
   /** If true, always include time in the output (e.g., 'Thursday at 4:53 PM' instead of 'Thursday'). */

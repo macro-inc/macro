@@ -88,7 +88,7 @@ export function delayStream(
 }
 
 // stop a stream at chunk n
-export function limitStream(
+function _limitStream(
   stream: ChatMessageStream,
   itemLimit: number
 ): ChatMessageStream {
@@ -117,7 +117,7 @@ export function blockDone(stream: ChatMessageStream): ChatMessageStream {
   };
 }
 
-export function splitStream(
+function splitStream(
   stream: ChatMessageStream,
   split: Splitter
 ): ChatMessageStream {

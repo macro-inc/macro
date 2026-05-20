@@ -212,7 +212,7 @@ const FilterChip = (props: {
 
             <DropdownMenu.Portal>
               <Layer depth={2}>
-                <DropdownMenu.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
+                <DropdownMenu.Content class="z-action-menu bg-surface ring-1 ring-edge-muted rounded-sm shadow-xl min-w-40 p-1">
                   <For each={props.filter.categoryOptions}>
                     {(option) => {
                       const active = () =>

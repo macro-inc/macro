@@ -4,7 +4,7 @@ import type { JSX, ParentProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Surface } from './Surface';
 
-export type HoverCardProps = ParentProps<{
+type HoverCardProps = ParentProps<{
   triggerClass?: string;
   contentClass?: string;
   placement?: Placement;

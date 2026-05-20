@@ -3,7 +3,7 @@ import { isPlatform } from '@core/util/platform';
 import { isIOS } from '@solid-primitives/platform';
 import { type Accessor, onCleanup } from 'solid-js';
 
-export type FocusInputOptions = {
+type FocusInputOptions = {
   getTarget: () => HTMLElement | null | undefined;
   positionNear?: HTMLElement;
 };

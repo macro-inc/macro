@@ -18,7 +18,7 @@ import { createContext, createSignal, useContext } from 'solid-js';
 
 // ---- Uncreated state (always present) ----
 
-export type ChatInputState = {
+type ChatInputState = {
   model: Accessor<Model>;
   setModel: (model?: Model) => void;
   isGenerating: Accessor<boolean>;
@@ -74,7 +74,7 @@ export function useChatInputContext(): ChatInputState {
 
 // ---- Created state (only when chat exists) ----
 
-export type ChatState = ChatController;
+type ChatState = ChatController;
 
 const ChatCtx = createContext<ChatState>();
 
@@ -104,6 +104,6 @@ export function useChatContext(): ChatState {
   return ctx;
 }
 
-export function useChatContextOptional(): ChatState | undefined {
+function _useChatContextOptional(): ChatState | undefined {
   return useContext(ChatCtx);
 }

@@ -201,7 +201,7 @@ export function sharedEntity(getUserID: () => string | undefined) {
   };
 }
 
-export function ownedAgentFilter(getUserID: () => string | undefined) {
+function _ownedAgentFilter(getUserID: () => string | undefined) {
   return function (entity: EntityData): boolean {
     if (entity.type !== 'chat') return false;
     const userID = getUserID();
@@ -211,7 +211,7 @@ export function ownedAgentFilter(getUserID: () => string | undefined) {
   };
 }
 
-export function sharedAgentFilter(getUserID: () => string | undefined) {
+function _sharedAgentFilter(getUserID: () => string | undefined) {
   return function (entity: EntityData): boolean {
     if (entity.type !== 'chat') return false;
     const userID = getUserID();
@@ -231,12 +231,12 @@ export function taskAssignedToUserFilter(getUserID: () => string | undefined) {
   };
 }
 
-export function hasAssignees(entity: EntityData): boolean {
+function _hasAssignees(entity: EntityData): boolean {
   if (!isTaskEntity(entity)) return false;
   return getTaskAssigneeIds(entity).length > 0;
 }
 
-export function isAssignedTo(entity: EntityData, userId: string): boolean {
+function _isAssignedTo(entity: EntityData, userId: string): boolean {
   if (!isTaskEntity(entity)) return false;
 
   const assigneeIds = getTaskAssigneeIds(entity);
@@ -245,12 +245,12 @@ export function isAssignedTo(entity: EntityData, userId: string): boolean {
   return assigneeIds.includes(userId);
 }
 
-export function isUnassigned(entity: EntityData): boolean {
+function _isUnassigned(entity: EntityData): boolean {
   if (!isTaskEntity(entity)) return false;
   return getTaskAssigneeIds(entity).length === 0;
 }
 
-export function hasStatus(entity: EntityData, statusOptionId: string): boolean {
+function hasStatus(entity: EntityData, statusOptionId: string): boolean {
   if (!isTaskEntity(entity)) return false;
   return getTaskStatusOptionId(entity) === statusOptionId;
 }
@@ -278,7 +278,7 @@ export function isCanceled(entity: EntityData): boolean {
   return hasStatus(entity, PROPERTY_OPTION_IDS.STATUS.CANCELED);
 }
 
-export function isClosed(entity: EntityData): boolean {
+function isClosed(entity: EntityData): boolean {
   return isCompleted(entity) || isCanceled(entity);
 }
 
@@ -287,10 +287,7 @@ export function isOpen(entity: EntityData): boolean {
   return !isClosed(entity);
 }
 
-export function hasPriority(
-  entity: EntityData,
-  priorityOptionId: string
-): boolean {
+function hasPriority(entity: EntityData, priorityOptionId: string): boolean {
   if (!isTaskEntity(entity)) return false;
 
   return getTaskPriorityOptionId(entity) === priorityOptionId;

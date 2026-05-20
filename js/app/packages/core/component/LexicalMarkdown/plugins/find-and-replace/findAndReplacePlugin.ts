@@ -61,7 +61,7 @@ interface NoneBreakNode {
   realLocations: MatchedAndLocations[];
 }
 
-export type FindAndReplaceProps = {
+type FindAndReplaceProps = {
   setListOffset: (listOffset: NodekeyOffset[]) => void;
 };
 

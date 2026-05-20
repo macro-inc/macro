@@ -7,7 +7,7 @@ import { isBefore } from 'date-fns/isBefore';
 import { startOfDay } from 'date-fns/startOfDay';
 import { createEffect, createSignal, For, on, Show } from 'solid-js';
 
-export type DatePickerUIProps = {
+type DatePickerUIProps = {
   value: Date;
   onChange: (date: Date) => void;
   disablePriorToDate?: Date;

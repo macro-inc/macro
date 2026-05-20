@@ -11,16 +11,16 @@ import { createTask } from './create';
  * Small buffer accounts for possible Unicode version differences between
  * JS Intl.Segmenter and Rust's unicode-segmentation crate.
  */
-export const MAX_TASK_NAME_LENGTH = 97;
+const MAX_TASK_NAME_LENGTH = 97;
 
-export type TaskData = {
+type TaskData = {
   title: string;
   rawMarkdown: string;
   assigneeUserIds: string[];
   dueDate: Date | null;
 };
 
-export type TaskCreationOptions = {
+type TaskCreationOptions = {
   currentUserId?: string;
   parentTaskId?: string;
 };

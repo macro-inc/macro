@@ -31,12 +31,14 @@
     "/unfurl": {
       "get": {
         "tags": ["unfurl"],
+        "summary": "Unfurl the URL passed via the `url` query parameter and return its\nextracted metadata (title, description, image, favicon).",
+        "description": "On success returns `200` with a [`GetUnfurlResponse`] body. On any\nfailure returns `500` with a JSON `null` body — the response type is an\n`Option<GetUnfurlResponse>` so this contract is reflected in the\nsignature and OpenAPI spec.",
         "operationId": "get_unfurl",
         "parameters": [
           {
             "name": "url",
             "in": "query",
-            "description": "URL to unfold",
+            "description": "The URL to unfurl.",
             "required": true,
             "schema": {
               "type": "string"
@@ -45,7 +47,7 @@
         ],
         "responses": {
           "200": {
-            "description": "",
+            "description": "Unfurled metadata for the URL.",
             "content": {
               "application/json": {
                 "schema": {
@@ -54,32 +56,19 @@
               }
             }
           },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
           "500": {
-            "description": "",
+            "description": "Unfurl failed; response body is JSON null.",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GetUnfurlResponse"
+                    }
+                  ]
                 }
               }
             }
@@ -172,31 +161,39 @@
       },
       "GetUnfurlQueryParams": {
         "type": "object",
+        "description": "Query parameters for `GET /unfurl`.",
         "required": ["url"],
         "properties": {
           "url": {
-            "type": "string"
+            "type": "string",
+            "description": "The URL to unfurl."
           }
         }
       },
       "GetUnfurlResponse": {
         "type": "object",
+        "description": "Unfurl response for a single URL: the URL itself plus any metadata that\nwas extracted from the page's `<head>` (title, description, image,\nfavicon).",
         "required": ["url", "title"],
         "properties": {
           "description": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "The page description (from `og:description`), if any."
           },
           "favicon_url": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "The page's favicon URL, if any."
           },
           "image_url": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "The page's preview image URL (from `og:image`), if any."
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "description": "The page title (from custom URL parser, Open Graph, or `<title>`)."
           },
           "url": {
-            "type": "string"
+            "type": "string",
+            "description": "The URL that was unfurled."
           }
         }
       },
@@ -218,22 +215,28 @@
             },
             {
               "type": "object",
+              "description": "Unfurl response for a single URL: the URL itself plus any metadata that\nwas extracted from the page's `<head>` (title, description, image,\nfavicon).",
               "required": ["url", "title"],
               "properties": {
                 "description": {
-                  "type": ["string", "null"]
+                  "type": ["string", "null"],
+                  "description": "The page description (from `og:description`), if any."
                 },
                 "favicon_url": {
-                  "type": ["string", "null"]
+                  "type": ["string", "null"],
+                  "description": "The page's favicon URL, if any."
                 },
                 "image_url": {
-                  "type": ["string", "null"]
+                  "type": ["string", "null"],
+                  "description": "The page's preview image URL (from `og:image`), if any."
                 },
                 "title": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The page title (from custom URL parser, Open Graph, or `<title>`)."
                 },
                 "url": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The URL that was unfurled."
                 }
               }
             }

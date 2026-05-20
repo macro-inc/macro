@@ -1,7 +1,7 @@
 import { fileExtension } from '@service-storage/util/filename';
 import { FileSystemError } from './error';
 
-export function filenameFromPath(path: string) {
+function filenameFromPath(path: string) {
   const filename = path.split('\\')?.pop()?.split('/')?.pop();
   if (!filename) {
     throw new FileSystemError(`Unable to get filename from path: ${path}`);
@@ -26,7 +26,7 @@ export function replaceExtension(path: string, newExt: string) {
  * @param omitIfExtensionMissing - if true, the extension will not be replaced if the filename does not have an extension
  * @returns the filename with the new extension
  */
-export const replaceFileExtension = ({
+const replaceFileExtension = ({
   filename,
   toExtension,
   omitIfExtensionMissing,

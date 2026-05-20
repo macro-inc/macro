@@ -237,7 +237,7 @@ export function registerToggleAppendedThread(editor: LexicalEditor) {
   );
 }
 
-export async function appendItemsAsMacroMentions(
+async function _appendItemsAsMacroMentions(
   editor: LexicalEditor | undefined,
   items: DocumentMentionInfo[]
 ) {

@@ -95,7 +95,7 @@ export const useSearchSoupQuery = (
   }));
 };
 
-export type SearchChannelQueryArgs = {
+type SearchChannelQueryArgs = {
   params: {
     cursor?: string | null;
     page_size?: number;

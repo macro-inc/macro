@@ -23,7 +23,7 @@ export const getPermissions = (accessLevel?: UserAccessLevel) => {
   return Permissions.NO_ACCESS;
 };
 
-export const comparePermissions = (a: Permissions, b: Permissions) => {
+const comparePermissions = (a: Permissions, b: Permissions) => {
   const priorityMap: { [key in Permissions]: number } = {
     [Permissions.OWNER]: 5,
     [Permissions.CAN_EDIT]: 4,
@@ -35,9 +35,7 @@ export const comparePermissions = (a: Permissions, b: Permissions) => {
   return priorityMap[a] - priorityMap[b];
 };
 
-export const getAccessLevel = (
-  permissions?: Permissions
-): UserAccessLevel | null => {
+const _getAccessLevel = (permissions?: Permissions): UserAccessLevel | null => {
   switch (permissions) {
     case Permissions.OWNER:
       return UserAccessLevel.owner;

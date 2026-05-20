@@ -35,7 +35,7 @@ function messageContentIsEmpty(content: ChatMessageContent) {
   }
 }
 
-export function extractMessageText(content: ChatMessageContent) {
+function extractMessageText(content: ChatMessageContent) {
   if (typeof content === 'string') {
     return content;
   } else if (Array.isArray(content)) {

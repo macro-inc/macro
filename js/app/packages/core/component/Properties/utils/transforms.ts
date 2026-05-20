@@ -32,7 +32,7 @@ export function toPropertyDefinitionDomain(
   };
 }
 
-export function propertyDefinitionDomainToProperty(
+function _propertyDefinitionDomainToProperty(
   propertyDefinition: PropertyDefinitionDomain
 ): Property {
   return {

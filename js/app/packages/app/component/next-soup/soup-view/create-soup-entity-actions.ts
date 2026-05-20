@@ -31,14 +31,14 @@ const SIGNAL_TABS = new Set<string | undefined>([
 ]);
 const NOISE_TABS = new Set(['noise']);
 
-export type SoupEntityActionItem = {
+type SoupEntityActionItem = {
   id: string;
   label: string;
   onClick: () => void | Promise<void>;
   destructive?: boolean;
 };
 
-export type SoupEntityActionGroup = {
+type SoupEntityActionGroup = {
   items: SoupEntityActionItem[];
 };
 

@@ -62,31 +62,31 @@ const priorityFilter = <TId extends string>(
     },
   });
 
-export const taskNotStartedFilter = statusFilter(
+const taskNotStartedFilter = statusFilter(
   'task-not-started',
   PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
   isNotStarted
 );
 
-export const taskInProgressFilter = statusFilter(
+const taskInProgressFilter = statusFilter(
   'task-in-progress',
   PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
   isInProgress
 );
 
-export const taskInReviewFilter = statusFilter(
+const taskInReviewFilter = statusFilter(
   'task-in-review',
   PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
   isInReview
 );
 
-export const taskCompletedFilter = statusFilter(
+const taskCompletedFilter = statusFilter(
   'task-completed',
   PROPERTY_OPTION_IDS.STATUS.COMPLETED,
   isCompleted
 );
 
-export const taskCanceledFilter = statusFilter(
+const taskCanceledFilter = statusFilter(
   'task-canceled',
   PROPERTY_OPTION_IDS.STATUS.CANCELED,
   isCanceled
@@ -122,31 +122,31 @@ export const TASK_STATUS_FILTERS = [
   taskCanceledFilter,
 ] as const;
 
-export const taskCriticalFilter = priorityFilter(
+const taskCriticalFilter = priorityFilter(
   'task-critical',
   PROPERTY_OPTION_IDS.PRIORITY.URGENT,
   isUrgentPriority
 );
 
-export const taskHighPriorityFilter = priorityFilter(
+const taskHighPriorityFilter = priorityFilter(
   'task-high-priority',
   PROPERTY_OPTION_IDS.PRIORITY.HIGH,
   isHighPriority
 );
 
-export const taskMediumPriorityFilter = priorityFilter(
+const taskMediumPriorityFilter = priorityFilter(
   'task-medium-priority',
   PROPERTY_OPTION_IDS.PRIORITY.MEDIUM,
   isMediumPriority
 );
 
-export const taskLowPriorityFilter = priorityFilter(
+const taskLowPriorityFilter = priorityFilter(
   'task-low-priority',
   PROPERTY_OPTION_IDS.PRIORITY.LOW,
   isLowPriority
 );
 
-export const taskNoPriorityFilter = config({
+const taskNoPriorityFilter = config({
   id: 'task-no-priority',
   predicate: hasNoPriority,
   query: {

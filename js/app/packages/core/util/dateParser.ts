@@ -48,7 +48,7 @@ const MONTH_ABBR = [
   'dec',
 ];
 
-export function parseDateString(input: string): ParsedDate | null {
+function parseDateString(input: string): ParsedDate | null {
   const normalized = input.toLowerCase().trim();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -312,7 +312,7 @@ export function formatDate(date: Date): string {
   return date.toLocaleDateString('en-US', options);
 }
 
-export function getDateSuggestions(input: string): ParsedDate[] {
+function _getDateSuggestions(input: string): ParsedDate[] {
   const suggestions: ParsedDate[] = [];
   const normalized = input.toLowerCase().trim();
 

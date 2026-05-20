@@ -24,7 +24,7 @@ import { EditingContext } from './Editable';
 
 false && clickOutside;
 
-export const MENU_ITEM_HEIGHT = 28;
+const _MENU_ITEM_HEIGHT = 28;
 
 type BaseMenuItemWrapperProps = {
   children: JSX.Element;
@@ -91,7 +91,7 @@ function MenuItemWrapper(props: MenuItemWrapperProps) {
   );
 }
 
-export type BaseMenuItemProps = {
+type BaseMenuItemProps = {
   text?: string | JSX.Element;
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | JSX.Element;
   iconClass?: string;
@@ -102,14 +102,14 @@ export type BaseMenuItemProps = {
   hotkeyToken?: HotkeyToken;
 };
 
-export type CheckboxMenuItemProps = BaseMenuItemProps & {
+type CheckboxMenuItemProps = BaseMenuItemProps & {
   selectorType: 'checkbox';
   checked: boolean;
   onChange?: (value: boolean) => void;
   value?: undefined;
 };
 
-export type RadioMenuItemProps = BaseMenuItemProps & {
+type RadioMenuItemProps = BaseMenuItemProps & {
   selectorType: 'radio';
   value: string;
   groupValue: string;
@@ -117,19 +117,19 @@ export type RadioMenuItemProps = BaseMenuItemProps & {
   onChange?: undefined;
 };
 
-export type GenericMenuItemProps = BaseMenuItemProps & {
+type GenericMenuItemProps = BaseMenuItemProps & {
   selectorType?: undefined;
   onChange?: undefined;
   checked?: undefined;
   value?: undefined;
 };
 
-export type MenuItemProps =
+type MenuItemProps =
   | GenericMenuItemProps
   | CheckboxMenuItemProps
   | RadioMenuItemProps;
 
-export const MENU_ITEM_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1 text-base' : 'py-1 pl-2 pr-2 text-sm'} font-medium justify-between items-center rounded-xs outline-none focus:bg-active data-[highlighted]:bg-active`;
+export const MENU_ITEM_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1.5 text-base' : 'py-1 pl-2.5 pr-2 text-sm'} font-medium justify-between items-center rounded-md outline-none focus:bg-ink/3 data-[highlighted]:bg-ink/3`;
 
 /**
  * A menu item component that can be used interchangeably within either a ContextMenu or DropdownMenu.
@@ -180,7 +180,7 @@ export function MenuItem(props: MenuItemProps) {
         MENU_ITEM_CLASS,
         props.disabled
           ? 'opacity-50 cursor-not-allowed'
-          : 'hover:bg-hover hover-transition-bg',
+          : 'hover:bg-ink/3 hover-transition-bg',
         props.class
       )}
       onClick={props.onClick}
@@ -322,7 +322,7 @@ type MenuItemRenameTriggerProps = Omit<GenericMenuItemProps, 'onClick'> & {
   sideEffect?: () => void;
 };
 
-export function MenuItemRenameTrigger(props: MenuItemRenameTriggerProps) {
+function _MenuItemRenameTrigger(props: MenuItemRenameTriggerProps) {
   const [_, setIsRenaming] = useContext(EditingContext);
   return (
     <MenuItem
@@ -359,7 +359,7 @@ const menuWidths: Record<MenuWidth, string> = {
   screen: 'w-screen',
 };
 
-export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start bg-surface shadow-lg ring-1 ring-edge-muted rounded-sm p-1 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal`;
+export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start bg-surface shadow-[0_8px_24px_-16px_rgba(0,0,0,0.24),0_2px_8px_-6px_rgba(0,0,0,0.18)] ring-1 ring-edge rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal`;
 
 type MenuContentProps = ParentProps<{
   class?: string;

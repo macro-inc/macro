@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 
-export const DAILY_LIMIT = 5;
+const DAILY_LIMIT = 5;
 
 export enum PaywallKey {
   PROJECT_LIMIT = 'PROJECT_LIMIT',
@@ -32,12 +32,10 @@ export const PaywallMessages: Record<PaywallKey, string> = {
     'Upgrade your plan to remove the Macro signature.',
 };
 
-export const [paywallOpen, setPaywallOpen] = createSignal(false);
+const [paywallOpen, setPaywallOpen] = createSignal(false);
 // export const [paywallOpen, setPaywallOpen] = createControlledOpenSignal(false);
-export const [limitReached, setLimitReached] = createSignal(false);
-export const [paywallKey, setPaywallKey] = createSignal<PaywallKey | null>(
-  null
-);
+const [limitReached, _setLimitReached] = createSignal(false);
+const [paywallKey, setPaywallKey] = createSignal<PaywallKey | null>(null);
 
 export const usePaywallState = () => {
   const showPaywall = (errorKey?: PaywallKey | null) => {

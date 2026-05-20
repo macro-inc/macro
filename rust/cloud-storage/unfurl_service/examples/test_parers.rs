@@ -1,4 +1,4 @@
-use unfurl_service::url_parsers::{
+use unfurl::domain::url_parsers::{
     parse_custom_title, parse_figma_title, parse_linear_title, parse_notion_title,
 };
 

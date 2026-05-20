@@ -45,19 +45,7 @@ export type SoupRow = {
   isSelected: () => boolean;
 };
 
-export type NavigationResult = { row: SoupRow; index: number } | undefined;
-
-export type GroupConfig<T> = {
-  id: string;
-  label: string;
-  getValue: (item: T) => unknown;
-  getLabel?: (value: unknown) => string;
-  renderHeader?: (props: {
-    value: unknown;
-    label: string;
-    count: number;
-  }) => JSX.Element;
-};
+type NavigationResult = { row: SoupRow; index: number } | undefined;
 
 export type SortConfig<T> = {
   id: string;

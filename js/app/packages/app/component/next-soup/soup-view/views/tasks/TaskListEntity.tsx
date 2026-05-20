@@ -125,7 +125,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
       }}
       ref={mergeRefs(props.ref, draggable)}
       class={cn(
-        'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mx-1 relative group/narrow flex flex-col py-0.5 rounded',
+        'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mx-1 relative group/narrow flex flex-col py-0.5 rounded-lg',
         {
           'min-h-10': !isMobile(),
           'bg-accent/8': props.checked,

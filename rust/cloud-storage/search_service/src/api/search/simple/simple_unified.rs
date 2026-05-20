@@ -222,9 +222,21 @@ pub(in crate::api::search) async fn perform_unified_search(
     )
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
 
-    // Set terms on each index's search args
-    // Email gets split terms for multi-field search; other indices get the original query
-    filter_document_response.terms = terms.clone();
+    // Set terms on each index's search args.
+    //
+    // Emails always get whitespace-split terms (each term matched
+    // independently across many fields, ANDed inside OpenSearch).
+    // Documents get split terms only once the alias points at a
+    // join-shape index, where each term becomes a separate has_child
+    // clause ANDed via bool.must. While the alias still points at the
+    // flat-shape index, the documents branch keeps the single adjacent
+    // phrase-prefix behavior.
+    let document_terms = if opensearch_client::documents_shape::alias_uses_join_shape() {
+        split_search_terms(&terms)
+    } else {
+        terms.clone()
+    };
+    filter_document_response.terms = document_terms;
     filter_channel_response.terms = terms.clone();
     filter_chat_response.terms = terms.clone();
     filter_email_response.terms = email_terms.clone();
