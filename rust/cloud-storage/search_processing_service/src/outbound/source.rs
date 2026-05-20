@@ -165,15 +165,15 @@ impl BackfillSource for PgBackfillSource {
         req: &DocumentBackfillRequest,
         cursor: Option<DocumentBackfillCursor>,
     ) -> Result<(SourcePage, Option<DocumentBackfillCursor>), BackfillError> {
-        let db_cursor = cursor.map(|c| (c.created_at, c.document_id));
+        let db_cursor = cursor.map(|c| (c.updated_at, c.document_id));
         let batch = macro_db_client::document::get_documents_search::get_documents_for_search(
             &self.db,
             self.page_sizes.documents as i64,
             db_cursor,
             &req.file_types,
             &req.sub_type,
-            &req.created_after,
-            &req.created_before,
+            &req.updated_after,
+            &req.updated_before,
             req.deletion_filter.as_only_deleted(),
         )
         .await
@@ -182,13 +182,13 @@ impl BackfillSource for PgBackfillSource {
         // Build the next cursor from the last row before we move the
         // batch into the messages mapper. The query sorts ascending so
         // the last row carries the sort-tuple that resumes the scan.
-        // `created_at` is NOT NULL in the schema but sqlx types it as
+        // `updated_at` is NOT NULL in the schema but sqlx types it as
         // Option because of the timestamptz cast; if it ever did come
         // back None we'd rather stop pagination than build a bogus
         // cursor — `and_then` does exactly that.
         let next_cursor = batch.last().and_then(|d| {
-            d.created_at.map(|created_at| DocumentBackfillCursor {
-                created_at,
+            d.updated_at.map(|updated_at| DocumentBackfillCursor {
+                updated_at,
                 document_id: d.document_id.clone(),
             })
         });
