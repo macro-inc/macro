@@ -88,7 +88,7 @@ where
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-enum NotificationDatabaseEvent {
+pub(crate) enum NotificationDatabaseEvent {
     UserNotificationDeletes {
         #[serde(rename = "notificationId")]
         notification_id: Uuid,

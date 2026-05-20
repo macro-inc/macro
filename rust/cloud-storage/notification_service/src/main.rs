@@ -159,8 +159,7 @@ pub async fn main() -> anyhow::Result<()> {
             internal_secret_key.as_ref().to_string(),
             vars.connection_gateway_url.as_ref().to_string(),
         ));
-    let notification_events_receiver =
-        PgNotificationEventsReceiver::new(config.database_url.clone());
+    let notification_events_receiver = PgNotificationEventsReceiver::new(db.clone());
     let mut notification_events_listener = NotificationEventsListener::new(
         notification_events_receiver,
         notification_events_realtime_adapter,
