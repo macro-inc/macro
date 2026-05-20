@@ -29,7 +29,7 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
       <KobalteSwitch.Input class="sr-only" />
       <Show when={props.label != null}>
         <KobalteSwitch.Label
-          class={cn('whitespace-nowrap cursor-pointer', props.labelClass)}
+          class={cn('whitespace-nowrap', props.labelClass)}
         >
           {props.label}
         </KobalteSwitch.Label>
