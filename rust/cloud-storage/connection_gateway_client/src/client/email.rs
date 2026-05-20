@@ -1,5 +1,6 @@
 use super::ConnectionGatewayClient;
 use connection_gateway_models::MessageReceipt;
+use model_entity::EntityType;
 use serde_json::json;
 
 impl ConnectionGatewayClient {
@@ -11,8 +12,7 @@ impl ConnectionGatewayClient {
         event_type: &str,
     ) -> anyhow::Result<Vec<MessageReceipt>> {
         self.send_message(
-            "user",
-            user_id,
+            EntityType::User.with_entity_str(user_id),
             "refresh_email".to_string(),
             json!(event_type),
         )
