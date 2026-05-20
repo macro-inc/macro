@@ -406,15 +406,21 @@ const SETTINGS_MENU_TOP_ITEMS: SettingsMenuItem[] = [
     description: 'Get the mobile app',
     icon: DeviceMobileIcon,
   },
-];
-
-const SETTINGS_MENU_BOTTOM_ITEMS: SettingsMenuItem[] = [
   {
     tab: 'Agent',
     label: 'MCPs',
     description: 'Agent connectors and MCP servers',
     icon: PlugIcon,
   },
+  {
+    tab: 'Team',
+    label: 'Team',
+    description: 'Members and invites',
+    icon: UsersThreeIcon,
+  },
+];
+
+const SETTINGS_MENU_BOTTOM_ITEMS: SettingsMenuItem[] = [
   {
     tab: 'Shortcuts',
     label: 'Shortcuts',
@@ -426,12 +432,6 @@ const SETTINGS_MENU_BOTTOM_ITEMS: SettingsMenuItem[] = [
     label: 'Appearance',
     description: 'Theme and UI customization',
     icon: PaintBucketIcon,
-  },
-  {
-    tab: 'Team',
-    label: 'Team',
-    description: 'Members and invites',
-    icon: UsersThreeIcon,
   },
   {
     tab: 'Account',
