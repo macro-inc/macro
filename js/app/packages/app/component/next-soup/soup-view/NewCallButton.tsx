@@ -10,6 +10,7 @@ import XIcon from '@phosphor/x.svg';
 import { commsServiceClient } from '@service-comms/client';
 import { Button, Dialog, Surface } from '@ui';
 import { createSignal } from 'solid-js';
+import { CREATE_BUTTON_CLASS } from './create-button-style';
 
 export function NewCallButton() {
   const [isOpen, setIsOpen] = createSignal(false);
@@ -83,7 +84,7 @@ export function NewCallButton() {
       <Button
         variant="accent-reverse"
         size="sm"
-        class="rounded-md whitespace-nowrap px-2"
+        class={CREATE_BUTTON_CLASS}
         onClick={() => setIsOpen(true)}
       >
         <PlusCircleIcon class="size-3.5" />

@@ -15,6 +15,7 @@ import PlusCircleIcon from '@phosphor/plus-circle.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
 import { Button, Dropdown, Layer } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
+import { CREATE_BUTTON_CLASS } from './create-button-style';
 import { NewCallButton } from './NewCallButton';
 
 // Which blocks to show as create options per view, in order
@@ -61,8 +62,6 @@ const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
   mail: 'Email',
   tasks: 'Task',
 };
-
-const CREATE_BUTTON_CLASS = 'rounded-full px-1 py-2 font-bold';
 
 function getViewCreateOptions(view: ListView): CreateOption[] {
   const createNames = VIEW_CREATE_BLOCKNAMES[view] ?? [];
