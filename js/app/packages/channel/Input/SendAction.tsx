@@ -1,6 +1,6 @@
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import ArrowUp from '@phosphor/arrow-up.svg';
 import { isMobile } from '@core/mobile/isMobile';
+import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { Button, cn } from '@ui';
 import { children, type JSX, Show, splitProps } from 'solid-js';
 import { useInput, useInputCommands } from './context';
