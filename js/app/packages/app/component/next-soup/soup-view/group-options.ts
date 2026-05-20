@@ -12,14 +12,14 @@ export interface GroupOption {
   label: string;
 }
 
-export const GROUP_OPTIONS: GroupOption[] = [
+const _GROUP_OPTIONS: GroupOption[] = [
   { value: 'none', label: 'None' },
   { value: 'date', label: 'Date' },
   { value: 'entity_type', label: 'Type' },
   { value: 'project', label: 'Project' },
 ];
 
-export const DEFAULT_GROUP_OPTIONS: GroupOption[] = [
+const _DEFAULT_GROUP_OPTIONS: GroupOption[] = [
   { value: 'none', label: 'None' },
   { value: 'entity_type', label: 'Type' },
   { value: 'project', label: 'Project' },
@@ -34,13 +34,13 @@ export const TASK_GROUP_OPTIONS: GroupOption[] = [
   { value: 'date', label: 'Date' },
 ];
 
-export const EMAIL_GROUP_OPTIONS: GroupOption[] = [
+const _EMAIL_GROUP_OPTIONS: GroupOption[] = [
   { value: 'none', label: 'None' },
   { value: 'date', label: 'Date' },
   { value: 'project', label: 'Project' },
 ];
 
-export const INBOX_GROUP_OPTIONS: GroupOption[] = [
+const _INBOX_GROUP_OPTIONS: GroupOption[] = [
   { value: 'none', label: 'None' },
   { value: 'date', label: 'Date' },
   { value: 'entity_type', label: 'Type' },

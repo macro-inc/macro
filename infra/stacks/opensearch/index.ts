@@ -128,7 +128,7 @@ const opensearchDomain = new aws.opensearch.Domain(
     // per instance storage
     ebsOptions: {
       ebsEnabled: true,
-      volumeSize: stack === 'prod' ? 200 : 50,
+      volumeSize: stack === 'prod' ? 256 : 50,
       volumeType: 'gp3',
     },
     nodeToNodeEncryption: {

@@ -15,7 +15,7 @@ import {
 import type { Accessor } from 'solid-js';
 import { $getCaretRect, isRectFlushWith } from '../../utils';
 
-export type KeyboardFocusPluginProps = {
+type KeyboardFocusPluginProps = {
   onFocusLeaveStart?: (e: KeyboardEvent) => void;
   onFocusLeaveEnd?: (e: KeyboardEvent) => void;
   ignoreKeys: Accessor<boolean>;

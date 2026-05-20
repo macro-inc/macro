@@ -1,0 +1,30 @@
+[package]
+edition = "2024"
+name = "unfurl"
+publish = false
+version = "0.1.0"
+
+[features]
+all = ["axum", "inbound", "outbound", "ports"]
+axum = ["inbound", "dep:axum", "dep:utoipa"]
+inbound = ["ports"]
+outbound = ["dep:bytes", "dep:futures", "dep:reqwest", "dep:scraper", "dep:tokio", "ports"]
+ports = []
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true, optional = true }
+bytes = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+reqwest = { workspace = true, features = ["stream"], optional = true }
+scraper = { workspace = true, optional = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
+tracing = { workspace = true }
+url = { workspace = true }
+utoipa = { workspace = true, optional = true }
+
+[dev-dependencies]
+mockall = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

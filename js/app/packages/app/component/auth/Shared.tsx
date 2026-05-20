@@ -10,7 +10,7 @@ export function setCookie(name: string, value: string, days: number) {
   document.cookie = `${name}=${encodeURIComponent(value)}${expires}; path=/`;
 }
 
-export const assignABGroup = async () => {
+const _assignABGroup = async () => {
   const randomGroup = Math.random() < 0.5 ? 'A' : 'B';
   await authServiceClient.setGroup({ group: randomGroup });
   return randomGroup;

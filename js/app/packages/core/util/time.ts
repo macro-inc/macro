@@ -40,7 +40,7 @@ export function formatRelativeDate(value: DateValue): string {
  * @param value Date object or ISO date string to format
  * @returns Time string like "4:26 PM" or "12:30 PM"
  */
-export function formatTime(value: DateValue): string {
+function _formatTime(value: DateValue): string {
   const date = value instanceof Date ? value : new Date(value);
   return date.toLocaleTimeString('en-US', {
     hour: 'numeric',

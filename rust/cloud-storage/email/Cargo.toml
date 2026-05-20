@@ -33,7 +33,7 @@ axum = [
   "model_user/axum",
   "models_pagination/axum",
 ]
-gmail_token = ["dep:authentication_service_client", "dep:gmail_client", "dep:redis", "ports"]
+gmail_token = ["dep:authentication_service_client", "dep:redis", "ports"]
 inbound = ["ports"]
 outbound = ["dep:sqlx", "ports"]
 ports = ["dep:tokio", "frecency/ports"]
@@ -54,7 +54,6 @@ either = { workspace = true }
 email_utils = { path = "../email_utils" }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
-gmail_client = { path = "../gmail_client", optional = true }
 item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
@@ -62,7 +61,6 @@ model-entity = { path = "../model-entity" }
 non_empty = { path = "../non_empty", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true }
-models_grouping = { path = "../models_grouping" }
 models_pagination = { path = "../models_pagination" }
 recursion = { workspace = true }
 schemars = { workspace = true, optional = true, features = ["uuid1"] }

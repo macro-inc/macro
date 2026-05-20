@@ -36,7 +36,7 @@ export const SYSTEM_PROPERTY_IDS = {
  * These properties are automatically attached to entities of this block type
  * and cannot be removed. Order matches backend (display order).
  */
-export const BUILTIN_PROPERTIES_BY_BLOCK: Partial<
+const BUILTIN_PROPERTIES_BY_BLOCK: Partial<
   Record<BlockName | BlockAlias, readonly string[]>
 > = {
   task: [
@@ -57,7 +57,7 @@ export const BUILTIN_PROPERTIES_BY_BLOCK: Partial<
  * Default pinned properties by block type.
  * These are automatically pinned when a new entity of this block type is created.
  */
-export const DEFAULT_PINNED_PROPERTIES_BY_BLOCK: Partial<
+const DEFAULT_PINNED_PROPERTIES_BY_BLOCK: Partial<
   Record<BlockName | BlockAlias, readonly string[]>
 > = {
   task: [
@@ -91,7 +91,7 @@ export const FOCUS_CONFIG = {
   DELAY: 100, // Delay before focusing element after it's connected to DOM
 } as const;
 
-export const MODAL_DIMENSIONS = {
+const _MODAL_DIMENSIONS = {
   DEFAULT_WIDTH: 448, // 28rem
   DEFAULT_HEIGHT: 384, // 24rem
   PROPERTY_EDITOR_HEIGHT: 384,

@@ -40,6 +40,12 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<stripe::CustomerId>, TeamError>> + Send;
 
+    /// Checks if a user has already used a trial.
+    fn has_user_trialed(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send;
+
     /// Gets the subscription id for a team
     fn get_team_subscription_id(
         &self,

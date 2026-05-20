@@ -4,10 +4,7 @@ import type { MarkdownBlockSpec } from '../block-md/definition';
 import type { BlockName } from './block';
 
 // Base type for all block method specs
-export type BlockMethodSpec = Record<
-  string,
-  (...args: any[]) => any | Promise<any>
->;
+type BlockMethodSpec = Record<string, (...args: any[]) => any | Promise<any>>;
 
 export type SharedBlockSpec = {
   goToLocationFromParams: (params: Record<string, any>) => Promise<void>;

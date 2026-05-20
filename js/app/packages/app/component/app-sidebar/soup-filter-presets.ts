@@ -11,7 +11,7 @@ import {
 } from '@core/component/Properties/constants';
 import { subWeeks } from 'date-fns';
 
-export type SoupFiltersPreset = {
+type SoupFiltersPreset = {
   /** Filter data for server query */
   filters: Query;
   /** Client filters to apply */
@@ -30,13 +30,11 @@ export type PresetContext = {
   email: string | undefined;
 };
 
-export type TabPresetResolver = (
-  ctx: PresetContext
-) => SoupFiltersPreset | undefined;
+type TabPresetResolver = (ctx: PresetContext) => SoupFiltersPreset | undefined;
 
-export type TabConfig = Record<string, TabPresetResolver>;
+type TabConfig = Record<string, TabPresetResolver>;
 
-export type ViewTabConfig = {
+type ViewTabConfig = {
   default: string;
   tabs: TabConfig;
 };

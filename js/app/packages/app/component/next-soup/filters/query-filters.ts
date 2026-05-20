@@ -2,9 +2,9 @@ import type { SoupBody, SoupItemsQueryFilters } from '@queries/soup/items';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { match } from 'ts-pattern';
 
-export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
-export const EXCLUDE: string[] = [NIL_UUID];
+const EXCLUDE: string[] = [NIL_UUID];
 
 // Base filter that excludes all entity types by default
 export const QUERY_FILTERS_BASE: SoupItemsQueryFilters = {

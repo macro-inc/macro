@@ -15,7 +15,7 @@ export type ChannelAttachmentsData = InfiniteData<
   string | null
 >;
 
-export type ChannelAttachmentsQueryKey = ReturnType<
+type ChannelAttachmentsQueryKey = ReturnType<
   typeof channelKeys.attachments
 >['queryKey'];
 
@@ -50,7 +50,7 @@ export function channelAttachmentsQueryOptions(
   };
 }
 
-export function useChannelAttachmentsQuery(
+function useChannelAttachmentsQuery(
   channelId: Accessor<string>,
   attachmentType?: Accessor<ChannelAttachmentType | undefined>
 ) {
@@ -69,7 +69,7 @@ export function useChannelDocumentAttachmentsQuery(
   return useChannelAttachmentsQuery(channelId, () => 'dss');
 }
 
-export function useChannelAttachmentsWithIndex(channelId: Accessor<string>) {
+function _useChannelAttachmentsWithIndex(channelId: Accessor<string>) {
   const query = useChannelAttachmentsQuery(channelId);
   const byId = createMemo(() => {
     const flat = flattenAttachments(
@@ -102,7 +102,7 @@ export function getChannelAttachmentsQueryKeyPrefix(channelId: string) {
   return [...channelKeys.attachments._def, channelId];
 }
 
-export function softInvalidateChannelAttachments(channelId: string) {
+function _softInvalidateChannelAttachments(channelId: string) {
   queryClient.invalidateQueries({
     queryKey: getChannelAttachmentsQueryKeyPrefix(channelId),
     refetchType: 'inactive',

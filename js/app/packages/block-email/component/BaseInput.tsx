@@ -48,11 +48,11 @@ import { logger } from '@observability';
 import ReplyAll from '@phosphor/arrow-bend-double-up-left.svg';
 import Reply from '@phosphor/arrow-bend-up-left.svg';
 import Forward from '@phosphor/arrow-bend-up-right.svg';
+
 import ChevronDown from '@phosphor/caret-down.svg';
-import PaperPlaneRight from '@phosphor/paper-plane-right.svg';
 import Paperclip from '@phosphor/paperclip.svg';
 import Quotes from '@phosphor/quotes.svg';
-import Spinner from '@phosphor/spinner-gap.svg';
+
 import TextAa from '@phosphor/text-aa.svg';
 import Trash from '@phosphor/trash.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
@@ -79,7 +79,7 @@ import type {
   ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
-import { Button, cn, HoverCard, Scroll, Tooltip } from '@ui';
+import { Button, cn, HoverCard, Scroll, SendButton, Tooltip } from '@ui';
 import {
   defaultSelectionData,
   lazyRegister,
@@ -1309,12 +1309,14 @@ export function BaseInput(props: {
     )
   );
 
+  const hasBodyText = () => bodyMacro().trim().length > 0;
+
   return (
     <div
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative flex flex-col flex-1 bg-ink-muted/2.5 border border-ink-muted/8 rounded-lg max-w-full"
+      class="relative bg-surface flex flex-col flex-1 border border-ink-muted/8 rounded-xl max-w-full"
     >
       {/* Top Bar */}
       <div class="relative flex items-start gap-2 px-3 pt-1.5 pb-0.5">
@@ -1666,9 +1668,9 @@ export function BaseInput(props: {
             </div>
           </Scroll>
         </div>
-        <div class="flex flex-row w-full h-9 justify-between items-center px-3 pb-2 pt-0.5 space-x-2">
+        <div class="flex flex-row w-full h-9 justify-between items-end px-2 pb-2 pt-0.5 space-x-2">
           <div class="flex flex-row items-center gap-1">
-            <div class="relative">
+            <div class="relative flex">
               <Button
                 ref={(el) =>
                   fileSelector(el, () => ({
@@ -1747,24 +1749,16 @@ export function BaseInput(props: {
             </Button>
           </div>
 
-          <Tooltip label="Send">
-            <Button
-              size="icon-sm"
-              disabled={
-                uploadAttachmentMutation.isPending ||
-                sendMutation.isPending ||
-                !!form().sendTime()
-              }
-              onClick={() => sendEmail()}
-            >
-              <Show
-                when={!sendMutation.isPending}
-                fallback={<Spinner class="animate-spin" />}
-              >
-                <PaperPlaneRight />
-              </Show>
-            </Button>
-          </Tooltip>
+          <SendButton
+            disabled={
+              uploadAttachmentMutation.isPending ||
+              sendMutation.isPending ||
+              !!form().sendTime()
+            }
+            pending={sendMutation.isPending}
+            hidden={isMobile() && !hasBodyText()}
+            onClick={() => sendEmail()}
+          />
         </div>
       </div>
     </div>

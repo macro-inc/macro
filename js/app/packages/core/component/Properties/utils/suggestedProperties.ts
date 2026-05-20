@@ -10,7 +10,7 @@ import type { PropertyDefinitionDomain } from '../types';
  * @param entityTypes - Array of entity types from the filter (e.g., ['document', 'chat'])
  * @returns Array of PropertyDefinitionDomain objects for quick selection
  */
-export function getSuggestedProperties(
+function _getSuggestedProperties(
   _entityTypes: ExpandedEntityType[]
 ): PropertyDefinitionDomain[] {
   return [];

@@ -8,7 +8,7 @@ import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
 
-export function channelParticipantsQueryOptions(channelId: string) {
+function channelParticipantsQueryOptions(channelId: string) {
   return {
     queryKey: channelKeys.participants(channelId).queryKey,
     queryFn: async (): Promise<ApiChannelParticipant[]> => {

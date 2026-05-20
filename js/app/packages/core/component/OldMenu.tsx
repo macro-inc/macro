@@ -44,7 +44,7 @@ function OldBaseItem(props: ParentProps<OldBaseItemProps>) {
   );
 }
 
-export interface OldMenuItemProps extends OldBaseItemProps {
+interface OldMenuItemProps extends OldBaseItemProps {
   text: string | JSX.Element;
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   iconClass?: string;

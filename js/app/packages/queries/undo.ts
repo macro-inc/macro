@@ -46,9 +46,9 @@ type UndoEntry = {
   onRedone?: () => void;
 };
 
-export type UndoEntryInput = Omit<UndoEntry, 'id'>;
+type UndoEntryInput = Omit<UndoEntry, 'id'>;
 
-export type UndoHandle = {
+type UndoHandle = {
   id: string;
   /** Undo this specific entry, even if it is not at the top of the stack. */
   undo: (callbacks?: UndoCallbacks) => Promise<void>;
@@ -179,7 +179,7 @@ export const [MutationUndoProvider, useMutationUndoContext] =
     }
   );
 
-export type UndoLifecycle = {
+type UndoLifecycle = {
   onUndone?: () => void;
   onRedone?: () => void;
 };

@@ -49,5 +49,6 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         customer_id: stripe::CustomerId,
         req: &TeamCheckoutSessionRequest,
+        has_trialed: bool,
     ) -> impl Future<Output = Result<String, CustomerError>> + Send;
 }

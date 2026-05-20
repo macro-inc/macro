@@ -8,7 +8,7 @@ type LocalState = {
   hasChanges: boolean;
 };
 
-export interface PropertyEditorReturn {
+interface PropertyEditorReturn {
   selectedOptions: Accessor<Set<string>>;
   hasChanges: Accessor<boolean>;
   initializeSelectedOptions: () => void;

@@ -136,7 +136,7 @@ function useUserNameItem(id: MacroId) {
   return { getItem, refetch, mutate };
 }
 
-export type DisplayNameParts = {
+type DisplayNameParts = {
   firstName: () => string;
   lastName: () => string;
   fullName: () => string;

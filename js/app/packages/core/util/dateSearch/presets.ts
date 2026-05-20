@@ -1,6 +1,6 @@
 import { addDays, addWeeks, endOfDay, endOfWeek } from 'date-fns';
 
-export interface DatePreset {
+interface DatePreset {
   id: string;
   label: string;
   shortLabel?: string;
@@ -9,7 +9,7 @@ export interface DatePreset {
   category?: 'quick' | 'week' | 'month' | 'year';
 }
 
-export const DATE_PRESETS: DatePreset[] = [
+const DATE_PRESETS: DatePreset[] = [
   {
     id: 'today',
     label: 'Today',

@@ -14,10 +14,7 @@ export enum MarkdownEditorErrors {
   STAGING_VERSION_MISMATCH_ERROR = 'STAGING_VERSION_MISMATCH_ERROR',
 }
 
-export const MarkdownEditorErrorDescriptions: Record<
-  MarkdownEditorErrors,
-  string
-> = {
+const MarkdownEditorErrorDescriptions: Record<MarkdownEditorErrors, string> = {
   [MarkdownEditorErrors.EMPTY_SOURCE]: 'No document content could be found.',
   [MarkdownEditorErrors.JSON_PARSE_ERROR]:
     'Parse error. Invalid document JSON.',

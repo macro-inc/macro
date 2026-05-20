@@ -2,7 +2,7 @@ import { extendTailwindMerge } from 'tailwind-merge';
 
 // Local `clsx`-compatible types + implementation (so we don't depend on the external
 // `clsx` package being installed).
-export type ClassValue =
+type ClassValue =
   | string
   | number
   | null

@@ -8,7 +8,7 @@ export interface ThreeColumnLayout {
   marginWidth: number;
 }
 
-export interface ThreeColumnConfig {
+interface ThreeColumnConfig {
   gutterPx: number;
   minLeftColumnWidth: number;
   minRightColumnWidth: number;
@@ -16,7 +16,7 @@ export interface ThreeColumnConfig {
   rightHandWidth: number;
 }
 
-export const resizeColumns = (
+const _resizeColumns = (
   centerWidth: number | undefined,
   windowWidth: number | undefined,
   oldColumns: ThreeColumnLayout,

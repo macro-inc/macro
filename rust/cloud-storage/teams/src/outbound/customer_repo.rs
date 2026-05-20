@@ -239,6 +239,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         team_id: &uuid::Uuid,
         customer_id: stripe::CustomerId,
         req: &TeamCheckoutSessionRequest,
+        has_trialed: bool,
     ) -> Result<String, CustomerError> {
         let promo_code_id = if let Some(discount) = req.discount.as_ref() {
             let mut list_params = stripe::ListPromotionCodes::new();
@@ -278,12 +279,16 @@ impl CustomerRepository for CustomerRepositoryImpl {
             metadata.insert("fbc".to_string(), fbc.clone());
         }
 
-        // Only set subscription_data if we have metadata to include
-        let subscription_data =
-            (!metadata.is_empty()).then_some(stripe::CreateCheckoutSessionSubscriptionData {
-                metadata: Some(metadata),
+        let subscription_metadata = (!metadata.is_empty()).then_some(metadata);
+
+        // Only set subscription_data if we have metadata or a trial to include.
+        let subscription_data = (subscription_metadata.is_some() || !has_trialed).then_some(
+            stripe::CreateCheckoutSessionSubscriptionData {
+                metadata: subscription_metadata,
+                trial_period_days: (!has_trialed).then_some(60),
                 ..Default::default()
-            });
+            },
+        );
 
         let price_id = self
             .team_plan_stripe_price_ids

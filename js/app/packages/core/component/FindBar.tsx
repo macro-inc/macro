@@ -20,7 +20,7 @@ import type { FindBarController } from './createFindBarController';
  * ArrowUp/Shift+Enter retreat. `'desc'` — flipped, for surfaces where the
  * natural reading direction is bottom-to-top (e.g. a chat channel).
  */
-export type FindBarDirection = 'asc' | 'desc';
+type FindBarDirection = 'asc' | 'desc';
 
 type FindBarContextValue = {
   controller: FindBarController;
@@ -36,7 +36,7 @@ function useFindBarContext(): FindBarContextValue {
   return ctx;
 }
 
-export type FindBarProps = {
+type FindBarProps = {
   controller: FindBarController;
   direction?: FindBarDirection;
   placeholder?: string;

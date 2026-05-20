@@ -730,7 +730,7 @@ export interface MarkdownNode {
   type: string;
 }
 /**
- * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. For emails, whitespace-separated terms are ANDed and each term is matched independently across the text fields and the local-part of address fields, with the two groups OR'd. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"` or `"alice@example.com"`) to force exact-token matching instead of prefix. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
+ * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"` or `"alice@example.com"`) to force exact-token / exact-phrase matching instead of prefix. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
  */
 export interface ContentSearch {
   /**
@@ -738,7 +738,7 @@ export interface ContentSearch {
    */
   entityTypes?: UnifiedSearchIndex[];
   /**
-   * The text to search. Pass 1-3 keywords drawn from words that would literally appear in the content, not the user's natural-language description. Whitespace-separated terms are ANDed. For non-email types the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. For emails each term is matched across subject/body/sender/recipient. Wrap a term in double quotes to force exact-token (or full-email-address) matching.
+   * The text to search. Pass 1-3 keywords drawn from words that would literally appear in the content, not the user's natural-language description. Whitespace-separated terms are ANDed. For documents, every term must appear somewhere in the document (different chunks/pages are fine). For emails each term is matched across subject/body/sender/recipient. For chats/channels/calls the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. Wrap a term in double quotes to force exact-token (or full-email-address) matching.
    */
   query: string;
 }

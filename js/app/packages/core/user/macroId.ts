@@ -8,7 +8,7 @@ export type MacroId = string & { readonly [MacroIdBrand]: never };
 /**
  * Type guard to check if a string is a valid MacroId.
  */
-export function isMacroId(str: string): str is MacroId {
+function isMacroId(str: string): str is MacroId {
   return str.startsWith('macro|') && str.slice(6).includes('@');
 }
 

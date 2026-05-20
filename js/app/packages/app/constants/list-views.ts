@@ -26,7 +26,7 @@ export const LIST_VIEW_PATHS = {
   search: '/search',
 } as const satisfies Record<ListView, string>;
 
-export const isListViewPath = (path: string) => {
+const _isListViewPath = (path: string) => {
   return LIST_VIEW_PATHS[path as ListView] !== undefined;
 };
 
@@ -68,6 +68,6 @@ const BLOCK_LIST_VIEW_MAP = {
   automation: 'agents',
 } as const satisfies Record<BlockName | BlockAlias, ListView>;
 
-export const getBlockListView = (block: BlockName | BlockAlias): ListView => {
+const _getBlockListView = (block: BlockName | BlockAlias): ListView => {
   return BLOCK_LIST_VIEW_MAP[block];
 };

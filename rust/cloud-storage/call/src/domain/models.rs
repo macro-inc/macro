@@ -157,6 +157,52 @@ pub struct TranscriptSegmentRequest {
     pub embedding: Option<Vec<f32>>,
 }
 
+/// Full archived transcript row used by the AI speaker-attribution pipeline.
+///
+/// This mirrors every column currently stored in `call_record_transcripts` so
+/// the AI adapter can reason from both the raw archived speaker data and any
+/// existing overrides.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct EnrichedCallTranscript {
+    /// Stable DB-row id for this archived transcript segment.
+    pub id: Uuid,
+    /// The archived call record this transcript row belongs to.
+    pub call_record_id: Uuid,
+    /// LiveKit segment ID, when the archived row has one.
+    pub segment_id: Option<String>,
+    /// The speaker's original user ID from the transcribed track.
+    pub speaker_id: String,
+    /// Stable diarization label emitted by the STT provider, when present.
+    pub diarized_speaker_id: Option<String>,
+    /// Existing custom speaker override, when one has already been assigned.
+    pub custom_speaker: Option<String>,
+    /// Speaker voice id attached to the transcript row, when available.
+    pub voice_id: Option<Uuid>,
+    /// The transcribed text content.
+    pub content: String,
+    /// When the speaker started this segment.
+    pub started_at: DateTime<Utc>,
+    /// When the speaker stopped this segment, if known.
+    pub ended_at: Option<DateTime<Utc>>,
+    /// Ordering within the archived call.
+    pub sequence_num: i32,
+}
+
+/// Backwards-compatible name for callers that refer to the AI transcript input
+/// as "enhanced" rather than "enriched".
+pub type EnhancedCallTranscript = EnrichedCallTranscript;
+
+/// AI-generated speaker attribution for one archived transcript row.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+pub struct CallTranscriptCustomSpeakerResult {
+    /// The call transcript id.
+    #[serde(alias = "callTranscriptId")]
+    pub call_transcript_id: Uuid,
+    /// The custom speaker override for the transcript.
+    #[serde(alias = "customSpeaker")]
+    pub custom_speaker: String,
+}
+
 /// Edit call request
 #[derive(Debug, Clone, serde::Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]

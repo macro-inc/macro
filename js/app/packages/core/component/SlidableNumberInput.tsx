@@ -54,7 +54,7 @@ const OptionalTooltipWrapper = (props: {
   return <>{props.children}</>;
 };
 
-export type SlidableNumberInputProps = SlidableNumberInput;
+type SlidableNumberInputProps = SlidableNumberInput;
 
 export function SlidableNumberInput(props: SlidableNumberInputProps) {
   const [dropdownOpen, setDropdownOpen] = createSignal<boolean>(false);

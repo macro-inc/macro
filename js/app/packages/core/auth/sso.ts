@@ -8,7 +8,7 @@ import { authServiceClient } from '@service-auth/client';
 import { invoke } from '@tauri-apps/api/core';
 import { GOOGLE_GMAIL_IDP } from './email';
 
-export type StartSsoLoginParams = {
+type StartSsoLoginParams = {
   idpName?: string;
   /** Where to redirect after auth on web. Ignored on native mobile. */
   returnPath?: string;

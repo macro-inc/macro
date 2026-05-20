@@ -127,7 +127,7 @@ type CreateProjectContext = {
   tempProjectId: string;
 };
 
-export function useCreateProjectMutation(
+function _useCreateProjectMutation(
   callbacks?: MutationCallbacks<
     string | undefined,
     Error,

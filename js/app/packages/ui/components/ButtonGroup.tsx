@@ -26,17 +26,19 @@ type ButtonGroupProps = {
 };
 
 const groupVariantStyles: Record<ButtonVariant, string> = {
-  danger: 'border border-failure/50  ',
-  base:   'border border-edge-muted  ',
-  active: 'border border-accent  ',
-  ghost:  '                          ',
+  danger:           'border border-failure/50  ',
+  base:             'border border-edge-muted  ',
+  active:           'border border-accent  ',
+  ghost:            '                          ',
+  'cta': 'border border-transparent ',
 };
 
 const dividerVariantStyles: Record<ButtonVariant, string> = {
-  danger: 'bg-failure/50',
-  base:   'bg-edge-muted',
-  active: 'bg-accent',
-  ghost:  'bg-edge-muted',
+  danger:           'bg-failure/50',
+  base:             'bg-edge-muted',
+  active:           'bg-accent',
+  ghost:            'bg-edge-muted',
+  'cta': 'bg-surface/50',
 };
 
 /* explicit cross-axis size so the group's outer box matches a standalone

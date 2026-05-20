@@ -24,7 +24,7 @@ import { StaticMarkdown } from './LexicalMarkdown/component/core/StaticMarkdown'
 import { twoLineClampMarkdownTheme } from './LexicalMarkdown/theme';
 import { UserIcon } from './UserIcon';
 
-export type ReferenceProps = {
+type ReferenceProps = {
   documentId: string;
   entityType?: ItemType;
 };

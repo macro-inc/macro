@@ -692,6 +692,8 @@ where
             .get_authenticated_user()
             .map_err(TeamError::AccessError)?;
 
+        let has_trialed = self.team_repository.has_user_trialed(user_id).await?;
+
         let stripe_customer_id: stripe::CustomerId =
             match self.team_repository.get_stripe_customer_id(user_id).await? {
                 Some(customer_id) => customer_id,
@@ -710,7 +712,7 @@ where
 
         let url = self
             .customer_repository
-            .create_team_checkout_session(&team_id, stripe_customer_id, req)
+            .create_team_checkout_session(&team_id, stripe_customer_id, req, has_trialed)
             .await?;
 
         Ok(url)

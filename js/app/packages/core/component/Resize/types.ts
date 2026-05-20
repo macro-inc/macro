@@ -1,7 +1,7 @@
 export type PanelId = string;
 
-export const HORIZONTAL = 'horizontal' as const;
-export const VERTICAL = 'vertical' as const;
+const _HORIZONTAL = 'horizontal' as const;
+const _VERTICAL = 'vertical' as const;
 
 // TODO (seamus): next version should use these to as default sizes instead of
 // current behavior which is hard-coded "1fr"

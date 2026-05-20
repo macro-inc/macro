@@ -19,7 +19,7 @@ interface ISplitDrawerContext {
   contentOffsetTop: Accessor<number>;
 }
 
-export const SplitDrawerContext = createContext<ISplitDrawerContext>();
+const SplitDrawerContext = createContext<ISplitDrawerContext>();
 
 export function SplitDrawerGroup(
   props: ParentProps<{
@@ -92,7 +92,7 @@ export function SplitDrawerGroup(
  *     tie, the newer drawer wins.
  * @returns Signal<boolean> - A signal that can be used like any other boolean signal
  */
-export function createDrawerOpenSignal(
+function createDrawerOpenSignal(
   id: string,
   initial?: boolean
 ): Signal<boolean> {

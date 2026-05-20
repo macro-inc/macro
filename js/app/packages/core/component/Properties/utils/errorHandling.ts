@@ -35,7 +35,7 @@ export const ERROR_MESSAGES = {
  * @param context - Context for error logging (e.g., function name)
  * @returns true if operation succeeded, false otherwise
  */
-export function handlePropertyError(
+function _handlePropertyError(
   result: Result<unknown>,
   errorMessage: string,
   context: string

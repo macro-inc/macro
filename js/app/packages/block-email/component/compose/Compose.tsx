@@ -655,7 +655,11 @@ export function EmailCompose(props: EmailComposeProps) {
         </Show>
         <div class="macro-message-width sm:macro-message-padding mx-auto w-full min-h-120 max-h-full my-2 sm:my-12 mobile:my-0 px-2 sm:px-4 mobile:px-0 overflow-hidden mobile:overflow-y-auto mobile:scrollbar-hidden mobile:min-h-full">
           <WrapUnlessMobile
-            wrapper={(children) => <Surface depth={2}>{children}</Surface>}
+            wrapper={(children) => (
+              <Surface depth={2} class="rounded-xl border border-ink-muted/8">
+                {children}
+              </Surface>
+            )}
           >
             <ComposeLayout
               toolbar={<EmailComposeToolbar editor={editor} />}

@@ -12,7 +12,7 @@ export type WithNotification<T> = T & {
  * When clicking a stacked notification row, this array contains all notifications in the stack
  * so they can be bulk-marked as done.
  */
-export type WithStackedNotifications<T> = T & {
+type WithStackedNotifications<T> = T & {
   stackedNotifications?: Notification[];
 };
 
@@ -22,7 +22,7 @@ export const isWithNotification = <T extends {} = {}>(
   return 'notifications' in item && typeof item.notifications === 'function';
 };
 
-export const isWithStackedNotifications = <T extends {} = {}>(
+const _isWithStackedNotifications = <T extends {} = {}>(
   item: T
 ): item is WithStackedNotifications<T> => {
   return (

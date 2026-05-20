@@ -10,4 +10,6 @@ test-comptime = []
 [dependencies]
 paste = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
 tracing = { workspace = true }

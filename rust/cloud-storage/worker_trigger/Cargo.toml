@@ -7,12 +7,14 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-ecs = "1.124.0"
-macro_aws_config = { path = "../macro_aws_config" }
 aws_lambda_events = { workspace = true, features = ["eventbridge"] }
 lambda_runtime = { workspace = true }
+macro_aws_config = { path = "../macro_aws_config" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
-mockall = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+mockall = { workspace = true }

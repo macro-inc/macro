@@ -15,7 +15,7 @@ import type {
 
 false && clickOutside;
 
-export type PopoverSplitData = {
+type PopoverSplitData = {
   id: string;
   content: SplitContent;
   mount: SplitMount;

@@ -1,13 +1,5 @@
 import { syncServiceClient } from '@service-sync/client';
-import {
-  type Change,
-  type JsonOp,
-  type ListOp,
-  LoroDoc,
-  type MapOp,
-  type TextOp,
-  type TreeOp,
-} from 'loro-crdt';
+import { type Change, LoroDoc } from 'loro-crdt';
 
 export type BaseHistory = {
   readonly userId: string;
@@ -15,16 +7,6 @@ export type BaseHistory = {
   readonly humanTimestamp: string;
   readonly change: Change;
 };
-
-export type HistoryWithDiff<T> = BaseHistory & {
-  readonly diff: T;
-};
-
-export type Op = ListOp | MapOp | TreeOp | TextOp | JsonOp;
-
-export interface OpSerializer<T> {
-  serialize(ops: Op[], doc: LoroDoc): T;
-}
 
 type UnixTimestamp = number;
 type Milliseconds = number;
@@ -56,7 +38,7 @@ const DEFAULT_GROUPING_CONFIG: GroupingConfig = {
   minChanges: 1,
 };
 
-export type DocumentHistoryOptions = {
+type DocumentHistoryOptions = {
   readonly grouping?: GroupingConfig;
 };
 
@@ -100,7 +82,7 @@ function changeInWindow(change: BaseHistory, window: TimeWindow): boolean {
  * Two changes belong to the same session if they're within `pauseThreshold` of each other.
  * Uses interval merging: treat each change as a time window, merge overlapping windows.
  */
-export function groupHistory(
+function groupHistory(
   history: readonly BaseHistory[],
   config: GroupingConfig = DEFAULT_GROUPING_CONFIG
 ): HistoryGroup[] {
@@ -191,7 +173,7 @@ async function fetchRawHistory(documentId: string): Promise<BaseHistory[]> {
   return history.sort((a, b) => a.timestamp - b.timestamp);
 }
 
-export function applyGrouping(
+function applyGrouping(
   history: readonly BaseHistory[],
   config?: GroupingConfig
 ): GroupedHistory[] {

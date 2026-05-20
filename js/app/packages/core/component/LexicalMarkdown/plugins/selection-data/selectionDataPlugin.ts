@@ -15,13 +15,10 @@ import {
   type ElementNode,
   type LexicalEditor,
   type NodeKey,
-  type NodeSelection,
   type RangeSelection,
 } from 'lexical';
 import { createStore, type SetStoreFunction } from 'solid-js/store';
 import type { LexicalWrapper } from '../../context/LexicalWrapperContext';
-
-export type Selection = NodeSelection | RangeSelection | null;
 
 /**
  * Useful data about Lexical's current selection. If the selection is Lexical
@@ -65,13 +62,11 @@ function resetSelectionData(setSelectionData: SetStoreFunction<SelectionData>) {
   setSelectionData(structuredClone(defaultSelectionData));
 }
 
-export function createSelectionData() {
+function createSelectionData() {
   return createStore<SelectionData>(structuredClone(defaultSelectionData));
 }
 
-export function $getSelectionData(
-  selection: BaseSelection | null
-): SelectionData {
+function $getSelectionData(selection: BaseSelection | null): SelectionData {
   const data = structuredClone(defaultSelectionData);
   if (selection === null) return data;
 
@@ -122,7 +117,7 @@ export function nodeType(node: ElementNode): ElementName {
   return t as ElementName;
 }
 
-export function $extractNodeTypes(selection: RangeSelection): Set<ElementName> {
+function $extractNodeTypes(selection: RangeSelection): Set<ElementName> {
   const anchorParent = selection.anchor.getNode().getTopLevelElement();
   const focusParent = selection.focus.getNode().getTopLevelElement();
   const nodeTypes = new Set<ElementName>();

@@ -39,7 +39,7 @@ export interface BaseListEntityProps<E extends EntityData = EntityData> {
   entityRowConfig?: EntityRowConfig;
 }
 
-export const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
+const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
 export interface LayoutProps {
   entity: WithNotification<EntityData>;

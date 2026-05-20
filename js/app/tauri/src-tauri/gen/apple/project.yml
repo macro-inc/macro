@@ -133,6 +133,7 @@ targets:
             NSExtensionActivationRule:
               NSExtensionActivationSupportsImageWithMaxCount: 10
               NSExtensionActivationSupportsMovieWithMaxCount: 5
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
     entitlements:

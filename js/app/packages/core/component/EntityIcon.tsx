@@ -281,7 +281,7 @@ function validateEntity(entity: string): EntityWithValidIcon {
   }
 }
 
-export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
+const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   call: PhoneCall,
   canvas: WideDiagram,
   html: WideFileCode,
@@ -312,7 +312,7 @@ export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   automation: Robot,
 };
 
-export const ICON_SIZES = {
+const ICON_SIZES = {
   xs: 'w-4 h-4',
   sm: 'w-4.5 h-4.5',
   md: 'w-8 h-8',

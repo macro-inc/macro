@@ -46,7 +46,6 @@ comms = { path = "../comms", features = ["outbound", "attachment"] }
 comms_service_client = { path = "../comms_service_client" }
 connection_gateway = { path = "../connection_gateway" }
 cookie = { workspace = true }
-document_cognition_service_client = { path = "../document_cognition_service_client" }
 document_storage_service_client = { path = "../document_storage_service_client" }
 documents = { path = "../documents", features = ["ai_tools", "attachment"] }
 doppleganger = { workspace = true }
@@ -74,7 +73,6 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "cloud_storage",
   "user_permissions",
 ] }
-macro_project_utils = { path = "../macro_project_utils" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mcp_client = { path = "../mcp_client" }
@@ -99,7 +97,6 @@ regex = { workspace = true }
 reqwest.workspace = true
 roles_and_permissions = { path = "../roles_and_permissions", default-features = false }
 schemars = { workspace = true }
-comms_db_client = { path = "../comms_db_client" }
 search_service_client = { path = "../search_service_client" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }

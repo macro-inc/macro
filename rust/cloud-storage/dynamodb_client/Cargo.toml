@@ -12,7 +12,6 @@ anyhow = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 macro_aws_config = { path = "../macro_aws_config" }
 chrono = { workspace = true }
-model = { path = "../model" }
 models_bulk_upload = { path = "../models_bulk_upload" }
 s3_key = { path = "../s3_key" }
 strum = { workspace = true }

@@ -26,7 +26,7 @@ import {
 } from '../plugins';
 import { theme as baseTheme } from '../theme';
 
-export type LexicalWrapperProps = {
+type LexicalWrapperProps = {
   type: EditorType;
   namespace: string;
   isInteractable: () => boolean;

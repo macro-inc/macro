@@ -6,7 +6,6 @@ import { createEffect } from 'solid-js';
 
 export { mockMessages } from '@core/component/AI/util/mockMessage';
 export * from '@core/component/AI/util/stream';
-export { limitStream } from '@core/component/AI/util/stream';
 
 const TABLE = `Here's a comparison table:
 
@@ -66,7 +65,7 @@ export function table() {
   ]);
 }
 
-export function test() {
+function _test() {
   const stream = poem();
   createEffect(() => {
     const data = stream.data();

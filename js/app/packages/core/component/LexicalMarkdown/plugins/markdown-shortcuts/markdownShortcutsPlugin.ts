@@ -23,7 +23,7 @@ function getRegExp(transformer: Transformer) {
   }
 }
 
-export type MarkdownShortcutsPluginProps = {
+type MarkdownShortcutsPluginProps = {
   transformers: Transformer[];
   triggerOnEnterTransformers: Transformer[];
 };

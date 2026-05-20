@@ -153,14 +153,13 @@ export type PropertySelectorProps = {
 // Re-export generated API types from service-properties
 // Note: EntityType is NOT re-exported to avoid type conflicts with @service-connection
 // Files that need EntityType should import it directly from @service-properties/generated/schemas/entityType
-export type { DataType } from '@service-properties/generated/schemas/dataType';
-export type { EntityPropertiesResponse } from '@service-properties/generated/schemas/entityPropertiesResponse';
+
 export type { EntityPropertyWithDefinition } from '@service-properties/generated/schemas/entityPropertyWithDefinition';
 export type { EntityReference } from '@service-properties/generated/schemas/entityReference';
-export type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
+
 export type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
 export type { PropertyOptionValue } from '@service-properties/generated/schemas/propertyOptionValue';
-export type { PropertyValue } from '@service-properties/generated/schemas/propertyValue';
+
 export type { SetPropertyValue } from '@service-properties/generated/schemas/setPropertyValue';
 
 /**
@@ -180,7 +179,7 @@ export type PropertyApiValues =
   | { valueType: 'LINK'; values: string[] | null };
 
 // Result type for API responses
-export type ApiError = {
+type ApiError = {
   code: string;
   message: string;
 };

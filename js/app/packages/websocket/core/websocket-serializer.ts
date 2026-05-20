@@ -27,7 +27,7 @@ export interface WebsocketSerializer<
 /**
  * Type guard to check if this is default websocket data.
  */
-export function isDefaultWebsocketData(data: unknown): data is WebsocketData {
+function _isDefaultWebsocketData(data: unknown): data is WebsocketData {
   return (
     typeof data === 'string' ||
     data instanceof ArrayBuffer ||

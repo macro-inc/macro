@@ -14,7 +14,7 @@ import type { Accessor, JSX } from 'solid-js';
 import { createEffect, onCleanup } from 'solid-js';
 import { iosSafePadding } from './iosFloatingMiddleware';
 
-export type FloatWithElementOptions = {
+type FloatWithElementOptions = {
   element: () => Element | undefined | null;
   spacing?: number;
   useBlockBoundary?: boolean;

@@ -12,7 +12,7 @@ export function truncateString(str: string, maxLength: number) {
   return str.slice(0, maxLength) + '...';
 }
 
-export const DEFAULT_LABEL_MAX_CHARS = 30;
+const DEFAULT_LABEL_MAX_CHARS = 30;
 
 /**
  * Truncates a display label to a max character count, appending a single

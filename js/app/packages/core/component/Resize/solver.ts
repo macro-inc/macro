@@ -8,7 +8,7 @@ import {
 } from 'solid-js';
 import type { LayoutResult, Panel, PanelConfig, PanelId } from './types';
 
-export type ResizeSolver = {
+type ResizeSolver = {
   readonly direction: 'horizontal' | 'vertical';
   addPanel: (panel: PanelConfig, index?: number) => void;
   dropPanel: (id: PanelId) => void;

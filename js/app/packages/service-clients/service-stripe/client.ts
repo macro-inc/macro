@@ -126,7 +126,7 @@ export const stripeServiceClient = {
   },
 };
 
-export type UpdateSubscriptionTierResult =
+type UpdateSubscriptionTierResult =
   | { ok: true }
   | { ok: false; code: PatchSubscriptionTierErrorCode | 'UNKNOWN' };
 

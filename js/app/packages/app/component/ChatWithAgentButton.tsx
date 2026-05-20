@@ -13,14 +13,14 @@ export { AnimatedStarIcon as ChatWithAgentIcon };
 
 const CHANNEL_TYPE_VALUES = new Set<string>(Object.values(ChannelType));
 
-export function toChatChannelType(
+function _toChatChannelType(
   t: string | undefined | null
 ): ChannelType | undefined {
   if (t && CHANNEL_TYPE_VALUES.has(t)) return t as ChannelType;
   return undefined;
 }
 
-export type ChatWithAgentEntity =
+type ChatWithAgentEntity =
   | { type: 'email'; id: string; name: string }
   | {
       type: 'document';
