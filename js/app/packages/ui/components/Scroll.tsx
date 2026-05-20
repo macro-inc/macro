@@ -96,7 +96,7 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
           'height': '100%',
         }}
       >
-        <div class="bg-[red]/40" ref={contentRef}>{props.children}</div>
+        <div ref={contentRef}>{props.children}</div>
       </div>
       <div
         ref={gutterRef}

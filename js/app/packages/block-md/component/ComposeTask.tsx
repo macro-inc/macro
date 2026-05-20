@@ -1,6 +1,5 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { CircleSpinner } from '@core/component/CircleSpinner';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
@@ -576,7 +575,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     >
       <div class="flex items-center gap-1">
         <div class="flex-1 text-sm text text-ink-extra-muted flex items-center gap-2">
-          <EntityIcon targetType="task" size="xs" />
+          <EntityIcon targetType="task" size="xs" /> New Task
         </div>
         <Show when={content().trim() || title()}>
           <Button
@@ -584,6 +583,9 @@ export function ComposeTask(props: ComposeTaskProps) {
             tabIndex={-1}
             tooltip="Clear Draft"
             size="sm"
+            variant="base"
+            depth={3}
+            class="bg-surface px-3"
           >
             Clear Draft
           </Button>
@@ -655,18 +657,20 @@ export function ComposeTask(props: ComposeTaskProps) {
           />
         </div>
 
-        <div class="overflow-y-scroll scrollbar-hidden mb-6">
-          <MarkdownShell
-            config={editorConfig}
-            initialState={initialState.editorState}
-            initialValue={
-              initialState.editorState
-                ? undefined
-                : initialState.content || undefined
-            }
-            placeholder={props.placeholder ?? 'Add description...'}
-            portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
-          />
+        <div class="overflow-auto scrollbar-hidden mb-6 grow">
+          <Scroll>
+            <MarkdownShell
+              config={editorConfig}
+              initialState={initialState.editorState}
+              initialValue={
+                initialState.editorState
+                  ? undefined
+                  : initialState.content || undefined
+              }
+              placeholder={props.placeholder ?? 'Add description...'}
+              portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
+            />
+          </Scroll>
         </div>
 
         <Suspense>
@@ -710,11 +714,13 @@ export function ComposeTask(props: ComposeTaskProps) {
         />
         <Button
           onClick={handleCreateTask}
-          // disabled={title().trim().length === 0 || isCreating()}
+          disabled={title().trim().length === 0 || isCreating()}
           variant="base"
+          depth={3}
+          class="gap-3"
         >
           Create Task
-          <Hotkey shortcut="cmd+enter" />
+          <Hotkey shortcut="cmd+enter" theme="subtle" />
         </Button>
       </div>
     </div>

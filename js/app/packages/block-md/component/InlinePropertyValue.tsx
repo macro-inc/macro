@@ -48,7 +48,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
               'bg-surface',
               {
                 'hover:bg-hover': !isReadOnly(),
-                'text-ink-extra-muted/50': isEmpty(),
+                'text-ink-extra-muted': isEmpty(),
               }
             )}
           >
