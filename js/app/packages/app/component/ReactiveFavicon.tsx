@@ -1,17 +1,17 @@
-import { updateFavicon } from '@app/util/favicon';
-import { runRefocusPulses } from '@app/util/refocus-highlight';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   addBadgeNotification,
   removeBadgeNotifications,
 } from '@app/signal/sidebarBadges';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { updateFavicon } from '@app/util/favicon';
 import { notificationToSidebarId } from '@app/util/notification-sidebar-id';
+import { runRefocusPulses } from '@app/util/refocus-highlight';
 import { ENABLE_REFOCUS_HIGHLIGHT } from '@core/constant/featureFlags';
+import type { UnifiedNotification } from '@notifications';
 import { createBroadcastChannel } from '@solid-primitives/broadcast-channel';
 import { createEffect, createSignal, on, onCleanup, onMount } from 'solid-js';
 import { useReactiveColorString } from '../../theme/signals/themeReactive';
 import { useGlobalNotificationSource } from './GlobalAppState';
-import type { UnifiedNotification } from '@notifications';
 
 type BadgeMessage = { hasBadge: boolean };
 

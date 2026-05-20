@@ -1,9 +1,7 @@
-import { createSignal } from 'solid-js';
 import type { ListView } from '@app/constants/list-views';
+import { createSignal } from 'solid-js';
 
-const [badgeMap, setBadgeMap] = createSignal(
-  new Map<ListView, Set<string>>()
-);
+const [badgeMap, setBadgeMap] = createSignal(new Map<ListView, Set<string>>());
 
 export function hasSidebarBadge(id: ListView): boolean {
   return (badgeMap().get(id)?.size ?? 0) > 0;

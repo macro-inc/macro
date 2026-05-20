@@ -4,7 +4,6 @@ import {
   InviteModal,
   setInviteModalOpen,
 } from '@app/component/app-sidebar/invite-modal';
-import { clearSidebarBadge, hasSidebarBadge } from '@app/signal/sidebarBadges';
 import { CommandState } from '@app/component/command';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
 import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
@@ -16,6 +15,7 @@ import {
   type ListView,
 } from '@app/constants/list-views';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
+import { clearSidebarBadge, hasSidebarBadge } from '@app/signal/sidebarBadges';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { InCallPanel } from '@channel/Call';
 import { useCallContextOptional } from '@channel/Call/CallContext';

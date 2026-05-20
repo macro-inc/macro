@@ -1,7 +1,7 @@
 import type { SplitManager } from '@app/component/split-layout/layoutManager';
 import type { ListView } from '@app/constants/list-views';
-import { notificationToSidebarId } from '@app/util/notification-sidebar-id';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { notificationToSidebarId } from '@app/util/notification-sidebar-id';
 import { toast } from '@core/component/Toast/Toast';
 import { isElementVisibleInViewport } from '@core/util/isElementVisibleInViewport';
 import {
@@ -114,9 +114,12 @@ export function runRefocusPulses(
     // Rule 1: channel message bubble
     const { messageId } = getChannelNotificationParams(notification);
     if (messageId) {
-      const msgEl = document.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`);
+      const msgEl = document.querySelector(
+        `[data-message-id="${CSS.escape(messageId)}"]`
+      );
       if (msgEl instanceof HTMLElement && isElementVisibleInViewport(msgEl)) {
-        if (!tryPulse(msgEl, pulsed, pulseCount)) toastBucket.push(notification);
+        if (!tryPulse(msgEl, pulsed, pulseCount))
+          toastBucket.push(notification);
         continue;
       }
     }
@@ -143,9 +146,15 @@ export function runRefocusPulses(
     }
 
     // Rule 3: generic entity row visible in the soup/list view
-    const entityEl = document.querySelector(`[data-entity-id="${CSS.escape(notification.entity_id)}"]`);
-    if (entityEl instanceof HTMLElement && isElementVisibleInViewport(entityEl)) {
-      if (!tryPulse(entityEl, pulsed, pulseCount)) toastBucket.push(notification);
+    const entityEl = document.querySelector(
+      `[data-entity-id="${CSS.escape(notification.entity_id)}"]`
+    );
+    if (
+      entityEl instanceof HTMLElement &&
+      isElementVisibleInViewport(entityEl)
+    ) {
+      if (!tryPulse(entityEl, pulsed, pulseCount))
+        toastBucket.push(notification);
       continue;
     }
 
@@ -154,7 +163,8 @@ export function runRefocusPulses(
       `[data-unread-entity-id="${CSS.escape(notification.entity_id)}"]`
     );
     if (unreadEl) {
-      if (!tryPulse(unreadEl, pulsed, pulseCount)) toastBucket.push(notification);
+      if (!tryPulse(unreadEl, pulsed, pulseCount))
+        toastBucket.push(notification);
       continue;
     }
 
