@@ -202,3 +202,42 @@ fn test_build_bool_query_join_shape_has_inner_hits() -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn document_index_deserializes_parent_shape_with_no_node_id_or_raw_content() {
+    // Join-shape parent docs only carry parent metadata in `_source`;
+    // `node_id` and `raw_content` are child-only fields and are
+    // absent. Deserialization has to succeed (otherwise the unified
+    // search response 500s on any v2 hit) and produce None for both.
+    let parent = serde_json::json!({
+        "entity_id": "00000000-0000-0000-0000-000000000001",
+        "document_name": "Q3 Planning",
+        "owner_id": "macro|alice@example.com",
+        "file_type": "pdf",
+        "updated_at_seconds": 1779000000_i64,
+        "document_relation": "document",
+    });
+
+    let doc: DocumentIndex = serde_json::from_value(parent).expect("parent _source should deserialize");
+    assert!(doc.node_id.is_none(), "parent shape should have no node_id");
+    assert!(doc.raw_content.is_none(), "parent shape should have no raw_content");
+}
+
+#[test]
+fn document_index_deserializes_flat_chunk_shape_with_node_id() {
+    // Flat-shape chunk docs carry node_id (and optionally raw_content)
+    // directly. Make sure they keep deserializing after the move to
+    // Option<String>.
+    let chunk = serde_json::json!({
+        "entity_id": "00000000-0000-0000-0000-000000000001",
+        "document_name": "Q3 Planning",
+        "node_id": "0",
+        "owner_id": "macro|alice@example.com",
+        "file_type": "pdf",
+        "content": "Page text",
+        "updated_at_seconds": 1779000000_i64,
+    });
+
+    let doc: DocumentIndex = serde_json::from_value(chunk).expect("flat chunk should deserialize");
+    assert_eq!(doc.node_id.as_deref(), Some("0"));
+}
