@@ -230,9 +230,10 @@ pub trait NotificationRepository: Send + Sync + 'static {
 
 /// Port for publishing realtime notification updates.
 pub trait NotificationRealtimePublisher: Send + Sync + 'static {
-    /// Publish a notification status update to the entities referenced by the notifications.
+    /// Publish a notification status update to the user who owns the notifications.
     fn publish_status_update(
         &self,
+        user_id: MacroUserIdStr<'_>,
         update: &NotificationStatusUpdate,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
@@ -242,7 +243,11 @@ pub trait NotificationRealtimePublisher: Send + Sync + 'static {
 pub struct NoopNotificationRealtimePublisher;
 
 impl NotificationRealtimePublisher for NoopNotificationRealtimePublisher {
-    async fn publish_status_update(&self, _: &NotificationStatusUpdate) -> Result<(), Report> {
+    async fn publish_status_update(
+        &self,
+        _: MacroUserIdStr<'_>,
+        _: &NotificationStatusUpdate,
+    ) -> Result<(), Report> {
         Ok(())
     }
 }

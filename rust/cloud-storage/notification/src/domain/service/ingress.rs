@@ -526,7 +526,11 @@ where
 
         if !changed.is_empty() {
             let update = NotificationStatusUpdate::new(changed);
-            if let Err(err) = self.realtime.publish_status_update(&update).await {
+            if let Err(err) = self
+                .realtime
+                .publish_status_update(req.user_id.copied(), &update)
+                .await
+            {
                 tracing::warn!(error = ?err, "failed to publish notification status realtime update");
             }
         }

@@ -40,9 +40,6 @@ pub struct NotificationStatusChanged {
     /// The notification ID.
     #[serde(rename = "id")]
     pub notification_id: uuid::Uuid,
-    /// The entity the notification points to.
-    #[serde(flatten)]
-    pub entity: Entity<'static>,
     /// Whether the notification is marked as done after the update.
     pub done: bool,
     /// When the notification was viewed/seen after the update.
@@ -72,21 +69,6 @@ impl NotificationStatusUpdate {
             event_type: Self::MESSAGE_TYPE.to_string(),
             updates,
         }
-    }
-
-    /// The entities to target in connection gateway.
-    pub fn target_entities(&self) -> Vec<Entity<'static>> {
-        let mut seen = std::collections::HashSet::new();
-        self.updates
-            .iter()
-            .filter_map(|update| {
-                if seen.insert(update.entity.clone()) {
-                    Some(update.entity.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
     }
 }
 

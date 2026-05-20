@@ -13,8 +13,9 @@ use crate::domain::models::queue_message::{
 use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos,
-    NotificationIdAndCollapseKey, NotificationStatusChanged, RateLimitConfig, RateLimitExceeded, RateLimitKey,
-    RateLimitResult, SendNotificationRequestBuilder, TaggedContent, UserNotificationRow,
+    NotificationIdAndCollapseKey, NotificationStatusChanged, RateLimitConfig, RateLimitExceeded,
+    RateLimitKey, RateLimitResult, SendNotificationRequestBuilder, TaggedContent,
+    UserNotificationRow,
 };
 use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,

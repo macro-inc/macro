@@ -176,9 +176,10 @@ impl<W: WebSocketGatewayOps + Send + Sync + 'static> WebSocketSender
 impl NotificationRealtimePublisher for WebSocketGatewayAdapter<ConnectionGatewayClient> {
     async fn publish_status_update(
         &self,
+        user_id: MacroUserIdStr<'_>,
         update: &NotificationStatusUpdate,
     ) -> Result<(), Report> {
-        let entities = update.target_entities();
+        let entities = vec![EntityType::User.with_entity_str(user_id.as_ref())];
         self.gateway
             .batch_send_to_entities(NotificationStatusUpdate::MESSAGE_TYPE, update, entities)
             .await?;

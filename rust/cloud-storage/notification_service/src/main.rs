@@ -152,13 +152,14 @@ pub async fn main() -> anyhow::Result<()> {
         internal_secret_key.as_ref().to_string(),
         vars.connection_gateway_url.as_ref().to_string(),
     ));
-    let reader_service = ::notification::domain::service::NotificationReaderService::new_with_realtime(
-        notification_repository,
-        notification_queue.clone(),
-        sns_endpoint_manager,
-        platform_config,
-        reader_realtime_adapter,
-    );
+    let reader_service =
+        ::notification::domain::service::NotificationReaderService::new_with_realtime(
+            notification_repository,
+            notification_queue.clone(),
+            sns_endpoint_manager,
+            platform_config,
+            reader_realtime_adapter,
+        );
     let ingress_state = ::notification::inbound::http::NotificationRouterState::new(
         reader_service,
         &BLOCKABLE_NOTIFICATIONS,

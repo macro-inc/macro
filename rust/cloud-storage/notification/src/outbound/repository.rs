@@ -632,13 +632,10 @@ impl NotificationDbOps for PgPool {
             )
             SELECT
                 updated.notification_id,
-                n.event_item_id,
-                n.event_item_type,
                 updated.done,
                 updated.viewed_at,
                 NOW()::timestamptz as "updated_at!"
             FROM updated
-            JOIN notification n ON n.id = updated.notification_id
             "#,
             user_id_str,
             notification_ids
@@ -646,18 +643,15 @@ impl NotificationDbOps for PgPool {
         .fetch_all(self)
         .await?;
 
-        rows.into_iter()
-            .map(|row| {
-                let entity_type = EntityType::from_str(&row.event_item_type)?;
-                Ok(NotificationStatusChanged {
-                    notification_id: row.notification_id,
-                    entity: entity_type.with_entity_string(row.event_item_id),
-                    done: row.done,
-                    viewed_at: row.viewed_at,
-                    updated_at: row.updated_at,
-                })
+        Ok(rows
+            .into_iter()
+            .map(|row| NotificationStatusChanged {
+                notification_id: row.notification_id,
+                done: row.done,
+                viewed_at: row.viewed_at,
+                updated_at: row.updated_at,
             })
-            .collect()
+            .collect())
     }
 
     async fn mark_notifications_done(
@@ -678,13 +672,10 @@ impl NotificationDbOps for PgPool {
             )
             SELECT
                 updated.notification_id,
-                n.event_item_id,
-                n.event_item_type,
                 updated.done,
                 updated.viewed_at,
                 NOW()::timestamptz as "updated_at!"
             FROM updated
-            JOIN notification n ON n.id = updated.notification_id
             "#,
             user_id_str,
             notification_ids,
@@ -693,18 +684,15 @@ impl NotificationDbOps for PgPool {
         .fetch_all(self)
         .await?;
 
-        rows.into_iter()
-            .map(|row| {
-                let entity_type = EntityType::from_str(&row.event_item_type)?;
-                Ok(NotificationStatusChanged {
-                    notification_id: row.notification_id,
-                    entity: entity_type.with_entity_string(row.event_item_id),
-                    done: row.done,
-                    viewed_at: row.viewed_at,
-                    updated_at: row.updated_at,
-                })
+        Ok(rows
+            .into_iter()
+            .map(|row| NotificationStatusChanged {
+                notification_id: row.notification_id,
+                done: row.done,
+                viewed_at: row.viewed_at,
+                updated_at: row.updated_at,
             })
-            .collect()
+            .collect())
     }
 
     async fn get_basic_notifications(
