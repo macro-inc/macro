@@ -1763,7 +1763,15 @@ fn build_grouped_query<'a>(
             builder.push("\"group_key\"");
         }
     }
-    builder.push(", \"sort_ts\" DESC, \"id\" DESC LIMIT $3");
+    builder.push(", \"sort_ts\" DESC, \"id\" DESC");
+
+    // Apply LIMIT only in single-group "load more" mode. In multi-group mode the
+    // result is already bounded by the per-group cap inside FilteredGroupedItems
+    // (PER_GROUP_LIMIT), so a row-level LIMIT here would silently drop entire
+    // groups from the response when there are many groups.
+    if grouping.group_key.is_some() {
+        builder.push(" LIMIT $3");
+    }
 
     (builder, entity_type_bind)
 }
