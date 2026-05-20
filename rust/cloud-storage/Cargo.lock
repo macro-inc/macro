@@ -11771,6 +11771,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40ce102ab67701b8526c123c1bab5cbe42d7040ccfd0f64af1a385808d2f43de"
 
 [[package]]
+name = "unfurl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bytes",
+ "futures",
+ "mockall",
+ "reqwest 0.13.3",
+ "scraper",
+ "serde",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "url",
+ "utoipa",
+]
+
+[[package]]
 name = "unfurl_service"
 version = "0.1.0"
 dependencies = [
@@ -11791,6 +11810,7 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "unfurl",
  "url",
  "utoipa",
  "utoipa-swagger-ui",

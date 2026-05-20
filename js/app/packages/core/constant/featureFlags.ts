@@ -353,3 +353,8 @@ export const ENABLE_MARKDOWN_SIDE_PANEL = resolveFeatureFlag(
   'ENABLE_MARKDOWN_SIDE_PANEL',
   true
 );
+
+export const ENABLE_REFOCUS_HIGHLIGHT = resolveFeatureFlag(
+  'ENABLE_REFOCUS_HIGHLIGHT',
+  true
+);

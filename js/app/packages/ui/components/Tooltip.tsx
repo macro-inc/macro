@@ -65,7 +65,7 @@ export function Tooltip(props: TooltipProps) {
             depth={3}
           >
             <div class="flex flex-row items-center gap-2">
-              <div class="text-xs capitalize">{props.label}</div>
+              <div class="text-xs">{props.label}</div>
               <Show when={hasHotkey()}>
                 <div class="flex items-center gap-1 ml-auto">
                   <For each={tokens()}>

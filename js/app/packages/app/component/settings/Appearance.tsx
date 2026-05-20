@@ -29,6 +29,7 @@ function UserInterface() {
           checked={tooltipsEnabled()}
         />
       </div>
+
     </div>
   );
 }

@@ -106,6 +106,7 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     assert!(!result.id.to_string().is_empty());
     assert_eq!(result.name, "team1");
+    assert_eq!(result.slug, "MACRO");
     assert_eq!(result.owner_id.0.as_ref(), "macro|user3@user.com");
 
     // Create team with too large a name
@@ -946,6 +947,99 @@ async fn test_patch_team_plan(pool: Pool<Postgres>) -> anyhow::Result<()> {
         .err()
         .unwrap();
     assert!(err.to_string().contains("does not exist"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_get_team_by_id_includes_slug(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    let team = team_repo.get_team_by_id(&team_id).await?.team;
+
+    assert_eq!(team.name(), "team1");
+    assert_eq!(team.slug(), "MACRO");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_patch_team_normalizes_slug_to_screaming_snake_case(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let req = PatchTeamRequest {
+        name: Some("New Name".to_string()),
+        slug: Some("my-team  slug".to_string()),
+        user_role_updates: None,
+    };
+
+    team_repo.patch_team(&team_id, &req).await?;
+
+    let row = sqlx::query(r#"SELECT name, slug FROM team WHERE id = $1"#)
+        .bind(team_id)
+        .fetch_one(&pool)
+        .await?;
+
+    assert_eq!(row.try_get::<String, _>("name")?, "New Name");
+    assert_eq!(row.try_get::<String, _>("slug")?, "MY_TEAM_SLUG");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_patch_team_rejects_invalid_slug_without_updating_name(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let req = PatchTeamRequest {
+        name: Some("Should Not Apply".to_string()),
+        slug: Some("bad.slug".to_string()),
+        user_role_updates: None,
+    };
+
+    let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
+    assert!(matches!(err, TeamError::BadRequest(_)));
+
+    let row = sqlx::query(r#"SELECT name, slug FROM team WHERE id = $1"#)
+        .bind(team_id)
+        .fetch_one(&pool)
+        .await?;
+
+    assert_eq!(row.try_get::<String, _>("name")?, "team1");
+    assert_eq!(row.try_get::<String, _>("slug")?, "MACRO");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_patch_team_rejects_too_long_slug(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let req = PatchTeamRequest {
+        name: None,
+        slug: Some("THIS_SLUG_IS_WAY_TOO_LONG".to_string()),
+        user_role_updates: None,
+    };
+
+    let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
+
+    assert!(matches!(err, TeamError::BadRequest(_)));
 
     Ok(())
 }

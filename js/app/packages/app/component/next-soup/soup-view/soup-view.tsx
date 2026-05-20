@@ -486,34 +486,42 @@ export const SoupView = (props: SoupViewProps) => {
                       containerClass="h-full"
                     />
                   </Show>
-                  <Show when={!isMobile()}>
-                    <SoupViewCreateButton />
-                  </Show>
                 </Show>
               </div>
             </SplitHeaderLeft>
             <Show when={!isMobile()}>
               <SplitHeaderRight>
+                <Show
+                  when={
+                    !narrowSearchExpanded() && !isComponentListView('search')
+                  }
+                >
+                  <SoupViewCreateButton />
+                </Show>
                 <Show when={narrowSearchExpanded()}>
-                  <div class="flex-1 min-w-0">
-                    <SoupSearchbar
-                      variant="secondary"
-                      autoFocus
-                      initialValue={props.initialSearchText}
-                      onDismiss={() => setNarrowSearchExpanded(false)}
-                    />
-                  </div>
+                  <Layer depth={2}>
+                    <div class="flex-1 min-w-0">
+                      <SoupSearchbar
+                        variant="secondary"
+                        autoFocus
+                        initialValue={props.initialSearchText}
+                        onDismiss={() => setNarrowSearchExpanded(false)}
+                      />
+                    </div>
+                  </Layer>
                 </Show>
                 <Show
                   when={!isComponentListView('search')}
                   fallback={
-                    <div class="grow ml-2">
-                      <SoupSearchbar
-                        variant="secondary"
-                        placeholder="Search, @mention contacts"
-                        initialValue={props.initialSearchText}
-                      />
-                    </div>
+                    <Layer depth={2}>
+                      <div class="grow ml-2">
+                        <SoupSearchbar
+                          variant="secondary"
+                          placeholder="Search, @mention contacts"
+                          initialValue={props.initialSearchText}
+                        />
+                      </div>
+                    </Layer>
                   }
                 >
                   <CollapsibleHeaderItem
@@ -524,20 +532,23 @@ export const SoupView = (props: SoupViewProps) => {
                       if (!isCollapsed) setNarrowSearchExpanded(false);
                     }}
                     expanded={() => (
-                      <div class="w-60">
-                        <SoupSearchbar
-                          variant="secondary"
-                          initialValue={props.initialSearchText}
-                        />
-                      </div>
+                      <Layer depth={2}>
+                        <div class="w-60 ml-2">
+                          <SoupSearchbar
+                            variant="secondary"
+                            initialValue={props.initialSearchText}
+                          />
+                        </div>
+                      </Layer>
                     )}
                     collapsed={() => (
                       <Show when={!narrowSearchExpanded()}>
                         <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
                           <Button
-                            variant="ghost"
-                            class="p-1 rounded-xs"
+                            variant="base"
+                            class="p-1 rounded-lg ml-2 bg-surface"
                             onClick={() => setNarrowSearchExpanded(true)}
+                            depth={2}
                           >
                             <SearchIcon class="size-4 touch:size-6" />
                           </Button>

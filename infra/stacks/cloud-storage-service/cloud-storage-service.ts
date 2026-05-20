@@ -197,6 +197,14 @@ export class CloudStorageService extends pulumi.ComponentResource {
               Effect: 'Allow',
               Sid: '',
             },
+            {
+              Sid: 'AllowAccountAssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                AWS: 'arn:aws:iam::569036502058:root',
+              },
+              Action: 'sts:AssumeRole',
+            },
           ],
         },
         tags: { ...this.tags, 'call-recording-access': 'true' },

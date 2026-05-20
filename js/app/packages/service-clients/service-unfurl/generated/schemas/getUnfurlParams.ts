@@ -7,7 +7,7 @@
 
 export type GetUnfurlParams = {
   /**
-   * URL to unfold
+   * The URL to unfurl.
    */
   url: string;
 };

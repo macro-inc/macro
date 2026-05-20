@@ -21,6 +21,54 @@ fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
     }
 }
 
+const MAX_TEAM_SLUG_LEN: usize = 20;
+
+fn normalize_team_slug(slug: &str) -> Result<String, TeamError> {
+    let mut normalized = String::new();
+    let mut last_was_separator = false;
+
+    for ch in slug.chars() {
+        let normalized_char = if ch.is_ascii_alphabetic() {
+            ch.to_ascii_uppercase()
+        } else if ch == '_' || ch == '-' || ch.is_ascii_whitespace() {
+            '_'
+        } else {
+            return Err(TeamError::BadRequest(
+                "team slug may only contain ASCII letters, spaces, hyphens, and underscores"
+                    .to_string(),
+            ));
+        };
+
+        if normalized_char == '_' {
+            if !normalized.is_empty() && !last_was_separator {
+                normalized.push('_');
+            }
+            last_was_separator = true;
+        } else {
+            normalized.push(normalized_char);
+            last_was_separator = false;
+        }
+    }
+
+    while normalized.ends_with('_') {
+        normalized.pop();
+    }
+
+    if normalized.is_empty() {
+        return Err(TeamError::BadRequest(
+            "team slug cannot be empty".to_string(),
+        ));
+    }
+
+    if normalized.len() > MAX_TEAM_SLUG_LEN {
+        return Err(TeamError::BadRequest(format!(
+            "team slug cannot be longer than {MAX_TEAM_SLUG_LEN} characters"
+        )));
+    }
+
+    Ok(normalized)
+}
+
 #[cfg(test)]
 mod test;
 
@@ -96,9 +144,9 @@ impl TeamRepositoryImpl {
             r#"
             INSERT INTO team (id, name, owner_id, seat_count)
             VALUES ($1, $2, $3, 1)
-            RETURNING id, name, owner_id
+            RETURNING id, name, slug, owner_id
             "#,
-            &id,
+            id,
             team_name,
             user_id.as_ref(),
         )
@@ -106,6 +154,7 @@ impl TeamRepositoryImpl {
             Ok(Team {
                 id: row.id,
                 name: row.name,
+                slug: row.slug,
                 owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
                     .map_err(type_err)?
                     .into_owned(),
@@ -899,7 +948,7 @@ impl TeamRepository for TeamRepositoryImpl {
     async fn get_team_by_id(&self, team_id: &uuid::Uuid) -> Result<TeamWithMembers, TeamError> {
         let team = sqlx::query!(
             r#"
-            SELECT id, name, owner_id
+            SELECT id, name, slug, owner_id
             FROM team
             WHERE id = $1
             "#,
@@ -909,6 +958,7 @@ impl TeamRepository for TeamRepositoryImpl {
             Ok(Team {
                 id: row.id,
                 name: row.name,
+                slug: row.slug,
                 owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
                     .map_err(type_err)?
                     .into_owned(),
@@ -949,7 +999,7 @@ impl TeamRepository for TeamRepositoryImpl {
     async fn get_user_teams(&self, user_id: &MacroUserIdStr<'_>) -> Result<Vec<Team>, TeamError> {
         let teams = sqlx::query!(
             r#"
-            SELECT t.id, t.name, t.owner_id
+            SELECT t.id, t.name, t.slug, t.owner_id
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
             WHERE tu.user_id = $1
@@ -960,6 +1010,7 @@ impl TeamRepository for TeamRepositoryImpl {
             Ok(Team {
                 id: row.id,
                 name: row.name,
+                slug: row.slug,
                 owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
                     .map_err(type_err)?
                     .into_owned(),
@@ -1066,18 +1117,27 @@ impl TeamRepository for TeamRepositoryImpl {
         team_id: &uuid::Uuid,
         req: &PatchTeamRequest,
     ) -> Result<(), TeamError> {
-        if let Some(name) = req.name.as_ref() {
-            sqlx::query!(
+        let normalized_slug = req.slug.as_deref().map(normalize_team_slug).transpose()?;
+
+        if req.name.is_some() || normalized_slug.is_some() {
+            let result = sqlx::query(
                 r#"
                 UPDATE team
-                SET name = $1
-                WHERE id = $2
+                SET
+                    name = COALESCE($2, name),
+                    slug = COALESCE($3, slug)
+                WHERE id = $1
                 "#,
-                name,
-                team_id,
             )
+            .bind(team_id)
+            .bind(req.name.as_deref())
+            .bind(normalized_slug.as_deref())
             .execute(&self.pool)
             .await?;
+
+            if result.rows_affected() == 0 {
+                return Err(TeamError::TeamDoesNotExist);
+            }
         }
 
         Ok(())

@@ -2461,6 +2461,190 @@ async fn insert_call_summary_noop_for_unknown_id(pool: Pool<Postgres>) -> anyhow
     Ok(())
 }
 
+// -- get_call_participants_with_team_members ----------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_participants_with_team_members_returns_distinct_users(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let team_id = Uuid::from_u128(0x00000000_0000_0000_0000_00000000beef);
+
+    insert_user_mapping(&pool, USER_A.deref(), MACRO_USER_A).await?;
+    insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
+    insert_user_mapping(&pool, USER_C.deref(), MACRO_USER_C).await?;
+
+    sqlx::query!(
+        r#"INSERT INTO team (id, name, owner_id) VALUES ($1, $2, $3)"#,
+        team_id,
+        "speaker candidates",
+        USER_A.deref().as_ref(),
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query!(
+        r#"
+        INSERT INTO team_user (user_id, team_id, team_role) VALUES
+            ($1, $2, 'owner'),
+            ($3, $2, 'member'),
+            ($4, $2, 'member')
+        "#,
+        USER_A.deref().as_ref(),
+        team_id,
+        USER_B.deref().as_ref(),
+        USER_C.deref().as_ref(),
+    )
+    .execute(&pool)
+    .await?;
+
+    let users = repo
+        .get_call_participants_with_team_members(&CALL_ARCHIVED)
+        .await?;
+    let user_ids: Vec<String> = users
+        .into_iter()
+        .map(|user_id| user_id.as_ref().to_string())
+        .collect();
+
+    assert_eq!(
+        user_ids,
+        vec![
+            "macro|user-a@test.com".to_string(),
+            "macro|user-b@test.com".to_string(),
+            "macro|user-c@test.com".to_string(),
+        ]
+    );
+    Ok(())
+}
+
+// -- get_enhanced_call_record_transcripts -------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_enhanced_call_record_transcripts_returns_archived_rows(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    let transcripts = repo
+        .get_enhanced_call_record_transcripts(&CALL_ARCHIVED)
+        .await?;
+
+    assert_eq!(transcripts.len(), 3);
+    assert_eq!(transcripts[0].call_record_id, CALL_ARCHIVED);
+    assert_eq!(transcripts[0].segment_id.as_deref(), Some("seg-arch-1"));
+    assert_eq!(transcripts[0].speaker_id, "macro|user-a@test.com");
+    assert_eq!(
+        transcripts[0].diarized_speaker_id.as_deref(),
+        Some("spk-arch-a0")
+    );
+    assert!(transcripts[0].custom_speaker.is_none());
+    assert!(transcripts[0].voice_id.is_none());
+    assert_eq!(transcripts[0].content, "archived hello");
+    assert_eq!(transcripts[0].sequence_num, 1);
+
+    assert_eq!(transcripts[2].segment_id.as_deref(), Some("seg-arch-3"));
+    assert_eq!(
+        transcripts[2].custom_speaker.as_deref(),
+        Some(USER_B.deref().as_ref())
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_enhanced_call_record_transcripts_unknown_call_returns_empty(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    let transcripts = repo
+        .get_enhanced_call_record_transcripts(&Uuid::now_v7())
+        .await?;
+
+    assert!(transcripts.is_empty());
+    Ok(())
+}
+
+// -- overwrite_custom_speakers ------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn overwrite_custom_speakers_sets_rows_by_transcript_id(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    let rows = sqlx::query!(
+        r#"
+        SELECT id
+        FROM call_record_transcripts
+        WHERE call_record_id = $1
+        ORDER BY sequence_num ASC
+        "#,
+        CALL_ARCHIVED,
+    )
+    .fetch_all(&pool)
+    .await?;
+    let first_id = rows[0].id;
+    let second_id = rows[1].id;
+
+    repo.overwrite_custom_speakers(vec![
+        (first_id, USER_C.deref().to_string()),
+        (second_id, USER_A.deref().to_string()),
+    ])
+    .await?;
+
+    let stored = sqlx::query!(
+        r#"
+        SELECT custom_speaker
+        FROM call_record_transcripts
+        WHERE call_record_id = $1
+        ORDER BY sequence_num ASC
+        "#,
+        CALL_ARCHIVED,
+    )
+    .fetch_all(&pool)
+    .await?;
+
+    let first_custom_speaker = stored[0].custom_speaker.as_deref();
+    let second_custom_speaker = stored[1].custom_speaker.as_deref();
+    let third_custom_speaker = stored[2].custom_speaker.as_deref();
+
+    assert_eq!(first_custom_speaker, Some(USER_C.deref().as_ref()));
+    assert_eq!(second_custom_speaker, Some(USER_A.deref().as_ref()));
+    assert_eq!(third_custom_speaker, Some(USER_B.deref().as_ref()));
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn overwrite_custom_speakers_empty_is_noop(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    repo.overwrite_custom_speakers(Vec::new()).await?;
+
+    let count = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM call_record_transcripts WHERE call_record_id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(count, 3);
+    Ok(())
+}
+
 // -- patch_call_transcript_custom_speakers ------------------------------------
 
 #[sqlx::test(

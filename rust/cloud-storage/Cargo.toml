@@ -40,6 +40,7 @@ members = [
   "sha_cleanup_worker",
   "static_file_service",
   "tools/native_app_server",
+  "unfurl",
   "unfurl_service",
   "upload_extractor_lambda_handler",
   "upload_extractor_lambda_trigger",

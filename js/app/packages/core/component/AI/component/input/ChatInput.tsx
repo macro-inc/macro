@@ -11,7 +11,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
-import PaperPlaneRight from '@phosphor/paper-plane-right.svg';
+import ArrowUp from '@phosphor/arrow-up.svg';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import Stop from '@phosphor/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
@@ -164,13 +164,17 @@ export function ChatInput(props: ChatInputComponentProps) {
       shortcut="cmd+enter"
       tooltipPlacement="top"
       disabled={!canSendMessage()}
+      class={cn(
+        'rounded-[11px] size-[30px] bg-edge-muted/60 text-ink-muted [&_svg]:stroke-[2.5] not-disabled:bg-accent not-disabled:text-surface not-disabled:hover:bg-accent/90 data-disabled:opacity-100 data-disabled:bg-edge-muted/60 data-disabled:text-ink-muted',
+        isMobile() && isEmptyInput() && 'opacity-0!'
+      )}
       onClick={() =>
         sendMessage(
           isTouchDevice() ? { modelOverride: 'claude-opus-4-6' } : undefined
         )
       }
     >
-      <PaperPlaneRight />
+      <ArrowUp />
     </Button>
   );
 
@@ -183,7 +187,11 @@ export function ChatInput(props: ChatInputComponentProps) {
   );
 
   return (
-    <Surface depth={2}>
+    <Surface
+      depth={2}
+      class="rounded-xl ring-1 ring-ink-muted/8"
+      style={{ border: '0' }}
+    >
       <div id="chat-input" ref={containerRef} class="relative flex flex-col">
         <Show when={hasAttachments()}>
           <div class="px-2 pt-2 w-full">
@@ -240,7 +248,7 @@ export function ChatInput(props: ChatInputComponentProps) {
             <LeftButton />
           </div>
 
-          <div class="absolute right-2 bottom-1.5">
+          <div class="absolute right-1.5 bottom-1.5">
             <RightControls />
           </div>
         </div>

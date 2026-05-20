@@ -12,4 +12,5 @@ export interface Team {
   id: string;
   name: string;
   owner_id: string;
+  slug: string;
 }

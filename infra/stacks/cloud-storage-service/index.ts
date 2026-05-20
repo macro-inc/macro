@@ -456,6 +456,15 @@ const cloudStorageService = new CloudStorageService(
         value: OPENSEARCH_PASSWORD,
       },
       {
+        // Flips the documents alias dispatch in opensearch_client between
+        // the flat-chunk shape (`documents_v1`) and the parent/child join
+        // shape (`documents_v2`). Set via Pulumi config and flipped at
+        // cutover; defaults to `false` so the existing flat-shape paths
+        // stay active until the alias is swapped.
+        name: 'DOCUMENTS_INDEX_USES_JOIN',
+        value: config.get('documents_index_uses_join') ?? 'false',
+      },
+      {
         name: 'DATABASE_URL',
         value: pulumi.interpolate`${DATABASE_URL}`,
       },

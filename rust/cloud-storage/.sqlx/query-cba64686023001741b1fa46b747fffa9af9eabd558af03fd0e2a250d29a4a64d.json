@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT t.id, t.name, t.owner_id\n            FROM team t\n            JOIN team_user tu ON t.id = tu.team_id\n            WHERE tu.user_id = $1\n            ",
+  "query": "\n            SELECT t.id, t.name, t.slug, t.owner_id\n            FROM team t\n            JOIN team_user tu ON t.id = tu.team_id\n            WHERE tu.user_id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -15,6 +15,11 @@
       },
       {
         "ordinal": 2,
+        "name": "slug",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
         "name": "owner_id",
         "type_info": "Text"
       }
@@ -27,8 +32,9 @@
     "nullable": [
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "eb60dffb5b5eee74b267402d11b05e3c7edb39484f34fb204523df6cd46fa3fe"
+  "hash": "cba64686023001741b1fa46b747fffa9af9eabd558af03fd0e2a250d29a4a64d"
 }

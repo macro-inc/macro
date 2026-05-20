@@ -108,7 +108,7 @@ function RoleSelect(props: {
         <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content class="z-50 bg-surface border border-edge rounded shadow-lg min-w-25 p-1">
+        <Select.Content class="z-50 bg-surface ring-1 ring-edge rounded shadow-lg min-w-25 p-1">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>

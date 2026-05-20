@@ -200,6 +200,7 @@ export function useCreateTeamWithInvitesMutation(
             const optimisticTeam: Team = {
               id: `optimistic-${Date.now()}`,
               name,
+              slug: 'MACRO', // optimisitc slug
               owner_id: userInfo.userId,
             };
 

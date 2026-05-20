@@ -51,7 +51,7 @@ import { SearchableMultiSelectInline } from './searchable-multi-select';
 const TypeIndicator = (props: { active: boolean }) => (
   <span
     class={cn(
-      'size-4 flex items-center justify-center shrink-0 rounded-full border transition-colors',
+      'size-4 flex items-center justify-center shrink-0 rounded-full border',
       props.active ? 'bg-accent border-accent' : 'border-edge'
     )}
   >
@@ -60,6 +60,12 @@ const TypeIndicator = (props: { active: boolean }) => (
     </Show>
   </span>
 );
+
+const FILTER_MENU_ROW_CLASS =
+  'w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-left text-xs hover:bg-ink/5 outline-none data-highlighted:bg-ink/5 cursor-default';
+
+const FILTER_MENU_SUBTRIGGER_CLASS =
+  'w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-md text-left text-xs hover:bg-ink/5 outline-none data-highlighted:bg-ink/5 cursor-default';
 
 export type FilterOption = {
   id: FilterID;
@@ -397,7 +403,7 @@ const SearchableFilterSubmenu = (props: {
   return (
     <Dropdown.Sub gutter={4} open={isOpen()} onOpenChange={setIsOpen}>
       <Dropdown.SubTrigger
-        class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+        class={cn(FILTER_MENU_SUBTRIGGER_CLASS, 'py-2')}
         onPointerEnter={(e) => {
           // Kobalte's "grace polygon" keeps an open sub alive when the
           // pointer crosses toward its content. For sibling In/From triggers,
@@ -416,7 +422,7 @@ const SearchableFilterSubmenu = (props: {
 
       <Dropdown.Portal>
         <Layer depth={2}>
-          <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl w-65 max-w-[90vw] overflow-hidden">
+          <Dropdown.SubContent class="z-action-menu bg-surface ring-1 ring-edge-muted rounded-sm shadow-xl w-65 max-w-[90vw] overflow-hidden">
             <SearchableMultiSelectInline
               options={props.options}
               activeIds={props.activeIds}
@@ -441,19 +447,19 @@ function SingleValueSubmenu<T>(props: {
 }) {
   return (
     <Dropdown.Sub gutter={4}>
-      <Dropdown.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover">
+      <Dropdown.SubTrigger class={FILTER_MENU_SUBTRIGGER_CLASS}>
         <span class="text-ink">{props.label}</span>
         <CaretRightIcon class="size-3 text-ink-muted" />
       </Dropdown.SubTrigger>
       <Dropdown.Portal>
         <Layer depth={2}>
-          <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
+          <Dropdown.SubContent class="z-action-menu bg-surface ring-1 ring-edge-muted rounded-sm shadow-xl min-w-40 p-1">
             <For each={props.options}>
               {(option) => {
                 const active = () => props.current() === option.value;
                 return (
                   <Dropdown.Item
-                    class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+                    class={FILTER_MENU_ROW_CLASS}
                     onSelect={() => props.onSelect(option.value)}
                     closeOnSelect
                   >
@@ -608,7 +614,7 @@ const SearchIndexItem = (props: {
   onSelect: () => void;
 }) => (
   <Dropdown.Item
-    class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+    class={FILTER_MENU_ROW_CLASS}
     onSelect={props.onSelect}
     closeOnSelect
   >
@@ -633,7 +639,7 @@ const SearchIndexSubRow = (props: {
 }) => (
   <Dropdown.Sub gutter={4}>
     <Dropdown.SubTrigger
-      class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+      class={FILTER_MENU_ROW_CLASS}
       onPointerDown={props.onSelect}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -649,7 +655,7 @@ const SearchIndexSubRow = (props: {
     </Dropdown.SubTrigger>
     <Dropdown.Portal>
       <Layer depth={2}>
-        <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
+        <Dropdown.SubContent class="z-action-menu bg-surface ring-1 ring-edge-muted rounded-sm shadow-xl min-w-45 p-1">
           {props.children}
         </Dropdown.SubContent>
       </Layer>
@@ -810,7 +816,7 @@ export const UnifiedFilterDropdown = () => {
 
         <Dropdown.Portal>
           <Layer depth={2}>
-            <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
+            <Dropdown.Content class="min-w-45">
               <Show
                 when={
                   categories().length === 1 && !isTasksView() && !isSearchView()
@@ -820,27 +826,29 @@ export const UnifiedFilterDropdown = () => {
                     <For each={categories()}>
                       {(category) => (
                         <Dropdown.Sub gutter={4}>
-                          <Dropdown.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover">
+                          <Dropdown.SubTrigger
+                            class={FILTER_MENU_SUBTRIGGER_CLASS}
+                          >
                             <span class="text-ink">{category.label}</span>
                             <CaretRightIcon class="size-3 text-ink-muted" />
                           </Dropdown.SubTrigger>
 
                           <Dropdown.Portal>
                             <Layer depth={2}>
-                              <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
+                              <Dropdown.SubContent class="min-w-40">
                                 <For each={category.options}>
                                   {(option) => {
                                     const active = () =>
                                       isOptionActive(option.id);
                                     return (
                                       <Dropdown.Item
-                                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+                                        class={FILTER_MENU_ROW_CLASS}
                                         onSelect={() => toggleFilter(option.id)}
                                         closeOnSelect={!category.multiple}
                                       >
                                         <span
                                           class={cn(
-                                            'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                                            'size-4 flex items-center justify-center shrink-0 rounded border',
                                             active()
                                               ? 'bg-accent border-accent'
                                               : 'border-edge'
@@ -936,7 +944,7 @@ export const UnifiedFilterDropdown = () => {
 
                       {/* All row */}
                       <Dropdown.Item
-                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+                        class={FILTER_MENU_ROW_CLASS}
                         onSelect={() => handleIndexChange('all')}
                         closeOnSelect
                       >
@@ -960,13 +968,13 @@ export const UnifiedFilterDropdown = () => {
                     const active = () => isOptionActive(option.id);
                     return (
                       <Dropdown.Item
-                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+                        class={FILTER_MENU_ROW_CLASS}
                         onSelect={() => toggleFilter(option.id)}
                         closeOnSelect={!categories()[0]!.multiple}
                       >
                         <span
                           class={cn(
-                            'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                            'size-4 flex items-center justify-center shrink-0 rounded border',
                             active() ? 'bg-accent border-accent' : 'border-edge'
                           )}
                         >

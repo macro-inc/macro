@@ -199,7 +199,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
 
   return (
     <Input.Root input={inputView()} commands={commands}>
-      <Surface depth={2}>
+      <Surface depth={2} class="rounded-xl">
         <Input.Layout>
           <Input.FormatRibbon>
             <FormatButtons

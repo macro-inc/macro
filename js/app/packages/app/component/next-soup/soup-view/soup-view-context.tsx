@@ -349,75 +349,6 @@ export const SoupViewContextProvider: FlowComponent<
     return [...featured, ...rest];
   };
 
-  const rows = createMemo((): SoupRow[] => {
-    const field = groupByField();
-    const groups = itemsQuery.data?.groups;
-
-    // Not grouped - build simple entity rows
-    if (!field || !groups) {
-      return entities().map((entity, index) =>
-        soup.buildRow({ id: entity.id, index, original: entity })
-      );
-    }
-
-    // Grouped - build header + entity + loadMore rows for each group
-    const result: SoupRow[] = [];
-    let globalIndex = 0;
-
-    for (const apiGroup of groups) {
-      const groupMeta = buildGroupMeta(apiGroup);
-      const query = groupQueries().find((q) => q.key === apiGroup.key);
-      const groupEntities = query?.data() ?? [];
-
-      // Get first entity to use for header original
-      // If the group has no entities, we can skip it
-      const firstEntity = groupEntities[0];
-
-      if (!firstEntity) continue;
-
-      // Header row
-      result.push(
-        soup.buildRow({
-          id: `header:${apiGroup.key}`,
-          index: globalIndex++,
-          original: firstEntity,
-          group: groupMeta,
-          isGrouped: true,
-        })
-      );
-
-      // Entity rows
-      for (const entity of groupEntities) {
-        result.push(
-          soup.buildRow({
-            id: entity.id,
-            index: globalIndex++,
-            original: entity,
-            group: groupMeta,
-          })
-        );
-      }
-
-      // We can stop here if the group has no more data
-      // that needs to be fetched
-      if (!groupMeta.hasMore()) continue;
-
-      const lastEntity = groupEntities[groupEntities.length - 1];
-
-      result.push(
-        soup.buildRow({
-          id: `loadmore:${apiGroup.key}`,
-          index: globalIndex++,
-          original: lastEntity,
-          group: groupMeta,
-          isLoadMore: true,
-        })
-      );
-    }
-
-    return result;
-  });
-
   const instructionsIdQuery = useInstructionsMdIdQuery();
 
   const groupQueries = createInfiniteQueries<GroupedSoupPage, SoupEntity[]>(
@@ -521,6 +452,75 @@ export const SoupViewContextProvider: FlowComponent<
       isLoading: () => isGroupLoadingMore(group.key),
     };
   };
+
+  const rows = createMemo((): SoupRow[] => {
+    const field = groupByField();
+    const groups = itemsQuery.data?.groups;
+
+    // Not grouped - build simple entity rows
+    if (!field || !groups) {
+      return entities().map((entity, index) =>
+        soup.buildRow({ id: entity.id, index, original: entity })
+      );
+    }
+
+    // Grouped - build header + entity + loadMore rows for each group
+    const result: SoupRow[] = [];
+    let globalIndex = 0;
+
+    for (const apiGroup of groups) {
+      const groupMeta = buildGroupMeta(apiGroup);
+      const query = groupQueries().find((q) => q.key === apiGroup.key);
+      const groupEntities = query?.data() ?? [];
+
+      // Get first entity to use for header original
+      // If the group has no entities, we can skip it
+      const firstEntity = groupEntities[0];
+
+      if (!firstEntity) continue;
+
+      // Header row
+      result.push(
+        soup.buildRow({
+          id: `header:${apiGroup.key}`,
+          index: globalIndex++,
+          original: firstEntity,
+          group: groupMeta,
+          isGrouped: true,
+        })
+      );
+
+      // Entity rows
+      for (const entity of groupEntities) {
+        result.push(
+          soup.buildRow({
+            id: entity.id,
+            index: globalIndex++,
+            original: entity,
+            group: groupMeta,
+          })
+        );
+      }
+
+      // We can stop here if the group has no more data
+      // that needs to be fetched
+      if (!groupMeta.hasMore()) continue;
+
+      const lastEntity = groupEntities[groupEntities.length - 1];
+
+      result.push(
+        soup.buildRow({
+          id: `loadmore:${apiGroup.key}`,
+          index: globalIndex++,
+          original: lastEntity,
+          group: groupMeta,
+          isLoadMore: true,
+        })
+      );
+    }
+
+    return result;
+  });
 
   const { searchQuery } = search;
 
