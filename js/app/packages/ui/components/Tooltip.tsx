@@ -6,11 +6,6 @@ import type { ParentProps } from 'solid-js';
 import { For, Show } from 'solid-js';
 import { Surface } from '@ui';
 
-export type TooltipShortcutItem = {
-  label: string;
-  shortcut: string;
-};
-
 export type TooltipProps = ParentProps<{
   hotkey?: HotkeyToken | HotkeyToken[];
   /**
@@ -18,11 +13,6 @@ export type TooltipProps = ParentProps<{
    * Use this for shortcuts that aren't registered as a `HotkeyToken`.
    */
   shortcut?: string | string[];
-  /**
-   * Multiple labeled shortcuts to display (e.g. for showing both "Send [enter]" and "Send in background [cmd+enter]").
-   * When provided, this takes precedence over `shortcut`.
-   */
-  shortcuts?: TooltipShortcutItem[];
   placement?: Placement;
   as?: 'div' | 'span';
   label: string;
@@ -74,55 +64,39 @@ export function Tooltip(props: TooltipProps) {
             class="flex items-center justify-center p-2 text-ink-muted text-xs wrap-break-word"
             depth={3}
           >
-            <Show
-              when={props.shortcuts && props.shortcuts.length > 0}
-              fallback={
-                <div class="flex flex-row items-center gap-2">
-                  <div class="text-xs capitalize">{props.label}</div>
-                  <Show when={hasHotkey()}>
-                    <div class="flex items-center gap-1 ml-auto">
-                      <For each={tokens()}>
-                        {(token, ndx) => (
-                          <>
-                            <Hotkey
-                              token={token}
-                              theme="subtle"
-                            />
-                            <Show when={ndx() < tokens().length - 1}>
-                              <span class="text-ink-extra-muted">then</span>
-                            </Show>
-                          </>
-                        )}
-                      </For>
-                      <For each={shortcuts()}>
-                        {(shortcut, ndx) => (
-                          <>
-                            <Hotkey
-                              shortcut={shortcut}
-                              theme="subtle"
-                            />
-                            <Show when={ndx() < shortcuts().length - 1}>
-                              <span class="text-ink-extra-muted">then</span>
-                            </Show>
-                          </>
-                        )}
-                      </For>
-                    </div>
-                  </Show>
+            <div class="flex flex-row items-center gap-2">
+              <div class="text-xs">{props.label}</div>
+              <Show when={hasHotkey()}>
+                <div class="flex items-center gap-1 ml-auto">
+                  <For each={tokens()}>
+                    {(token, ndx) => (
+                      <>
+                        <Hotkey
+                          token={token}
+                          theme="subtle"
+                        />
+                        <Show when={ndx() < tokens().length - 1}>
+                          <span class="text-ink-extra-muted">then</span>
+                        </Show>
+                      </>
+                    )}
+                  </For>
+                  <For each={shortcuts()}>
+                    {(shortcut, ndx) => (
+                      <>
+                        <Hotkey
+                          shortcut={shortcut}
+                          theme="subtle"
+                        />
+                        <Show when={ndx() < shortcuts().length - 1}>
+                          <span class="text-ink-extra-muted">then</span>
+                        </Show>
+                      </>
+                    )}
+                  </For>
                 </div>
-              }
-            >
-              <div class="flex flex-col gap-1">
-                <For each={props.shortcuts}>
-                  {(item) => (
-                    <div class="flex flex-row items-center gap-2">
-                      <div class="text-xs capitalize">{item.label}</div>
-                      <Hotkey shortcut={item.shortcut} theme="subtle" />
-                    </div>
-                  )}
-                </For>
-              </div>
-            </Show>
+              </Show>
+            </div>
           </Surface>
         </KobalteTooltip.Content>
       </KobalteTooltip.Portal>

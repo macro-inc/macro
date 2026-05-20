@@ -6,13 +6,18 @@
 //! internally constructs its own provider client (see the `memory` crate's
 //! `judge_memory` for the same pattern this mirrors).
 
+use std::collections::HashSet;
 use std::fmt::Write as _;
 
 use ai::chat_completion::get_chat_completion;
 use ai::types::{Model, RequestBuilder};
 use uuid::Uuid;
 
-use crate::domain::models::CallRecordTranscriptSegment;
+use macro_user_id::user_id::MacroUserIdStr;
+
+use crate::domain::models::{
+    CallRecordTranscriptSegment, CallTranscriptCustomSpeakerResult, EnrichedCallTranscript,
+};
 use crate::domain::ports::CallSummarizer;
 
 /// Default model used when summarizing a call transcript.
@@ -84,6 +89,24 @@ Sam will follow up with infra.` → `Platform Standup: Postgres Upgrade Blocker`
 Summary: `Intro call between Jordan (Macro) and Lee (Acme) about a possible \
 SSO integration.` → `Macro & Acme SSO Intro Call`
 Summary: `No speech detected in the transcript.` → `UNTITLED_CALL`";
+
+/// System prompt for assigning archived transcript rows to known Macro users.
+const CUSTOM_SPEAKER_SYSTEM_PROMPT: &str = "\
+You assign speakers in archived call transcript rows to Macro user ids. You are \
+given JSON transcript rows from the `call_record_transcripts` table and a JSON \
+array of candidate Macro user ids. Your job is to infer the actual speaker for \
+each row only when the transcript content and surrounding context make that \
+attribution clear.
+
+Rules:
+- Output strictly valid JSON and nothing else.
+- The JSON must be an array of objects with exactly these keys: \
+  `call_transcript_id` and `custom_speaker`.
+- `call_transcript_id` must be the `id` value from an input transcript row.
+- `custom_speaker` must be one of the candidate Macro user ids exactly.
+- Return an entry only when you are confident. If unsure, omit that row.
+- If you cannot confidently identify any speaker, return exactly `[]`.
+- Do not invent users, do not use display names, and do not include reasons.";
 
 /// Sentinel the model is asked to emit when the summary has no substantive
 /// content. Mapped to `None` so the caller leaves the existing name untouched.
@@ -180,6 +203,43 @@ impl CallSummarizer for AiCallSummarizer {
 
         Ok(sanitize_call_name(&raw))
     }
+
+    #[tracing::instrument(
+        skip(self, transcript, candidate_speakers),
+        fields(segment_count = transcript.len(), candidate_count = candidate_speakers.len()),
+        err
+    )]
+    async fn generate_custom_speakers(
+        &self,
+        transcript: Vec<EnrichedCallTranscript>,
+        candidate_speakers: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<Vec<CallTranscriptCustomSpeakerResult>, Self::Err> {
+        if transcript.is_empty() || candidate_speakers.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let transcript_ids: HashSet<Uuid> = transcript.iter().map(|row| row.id).collect();
+        let candidate_user_ids: HashSet<String> = candidate_speakers
+            .iter()
+            .map(|user_id| user_id.as_ref().to_string())
+            .collect();
+        let user_message = format_custom_speakers_prompt(&transcript, &candidate_speakers);
+
+        let request = RequestBuilder::new()
+            .model(SUMMARIZATION_MODEL)
+            .system_prompt(CUSTOM_SPEAKER_SYSTEM_PROMPT)
+            .user_message(user_message)
+            .build();
+
+        let raw = get_chat_completion(request)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
+            .inspect_err(|e| {
+                tracing::error!(error = ?e, "ai custom-speaker generation failed");
+            })?;
+
+        parse_custom_speaker_results(&raw, &transcript_ids, &candidate_user_ids)
+    }
 }
 
 #[cfg(test)]
@@ -233,6 +293,76 @@ fn sanitize_call_name(raw: &str) -> Option<String> {
     }
     let cut = taken.trim_end().to_string();
     if cut.is_empty() { None } else { Some(cut) }
+}
+
+/// Render archived transcript rows and candidate speakers for the speaker
+/// attribution prompt.
+fn format_custom_speakers_prompt(
+    transcript: &[EnrichedCallTranscript],
+    candidate_speakers: &[MacroUserIdStr<'static>],
+) -> String {
+    let candidate_user_ids: Vec<&str> = candidate_speakers
+        .iter()
+        .map(|user_id| user_id.as_ref())
+        .collect();
+    let transcript_json =
+        serde_json::to_string_pretty(transcript).unwrap_or_else(|_| "[]".to_string());
+    let candidate_json =
+        serde_json::to_string_pretty(&candidate_user_ids).unwrap_or_else(|_| "[]".to_string());
+
+    format!(
+        "Candidate Macro user ids:\n{candidate_json}\n\nArchived transcript rows:\n{transcript_json}\n\nReturn only the JSON array of confident custom speaker assignments."
+    )
+}
+
+/// Parse and validate model output for custom-speaker attribution.
+fn parse_custom_speaker_results(
+    raw: &str,
+    valid_transcript_ids: &HashSet<Uuid>,
+    candidate_user_ids: &HashSet<String>,
+) -> anyhow::Result<Vec<CallTranscriptCustomSpeakerResult>> {
+    let json = extract_json_array(raw)?;
+    let parsed: Vec<CallTranscriptCustomSpeakerResult> = serde_json::from_str(json)?;
+    let mut seen_transcript_ids = HashSet::new();
+    let mut results = Vec::with_capacity(parsed.len());
+
+    for result in parsed {
+        if !valid_transcript_ids.contains(&result.call_transcript_id) {
+            continue;
+        }
+
+        let Ok(normalized_user_id) = MacroUserIdStr::try_from(result.custom_speaker) else {
+            continue;
+        };
+        let normalized_custom_speaker = normalized_user_id.as_ref().to_string();
+        if !candidate_user_ids.contains(&normalized_custom_speaker)
+            || !seen_transcript_ids.insert(result.call_transcript_id)
+        {
+            continue;
+        }
+
+        results.push(CallTranscriptCustomSpeakerResult {
+            call_transcript_id: result.call_transcript_id,
+            custom_speaker: normalized_custom_speaker,
+        });
+    }
+
+    Ok(results)
+}
+
+/// Extract the first JSON array from a model response.
+fn extract_json_array(raw: &str) -> anyhow::Result<&str> {
+    let trimmed = raw.trim();
+    let Some(start) = trimmed.find('[') else {
+        anyhow::bail!("custom speaker response did not contain a JSON array");
+    };
+    let Some(end) = trimmed.rfind(']') else {
+        anyhow::bail!("custom speaker response did not contain a complete JSON array");
+    };
+    if end < start {
+        anyhow::bail!("custom speaker response had malformed JSON array bounds");
+    }
+    Ok(&trimmed[start..=end])
 }
 
 /// Render the transcript as a chronological, speaker-labeled block suitable

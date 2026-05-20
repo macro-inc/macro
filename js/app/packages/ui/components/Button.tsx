@@ -1,6 +1,6 @@
 import { Button as KobalteButton, type ButtonRootProps } from '@kobalte/core/button';
 import { type ComponentProps, type JSX, Show, splitProps } from 'solid-js';
-import { Tooltip, type TooltipShortcutItem } from './Tooltip';
+import { Tooltip } from './Tooltip';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import type { Placement } from '@floating-ui/dom';
 import { cn } from '../utils/classname';
@@ -20,10 +20,6 @@ export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> &
    * Raw shortcut string(s) shown in the tooltip when no `hotkey` token is available.
    */
   shortcut?: string | string[];
-  /**
-   * Multiple labeled shortcuts to display in tooltip (e.g. for showing both "Send [enter]" and "Send in background [cmd+enter]").
-   */
-  shortcuts?: TooltipShortcutItem[];
   size?: ButtonSize;
   class?: string;
 };
@@ -57,7 +53,6 @@ export const Button = (props: ButtonProps) => {
     'variant',
     'hotkey',
     'shortcut',
-    'shortcuts',
     'class',
     'depth',
     'label',
@@ -108,7 +103,6 @@ export const Button = (props: ButtonProps) => {
         <Tooltip
           hotkey={local.hotkey}
           shortcut={local.shortcut}
-          shortcuts={local.shortcuts}
           placement={placement()}
           label={label()}
         >

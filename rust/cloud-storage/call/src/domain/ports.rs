@@ -17,9 +17,10 @@ use crate::domain::models::{
 
 use super::models::{
     AddParticipantError, Call, CallActiveResponse, CallError, CallParticipant, CallRecord,
-    CallRecordPreview, CallRecordTranscriptSegment, CallTokenResponse, CallWebhookEvent,
-    EgressS3Config, GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse,
-    GetCallRecordsRequest, LeaveCallResponse, TranscriptSegmentRequest,
+    CallRecordPreview, CallRecordTranscriptSegment, CallTokenResponse,
+    CallTranscriptCustomSpeakerResult, CallWebhookEvent, EgressS3Config, EnrichedCallTranscript,
+    GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
+    LeaveCallResponse, TranscriptSegmentRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -94,6 +95,16 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_id: &Uuid,
     ) -> impl Future<Output = Result<i64, Self::Err>> + Send;
+
+    /// Fetch the archived call participants plus all users on those
+    /// participants' teams.
+    ///
+    /// The returned user ids are distinct and owned. This is used as the
+    /// candidate speaker set for AI-generated archived transcript attribution.
+    fn get_call_participants_with_team_members(
+        &self,
+        call_record_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
 
     /// Check if a user is already a participant in a call.
     fn is_participant(
@@ -266,6 +277,26 @@ pub trait CallRepository: Send + Sync + 'static {
         assignments: &[CustomSpeakerAssignment],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Fetch archived transcript rows directly from `call_record_transcripts`.
+    ///
+    /// Unlike [`get_call_record_by_call_id`](Self::get_call_record_by_call_id),
+    /// this never consults active call transcript rows and does not collapse
+    /// `custom_speaker` over `speaker_id`; callers get the raw archived row.
+    fn get_enhanced_call_record_transcripts(
+        &self,
+        call_record_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<EnrichedCallTranscript>, Self::Err>> + Send;
+
+    /// Overwrite `custom_speaker` for archived transcript rows by row id.
+    ///
+    /// Each tuple is `(call_record_transcripts.id, custom_speaker)`. Unknown
+    /// transcript ids are ignored by the database update. Empty assignment
+    /// vectors are a no-op.
+    fn overwrite_custom_speakers(
+        &self,
+        assignments: Vec<(Uuid, String)>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Stable `(macro_user_id, voice_id)` pairs inferred from a finished
     /// call's archived transcripts. A speaker is returned only when every
     /// transcript row for that `speaker_id` has the same non-NULL
@@ -379,6 +410,18 @@ pub trait CallSummarizer: Send + Sync + 'static {
         call_id: &Uuid,
         summary: &str,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Generate row-level `custom_speaker` assignments for archived transcript
+    /// rows from the full archived transcript data and a candidate speaker set.
+    ///
+    /// Implementations should return an empty vector when no confident
+    /// attribution can be made. Callers persist non-empty results with
+    /// [`CallRepository::overwrite_custom_speakers`].
+    fn generate_custom_speakers(
+        &self,
+        transcript: Vec<EnrichedCallTranscript>,
+        candidate_speakers: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<Vec<CallTranscriptCustomSpeakerResult>, Self::Err>> + Send;
 }
 
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).

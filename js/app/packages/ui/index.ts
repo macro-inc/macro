@@ -8,7 +8,7 @@ export { ChatInput } from './components/ChatInput';
 export { HoverCard } from './components/HoverCard';
 export { Dropdown } from './components/Dropdown';
 export { Surface } from './components/Surface';
-export { Tooltip, type TooltipShortcutItem } from './components/Tooltip';
+export { Tooltip } from './components/Tooltip';
 export { Dialog  } from './components/Dialog';
 export { Button } from './components/Button';
 export { SendButton } from './components/SendButton';

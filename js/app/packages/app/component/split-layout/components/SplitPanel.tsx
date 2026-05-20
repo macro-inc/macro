@@ -179,6 +179,7 @@ export function SplitPanel(props: SplitPanelProps) {
               depth={1}
             >
               <Panel.Header
+                data-split-header
                 class={cn(
                   'block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible',
                   shouldHideSplitHeader() && 'hidden'

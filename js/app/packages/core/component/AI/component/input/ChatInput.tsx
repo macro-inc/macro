@@ -160,16 +160,8 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const SendButton = () => (
     <UiSendButton
-      tooltip="Send"
-      shortcut={props.isPersistent ? undefined : 'cmd+enter'}
-      shortcuts={
-        props.isPersistent
-          ? [
-              { label: 'Send', shortcut: 'enter' },
-              { label: 'Send in background', shortcut: 'cmd+enter' },
-            ]
-          : undefined
-      }
+      tooltip={'Ask Ai'}
+      shortcut="enter"
       tooltipPlacement="top"
       disabled={!canSendMessage()}
       hidden={isMobile() && isEmptyInput()}

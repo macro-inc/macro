@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PatchTeamRequestName } from './patchTeamRequestName';
+import type { PatchTeamRequestSlug } from './patchTeamRequestSlug';
 import type { PatchTeamRequestUserRoleUpdates } from './patchTeamRequestUserRoleUpdates';
 
 /**
@@ -13,6 +14,8 @@ import type { PatchTeamRequestUserRoleUpdates } from './patchTeamRequestUserRole
 export interface PatchTeamRequest {
   /** The new name for the team */
   name?: PatchTeamRequestName;
+  /** The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE. */
+  slug?: PatchTeamRequestSlug;
   /** Role updates to apply to team users */
   user_role_updates?: PatchTeamRequestUserRoleUpdates;
 }

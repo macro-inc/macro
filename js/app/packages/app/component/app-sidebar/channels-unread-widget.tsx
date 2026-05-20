@@ -148,11 +148,19 @@ function ChannelGroupItem(props: {
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? false;
 
-  const navigateToLatestNotification = (newSplit = false) => {
+  const navigateToLatestNotification = async (newSplit = false) => {
     const manager = globalSplitManager();
     if (!manager) return;
     const notification = latestNotification();
-    openNotification(notification, manager, newSplit);
+    try {
+      await openNotification(notification, manager, newSplit);
+      await notificationSource.markAsRead(notification);
+    } catch (error) {
+      console.error(
+        'Failed to open unread notification from sidebar widget:',
+        error
+      );
+    }
   };
 
   const openInCurrentSplit = () => {
@@ -189,11 +197,14 @@ function ChannelGroupItem(props: {
     <Button
       class={cn(
         'flex items-center cursor-default rounded-md text-ink-extra-muted not-disabled:hover:bg-ink/3',
-        isSlim() ? 'justify-center size-8' : 'justify-start gap-2 w-full py-1'
+        isSlim()
+          ? 'justify-center size-8'
+          : 'justify-start gap-2 w-full h-8 py-1'
       )}
       draggable={false}
       variant="ghost"
       size="sm"
+      data-unread-entity-id={props.group.entityId}
       classList={{
         'opacity-0 -translate-y-2': !isVisible(),
         'opacity-100 translate-y-0': isVisible(),

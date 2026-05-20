@@ -15,6 +15,7 @@ import PlusCircleIcon from '@phosphor/plus-circle.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
 import { Button, Dropdown, Layer } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
+import { CREATE_BUTTON_CLASS } from './create-button-style';
 import { NewCallButton } from './NewCallButton';
 
 // Which blocks to show as create options per view, in order
@@ -61,8 +62,6 @@ const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
   mail: 'Email',
   tasks: 'Task',
 };
-
-const CREATE_BUTTON_CLASS = 'rounded-full pl-1 pr-2.5 py-2 font-bold';
 
 function getViewCreateOptions(view: ListView): CreateOption[] {
   const createNames = VIEW_CREATE_BLOCKNAMES[view] ?? [];
@@ -142,11 +141,10 @@ export const SoupViewCreateButton = () => {
   const SingleOptionButton = (props: { hideLabel?: boolean }) => (
     <Button
       variant="accent-reverse"
-      size="sm"
-      class={CREATE_BUTTON_CLASS}
-      onClick={() => handleSelect(options()[0])}
-      tooltip={`Create new ${createLabel()}`}
       depth={5}
+      class="rounded-full px-3 py-2 pl-1 font-bold"
+      size="sm"
+      onClick={() => handleSelect(options()[0])}
     >
       <PlusCircleIcon class="size-3.5" />
       <Show when={!props.hideLabel}>
@@ -157,7 +155,11 @@ export const SoupViewCreateButton = () => {
 
   const MultiOptionButton = (props: { hideLabel?: boolean }) => (
     <Dropdown placement="bottom-start" gutter={4}>
-      <Dropdown.Trigger variant="accent-reverse" class={CREATE_BUTTON_CLASS}>
+      <Dropdown.Trigger
+        variant="accent-reverse"
+        depth={5}
+        class="rounded-full px-3 pl-1 py-2 font-bold"
+      >
         <PlusCircleIcon class="size-3.5" />
         <Show when={!props.hideLabel}>
           <span>{createLabel()}</span>

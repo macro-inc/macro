@@ -3523,6 +3523,10 @@
             "type": ["string", "null"],
             "description": "The new name for the team"
           },
+          "slug": {
+            "type": ["string", "null"],
+            "description": "The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE."
+          },
           "user_role_updates": {
             "type": ["array", "null"],
             "items": {
@@ -3718,7 +3722,7 @@
       "Team": {
         "type": "object",
         "description": "The Team struct",
-        "required": ["id", "name", "owner_id"],
+        "required": ["id", "name", "slug", "owner_id"],
         "properties": {
           "id": {
             "type": "string",
@@ -3728,6 +3732,9 @@
             "type": "string"
           },
           "owner_id": {
+            "type": "string"
+          },
+          "slug": {
             "type": "string"
           }
         }

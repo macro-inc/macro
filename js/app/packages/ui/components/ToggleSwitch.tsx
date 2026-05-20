@@ -1,5 +1,5 @@
 import { Switch as KobalteSwitch } from '@kobalte/core/switch';
-import { Show, splitProps } from 'solid-js';
+import { Show } from 'solid-js';
 import { cn } from '../utils/classname';
 import type { JSX } from 'solid-js';
 
@@ -14,33 +14,28 @@ export type ToggleSwitchProps = {
 };
 
 export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
-  const [local, others] = splitProps(props, [
-    'defaultChecked',
-    'labelClass',
-    'onChange',
-    'disabled',
-    'checked',
-    'class',
-    'label',
-  ]);
-
   return (
     <KobalteSwitch
-      class={cn('inline-flex items-center gap-2', local.class)}
-      defaultChecked={local.defaultChecked}
-      onChange={local.onChange}
-      disabled={local.disabled}
-      checked={local.checked}
-      {...others}
+      class={cn(
+        'inline-flex items-center gap-2 font-medium text-[14px]',
+        props.disabled && 'opacity-50 cursor-not-allowed',
+        props.class
+      )}
+      checked={props.checked}
+      defaultChecked={props.defaultChecked}
+      onChange={props.onChange}
+      disabled={props.disabled}
     >
       <KobalteSwitch.Input class="sr-only" />
-      <Show when={local.label != null}>
-        <KobalteSwitch.Label class={cn('cursor-pointer', local.labelClass)}>
-          {local.label}
+      <Show when={props.label != null}>
+        <KobalteSwitch.Label
+          class={cn('whitespace-nowrap', props.labelClass)}
+        >
+          {props.label}
         </KobalteSwitch.Label>
       </Show>
-      <KobalteSwitch.Control class="relative h-6 w-12 rounded-full border border-edge bg-surface transition-colors duration-150 data-checked:border-accent data-checked:bg-accent/50">
-        <KobalteSwitch.Thumb class="absolute top-0.75 left-0.75 size-4 rounded-full border border-edge transition-all duration-150 ease-in-out data-checked:translate-x-6 data-checked:border-accent data-checked:bg-accent/50" />
+      <KobalteSwitch.Control class="relative w-8 h-3 touch:w-12 touch:h-8 rounded-full bg-edge transition-colors duration-80 data-[checked]:bg-accent">
+        <KobalteSwitch.Thumb class="absolute top-0.5 size-2 touch:size-7 rounded-full bg-surface transition-transform duration-200 ease-out translate-x-0.5 data-[checked]:translate-x-5.5 touch:data-[checked]:translate-x-4.5" />
       </KobalteSwitch.Control>
     </KobalteSwitch>
   );

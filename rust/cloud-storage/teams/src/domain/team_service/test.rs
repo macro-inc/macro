@@ -59,7 +59,7 @@ struct MockTeamRepository {
     fail_rollback_accept: bool,
     fail_rollback_remove: bool,
     patch_team_user_role_calls: Arc<Mutex<Vec<(uuid::Uuid, String, TeamRole)>>>,
-    patch_team_name_calls: Arc<Mutex<Vec<(uuid::Uuid, Option<String>)>>>,
+    patch_team_name_calls: Arc<Mutex<Vec<(uuid::Uuid, Option<String>, Option<String>)>>>,
 }
 
 impl MockTeamRepository {
@@ -319,10 +319,11 @@ impl TeamRepository for MockTeamRepository {
         team_id: &uuid::Uuid,
         req: &PatchTeamRequest,
     ) -> impl Future<Output = Result<(), TeamError>> + Send {
-        self.patch_team_name_calls
-            .lock()
-            .unwrap()
-            .push((*team_id, req.name.clone()));
+        self.patch_team_name_calls.lock().unwrap().push((
+            *team_id,
+            req.name.clone(),
+            req.slug.clone(),
+        ));
         async { Ok(()) }
     }
 
@@ -721,7 +722,7 @@ fn build_service_with_team(
 ) -> (
     impl TeamService,
     Arc<Mutex<Vec<(uuid::Uuid, String, TeamRole)>>>,
-    Arc<Mutex<Vec<(uuid::Uuid, Option<String>)>>>,
+    Arc<Mutex<Vec<(uuid::Uuid, Option<String>, Option<String>)>>>,
 ) {
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
     let team_repo =
@@ -746,12 +747,18 @@ async fn test_patch_team_rejects_owner_role_assignment() {
     let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com")
         .unwrap()
         .into_owned();
-    let team = Team::new(team_id, "Test Team".to_string(), owner_id);
+    let team = Team::new(
+        team_id,
+        "Test Team".to_string(),
+        "TEST_TEAM".to_string(),
+        owner_id,
+    );
 
     let (service, role_calls, name_calls) = build_service_with_team(team);
 
     let req = PatchTeamRequest {
         name: Some("New Name".to_string()),
+        slug: Some("new-team".to_string()),
         user_role_updates: Some(vec![PatchTeamUserRole {
             team_user_id: MacroUserIdStr::parse_from_str("macro|member@example.com")
                 .unwrap()
@@ -777,12 +784,18 @@ async fn test_patch_team_rejects_owner_downgrade() {
     let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com")
         .unwrap()
         .into_owned();
-    let team = Team::new(team_id, "Test Team".to_string(), owner_id.clone());
+    let team = Team::new(
+        team_id,
+        "Test Team".to_string(),
+        "TEST_TEAM".to_string(),
+        owner_id.clone(),
+    );
 
     let (service, role_calls, name_calls) = build_service_with_team(team);
 
     let req = PatchTeamRequest {
         name: None,
+        slug: None,
         user_role_updates: Some(vec![PatchTeamUserRole {
             team_user_id: owner_id.clone(),
             role: TeamRole::Member,
@@ -809,12 +822,18 @@ async fn test_patch_team_applies_role_updates_and_name() {
     let admin_id = MacroUserIdStr::parse_from_str("macro|admin@example.com")
         .unwrap()
         .into_owned();
-    let team = Team::new(team_id, "Old Name".to_string(), owner_id.clone());
+    let team = Team::new(
+        team_id,
+        "Old Name".to_string(),
+        "OLD_NAME".to_string(),
+        owner_id.clone(),
+    );
 
     let (service, role_calls, name_calls) = build_service_with_team(team);
 
     let req = PatchTeamRequest {
         name: Some("New Name".to_string()),
+        slug: Some("new-team slug".to_string()),
         user_role_updates: Some(vec![
             PatchTeamUserRole {
                 team_user_id: member_id.clone(),
@@ -843,7 +862,14 @@ async fn test_patch_team_applies_role_updates_and_name() {
 
     let name_calls = name_calls.lock().unwrap();
     assert_eq!(name_calls.len(), 1);
-    assert_eq!(name_calls[0], (team_id, Some("New Name".to_string())));
+    assert_eq!(
+        name_calls[0],
+        (
+            team_id,
+            Some("New Name".to_string()),
+            Some("new-team slug".to_string())
+        )
+    );
 }
 
 /// Empty user_role_updates vec is a no-op for roles but still applies name.
@@ -853,12 +879,18 @@ async fn test_patch_team_empty_role_updates() {
     let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com")
         .unwrap()
         .into_owned();
-    let team = Team::new(team_id, "Old Name".to_string(), owner_id.clone());
+    let team = Team::new(
+        team_id,
+        "Old Name".to_string(),
+        "OLD_NAME".to_string(),
+        owner_id.clone(),
+    );
 
     let (service, role_calls, name_calls) = build_service_with_team(team);
 
     let req = PatchTeamRequest {
         name: Some("New Name".to_string()),
+        slug: None,
         user_role_updates: Some(Vec::new()),
     };
 
@@ -868,5 +900,5 @@ async fn test_patch_team_empty_role_updates() {
     assert!(role_calls.lock().unwrap().is_empty());
     let name_calls = name_calls.lock().unwrap();
     assert_eq!(name_calls.len(), 1);
-    assert_eq!(name_calls[0], (team_id, Some("New Name".to_string())));
+    assert_eq!(name_calls[0], (team_id, Some("New Name".to_string()), None));
 }

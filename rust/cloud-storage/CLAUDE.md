@@ -240,6 +240,8 @@ The migration included comprehensive indexes:
 
 ### Database Query Management
 
+- Prefer SQLx compile-time checked macros (`query!`, `query_as!`, `query_scalar!`) for database queries whenever possible instead of dynamic `sqlx::query` calls.
+- Never manually create or edit `.sqlx/query-*.json` files. To update SQLx query metadata, run `just prepare_db` from `rust/cloud-storage`.
 - Always run tests between changes that involve changes to db queries
 - Never run `cargo test` with `SQLX_OFFLINE=true`. Tests are designed to validate against the live local Postgres; offline mode forces sqlx macros to consult the cached `.sqlx` data and can either surface confusing "type annotations needed" errors when a query was not in the cache or hide regressions where a query no longer matches the schema. If tests fail with sqlx "no cached data" errors, run `just prepare_db` (with `--tests` when the failure is in test code) — do not flip offline mode on. `SQLX_OFFLINE=true` is fine for `cargo check` / `cargo build` / `cargo clippy` only.
 

@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * The page's favicon URL, if any.
+ */
 export type GetUnfurlResponseFaviconUrl = string | null;

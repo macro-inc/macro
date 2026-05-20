@@ -17,6 +17,7 @@ import { updateCookie } from '@core/util/cookies';
 import { makePersisted } from '@solid-primitives/storage';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { cn, Layer } from '@ui';
+import { ScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,
@@ -212,6 +213,7 @@ function LayoutInner(props: RouteSectionProps) {
         </Show>
       </Suspense>
       <DevStatusBar />
+      <ScreencastHotkeys />
     </div>
   );
 }

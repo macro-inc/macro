@@ -227,6 +227,12 @@ pub(crate) struct Hit<T> {
     /// Highlights may or may not be present since we could match
     /// purely on the title of the item
     pub highlight: Option<HashMap<String, Vec<String>>>,
+    /// `inner_hits` come back attached to a parent hit when the query
+    /// used `has_child` (the documents join shape). Kept as raw JSON
+    /// because the structure is per-has_child-clause and only the
+    /// documents branch consumes it today.
+    #[serde(default)]
+    pub inner_hits: Option<serde_json::Value>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Default, Clone)]

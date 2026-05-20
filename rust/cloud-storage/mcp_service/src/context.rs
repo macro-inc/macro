@@ -69,6 +69,7 @@ pub struct McpContext {
     pub jwt_args: JwtValidationArgs,
     pub tool_context: ToolServiceContext,
     pub auth_proxy: McpAuthProxyServiceImpl<RedisInflightAuth>,
+    pub mcp_public_host: String,
 }
 
 pub async fn build_context() -> anyhow::Result<McpContext> {
@@ -120,10 +121,17 @@ pub async fn build_context() -> anyhow::Result<McpContext> {
 
     let auth_proxy = build_auth_proxy(&env_vars, &secretsmanager_client).await?;
 
+    let mcp_public_host = http::Uri::try_from(env_vars.mcp_public_url.as_ref())
+        .context("MCP_PUBLIC_URL is not a valid URI")?
+        .host()
+        .context("MCP_PUBLIC_URL has no host")?
+        .to_owned();
+
     Ok(McpContext {
         jwt_args,
         tool_context,
         auth_proxy,
+        mcp_public_host,
     })
 }
 

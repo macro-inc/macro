@@ -15,6 +15,7 @@ import {
   type ListView,
 } from '@app/constants/list-views';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
+import { clearSidebarBadge, hasSidebarBadge } from '@app/signal/sidebarBadges';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { InCallPanel } from '@channel/Call';
 import { useCallContextOptional } from '@channel/Call/CallContext';
@@ -52,6 +53,7 @@ import { useLocation } from '@solidjs/router';
 import { Button, cn, Hotkey } from '@ui';
 import {
   type Component,
+  createEffect,
   createMemo,
   createSignal,
   For,
@@ -739,6 +741,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const layoutManager = globalSplitManager();
+  const hasUnread = () => hasSidebarBadge(props.id);
 
   const location = useLocation();
 
@@ -754,6 +757,10 @@ const SidebarLink = (props: SidebarLinkProps) => {
 
     return activeContent?.id === props.id;
   };
+
+  createEffect(() => {
+    if (isActive()) clearSidebarBadge(props.id);
+  });
 
   const content = () =>
     ({
@@ -817,6 +824,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
           onMouseLeave={() => setIsHovering(false)}
           onMouseDown={(e) => {
             if (e.button !== 0) return;
+            clearSidebarBadge(props.id);
             analytics.track('sidebar_click', {
               view: props.id,
             });
@@ -846,8 +854,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
           }}
         >
           <Show when={props.icon}>
-            <div class="shrink-0 [&_svg]:size-4">
+            <div class="relative shrink-0 [&_svg]:size-4">
               <Dynamic component={props.icon} triggerAnimation={isHovering()} />
+              <Show when={hasUnread() && !isActive()}>
+                <div class="absolute -top-0.5 -right-0.5 size-1.5 bg-accent rounded-full ring-surface ring-2" />
+              </Show>
             </div>
           </Show>
 

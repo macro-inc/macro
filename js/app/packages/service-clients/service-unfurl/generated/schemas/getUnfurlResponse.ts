@@ -8,10 +8,20 @@ import type { GetUnfurlResponseDescription } from './getUnfurlResponseDescriptio
 import type { GetUnfurlResponseFaviconUrl } from './getUnfurlResponseFaviconUrl';
 import type { GetUnfurlResponseImageUrl } from './getUnfurlResponseImageUrl';
 
+/**
+ * Unfurl response for a single URL: the URL itself plus any metadata that
+was extracted from the page's `<head>` (title, description, image,
+favicon).
+ */
 export interface GetUnfurlResponse {
+  /** The page description (from `og:description`), if any. */
   description?: GetUnfurlResponseDescription;
+  /** The page's favicon URL, if any. */
   favicon_url?: GetUnfurlResponseFaviconUrl;
+  /** The page's preview image URL (from `og:image`), if any. */
   image_url?: GetUnfurlResponseImageUrl;
+  /** The page title (from custom URL parser, Open Graph, or `<title>`). */
   title: string;
+  /** The URL that was unfurled. */
   url: string;
 }
