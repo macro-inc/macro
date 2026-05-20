@@ -92,6 +92,20 @@ struct BatchSendMessageBody<'a> {
     entities: Vec<Entity<'a>>,
 }
 
+/// A unique message for a single entity.
+#[derive(serde::Serialize)]
+struct UniqueMessage<'a> {
+    message_type: &'a str,
+    message_content: serde_json::Value,
+    entity: Entity<'a>,
+}
+
+/// Request body for batch sending unique messages.
+#[derive(serde::Serialize)]
+struct BatchSendUniqueMessagesBody<'a> {
+    messages: Vec<UniqueMessage<'a>>,
+}
+
 impl ConnectionGatewayClient {
     async fn batch_send_to_entities<T: Serialize + Send + Sync>(
         &self,
@@ -113,6 +127,32 @@ impl ConnectionGatewayClient {
             .client
             .post(format!(
                 "{}/message/batch_send",
+                self.connection_gateway_url
+            ))
+            .json(&body)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let json = res.json().await?;
+        let response: GatewayResponse = serde_json::from_value(json)?;
+        Ok(response.receipts)
+    }
+
+    async fn batch_send_unique_messages(
+        &self,
+        messages: Vec<UniqueMessage<'_>>,
+    ) -> Result<Vec<MessageReceipt>, Report> {
+        if messages.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let body = BatchSendUniqueMessagesBody { messages };
+
+        let res = self
+            .client
+            .post(format!(
+                "{}/message/batch_send_unique",
                 self.connection_gateway_url
             ))
             .json(&body)
@@ -178,16 +218,18 @@ impl NotificationRealtimePublisher for WebSocketGatewayAdapter<ConnectionGateway
         &self,
         updates: &[UserNotificationStatusUpdate<'_>],
     ) -> Result<(), Report> {
-        let futures = updates.iter().map(|update| {
-            let entities = vec![EntityType::User.with_entity_str(update.user.as_ref())];
-            self.gateway.batch_send_to_entities(
-                NotificationStatusUpdate::MESSAGE_TYPE,
-                &update.update,
-                entities,
-            )
-        });
+        let messages = updates
+            .iter()
+            .map(|update| {
+                Ok(UniqueMessage {
+                    message_type: NotificationStatusUpdate::MESSAGE_TYPE,
+                    message_content: serde_json::to_value(&update.update)?,
+                    entity: EntityType::User.with_entity_str(update.user.as_ref()),
+                })
+            })
+            .collect::<Result<Vec<_>, serde_json::Error>>()?;
 
-        futures::future::try_join_all(futures).await?;
+        self.gateway.batch_send_unique_messages(messages).await?;
         Ok(())
     }
 }
