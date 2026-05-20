@@ -392,6 +392,44 @@ type SidebarActionButtonProps = {
   label: string;
 };
 
+type SidebarShortcutLinkProps = {
+  label: string;
+  icon: Component<{ triggerAnimation?: boolean; class?: string }>;
+  onClick: () => void;
+  isSlim: () => boolean;
+};
+
+const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
+  const [isHovering, setIsHovering] = createSignal(false);
+
+  return (
+    <Button
+      draggable={false}
+      variant="ghost"
+      class={cn(
+        'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-md py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3'
+      )}
+      tooltipPlacement="right"
+      label={props.isSlim() ? props.label : undefined}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+      onMouseDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        props.onClick();
+      }}
+    >
+      <div class="relative shrink-0 [&_svg]:size-4">
+        <Dynamic component={props.icon} triggerAnimation={isHovering()} />
+      </div>
+
+      <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
+        <span class="whitespace-nowrap">{props.label}</span>
+      </div>
+    </Button>
+  );
+};
+
 type SettingsMenuItem = {
   tab: SettingsTab;
   label: string;
@@ -521,7 +559,13 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
           fallback={<div class="size-6 shrink-0 rounded-full bg-ink/10" />}
         >
           {(id) => (
-            <UserIcon id={id()} size="md" suppressClick showTooltip={false} />
+            <UserIcon
+              id={id()}
+              size="md"
+              suppressClick
+              showTooltip={false}
+              // class="-m-1"
+            />
           )}
         </Show>
         <span class="flex-1 min-w-0 text-left whitespace-nowrap text-sm truncate group-data-[slim=true]/sidebar:hidden">
@@ -836,19 +880,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="w-full px-2 flex flex-col gap-1 mb-1">
-        <SidebarActionButton
+        <SidebarShortcutLink
           label="App"
           isSlim={isSlim}
           onClick={() => openSettingsTab('Mobile App')}
           icon={() => <DeviceMobileIcon class="size-4" />}
         />
-        <SidebarActionButton
+        <SidebarShortcutLink
           label="MCPs"
           isSlim={isSlim}
           onClick={() => openSettingsTab('Agent')}
           icon={() => <PlugIcon class="size-4" />}
         />
-        <SidebarActionButton
+        <SidebarShortcutLink
           label="Team"
           isSlim={isSlim}
           onClick={() => openSettingsTab('Team')}
