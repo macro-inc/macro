@@ -1,10 +1,11 @@
 import type { ListView } from '@app/constants/list-views';
+import type { NotificationType } from '@core/types';
 import type { UnifiedNotification } from '@notifications';
 
 export function notificationToSidebarId(
   n: UnifiedNotification
 ): ListView | null {
-  const tag = n.notification_metadata.tag;
+  const tag = n.notification_metadata.tag as NotificationType;
   switch (tag) {
     case 'channel_mention':
     case 'channel_message_send':
