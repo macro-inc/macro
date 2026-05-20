@@ -1,6 +1,5 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { EntityIcon } from '@core/component/EntityIcon';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
@@ -626,13 +625,23 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   return (
     <div
-      class="flex flex-col relative h-full max-h-full min-h-0 p-4"
+      class="flex flex-col relative h-full max-h-full min-h-0 p-4 gap-4"
       tabIndex={-1}
       ref={setContainerRef}
     >
       <div class="flex items-center gap-1">
-        <div class="flex-1 text-sm text text-ink-extra-muted flex items-center gap-2">
-          <EntityIcon targetType="task" size="xs" /> New Task
+        <div class="flex-1 flex items-center">
+          <Show when={splitPanel?.handle.isPopover()}>
+            <Button
+              onMouseDown={handleContinueInSplit}
+              disabled={isCreating()}
+              tabIndex={-1}
+              tooltip="Continue editing in split"
+              size="icon-sm"
+            >
+              <ArrowsOutIcon />
+            </Button>
+          </Show>
         </div>
         <Show when={content().trim() || title()}>
           <Button
@@ -649,15 +658,6 @@ export function ComposeTask(props: ComposeTaskProps) {
         </Show>
         <Show when={splitPanel?.handle.isPopover()}>
           <Button
-            onMouseDown={handleContinueInSplit}
-            disabled={isCreating()}
-            tabIndex={-1}
-            tooltip="Continue editing in split"
-            size="icon-sm"
-          >
-            <ArrowsOutIcon />
-          </Button>
-          <Button
             onMouseDown={handleClose}
             tabIndex={-1}
             tooltip="Close"
@@ -667,7 +667,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           </Button>
         </Show>
       </div>
-      <div class="mt-6 flex-1 min-h-0 flex flex-col overflow-hidden">
+      <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
         <div class="shrink-0 flex gap-2 items-center">
           <input
             type="text"
@@ -680,7 +680,7 @@ export function ComposeTask(props: ComposeTaskProps) {
               }
             }}
             disabled={isCreating()}
-            class="w-full py-2 text-xl font-medium placeholder-ink-placeholder disabled:opacity-50"
+            class="w-full py-2 text-xl font-medium placeholder-ink-placeholder disabled:opacity-50 truncate focus:overflow-visible"
             on:keydown={(e) => {
               if (e.key === 'Escape') {
                 const container = containerRef();

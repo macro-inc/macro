@@ -1,5 +1,5 @@
 import { Switch as KobalteSwitch } from '@kobalte/core/switch';
-import { Show, splitProps } from 'solid-js';
+import { Show, createEffect, createSignal, on, onCleanup, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import type { JSX } from 'solid-js';
 
@@ -23,12 +23,31 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
     'class',
     'label',
   ]);
+  const [isStretched, setIsStretched] = createSignal(false);
+  let stretchTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  const triggerStretch = () => {
+    setIsStretched(true);
+    if (stretchTimeout) clearTimeout(stretchTimeout);
+    stretchTimeout = setTimeout(() => setIsStretched(false), 75);
+  };
+
+  const handleChange = (checked: boolean) => {
+    triggerStretch();
+    local.onChange?.(checked);
+  };
+
+  createEffect(on(() => local.checked, triggerStretch, { defer: true }));
+
+  onCleanup(() => {
+    if (stretchTimeout) clearTimeout(stretchTimeout);
+  });
 
   return (
     <KobalteSwitch
       class={cn('inline-flex items-center gap-2', local.class)}
       defaultChecked={local.defaultChecked}
-      onChange={local.onChange}
+      onChange={handleChange}
       disabled={local.disabled}
       checked={local.checked}
       {...others}
@@ -39,8 +58,15 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
           {local.label}
         </KobalteSwitch.Label>
       </Show>
-      <KobalteSwitch.Control class="relative h-6 w-12 rounded-full border border-edge bg-surface transition-colors duration-150 data-checked:border-accent data-checked:bg-accent/50">
-        <KobalteSwitch.Thumb class="absolute top-0.75 left-0.75 size-4 rounded-full border border-edge transition-all duration-150 ease-in-out data-checked:translate-x-6 data-checked:border-accent data-checked:bg-accent/50" />
+      <KobalteSwitch.Control class="relative h-4 w-8 rounded-full bg-edge transition-colors duration-150 data-checked:bg-accent">
+        <KobalteSwitch.Thumb
+          class={cn(
+            'absolute top-0.5 left-0.5 h-3 rounded-full bg-surface transition-all duration-150 ease-in-out',
+            isStretched()
+              ? 'w-4 data-checked:translate-x-3'
+              : 'w-3 data-checked:translate-x-4',
+          )}
+        />
       </KobalteSwitch.Control>
     </KobalteSwitch>
   );
