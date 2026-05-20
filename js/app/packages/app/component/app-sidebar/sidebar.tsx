@@ -14,6 +14,7 @@ import {
   LIST_VIEW_PATHS,
   type ListView,
 } from '@app/constants/list-views';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { clearSidebarBadge, hasSidebarBadge } from '@app/signal/sidebarBadges';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -21,8 +22,12 @@ import { InCallPanel } from '@channel/Call';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { UserIcon } from '@core/component/UserIcon';
-
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import {
+  DEV_MODE_ENV,
+  ENABLE_APP_STORE_QR_CODE,
+  ENABLE_CALLS,
+  ENABLE_TEAMS_OVERRIDE,
+} from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
@@ -33,6 +38,8 @@ import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import LogoIcon from '@icon/macro-logo.svg';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
@@ -480,6 +487,37 @@ const SETTINGS_MENU_BOTTOM_ITEMS: SettingsMenuItem[] = [
 ];
 
 /**
+ * Mirrors the gating in `Settings.tsx`'s `settingsTabs()`. Use to filter the
+ * sidebar menu/shortcuts and to guard `setActiveTabId` callers so we never
+ * activate a tab that the settings panel won't render.
+ */
+const useIsSettingsTabAvailable = () => {
+  const teamsFlag = useFeatureFlag('enable-teams-settings', {
+    enabledOverride: ENABLE_TEAMS_OVERRIDE,
+  });
+
+  return (tab: SettingsTab): boolean => {
+    switch (tab) {
+      case 'Appearance':
+      case 'Account':
+        return true;
+      case 'Team':
+        return teamsFlag().enabled;
+      case 'Shortcuts':
+        return !isTouchDevice();
+      case 'Mobile App':
+        return ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform();
+      case 'Agent':
+        return !isNativeMobilePlatform();
+      case 'Mobile':
+        return isNativeMobilePlatform() && DEV_MODE_ENV;
+      default:
+        return false;
+    }
+  };
+};
+
+/**
  * A normalised action button for the sidebar footer area.
  *
  * Mirrors the tooltip behaviour of `SidebarLink`:
@@ -532,10 +570,18 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
 type SidebarSettingsWidgetProps = {
   isSlim: () => boolean;
   onSelect: (tab: SettingsTab) => void;
+  isTabAvailable: (tab: SettingsTab) => boolean;
 };
 
 const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   const userId = useUserId();
+
+  const topItems = createMemo(() =>
+    SETTINGS_MENU_TOP_ITEMS.filter((item) => props.isTabAvailable(item.tab))
+  );
+  const bottomItems = createMemo(() =>
+    SETTINGS_MENU_BOTTOM_ITEMS.filter((item) => props.isTabAvailable(item.tab))
+  );
 
   return (
     <Dropdown placement="top-start" gutter={6}>
@@ -578,7 +624,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
       <Dropdown.Portal>
         <Layer depth={3}>
           <Dropdown.Content class="min-w-56">
-            <For each={SETTINGS_MENU_TOP_ITEMS}>
+            <For each={topItems()}>
               {(item) => (
                 <Dropdown.Item
                   class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
@@ -599,8 +645,10 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
                 </Dropdown.Item>
               )}
             </For>
-            <Dropdown.Separator />
-            <For each={SETTINGS_MENU_BOTTOM_ITEMS}>
+            <Show when={topItems().length > 0 && bottomItems().length > 0}>
+              <Dropdown.Separator />
+            </Show>
+            <For each={bottomItems()}>
               {(item) => (
                 <Dropdown.Item
                   class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
@@ -641,6 +689,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const { openSettings, setActiveTabId, settingsOpen } = useSettingsState();
+  const isTabAvailable = useIsSettingsTabAvailable();
   const notificationSettings = useNotificationSettings();
   const callCtx = useCallContextOptional();
 
@@ -712,6 +761,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   };
 
   const openSettingsTab = (tab: SettingsTab) => {
+    if (!isTabAvailable(tab)) return;
     if (settingsOpen()) {
       setActiveTabId(tab);
       return;
@@ -882,28 +932,38 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="w-full px-2 flex flex-col gap-1 mb-1">
-        <SidebarShortcutLink
-          label="App"
-          isSlim={isSlim}
-          onClick={() => openSettingsTab('Mobile App')}
-          icon={() => <DeviceMobileIcon class="size-4" />}
-        />
-        <SidebarShortcutLink
-          label="MCPs"
-          isSlim={isSlim}
-          onClick={() => openSettingsTab('Agent')}
-          icon={() => <PlugIcon class="size-4" />}
-        />
-        <SidebarShortcutLink
-          label="Team"
-          isSlim={isSlim}
-          onClick={() => openSettingsTab('Team')}
-          icon={() => <UsersThreeIcon class="size-4" />}
-        />
+        <Show when={isTabAvailable('Mobile App')}>
+          <SidebarShortcutLink
+            label="App"
+            isSlim={isSlim}
+            onClick={() => openSettingsTab('Mobile App')}
+            icon={() => <DeviceMobileIcon class="size-4" />}
+          />
+        </Show>
+        <Show when={isTabAvailable('Agent')}>
+          <SidebarShortcutLink
+            label="MCPs"
+            isSlim={isSlim}
+            onClick={() => openSettingsTab('Agent')}
+            icon={() => <PlugIcon class="size-4" />}
+          />
+        </Show>
+        <Show when={isTabAvailable('Team')}>
+          <SidebarShortcutLink
+            label="Team"
+            isSlim={isSlim}
+            onClick={() => openSettingsTab('Team')}
+            icon={() => <UsersThreeIcon class="size-4" />}
+          />
+        </Show>
       </div>
 
       <div class="w-full px-2">
-        <SidebarSettingsWidget isSlim={isSlim} onSelect={openSettingsTab} />
+        <SidebarSettingsWidget
+          isSlim={isSlim}
+          onSelect={openSettingsTab}
+          isTabAvailable={isTabAvailable}
+        />
       </div>
       <InviteModal />
     </div>
