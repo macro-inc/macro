@@ -140,26 +140,24 @@ impl TeamRepositoryImpl {
 
         let id = macro_uuid::generate_uuid_v7();
 
-        let team = sqlx::query(
+        let team = sqlx::query!(
             r#"
             INSERT INTO team (id, name, owner_id, seat_count)
             VALUES ($1, $2, $3, 1)
             RETURNING id, name, slug, owner_id
             "#,
+            id,
+            team_name,
+            user_id.as_ref(),
         )
-        .bind(id)
-        .bind(team_name)
-        .bind(user_id.as_ref())
-        .try_map(|row: sqlx::postgres::PgRow| {
+        .try_map(|row| {
             Ok(Team {
-                id: row.try_get("id")?,
-                name: row.try_get("name")?,
-                slug: row.try_get("slug")?,
-                owner_id: MacroUserIdStr::parse_from_str(
-                    row.try_get::<String, _>("owner_id")?.as_str(),
-                )
-                .map_err(type_err)?
-                .into_owned(),
+                id: row.id,
+                name: row.name,
+                slug: row.slug,
+                owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
+                    .map_err(type_err)?
+                    .into_owned(),
             })
         })
         .fetch_one(&mut *transaction)
@@ -948,24 +946,22 @@ impl TeamRepository for TeamRepositoryImpl {
 
     #[tracing::instrument(skip(self), err)]
     async fn get_team_by_id(&self, team_id: &uuid::Uuid) -> Result<TeamWithMembers, TeamError> {
-        let team = sqlx::query(
+        let team = sqlx::query!(
             r#"
             SELECT id, name, slug, owner_id
             FROM team
             WHERE id = $1
             "#,
+            team_id,
         )
-        .bind(team_id)
-        .try_map(|row: sqlx::postgres::PgRow| {
+        .try_map(|row| {
             Ok(Team {
-                id: row.try_get("id")?,
-                name: row.try_get("name")?,
-                slug: row.try_get("slug")?,
-                owner_id: MacroUserIdStr::parse_from_str(
-                    row.try_get::<String, _>("owner_id")?.as_str(),
-                )
-                .map_err(type_err)?
-                .into_owned(),
+                id: row.id,
+                name: row.name,
+                slug: row.slug,
+                owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
+                    .map_err(type_err)?
+                    .into_owned(),
             })
         })
         .fetch_one(&self.pool)
@@ -1001,25 +997,23 @@ impl TeamRepository for TeamRepositoryImpl {
 
     #[tracing::instrument(skip(self), err)]
     async fn get_user_teams(&self, user_id: &MacroUserIdStr<'_>) -> Result<Vec<Team>, TeamError> {
-        let teams = sqlx::query(
+        let teams = sqlx::query!(
             r#"
             SELECT t.id, t.name, t.slug, t.owner_id
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
             WHERE tu.user_id = $1
             "#,
+            user_id.as_ref(),
         )
-        .bind(user_id.as_ref())
-        .try_map(|row: sqlx::postgres::PgRow| {
+        .try_map(|row| {
             Ok(Team {
-                id: row.try_get("id")?,
-                name: row.try_get("name")?,
-                slug: row.try_get("slug")?,
-                owner_id: MacroUserIdStr::parse_from_str(
-                    row.try_get::<String, _>("owner_id")?.as_str(),
-                )
-                .map_err(type_err)?
-                .into_owned(),
+                id: row.id,
+                name: row.name,
+                slug: row.slug,
+                owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
+                    .map_err(type_err)?
+                    .into_owned(),
             })
         })
         .fetch_all(&self.pool)
