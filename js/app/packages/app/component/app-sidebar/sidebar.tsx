@@ -556,16 +556,18 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
       >
         <Show
           when={userId()}
-          fallback={<div class="size-6 shrink-0 rounded-full bg-ink/10" />}
+          fallback={<div class="size-5 shrink-0 rounded-full bg-ink/10" />}
         >
           {(id) => (
-            <UserIcon
-              id={id()}
-              size="md"
-              suppressClick
-              showTooltip={false}
-              // class="-m-1"
-            />
+            <div class="size-5">
+              <UserIcon
+                id={id()}
+                size="fill"
+                suppressClick
+                showTooltip={false}
+                // class="-m-1"
+              />
+            </div>
           )}
         </Show>
         <span class="flex-1 min-w-0 text-left whitespace-nowrap text-sm truncate group-data-[slim=true]/sidebar:hidden">
