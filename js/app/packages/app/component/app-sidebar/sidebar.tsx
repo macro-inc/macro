@@ -531,51 +531,51 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
       </Dropdown.Trigger>
       <Dropdown.Portal>
         <Layer depth={3}>
-        <Dropdown.Content class="min-w-56">
-          <For each={SETTINGS_MENU_TOP_ITEMS}>
-            {(item) => (
-              <Dropdown.Item
-                class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
-                onSelect={() => props.onSelect(item.tab)}
-              >
-                <span class="size-5 flex items-center justify-center">
-                  <Dynamic
-                    component={item.icon}
-                    class="size-4 shrink-0 text-ink-extra-muted"
-                  />
-                </span>
-                <div class="flex flex-col min-w-0">
-                  <span class="text-ink">{item.label}</span>
-                  <span class="text-xxs text-ink-extra-muted leading-tight">
-                    {item.description}
+          <Dropdown.Content class="min-w-56">
+            <For each={SETTINGS_MENU_TOP_ITEMS}>
+              {(item) => (
+                <Dropdown.Item
+                  class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
+                  onSelect={() => props.onSelect(item.tab)}
+                >
+                  <span class="size-5 flex items-center justify-center">
+                    <Dynamic
+                      component={item.icon}
+                      class="size-4 shrink-0 text-ink-extra-muted"
+                    />
                   </span>
-                </div>
-              </Dropdown.Item>
-            )}
-          </For>
-          <Dropdown.Separator />
-          <For each={SETTINGS_MENU_BOTTOM_ITEMS}>
-            {(item) => (
-              <Dropdown.Item
-                class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
-                onSelect={() => props.onSelect(item.tab)}
-              >
-                <span class="size-5 flex items-center justify-center">
-                  <Dynamic
-                    component={item.icon}
-                    class="size-4 shrink-0 text-ink-extra-muted"
-                  />
-                </span>
-                <div class="flex flex-col min-w-0">
-                  <span class="text-ink">{item.label}</span>
-                  <span class="text-xxs text-ink-extra-muted leading-tight">
-                    {item.description}
+                  <div class="flex flex-col min-w-0">
+                    <span class="text-ink">{item.label}</span>
+                    <span class="text-xxs text-ink-extra-muted leading-tight">
+                      {item.description}
+                    </span>
+                  </div>
+                </Dropdown.Item>
+              )}
+            </For>
+            <Dropdown.Separator />
+            <For each={SETTINGS_MENU_BOTTOM_ITEMS}>
+              {(item) => (
+                <Dropdown.Item
+                  class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
+                  onSelect={() => props.onSelect(item.tab)}
+                >
+                  <span class="size-5 flex items-center justify-center">
+                    <Dynamic
+                      component={item.icon}
+                      class="size-4 shrink-0 text-ink-extra-muted"
+                    />
                   </span>
-                </div>
-              </Dropdown.Item>
-            )}
-          </For>
-        </Dropdown.Content>
+                  <div class="flex flex-col min-w-0">
+                    <span class="text-ink">{item.label}</span>
+                    <span class="text-xxs text-ink-extra-muted leading-tight">
+                      {item.description}
+                    </span>
+                  </div>
+                </Dropdown.Item>
+              )}
+            </For>
+          </Dropdown.Content>
         </Layer>
       </Dropdown.Portal>
     </Dropdown>
@@ -833,6 +833,27 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
       <div class={cn('px-2 w-full', !callCtx?.isInCall() && 'mt-auto')}>
         <hr class="border-transparent mb-2" />
+      </div>
+
+      <div class="w-full px-2 flex flex-col gap-1 mb-1">
+        <SidebarActionButton
+          label="App"
+          isSlim={isSlim}
+          onClick={() => openSettingsTab('Mobile App')}
+          icon={() => <DeviceMobileIcon class="size-4" />}
+        />
+        <SidebarActionButton
+          label="MCPs"
+          isSlim={isSlim}
+          onClick={() => openSettingsTab('Agent')}
+          icon={() => <PlugIcon class="size-4" />}
+        />
+        <SidebarActionButton
+          label="Team"
+          isSlim={isSlim}
+          onClick={() => openSettingsTab('Team')}
+          icon={() => <UsersThreeIcon class="size-4" />}
+        />
       </div>
 
       <div class="w-full px-2">
