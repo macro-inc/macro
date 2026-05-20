@@ -27,20 +27,23 @@ function pulseElement(el: Element): void {
   const isSlimSidebar = !!el.closest('[data-slim="true"]');
   const glowExtension = isSlimSidebar ? 60 : 0;
 
+  const accentBg = 'oklch(var(--a0l) var(--a0c) var(--a0h) / 0.25)';
+  const background = isSlimSidebar
+    ? `linear-gradient(to right, ${accentBg} ${rect.width}px, transparent ${rect.width + glowExtension}px)`
+    : accentBg;
+
   const overlay = document.createElement('div');
-  overlay.style.cssText = [
-    'position:fixed',
-    `top:${rect.top}px`,
-    `left:${rect.left}px`,
-    `width:${rect.width + glowExtension}px`,
-    `height:${rect.height}px`,
-    isSlimSidebar
-      ? `background:linear-gradient(to right, oklch(var(--a0l) var(--a0c) var(--a0h) / 0.25) ${rect.width}px, transparent ${rect.width + glowExtension}px)`
-      : 'background:oklch(var(--a0l) var(--a0c) var(--a0h) / 0.25)',
-    isSlimSidebar ? 'border-radius:4px 0 0 4px' : 'border-radius:4px',
-    'pointer-events:none',
-    'z-index:2147483647',
-  ].join(';');
+  Object.assign(overlay.style, {
+    position: 'fixed',
+    top: `${rect.top}px`,
+    left: `${rect.left}px`,
+    width: `${rect.width + glowExtension}px`,
+    height: `${rect.height}px`,
+    background,
+    borderRadius: isSlimSidebar ? '4px 0 0 4px' : '4px',
+    pointerEvents: 'none',
+    zIndex: '2147483647',
+  });
   document.body.appendChild(overlay);
 
   const reducedMotion = window.matchMedia(
