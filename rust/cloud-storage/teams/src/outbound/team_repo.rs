@@ -214,6 +214,23 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn has_user_trialed(&self, user_id: &MacroUserIdStr<'_>) -> Result<bool, TeamError> {
+        let has_trialed = sqlx::query_scalar::<_, bool>(
+            r#"
+            SELECT mu.has_trialed
+            FROM "User" u
+            INNER JOIN macro_user mu ON mu.id = u.macro_user_id
+            WHERE u.id = $1
+            "#,
+        )
+        .bind(user_id.as_ref())
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(has_trialed)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_subscription_id(
         &self,
         team_id: &uuid::Uuid,

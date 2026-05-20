@@ -109,6 +109,13 @@ impl TeamRepository for MockTeamRepository {
         async move { Ok(subscription_id) }
     }
 
+    fn has_user_trialed(
+        &self,
+        _: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send {
+        async { Ok(false) }
+    }
+
     fn create_team(
         &self,
         _: &MacroUserIdStr<'_>,
@@ -422,6 +429,7 @@ impl CustomerRepository for MockCustomerRepository {
         _team_id: &uuid::Uuid,
         _customer_id: stripe::CustomerId,
         _req: &TeamCheckoutSessionRequest,
+        _has_trialed: bool,
     ) -> impl Future<Output = Result<String, CustomerError>> + Send {
         async { unimplemented!() }
     }
