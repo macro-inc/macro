@@ -44,6 +44,7 @@ export * from './patchSubscriptionTierRequest';
 export * from './patchTeamPlanRequest';
 export * from './patchTeamRequest';
 export * from './patchTeamRequestName';
+export * from './patchTeamRequestSlug';
 export * from './patchTeamRequestUserRoleUpdates';
 export * from './patchTeamUserRole';
 export * from './patchUserGroupRequest';

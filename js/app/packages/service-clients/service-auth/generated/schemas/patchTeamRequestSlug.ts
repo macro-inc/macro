@@ -6,11 +6,6 @@
  */
 
 /**
- * The Team struct
+ * The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE.
  */
-export interface Team {
-  id: string;
-  name: string;
-  owner_id: string;
-  slug: string;
-}
+export type PatchTeamRequestSlug = string | null;
