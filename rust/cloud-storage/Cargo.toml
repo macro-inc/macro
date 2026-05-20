@@ -4,6 +4,7 @@ resolver = "2"
 members = [
   "authentication_service",
   "backfill_entity_access",
+  "comms_service",
   "connection_gateway",
   "contacts_service",
   "convert_service",
@@ -29,8 +30,10 @@ members = [
   "notification_service",
   "organization_retention_handler",
   "organization_retention_trigger",
+  "properties_service",
   "scheduled_action",
   "search_processing_service",
+  "search_service",
   "search_upload_handler",
   "seed_cli",
   "sha_cleanup_worker",
