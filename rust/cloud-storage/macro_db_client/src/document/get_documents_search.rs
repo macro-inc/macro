@@ -11,9 +11,7 @@ use model::document::{BackfillSearchDocumentInformation, FileType};
 ///
 /// Pagination is **keyset (seek-method)**: pass `cursor` as the last row's
 /// `(updated_at, document_id)` pair from the previous page (or `None` for
-/// the first page). Each page is an O(log n) b-tree seek + LIMIT walk
-/// against the `(updatedAt, id)` index, regardless of depth. The
-/// orchestrator stops paging when an empty result comes back.
+/// the first page).
 ///
 /// Sorting and filtering use `updatedAt` rather than `createdAt` so that
 /// incremental backfills (e.g. "anything changed since X") catch documents
