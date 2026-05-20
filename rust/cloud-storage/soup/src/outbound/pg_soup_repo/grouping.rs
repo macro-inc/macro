@@ -45,14 +45,16 @@ pub fn group_order_expr(field: &GroupByField) -> Cow<'static, str> {
 
 /// Result of building a group JOIN clause with optional bind parameter.
 pub struct GroupJoinClause {
-    /// The SQL JOIN clause (may contain $10 placeholder for entity_type)
+    /// The SQL JOIN clause (may contain `$10` placeholder for entity_type).
+    /// Callers must ensure the entity_type value is bound at $10 (and that $9
+    /// is bound — with `group_key` or NULL — so the indices line up).
     pub sql: String,
-    /// Entity type value to bind at $10, if present
+    /// Entity type value to bind at `$10`, if present
     pub entity_type_bind: Option<String>,
 }
 
 /// Build the JOIN clause for property-based grouping.
-/// Returns SQL with $10 placeholder for entity_type when present.
+/// Returns SQL with `$10` placeholder for entity_type when present.
 ///
 /// The clause LATERAL-expands `entity_properties.values->'value'` into one row
 /// per element, so multi-value properties (e.g. assignees) place each item into

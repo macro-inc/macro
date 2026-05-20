@@ -1801,6 +1801,7 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
     let (mut query_builder, entity_type_bind) =
         build_grouped_query(cursor.filter(), exclude_frecency, &grouping);
 
+    // $9 is bound unconditionally (NULL when not in single-group mode) so $10 stays aligned.
     let mut query = query_builder
         .build()
         .bind(user_id.as_ref())
@@ -1810,12 +1811,8 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         .bind(cursor_id_str)
         .bind(completed_option_id)
         .bind(status_property_id)
-        .bind(assignees_property_id);
-
-    // Bind group_key as $9 when filtering by specific group
-    if let Some(ref key) = grouping.group_key {
-        query = query.bind(key.clone());
-    }
+        .bind(assignees_property_id)
+        .bind(grouping.group_key.clone());
 
     // Bind entity_type as $10 when property grouping with entity_type filter
     if let Some(ref et) = entity_type_bind {
