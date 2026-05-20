@@ -44,7 +44,6 @@ import LogoIcon from '@icon/macro-logo.svg';
 import SquareSidebarIcon from '@icon/square-sidebar.svg';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
-import { AnimatedCommandIcon } from '@icon/wide-command';
 import CommandKIcon from '@icon/wide-command-k.svg';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
