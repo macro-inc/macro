@@ -218,9 +218,13 @@ fn document_index_deserializes_parent_shape_with_no_node_id_or_raw_content() {
         "document_relation": "document",
     });
 
-    let doc: DocumentIndex = serde_json::from_value(parent).expect("parent _source should deserialize");
+    let doc: DocumentIndex =
+        serde_json::from_value(parent).expect("parent _source should deserialize");
     assert!(doc.node_id.is_none(), "parent shape should have no node_id");
-    assert!(doc.raw_content.is_none(), "parent shape should have no raw_content");
+    assert!(
+        doc.raw_content.is_none(),
+        "parent shape should have no raw_content"
+    );
 }
 
 #[test]
