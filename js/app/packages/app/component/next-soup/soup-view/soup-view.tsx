@@ -82,7 +82,7 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { useDisplayName } from '@core/user/displayName';
-import type { MacroId } from '@core/user/macroId';
+import { type MacroId, tryMacroId } from '@core/user/macroId';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
   type EntityData,
@@ -133,22 +133,7 @@ import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 
-// Property values for entity-reference properties (e.g. assignees) are stored
-// as `{"entity_id": "...", "entity_type": "USER"}` and arrive in group keys as
-// the JSON-encoded text of that object.
-const parseEntityRefId = (key: string): string | null => {
-  try {
-    const parsed: unknown = JSON.parse(key);
-    if (typeof parsed === 'string') return parsed;
-    if (typeof parsed !== 'object' || parsed === null) return null;
-    const id = (parsed as Record<string, unknown>).entity_id;
-    return typeof id === 'string' ? id : null;
-  } catch {
-    return null;
-  }
-};
-
-const SoupSectionHeader = (props: {
+export const SoupSectionHeader = (props: {
   children: JSX.Element;
   onClick?: () => void;
   highlighted?: boolean;
@@ -203,9 +188,9 @@ const DefaultGroupHeader = (
       field.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.ASSIGNEES ||
       props.group.key === ''
     ) {
-      return null;
+      return;
     }
-    return parseEntityRefId(props.group.key);
+    return tryMacroId(props.group.key);
   });
 
   return (
@@ -236,7 +221,7 @@ const DefaultGroupHeader = (
       >
         {(id) => (
           <AssigneeGroupContent
-            assigneeId={id() as MacroId}
+            assigneeId={id()}
             fallbackLabel={props.group.label}
           />
         )}

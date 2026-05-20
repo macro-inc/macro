@@ -135,11 +135,7 @@ export const SoupViewContextProvider: FlowComponent<
       : 'created_at';
 
     return {
-      // When doing a group by query, the limit will end up cutting off groups.
-      // So, instead we increase the fetch limit for the group by query to make
-      // sure we get as many groups as we can. Alternative would be to implement
-      // paginated loading of groups, but we dont have that right now.
-      limit: soup.grouping.activeGroupId() ? 2_000 : 100,
+      limit: 100,
       sort_method: sortMethod,
     };
   });

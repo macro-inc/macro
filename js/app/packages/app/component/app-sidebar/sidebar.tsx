@@ -41,9 +41,11 @@ import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import LogoIcon from '@icon/macro-logo.svg';
+import SquareSidebarIcon from '@icon/square-sidebar.svg';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedCommandIcon } from '@icon/wide-command';
+import CommandKIcon from '@icon/wide-command-k.svg';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedFolderIcon } from '@icon/wide-folder';
@@ -51,7 +53,6 @@ import { AnimatedInboxIcon } from '@icon/wide-inbox';
 import { AnimatedNewSplitIcon } from '@icon/wide-newSplit';
 import { AnimatedPlusIcon } from '@icon/wide-plus';
 import { AnimatedSearchIcon } from '@icon/wide-search';
-import { AnimatedSidebarIcon } from '@icon/wide-sidebar';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -793,8 +794,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
     getShell: () => sidebarShell,
   });
 
-  const [sidebarBtnHovering, setSidebarBtnHovering] = createSignal(false);
-
   registerSidebarHotkeys({
     links: visibleLinks(),
     hotkeyVisible,
@@ -823,12 +822,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
       data-slim={isSlim()}
       style={{ transition: SIDEBAR_MAX_WIDTH_TRANSITION_STYLE }}
     >
-      <div class="flex items-center justify-between p-2 relative">
-        <div class="flex items-center group/logo-area w-full">
+      <div class="flex items-center justify-between p-2 relative group-data-[slim=true]/sidebar:pr-2.25">
+        <div class="flex items-center group/logo-area w-full group-data-[slim=true]/sidebar:justify-end">
           <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0">
             <LogoIcon class="size-6" />
           </div>
-          <div class="grow shrink-10 min-w-0" />
+          <div class="grow shrink-10 min-w-0 group-data-[slim=true]/sidebar:hidden" />
           <Show when={isExpanded()}>
             <div class="flex items-center gap-1 mr-1">
               <Show when={showEnableNotifications()}>
@@ -855,12 +854,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
                 hotkey={TOKENS.global.commandMenu}
                 onClick={handleCommandPaletteClick}
               >
-                <AnimatedCommandIcon />
+                <CommandKIcon />
               </Button>
             </div>
           </Show>
           <Button
-            class="flex items-center justify-center rounded-xs p-0.5 px-2 bg-surface [&_svg]:size-4"
+            class="size-7 rounded-xs p-1 [&_svg]:size-4"
             onMouseDown={(e) => {
               if (e.button !== 0) return;
               e.preventDefault();
@@ -869,12 +868,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
               handleSidebarOpenChange(!isExpanded());
               globalSplitManager()?.returnFocus();
             }}
-            onMouseEnter={() => setSidebarBtnHovering(true)}
-            onMouseLeave={() => setSidebarBtnHovering(false)}
             label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
             hotkey={TOKENS.global.toggleSidebar}
           >
-            <AnimatedSidebarIcon triggerAnimation={sidebarBtnHovering()} />
+            <SquareSidebarIcon />
           </Button>
         </div>
       </div>
