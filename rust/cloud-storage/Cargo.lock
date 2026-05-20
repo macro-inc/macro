@@ -3756,7 +3756,6 @@ dependencies = [
  "filter_ast",
  "frecency",
  "futures",
- "gmail_client",
  "item_filters",
  "macro_db_migrator",
  "macro_user_id",
@@ -4045,7 +4044,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "axum-extra",
  "cached",
  "cool_asserts",
  "macro_db_migrator",
@@ -4379,7 +4377,6 @@ dependencies = [
  "filter_ast",
  "item_filters",
  "macro_db_migrator",
- "macro_env_var",
  "macro_user_id",
  "mockall",
  "model-entity",
@@ -4393,7 +4390,6 @@ dependencies = [
  "strum",
  "thiserror 2.0.17",
  "tokio",
- "tower 0.5.3",
  "tracing",
  "uuid",
 ]
@@ -6379,7 +6375,6 @@ dependencies = [
  "model-entity",
  "model_user",
  "models_permissions",
- "permission",
  "remote_env_var",
  "serde",
  "serde_json",
@@ -8192,14 +8187,6 @@ name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
-
-[[package]]
-name = "permission"
-version = "0.1.0"
-dependencies = [
- "models_permissions",
- "tracing",
-]
 
 [[package]]
 name = "petgraph"
@@ -10879,7 +10866,6 @@ dependencies = [
  "futures",
  "model",
  "models_email",
- "models_opensearch",
  "s3_key",
  "serde",
  "serde_json",
