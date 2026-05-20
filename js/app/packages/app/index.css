@@ -183,6 +183,11 @@
   --animate-slide-in: slideIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
   --animate-typing-dot: typing-dot 1s infinite;
   --animate-swipe-out: swipeOut 100ms ease-out;
+
+  --z-index-modal-overlay: 100;
+  --z-index-modal:         110;
+  --z-index-modal-content: 120;
+  --z-index-tool-tip:      200;
 }
 
 /* scuffed: might wan to use signals for this */

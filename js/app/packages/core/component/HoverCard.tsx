@@ -2,6 +2,7 @@ import {
   type HoverCardRootProps,
   HoverCard as KobalteHoverCard,
 } from '@kobalte/core/hover-card';
+import { cn } from '@ui';
 import type { JSX, Setter } from 'solid-js';
 import {
   createContext,
@@ -173,7 +174,7 @@ export function HoverCard(props: HoverCardComponentProps) {
           ref={(el) => {
             contentEl = el;
           }}
-          class={props.contentClass}
+          class={cn('z-tool-tip', props.contentClass)}
         >
           <HoverCardPortalNestedPreviewOpenContext.Provider
             value={{ count: nestedOpenCount, setCount: setNestedOpenCount }}
