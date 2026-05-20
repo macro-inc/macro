@@ -212,6 +212,14 @@ export const createSoupState = <TId extends string = FilterID>(
     return calculateFocusRow(current + offset);
   };
 
+  const shouldSkipRow = (row: SoupRow): boolean => {
+    if (!row.group) return false;
+    if (row.getIsGrouped()) {
+      return !!skipGroupHeaders;
+    }
+    return !row.group.isExpanded();
+  };
+
   const findNextIndex = (startIndex: number, offset: number): number => {
     const allRows = rows();
     if (allRows.length === 0) return -1;
@@ -234,7 +242,7 @@ export const createSoupState = <TId extends string = FilterID>(
       const row = allRows[targetIndex];
       if (!row) break;
 
-      if (skipGroupHeaders && row.group) {
+      if (shouldSkipRow(row)) {
         continue;
       }
 
@@ -250,11 +258,9 @@ export const createSoupState = <TId extends string = FilterID>(
 
     if (current === -1) {
       let startIndex = offset > 0 ? 0 : allRows.length - 1;
-      if (skipGroupHeaders) {
-        const row = allRows[startIndex];
-        if (row?.group) {
-          startIndex = findNextIndex(startIndex, offset);
-        }
+      const row = allRows[startIndex];
+      if (row && shouldSkipRow(row)) {
+        startIndex = findNextIndex(startIndex, offset);
       }
       return setFocus(startIndex);
     }
