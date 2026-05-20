@@ -22,7 +22,7 @@ use sqlx::Row;
 use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
     Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs,
-    Thread,
+    TeamTaskMetadata, Thread,
 };
 use crate::domain::ports::DocumentRepo;
 
@@ -400,6 +400,7 @@ impl DocumentRepo for PgDocumentRepo {
             user_id,
             file_type,
             project_id,
+            team_id,
             email_attachment_id,
             created_at: provided_created_at,
             is_task,
@@ -437,6 +438,10 @@ impl DocumentRepo for PgDocumentRepo {
         // Insert document sub-type
         let sub_type: Option<DocumentSubType> =
             create::set_document_sub_type(&mut transaction, &document_id, is_task).await?;
+
+        if is_task && let Some(team_id) = team_id.as_ref() {
+            create::allocate_team_task_number(&mut transaction, team_id, &document_id).await?;
+        }
 
         // Insert document version (DocumentBom for docx, DocumentInstance for others)
         let document_version = create::set_document_version(
@@ -650,8 +655,55 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn share_with_team(&self, user_id: &str, document_id: &str) -> Result<(), Self::Err> {
-        share::share_with_team(&self.pool, user_id, document_id).await
+    async fn get_team_ids_for_user(&self, user_id: &str) -> Result<Vec<uuid::Uuid>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT team_id
+            FROM team_user
+            WHERE user_id = $1
+            ORDER BY team_id
+            "#,
+            user_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|row| row.team_id).collect())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_task_metadata(
+        &self,
+        document_id: &str,
+    ) -> Result<Option<TeamTaskMetadata>, Self::Err> {
+        let Some(row) = sqlx::query!(
+            r#"
+            SELECT team_id, task_num
+            FROM team_task
+            WHERE document_id = $1
+            LIMIT 1
+            "#,
+            document_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(TeamTaskMetadata {
+            team_id: row.team_id,
+            task_num: row.task_num,
+        }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn share_with_team(
+        &self,
+        team_id: &uuid::Uuid,
+        document_id: &str,
+    ) -> Result<(), Self::Err> {
+        share::share_with_team(&self.pool, team_id, document_id).await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -833,6 +885,7 @@ impl DocumentRepo for PgDocumentRepo {
             user_id,
             document_name,
             file_type,
+            team_id,
         } = args;
 
         let mut transaction = self.pool.begin().await?;
@@ -860,6 +913,12 @@ impl DocumentRepo for PgDocumentRepo {
 
         let document_id = uuid::Uuid::parse_str(&document.document_id)
             .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+
+        if document.sub_type == Some(DocumentSubType::Task)
+            && let Some(team_id) = team_id.as_ref()
+        {
+            create::allocate_team_task_number(&mut transaction, team_id, &document_id).await?;
+        }
 
         // Create share permission
         create::set_share_permission(&mut transaction, &document_id, file_type).await?;

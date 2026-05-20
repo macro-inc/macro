@@ -66,6 +66,19 @@ pub struct CopyDocumentRepoArgs {
     pub document_name: String,
     /// The file type of the document.
     pub file_type: Option<FileType>,
+    /// Team that should receive a new per-team task number when copying a task.
+    pub team_id: Option<uuid::Uuid>,
+}
+
+/// Immutable per-team task metadata assigned at task creation time.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct TeamTaskMetadata {
+    /// The team this task number is scoped to.
+    pub team_id: uuid::Uuid,
+    /// Monotonic task number within the team.
+    pub task_num: i32,
 }
 
 /// Request body for copying a document.
@@ -101,6 +114,8 @@ pub struct CreateDocumentRepoArgs {
     pub file_type: Option<FileType>,
     /// Project to associate the document with.
     pub project_id: Option<uuid::Uuid>,
+    /// Team to use when assigning a per-team task number.
+    pub team_id: Option<uuid::Uuid>,
     /// Email attachment to link (internal only).
     pub email_attachment_id: Option<uuid::Uuid>,
     /// Custom creation timestamp.
@@ -229,6 +244,9 @@ pub struct CreateTaskRequest {
     pub markdown: Option<String>,
     /// Optional project ID to associate the task with.
     pub project_id: Option<uuid::Uuid>,
+    /// Team to assign the task number within. If omitted, it is inferred only
+    /// when the creator belongs to exactly one team.
+    pub team_id: Option<uuid::Uuid>,
     /// Optional property values to set on the task.
     pub property_values: Option<Vec<PropertyInput>>,
     /// Whether to share the task with your team or not
@@ -244,6 +262,12 @@ pub struct CreateTaskRequest {
 pub struct CreateTaskResponse {
     /// The document ID of the created task.
     pub document_id: String,
+    /// The team this task number is scoped to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<uuid::Uuid>,
+    /// The task number assigned within the team.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_task_id: Option<i32>,
 }
 
 /// A comment thread attached to a document.

@@ -132,6 +132,7 @@ impl AttachmentProcessor {
                     branched_from_version_id: None,
                     job_id: None,
                     project_id: None,
+                    team_id: None,
                     created_at: Some(attachment.internal_date_ts),
                     email_attachment_id: Some(attachment.attachment_db_id),
                     is_task: false,

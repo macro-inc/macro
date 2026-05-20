@@ -1,15 +1,125 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::cowlike::CowLike;
 use model_entity::EntityType;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
-use sqlx::{Pool, Postgres};
+use sqlx::{Pool, Postgres, Row};
 
-use crate::domain::models::{EditDocumentRepoArgs, FileTypeUpdate};
+use crate::domain::models::{
+    CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs, FileTypeUpdate,
+};
 use crate::domain::ports::DocumentRepo;
 use crate::outbound::pg_document_repo::PgDocumentRepo;
+
+const TEST_TEAM_ID: uuid::Uuid = uuid::uuid!("a0000000-0000-0000-0000-000000000001");
+const SECOND_TEAM_ID: uuid::Uuid = uuid::uuid!("a0000000-0000-0000-0000-000000000002");
+
+fn user_id(user_id: &str) -> macro_user_id::user_id::MacroUserIdStr<'static> {
+    macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)
+        .unwrap()
+        .into_owned()
+}
+
+fn create_document_args(
+    user_id: &str,
+    is_task: bool,
+    team_id: Option<uuid::Uuid>,
+) -> CreateDocumentRepoArgs {
+    CreateDocumentRepoArgs {
+        id: None,
+        sha: "sha".to_string(),
+        document_name: "task".to_string(),
+        user_id: self::user_id(user_id),
+        file_type: Some(model::document::FileType::Md),
+        project_id: None,
+        team_id,
+        email_attachment_id: None,
+        created_at: None,
+        is_task,
+        skip_history: false,
+    }
+}
+
+async fn create_task_for_team(
+    repo: &PgDocumentRepo,
+    user_id: &str,
+    team_id: uuid::Uuid,
+) -> model::document::DocumentMetadata {
+    repo.create_document(create_document_args(user_id, true, Some(team_id)))
+        .await
+        .unwrap()
+}
+
+async fn team_task_numbers(pool: &Pool<Postgres>, team_id: uuid::Uuid) -> Vec<i32> {
+    sqlx::query(
+        r#"
+        SELECT task_num
+        FROM team_task
+        WHERE team_id = $1
+        ORDER BY task_num
+        "#,
+    )
+    .bind(team_id)
+    .fetch_all(pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| row.try_get("task_num").unwrap())
+    .collect()
+}
+
+async fn insert_second_team(pool: &Pool<Postgres>) {
+    sqlx::query(
+        r#"
+        INSERT INTO public."macro_user" ("id", "username", "email", "stripe_customer_id")
+        VALUES ($1, 'other', 'other@user.com', 'stripe_id_other')
+        ON CONFLICT DO NOTHING
+        "#,
+    )
+    .bind(uuid::uuid!("a4444444-4444-4444-4444-444444444444"))
+    .execute(pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId", "macro_user_id")
+        VALUES ('macro|other@user.com', 'other@user.com', 'stripe_id_other', 1, $1)
+        ON CONFLICT DO NOTHING
+        "#,
+    )
+    .bind(uuid::uuid!("a4444444-4444-4444-4444-444444444444"))
+    .execute(pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        INSERT INTO public."team" ("id", "name", "owner_id")
+        VALUES ($1, 'second-team', 'macro|other@user.com')
+        ON CONFLICT DO NOTHING
+        "#,
+    )
+    .bind(SECOND_TEAM_ID)
+    .execute(pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        INSERT INTO public."team_user" ("user_id", "team_id", "team_role")
+        VALUES ('macro|other@user.com', $1, 'owner')
+        ON CONFLICT DO NOTHING
+        "#,
+    )
+    .bind(SECOND_TEAM_ID)
+    .execute(pool)
+    .await
+    .unwrap();
+}
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
@@ -398,12 +508,9 @@ async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
 async fn test_share_with_team_creates_access_for_team_members(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
 
-    repo.share_with_team(
-        "macro|user@user.com",
-        "d0000000-0000-0000-0000-000000000001",
-    )
-    .await
-    .unwrap();
+    repo.share_with_team(&TEST_TEAM_ID, "d0000000-0000-0000-0000-000000000001")
+        .await
+        .unwrap();
 
     // All 3 team members should have access rows
     let doc_uuid = macro_uuid::string_to_uuid("d0000000-0000-0000-0000-000000000001").unwrap();
@@ -441,33 +548,15 @@ async fn test_share_with_team_creates_access_for_team_members(pool: Pool<Postgre
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn test_share_with_team_no_op_when_user_not_on_team(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+async fn test_get_team_ids_for_user_returns_empty_when_user_not_on_team(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool);
 
-    // teammate1 is on a team, but let's use a user that isn't on any team
-    // We'll use a non-existent user id to simulate no team membership
-    repo.share_with_team(
-        "macro|no-team@user.com",
-        "d0000000-0000-0000-0000-000000000001",
-    )
-    .await
-    .unwrap();
+    let team_ids = repo
+        .get_team_ids_for_user("macro|no-team@user.com")
+        .await
+        .unwrap();
 
-    // Only the pre-existing owner row should exist
-    let doc_uuid = macro_uuid::string_to_uuid("d0000000-0000-0000-0000-000000000001").unwrap();
-    let count = sqlx::query_scalar!(
-        r#"
-        SELECT COUNT(*) as "count!"
-        FROM entity_access
-        WHERE entity_id = $1 AND entity_type = 'document'
-        "#,
-        doc_uuid,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-
-    assert_eq!(count, 1); // just the owner row from fixtures
+    assert!(team_ids.is_empty());
 }
 
 #[sqlx::test(
@@ -478,18 +567,12 @@ async fn test_share_with_team_idempotent(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
 
     // Call twice — second call should be a no-op
-    repo.share_with_team(
-        "macro|user@user.com",
-        "d0000000-0000-0000-0000-000000000001",
-    )
-    .await
-    .unwrap();
-    repo.share_with_team(
-        "macro|user@user.com",
-        "d0000000-0000-0000-0000-000000000001",
-    )
-    .await
-    .unwrap();
+    repo.share_with_team(&TEST_TEAM_ID, "d0000000-0000-0000-0000-000000000001")
+        .await
+        .unwrap();
+    repo.share_with_team(&TEST_TEAM_ID, "d0000000-0000-0000-0000-000000000001")
+        .await
+        .unwrap();
 
     let doc_uuid = macro_uuid::string_to_uuid("d0000000-0000-0000-0000-000000000001").unwrap();
     let count = sqlx::query_scalar!(
@@ -529,12 +612,9 @@ async fn test_share_with_team_skips_user_with_existing_direct_access(pool: Pool<
     .await
     .unwrap();
 
-    repo.share_with_team(
-        "macro|user@user.com",
-        "d0000000-0000-0000-0000-000000000001",
-    )
-    .await
-    .unwrap();
+    repo.share_with_team(&TEST_TEAM_ID, "d0000000-0000-0000-0000-000000000001")
+        .await
+        .unwrap();
 
     // teammate1 should still have just their original edit row, not a second comment row
     let rows = sqlx::query!(
@@ -558,17 +638,12 @@ async fn test_share_with_team_skips_user_with_existing_direct_access(pool: Pool<
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn test_share_with_team_called_by_teammate(pool: Pool<Postgres>) {
+async fn test_share_with_explicit_team_id(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
 
-    // A teammate (not the owner) triggers the share — should still find the
-    // same team and share with all members including the owner.
-    repo.share_with_team(
-        "macro|teammate1@user.com",
-        "d0000000-0000-0000-0000-000000000001",
-    )
-    .await
-    .unwrap();
+    repo.share_with_team(&TEST_TEAM_ID, "d0000000-0000-0000-0000-000000000001")
+        .await
+        .unwrap();
 
     let doc_uuid = macro_uuid::string_to_uuid("d0000000-0000-0000-0000-000000000001").unwrap();
     let rows = sqlx::query!(
@@ -598,6 +673,181 @@ async fn test_share_with_team_called_by_teammate(pool: Pool<Postgres>) {
         .find(|r| r.source_id == "a0000000-0000-0000-0000-000000000001")
         .unwrap();
     assert_eq!(t1.access_level, Some("comment".to_string()));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_create_first_task_assigns_team_task_id_one(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    let metadata = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+    let task_metadata = repo
+        .get_team_task_metadata(&metadata.document_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(task_metadata.team_id, TEST_TEAM_ID);
+    assert_eq!(task_metadata.task_num, 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_create_multiple_tasks_same_team_assigns_sequence(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    for _ in 0..3 {
+        create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+    }
+
+    assert_eq!(team_task_numbers(&pool, TEST_TEAM_ID).await, vec![1, 2, 3]);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_create_tasks_different_teams_have_independent_sequences(pool: Pool<Postgres>) {
+    insert_second_team(&pool).await;
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+    create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+    create_task_for_team(&repo, "macro|other@user.com", SECOND_TEAM_ID).await;
+
+    assert_eq!(team_task_numbers(&pool, TEST_TEAM_ID).await, vec![1, 2]);
+    assert_eq!(team_task_numbers(&pool, SECOND_TEAM_ID).await, vec![1]);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_concurrent_task_creates_same_team_get_unique_numbers(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let mut handles = Vec::new();
+
+    for _ in 0..8 {
+        let repo = repo.clone();
+        handles.push(tokio::spawn(async move {
+            create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+        }));
+    }
+
+    for handle in handles {
+        handle.await.unwrap();
+    }
+
+    assert_eq!(
+        team_task_numbers(&pool, TEST_TEAM_ID).await,
+        (1..=8).collect::<Vec<_>>()
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_non_task_document_does_not_create_team_task_row(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool);
+
+    let metadata = repo
+        .create_document(create_document_args(
+            "macro|user@user.com",
+            false,
+            Some(TEST_TEAM_ID),
+        ))
+        .await
+        .unwrap();
+
+    assert!(
+        repo.get_team_task_metadata(&metadata.document_id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_task_without_team_id_does_not_create_team_task_row(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool);
+
+    let metadata = repo
+        .create_document(create_document_args("macro|user@user.com", true, None))
+        .await
+        .unwrap();
+
+    assert!(
+        repo.get_team_task_metadata(&metadata.document_id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_deleting_document_cascades_team_task_row(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let metadata = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+
+    repo.delete_document_by_id(&metadata.document_id)
+        .await
+        .unwrap();
+
+    let count: i64 = sqlx::query(
+        r#"
+        SELECT COUNT(*) AS count
+        FROM team_task
+        WHERE document_id = $1
+        "#,
+    )
+    .bind(&metadata.document_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .try_get("count")
+    .unwrap();
+
+    assert_eq!(count, 0);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_copying_task_allocates_new_team_task_number(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let original = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+
+    let copied = repo
+        .copy_document(CopyDocumentRepoArgs {
+            original_document: original,
+            user_id: user_id("macro|user@user.com"),
+            document_name: "copied task".to_string(),
+            file_type: Some(model::document::FileType::Md),
+            team_id: Some(TEST_TEAM_ID),
+        })
+        .await
+        .unwrap();
+
+    let copied_task_metadata = repo
+        .get_team_task_metadata(&copied.document_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(copied_task_metadata.task_num, 2);
+    assert_eq!(team_task_numbers(&pool, TEST_TEAM_ID).await, vec![1, 2]);
 }
 
 #[sqlx::test(

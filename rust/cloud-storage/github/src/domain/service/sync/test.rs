@@ -176,6 +176,14 @@ impl DocumentService for StubDocumentService {
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         unimplemented!()
     }
+
+    async fn resolve_task_team_id(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        requested_team_id: Option<uuid::Uuid>,
+    ) -> Result<uuid::Uuid, DocumentError> {
+        requested_team_id.ok_or_else(|| DocumentError::BadRequest("teamId is required".into()))
+    }
     async fn get_document_content(
         &self,
         _document_context: &DocumentBasic,

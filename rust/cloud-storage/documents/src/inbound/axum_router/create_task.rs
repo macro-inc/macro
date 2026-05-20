@@ -52,12 +52,17 @@ pub async fn create_task_handler<
                 subtype: MarkdownSubtype::Task {
                     property_values: req.property_values,
                     share_with_team: req.share_with_team,
+                    team_id: req.team_id,
                 },
             },
         )
         .await?;
 
+    let task_metadata = &created.response().document_response.document_metadata;
+
     Ok(Json(CreateTaskResponse {
         document_id: created.document_id().to_string(),
+        team_id: task_metadata.team_id,
+        team_task_id: task_metadata.team_task_id,
     }))
 }

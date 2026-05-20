@@ -64,6 +64,7 @@ impl NewDocumentMetadata {
             user_id,
             file_type: kind.file_type,
             project_id: self.project_id,
+            team_id: kind.team_id,
             email_attachment_id: self.email_attachment_id,
             created_at: self.created_at,
             is_task: kind.subtype.is_task(),
@@ -119,6 +120,7 @@ struct RepoDocumentKind {
     file_type: Option<FileType>,
     sha: String,
     subtype: RepoDocumentSubtype,
+    team_id: Option<uuid::Uuid>,
 }
 
 enum RepoDocumentSubtype {
@@ -143,6 +145,9 @@ pub enum MarkdownSubtype {
         property_values: Option<Vec<PropertyInput>>,
         /// Whether to share the task with the user's team.
         share_with_team: bool,
+        /// Team to assign the task number within. If omitted, it is inferred only
+        /// when the creator belongs to exactly one team.
+        team_id: Option<uuid::Uuid>,
     },
 }
 
@@ -153,6 +158,7 @@ impl MarkdownSubtype {
             Self::Task {
                 property_values: None,
                 share_with_team: true,
+                team_id: None,
             }
         } else {
             Self::Note
@@ -491,7 +497,18 @@ where
             MarkdownSubtype::Task {
                 property_values,
                 share_with_team,
-            } => Some((property_values.clone(), *share_with_team)),
+                team_id,
+            } => Some((property_values.clone(), *share_with_team, *team_id)),
+        };
+
+        let resolved_team_id = if let Some((_, _, requested_team_id)) = task.as_ref() {
+            Some(
+                self.document_service
+                    .resolve_task_team_id(user_id.clone(), *requested_team_id)
+                    .await?,
+            )
+        } else {
+            None
         };
 
         let task_name = metadata.document_name.clone();
@@ -506,6 +523,7 @@ where
                 } else {
                     RepoDocumentSubtype::Regular
                 },
+                team_id: resolved_team_id,
             },
         );
 
@@ -522,7 +540,7 @@ where
             .clone();
 
         let finalize_result = async {
-            if let Some((property_values, share_with_team)) = task {
+            if let Some((property_values, share_with_team, _)) = task {
                 self.document_service
                     .handle_task_properties(
                         user_id,
@@ -531,6 +549,7 @@ where
                             task_name,
                             markdown: None,
                             project_id,
+                            team_id: resolved_team_id,
                             property_values,
                             share_with_team,
                         },
@@ -585,6 +604,7 @@ where
                 file_type: Some(file_type.into_file_type()),
                 sha: hashes.hex,
                 subtype: RepoDocumentSubtype::Regular,
+                team_id: None,
             },
         );
 

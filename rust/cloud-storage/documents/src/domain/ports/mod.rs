@@ -25,7 +25,7 @@ use model_entity::Entity;
 
 use super::models::{
     CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
-    EditDocumentRepoArgs, EditDocumentServiceArgs, LocationQueryParams,
+    EditDocumentRepoArgs, EditDocumentServiceArgs, LocationQueryParams, TeamTaskMetadata,
 };
 
 /// Repository for accessing document data from the database.
@@ -159,10 +159,22 @@ pub trait DocumentRepo: Send + Sync + 'static {
         document_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Share a document with all members of the user's team.
-    fn share_with_team(
+    /// Get all team IDs the user belongs to.
+    fn get_team_ids_for_user(
         &self,
         user_id: &str,
+    ) -> impl Future<Output = Result<Vec<uuid::Uuid>, Self::Err>> + Send;
+
+    /// Get per-team task metadata for a document, when it is a team task.
+    fn get_team_task_metadata(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<TeamTaskMetadata>, Self::Err>> + Send;
+
+    /// Share a document with the given team.
+    fn share_with_team(
+        &self,
+        team_id: &uuid::Uuid,
         document_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
@@ -317,6 +329,13 @@ pub trait DocumentService: Send + Sync + 'static {
         args: CreateDocumentRepoArgs,
         job_id: Option<String>,
     ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
+
+    /// Resolve the team to use for per-team task numbering.
+    fn resolve_task_team_id(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        requested_team_id: Option<uuid::Uuid>,
+    ) -> impl Future<Output = Result<uuid::Uuid, DocumentError>> + Send;
 
     /// Get content lifecycle metadata for a document.
     fn get_document_content(

@@ -48,6 +48,13 @@ pub trait DocumentCreationService: Send + Sync {
         request: &CreateTaskRequest,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
+    /// Resolve the team to use for per-team task numbering.
+    fn resolve_task_team_id(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        requested_team_id: Option<uuid::Uuid>,
+    ) -> impl Future<Output = Result<uuid::Uuid, DocumentError>> + Send;
+
     /// Mark a created document's upload/finalization lifecycle as complete.
     fn mark_document_uploaded(
         &self,
@@ -86,6 +93,16 @@ where
     ) -> Result<(), DocumentError> {
         (**self)
             .handle_task_properties(user_id, document_id, request)
+            .await
+    }
+
+    async fn resolve_task_team_id(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        requested_team_id: Option<uuid::Uuid>,
+    ) -> Result<uuid::Uuid, DocumentError> {
+        (**self)
+            .resolve_task_team_id(user_id, requested_team_id)
             .await
     }
 
