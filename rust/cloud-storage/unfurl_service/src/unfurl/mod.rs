@@ -1,38 +1,30 @@
-pub mod url_parsers;
-
-use anyhow::{Context, Error};
+use anyhow::Error;
 use futures::StreamExt;
 use scraper::{Html, Selector};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use url::Url;
-use utoipa::ToSchema;
 
 use crate::http_safety::{
     FetchError, assert_not_internal, check_content_length, content_type_of, send_request,
     validate_url,
 };
-use url_parsers::parse_custom_title;
+
+pub use ::unfurl::domain::favicon::append_optimistic_favico;
+pub use ::unfurl::domain::models::{GetUnfurlResponse, GetUnfurlResponseList};
+
+// Re-exported through `crate::unfurl_service::{favico_url, url_parsers}` for
+// external consumers (see `lib.rs`). Not consumed inside this binary itself,
+// so the bin target sees them as unused without the allow.
+#[allow(unused_imports)]
+pub use ::unfurl::domain::favicon::favico_url;
+#[allow(unused_imports)]
+pub use ::unfurl::domain::url_parsers;
 
 /// 1 MB max HTML response size for meta-tag extraction.
 pub const MAX_HTML_SIZE: u64 = 1024 * 1024;
 
 /// Cap on concurrent outbound requests for `fetch_links_async`.
 pub const BULK_CONCURRENCY: usize = 16;
-
-pub type GetUnfurlResponseList = Vec<Option<GetUnfurlResponse>>;
-
-#[derive(Debug, Serialize, Deserialize, ToSchema, Default, Clone, Eq, PartialEq)]
-pub struct GetUnfurlResponse {
-    pub url: String,
-    pub title: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub image_url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub favicon_url: Option<String>,
-}
 
 #[tracing::instrument]
 fn parse_document(html_content: &str, url: &Url) -> Result<HashMap<String, String>, Error> {
@@ -184,33 +176,6 @@ async fn read_body_capped(
     })
 }
 
-pub fn favico_url(url: &str) -> Result<String, anyhow::Error> {
-    let url = Url::parse(url).context("failed to parse url")?;
-    let host = url.host().ok_or_else(|| anyhow::anyhow!("no host"))?;
-    let scheme = url.scheme();
-    let port = url
-        .port()
-        .map(|port| format!(":{}", port))
-        .unwrap_or_default();
-    Ok(format!("{}://{}{}/favicon.ico", scheme, port, host))
-}
-
-pub fn append_optimistic_favico(
-    mut meta_tags: HashMap<String, String>,
-    url: &str,
-) -> HashMap<String, String> {
-    let optimistic_url = favico_url(url)
-        .inspect_err(|err| tracing::debug!(error=?err, "could not form favicon url"));
-
-    if !meta_tags.contains_key("favicon")
-        && let Ok(url) = optimistic_url
-    {
-        meta_tags.insert("favicon".to_string(), url);
-    }
-
-    meta_tags
-}
-
 pub async fn extract_meta_tags(
     client: &reqwest::Client,
     url: &str,
@@ -249,64 +214,6 @@ pub async fn extract_meta_tags_mock(
     }
 
     Err(UnfurlFetchError::Parse(anyhow::anyhow!("not found")))
-}
-
-impl GetUnfurlResponse {
-    pub fn get_title(url: &str, metatags: &HashMap<String, String>) -> String {
-        // First try custom URL parsing for known services
-        if let Some(custom_title) = parse_custom_title(url) {
-            return custom_title;
-        }
-
-        // Fall back to metadata extraction
-        let mut title = None;
-
-        let properties = ["property:og:title", "property:og:site_name", "title"];
-
-        for prop in properties {
-            title = metatags.get(prop);
-            if title.is_some() {
-                break;
-            }
-        }
-
-        let title = match title {
-            Some(s) => s,
-            None => url,
-        };
-
-        title.to_string()
-    }
-
-    pub fn new(url: &str, metatags: &HashMap<String, String>) -> Self {
-        let title = Self::get_title(url, metatags);
-
-        let description = metatags
-            .get("property:og:description")
-            .map(|s| s.to_string());
-
-        // TODO: prioritize ol:image:secure_url over og:image if both exist
-        let image_url = metatags.get("property:og:image").map(|s| s.to_string());
-
-        let mut favicon_url = metatags.get("favicon").map(|s| s.to_string());
-
-        // Resolve favicon URL to absolute path
-        if let Ok(base_url) = Url::parse(url)
-            && let Some(furl) = favicon_url
-        {
-            // TODO: better error handling?
-            let base_url = base_url.join(&furl).unwrap();
-            favicon_url = Some(base_url.to_string());
-        }
-
-        GetUnfurlResponse {
-            url: url.to_string(),
-            title: title.to_string(),
-            description,
-            image_url,
-            favicon_url,
-        }
-    }
 }
 
 pub async fn fetch_links_async(
