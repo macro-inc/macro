@@ -62,7 +62,7 @@ const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
   tasks: 'Task',
 };
 
-const CREATE_BUTTON_CLASS = 'rounded-full px-1 py-2 font-bold';
+const CREATE_BUTTON_CLASS = 'rounded-full pl-1 pr-2.5 py-2 font-bold';
 
 function getViewCreateOptions(view: ListView): CreateOption[] {
   const createNames = VIEW_CREATE_BLOCKNAMES[view] ?? [];
@@ -145,6 +145,8 @@ export const SoupViewCreateButton = () => {
       size="sm"
       class={CREATE_BUTTON_CLASS}
       onClick={() => handleSelect(options()[0])}
+      tooltip={`Create new ${createLabel()}`}
+      depth={5}
     >
       <PlusCircleIcon class="size-3.5" />
       <Show when={!props.hideLabel}>
