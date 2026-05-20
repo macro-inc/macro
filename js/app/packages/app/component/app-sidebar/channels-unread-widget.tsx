@@ -152,8 +152,15 @@ function ChannelGroupItem(props: {
     const manager = globalSplitManager();
     if (!manager) return;
     const notification = latestNotification();
-    await openNotification(notification, manager, newSplit);
-    await notificationSource.markAsRead(notification);
+    try {
+      await openNotification(notification, manager, newSplit);
+      await notificationSource.markAsRead(notification);
+    } catch (error) {
+      console.error(
+        'Failed to open unread notification from sidebar widget:',
+        error
+      );
+    }
   };
 
   const openInCurrentSplit = () => {
