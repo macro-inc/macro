@@ -16,7 +16,6 @@ async-openai = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
-const_format = "0.2.34"
 futures = { workspace = true }
 lazy_static = { workspace = true }
 rand.workspace = true

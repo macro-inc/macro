@@ -23,5 +23,4 @@ serde_json = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-unicode-segmentation = { workspace = true }
 uuid = { workspace = true }

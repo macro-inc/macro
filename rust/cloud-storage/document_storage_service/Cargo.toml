@@ -39,7 +39,6 @@ cal = { path = "../cal", features = ["axum", "outbound"] }
 call = { path = "../call" }
 channels = { path = "../channels", features = ["inbound", "outbound"] }
 chrono = { workspace = true }
-clap = { workspace = true }
 cloudfront_sign = { workspace = true }
 comms = { path = "../comms", features = ["outbound"] }
 comms_db_client = { path = "../comms_db_client" }

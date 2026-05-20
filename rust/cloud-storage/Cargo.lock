@@ -77,7 +77,6 @@ dependencies = [
  "async-trait",
  "attachment",
  "chrono",
- "const_format",
  "futures",
  "lazy_static",
  "macro_user_id",
@@ -172,9 +171,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-macros",
- "futures",
  "macro_user_id",
- "non_empty",
  "schemars",
  "serde",
  "serde_json",
@@ -2220,11 +2217,7 @@ dependencies = [
  "jsonwebtoken 10.3.0 (git+https://github.com/whutchinson98/jsonwebtoken)",
  "last_online_tracker",
  "macro_auth",
- "macro_aws_config",
- "macro_axum_utils",
- "macro_cors",
  "macro_db_client",
- "macro_entrypoint",
  "macro_env",
  "macro_env_var",
  "macro_middleware",
@@ -2404,26 +2397,6 @@ name = "const-oid"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
-
-[[package]]
-name = "const_format"
-version = "0.2.34"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "126f97965c8ad46d6d9163268ff28432e8f6a1196a55578867832e3049df63dd"
-dependencies = [
- "const_format_proc_macros",
-]
-
-[[package]]
-name = "const_format_proc_macros"
-version = "0.2.34"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d57c2eccfb16dbac1f4e61e206105db5820c9d26c3c472bc17c774259ef7744"
-dependencies = [
- "proc-macro2",
- "quote",
- "unicode-xid",
-]
 
 [[package]]
 name = "constant_time_eq"
@@ -3210,11 +3183,9 @@ dependencies = [
  "chat",
  "chrono",
  "comms",
- "comms_db_client",
  "comms_service_client",
  "connection_gateway",
  "cookie",
- "document_cognition_service_client",
  "document_storage_service_client",
  "documents",
  "doppleganger",
@@ -3239,7 +3210,6 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_middleware",
- "macro_project_utils",
  "macro_user_id",
  "macro_uuid",
  "mcp_client",
@@ -3286,21 +3256,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "document_cognition_service_client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "model",
- "models_dcs",
- "reqwest 0.13.3",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "tracing",
-]
-
-[[package]]
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
@@ -3320,7 +3275,6 @@ dependencies = [
  "call",
  "channels",
  "chrono",
- "clap",
  "cloudfront_sign",
  "comms",
  "comms_db_client",
@@ -3668,7 +3622,6 @@ dependencies = [
  "aws-sdk-dynamodb",
  "chrono",
  "macro_aws_config",
- "model",
  "models_bulk_upload",
  "s3_key",
  "strum",
@@ -3811,7 +3764,6 @@ dependencies = [
  "model-entity",
  "model-error-response",
  "model_user",
- "models_grouping",
  "models_pagination",
  "non_empty",
  "recursion",
@@ -4769,7 +4721,6 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "chrono",
- "futures",
  "jsonwebtoken 10.3.0 (git+https://github.com/whutchinson98/jsonwebtoken)",
  "mail-builder",
  "mockall",
@@ -6290,7 +6241,6 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
- "urlencoding",
 ]
 
 [[package]]
@@ -6300,7 +6250,6 @@ dependencies = [
  "aws-config",
  "aws-sdk-s3",
  "aws-sdk-sqs",
- "macro_env",
  "macro_env_var",
  "thiserror 2.0.17",
  "tracing",
@@ -6344,7 +6293,6 @@ dependencies = [
  "futures",
  "macro_user_id",
  "macro_uuid",
- "mockall",
  "model",
  "model-entity",
  "model_file_type",
@@ -6353,7 +6301,6 @@ dependencies = [
  "models_opensearch",
  "models_pagination",
  "models_permissions",
- "models_search",
  "models_team",
  "non_empty",
  "rand 0.9.4",
@@ -6409,7 +6356,6 @@ version = "0.1.0"
 dependencies = [
  "paste",
  "thiserror 2.0.17",
- "tracing",
 ]
 
 [[package]]
@@ -6466,7 +6412,6 @@ dependencies = [
  "anyhow",
  "redis",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -6829,11 +6774,9 @@ dependencies = [
 name = "mention_utils"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "cool_asserts",
  "macro_user_id",
  "nom 8.0.0",
- "regex",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
@@ -6976,7 +6919,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_repr",
- "serde_with",
  "sqlx",
  "strum",
  "thiserror 2.0.17",
@@ -7081,14 +7023,8 @@ dependencies = [
 name = "models_dcs"
 version = "0.1.0"
 dependencies = [
- "ai",
- "chrono",
- "model",
- "models_permissions",
  "serde",
  "serde_json",
- "sqlx",
- "unfurl_service",
  "utoipa",
 ]
 
@@ -7135,7 +7071,6 @@ name = "models_opensearch"
 version = "0.1.0"
 dependencies = [
  "serde",
- "serde_json",
  "strum",
 ]
 
@@ -7172,13 +7107,11 @@ dependencies = [
 name = "models_properties"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "chrono",
  "serde",
  "serde_json",
  "serde_with",
  "sqlx",
- "strum",
  "thiserror 2.0.17",
  "tracing",
  "utoipa",
@@ -7318,14 +7251,12 @@ checksum = "bc0287524726960e07b119cebd01678f852f147742ae0d925e6a520dca956126"
 name = "name_search"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "cached",
  "chrono",
  "macro_db_migrator",
  "macro_user_id",
  "models_opensearch",
  "models_search_cursor",
- "non_empty",
  "regex",
  "serde",
  "sqlx",
@@ -7503,7 +7434,6 @@ dependencies = [
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
- "model",
  "model-entity",
  "model_notifications",
  "models_pagination",
@@ -7558,7 +7488,6 @@ dependencies = [
  "chrono",
  "decode_jwt",
  "email_formatting",
- "email_validator",
  "hmac 0.12.1",
  "http-body-util",
  "itertools 0.14.0",
@@ -7591,7 +7520,6 @@ dependencies = [
  "secretsmanager_client",
  "serde",
  "serde_json",
- "ses_client",
  "sha2 0.10.9",
  "sns_client",
  "sqlx",
@@ -7930,7 +7858,6 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
- "unicode-segmentation",
  "uuid",
 ]
 
@@ -8270,7 +8197,6 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 name = "permission"
 version = "0.1.0"
 dependencies = [
- "model",
  "models_permissions",
  "tracing",
 ]
@@ -8689,7 +8615,6 @@ dependencies = [
  "futures",
  "macro_db_client",
  "macro_db_migrator",
- "macro_middleware",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -8714,16 +8639,13 @@ name = "properties_db_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cached",
  "chrono",
- "futures",
  "macro_db_migrator",
  "macro_uuid",
  "models_properties",
  "serde",
  "serde_json",
  "sqlx",
- "strum",
  "thiserror 2.0.17",
  "tracing",
  "uuid",
@@ -8735,7 +8657,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
  "chrono",
@@ -8744,9 +8665,6 @@ dependencies = [
  "http-body-util",
  "last_online_tracker",
  "macro_auth",
- "macro_aws_config",
- "macro_cors",
- "macro_entrypoint",
  "macro_env",
  "macro_middleware",
  "macro_user_id",
@@ -8758,7 +8676,6 @@ dependencies = [
  "notification",
  "properties",
  "properties_db_client",
- "secretsmanager_client",
  "serde",
  "serde_json",
  "serde_with",
@@ -8769,9 +8686,7 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
- "tracing-tree",
  "utoipa",
- "utoipa-swagger-ui",
  "uuid",
 ]
 
@@ -9492,7 +9407,6 @@ name = "roles_and_permissions"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "macro_db_migrator",
  "macro_user_id",
  "non_empty",
@@ -9974,9 +9888,7 @@ dependencies = [
  "item_filters",
  "macro_auth",
  "macro_aws_config",
- "macro_cors",
  "macro_db_client",
- "macro_entrypoint",
  "macro_env",
  "macro_middleware",
  "macro_user_id",
@@ -10002,7 +9914,6 @@ dependencies = [
  "tower-http",
  "tracing",
  "utoipa",
- "utoipa-swagger-ui",
 ]
 
 [[package]]
@@ -10074,7 +9985,6 @@ dependencies = [
 name = "secretsmanager_client"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "aws-sdk-secretsmanager",
  "macro_env",
  "mockall",
@@ -10647,7 +10557,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-sns",
- "model-entity",
  "serde",
  "serde_json",
  "tracing",
@@ -12075,7 +11984,6 @@ dependencies = [
 name = "user_quota"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "serde",
  "serde_json",
  "utoipa",
@@ -12899,7 +12807,6 @@ dependencies = [
  "macro_aws_config",
  "macro_entrypoint",
  "macro_env",
- "mockall",
  "serde_json",
  "tokio",
  "tracing",
