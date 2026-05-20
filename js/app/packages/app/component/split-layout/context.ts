@@ -36,11 +36,6 @@ export type HalfSplitState = {
   side: 'left' | 'right';
 };
 
-export type PopoverExpansion = {
-  expanded: Accessor<boolean>;
-  setExpanded: Setter<boolean>;
-};
-
 export type SplitPanelContextType = {
   handle: SplitHandle;
   splitHotkeyScope: string;
@@ -58,8 +53,6 @@ export type SplitPanelContextType = {
     toolbarRight?: HTMLDivElement;
   };
   headerCollapser: HeaderCollapser;
-  /** Only present when the panel is rendered as a popover dialog. */
-  popoverExpansion?: PopoverExpansion;
 };
 
 export const SplitPanelContext = createContext<SplitPanelContextType>();

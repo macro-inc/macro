@@ -49,7 +49,6 @@ function PopoverSplitModal(props: {
   const [panelRef, setPanelRef] = createSignal<HTMLElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
   const [previewState, setPreviewState] = createSignal(false);
-  const [expanded, setExpanded] = createSignal(false);
 
   const stubHandle: SplitHandle = {
     id: props.popover.id as SplitId,
@@ -102,7 +101,6 @@ function PopoverSplitModal(props: {
     ],
     layoutRefs: {},
     headerCollapser: { register: () => () => {} },
-    popoverExpansion: { expanded, setExpanded },
   };
 
   const [bindHotKeyDom, scopeId] = useHotkeyDOMScope(
@@ -131,7 +129,6 @@ function PopoverSplitModal(props: {
         setPanelRef(r);
         bindHotKeyDom(r);
       }}
-      class={expanded() ? 'w-screen max-w-6xl top-none' : undefined}
     >
       <Panel depth={2} active class="rounded-xl">
         <SplitPanelContext.Provider value={stubPanelContext}>

@@ -29,8 +29,7 @@ import { createTask } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
-import ArrowsInIcon from '@phosphor/arrows-in-simple.svg';
-import ArrowsOutIcon from '@phosphor/arrows-out-simple.svg';
+import ArrowsOutIcon from '@phosphor/arrows-out.svg';
 import SplitIcon from '@phosphor/square-half.svg';
 import XIcon from '@phosphor/x.svg';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
@@ -492,6 +491,64 @@ export function ComposeTask(props: ComposeTaskProps) {
     }
   };
 
+  const handleContinueInSplit = async () => {
+    if (isCreating()) return;
+
+    const taskTitle = title().trim();
+    const taskContent = content().trim();
+
+    setErrorMessage('');
+    setIsCreating(true);
+
+    const properties = structuredClone(Object.entries(unwrap(propertyValues)));
+    const draftSnapshot = {
+      title: taskTitle,
+      content: taskContent,
+      propertyValues: structuredClone(unwrap(propertyValues)),
+    };
+    clearTaskComposerDraft();
+
+    splitPanel.handle.close();
+    props.onClose?.();
+
+    const split = openWithSplit(
+      { type: 'component', id: 'loading' },
+      { referredFrom: 'launcher', preferNewSplit: true }
+    );
+
+    const documentId = await createTaskWithProperties(
+      taskTitle,
+      taskContent,
+      properties,
+      definitions(),
+      (params) => upsertToHistoryMutation.mutate(params)
+    );
+
+    setIsCreating(false);
+
+    if (!documentId) {
+      split?.goBack();
+      saveTaskComposerDraft(draftSnapshot);
+      popoverSplit({ type: 'component', id: 'task-compose' });
+      return;
+    }
+
+    if (split) {
+      split.replace({
+        next: { type: 'task', id: documentId },
+        mergeHistory: true,
+        referredFrom: 'launcher',
+      });
+    } else {
+      openWithSplit(
+        { type: 'task', id: documentId },
+        { referredFrom: 'launcher', preferNewSplit: true }
+      );
+    }
+
+    props.onCreateTask?.(taskTitle, taskContent);
+  };
+
   const handleClose = () => {
     const currentTitle = title();
     const currentContent = content();
@@ -590,28 +647,16 @@ export function ComposeTask(props: ComposeTaskProps) {
             Clear Draft
           </Button>
         </Show>
-        <Show
-          when={splitPanel?.handle.isPopover() && splitPanel.popoverExpansion}
-        >
+        <Show when={splitPanel?.handle.isPopover()}>
           <Button
-            onMouseDown={() =>
-              splitPanel.popoverExpansion?.setExpanded((v) => !v)
-            }
+            onMouseDown={handleContinueInSplit}
+            disabled={isCreating()}
             tabIndex={-1}
-            tooltip={
-              splitPanel.popoverExpansion?.expanded() ? 'Collapse' : 'Expand'
-            }
+            tooltip="Continue editing in split"
             size="icon-sm"
           >
-            <Show
-              when={splitPanel.popoverExpansion?.expanded()}
-              fallback={<ArrowsOutIcon />}
-            >
-              <ArrowsInIcon />
-            </Show>
+            <ArrowsOutIcon />
           </Button>
-        </Show>
-        <Show when={splitPanel?.handle.isPopover()}>
           <Button
             onMouseDown={handleClose}
             tabIndex={-1}
