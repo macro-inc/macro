@@ -1,3 +1,4 @@
+use crate::pubsub::context::CrmServiceType;
 use crate::pubsub::link_manager::context::LinkManagerContext;
 use crate::pubsub::link_manager::process;
 use crate::util::redis::RedisClient;
@@ -14,6 +15,7 @@ pub async fn run_worker(
     auth_service_client: AuthServiceClient,
     redis_client: RedisClient,
     sqs_client: SQS,
+    crm_service: CrmServiceType,
 ) {
     let ctx = LinkManagerContext {
         db,
@@ -22,6 +24,7 @@ pub async fn run_worker(
         auth_service_client,
         redis_client,
         sqs_client,
+        crm_service,
     };
     loop {
         let worker_result = tokio::spawn({

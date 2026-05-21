@@ -79,17 +79,24 @@ struct RecipientQueryResult {
 /// given `link_id`. Walks To/Cc/Bcc indiscriminately — the caller is
 /// responsible for any filtering (e.g. dropping the user's own address).
 ///
+/// Returns `(lowercased_email, name)` pairs — `email_contacts` is unique
+/// per `(link_id, email_address)`, so each address appears at most once
+/// in the result with the single display name stored on its row. `name`
+/// is `None` when no display name was recorded.
+///
 /// Used by the `PopulateCrmForUser` backfill step to enumerate the
 /// contacts a user has previously emailed so they can be seeded into
 /// their team's CRM tables.
 #[tracing::instrument(skip(pool), err)]
-pub async fn fetch_sent_message_recipient_emails_by_link(
+pub async fn fetch_sent_message_recipient_contacts_by_link(
     pool: &PgPool,
     link_id: Uuid,
-) -> anyhow::Result<Vec<String>> {
-    sqlx::query_scalar!(
+) -> anyhow::Result<Vec<(String, Option<String>)>> {
+    let rows = sqlx::query!(
         r#"
-        SELECT DISTINCT LOWER(c.email_address) AS "email!"
+        SELECT DISTINCT
+            LOWER(c.email_address) AS "email!",
+            c.name AS "name"
         FROM email_messages m
         JOIN email_message_recipients r ON r.message_id = m.id
         JOIN email_contacts c ON c.id = r.contact_id
@@ -99,6 +106,39 @@ pub async fn fetch_sent_message_recipient_emails_by_link(
         link_id,
     )
     .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(|r| (r.email, r.name)).collect())
+}
+
+/// Returns true iff `link_id` still has at least one sent message whose
+/// recipients (to/cc/bcc) include `email`. Used by the depopulate-CRM-
+/// contact backfill step as the pre-check: if any sent message remains,
+/// the CRM source row must stay. `email` is matched case-insensitively.
+#[tracing::instrument(skip(pool), err)]
+pub async fn link_has_sent_message_to(
+    pool: &PgPool,
+    link_id: Uuid,
+    email: &str,
+) -> anyhow::Result<bool> {
+    let normalized = email.to_ascii_lowercase();
+    sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM email_messages m
+            JOIN email_message_recipients r ON r.message_id = m.id
+            JOIN email_contacts c ON c.id = r.contact_id
+            WHERE m.link_id = $1
+              AND m.is_sent = true
+              AND LOWER(c.email_address) = $2
+            LIMIT 1
+        ) AS "exists!"
+        "#,
+        link_id,
+        normalized,
+    )
+    .fetch_one(pool)
     .await
     .map_err(Into::into)
 }

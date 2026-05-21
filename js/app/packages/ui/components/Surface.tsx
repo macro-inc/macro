@@ -31,8 +31,6 @@ export function Surface(props: SurfaceProps) {
         }}
         class={cn(
           'relative rounded-md overflow-clip min-h-0 size-full',
-          "after:content-[''] after:absolute after:inset-0 after:pointer-events-none after:rounded-[inherit] after:z-10",
-          'after:shadow-[inset_0_0_4px_var(--color-shadow)]',
           local.class,
         )}
         {...rest}
@@ -42,3 +40,9 @@ export function Surface(props: SurfaceProps) {
     </Layer>
   );
 }
+
+/*
+shadow sudo element
+"after:content-[''] after:absolute after:inset-0 after:pointer-events-none after:rounded-[inherit] after:z-10",
+'after:shadow-[inset_0_0_4px_var(--color-shadow)]'"
+*/

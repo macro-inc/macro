@@ -80,6 +80,7 @@ async fn main() {
     let email_repo = EmailPgRepo::new(pool.clone());
     let crm_service = crm::domain::service::CrmServiceImpl::new(
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(pool),
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
     let email_service = EmailServiceImpl::new(
         email_repo,

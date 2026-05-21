@@ -36,29 +36,27 @@ async fn seed_team(pool: &PgPool, team_id: Uuid, owner_id: &str) -> sqlx::Result
 async fn insert_company(
     pool: &PgPool,
     team_id: Uuid,
-    name: &str,
     email_sync: bool,
     domains: &[&str],
 ) -> sqlx::Result<Uuid> {
     let company_id = Uuid::now_v7();
 
-    sqlx::query(
-        r#"INSERT INTO crm_companies (id, team_id, name, email_sync) VALUES ($1, $2, $3, $4)"#,
-    )
-    .bind(company_id)
-    .bind(team_id)
-    .bind(name)
-    .bind(email_sync)
-    .execute(pool)
-    .await?;
+    sqlx::query(r#"INSERT INTO crm_companies (id, team_id, email_sync) VALUES ($1, $2, $3)"#)
+        .bind(company_id)
+        .bind(team_id)
+        .bind(email_sync)
+        .execute(pool)
+        .await?;
 
     for domain in domains {
-        sqlx::query(r#"INSERT INTO crm_domains (company_id, team_id, domain) VALUES ($1, $2, $3)"#)
-            .bind(company_id)
-            .bind(team_id)
-            .bind(*domain)
-            .execute(pool)
-            .await?;
+        sqlx::query(
+            r#"INSERT INTO crm_domains (company_id, team_id, domain) VALUES ($1, $2, $3)"#,
+        )
+        .bind(company_id)
+        .bind(team_id)
+        .bind(*domain)
+        .execute(pool)
+        .await?;
     }
 
     Ok(company_id)
@@ -80,7 +78,7 @@ async fn returns_none_when_no_company_for_domain(pool: PgPool) -> anyhow::Result
 async fn returns_company_with_all_domains_when_match(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, "macro|owner@test.com").await?;
-    let company_id = insert_company(&pool, team_id, "Acme", true, &["acme.com", "acme.io"]).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com", "acme.io"]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let company = repo
@@ -90,7 +88,6 @@ async fn returns_company_with_all_domains_when_match(pool: PgPool) -> anyhow::Re
 
     assert_eq!(company.id, company_id);
     assert_eq!(company.team_id, team_id);
-    assert_eq!(company.name, "Acme");
     assert!(company.email_sync);
 
     let mut domains: Vec<_> = company.domains.iter().map(|d| d.domain.as_str()).collect();
@@ -103,7 +100,7 @@ async fn returns_company_with_all_domains_when_match(pool: PgPool) -> anyhow::Re
 async fn domain_lookup_is_case_insensitive(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, "macro|owner@test.com").await?;
-    insert_company(&pool, team_id, "Acme", true, &["acme.com"]).await?;
+    insert_company(&pool, team_id, true, &["acme.com"]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool);
 
@@ -126,7 +123,7 @@ async fn does_not_return_companies_from_other_teams(pool: PgPool) -> anyhow::Res
     let team_b = Uuid::now_v7();
     seed_team(&pool, team_a, "macro|owner_a@test.com").await?;
     seed_team(&pool, team_b, "macro|owner_b@test.com").await?;
-    insert_company(&pool, team_a, "Acme A", true, &["acme.com"]).await?;
+    insert_company(&pool, team_a, true, &["acme.com"]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let result = repo.get_company_by_domain(&team_b, "acme.com").await?;
@@ -139,7 +136,7 @@ async fn does_not_return_companies_from_other_teams(pool: PgPool) -> anyhow::Res
 async fn returns_company_when_email_sync_is_false(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, "macro|owner@test.com").await?;
-    insert_company(&pool, team_id, "Acme", false, &["acme.com"]).await?;
+    insert_company(&pool, team_id, false, &["acme.com"]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let company = repo

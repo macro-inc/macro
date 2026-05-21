@@ -4,6 +4,7 @@ use crate::pubsub::inbox_sync::operations::shared::notify_search;
 use crate::pubsub::inbox_sync::process;
 use crate::pubsub::inbox_sync::process::check_gmail_rate_limit_inbox_sync;
 use crate::pubsub::util::cg_refresh_email;
+use crate::pubsub::util::enqueue_populate_crm_contacts;
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
 use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
 use contacts::domain::ports::ContactsIngress;
@@ -95,15 +96,36 @@ pub async fn upsert_message(
     // deduped list of all non-generic emails the message was sent to
     let recipient_emails = dedupe_emails(
         message
-            .cc
+            .to
             .iter()
+            .chain(&message.cc)
+            .chain(&message.bcc)
             .map(|c| c.email.clone())
-            .chain(message.to.iter().map(|t| t.email.clone()))
             .collect(),
     )
     .into_iter()
     .filter(|e| !email_utils::is_generic_email(e))
     .collect::<Vec<_>>();
+
+    // Snapshot `(email, name)` pairs for the CRM populate fan-out below.
+    // We capture it here (before `message` is moved into
+    // `process_and_insert_message`) so the consumer can write
+    // `crm_contacts.name` without a separate email_contacts lookup.
+    // No producer-side filtering — the crm crate is the single source
+    // of truth for "what belongs in the CRM" (generic-provider domains,
+    // killswitched companies, etc.) and applying the same rules here
+    // would just drift over time.
+    let crm_recipients: Vec<(String, Option<String>)> = if is_sent {
+        message
+            .to
+            .iter()
+            .chain(&message.cc)
+            .chain(&message.bcc)
+            .map(|c| (c.email.clone(), c.name.clone()))
+            .collect()
+    } else {
+        Vec::new()
+    };
 
     // determine if message's thread already exists in the database
     let thread_provider_to_db_map = threads::get::get_threads_by_link_id_and_provider_ids(
@@ -193,6 +215,15 @@ pub async fn upsert_message(
         is_sent,
     )
     .await?;
+
+    // For messages sent BY the user, fan out a PopulateCrmContact job per
+    // recipient so the CRM tables learn about the contacts the team has
+    // been emailing. Mirrors the backfill path in backfill_message.rs;
+    // `crm_recipients` was snapshotted above before `message` was moved.
+    if is_sent {
+        let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
+        enqueue_populate_crm_contacts(ctx, link.id, &self_email, crm_recipients).await?;
+    }
 
     notify_search(ctx, link, message_db_id, is_spam_or_trash).await?;
 

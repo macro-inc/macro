@@ -1603,55 +1603,6 @@
         }
       }
     },
-    "/team/checkout": {
-      "post": {
-        "tags": ["teams::inbound::axum_router::create_team_checkout_session"],
-        "summary": "Creates a new team.",
-        "operationId": "create_team_checkout_session",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TeamCheckoutSessionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Team"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/team/invite": {
       "post": {
         "tags": ["teams::inbound::axum_router::invite_to_team"],
@@ -1911,68 +1862,6 @@
             }
           },
           "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/team/plan": {
-      "patch": {
-        "tags": ["teams::inbound::axum_router::patch_team_plan"],
-        "summary": "Updates a team plan.",
-        "operationId": "patch_team_plan",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PatchTeamPlanRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -2890,13 +2779,82 @@
     "/user/stripe/checkout": {
       "post": {
         "tags": ["user::stripe::create_checkout_session"],
-        "summary": "Creates a Stripe checkout session for the user to subscribe.",
+        "summary": "**LEGACY DO NOT USE** Creates a Stripe checkout session for the user to subscribe.",
         "operationId": "create_checkout_session",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CreateCheckoutSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StripeSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/stripe/checkoutv2": {
+      "post": {
+        "tags": ["user::stripe::create_checkout_session_v2"],
+        "summary": "Creates a Stripe checkout session for the user to subscribe.",
+        "operationId": "create_checkout_session_v2",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCheckoutSessionV2Request"
               }
             }
           },
@@ -3210,6 +3168,29 @@
           }
         }
       },
+      "CreateCheckoutSessionV2Request": {
+        "type": "object",
+        "description": "Request body for creating a Stripe checkout session",
+        "required": ["successUrl", "cancelUrl"],
+        "properties": {
+          "cancelUrl": {
+            "type": "string",
+            "description": "The URL to redirect to if checkout is cancelled"
+          },
+          "discount": {
+            "type": ["string", "null"],
+            "description": "Optional discount/promo code to apply"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/CheckoutSessionMetadata",
+            "description": "Tracking metadata for conversion attribution"
+          },
+          "successUrl": {
+            "type": "string",
+            "description": "The URL to redirect to on successful checkout"
+          }
+        }
+      },
       "CreateInProgressLinkResponse": {
         "type": "object",
         "required": ["link_id"],
@@ -3504,17 +3485,6 @@
           }
         }
       },
-      "PatchTeamPlanRequest": {
-        "type": "object",
-        "description": "Request to update the team plan",
-        "required": ["team_plan"],
-        "properties": {
-          "team_plan": {
-            "$ref": "#/components/schemas/TeamPlan",
-            "description": "The new team plan"
-          }
-        }
-      },
       "PatchTeamRequest": {
         "type": "object",
         "description": "Request to update a team",
@@ -3736,62 +3706,6 @@
           },
           "slug": {
             "type": "string"
-          }
-        }
-      },
-      "TeamCheckoutSessionMetadata": {
-        "type": "object",
-        "description": "Team checkout session metadata",
-        "properties": {
-          "fbc": {
-            "type": ["string", "null"],
-            "description": "Meta (Facebook) click ID from _fbc cookie"
-          },
-          "fbp": {
-            "type": ["string", "null"],
-            "description": "Meta (Facebook) browser ID from _fbp cookie"
-          },
-          "ga_client_id": {
-            "type": ["string", "null"],
-            "description": "Google Analytics client ID for conversion tracking"
-          }
-        }
-      },
-      "TeamCheckoutSessionRequest": {
-        "type": "object",
-        "description": "Team checkout session request",
-        "required": ["success_url", "cancel_url", "team_plan"],
-        "properties": {
-          "cancel_url": {
-            "type": "string",
-            "description": "The URL to redirect to if checkout is cancelled"
-          },
-          "discount": {
-            "type": ["string", "null"],
-            "description": "Optional discount/promo code to apply"
-          },
-          "metadata": {
-            "$ref": "#/components/schemas/TeamCheckoutSessionMetadata",
-            "description": "Tracking metadata for conversion attribution"
-          },
-          "success_url": {
-            "type": "string",
-            "description": "The URL to redirect to on successful checkout"
-          },
-          "team_plan": {
-            "$ref": "#/components/schemas/TeamPlan",
-            "description": "The team plan the user wants to purchase for their team"
-          }
-        }
-      },
-      "TeamCheckoutSessionResponse": {
-        "type": "object",
-        "description": "Team checkout session response",
-        "required": ["url"],
-        "properties": {
-          "url": {
-            "type": "string",
-            "description": "The checkout url"
           }
         }
       },

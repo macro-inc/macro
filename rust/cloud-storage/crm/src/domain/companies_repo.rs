@@ -1,6 +1,6 @@
 //! Port for persistence operations on CRM companies.
 
-use crate::domain::model::{CrmCompany, CrmError};
+use crate::domain::model::{CrmCompany, CrmError, DomainMetadata};
 
 /// The CompaniesRepository defines persistence operations for CRM
 /// companies and their associated domains.
@@ -25,21 +25,131 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     ///      this domain out (the killswitch): no rows are written and the
     ///      method returns `Ok(())` so the caller can ack the job.
     ///    - If a row exists with `email_sync = true` it is reused.
-    ///    - Otherwise a new `crm_companies` row (name = `"TODO"`) and a
-    ///      matching `crm_domains` row are inserted.
-    /// 2. Upsert `crm_contacts (company_id, email)` with
-    ///    `ON CONFLICT DO NOTHING`.
+    ///    - Otherwise a new `crm_companies` row and a matching
+    ///      `crm_domains` row are inserted. The company name itself
+    ///      lives in `crm_domain_directory` keyed by `domain`, not on
+    ///      `crm_companies` — see [`lookup_domain_metadata`] /
+    ///      [`upsert_domain_metadata`].
+    /// 2. Upsert `crm_contacts (company_id, email, name)` with
+    ///    `ON CONFLICT DO UPDATE SET name = COALESCE(crm_contacts.name, EXCLUDED.name)`
+    ///    so the first non-NULL name wins and later populates can't
+    ///    overwrite it.
     /// 3. Upsert `crm_contact_sources (contact_id, link_id)` with
     ///    `ON CONFLICT DO NOTHING`.
     ///
     /// `domain` and `email` are both normalized to lowercase before storage
-    /// and comparison.
+    /// and comparison. `name` is the display name observed for `email` on
+    /// this user's link (sourced from `email_contacts.name` by the
+    /// caller); pass `None` when no display name is available.
+    ///
+    /// The caller is expected to have ensured a `crm_domain_directory`
+    /// entry exists for `domain` (via [`upsert_domain_metadata`]) before
+    /// invoking — this method writes no metadata of its own.
+    ///
+    /// [`lookup_domain_metadata`]: CompaniesRepository::lookup_domain_metadata
+    /// [`upsert_domain_metadata`]: CompaniesRepository::upsert_domain_metadata
     fn populate_contact(
         &self,
         team_id: &uuid::Uuid,
         link_id: &uuid::Uuid,
         domain: &str,
         email: &str,
+        name: Option<&str>,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Read the cached [`DomainMetadata`] for `domain` from
+    /// `crm_domain_directory`, if any. `domain` is matched
+    /// case-insensitively. Returns `Ok(None)` when no row exists for
+    /// the domain — the caller is expected to resolve via
+    /// [`crate::domain::company_metadata_resolver::CompanyMetadataResolver`]
+    /// and then [`upsert_domain_metadata`] before retrying.
+    ///
+    /// `Some(DomainMetadata { name: None, ... })` is distinct from
+    /// `None`: it means the domain has been looked up before and the
+    /// resolver returned nothing useful — the negative-cache entry
+    /// suppresses further resolver calls.
+    ///
+    /// [`upsert_domain_metadata`]: CompaniesRepository::upsert_domain_metadata
+    fn lookup_domain_metadata(
+        &self,
+        domain: &str,
+    ) -> impl Future<Output = Result<Option<DomainMetadata>, CrmError>> + Send;
+
+    /// Insert `metadata` for `domain` into `crm_domain_directory` with
+    /// `ON CONFLICT (LOWER(domain)) DO NOTHING`. The directory is a
+    /// global, first-write-wins cache: a row for `domain` (whether
+    /// populated or all-NULL) is preserved as-is for the lifetime of
+    /// the table. `domain` is lower-cased before storage.
+    ///
+    /// Idempotent under concurrent calls — racing producers can both
+    /// resolve the same domain and both call this method; the second
+    /// is a no-op.
+    fn upsert_domain_metadata(
+        &self,
+        domain: &str,
+        metadata: &DomainMetadata,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Reverses [`populate_contact`] for one `(link_id, email)`: drops the
+    /// matching `crm_contact_sources` row, then `crm_contacts` if no other
+    /// source rows remain for that contact, then `crm_companies` (cascading
+    /// to `crm_domains`) if no other contact rows remain for that company
+    /// **and** the company has `email_sync = true`. Companies with
+    /// `email_sync = false` (the killswitch opt-out) are kept so the
+    /// team's configuration survives teardown — a future populate will
+    /// re-discover the row and short-circuit on the same flag.
+    ///
+    /// Source and contact rows are derived data and are always cleaned
+    /// up regardless of the killswitch.
+    ///
+    /// The whole cascade runs in a single transaction that begins by
+    /// acquiring the same advisory lock [`populate_contact`] takes (key
+    /// `"{team_id}:{lower(domain)}"`) **before** observing any state, so
+    /// a concurrent in-flight populate for the same `(team_id, domain)`
+    /// can't slip an uncommitted insert past the existence check.
+    ///
+    /// No-op (returns `Ok(())`) when the contact / company / domain is
+    /// not found for `(team_id, domain, email)`. `domain` and `email` are
+    /// matched case-insensitively.
+    fn depopulate_contact(
+        &self,
+        team_id: &uuid::Uuid,
+        link_id: &uuid::Uuid,
+        domain: &str,
+        email: &str,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Bulk counterpart to [`depopulate_contact`]: removes everything
+    /// the link contributed to a single team's CRM rows. In one
+    /// transaction:
+    ///   1. Delete every `crm_contact_sources` row whose `link_id`
+    ///      matches AND whose contact lives under `team_id`.
+    ///   2. Delete every `crm_contacts` row in `team_id` that has no
+    ///      remaining `crm_contact_sources` (orphaned by step 1 or by
+    ///      any earlier cleanup race).
+    ///   3. Delete every `crm_companies` row in `team_id` that has no
+    ///      remaining `crm_contacts` AND `email_sync = true`. Companies
+    ///      with `email_sync = false` are preserved so the team's
+    ///      killswitch configuration survives teardown. `crm_domains`
+    ///      falls out via FK cascade.
+    ///
+    /// Scoping every query to `team_id` keeps the blast radius bounded
+    /// — sources the link contributed to a *different* team (from a
+    /// prior membership) are untouched — and lets the orphan cleanup
+    /// run as a single SQL pass per layer instead of snapshotting
+    /// candidate ids into memory first.
+    ///
+    /// Does NOT take per-`(team, domain)` advisory locks. A link can
+    /// span many domains within a team, and a concurrent populate on
+    /// the same team won't see the user as a member once the team
+    /// membership change has propagated, so the race window is benign.
+    ///
+    /// Used by the `DepopulateCrmForUser` backfill step (fired when a
+    /// user is removed from a team).
+    fn depopulate_link_in_team(
+        &self,
+        team_id: &uuid::Uuid,
+        link_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
     /// Returns the team id that `macro_id` belongs to. When the user is on

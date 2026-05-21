@@ -162,6 +162,7 @@ async fn build_tool_context(
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
     let crm_service = crm::domain::service::CrmServiceImpl::new(
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
     let email_service = EmailServiceImpl::new(
         EmailPgRepo::new(db.clone()),

@@ -38,7 +38,9 @@ pub async fn handle_non_retryable_error(
         }
         BackfillOperation::BackfillAttachment(_) => {}
         BackfillOperation::PopulateCrmContact(_) => {}
+        BackfillOperation::DepopulateCrmContact(_) => {}
         BackfillOperation::PopulateCrmForUser(_) => {}
+        BackfillOperation::DepopulateCrmForUser(_) => {}
     }
 
     cleanup_message(&ctx.sqs_worker, message).await?;
@@ -111,10 +113,22 @@ pub async fn handle_retryable_error(
                 "Retryable error populating CRM contact"
             )
         }
+        BackfillOperation::DepopulateCrmContact(scope) => {
+            tracing::debug!(
+                contact_email = %scope.payload.contact_email,
+                "Retryable error depopulating CRM contact"
+            )
+        }
         BackfillOperation::PopulateCrmForUser(payload) => {
             tracing::debug!(
                 macro_id = %payload.macro_id,
                 "Retryable error populating CRM for user"
+            )
+        }
+        BackfillOperation::DepopulateCrmForUser(payload) => {
+            tracing::debug!(
+                macro_id = %payload.macro_id,
+                "Retryable error depopulating CRM for user"
             )
         }
     }

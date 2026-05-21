@@ -3,6 +3,7 @@ use super::list_entities::build_summary;
 use super::*;
 use ai::generate_tool_input_schema;
 use ai::tool::types::tool_object::validate_tool_schema;
+use non_empty::IsEmpty;
 use uuid::Uuid;
 
 #[test]
@@ -28,6 +29,65 @@ fn test_default_values() {
     let list = ListEntities::default();
     assert!(list.include_types.is_none());
     assert!(matches!(list.sort_by, SortBy::RecentlyViewed));
+}
+
+#[test]
+fn test_full_ast_input_deserializes() {
+    let input = serde_json::json!({
+        "callf": {"l": {"CallId": "00000000-0000-0000-0000-000000000000"}},
+        "cf": {"l": {"cid": "00000000-0000-0000-0000-000000000000"}},
+        "chanf": {"l": {"ChannelId": "00000000-0000-0000-0000-000000000000"}},
+        "df": {"l": {"id": "00000000-0000-0000-0000-000000000000"}},
+        "ef": {"&": [
+            {"l": {"Importance": true}},
+            {"l": {"Shared": "exclude"}}
+        ]},
+        "emailView": "inbox",
+        "limit": 100,
+        "pf": {"l": {"pid": "00000000-0000-0000-0000-000000000000"}},
+        "sortBy": "recently_updated"
+    });
+
+    let list: ListEntities = serde_json::from_value(input).unwrap();
+    assert_eq!(list.limit, Some(100));
+    assert!(matches!(list.sort_by, SortBy::RecentlyUpdated));
+    assert!(!list.entity_filter_ast().is_empty());
+    assert_eq!(
+        list.email_view().unwrap(),
+        email::domain::models::PreviewView::default()
+    );
+}
+
+#[test]
+fn test_email_preset_defaults_to_email_results() {
+    let list: ListEntities = serde_json::from_value(serde_json::json!({
+        "emailPreset": "signal"
+    }))
+    .unwrap();
+
+    let ast = list.entity_filter_ast();
+    assert!(ast.email_filter.is_some());
+    assert!(ast.document_filter.is_some());
+    assert!(ast.project_filter.is_some());
+    assert!(ast.chat_filter.is_some());
+    assert!(ast.channel_filter.is_some());
+    assert!(ast.call_filter.is_some());
+    assert_eq!(list.effective_include_types(), Some(vec![ItemType::Email]));
+}
+
+#[test]
+fn test_include_types_document_without_filter_keeps_document_unfiltered() {
+    let list: ListEntities = serde_json::from_value(serde_json::json!({
+        "includeTypes": ["document"]
+    }))
+    .unwrap();
+
+    let ast = list.entity_filter_ast();
+    assert!(ast.document_filter.is_none());
+    assert_eq!(
+        list.effective_include_types(),
+        Some(vec![ItemType::Document])
+    );
 }
 
 #[test]

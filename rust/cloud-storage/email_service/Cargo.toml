@@ -79,6 +79,7 @@ chrono = { workspace = true }
 cloudfront_sign = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client" }
 crm = { path = "../crm" }
+unfurl = { path = "../unfurl", features = ["outbound"] }
 document_storage_service_client = { path = "../document_storage_service_client" }
 doppleganger = { workspace = true }
 ego-tree = { workspace = true }

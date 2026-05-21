@@ -76,7 +76,10 @@ type DssEmailService = EmailServiceImpl<
     EmailPgRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
     email::domain::ports::NoOpEnqueuer,
-    crm::domain::service::CrmServiceImpl<crm::outbound::companies_repo::CompaniesRepositoryImpl>,
+    crm::domain::service::CrmServiceImpl<
+        crm::outbound::companies_repo::CompaniesRepositoryImpl,
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+    >,
 >;
 
 type DssSoupState = SoupRouterState<

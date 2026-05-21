@@ -95,8 +95,8 @@ pub struct Config {
     /// The legacy stripe price ids
     pub legacy_stripe_price_ids: LegacyStripePriceIds,
 
-    /// The team stripe price ids
-    pub team_stripe_price_ids: TeamStripePriceIds,
+    /// The stripe price id
+    pub stripe_price_id: String,
 }
 
 env_var! {
@@ -111,35 +111,12 @@ env_var! {
     }
 }
 
-#[derive(Clone)]
-pub struct TeamStripePriceIds {
-    /// The idea price id
-    pub idea: String,
-    /// The pre-seed price id
-    pub pre_seed: String,
-    /// The seed price id
-    pub seed: String,
-    /// The series-a price id
-    pub series_a: String,
-}
-
-impl From<Environment> for TeamStripePriceIds {
-    fn from(value: Environment) -> Self {
-        // SAFETY: stripe price ids are not sensitive information so hard coding them here is simpler
-        match value {
-            Environment::Production => Self {
-                idea: "price_1TX2JjJaD7zvQeOBv2MDjxUC".to_string(),
-                pre_seed: "price_1TX2K5JaD7zvQeOBKbFKDQZr".to_string(),
-                seed: "price_1TX2KJJaD7zvQeOBJljvtVoL".to_string(),
-                series_a: "price_1TX2KVJaD7zvQeOByIRkVPdS".to_string(),
-            },
-            Environment::Develop | Environment::Local => Self {
-                idea: "price_1TX2GiJaD7zvQeOBACos6om2".to_string(),
-                pre_seed: "price_1TX2GxJaD7zvQeOBgueJpOTi".to_string(),
-                seed: "price_1TX2HDJaD7zvQeOBXl4Xlc0c".to_string(),
-                series_a: "price_1TX2HUJaD7zvQeOBMWwI4FFK".to_string(),
-            },
-        }
+/// Grab the stripe product price id using the environment
+fn get_stripe_price_id_from_environment(environment: Environment) -> String {
+    // SAFETY: stripe price ids are not sensitive information so hard coding them here is simpler
+    match environment {
+        Environment::Production => "price_1TZY5FJaD7zvQeOBMldBpUHg".to_string(),
+        Environment::Develop | Environment::Local => "price_1TZY5uJaD7zvQeOBRu9a5v8P".to_string(),
     }
 }
 
@@ -218,7 +195,7 @@ impl Config {
 
         let legacy_stripe_price_ids = LegacyStripePriceIds::new()?;
 
-        let team_stripe_price_ids = TeamStripePriceIds::from(environment);
+        let stripe_price_id = get_stripe_price_id_from_environment(environment);
 
         Ok(Config {
             base_url,
@@ -252,7 +229,7 @@ impl Config {
             posthog_api_key,
             posthog_host,
             legacy_stripe_price_ids,
-            team_stripe_price_ids,
+            stripe_price_id,
         })
     }
 }

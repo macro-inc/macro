@@ -87,6 +87,7 @@ export type DocumentContentState = 'unknown' | 'pending' | 'ready';
  * These values should match the `document_sub_type_value` table in macrodb.
  */
 export type DocumentSubType = 'task';
+export type EmailPreset = 'signal';
 export type EntityItem =
   | {
       id: string;
@@ -1160,9 +1161,63 @@ export interface ListCallRecordsResponse {
  */
 export interface ListEntities {
   /**
-   * Filter to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails.
+   * Full soup AST call filter (callf).
+   */
+  callf?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Full soup AST AI chat filter (cf).
+   */
+  cf?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Full soup AST channel filter (chanf).
+   */
+  chanf?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}.
+   */
+  df?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Advanced full soup AST email filter (ef). Prefer emailPreset="signal" for common requests. Signal emails and important emails are synonymous; they use {"&":[{"l":{"Importance":true}},{"l":{"Shared":"exclude"}}]}.
+   */
+  ef?: {
+    [k: string]: unknown;
+  };
+  /**
+   * High-level email filter preset. Use "signal" for signal emails. Signal emails and important emails are synonymous: if the user asks for important emails, use emailPreset="signal". This expands to the email AST {"&":[{"l":{"Importance":true}},{"l":{"Shared":"exclude"}}]} and defaults results to emails if includeTypes is omitted.
+   */
+  emailPreset?: EmailPreset | null;
+  /**
+   * Email view to use for email results: inbox (default), sent, drafts, starred, all, important, other, or user:<label>.
+   */
+  emailView?: string | null;
+  /**
+   * Filter returned items to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails. This is folded into the AST and applied as part of cursor-level filtering.
    */
   includeTypes?: ItemType[] | null;
+  /**
+   * Maximum number of items to return. Defaults to 50; max 500.
+   */
+  limit?: number | null;
+  /**
+   * Full soup AST project filter (pf).
+   */
+  pf?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Full soup AST property filter (propf).
+   */
+  propf?: {
+    [k: string]: unknown;
+  };
   sortBy?: SortBy;
 }
 export interface ListEntitiesResponse {

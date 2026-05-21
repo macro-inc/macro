@@ -161,6 +161,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
     let crm_service = crm::domain::service::CrmServiceImpl::new(
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(pool.clone()),
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
     let email_service = EmailServiceImpl::new(
         EmailPgRepo::new(pool.clone()),

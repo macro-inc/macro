@@ -15,13 +15,20 @@ export interface PropertyRootContextValue {
   onEdit?: PropertyEditFn;
   onRefresh?: () => void;
 
-  // Local editor open state. Populated by EditTrigger when the consumer
-  // hasn't supplied an external onEdit; consumed by PopoverEditor. Always
-  // present (signals never undefined) so consumers can read without nulls.
+  // Local editor open state. Populated by EditTrigger when the consumer hasn't
+  // supplied an external onEdit; consumed by PopoverEditor. The anchor passed
+  // to openEditor is recorded internally by <Property.Root> and used by the
+  // Kobalte popper via getAnchorRect — callers don't read it back.
   editorOpen: Accessor<boolean>;
-  editorAnchor: Accessor<HTMLElement | undefined>;
   openEditor: (anchor?: HTMLElement) => void;
   closeEditor: () => void;
+
+  // Closest `.portal-scope` ancestor at the time Property.Root mounted.
+  // Used by PopoverEditor to mount the dropdown into the same stacking
+  // context as the surrounding panel/dialog instead of document.body —
+  // otherwise the editor renders behind a host modal. Undefined until the
+  // root div mounts, after which Kobalte's Portal falls back to body.
+  portalMount: Accessor<HTMLElement | undefined>;
 }
 
 export const PropertyRootContext = createContext<PropertyRootContextValue>();
@@ -32,8 +39,4 @@ export function useProperty(): PropertyRootContextValue {
     throw new Error('useProperty must be used within <Property.Root>');
   }
   return ctx;
-}
-
-function _useMaybeProperty(): PropertyRootContextValue | undefined {
-  return useContext(PropertyRootContext);
 }

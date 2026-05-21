@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 default = ["outbound", "ports"]
-outbound = ["dep:sqlx", "ports"]
+outbound = ["dep:sqlx", "dep:unfurl", "ports"]
 ports = []
 
 [dependencies]
@@ -19,6 +19,7 @@ uuid = { workspace = true }
 
 # Outbound dependencies
 sqlx = { workspace = true, optional = true }
+unfurl = { path = "../unfurl", features = ["ports"], optional = true }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

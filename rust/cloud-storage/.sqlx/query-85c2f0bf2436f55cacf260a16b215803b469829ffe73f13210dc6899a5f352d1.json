@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT ct.id AS contact_id, co.id AS company_id\n            FROM crm_contacts ct\n            JOIN crm_companies co ON co.id = ct.company_id\n            JOIN crm_domains d ON d.company_id = co.id\n            WHERE co.team_id = $1\n              AND LOWER(ct.email) = $2\n              AND LOWER(d.domain) = $3\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "company_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "85c2f0bf2436f55cacf260a16b215803b469829ffe73f13210dc6899a5f352d1"
+}

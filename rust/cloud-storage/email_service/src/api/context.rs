@@ -25,7 +25,10 @@ pub(crate) type EmailSvc = EmailServiceImpl<
     EmailPgRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
     sqs_client::SQS,
-    crm::domain::service::CrmServiceImpl<crm::outbound::companies_repo::CompaniesRepositoryImpl>,
+    crm::domain::service::CrmServiceImpl<
+        crm::outbound::companies_repo::CompaniesRepositoryImpl,
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+    >,
 >;
 
 #[derive(Clone, FromRef)]

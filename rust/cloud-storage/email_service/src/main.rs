@@ -129,8 +129,12 @@ async fn main() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
     let gmail_client = Arc::new(gmail_client);
+    // HTTP API only reads CRM rows — populate runs in the pubsub
+    // worker. The no-op resolver makes the unused branch explicit and
+    // keeps reqwest/scraper out of this binary.
     let crm_service = crm::domain::service::CrmServiceImpl::new(
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
     let email_service = EmailRouterState::new(EmailServiceImpl::new(
         EmailPgRepo::new(db.clone()),

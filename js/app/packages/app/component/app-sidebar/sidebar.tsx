@@ -65,7 +65,7 @@ import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { useLocation } from '@solidjs/router';
-import { Button, cn, Dropdown, Hotkey, Layer } from '@ui';
+import { Button, cn, Dropdown, Hotkey } from '@ui';
 import {
   type Component,
   createMemo,
@@ -584,7 +584,6 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   return (
     <Dropdown placement="top-start" gutter={6}>
       <Dropdown.Trigger
-        as={Button}
         variant="ghost"
         class={cn(
           'flex items-center w-full rounded-md cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
@@ -619,57 +618,55 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
         </span>
         <CaretUpIcon class="size-3 text-ink-extra-muted shrink-0 group-data-[slim=true]/sidebar:hidden" />
       </Dropdown.Trigger>
-      <Dropdown.Portal>
-        <Layer depth={3}>
-          <Dropdown.Content class="min-w-56">
-            <For each={topItems()}>
-              {(item) => (
-                <Dropdown.Item
-                  class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
-                  onSelect={() => props.onSelect(item.tab)}
-                >
-                  <span class="size-5 flex items-center justify-center">
-                    <Dynamic
-                      component={item.icon}
-                      class="size-4 shrink-0 text-ink-extra-muted"
-                    />
+      <Dropdown.Content depth={3} class="min-w-56">
+        <Dropdown.Group>
+          <For each={topItems()}>
+            {(item) => (
+              <Dropdown.Item
+                class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
+                onSelect={() => props.onSelect(item.tab)}
+              >
+                <span class="size-5 flex items-center justify-center">
+                  <Dynamic
+                    component={item.icon}
+                    class="size-4 shrink-0 text-ink-extra-muted"
+                  />
+                </span>
+                <div class="flex flex-col min-w-0">
+                  <span class="text-ink">{item.label}</span>
+                  <span class="text-xxs text-ink-extra-muted leading-tight">
+                    {item.description}
                   </span>
-                  <div class="flex flex-col min-w-0">
-                    <span class="text-ink">{item.label}</span>
-                    <span class="text-xxs text-ink-extra-muted leading-tight">
-                      {item.description}
-                    </span>
-                  </div>
-                </Dropdown.Item>
-              )}
-            </For>
-            <Show when={topItems().length > 0 && bottomItems().length > 0}>
-              <Dropdown.Separator />
-            </Show>
-            <For each={bottomItems()}>
-              {(item) => (
-                <Dropdown.Item
-                  class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
-                  onSelect={() => props.onSelect(item.tab)}
-                >
-                  <span class="size-5 flex items-center justify-center">
-                    <Dynamic
-                      component={item.icon}
-                      class="size-4 shrink-0 text-ink-extra-muted"
-                    />
+                </div>
+              </Dropdown.Item>
+            )}
+          </For>
+          <Show when={topItems().length > 0 && bottomItems().length > 0}>
+            <Dropdown.Separator />
+          </Show>
+          <For each={bottomItems()}>
+            {(item) => (
+              <Dropdown.Item
+                class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
+                onSelect={() => props.onSelect(item.tab)}
+              >
+                <span class="size-5 flex items-center justify-center">
+                  <Dynamic
+                    component={item.icon}
+                    class="size-4 shrink-0 text-ink-extra-muted"
+                  />
+                </span>
+                <div class="flex flex-col min-w-0">
+                  <span class="text-ink">{item.label}</span>
+                  <span class="text-xxs text-ink-extra-muted leading-tight">
+                    {item.description}
                   </span>
-                  <div class="flex flex-col min-w-0">
-                    <span class="text-ink">{item.label}</span>
-                    <span class="text-xxs text-ink-extra-muted leading-tight">
-                      {item.description}
-                    </span>
-                  </div>
-                </Dropdown.Item>
-              )}
-            </For>
-          </Dropdown.Content>
-        </Layer>
-      </Dropdown.Portal>
+                </div>
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Group>
+      </Dropdown.Content>
     </Dropdown>
   );
 };

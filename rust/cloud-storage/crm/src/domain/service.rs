@@ -2,6 +2,8 @@
 
 use crate::domain::{
     companies_repo::CompaniesRepository,
+    company_metadata_resolver::CompanyMetadataResolver,
+    generic_email_domains::is_generic_email_domain,
     model::{CrmCompany, CrmError},
 };
 
@@ -23,11 +25,68 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// `crm_contact_sources` in a single transaction. If the team has
     /// opted the contact's domain out (`crm_companies.email_sync = false`)
     /// the call is a no-op.
+    ///
+    /// `name` is the display name observed for `email` on this user's
+    /// link — typically `email_contacts.name`, which the caller looks up
+    /// before invoking. The first non-NULL name wins for the
+    /// `crm_contacts` row; later populates from other team members can't
+    /// overwrite it. Pass `None` when no display name is available.
+    ///
+    /// Before the populate transaction, this method ensures
+    /// `crm_domain_directory` has an entry for the email's domain — if
+    /// not, it invokes the
+    /// [`crate::domain::company_metadata_resolver::CompanyMetadataResolver`]
+    /// and inserts the result (which may be all-NULL on resolver
+    /// failure — that's the negative cache). The directory write is its
+    /// own transaction so the populate tx never holds locks across an
+    /// HTTP fetch.
     fn populate_contact(
         &self,
         team_id: &uuid::Uuid,
         link_id: &uuid::Uuid,
         email: &str,
+        name: Option<&str>,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Reverses [`populate_contact`] for one `(link_id, email)`. Drops the
+    /// `crm_contact_sources` row, then cascades up to `crm_contacts` and
+    /// `crm_companies` (with `crm_domains` cascading via FK) when no
+    /// sibling rows remain — except that companies with `email_sync =
+    /// false` are preserved so the team's opt-out configuration survives
+    /// teardown. See
+    /// [`crate::domain::companies_repo::CompaniesRepository::depopulate_contact`].
+    ///
+    /// Treats malformed emails (missing `@`, empty local-part, empty or
+    /// multi-`@` domain) as a no-op rather than an error so that retries
+    /// don't pile up on poisoned messages. This is stricter than
+    /// [`populate_contact`], which errors on malformed input — depopulate
+    /// is a teardown step and we'd rather drop a bad payload than churn
+    /// it through the retry path. The caller is expected to gate this
+    /// call on a prior check that the link has no other sent messages to
+    /// `email`.
+    fn depopulate_contact(
+        &self,
+        team_id: &uuid::Uuid,
+        link_id: &uuid::Uuid,
+        email: &str,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Bulk teardown for one user's email link within one team: drops
+    /// the team's `crm_contact_sources` rows owned by `link_id`, then
+    /// cascades to `crm_contacts` and `crm_companies` for the rows
+    /// orphaned as a result. Companies with `email_sync = false` are
+    /// preserved. See
+    /// [`crate::domain::companies_repo::CompaniesRepository::depopulate_link_in_team`].
+    ///
+    /// Used by the `DepopulateCrmForUser` backfill step. Unlike
+    /// [`depopulate_contact`], this bypasses any per-message gate — the
+    /// trigger here is "user is no longer on this team", which makes
+    /// the presence of the user's sent messages in `email_messages`
+    /// irrelevant.
+    fn depopulate_link_in_team(
+        &self,
+        team_id: &uuid::Uuid,
+        link_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
     /// Returns the team id `macro_id` belongs to, or `None` when the user
@@ -40,42 +99,53 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<uuid::Uuid>, CrmError>> + Send;
 }
 
-/// Implementation of [`CrmService`] backed by a [`CompaniesRepository`].
+/// Implementation of [`CrmService`] backed by a [`CompaniesRepository`]
+/// and a [`CompanyMetadataResolver`].
 #[derive(Debug)]
-pub struct CrmServiceImpl<CR>
+pub struct CrmServiceImpl<CR, R>
 where
     CR: CompaniesRepository,
+    R: CompanyMetadataResolver,
 {
     /// The underlying companies repository
     companies_repository: CR,
+    /// Resolver consulted only when `crm_domain_directory` has no entry
+    /// for a given domain. The resolver itself is best-effort — its
+    /// failures collapse to a negative-cache row in the directory.
+    metadata_resolver: R,
 }
 
-impl<CR> Clone for CrmServiceImpl<CR>
+impl<CR, R> Clone for CrmServiceImpl<CR, R>
 where
     CR: CompaniesRepository,
+    R: CompanyMetadataResolver,
 {
     fn clone(&self) -> Self {
         Self {
             companies_repository: self.companies_repository.clone(),
+            metadata_resolver: self.metadata_resolver.clone(),
         }
     }
 }
 
-impl<CR> CrmServiceImpl<CR>
+impl<CR, R> CrmServiceImpl<CR, R>
 where
     CR: CompaniesRepository,
+    R: CompanyMetadataResolver,
 {
     /// Creates a new CrmServiceImpl
-    pub fn new(companies_repository: CR) -> Self {
+    pub fn new(companies_repository: CR, metadata_resolver: R) -> Self {
         Self {
             companies_repository,
+            metadata_resolver,
         }
     }
 }
 
-impl<CR> CrmService for CrmServiceImpl<CR>
+impl<CR, R> CrmService for CrmServiceImpl<CR, R>
 where
     CR: CompaniesRepository,
+    R: CompanyMetadataResolver,
 {
     #[tracing::instrument(skip(self), err)]
     async fn get_company_by_domain(
@@ -94,6 +164,7 @@ where
         team_id: &uuid::Uuid,
         link_id: &uuid::Uuid,
         email: &str,
+        name: Option<&str>,
     ) -> Result<(), CrmError> {
         let email = email.trim();
         let Some((local_part, domain)) = email.split_once('@') else {
@@ -111,8 +182,76 @@ where
                 "email {email} has an empty domain"
             )));
         }
+
+        // Skip personal / free-mail-provider domains (gmail, yahoo,
+        // hotmail, …). CRM rows are meant to represent companies
+        if is_generic_email_domain(domain) {
+            tracing::debug!(
+                domain,
+                "Skipping CRM populate for generic email provider domain"
+            );
+            return Ok(());
+        }
+
+        // Ensure `crm_domain_directory` has an entry for this domain
+        // before the populate tx — the populate tx no longer carries any
+        // name metadata of its own, and we don't want to hold its
+        // advisory lock across an HTTP fetch. The directory upsert is
+        // its own transaction, idempotent under concurrent populates
+        // for the same domain (first-write-wins via the unique index
+        // on `LOWER(domain)`).
+        if self
+            .companies_repository
+            .lookup_domain_metadata(domain)
+            .await?
+            .is_none()
+        {
+            let metadata = self.metadata_resolver.resolve(domain).await;
+            self.companies_repository
+                .upsert_domain_metadata(domain, &metadata)
+                .await?;
+        }
+
         self.companies_repository
-            .populate_contact(team_id, link_id, domain, email)
+            .populate_contact(team_id, link_id, domain, email, name)
+            .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn depopulate_contact(
+        &self,
+        team_id: &uuid::Uuid,
+        link_id: &uuid::Uuid,
+        email: &str,
+    ) -> Result<(), CrmError> {
+        let email = email.trim();
+        let Some((local_part, domain)) = email.split_once('@') else {
+            tracing::debug!(
+                email,
+                "depopulate_contact: skipping malformed email (no '@')"
+            );
+            return Ok(());
+        };
+        if local_part.is_empty() || domain.is_empty() || domain.contains('@') {
+            tracing::debug!(
+                email,
+                "depopulate_contact: skipping malformed email (empty part or multiple '@')"
+            );
+            return Ok(());
+        }
+        self.companies_repository
+            .depopulate_contact(team_id, link_id, domain, email)
+            .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn depopulate_link_in_team(
+        &self,
+        team_id: &uuid::Uuid,
+        link_id: &uuid::Uuid,
+    ) -> Result<(), CrmError> {
+        self.companies_repository
+            .depopulate_link_in_team(team_id, link_id)
             .await
     }
 

@@ -6,6 +6,6 @@
  */
 
 /**
- * Google Analytics client ID for conversion tracking
+ * Optional discount/promo code to apply
  */
-export type TeamCheckoutSessionMetadataGaClientId = string | null;
+export type CreateCheckoutSessionV2RequestDiscount = string | null;

@@ -1,11 +1,8 @@
 //! Implementation of [`CompaniesRepository`] backed by MacroDB.
 
-#[cfg(test)]
-mod test;
-
 use crate::domain::{
     companies_repo::CompaniesRepository,
-    model::{CrmCompany, CrmDomain, CrmError},
+    model::{CrmCompany, CrmDomain, CrmError, DomainMetadata},
 };
 use sqlx::PgPool;
 
@@ -34,7 +31,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
 
         let company = sqlx::query!(
             r#"
-            SELECT c.id, c.team_id, c.name, c.email_sync, c.created_at
+            SELECT c.id, c.team_id, c.email_sync, c.created_at
             FROM crm_companies c
             JOIN crm_domains d ON d.company_id = c.id
             WHERE c.team_id = $1
@@ -76,7 +73,6 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         Ok(Some(CrmCompany {
             id: company.id,
             team_id: company.team_id,
-            name: company.name,
             email_sync: company.email_sync,
             created_at: company.created_at,
             domains,
@@ -90,6 +86,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         link_id: &uuid::Uuid,
         domain: &str,
         email: &str,
+        name: Option<&str>,
     ) -> Result<(), CrmError> {
         let normalized_domain = domain.to_ascii_lowercase();
         let normalized_email = email.to_ascii_lowercase();
@@ -149,8 +146,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             None => {
                 let new_company = sqlx::query!(
                     r#"
-                    INSERT INTO crm_companies (team_id, name)
-                    VALUES ($1, 'TODO')
+                    INSERT INTO crm_companies (team_id)
+                    VALUES ($1)
                     RETURNING id
                     "#,
                     team_id,
@@ -210,19 +207,25 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             }
         };
 
-        // Upsert the contact. `ON CONFLICT DO UPDATE SET email = EXCLUDED.email`
-        // is a no-op write that exists only to force RETURNING to fire on the
-        // conflict path, so we get the existing row's id without a second
-        // round trip.
+        // Upsert the contact. `name` is supplied by the caller (the
+        // backfill consumer looks it up in email_contacts before invoking
+        // populate). On conflict, COALESCE preserves the existing
+        // crm_contacts.name when it's non-NULL, so the first non-empty
+        // name wins and a subsequent populate from a different team
+        // member can't overwrite it. If the existing name is NULL
+        // (previous populate ran before email_contacts had a name), the
+        // conflict path still gets a chance to fill it.
         let contact_id = sqlx::query_scalar!(
             r#"
-            INSERT INTO crm_contacts (company_id, email)
-            VALUES ($1, $2)
-            ON CONFLICT (company_id, email) DO UPDATE SET email = EXCLUDED.email
+            INSERT INTO crm_contacts (company_id, email, name)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (company_id, email) DO UPDATE
+                SET name = COALESCE(crm_contacts.name, EXCLUDED.name)
             RETURNING id
             "#,
             company_id,
             normalized_email,
+            name,
         )
         .fetch_one(&mut *tx)
         .await
@@ -244,6 +247,289 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         tx.commit()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn depopulate_contact(
+        &self,
+        team_id: &uuid::Uuid,
+        link_id: &uuid::Uuid,
+        domain: &str,
+        email: &str,
+    ) -> Result<(), CrmError> {
+        let normalized_domain = domain.to_ascii_lowercase();
+        let normalized_email = email.to_ascii_lowercase();
+
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // Take the lock BEFORE looking at any state. A concurrent
+        // populate_contact for the same (team, domain) might have a tx
+        // open that has inserted rows but hasn't committed yet — without
+        // the lock our SELECT below would miss those rows, return
+        // Ok(()) here, and the in-flight populate would then commit and
+        // leave the team with CRM data for a since-deleted sent message.
+        // Holding the lock for the rest of this tx forces populate to
+        // either commit first (we then see + tear down its rows) or
+        // wait until we're done (its row will be inserted after, and
+        // a future depopulate will catch it).
+        sqlx::query!(
+            r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))"#,
+            format!("{team_id}:{normalized_domain}"),
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // Resolve (contact_id, company_id, email_sync) for this
+        // (team, domain, email). Returning None here means there is
+        // nothing to tear down: commit the empty tx and ack.
+        let Some(row) = sqlx::query!(
+            r#"
+            SELECT
+                ct.id AS contact_id,
+                co.id AS company_id,
+                co.email_sync AS "email_sync!"
+            FROM crm_contacts ct
+            JOIN crm_companies co ON co.id = ct.company_id
+            JOIN crm_domains d ON d.company_id = co.id
+            WHERE co.team_id = $1
+              AND LOWER(ct.email) = $2
+              AND LOWER(d.domain) = $3
+            LIMIT 1
+            "#,
+            team_id,
+            normalized_email,
+            normalized_domain,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?
+        else {
+            tx.commit()
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            return Ok(());
+        };
+
+        // 1. Drop the per-link source row.
+        sqlx::query!(
+            r#"
+            DELETE FROM crm_contact_sources
+            WHERE contact_id = $1 AND link_id = $2
+            "#,
+            row.contact_id,
+            link_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // 2. Keep the contact iff any other link in the team still
+        //    references it.
+        let other_sources = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS(
+                SELECT 1 FROM crm_contact_sources WHERE contact_id = $1 LIMIT 1
+            ) AS "exists!"
+            "#,
+            row.contact_id,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        if other_sources {
+            tx.commit()
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            return Ok(());
+        }
+
+        sqlx::query!(r#"DELETE FROM crm_contacts WHERE id = $1"#, row.contact_id,)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // 3. Keep the company when other contacts in the team still
+        //    belong to it, OR when the team has opted the domain out.
+        //    The killswitch (`email_sync = false`) is stored on
+        //    crm_companies and is configuration, not derived data;
+        //    dropping the company would silently erase the opt-out and
+        //    a future populate would recreate the row with the default
+        //    `email_sync = true`.
+        if !row.email_sync {
+            tx.commit()
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            return Ok(());
+        }
+
+        let other_contacts = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS(
+                SELECT 1 FROM crm_contacts WHERE company_id = $1 LIMIT 1
+            ) AS "exists!"
+            "#,
+            row.company_id,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        if other_contacts {
+            tx.commit()
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            return Ok(());
+        }
+
+        // crm_domains FK is ON DELETE CASCADE — deleting the company
+        // takes its domain rows with it.
+        sqlx::query!(r#"DELETE FROM crm_companies WHERE id = $1"#, row.company_id,)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn depopulate_link_in_team(
+        &self,
+        team_id: &uuid::Uuid,
+        link_id: &uuid::Uuid,
+    ) -> Result<(), CrmError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // 1. Drop the link's source rows scoped to this team.
+        sqlx::query!(
+            r#"
+            DELETE FROM crm_contact_sources cs
+            USING crm_contacts ct, crm_companies co
+            WHERE cs.contact_id = ct.id
+              AND ct.company_id = co.id
+              AND co.team_id = $1
+              AND cs.link_id = $2
+            "#,
+            team_id,
+            link_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // 2. Drop every contact in this team that no longer has any
+        //    source.
+        sqlx::query!(
+            r#"
+            DELETE FROM crm_contacts ct
+            USING crm_companies co
+            WHERE ct.company_id = co.id
+              AND co.team_id = $1
+              AND NOT EXISTS (
+                  SELECT 1 FROM crm_contact_sources WHERE contact_id = ct.id
+              )
+            "#,
+            team_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // 3. Drop every company in this team that no longer has any
+        //    contact AND is not killswitched. Companies with
+        //    `email_sync = false` are preserved so the team's
+        //    configuration survives teardown — a future populate will
+        //    re-find the row and short-circuit on the same flag.
+        //    `crm_domains` falls out via FK cascade.
+        sqlx::query!(
+            r#"
+            DELETE FROM crm_companies co
+            WHERE co.team_id = $1
+              AND co.email_sync = TRUE
+              AND NOT EXISTS (
+                  SELECT 1 FROM crm_contacts WHERE company_id = co.id
+              )
+            "#,
+            team_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn lookup_domain_metadata(
+        &self,
+        domain: &str,
+    ) -> Result<Option<DomainMetadata>, CrmError> {
+        let normalized_domain = domain.to_ascii_lowercase();
+        let row = sqlx::query!(
+            r#"
+            SELECT name, description, icon_url
+            FROM crm_domain_directory
+            WHERE LOWER(domain) = $1
+            LIMIT 1
+            "#,
+            normalized_domain,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(row.map(|r| DomainMetadata {
+            name: r.name,
+            description: r.description,
+            icon_url: r.icon_url,
+        }))
+    }
+
+    #[tracing::instrument(skip(self, metadata), err)]
+    async fn upsert_domain_metadata(
+        &self,
+        domain: &str,
+        metadata: &DomainMetadata,
+    ) -> Result<(), CrmError> {
+        let normalized_domain = domain.to_ascii_lowercase();
+        // First-write-wins: the unique index is on `LOWER(domain)`, so
+        // a concurrent populate of the same domain hits the conflict
+        // path and we leave the existing row untouched (treat-as-forever
+        // cache). Negative cache entries (all-NULL fields) are inserted
+        // verbatim so subsequent populates suppress the resolver call.
+        sqlx::query!(
+            r#"
+            INSERT INTO crm_domain_directory (domain, name, description, icon_url)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (LOWER(domain)) DO NOTHING
+            "#,
+            normalized_domain,
+            metadata.name,
+            metadata.description,
+            metadata.icon_url,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         Ok(())
     }

@@ -31,8 +31,15 @@ pub type ToolFrecencyService = frecency::domain::services::FrecencyQueryServiceI
 >;
 
 /// Type alias for the CRM service implementation used by tools.
-pub type ToolCrmService =
-    crm::domain::service::CrmServiceImpl<crm::outbound::companies_repo::CompaniesRepositoryImpl>;
+///
+/// Tools only read CRM rows (e.g. `get_company_by_domain`); the populate
+/// path runs in the email-service pubsub worker. The no-op resolver
+/// keeps reqwest/scraper out of the tool binary at the cost of a silent
+/// negative cache if populate is ever invoked here.
+pub type ToolCrmService = crm::domain::service::CrmServiceImpl<
+    crm::outbound::companies_repo::CompaniesRepositoryImpl,
+    crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+>;
 
 /// Type alias for the email service implementation
 pub type ToolEmailService = EmailServiceImpl<

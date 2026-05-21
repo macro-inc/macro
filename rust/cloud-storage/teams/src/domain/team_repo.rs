@@ -9,10 +9,9 @@ use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr
 
 use crate::domain::model::{
     AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
-    PatchTeamPlanRequest, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
-    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
-    TeamCheckoutError, TeamCheckoutSessionRequest, TeamError, TeamInvite, TeamInviteDetails,
-    TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
+    PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
+    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team, TeamError,
+    TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
 };
 
 /// The TeamChannelsRepository defines a set of actions related to team channels
@@ -360,20 +359,4 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     ) -> impl Future<
         Output = Result<HashSet<roles_and_permissions::domain::model::PermissionId>, TeamError>,
     > + Send;
-
-    /// Updates the teams plan
-    fn update_team_plan(
-        &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
-        req: &PatchTeamPlanRequest,
-    ) -> impl Future<Output = Result<(), TeamError>> + Send;
-
-    /// Creates a checkout session for the initial team purchase
-    /// This should only be called if the team currently is not on a plan
-    /// Returns the checkout session url
-    fn create_checkout_session(
-        &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
-        req: &TeamCheckoutSessionRequest,
-    ) -> impl Future<Output = Result<String, TeamCheckoutError>> + Send;
 }

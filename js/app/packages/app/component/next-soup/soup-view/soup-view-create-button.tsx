@@ -13,7 +13,7 @@ import {
 import ChevronDownIcon from '@phosphor/caret-down.svg';
 import PlusCircleIcon from '@phosphor/plus.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
-import { Button, cn, Dropdown, Layer } from '@ui';
+import { Button, cn, Dropdown } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { NewCallButton } from './NewCallButton';
 
@@ -169,27 +169,20 @@ export const SoupViewCreateButton = () => {
         </Show>
         <ChevronDownIcon class="size-2.5" />
       </Dropdown.Trigger>
-      <Dropdown.Portal>
-        <Layer depth={2}>
-          <Dropdown.Content class="min-w-35">
-            <For each={options()}>
-              {(item) => (
-                <Dropdown.Item
-                  class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
-                  onSelect={() => handleSelect(item)}
-                >
-                  <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
-                    <CreateOptionIcon id={item.id} />
-                  </span>
-                  <span class="flex-1 truncate text-ink-muted">
-                    {item.label}
-                  </span>
-                </Dropdown.Item>
-              )}
-            </For>
-          </Dropdown.Content>
-        </Layer>
-      </Dropdown.Portal>
+      <Dropdown.Content class="min-w-35">
+        <Dropdown.Group>
+          <For each={options()}>
+            {(item) => (
+              <Dropdown.Item onSelect={() => handleSelect(item)}>
+                <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
+                  <CreateOptionIcon id={item.id} />
+                </span>
+                <span class="flex-1 truncate text-ink-muted">{item.label}</span>
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Group>
+      </Dropdown.Content>
     </Dropdown>
   );
 

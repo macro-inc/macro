@@ -1,9 +1,8 @@
 use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
 use teams::domain::model::{
-    PatchTeamPlanRequest, PatchTeamRequest, PatchTeamUserRole, Team, TeamCheckoutSessionRequest,
-    TeamInviteDetails, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+    PatchTeamRequest, PatchTeamUserRole, Team, TeamInviteDetails, TeamMember, TeamPlan, TeamRole,
+    TeamWithMembers,
 };
-use teams::inbound::axum_router::create_team_checkout_session::TeamCheckoutSessionResponse;
 use teams::inbound::axum_router::get_team_invites::TeamInvitesResponse as TeamTeamInvitesResponse;
 use teams::inbound::axum_router::get_user_invites::TeamInvitesResponse as UserTeamInvitesResponse;
 use teams::inbound::axum_router::{
@@ -28,6 +27,7 @@ use crate::api::user::patch_user_onboarding::PatchUserOnboardingRequest;
 use crate::api::user::post_get_names::PostGetNamesRequestBody;
 use crate::api::user::post_get_names_with_email::GetNamesWithEmailRequestBody;
 use crate::api::user::stripe::create_checkout_session::CreateCheckoutSessionRequest;
+use crate::api::user::stripe::create_checkout_session_v2::CreateCheckoutSessionV2Request;
 use crate::api::user::stripe::create_portal_session::CreatePortalSessionRequest;
 use crate::api::user::stripe::patch_subscription_tier::PatchSubscriptionTierRequest;
 use crate::api::user::stripe::{StripeProductTier, StripeSessionResponse};
@@ -100,6 +100,7 @@ use model::user::{
                 user::get_legacy_user_permissions::handler,
                 user::patch_tutorial::handler,
                 user::stripe::create_checkout_session::create_checkout_session,
+                user::stripe::create_checkout_session_v2::create_checkout_session,
                 user::stripe::create_portal_session::create_portal_session,
                 user::stripe::patch_subscription_tier::patch_subscription_tier,
 
@@ -121,13 +122,11 @@ use model::user::{
                 teams::inbound::axum_router::invite_to_team::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::get_team_invites::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::patch_team::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::patch_team_plan::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::reject_invitation::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::get_user_invites::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::get_user_teams::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::remove_user_from_team::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::delete_team_invite::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::create_team_checkout_session::handler::<crate::api::context::TeamServiceType>,
 
                 /// /referral
                 referral::inbound::axum_router::get_referral_code_handler::<crate::api::context::ReferralServiceType>,
@@ -174,6 +173,7 @@ use model::user::{
                         // Stripe
                         StripeProductTier,
                         CreateCheckoutSessionRequest,
+                        CreateCheckoutSessionV2Request,
                         CreatePortalSessionRequest,
                         PatchSubscriptionTierRequest,
                         StripeSessionResponse,
@@ -192,12 +192,9 @@ use model::user::{
                         CreateTeamRequest,
                         InviteToTeamRequest,
                         PatchTeamRequest,
-                        PatchTeamPlanRequest,
                         PatchTeamUserRole,
                         TeamTeamInvitesResponse,
                         UserTeamInvitesResponse,
-                        TeamCheckoutSessionRequest,
-                        TeamCheckoutSessionResponse,
 
                         // Mobile welcome email
                         mobile_welcome_email::SendMobileWelcomeEmailRequest,

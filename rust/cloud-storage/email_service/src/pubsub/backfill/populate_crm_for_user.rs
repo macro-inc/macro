@@ -1,5 +1,5 @@
-use crate::pubsub::backfill::populate_crm_contact::enqueue_populate_crm_contacts;
 use crate::pubsub::context::PubSubContext;
+use crate::pubsub::util::enqueue_populate_crm_contacts;
 use crm::domain::service::CrmService;
 use models_email::email::service::backfill::PopulateCrmForUserPayload;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
@@ -53,20 +53,22 @@ pub async fn populate_crm_for_user(
 
     let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
 
-    // Pull every distinct recipient address from sent messages on this link.
-    // Mirrors what backfill_message would have produced if the per-message
-    // fan-out had been running when these messages were first backfilled.
-    let recipient_emails =
-        email_db_client::contacts::get::fetch_sent_message_recipient_emails_by_link(
-            &ctx.db, link.id,
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to fetch sent-message recipients"),
-            })
-        })?;
+    // Pull every distinct recipient (email + display name) from sent
+    // messages on this link. Mirrors what backfill_message would have
+    // produced if the per-message fan-out had been running when these
+    // messages were first backfilled — including the name from
+    // email_contacts so the consumer can set crm_contacts.name without
+    // its own round-trip.
+    let recipients = email_db_client::contacts::get::fetch_sent_message_recipient_contacts_by_link(
+        &ctx.db, link.id,
+    )
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e.context("Failed to fetch sent-message recipients"),
+        })
+    })?;
 
-    enqueue_populate_crm_contacts(ctx, link.id, &self_email, recipient_emails).await
+    enqueue_populate_crm_contacts(ctx, link.id, &self_email, recipients).await
 }

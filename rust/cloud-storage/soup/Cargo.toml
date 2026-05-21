@@ -30,7 +30,7 @@ axum = [
   "models_soup/schema",
 ]
 inbound = ["email/inbound", "entity_access/inbound", "ports"]
-outbound = ["dep:readonly_pool", "dep:sqlx", "ports"]
+outbound = ["crm/outbound", "dep:readonly_pool", "dep:sqlx", "ports"]
 ports = ["dep:tokio", "frecency/ports"]
 
 
@@ -68,6 +68,7 @@ recursion = { workspace = true }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
 system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }
@@ -88,7 +89,6 @@ macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
 ordered-float = { workspace = true }
 rootcause = { workspace = true }
-serde_json = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
 

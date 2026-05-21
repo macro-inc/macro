@@ -80,11 +80,24 @@ pub enum BackfillOperation {
     // sent by the user. No-op if the user has no team or the contact's domain
     // has been opted out by the team (crm_companies.email_sync = false).
     PopulateCrmContact(LinkScopedPayload<PopulateCrmContactPayload>),
+    // Walks the CRM cascade in reverse for one (link, contact_email): drops
+    // the matching crm_contact_sources row, then crm_contacts when no other
+    // sources remain, then crm_companies when no other contacts remain.
+    // Fanned out one-per-recipient from delete_message when a sent message
+    // is deleted. Ignores the company-level email_sync killswitch so that
+    // deletions stay reflected in the CRM tables even on opted-out domains.
+    DepopulateCrmContact(LinkScopedPayload<DepopulateCrmContactPayload>),
     // Fans out PopulateCrmContact messages for every contact a user has
     // previously emailed. Resolves the user's link + team itself (bails if
     // either is missing). Triggered when a user gets added to a team so
     // their historical sent-mail recipients seed the team's CRM tables.
     PopulateCrmForUser(PopulateCrmForUserPayload),
+    // Tears down every CRM source row owned by the user's email link,
+    // plus the contact/company rows that become orphaned as a result
+    // (preserving companies with `email_sync = false`). Triggered when a
+    // user is removed from a team. Team deletion is handled separately
+    // via the `crm_companies.team_id` FK cascade in macrodb.
+    DepopulateCrmForUser(DepopulateCrmForUserPayload),
 }
 
 impl BackfillOperation {
@@ -99,7 +112,9 @@ impl BackfillOperation {
             BackfillOperation::UpdateThreadMetadata(s) => Some(s.link_id),
             BackfillOperation::BackfillAttachment(s) => Some(s.link_id),
             BackfillOperation::PopulateCrmContact(s) => Some(s.link_id),
+            BackfillOperation::DepopulateCrmContact(s) => Some(s.link_id),
             BackfillOperation::PopulateCrmForUser(_) => None,
+            BackfillOperation::DepopulateCrmForUser(_) => None,
         }
     }
 
@@ -113,9 +128,10 @@ impl BackfillOperation {
             BackfillOperation::BackfillMessage(s) => Some(s.job_id),
             BackfillOperation::UpdateThreadMetadata(s) => Some(s.job_id),
             BackfillOperation::BackfillAttachment(s) => Some(s.job_id),
-            BackfillOperation::PopulateCrmContact(_) | BackfillOperation::PopulateCrmForUser(_) => {
-                None
-            }
+            BackfillOperation::PopulateCrmContact(_)
+            | BackfillOperation::DepopulateCrmContact(_)
+            | BackfillOperation::PopulateCrmForUser(_)
+            | BackfillOperation::DepopulateCrmForUser(_) => None,
         }
     }
 }
@@ -256,9 +272,33 @@ pub struct BackfillAttachmentPayload {
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct PopulateCrmContactPayload {
     pub contact_email: String,
+    /// Display name observed for `contact_email` at producer time — the
+    /// caller copies it from the gmail message's recipient header
+    /// (`backfill_message`, `upsert_message`) or from `email_contacts.name`
+    /// (`populate_crm_for_user`). Threading it through the payload lets
+    /// the consumer skip its own `email_contacts` round-trip. `None` when
+    /// no display name was associated with the address.
+    #[serde(default)]
+    pub contact_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub struct DepopulateCrmContactPayload {
+    pub contact_email: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct PopulateCrmForUserPayload {
     pub macro_id: MacroUserIdStr<'static>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub struct DepopulateCrmForUserPayload {
+    pub macro_id: MacroUserIdStr<'static>,
+    /// Team the user was just removed from. Passed explicitly because
+    /// the consumer cannot recover this via `get_team_id_for_user` —
+    /// by the time it runs the user has already been removed from
+    /// `team_user`, so the lookup would either be empty or return a
+    /// different team if the user is on multiple.
+    pub team_id: Uuid,
 }
