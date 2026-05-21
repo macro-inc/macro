@@ -550,6 +550,38 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
+        // Disable path takes the same per-(team, domain) advisory locks
+        // populate_contact uses. Without this, a populate that already
+        // passed its killswitch check could insert a contact into a
+        // company we're about to disable. Sorted lookup gives a
+        // deterministic lock order — populates only hold one domain lock
+        // at a time, so deadlock isn't possible.
+        if !email_sync {
+            let domains = sqlx::query_scalar!(
+                r#"
+                SELECT LOWER(domain)
+                FROM crm_domains
+                WHERE company_id = $1 AND team_id = $2
+                ORDER BY LOWER(domain) ASC
+                "#,
+                company_id,
+                team_id,
+            )
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+            for domain in domains.into_iter().flatten() {
+                sqlx::query!(
+                    r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))"#,
+                    format!("{team_id}:{domain}"),
+                )
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            }
+        }
+
         // Scoping UPDATE on both id AND team_id rejects cross-team callers as NotFound.
         let updated = sqlx::query_scalar!(
             r#"
@@ -567,9 +599,6 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         if updated.is_none() {
-            tx.rollback()
-                .await
-                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
             return Err(CrmError::CompanyNotFoundForTeam);
         }
 

@@ -14,7 +14,7 @@ axum = [
   "entity_access/inbound",
   "entity_access/ports",
 ]
-default = ["axum", "inbound", "outbound", "ports"]
+default = ["inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
 outbound = ["dep:sqlx", "dep:unfurl", "ports"]
 ports = []

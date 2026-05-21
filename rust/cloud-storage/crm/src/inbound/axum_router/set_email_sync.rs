@@ -1,6 +1,7 @@
 use axum::{
     Json,
     extract::{Path, State},
+    http::StatusCode,
 };
 use entity_access::{
     domain::{models::AdminTeamRole, ports::EntityAccessService},
@@ -18,11 +19,14 @@ use super::CrmRouterState;
 /// Request body for `PUT /companies/{company_id}/email-sync`.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SetEmailSyncRequest {
-    /// New value for `crm_companies.email_sync`. `false` cascades to contacts.
+    /// New value for `crm_companies.email_sync`. Setting to `false`
+    /// permanently deletes the company's CRM contacts and contact sources.
     pub email_sync: bool,
 }
 
-/// Toggle `email_sync` on a CRM company. False means emails aren't shared amongst the team
+/// Toggle `email_sync` on a CRM company. `false` disables CRM email
+/// sharing for the company and permanently removes its existing CRM
+/// contacts and contact sources.
 #[utoipa::path(
     put,
     path = "/crm/companies/{company_id}/email-sync",
@@ -32,7 +36,7 @@ pub struct SetEmailSyncRequest {
     ),
     request_body = SetEmailSyncRequest,
     responses(
-        (status = 200),
+        (status = 204),
         (status = 401, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
@@ -44,12 +48,13 @@ pub async fn handler<C: CrmService, Eas: EntityAccessService>(
     State(state): State<CrmRouterState<C, Eas>>,
     Path(company_id): Path<Uuid>,
     Json(req): Json<SetEmailSyncRequest>,
-) -> Result<(), CrmError> {
+) -> Result<StatusCode, CrmError> {
     let team_id =
         macro_uuid::string_to_uuid(&access.entity_access_receipt.entity().entity_id).unwrap();
 
     state
         .service
         .set_email_sync(&team_id, &company_id, req.email_sync)
-        .await
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }

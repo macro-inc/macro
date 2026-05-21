@@ -293,3 +293,30 @@ async fn set_email_sync_isolates_companies_across_teams(pool: PgPool) -> anyhow:
     assert_eq!(count_sources_for_company(&pool, company_a).await?, 1);
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_email_sync_disable_handles_multi_domain_company(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id =
+        insert_company(&pool, team_id, true, &["acme.com", "acme.io", "acme.co"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+    insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+    insert_contact_with_source(&pool, company_id, "bob@acme.io", link_id).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    repo.set_email_sync(&team_id, &company_id, false).await?;
+
+    assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(false));
+    assert_eq!(count_contacts(&pool, company_id).await?, 0);
+    assert_eq!(count_sources_for_company(&pool, company_id).await?, 0);
+    // Company + its domain rows survive the disable so future populates short-circuit.
+    let (domain_count,): (i64,) =
+        sqlx::query_as(r#"SELECT COUNT(*) FROM crm_domains WHERE company_id = $1"#)
+            .bind(company_id)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(domain_count, 3);
+    Ok(())
+}
