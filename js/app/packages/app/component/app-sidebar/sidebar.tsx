@@ -967,9 +967,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
       <Show when={!isSlim() && premiumHintVisible() && premiumCardDismissed()}>
         <div class="w-full px-2 mb-2">
           <SidebarPromoHint
-            title="Premium"
+            title="Maybe later"
             message="You can upgrade anytime from Account settings."
             onDone={() => setPremiumHintVisible(false)}
+            secondaryAction={{
+              label: 'Take me there',
+              onClick: () => openSettingsTab('Account'),
+            }}
           />
         </div>
       </Show>
