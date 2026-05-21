@@ -53,10 +53,12 @@ pub async fn delete_message(
                             .context("Failed to fetch recipients for deleted message".to_string()),
                     })
                 })?;
+        // No producer-side filtering — the crm crate decides what's
+        // depopulatable. Filtering here would create drift with the
+        // populate side, which is also unfiltered at the producer.
         recipients
             .into_iter()
             .filter_map(|(contact, _)| contact.email_address)
-            .filter(|e| !email_utils::is_generic_email(e))
             .collect()
     } else {
         Vec::new()

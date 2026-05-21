@@ -110,16 +110,17 @@ pub async fn upsert_message(
     // Snapshot `(email, name)` pairs for the CRM populate fan-out below.
     // We capture it here (before `message` is moved into
     // `process_and_insert_message`) so the consumer can write
-    // `crm_contacts.name` without a separate email_contacts lookup. The
-    // enqueue helper handles its own dedup + validation, so we keep the
-    // raw list and only drop generic addresses.
+    // `crm_contacts.name` without a separate email_contacts lookup.
+    // No producer-side filtering — the crm crate is the single source
+    // of truth for "what belongs in the CRM" (generic-provider domains,
+    // killswitched companies, etc.) and applying the same rules here
+    // would just drift over time.
     let crm_recipients: Vec<(String, Option<String>)> = if is_sent {
         message
             .to
             .iter()
             .chain(&message.cc)
             .chain(&message.bcc)
-            .filter(|c| !email_utils::is_generic_email(&c.email))
             .map(|c| (c.email.clone(), c.name.clone()))
             .collect()
     } else {
