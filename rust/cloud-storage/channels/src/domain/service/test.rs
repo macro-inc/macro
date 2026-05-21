@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::{
-    events::{ChannelEvent, ChannelNotificationEvent},
+    events::ChannelEvent,
     models::{
         ChannelAttachment, ChannelAttachmentType, ChannelInfo, ChannelMessageFilters,
         ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction, MessageAttachment,
@@ -610,9 +610,9 @@ struct FakeMessageNotification {
 }
 
 impl ChannelNotificationDispatcher for FakeNotifications {
-    fn dispatch(&self, event: ChannelNotificationEvent) {
+    fn dispatch(&self, event: ChannelEvent) {
         match event {
-            ChannelNotificationEvent::MessagePosted {
+            ChannelEvent::MessagePosted {
                 metadata,
                 participants,
                 message,
@@ -626,9 +626,10 @@ impl ChannelNotificationDispatcher for FakeNotifications {
                     has_attachments,
                 });
             }
-            ChannelNotificationEvent::ParticipantsAdded { .. } => {
+            ChannelEvent::ParticipantsAdded { .. } => {
                 *self.invites.lock().unwrap() += 1;
             }
+            _ => {}
         }
     }
 }
@@ -747,15 +748,16 @@ impl ChannelEventDispatcher for FakeEvents {
                         fake_participant_ids(&participants),
                     );
                 }
-                self.notifications
-                    .dispatch(ChannelNotificationEvent::MessagePosted {
-                        channel_id,
-                        metadata,
-                        participants,
-                        message: message.clone(),
-                        mentions,
-                        has_attachments,
-                    });
+                self.notifications.dispatch(ChannelEvent::MessagePosted {
+                    channel_id,
+                    metadata,
+                    participants,
+                    message: message.clone(),
+                    mentions,
+                    has_attachments,
+                    attachments: Vec::new(),
+                    nonce: None,
+                });
                 self.search
                     .indexed
                     .lock()
@@ -858,8 +860,10 @@ impl ChannelEventDispatcher for FakeEvents {
                 ..
             } => {
                 self.notifications
-                    .dispatch(ChannelNotificationEvent::ParticipantsAdded {
+                    .dispatch(ChannelEvent::ParticipantsAdded {
                         channel_id,
+                        channel_type: metadata.channel_type,
+                        active_participant_user_ids: Vec::new(),
                         invited_by_user_id,
                         recipient_user_ids,
                         metadata,

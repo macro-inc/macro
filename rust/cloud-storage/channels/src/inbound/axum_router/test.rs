@@ -7,8 +7,8 @@ use crate::domain::models::{
     PostTypingRequest, RemoveParticipantsRequest,
 };
 use crate::domain::ports::{
-    ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMessagesService,
-    ChannelMutationErr, ChannelMutationsService,
+    ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMutationErr,
+    ChannelService,
 };
 use axum::{
     Extension, Router,
@@ -177,7 +177,7 @@ impl EntityAccessService for TestAccessService {
 
 struct MockService;
 
-impl ChannelMessagesService for MockService {
+impl ChannelService for MockService {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -245,7 +245,7 @@ impl ChannelMessagesService for MockService {
 
 struct ErrorService;
 
-impl ChannelMessagesService for ErrorService {
+impl ChannelService for ErrorService {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -295,7 +295,7 @@ impl ChannelMessagesService for ErrorService {
 
 struct ParticipantsService;
 
-impl ChannelMessagesService for ParticipantsService {
+impl ChannelService for ParticipantsService {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -381,7 +381,71 @@ struct RecordingMutationService {
     posts: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid, PostMessageRequest)>>>,
 }
 
-impl ChannelMutationsService for RecordingMutationService {
+impl ChannelService for RecordingMutationService {
+    async fn get_channel_messages(
+        &self,
+        _channel_id: Uuid,
+        _query: models_pagination::Query<Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
+        _limit: u16,
+        _filters: &ChannelMessageFilters,
+        _notification_user_id: Option<MacroUserIdStr<'static>>,
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
+    }
+
+    async fn get_channel_attachments(
+        &self,
+        _channel_id: Uuid,
+        _query: models_pagination::Query<Uuid, CreatedAt, ()>,
+        _limit: u16,
+        _attachment_type: Option<ChannelAttachmentType>,
+    ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
+        Ok(Vec::<ChannelAttachment>::new()
+            .into_iter()
+            .paginate_on(50, CreatedAt)
+            .filter_on(())
+            .into_page())
+    }
+
+    async fn get_channel_participants(
+        &self,
+        _channel_id: Uuid,
+    ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn get_channel_messages_around(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _limit: u16,
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
+    }
+
+    async fn get_thread_replies(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
     async fn create_channel(
         &self,
         _actor: MacroUserIdStr<'static>,
@@ -558,10 +622,9 @@ fn not_found_router() -> Router {
 async fn post_message_route_uses_entity_access_and_mutation_service() {
     let mutation_service = RecordingMutationService::default();
     let posts = mutation_service.posts.clone();
-    let router = channels_router(ChannelsRouterState::with_mutations(
-        MockService,
-        TestAccessService::allow(),
+    let router = channels_router(ChannelsRouterState::new(
         mutation_service,
+        TestAccessService::allow(),
     ))
     .layer(user_extension());
     let channel_id = Uuid::new_v4();
@@ -776,7 +839,7 @@ async fn participants_returns_500_on_service_error() {
 
 struct NotFoundService;
 
-impl ChannelMessagesService for NotFoundService {
+impl ChannelService for NotFoundService {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -839,7 +902,7 @@ struct AroundHasItemsService {
     has_more_newer: bool,
 }
 
-impl ChannelMessagesService for AroundHasItemsService {
+impl ChannelService for AroundHasItemsService {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -1039,7 +1102,7 @@ impl CapturingService {
     }
 }
 
-impl ChannelMessagesService for std::sync::Arc<CapturingService> {
+impl ChannelService for std::sync::Arc<CapturingService> {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,

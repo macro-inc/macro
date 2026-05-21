@@ -135,36 +135,3 @@ pub enum ChannelEvent {
         active_participant_user_ids: Vec<MacroUserIdStr<'static>>,
     },
 }
-
-/// Notification-oriented events emitted by channel mutations.
-#[derive(Debug, Clone)]
-pub enum ChannelNotificationEvent {
-    /// A message was posted and may fan out notifications depending on channel state.
-    MessagePosted {
-        /// Channel containing the message.
-        channel_id: Uuid,
-        /// Resolved channel metadata for notification copy.
-        metadata: ChannelMetadata,
-        /// Active channel participants at publish time.
-        participants: Vec<ChannelParticipant>,
-        /// Persisted message payload.
-        message: MutatedMessage,
-        /// Mentions attached to the message.
-        mentions: Vec<SimpleMention>,
-        /// Whether the message contains attachments.
-        has_attachments: bool,
-    },
-    /// Participants were explicitly added to a channel.
-    ParticipantsAdded {
-        /// Channel receiving new participants.
-        channel_id: Uuid,
-        /// User who initiated the add.
-        invited_by_user_id: MacroUserIdStr<'static>,
-        /// Newly added recipients.
-        recipient_user_ids: Vec<MacroUserIdStr<'static>>,
-        /// Resolved channel metadata for notification copy.
-        metadata: ChannelMetadata,
-        /// Optional message content associated with the invite.
-        message_content: Option<String>,
-    },
-}

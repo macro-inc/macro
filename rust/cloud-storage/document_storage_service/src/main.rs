@@ -607,11 +607,7 @@ async fn main() -> anyhow::Result<()> {
                 documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
             ),
         },
-        channels_state: ChannelsRouterState::with_mutations(
-            channels_service.clone(),
-            (*entity_access_service).clone(),
-            channels_service,
-        ),
+        channels_state: ChannelsRouterState::new(channels_service, (*entity_access_service).clone()),
         call_state,
         call_webhook_state,
         call_internal_state,

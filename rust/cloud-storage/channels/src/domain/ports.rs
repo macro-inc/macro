@@ -1,4 +1,4 @@
-use crate::domain::events::{ChannelEvent, ChannelNotificationEvent};
+use crate::domain::events::ChannelEvent;
 use crate::domain::models::{
     AddParticipantsRequest, ChannelAttachment, ChannelAttachmentType, ChannelInfo,
     ChannelMessageFilters, ChannelMetadata, ChannelParticipant, CountedReaction,
@@ -295,8 +295,8 @@ pub trait ChannelRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<CountedReaction>, Self::Err>> + Send;
 }
 
-/// Service for fetching paginated channel messages.
-pub trait ChannelMessagesService: Send + Sync + 'static {
+/// Service for channel reads and mutations.
+pub trait ChannelService: Send + Sync + 'static {
     /// Fetch a page of channel messages with thread previews, reactions, and attachments.
     ///
     /// `notification_user_id` is used only when `filters.notification_filters` is non-empty.
@@ -354,6 +354,202 @@ pub trait ChannelMessagesService: Send + Sync + 'static {
         let _ = channel_id;
         async move { Err(ChannelMessagesErr::MessageNotFound(message_id)) }
     }
+
+    // Channel mutation operations.
+
+    /// Create a channel.
+    fn create_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _actor_org_id: Option<i64>,
+        _req: CreateChannelRequest,
+    ) -> impl Future<Output = Result<CreateChannelResponse, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Get or create a direct message channel.
+    fn get_or_create_dm(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _req: GetOrCreateDmRequest,
+    ) -> impl Future<Output = Result<GetOrCreateChannelResponse, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Get or create a private channel.
+    fn get_or_create_private(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _req: GetOrCreatePrivateRequest,
+    ) -> impl Future<Output = Result<GetOrCreateChannelResponse, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Patch a channel.
+    fn patch_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _req: PatchChannelRequest,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Delete a channel.
+    fn delete_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Send a message.
+    fn post_message(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _req: PostMessageRequest,
+    ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Patch a message.
+    fn patch_message(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _actor_role: super::models::ParticipantRole,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _req: PatchMessageRequest,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Delete a message.
+    fn delete_message(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _actor_role: super::models::ParticipantRole,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _query: DeleteMessageQuery,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Mutate a reaction.
+    fn post_reaction(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _req: PostReactionRequest,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Emit a typing update.
+    fn post_typing(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _req: PostTypingRequest,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Add participants to a channel.
+    fn add_participants(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _req: AddParticipantsRequest,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Remove participants from a channel.
+    fn remove_participants(
+        &self,
+        _channel_id: Uuid,
+        _req: RemoveParticipantsRequest,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Join a channel.
+    fn join_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Leave a channel.
+    fn leave_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
 }
 
 /// A paginated page of channel messages.
@@ -406,10 +602,10 @@ pub trait ChannelRealtimeGateway: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
-/// Dispatcher for notification-related channel events.
+/// Dispatcher for notification-related channel side effects.
 pub trait ChannelNotificationDispatcher: Send + Sync + 'static {
-    /// Fire-and-forget dispatch of a notification event.
-    fn dispatch(&self, event: ChannelNotificationEvent);
+    /// Fire-and-forget dispatch of a channel event to the notification adapter.
+    fn dispatch(&self, event: ChannelEvent);
 }
 
 /// Dispatcher for channel side effects emitted after durable state changes.
@@ -455,119 +651,6 @@ pub trait ChannelSharePermissionService: Send + Sync + 'static {
         channel_id: Uuid,
         items: Vec<(String, String)>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-}
-
-/// Service for mutating channel state.
-pub trait ChannelMutationsService: Send + Sync + 'static {
-    /// Create a channel.
-    fn create_channel(
-        &self,
-        actor: MacroUserIdStr<'static>,
-        actor_org_id: Option<i64>,
-        req: CreateChannelRequest,
-    ) -> impl Future<Output = Result<CreateChannelResponse, ChannelMutationErr>> + Send;
-
-    /// Get or create a direct message channel.
-    fn get_or_create_dm(
-        &self,
-        actor: MacroUserIdStr<'static>,
-        req: GetOrCreateDmRequest,
-    ) -> impl Future<Output = Result<GetOrCreateChannelResponse, ChannelMutationErr>> + Send;
-
-    /// Get or create a private channel.
-    fn get_or_create_private(
-        &self,
-        actor: MacroUserIdStr<'static>,
-        req: GetOrCreatePrivateRequest,
-    ) -> impl Future<Output = Result<GetOrCreateChannelResponse, ChannelMutationErr>> + Send;
-
-    /// Patch a channel.
-    fn patch_channel(
-        &self,
-        actor: MacroUserIdStr<'static>,
-        channel_id: Uuid,
-        req: PatchChannelRequest,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
-
-    /// Delete a channel.
-    fn delete_channel(
-        &self,
-        actor: MacroUserIdStr<'static>,
-        channel_id: Uuid,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
-
-    /// Send a message.
-    fn post_message(
-        &self,
-        actor: MacroUserIdStr<'static>,
-        channel_id: Uuid,
-        req: PostMessageRequest,
-    ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send;
-
-    /// Patch a message.
-    fn patch_message(
-        &self,
-        actor: MacroUserIdStr<'static>,
-        actor_role: super::models::ParticipantRole,
-        channel_id: Uuid,
-        message_id: Uuid,
-        req: PatchMessageRequest,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
-
-    /// Delete a message.
-    fn delete_message(
-        &self,
-        actor: MacroUserIdStr<'static>,
-        actor_role: super::models::ParticipantRole,
-        channel_id: Uuid,
-        message_id: Uuid,
-        query: DeleteMessageQuery,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
-
-    /// Mutate a reaction.
-    fn post_reaction(
-        &self,
-        actor: MacroUserIdStr<'static>,
-        channel_id: Uuid,
-        req: PostReactionRequest,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
-
-    /// Emit a typing update.
-    fn post_typing(
-        &self,
-        actor: MacroUserIdStr<'static>,
-        channel_id: Uuid,
-        req: PostTypingRequest,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
-
-    /// Add participants to a channel.
-    fn add_participants(
-        &self,
-        actor: MacroUserIdStr<'static>,
-        channel_id: Uuid,
-        req: AddParticipantsRequest,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
-
-    /// Remove participants from a channel.
-    fn remove_participants(
-        &self,
-        channel_id: Uuid,
-        req: RemoveParticipantsRequest,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
-
-    /// Join a channel.
-    fn join_channel(
-        &self,
-        actor: MacroUserIdStr<'static>,
-        channel_id: Uuid,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
-
-    /// Leave a channel.
-    fn leave_channel(
-        &self,
-        actor: MacroUserIdStr<'static>,
-        channel_id: Uuid,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
 }
 
 /// Errors that can occur while mutating channels.

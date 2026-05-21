@@ -208,8 +208,7 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
 >;
 
 /// Type alias for the channels router state.
-pub(crate) type DssChannelsState =
-    ChannelsRouterState<DssChannelService, EntityAccessService, DssChannelService>;
+pub(crate) type DssChannelsState = ChannelsRouterState<DssChannelService, EntityAccessService>;
 
 /// Type alias for the call connection service.
 pub(crate) type CallConnectionService =

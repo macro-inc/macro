@@ -1,7 +1,7 @@
 //! Outbound adapters for channel mutations.
 
 use crate::domain::{
-    events::{ChannelEvent, ChannelNotificationEvent},
+    events::ChannelEvent,
     models::{
         ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction, MutatedAttachment,
         MutatedMessage, SimpleMention, TypingAction,
@@ -270,6 +270,9 @@ async fn dispatch_channel_event<G, N, S, C>(
     C: ChannelContactsDispatcher,
 {
     let contact_sync_users = contact_sync_users_for_event(&event);
+    if should_dispatch_notification(&event) {
+        notifications.dispatch(event.clone());
+    }
 
     match event {
         ChannelEvent::ChannelCreated { .. } => {}
@@ -278,13 +281,11 @@ async fn dispatch_channel_event<G, N, S, C>(
         }
         ChannelEvent::MessagePosted {
             channel_id,
-            metadata,
             participants,
             message,
-            mentions,
-            has_attachments,
             attachments,
             nonce,
+            ..
         } => {
             send_realtime(
                 realtime,
@@ -314,14 +315,6 @@ async fn dispatch_channel_event<G, N, S, C>(
                 .await;
             }
 
-            notifications.dispatch(ChannelNotificationEvent::MessagePosted {
-                channel_id,
-                metadata,
-                participants,
-                message: message.clone(),
-                mentions,
-                has_attachments,
-            });
             search.index_message(channel_id, message.id).await;
         }
         ChannelEvent::AttachmentsChanged {
@@ -430,22 +423,7 @@ async fn dispatch_channel_event<G, N, S, C>(
             )
             .await;
         }
-        ChannelEvent::ParticipantsAdded {
-            channel_id,
-            invited_by_user_id,
-            recipient_user_ids,
-            metadata,
-            message_content,
-            ..
-        } => {
-            notifications.dispatch(ChannelNotificationEvent::ParticipantsAdded {
-                channel_id,
-                invited_by_user_id,
-                recipient_user_ids,
-                metadata,
-                message_content,
-            });
-        }
+        ChannelEvent::ParticipantsAdded { .. } => {}
         ChannelEvent::ParticipantJoined { .. } => {}
     }
 
@@ -455,6 +433,13 @@ async fn dispatch_channel_event<G, N, S, C>(
             tracing::error!(error=?err, "unable to enqueue channel contact sync");
         }
     }
+}
+
+fn should_dispatch_notification(event: &ChannelEvent) -> bool {
+    matches!(
+        event,
+        ChannelEvent::MessagePosted { .. } | ChannelEvent::ParticipantsAdded { .. }
+    )
 }
 
 fn contact_sync_users_for_event(event: &ChannelEvent) -> Option<HashSet<MacroUserIdStr<'static>>> {
@@ -823,15 +808,16 @@ impl<I> NotificationChannelDispatcher<I>
 where
     I: NotificationIngress + 'static,
 {
-    async fn dispatch_event(&self, event: ChannelNotificationEvent) -> anyhow::Result<()> {
+    async fn dispatch_event(&self, event: ChannelEvent) -> anyhow::Result<()> {
         match event {
-            ChannelNotificationEvent::MessagePosted {
+            ChannelEvent::MessagePosted {
                 channel_id,
                 metadata,
                 participants,
                 message,
                 mentions,
                 has_attachments,
+                ..
             } => {
                 self.dispatch_message_posted(
                     channel_id,
@@ -843,12 +829,13 @@ where
                 )
                 .await
             }
-            ChannelNotificationEvent::ParticipantsAdded {
+            ChannelEvent::ParticipantsAdded {
                 channel_id,
                 invited_by_user_id,
                 recipient_user_ids,
                 metadata,
                 message_content,
+                ..
             } => {
                 self.dispatch_participants_added(
                     channel_id,
@@ -859,6 +846,7 @@ where
                 )
                 .await
             }
+            _ => Ok(()),
         }
     }
 
@@ -1260,7 +1248,7 @@ impl<I> ChannelNotificationDispatcher for NotificationChannelDispatcher<I>
 where
     I: NotificationIngress + 'static,
 {
-    fn dispatch(&self, event: ChannelNotificationEvent) {
+    fn dispatch(&self, event: ChannelEvent) {
         let this = Self {
             pool: self.pool.clone(),
             ingress: self.ingress.clone(),

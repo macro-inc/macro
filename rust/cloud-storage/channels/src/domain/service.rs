@@ -11,8 +11,8 @@ use crate::domain::{
     },
     ports::{
         ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr,
-        ChannelMessagesQueryResult, ChannelMessagesService, ChannelMutationErr,
-        ChannelMutationsService, ChannelRepo, ChannelSharePermissionService,
+        ChannelMessagesQueryResult, ChannelMutationErr, ChannelRepo, ChannelService,
+        ChannelSharePermissionService,
     },
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -229,164 +229,7 @@ fn created_channel_participant_ids(
     parse_user_ids(users)
 }
 
-/// Mutation service used by read-only router states.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct NoopChannelMutationsService;
-impl ChannelMutationsService for NoopChannelMutationsService {
-    async fn create_channel(
-        &self,
-        _actor: MacroUserIdStr<'static>,
-        _actor_org_id: Option<i64>,
-        _req: crate::domain::models::CreateChannelRequest,
-    ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
-        Err(ChannelMutationErr::NotFound(
-            "channel mutations are not configured".to_string(),
-        ))
-    }
-
-    async fn get_or_create_dm(
-        &self,
-        _actor: MacroUserIdStr<'static>,
-        _req: GetOrCreateDmRequest,
-    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
-        Err(ChannelMutationErr::NotFound(
-            "channel mutations are not configured".to_string(),
-        ))
-    }
-
-    async fn get_or_create_private(
-        &self,
-        _actor: MacroUserIdStr<'static>,
-        _req: GetOrCreatePrivateRequest,
-    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
-        Err(ChannelMutationErr::NotFound(
-            "channel mutations are not configured".to_string(),
-        ))
-    }
-
-    async fn patch_channel(
-        &self,
-        _actor: MacroUserIdStr<'static>,
-        _channel_id: Uuid,
-        _req: PatchChannelRequest,
-    ) -> Result<(), ChannelMutationErr> {
-        Err(ChannelMutationErr::NotFound(
-            "channel mutations are not configured".to_string(),
-        ))
-    }
-
-    async fn delete_channel(
-        &self,
-        _actor: MacroUserIdStr<'static>,
-        _channel_id: Uuid,
-    ) -> Result<(), ChannelMutationErr> {
-        Err(ChannelMutationErr::NotFound(
-            "channel mutations are not configured".to_string(),
-        ))
-    }
-
-    async fn post_message(
-        &self,
-        _actor: MacroUserIdStr<'static>,
-        _channel_id: Uuid,
-        _req: PostMessageRequest,
-    ) -> Result<PostMessageResponse, ChannelMutationErr> {
-        Err(ChannelMutationErr::NotFound(
-            "channel mutations are not configured".to_string(),
-        ))
-    }
-
-    async fn patch_message(
-        &self,
-        _actor: MacroUserIdStr<'static>,
-        _actor_role: ParticipantRole,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-        _req: PatchMessageRequest,
-    ) -> Result<(), ChannelMutationErr> {
-        Err(ChannelMutationErr::NotFound(
-            "channel mutations are not configured".to_string(),
-        ))
-    }
-
-    async fn delete_message(
-        &self,
-        _actor: MacroUserIdStr<'static>,
-        _actor_role: ParticipantRole,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-        _query: DeleteMessageQuery,
-    ) -> Result<(), ChannelMutationErr> {
-        Err(ChannelMutationErr::NotFound(
-            "channel mutations are not configured".to_string(),
-        ))
-    }
-
-    async fn post_reaction(
-        &self,
-        _actor: MacroUserIdStr<'static>,
-        _channel_id: Uuid,
-        _req: PostReactionRequest,
-    ) -> Result<(), ChannelMutationErr> {
-        Err(ChannelMutationErr::NotFound(
-            "channel mutations are not configured".to_string(),
-        ))
-    }
-
-    async fn post_typing(
-        &self,
-        _actor: MacroUserIdStr<'static>,
-        _channel_id: Uuid,
-        _req: PostTypingRequest,
-    ) -> Result<(), ChannelMutationErr> {
-        Err(ChannelMutationErr::NotFound(
-            "channel mutations are not configured".to_string(),
-        ))
-    }
-
-    async fn add_participants(
-        &self,
-        _actor: MacroUserIdStr<'static>,
-        _channel_id: Uuid,
-        _req: AddParticipantsRequest,
-    ) -> Result<(), ChannelMutationErr> {
-        Err(ChannelMutationErr::NotFound(
-            "channel mutations are not configured".to_string(),
-        ))
-    }
-
-    async fn remove_participants(
-        &self,
-        _channel_id: Uuid,
-        _req: RemoveParticipantsRequest,
-    ) -> Result<(), ChannelMutationErr> {
-        Err(ChannelMutationErr::NotFound(
-            "channel mutations are not configured".to_string(),
-        ))
-    }
-
-    async fn join_channel(
-        &self,
-        _actor: MacroUserIdStr<'static>,
-        _channel_id: Uuid,
-    ) -> Result<(), ChannelMutationErr> {
-        Err(ChannelMutationErr::NotFound(
-            "channel mutations are not configured".to_string(),
-        ))
-    }
-
-    async fn leave_channel(
-        &self,
-        _actor: MacroUserIdStr<'static>,
-        _channel_id: Uuid,
-    ) -> Result<(), ChannelMutationErr> {
-        Err(ChannelMutationErr::NotFound(
-            "channel mutations are not configured".to_string(),
-        ))
-    }
-}
-
-impl<R, E, P> ChannelMutationsService for ChannelServiceImpl<R, E, P>
+impl<R, E, P> ChannelServiceImpl<R, E, P>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
@@ -1263,7 +1106,7 @@ fn center_window(
     }
 }
 
-impl<R, E, P> ChannelMessagesService for ChannelServiceImpl<R, E, P>
+impl<R, E, P> ChannelService for ChannelServiceImpl<R, E, P>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
@@ -1461,5 +1304,131 @@ where
             .await
             .map_err(anyhow::Error::from)?
             .ok_or(ChannelMessagesErr::MessageNotFound(message_id))
+    }
+
+    async fn create_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        actor_org_id: Option<i64>,
+        req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
+        ChannelServiceImpl::create_channel(self, actor, actor_org_id, req).await
+    }
+
+    async fn get_or_create_dm(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        req: GetOrCreateDmRequest,
+    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
+        ChannelServiceImpl::get_or_create_dm(self, actor, req).await
+    }
+
+    async fn get_or_create_private(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        req: GetOrCreatePrivateRequest,
+    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
+        ChannelServiceImpl::get_or_create_private(self, actor, req).await
+    }
+
+    async fn patch_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: PatchChannelRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        ChannelServiceImpl::patch_channel(self, actor, channel_id, req).await
+    }
+
+    async fn delete_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        ChannelServiceImpl::delete_channel(self, actor, channel_id).await
+    }
+
+    async fn post_message(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: PostMessageRequest,
+    ) -> Result<PostMessageResponse, ChannelMutationErr> {
+        ChannelServiceImpl::post_message(self, actor, channel_id, req).await
+    }
+
+    async fn patch_message(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        actor_role: ParticipantRole,
+        channel_id: Uuid,
+        message_id: Uuid,
+        req: PatchMessageRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        ChannelServiceImpl::patch_message(self, actor, actor_role, channel_id, message_id, req)
+            .await
+    }
+
+    async fn delete_message(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        actor_role: ParticipantRole,
+        channel_id: Uuid,
+        message_id: Uuid,
+        query: DeleteMessageQuery,
+    ) -> Result<(), ChannelMutationErr> {
+        ChannelServiceImpl::delete_message(self, actor, actor_role, channel_id, message_id, query)
+            .await
+    }
+
+    async fn post_reaction(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: PostReactionRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        ChannelServiceImpl::post_reaction(self, actor, channel_id, req).await
+    }
+
+    async fn post_typing(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: PostTypingRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        ChannelServiceImpl::post_typing(self, actor, channel_id, req).await
+    }
+
+    async fn add_participants(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: AddParticipantsRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        ChannelServiceImpl::add_participants(self, actor, channel_id, req).await
+    }
+
+    async fn remove_participants(
+        &self,
+        channel_id: Uuid,
+        req: RemoveParticipantsRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        ChannelServiceImpl::remove_participants(self, channel_id, req).await
+    }
+
+    async fn join_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        ChannelServiceImpl::join_channel(self, actor, channel_id).await
+    }
+
+    async fn leave_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        ChannelServiceImpl::leave_channel(self, actor, channel_id).await
     }
 }
