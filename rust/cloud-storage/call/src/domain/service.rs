@@ -20,7 +20,7 @@ use notification::domain::models::{
 use notification::domain::ports::VoipPushSender;
 use notification::domain::service::NotificationIngress;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use uuid::Uuid;
 
@@ -28,26 +28,14 @@ use crate::domain::models::{EditCallRecordRequest, EditCallTranscriptRequest};
 
 use super::models::{
     AddParticipantError, CallActiveResponse, CallError, CallRecord, CallRecordTranscriptSegment,
-    CallTokenResponse, EgressS3Config, GetBatchCallRecordPreviewRequest,
-    GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, LeaveCallResponse,
-    TranscriptSegmentRequest,
+    CallTokenResponse, CallTranscriptCustomSpeakerResult, EgressS3Config, EnrichedCallTranscript,
+    GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
+    LeaveCallResponse, TranscriptSegmentRequest,
 };
 use super::ports::{
     CallRecordQueryService, CallRepository, CallRtcClient, CallSearchIndexer, CallService,
     CallSummarizer, NoOpCallSearchIndexer, NoOpVoiceRepository, RecordingStorage, VoiceRepository,
 };
-
-/// Cosine distance threshold used by the post-archive voice matcher when
-/// resolving a transcript's `voice_id` to an enrolled macro user.
-///
-/// pgvector exposes cosine *distance* via `<=>` (range 0.0–2.0; 0.0 ≈
-/// identical, 1.0 ≈ orthogonal). Resemblyzer's docs report ~0.75 cosine
-/// *similarity* for same-speaker pairs, which corresponds to ~0.25
-/// cosine distance — that's our starting point. Lower = stricter (fewer
-/// false matches, more missed matches); higher = looser. Tune with real
-/// enrollment data; consider promoting to per-tenant config once we have
-/// signal on false-positive vs miss rates.
-pub const VOICE_MATCH_DISTANCE_THRESHOLD: f32 = 0.25;
 
 /// The concrete call service implementation.
 pub struct CallServiceImpl<
@@ -1167,8 +1155,15 @@ impl<
             return Ok(());
         };
 
-        // Load the finalized call record. May race with deletion, in which
-        // case there's nothing to summarize — log and move on.
+        if let Err(e) = generate_and_persist_custom_speakers(&self.repo, summarizer, call_id).await
+        {
+            tracing::error!(error=?e, %call_id, "failed to generate custom speakers before summarization");
+        }
+
+        // Load the finalized call record after the custom-speaker step so the
+        // summary prompt sees any newly persisted speaker overrides. May race
+        // with deletion, in which case there's nothing to summarize — log and
+        // move on.
         let Some(record) = self
             .repo
             .get_call_record_by_call_id(call_id)
@@ -1288,6 +1283,11 @@ impl<
         };
         let repo = self.repo.clone();
         tokio::spawn(async move {
+            if let Err(e) = generate_and_persist_custom_speakers(&repo, &summarizer, &call_id).await
+            {
+                tracing::error!(error=?e, %call_id, "failed to generate custom speakers before summarization");
+            }
+
             let record = match repo.get_call_record_by_call_id(&call_id).await {
                 Ok(Some(record)) => record,
                 Ok(None) => {
@@ -1352,28 +1352,70 @@ impl<
         });
     }
 
-    /// Fire-and-forget spawn of finished-call voice processing.
+    /// Fire-and-forget spawn of finished-call voice enrollment.
     ///
     /// Called from `process_webhook_event` immediately after `archive_call`
-    /// finalizes the `call_records` row. First, voice ids for consistently
-    /// diarized speakers are enrolled for the users who spoke them; then the
-    /// regular voice matcher can use both pre-existing and newly-enrolled
-    /// voices to populate speaker overrides. Errors are logged inside the
-    /// spawned task.
+    /// finalizes the `call_records` row. Voice ids for consistently diarized
+    /// speakers are enrolled for the users who spoke them. This intentionally
+    /// does not populate `custom_speaker`; AI speaker attribution is handled
+    /// separately before summarization.
     fn spawn_process_voices_for_call(&self, call_record_id: Uuid) {
         let repo = self.repo.clone();
         let voice_repo = self.voice_repo.clone();
         tokio::spawn(async move {
             enroll_stable_speaker_voices_for_call_record(&repo, &voice_repo, call_record_id).await;
-            match_voices_for_call_record(
-                &repo,
-                &voice_repo,
-                call_record_id,
-                VOICE_MATCH_DISTANCE_THRESHOLD,
-            )
-            .await;
         });
     }
+}
+
+async fn generate_and_persist_custom_speakers<R, Sm>(
+    repo: &R,
+    summarizer: &Sm,
+    call_record_id: &Uuid,
+) -> anyhow::Result<()>
+where
+    R: CallRepository,
+    Sm: CallSummarizer,
+{
+    let transcripts = repo
+        .get_enhanced_call_record_transcripts(call_record_id)
+        .await
+        .map_err(Into::into)?;
+    if transcripts.is_empty() {
+        tracing::info!(%call_record_id, "call has empty archived transcript; skipping custom speaker generation");
+        return Ok(());
+    }
+
+    let candidate_speakers = repo
+        .get_call_participants_with_team_members(call_record_id)
+        .await
+        .map_err(Into::into)?;
+    if candidate_speakers.is_empty() {
+        tracing::info!(%call_record_id, "call has no candidate speakers; skipping custom speaker generation");
+        return Ok(());
+    }
+
+    let assignments = summarizer
+        .generate_custom_speakers(transcripts, candidate_speakers)
+        .await
+        .map_err(Into::into)?;
+    if assignments.is_empty() {
+        tracing::info!(%call_record_id, "custom speaker generation returned no assignments");
+        return Ok(());
+    }
+
+    let num_assignments = assignments.len();
+    repo.overwrite_custom_speakers(
+        assignments
+            .into_iter()
+            .map(|result| (result.call_transcript_id, result.custom_speaker))
+            .collect(),
+    )
+    .await
+    .map_err(Into::into)?;
+
+    tracing::info!(%call_record_id, num_assignments, "persisted generated custom speaker assignments");
+    Ok(())
 }
 
 /// Enroll stable speaker voice ids observed in a freshly archived call.
@@ -1424,98 +1466,6 @@ async fn enroll_stable_speaker_voices_for_call_record<R: CallRepository, Vr: Voi
     );
 }
 
-/// Match the voice ids on a freshly archived call to enrolled users and
-/// populate `custom_speaker` for the matched diarized speakers.
-///
-/// Pulls the distinct `(diarized_speaker_id, voice_id)` pairs from the
-/// call's transcripts, resolves each `voice_id` to a macro user via
-/// the voice repository's nearest-neighbour lookup, then writes eligible
-/// assignments back via [`CallRepository::patch_call_transcript_speakers_from_voice_match`]
-/// (which only fills `custom_speaker` rows that are still `NULL` and whose
-/// matched user shares a team with at least one participant, so manual
-/// corrections are preserved and cross-team matches are ignored).
-async fn match_voices_for_call_record<R: CallRepository, Vr: VoiceRepository>(
-    repo: &R,
-    voice_repo: &Vr,
-    call_record_id: Uuid,
-    distance_threshold: f32,
-) {
-    let pairs = match repo
-        .get_distinct_voice_speakers_for_call_record(&call_record_id)
-        .await
-    {
-        Ok(p) => p,
-        Err(e) => {
-            tracing::error!(
-                error=?e, %call_record_id,
-                "failed to load voice/speaker pairs for matching"
-            );
-            return;
-        }
-    };
-
-    if pairs.is_empty() {
-        return;
-    }
-
-    let total = pairs.len();
-    let mut raw_assignments: Vec<(String, Uuid)> = Vec::new();
-    for (diarized_speaker_id, voice_id) in pairs {
-        match voice_repo
-            .find_nearest_user_for_voice(&voice_id, distance_threshold)
-            .await
-        {
-            Ok(Some(user_id)) => raw_assignments.push((diarized_speaker_id, user_id)),
-            Ok(None) => {}
-            Err(e) => tracing::error!(
-                error=?e, %call_record_id, %voice_id,
-                "voice match lookup failed; skipping speaker"
-            ),
-        }
-    }
-
-    // The same diarized_speaker_id can appear with multiple voice_ids, each
-    // potentially resolving to a different user. The patch query joins only on
-    // diarized_speaker_id, so collapse to one winner per speaker — most-frequent
-    // user wins, ties broken by earliest appearance for determinism.
-    let mut tally: HashMap<(String, Uuid), (usize, usize)> = HashMap::new();
-    for (idx, (speaker, user)) in raw_assignments.iter().enumerate() {
-        tally.entry((speaker.clone(), *user)).or_insert((0, idx)).0 += 1;
-    }
-    let mut winners: HashMap<String, (Uuid, usize, usize)> = HashMap::new();
-    for ((speaker, user), (count, first_idx)) in tally {
-        let replace = winners
-            .get(&speaker)
-            .is_none_or(|(_, cur_count, cur_first)| {
-                count > *cur_count || (count == *cur_count && first_idx < *cur_first)
-            });
-        if replace {
-            winners.insert(speaker, (user, count, first_idx));
-        }
-    }
-    let assignments: Vec<(String, Uuid)> = winners
-        .into_iter()
-        .map(|(speaker, (user, _, _))| (speaker, user))
-        .collect();
-
-    let matched = assignments.len();
-    if let Err(e) = repo
-        .patch_call_transcript_speakers_from_voice_match(&call_record_id, &assignments)
-        .await
-    {
-        tracing::error!(
-            error=?e, %call_record_id,
-            "failed to persist voice-matched speakers"
-        );
-        return;
-    }
-
-    tracing::info!(
-        %call_record_id, matched, total,
-        "voice match completed"
-    );
-}
-
 /// Extract the recording key from a full S3 URL.
 ///
 /// Given `https://bucket.s3.amazonaws.com/calls/UUID/TIMESTAMP.mp4`,
@@ -1562,6 +1512,16 @@ impl CallSummarizer for NoopCallSummarizer {
     ) -> Result<Option<String>, Self::Err> {
         unreachable!(
             "NoopCallSummarizer::generate_call_name invoked; it exists only as a type placeholder when the optional summarizer is None"
+        )
+    }
+
+    async fn generate_custom_speakers(
+        &self,
+        _transcript: Vec<EnrichedCallTranscript>,
+        _candidate_speakers: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<Vec<CallTranscriptCustomSpeakerResult>, Self::Err> {
+        unreachable!(
+            "NoopCallSummarizer::generate_custom_speakers invoked; it exists only as a type placeholder when the optional summarizer is None"
         )
     }
 }

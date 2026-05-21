@@ -6,7 +6,7 @@ import { $getRoot, type LexicalEditor, type UpdateListener } from 'lexical';
 
 const DEFAULT_DEBOUNCE_TIME = 300;
 
-export type UserPromptPluginProps = {
+type UserPromptPluginProps = {
   documentId: string;
   debounceTime?: number;
   storageKey?: string;

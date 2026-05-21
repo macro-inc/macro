@@ -35,7 +35,7 @@ export function isFileSizeReasonable(file: File): boolean {
 /**
  * Estimate conversion time based on file size
  */
-export function estimateConversionTime(fileSizeBytes: number): number {
+function _estimateConversionTime(fileSizeBytes: number): number {
   // Rough estimate: 1MB = 1 second on average hardware
   const sizeInMB = fileSizeBytes / (1024 * 1024);
   return Math.ceil(sizeInMB * 1000); // Return in milliseconds
@@ -44,7 +44,7 @@ export function estimateConversionTime(fileSizeBytes: number): number {
 /**
  * Create optimized canvas context options based on use case
  */
-export function getOptimizedCanvasOptions(willReadPixels: boolean = false) {
+function _getOptimizedCanvasOptions(willReadPixels: boolean = false) {
   return {
     willReadFrequently: willReadPixels,
     alpha: true,

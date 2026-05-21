@@ -2,7 +2,6 @@ import type { ResultError } from '@core/util/result';
 
 import { platformFetch } from 'core/util/platformFetch';
 import { err, ok, type Result } from 'neverthrow';
-import type { DocumentMetadata } from '../generated/schemas/documentMetadata';
 import type { StorageError } from './storageError';
 
 export async function fetchBinary(
@@ -64,8 +63,3 @@ export async function fetchBinary<T extends ArrayBuffer | Blob>(
     }
   }
 }
-
-export type BinaryFile = {
-  blob: Blob;
-  metadata: DocumentMetadata;
-};

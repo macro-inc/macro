@@ -16,15 +16,15 @@ import type {
 
 const scheduledActionHost: string = SERVER_HOSTS['scheduled-action'];
 
-export function scheduledActionFetch(
+function scheduledActionFetch(
   url: string,
   init?: SafeFetchInit
 ): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
-export function scheduledActionFetch<T extends ObjectLike>(
+function scheduledActionFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
 ): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
-export function scheduledActionFetch<T extends ObjectLike = never>(
+function scheduledActionFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):

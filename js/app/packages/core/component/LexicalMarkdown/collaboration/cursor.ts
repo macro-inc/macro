@@ -338,7 +338,7 @@ export function $cursorToLexicalPoint(
   return $createPointFromKeyAndOffset(nodeKey, pos.offset);
 }
 
-export function $createPointFromKeyAndOffset(
+function $createPointFromKeyAndOffset(
   nodeKey: NodeKey,
   offset: number
 ): Point | null {

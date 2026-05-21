@@ -215,7 +215,7 @@ export function $collectNestedGroup(item: ListItemNode): ListItemNode[] {
   return group;
 }
 
-export type DraggableBlockPluginProps = {
+type DraggableBlockPluginProps = {
   setState: SetStoreFunction<DraggableBlockState>;
   /**
    * Element to listen for mouse / drag events on.

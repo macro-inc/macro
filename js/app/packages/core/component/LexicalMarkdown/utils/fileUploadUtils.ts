@@ -74,7 +74,7 @@ export const getDragDropPosition = (
   return { key, position };
 };
 
-export async function onFilesReady(
+async function onFilesReady(
   editor: LexicalEditor,
   uploadEntries: UploadInput[],
   blockId?: string,

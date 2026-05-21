@@ -17,11 +17,7 @@ import type { EntityFilters } from '@service-storage/generated/schemas/entityFil
 import type { Params } from '@service-storage/generated/schemas/params';
 import type { PostSoupAstRequestAllOf } from '@service-storage/generated/schemas/postSoupAstRequestAllOf';
 import type { PostSoupRequest } from '@service-storage/generated/schemas/postSoupRequest';
-import {
-  type StaleTime,
-  type UseInfiniteQueryResult,
-  useInfiniteQuery,
-} from '@tanstack/solid-query';
+import { type StaleTime, useInfiniteQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
 export type SoupParams = Params;
@@ -46,8 +42,6 @@ export type SoupAstItemsQueryArgs = {
   groupKey?: string;
 };
 
-export type UseSoupQueryResult = UseInfiniteQueryResult<EntityData[], Error>;
-
 export type SoupApiItemFilter = (item: SoupApiItem) => boolean;
 
 interface SoupItemsQueryOptions {
@@ -55,13 +49,13 @@ interface SoupItemsQueryOptions {
   staleTime?: StaleTime;
 }
 
-export type SoupAstItemsPage = {
+type SoupAstItemsPage = {
   items: SoupApiItem[];
   nextCursor: string | null;
   groups?: GroupMeta[];
 };
 
-export type SoupAstItemsData = {
+type SoupAstItemsData = {
   entities: EntityData[];
   groups: GroupMeta[] | undefined;
   items: SoupApiItem[];

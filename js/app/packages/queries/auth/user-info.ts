@@ -72,7 +72,7 @@ export async function prefetchUserInfo() {
 }
 
 /** Fetch user info and return the data. Use when you need the result. */
-export async function fetchUserInfo() {
+async function _fetchUserInfo() {
   return queryClient.fetchQuery({
     queryKey: authKeys.userInfo.queryKey,
     queryFn: async () =>
@@ -85,4 +85,4 @@ export async function fetchUserInfo() {
 /**
  * @deprecated Use invalidateUserInfo() instead
  */
-export const updateUserInfo = invalidateUserInfo;
+const _updateUserInfo = invalidateUserInfo;

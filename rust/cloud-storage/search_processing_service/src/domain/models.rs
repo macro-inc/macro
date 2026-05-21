@@ -89,15 +89,31 @@ pub struct ChannelBackfillRequest {
     pub index_override: Option<String>,
 }
 
+/// Keyset (seek-method) pagination cursor for document backfills.
+///
+/// `get_documents_for_search` walks `"Document"` in
+/// `(updatedAt ASC, id ASC)` order; the cursor carries the last row's
+/// pair so the next page resumes with `WHERE (updatedAt, id) > cursor`.
+/// `None` starts at the beginning.
+#[derive(Debug, Clone)]
+pub struct DocumentBackfillCursor {
+    pub updated_at: DateTime<Utc>,
+    pub document_id: String,
+}
+
 /// Document backfill filter. Every field is additive — all `None` means "every
 /// document this service knows about".
+///
+/// `updated_after` / `updated_before` filter on `updatedAt`, not `createdAt`,
+/// so incremental runs (e.g. "anything changed since X") catch documents that
+/// existed before the cutoff but were modified after it.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct DocumentBackfillRequest {
     pub file_types: Option<Vec<String>>,
     pub sub_type: Option<String>,
-    pub created_after: Option<DateTime<Utc>>,
-    pub created_before: Option<DateTime<Utc>>,
+    pub updated_after: Option<DateTime<Utc>>,
+    pub updated_before: Option<DateTime<Utc>>,
     pub deletion_filter: DeletionFilter,
     /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
     pub index_override: Option<String>,

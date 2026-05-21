@@ -36,8 +36,8 @@ export const isAgent = { exclude: { chatId: [NIL_UUID] } };
 export const isTask = { include: { subType: ['task'] } };
 export const isNotTask = { exclude: { subType: ['task'] } };
 export const isEmailAttachment = { include: { isEmailAttachment: true } };
-export const isChannel = { exclude: { channelId: [NIL_UUID] } };
-export const isFolder = { exclude: { folderId: [NIL_UUID] } };
+const _isChannel = { exclude: { channelId: [NIL_UUID] } };
+const _isFolder = { exclude: { folderId: [NIL_UUID] } };
 
 export type FilterContext = {
   userId?: string;
@@ -47,10 +47,10 @@ export type FilterContext = {
 
 export type Predicate = (entity: EntityData, ctx: FilterContext) => boolean;
 
-export type QueryInput = Query;
-export type QueryFn = (ctx: FilterContext) => QueryInput;
+type QueryInput = Query;
+type QueryFn = (ctx: FilterContext) => QueryInput;
 
-export type FilterDefinition<TId extends string = string> = {
+type FilterDefinition<TId extends string = string> = {
   id: TId;
   group?: string;
   predicate: Predicate;

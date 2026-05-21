@@ -280,6 +280,36 @@ where
     }
 }
 
+/// Expand one OpenSearch hit into one or more `SearchHit`s.
+///
+/// For the documents join shape, OpenSearch returns one parent hit per
+/// matching document with the matching chunks nested under
+/// `inner_hits`. The documents module knows how to unpack that into
+/// chunk-level hits; everything else (flat indices, non-document hits)
+/// takes the 1:1 conversion.
+fn expand_hit_into_search_hits(hit: Hit<UnifiedSearchIndex>) -> Vec<SearchHit> {
+    let UnifiedSearchIndex::Document(parent) = &hit.source else {
+        return vec![hit.into()];
+    };
+    let Some(inner) = hit.inner_hits.as_ref() else {
+        return vec![hit.into()];
+    };
+
+    let entity_id = parent.entity_id;
+    let updated_at = parent
+        .updated_at_seconds
+        .and_then(|s| DateTime::from_timestamp(s, 0));
+
+    let expanded =
+        crate::search::documents::expand_inner_hits_to_search_hits(entity_id, updated_at, inner);
+    if expanded.is_empty() {
+        // Malformed or empty inner_hits — fall back to the parent so
+        // the document still surfaces, just without per-chunk drill-down.
+        return vec![hit.into()];
+    }
+    expanded
+}
+
 impl From<Hit<UnifiedSearchIndex>> for SearchHit {
     fn from(index: Hit<UnifiedSearchIndex>) -> Self {
         match index.source {
@@ -327,7 +357,12 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     })
                     .unwrap_or_default(),
                 goto: Some(SearchGotoContent::Documents(SearchGotoDocument {
-                    node_id: a.node_id,
+                    // Parent hits in the join shape have no node_id on
+                    // `_source` (it lives on the matching chunk in
+                    // inner_hits). Fall back to empty for now; piping
+                    // the chunk's node_id through inner_hits is a
+                    // follow-up.
+                    node_id: a.node_id.unwrap_or_default(),
                     raw_content: a.raw_content,
                 })),
                 updated_at: a
@@ -551,7 +586,17 @@ pub(crate) async fn search_unified(
 
     tracing::trace!("search request {:?}", search_request);
 
-    let search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.index_name()).collect();
+    // Documents reads can be redirected to a side alias via
+    // DOCUMENTS_INDEX_NAME for local end-to-end testing; every other
+    // entity type keeps its default alias.
+    let search_indices: Vec<&str> = args
+        .search_indices
+        .iter()
+        .map(|i| match i {
+            OpenSearchEntityType::Documents => crate::documents_shape::documents_search_alias(),
+            other => other.index_name(),
+        })
+        .collect();
 
     let response = async {
         client
@@ -594,7 +639,12 @@ pub(crate) async fn search_unified(
         "opensearch response"
     );
 
-    let mut results: Vec<SearchHit> = result.hits.hits.into_iter().map(|h| h.into()).collect();
+    let mut results: Vec<SearchHit> = result
+        .hits
+        .hits
+        .into_iter()
+        .flat_map(expand_hit_into_search_hits)
+        .collect();
 
     let has_more = results.len() > args.page_size as usize;
 

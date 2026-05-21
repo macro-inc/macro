@@ -29,7 +29,7 @@ function SplitBackButton() {
   if (!context) return null;
   return (
     <Button
-      class="p-1"
+      class="p-1 rounded-lg"
       label="Go Back"
       hotkey={TOKENS.split.go.back}
       disabled={!context.handle.canGoBack()}
@@ -50,7 +50,7 @@ function SplitForwardButton() {
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
       class={cn(
-        'p-1',
+        'p-1 rounded-lg',
         isMobile() && !context.handle.canGoForward() && 'hidden'
       )}
     >
@@ -66,7 +66,7 @@ function _SplitSpotlightButton() {
   return (
     <Show when={canSpotlight(layout.manager)}>
       <Button
-        class="p-1 rounded-xs hidden"
+        class="p-1 rounded-lg hidden"
         label={
           context.handle.isSpotLight() ? 'Minimize Split' : 'Spotlight Split'
         }
@@ -97,7 +97,7 @@ function SplitCloseButton() {
   return (
     <Show when={layout.manager.splits().length > 1}>
       <Button
-        class="p-1"
+        class="p-1 rounded-lg"
         label={label()}
         hotkey={TOKENS.split.close}
         onClick={context.handle.close}
@@ -125,7 +125,7 @@ function _SplitPreviewToggle() {
     <Show when={isUnifiedList()}>
       <div class="max-sm:rotate-90">
         <Button
-          class="p-1"
+          class="p-1 rounded-lg"
           classList={{
             'bg-accent/20 text-accent': preview(),
           }}

@@ -10,7 +10,7 @@ export const IMAGE_FORMATS = {
   HEIF: 'image/heif',
 } as const;
 
-export const IMAGE_EXTENSIONS = {
+const IMAGE_EXTENSIONS = {
   PNG: 'png',
   JPEG: 'jpg',
   HEIC: 'heic',
@@ -28,7 +28,7 @@ export const HEIC_EXTENSIONS = [
 ] as const;
 
 // Conversion quality settings
-export const CONVERSION_QUALITY = {
+const CONVERSION_QUALITY = {
   HIGH: 0.95,
   STANDARD: 0.92,
   MEDIUM: 0.85,
@@ -43,7 +43,7 @@ export const WORKER_POOL_CONFIG = {
 } as const;
 
 // Canvas context options
-export const CANVAS_OPTIONS = {
+const _CANVAS_OPTIONS = {
   WILL_READ_FREQUENTLY: false,
 } as const;
 

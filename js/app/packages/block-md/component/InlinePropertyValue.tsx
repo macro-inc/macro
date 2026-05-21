@@ -1,3 +1,4 @@
+import { useMaybeBlockId } from '@core/block';
 import { usePropertiesContext } from '@core/component/Properties/context/PropertiesContext';
 import { getEntityValues, hasValue } from '@core/component/Properties/utils';
 import { Property } from '@property';
@@ -20,6 +21,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
   props
 ) => {
   const ctx = usePropertiesContext();
+  const blockId = useMaybeBlockId();
 
   const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
   const isEmpty = () => !hasValue(props.property);
@@ -35,7 +37,8 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
     <Property.Root
       property={props.property}
       canEdit={ctx.canEdit}
-      onEdit={ctx.openPropertyEditor}
+      onSave={ctx.saveHandler.saveProperty}
+      onRefresh={ctx.onRefresh}
     >
       <Property.Tooltip property={props.property}>
         <Layer depth={2}>
@@ -73,6 +76,9 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
           </Property.EditTrigger>
         </Layer>
       </Property.Tooltip>
+      <Property.PopoverEditor
+        entitySelfFilter={{ entityType: ctx.entityType, blockId }}
+      />
     </Property.Root>
   );
 };

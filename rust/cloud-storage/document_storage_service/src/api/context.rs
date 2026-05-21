@@ -84,6 +84,10 @@ type DssEmailService = EmailServiceImpl<
     EmailPgRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
     email::domain::ports::NoOpEnqueuer,
+    crm::domain::service::CrmServiceImpl<
+        crm::outbound::companies_repo::CompaniesRepositoryImpl,
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+    >,
 >;
 
 type DssSoupState = SoupRouterState<
@@ -95,6 +99,7 @@ type DssSoupState = SoupRouterState<
         call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
     >,
     DssEmailService,
+    EntityAccessService,
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;

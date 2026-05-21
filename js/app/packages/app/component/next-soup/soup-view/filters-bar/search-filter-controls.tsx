@@ -122,20 +122,15 @@ export function useSearchFilterOptions() {
   };
 }
 
-export type ChannelSubFilters = Pick<
-  ChannelFilters,
-  'channel_ids' | 'sender_ids'
->;
-export type EmailSubFilters = Pick<EmailFilters, 'importance'>;
-export type CallSubFilters = {
+type ChannelSubFilters = Pick<ChannelFilters, 'channel_ids' | 'sender_ids'>;
+type EmailSubFilters = Pick<EmailFilters, 'importance'>;
+type CallSubFilters = {
   channel_ids?: string[];
   speaker_ids?: string[];
   attended?: boolean | null;
 };
 
-export function getCachedChannelSubFilters(
-  contentId: string
-): ChannelSubFilters {
+function getCachedChannelSubFilters(contentId: string): ChannelSubFilters {
   if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return {};
   try {
     const raw = localStorage.getItem(
@@ -162,7 +157,7 @@ export function cacheChannelSubFilters(
   }
 }
 
-export function getCachedEmailSubFilters(contentId: string): EmailSubFilters {
+function getCachedEmailSubFilters(contentId: string): EmailSubFilters {
   if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return {};
   try {
     const raw = localStorage.getItem(
@@ -189,7 +184,7 @@ export function cacheEmailSubFilters(
   }
 }
 
-export function getCachedCallSubFilters(contentId: string): CallSubFilters {
+function getCachedCallSubFilters(contentId: string): CallSubFilters {
   if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return {};
   try {
     const raw = localStorage.getItem(

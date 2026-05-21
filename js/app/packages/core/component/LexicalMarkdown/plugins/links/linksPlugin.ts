@@ -329,7 +329,7 @@ function $tryInsertLink(
   }
 }
 
-export type LinkPluginProps = {
+type LinkPluginProps = {
   onHoverLink?: (link?: ILinkInfo) => void;
   onClickLink?: (link?: ILinkInfo) => void;
   onCreateLink?: (link?: ILinkInfo) => void;

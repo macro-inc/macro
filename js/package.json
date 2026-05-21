@@ -1,45 +1,45 @@
 {
-  "name": "@coparse/js",
-  "private": true,
-  "workspaces": [
-    "app",
-    "app/packages/*",
-    "app/infra/*",
-    "loro-mirror",
-    "lexical-core",
-    "lexical-service"
-  ],
-  "packageManager": "bun@1.3.5",
-  "scripts": {
-    "fix": "cd app && bunx --bun @biomejs/biome check --write",
-    "lint:ci": "cd app && bunx --bun @biomejs/biome ci --changed --no-errors-on-unmatched --error-on-warnings",
-    "check": "cd app && tsc --noEmit --skipLibCheck --project packages/app/tsconfig.json",
-    "lint": "cd app && bunx --bun @biomejs/biome lint --skip=suspicious/noImportCycles",
-    "format": "cd app && bunx --bun @biomejs/biome format --write"
-  },
-  "trustedDependencies": [
-    "@pulumi/aws-native",
-    "@pulumi/awsx",
-    "@pulumi/command",
-    "@pulumi/synced-folder",
-    "aws-sdk",
-    "docker-classic",
-    "esbuild"
-  ],
-  "patchedDependencies": {
-    "solid-gesture@0.0.3": "app/patches/solid-gesture@0.0.3.patch",
-    "@thisbeyond/solid-dnd@0.7.5": "app/patches/@thisbeyond%2Fsolid-dnd@0.7.5.patch",
-    "@lexical/markdown@0.32.1": "app/patches/@lexical%2Fmarkdown@0.32.1.patch",
-    "@kobalte/core@0.13.11": "app/patches/@kobalte%2Fcore@0.13.11.patch",
-    "virtua@0.48.8": "app/patches/virtua@0.48.8.patch",
-    "@tanstack/solid-query@5.90.3": "app/patches/@tanstack%2Fsolid-query@5.90.3.patch"
-  },
-  "overrides": {
-    "cross-spawn": "7.0.6",
-    "undici": ">=6.24.0",
-    "flatted": ">=3.4.0",
-    "minimatch": ">=3.1.4",
-    "rollup": ">=4.59.0",
-    "ajv": ">=6.14.0"
-  }
+	"name": "@coparse/js",
+	"private": true,
+	"workspaces": [
+		"app",
+		"app/packages/*",
+		"app/infra/*",
+		"loro-mirror",
+		"lexical-core",
+		"lexical-service"
+	],
+	"packageManager": "bun@1.3.5",
+	"scripts": {
+		"fix": "cd app && bunx --bun @biomejs/biome check --write",
+		"lint:ci": "cd app && bunx --bun @biomejs/biome ci --changed --no-errors-on-unmatched --error-on-warnings",
+		"check": "cd app && tsc --noEmit --skipLibCheck --project packages/app/tsconfig.json",
+		"lint": "cd app && bunx --bun @biomejs/biome lint --skip=suspicious/noImportCycles",
+		"format": "cd app && bunx --bun @biomejs/biome format --write"
+	},
+	"trustedDependencies": [
+		"@pulumi/aws-native",
+		"@pulumi/awsx",
+		"@pulumi/command",
+		"@pulumi/synced-folder",
+		"aws-sdk",
+		"docker-classic",
+		"esbuild"
+	],
+	"patchedDependencies": {
+		"solid-gesture@0.0.3": "app/patches/solid-gesture@0.0.3.patch",
+		"@thisbeyond/solid-dnd@0.7.5": "app/patches/@thisbeyond%2Fsolid-dnd@0.7.5.patch",
+		"@lexical/markdown@0.32.1": "app/patches/@lexical%2Fmarkdown@0.32.1.patch",
+		"@kobalte/core@0.13.11": "app/patches/@kobalte%2Fcore@0.13.11.patch",
+		"virtua@0.48.8": "app/patches/virtua@0.48.8.patch",
+		"@tanstack/solid-query@5.90.3": "app/patches/@tanstack%2Fsolid-query@5.90.3.patch"
+	},
+	"overrides": {
+		"cross-spawn": "7.0.6",
+		"undici": ">=6.24.0",
+		"flatted": ">=3.4.0",
+		"minimatch": ">=3.1.4",
+		"rollup": ">=4.59.0",
+		"ajv": ">=6.14.0"
+	}
 }

@@ -6,7 +6,7 @@ use axum::{
 };
 use model::response::ErrorResponse;
 use models_email::email::service::backfill::{
-    BackfillJobStatus, BackfillOperation, BackfillPubsubMessage,
+    BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
 use sqlx::types::Uuid;
 use utoipa::ToSchema;
@@ -94,9 +94,11 @@ pub async fn handler(
         });
 
         let ps_message = BackfillPubsubMessage {
-            link_id: link.id,
-            job_id: backfill_job.id,
-            backfill_operation: BackfillOperation::Init,
+            backfill_operation: BackfillOperation::Init(JobScopedPayload {
+                link_id: link.id,
+                job_id: backfill_job.id,
+                payload: InitPayload {},
+            }),
         };
 
         ctx.sqs_client.enqueue_email_backfill_message(ps_message)

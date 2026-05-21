@@ -23,7 +23,7 @@ export type StreamId = {
   stream_id: string;
 };
 
-export type StreamItem<K extends keyof StreamType> = {
+type StreamItem<K extends keyof StreamType> = {
   id: StreamId;
   payload: StreamType[K];
 };

@@ -3,7 +3,7 @@ import type { LexicalEditor } from 'lexical';
 import type { Accessor, JSX } from 'solid-js';
 import { createEffect, onCleanup } from 'solid-js';
 
-export type GlueToElementProps = {
+type GlueToElementProps = {
   editor: LexicalEditor;
   element: Accessor<HTMLElement | undefined | null>;
 };

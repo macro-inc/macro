@@ -65,7 +65,7 @@ type ApiTokenQueryOptions = SolidQueryOptions<
 > & {
   initialData?: undefined;
 };
-export function createApiTokenQueryOptions(): ApiTokenQueryOptions {
+function createApiTokenQueryOptions(): ApiTokenQueryOptions {
   return queryOptions({
     queryKey: queryKeys.auth.apiToken,
     queryFn: fetchApiToken,

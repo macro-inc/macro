@@ -2,8 +2,6 @@
 
 /// Create a new team.
 pub mod create_team;
-/// Create team checkout session.
-pub mod create_team_checkout_session;
 /// Delete a team.
 pub mod delete_team;
 /// Delete a team invite.
@@ -22,8 +20,6 @@ pub mod invite_to_team;
 pub mod join_team;
 /// Update a team.
 pub mod patch_team;
-/// Update team plan.
-pub mod patch_team_plan;
 /// Reject a team invitation.
 pub mod reject_invitation;
 /// Remove a user from a team.
@@ -90,14 +86,9 @@ where
         .route("/user/invites", get(get_user_invites::handler::<T, Eas>))
         .route("/", get(get_team::handler::<T, Eas>))
         .route("/", patch(patch_team::handler::<T, Eas>))
-        .route("/plan", patch(patch_team_plan::handler::<T, Eas>))
         .route("/", delete(delete_team::handler::<T, Eas>))
         .route("/invites", get(get_team_invites::handler::<T, Eas>))
         .route("/invite", post(invite_to_team::handler::<T, Eas>))
-        .route(
-            "/checkout",
-            post(create_team_checkout_session::handler::<T, Eas>),
-        )
         .route(
             "/join/{team_invite_id}",
             delete(reject_invitation::handler::<T, Eas>),

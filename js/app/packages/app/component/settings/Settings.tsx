@@ -36,7 +36,7 @@ type SettingsPanelProps = {
   hide?: boolean;
 };
 
-export function SettingsPanel(props: SettingsPanelProps) {
+function SettingsPanel(props: SettingsPanelProps) {
   const { settingsOpen, closeSettings, activeTabId, setActiveTabId } = useSettingsState();
     const teamsFlag = useFeatureFlag('enable-teams-settings', { enabledOverride: ENABLE_TEAMS_OVERRIDE });
 
@@ -61,9 +61,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
       { value: 'Account', label: 'Account' },
     ];
     if (teamsFlag().enabled) { tabs.push({ value: 'Team', label: 'Team' }) }
-    tabs.push({ value: 'Shortcuts', label: 'Shortcuts' });
+    if (!isTouchDevice()) { tabs.push({ value: 'Shortcuts', label: 'Shortcuts' }) }
     if (ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()) { tabs.push({ value: 'Mobile App', label: 'App' }) }
-    if (!isNativeMobilePlatform()) { tabs.push({ value: 'Agent', label: 'Agent' }) }
+    if (!isNativeMobilePlatform()) { tabs.push({ value: 'Agent', label: 'MCPs' }) }
     if (isNativeMobilePlatform() && DEV_MODE_ENV) { tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' }) }
     return tabs;
   }
@@ -214,7 +214,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
             <Account />
           </Suspense>
         </Show>
-
         <Show when={activeTabId() === 'Appearance'}>
           <Appearance />
         </Show>

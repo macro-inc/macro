@@ -38,7 +38,7 @@ const variantStyles: Record<SearchbarVariant, string> = {
   filled:
     'bg-ink/5 text-ink-muted hover:bg-ink/7 hover:text-ink border-edge-muted focus-within:bg-ink/7 focus-within:text-ink',
   secondary:
-    'bg-transparent text-ink-muted border-edge-muted hover:bg-surface hover:text-ink focus-within:bg-surface focus-within:text-ink',
+    'bg-surface text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink',
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
@@ -154,7 +154,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     >
       <div
         class={cn(
-          'group w-full relative flex items-center gap-1 rounded-md h-7 mobile:h-9 pl-2 pr-1 mobile:min-w-35 border text-xs',
+          'group w-full relative flex items-center gap-1 rounded-lg mobile:h-9 pl-1 pr-1 py-1 mobile:min-w-35 border text-xs',
           variantStyles[props.variant ?? 'secondary']
         )}
       >
@@ -174,7 +174,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
         <Show
           when={!hasContent() && !props.onDismiss && !!searchHotkey.hotkey()}
         >
-          <div class="shrink-0 text-xxs text-ink-extra-muted/50 rounded-sm border border-ink/5 px-1.5 py-px group-focus-within:hidden">
+          <div class="shrink-0 text-xxs text-ink-extra-muted rounded-sm border border-ink/5 px-1.5 py-px group-focus-within:hidden">
             <Hotkey shortcut={searchHotkey.hotkey()} class="flex gap-1" />
           </div>
         </Show>

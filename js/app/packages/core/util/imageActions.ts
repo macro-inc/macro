@@ -1,6 +1,35 @@
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
+function extensionForImageBlob(blob: Blob): string {
+  const t = (blob.type || '').toLowerCase().split(';')[0].trim();
+  switch (t) {
+    case 'image/svg+xml':
+      return 'svg';
+    case 'image/jpeg':
+      return 'jpg';
+    case 'image/gif':
+      return 'gif';
+    case 'image/webp':
+      return 'webp';
+    case 'image/avif':
+      return 'avif';
+    case 'image/bmp':
+      return 'bmp';
+    case 'image/x-icon':
+    case 'image/vnd.microsoft.icon':
+      return 'ico';
+    case 'image/tiff':
+      return 'tiff';
+    case 'image/heic':
+      return 'heic';
+    case 'image/heif':
+      return 'heif';
+    default:
+      return 'png';
+  }
+}
+
 async function toPng(blob: Blob): Promise<Blob> {
   const bitmap = await createImageBitmap(blob);
   const canvas = document.createElement('canvas');
@@ -80,12 +109,14 @@ export async function downloadImage(
     const blob = await getBlob();
     if (!blob) throw new Error('No blob');
 
+    const filename = `image-${imageId}.${extensionForImageBlob(blob)}`;
+
     // iOS: Use the native share sheet instead — the user can save to Photos, AirDrop, etc.
     if (isTouchDevice() && navigator.share) {
       try {
         await navigator.share({
           files: [
-            new File([blob], `image-${imageId}.png`, {
+            new File([blob], filename, {
               type: blob.type || 'image/png',
             }),
           ],
@@ -100,7 +131,7 @@ export async function downloadImage(
     const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = blobUrl;
-    a.download = `image-${imageId}.png`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

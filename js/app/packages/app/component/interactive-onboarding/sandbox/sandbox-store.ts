@@ -253,7 +253,7 @@ function matchesFilter(
   }
 }
 
-export function sandboxEntities() {
+function sandboxEntities() {
   return entities();
 }
 
@@ -267,7 +267,7 @@ export function addSandboxEntity(entity: EntityData) {
   setEntities((prev) => [entity, ...prev]);
 }
 
-export function removeSandboxEntity(id: string) {
+function _removeSandboxEntity(id: string) {
   setEntities((prev) => prev.filter((e) => e.id !== id));
 }
 

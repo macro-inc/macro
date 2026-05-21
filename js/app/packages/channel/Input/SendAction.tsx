@@ -1,39 +1,39 @@
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
-import PaperPlaneRight from '@phosphor-icons/core/regular/paper-plane-right.svg?component-solid';
-import { Button } from '@ui';
-import { children, type JSX, Show, splitProps } from 'solid-js';
+import { isMobile } from '@core/mobile/isMobile';
+import { SendButton } from '@ui';
+import { type JSX, splitProps } from 'solid-js';
 import { useInput, useInputCommands } from './context';
 import { hasSendableInputContent } from './utils/sendable-content';
 
-export function SendAction(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
+export type SendActionProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
+  /** Custom tooltip label. Defaults to "Send message". */
+  tooltip?: string;
+};
+
+export function SendAction(props: SendActionProps) {
   const input = useInput();
   const commands = useInputCommands();
-  const [local, rest] = splitProps(props, ['class', 'children']);
-  const resolved = children(() => local.children);
+  const [local, rest] = splitProps(props, ['class', 'tooltip', 'hidden']);
   const isBlockedByPending = () => !!input().hasPendingAttachments;
   const isBlockedByEmptyInput = () => !hasSendableInputContent(input());
+  const hasTextInput = () => (input().value?.trim().length ?? 0) > 0;
+
+  const tooltipText = () => local.tooltip ?? 'Send message';
 
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      tooltip="Send message"
-      aria-label="Send message"
+    <SendButton
+      tooltip={tooltipText()}
+      shortcut="enter"
+      aria-label={tooltipText()}
       data-input-action="send"
+      pending={isBlockedByPending()}
       disabled={isBlockedByPending() || isBlockedByEmptyInput()}
+      hidden={isMobile() && !hasTextInput()}
       class={local.class}
       onPointerDown={(event) => {
         event.preventDefault();
         void commands.send();
       }}
       {...rest}
-    >
-      <Show
-        when={!isBlockedByPending()}
-        fallback={<SpinnerIcon class="animate-spin" />}
-      >
-        {resolved() ?? <PaperPlaneRight />}
-      </Show>
-    </Button>
+    />
   );
 }

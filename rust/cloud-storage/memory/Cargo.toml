@@ -30,6 +30,7 @@ utoipa = { workspace = true }
 
 # For building ToolServiceContext
 comms = { path = "../comms" }
+crm = { path = "../crm" }
 documents = { path = "../documents" }
 email = { path = "../email" }
 email_service_client = { path = "../email_service_client" }

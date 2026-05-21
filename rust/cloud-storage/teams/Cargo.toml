@@ -23,7 +23,13 @@ axum = [
 ]
 default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
-outbound = ["dep:sqlx", "dep:url", "ports"]
+outbound = [
+  "dep:sqlx",
+  "dep:sqs_client",
+  "dep:models_email",
+  "dep:url",
+  "ports",
+]
 ports = [
   "dep:model-entity",
   "dep:model_notifications",
@@ -73,6 +79,10 @@ notification = { path = "../notification", optional = true, default-features = f
 # Outbound dependencies
 sqlx = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
+sqs_client = { path = "../sqs_client", default-features = false, features = [
+  "email",
+], optional = true }
+models_email = { path = "../models_email", optional = true }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

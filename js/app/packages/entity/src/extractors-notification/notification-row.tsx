@@ -106,9 +106,9 @@ function NotificationRowContent(props: {
   );
 }
 
-export type NotificationRowVariant = 'compact' | 'expanded';
+type NotificationRowVariant = 'compact' | 'expanded';
 
-export interface NotificationRowProps {
+interface NotificationRowProps {
   notification: UnifiedNotification;
   entity?: EntityData;
   onClick?: (e: PointerEvent | MouseEvent | KeyboardEvent) => void;

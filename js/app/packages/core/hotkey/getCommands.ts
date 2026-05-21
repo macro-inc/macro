@@ -18,7 +18,7 @@ type sortAndFilterOptions = {
 };
 
 // This is reactive on active scope (if scope not specified), activeElement, and commmand conditions.
-export function useActiveCommands(
+function _useActiveCommands(
   displayOptions?: sortAndFilterOptions,
   scope?: string
 ) {

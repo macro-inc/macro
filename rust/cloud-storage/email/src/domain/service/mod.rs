@@ -12,6 +12,7 @@ use crate::domain::{
     },
     ports::{EmailMessageEnqueuer, EmailRepo, EmailService},
 };
+use crm::domain::service::CrmService;
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, ViewAccessLevel,
 };
@@ -20,35 +21,39 @@ use models_pagination::{PaginatedCursor, SimpleSortMethod};
 use uuid::Uuid;
 
 #[derive(Clone)]
-pub struct EmailServiceImpl<T, U, E> {
-    email_repo: T,
-    frecency_service: U,
-    enqueuer: E,
-    sent_undo_delay_secs: u32,
+pub struct EmailServiceImpl<T, U, E, CS> {
+    pub(crate) email_repo: T,
+    pub(crate) frecency_service: U,
+    pub(crate) enqueuer: E,
+    pub(crate) crm_service: CS,
+    pub(crate) sent_undo_delay_secs: u32,
 }
 
-impl<T, U, E> EmailServiceImpl<T, U, E>
+impl<T, U, E, CS> EmailServiceImpl<T, U, E, CS>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
     E: EmailMessageEnqueuer,
+    CS: CrmService,
 {
     pub fn new(
         email_repo: T,
         frecency_service: U,
         enqueuer: E,
+        crm_service: CS,
         sent_undo_delay_secs: u32,
-    ) -> EmailServiceImpl<T, U, E> {
+    ) -> EmailServiceImpl<T, U, E, CS> {
         EmailServiceImpl {
             email_repo,
             frecency_service,
             enqueuer,
+            crm_service,
             sent_undo_delay_secs,
         }
     }
 }
 
-impl<T, U, E> EmailServiceImpl<T, U, E> {
+impl<T, U, E, CS> EmailServiceImpl<T, U, E, CS> {
     /// Validate and normalize email filter input.
     fn validate_email_filter_input(
         input: UpsertEmailFilterInput,
@@ -108,11 +113,12 @@ impl<T, U, E> EmailServiceImpl<T, U, E> {
     }
 }
 
-impl<T, U, E> EmailService for EmailServiceImpl<T, U, E>
+impl<T, U, E, CS> EmailService for EmailServiceImpl<T, U, E, CS>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
     E: EmailMessageEnqueuer,
+    CS: CrmService,
     anyhow::Error: From<T::Err>,
     anyhow::Error: From<E::Err>,
 {

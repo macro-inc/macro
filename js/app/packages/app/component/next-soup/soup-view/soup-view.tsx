@@ -82,7 +82,7 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { useDisplayName } from '@core/user/displayName';
-import type { MacroId } from '@core/user/macroId';
+import { type MacroId, tryMacroId } from '@core/user/macroId';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
   type EntityData,
@@ -132,21 +132,6 @@ import type { CacheSnapshot } from 'virtua/unstable_core';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
-
-// Property values for entity-reference properties (e.g. assignees) are stored
-// as `{"entity_id": "...", "entity_type": "USER"}` and arrive in group keys as
-// the JSON-encoded text of that object.
-const parseEntityRefId = (key: string): string | null => {
-  try {
-    const parsed: unknown = JSON.parse(key);
-    if (typeof parsed === 'string') return parsed;
-    if (typeof parsed !== 'object' || parsed === null) return null;
-    const id = (parsed as Record<string, unknown>).entity_id;
-    return typeof id === 'string' ? id : null;
-  } catch {
-    return null;
-  }
-};
 
 export const SoupSectionHeader = (props: {
   children: JSX.Element;
@@ -203,9 +188,9 @@ const DefaultGroupHeader = (
       field.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.ASSIGNEES ||
       props.group.key === ''
     ) {
-      return null;
+      return;
     }
-    return parseEntityRefId(props.group.key);
+    return tryMacroId(props.group.key);
   });
 
   return (
@@ -236,7 +221,7 @@ const DefaultGroupHeader = (
       >
         {(id) => (
           <AssigneeGroupContent
-            assigneeId={id() as MacroId}
+            assigneeId={id()}
             fallbackLabel={props.group.label}
           />
         )}
@@ -486,34 +471,42 @@ export const SoupView = (props: SoupViewProps) => {
                       containerClass="h-full"
                     />
                   </Show>
-                  <Show when={!isMobile()}>
-                    <SoupViewCreateButton />
-                  </Show>
                 </Show>
               </div>
             </SplitHeaderLeft>
             <Show when={!isMobile()}>
               <SplitHeaderRight>
+                <Show
+                  when={
+                    !narrowSearchExpanded() && !isComponentListView('search')
+                  }
+                >
+                  <SoupViewCreateButton />
+                </Show>
                 <Show when={narrowSearchExpanded()}>
-                  <div class="flex-1 min-w-0">
-                    <SoupSearchbar
-                      variant="secondary"
-                      autoFocus
-                      initialValue={props.initialSearchText}
-                      onDismiss={() => setNarrowSearchExpanded(false)}
-                    />
-                  </div>
+                  <Layer depth={2}>
+                    <div class="flex-1 min-w-0">
+                      <SoupSearchbar
+                        variant="secondary"
+                        autoFocus
+                        initialValue={props.initialSearchText}
+                        onDismiss={() => setNarrowSearchExpanded(false)}
+                      />
+                    </div>
+                  </Layer>
                 </Show>
                 <Show
                   when={!isComponentListView('search')}
                   fallback={
-                    <div class="grow ml-2">
-                      <SoupSearchbar
-                        variant="secondary"
-                        placeholder="Search, @mention contacts"
-                        initialValue={props.initialSearchText}
-                      />
-                    </div>
+                    <Layer depth={2}>
+                      <div class="grow ml-2">
+                        <SoupSearchbar
+                          variant="secondary"
+                          placeholder="Search, @mention contacts"
+                          initialValue={props.initialSearchText}
+                        />
+                      </div>
+                    </Layer>
                   }
                 >
                   <CollapsibleHeaderItem
@@ -524,20 +517,23 @@ export const SoupView = (props: SoupViewProps) => {
                       if (!isCollapsed) setNarrowSearchExpanded(false);
                     }}
                     expanded={() => (
-                      <div class="w-60">
-                        <SoupSearchbar
-                          variant="secondary"
-                          initialValue={props.initialSearchText}
-                        />
-                      </div>
+                      <Layer depth={2}>
+                        <div class="w-60 ml-2">
+                          <SoupSearchbar
+                            variant="secondary"
+                            initialValue={props.initialSearchText}
+                          />
+                        </div>
+                      </Layer>
                     )}
                     collapsed={() => (
                       <Show when={!narrowSearchExpanded()}>
                         <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
                           <Button
-                            variant="ghost"
-                            class="p-1 rounded-xs"
+                            variant="base"
+                            class="p-1 rounded-lg ml-2 bg-surface"
                             onClick={() => setNarrowSearchExpanded(true)}
+                            depth={2}
                           >
                             <SearchIcon class="size-4 touch:size-6" />
                           </Button>
@@ -1484,7 +1480,7 @@ const SoupList = (props: SoupListProps) => {
       <VList
         cache={props.cache}
         ref={registerVirtualizerHandler}
-        class={props.virtualizerClass}
+        class={cn('overscroll-none', props.virtualizerClass)}
         data={stableRows}
         itemSize={itemSize()}
         bufferSize={overscan() * itemSize()}

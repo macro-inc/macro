@@ -18,7 +18,6 @@ chrono = { workspace = true, features = ["serde"] }
 cowlike = { path = "../cowlike" }
 filter_ast = { path = "../filter_ast" }
 item_filters = { path = "../item_filters" }
-macro_env_var = { path = "../macro_env_var", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 mockall = { workspace = true, optional = true }
 model-entity = { path = "../model-entity" }
@@ -31,7 +30,6 @@ sqlx = { workspace = true, optional = true }
 strum = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true, features = ["sync", "time"] }
-tower = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 
 [dev-dependencies]

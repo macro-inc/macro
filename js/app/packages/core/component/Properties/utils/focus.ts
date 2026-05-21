@@ -5,7 +5,7 @@ import { FOCUS_CONFIG } from '../constants';
  * Consolidated hook for auto-focusing elements with reliable focus handling.
  * Uses IntersectionObserver to detect when element becomes visible, then focuses after delay.
  */
-export function useAutoFocus(
+function useAutoFocus(
   inputRef: () => HTMLElement | undefined,
   shouldFocus: () => boolean = () => true,
   delay: number = FOCUS_CONFIG.DELAY

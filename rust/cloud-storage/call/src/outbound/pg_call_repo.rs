@@ -21,7 +21,7 @@ use uuid::Uuid;
 use crate::domain::models::{
     AddParticipantError, Call, CallParticipant, CallRecord, CallRecordParticipant,
     CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment, CustomSpeakerAssignment,
-    EditCallRecordRequest, TranscriptSegmentRequest, WithCallId,
+    EditCallRecordRequest, EnrichedCallTranscript, TranscriptSegmentRequest, WithCallId,
 };
 use crate::domain::ports::CallRepository;
 
@@ -410,6 +410,46 @@ impl CallRepository for PgCallRepo {
         )
         .fetch_one(&self.pool)
         .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_participants_with_team_members(
+        &self,
+        call_record_id: &Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"
+            WITH participant_ids AS (
+                SELECT user_id
+                FROM call_record_participants
+                WHERE call_record_id = $1
+            ),
+            participant_team_ids AS (
+                SELECT DISTINCT tu.team_id
+                FROM team_user tu
+                JOIN participant_ids p ON p.user_id = tu.user_id
+            ),
+            candidate_user_ids AS (
+                SELECT user_id FROM participant_ids
+                UNION
+                SELECT tu.user_id
+                FROM team_user tu
+                JOIN participant_team_ids t ON t.team_id = tu.team_id
+            )
+            SELECT DISTINCT user_id AS "user_id!"
+            FROM candidate_user_ids
+            ORDER BY user_id ASC
+            "#,
+            call_record_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                MacroUserIdStr::try_from(row.user_id).map_err(|e| sqlx::Error::Decode(Box::new(e)))
+            })
+            .collect()
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1445,6 +1485,80 @@ impl CallRepository for PgCallRepo {
         Ok(())
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn get_enhanced_call_record_transcripts(
+        &self,
+        call_record_id: &Uuid,
+    ) -> Result<Vec<EnrichedCallTranscript>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                id,
+                call_record_id,
+                segment_id,
+                speaker_id,
+                diarized_speaker_id,
+                custom_speaker,
+                voice_id,
+                content,
+                started_at,
+                ended_at,
+                sequence_num
+            FROM call_record_transcripts
+            WHERE call_record_id = $1
+            ORDER BY sequence_num ASC
+            "#,
+            call_record_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| EnrichedCallTranscript {
+                id: row.id,
+                call_record_id: row.call_record_id,
+                segment_id: row.segment_id,
+                speaker_id: row.speaker_id,
+                diarized_speaker_id: row.diarized_speaker_id,
+                custom_speaker: row.custom_speaker,
+                voice_id: row.voice_id,
+                content: row.content,
+                started_at: row.started_at,
+                ended_at: row.ended_at,
+                sequence_num: row.sequence_num,
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(skip(self, assignments), fields(num_assignments = assignments.len()), err)]
+    async fn overwrite_custom_speakers(
+        &self,
+        assignments: Vec<(Uuid, String)>,
+    ) -> Result<(), Self::Err> {
+        if assignments.is_empty() {
+            return Ok(());
+        }
+
+        let (transcript_ids, custom_speakers): (Vec<Uuid>, Vec<String>) =
+            assignments.into_iter().unzip();
+
+        sqlx::query!(
+            r#"
+            UPDATE call_record_transcripts AS t
+            SET custom_speaker = u.custom_speaker
+            FROM UNNEST($1::uuid[], $2::text[]) AS u(transcript_id, custom_speaker)
+            WHERE t.id = u.transcript_id
+            "#,
+            &transcript_ids,
+            &custom_speakers,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     /// Return stable `(macro_user_id, voice_id)` pairs for one archived call.
     ///
     /// `call_record_id` scopes the scan to a single call's archived transcript rows.
@@ -1491,69 +1605,6 @@ impl CallRepository for PgCallRepo {
             .into_iter()
             .map(|row| (row.macro_user_id, row.voice_id))
             .collect())
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_distinct_voice_speakers_for_call_record(
-        &self,
-        call_record_id: &Uuid,
-    ) -> Result<Vec<(String, Uuid)>, Self::Err> {
-        let rows = sqlx::query!(
-            r#"
-            SELECT DISTINCT diarized_speaker_id AS "diarized_speaker_id!", voice_id AS "voice_id!"
-            FROM call_record_transcripts
-            WHERE call_record_id = $1
-              AND diarized_speaker_id IS NOT NULL
-              AND voice_id IS NOT NULL
-            "#,
-            call_record_id,
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(rows
-            .into_iter()
-            .map(|r| (r.diarized_speaker_id, r.voice_id))
-            .collect())
-    }
-
-    #[tracing::instrument(skip(self, assignments), fields(num_assignments = assignments.len()), err)]
-    async fn patch_call_transcript_speakers_from_voice_match(
-        &self,
-        call_record_id: &Uuid,
-        assignments: &[(String, Uuid)],
-    ) -> Result<(), Self::Err> {
-        if assignments.is_empty() {
-            return Ok(());
-        }
-        let diarized_ids: Vec<&str> = assignments.iter().map(|(d, _)| d.as_str()).collect();
-        let user_ids: Vec<Uuid> = assignments.iter().map(|(_, u)| *u).collect();
-        sqlx::query!(
-            r#"
-            UPDATE call_record_transcripts AS t
-            SET custom_speaker = u.id
-            FROM UNNEST($2::text[], $3::uuid[]) AS a(diarized_speaker_id, macro_user_id)
-            JOIN "User" u ON u.macro_user_id = a.macro_user_id
-            WHERE t.call_record_id = $1
-              AND t.diarized_speaker_id = a.diarized_speaker_id
-              AND t.custom_speaker IS NULL
-              AND EXISTS (
-                  SELECT 1
-                  FROM team_user matched_user_team
-                  JOIN team_user participant_team
-                    ON participant_team.team_id = matched_user_team.team_id
-                  JOIN call_record_participants p
-                    ON p.user_id = participant_team.user_id
-                   AND p.call_record_id = $1
-                  WHERE matched_user_team.user_id = u.id
-              )
-            "#,
-            call_record_id,
-            &diarized_ids as &[&str],
-            &user_ids,
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
     }
 
     #[tracing::instrument(skip(self, summary), err)]

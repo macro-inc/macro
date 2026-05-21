@@ -18,7 +18,7 @@ false && clickOutside;
 
 const COLLAPSE_WIDTH = 120;
 
-export interface MediaButtonsProps {
+interface MediaButtonsProps {
   delete?: () => void;
   enlarge?: () => void;
   newTab?: () => void;

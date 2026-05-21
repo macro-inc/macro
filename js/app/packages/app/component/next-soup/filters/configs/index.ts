@@ -4,10 +4,9 @@ export * from './document';
 export * from './email';
 export * from './entity';
 export * from './entity-type';
-export { ENTITY_TYPE_FILTERS } from './entity-type';
+
 export * from './general';
 export * from './task';
-export { TASK_PRIORITY_FILTERS, TASK_STATUS_FILTERS } from './task';
 
 import type { FilterGroupConfig } from './base';
 import {
@@ -90,7 +89,7 @@ export const SOUP_FILTERS = [
   ...FILE_TYPE_FILTERS,
 ] as const;
 
-export const SOUP_FILTER_GROUPS: FilterGroupConfig[] = [
+const _SOUP_FILTER_GROUPS: FilterGroupConfig[] = [
   { id: 'focus', allowMultiple: false },
   { id: 'entity-type', allowMultiple: true },
 ];

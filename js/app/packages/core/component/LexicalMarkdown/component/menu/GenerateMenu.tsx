@@ -32,7 +32,7 @@ import {
 } from '../../plugins/generate/generatePlugin';
 
 export type generateCallback = (userRequest: string) => void;
-export type GenerateMenuProps = {
+type GenerateMenuProps = {
   menuOpen: GenerateMenuOpen;
   generateCallback: generateCallback;
   completionSignal: Accessor<Completion | undefined>;

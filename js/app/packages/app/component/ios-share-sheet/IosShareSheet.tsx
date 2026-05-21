@@ -58,6 +58,19 @@ function pendingShareBatchKey(files: readonly PendingShareFile[]): string {
   return files.map((file) => file.token).join('|');
 }
 
+function normalizedSharedText(
+  file: Pick<PendingShareFile, 'sharedText'>
+): string {
+  return file.sharedText?.trim() ?? '';
+}
+
+function pendingShareInitialText(files: readonly PendingShareFile[]): string {
+  return files
+    .map(normalizedSharedText)
+    .filter((text) => text.length > 0)
+    .join('\n');
+}
+
 function getPendingShareAttachmentKind(
   file: Pick<PendingShareFile, 'name' | 'mimeType'>
 ): InputAttachmentKind {
@@ -227,14 +240,19 @@ function IosShareSheetComposer(props: {
 
         void (async () => {
           await Promise.allSettled(
-            files.map((file) =>
-              uploadPendingShareAttachment({
-                file,
-                tracker: attachmentTracker,
-                uploadPendingShareFile: shareTarget?.uploadPendingShareFile,
-                isActive: () => active,
-              })
-            )
+            files
+              .filter(
+                (file) =>
+                  !file.isSharedText && normalizedSharedText(file).length === 0
+              )
+              .map((file) =>
+                uploadPendingShareAttachment({
+                  file,
+                  tracker: attachmentTracker,
+                  uploadPendingShareFile: shareTarget?.uploadPendingShareFile,
+                  isActive: () => active,
+                })
+              )
           );
         })();
       }
@@ -308,6 +326,7 @@ function IosShareSheetComposer(props: {
       mode: 'channel',
       id: `ios-share-input-${composerId}`,
       placeholder: 'Add a message',
+      value: pendingShareInitialText(shareTarget?.pendingShareFiles() ?? []),
     },
     mentions: mentionsTracker.mentions,
     attachmentTracker,

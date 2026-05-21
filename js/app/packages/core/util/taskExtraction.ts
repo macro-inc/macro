@@ -9,14 +9,14 @@ import {
   extractUserMentions,
 } from '@core/component/LexicalMarkdown/plugins/checkbox-to-task/checkboxParsing';
 
-export { extractDateMention, extractTitleFromMarkdown, extractUserMentions };
+export { extractUserMentions };
 
 /**
  * Represents a potential task extracted from markdown text.
  * Unlike ParsedCheckbox (which requires Lexical node context),
  * this works with raw markdown strings.
  */
-export type PotentialTask = {
+type PotentialTask = {
   /** Line index in the source markdown (0-based) */
   lineIndex: number;
   /** Cleaned title without mentions */

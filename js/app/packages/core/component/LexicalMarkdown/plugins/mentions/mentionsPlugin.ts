@@ -70,7 +70,7 @@ import { mapRegisterDelete } from '../shared';
 export const INSERT_DOCUMENT_MENTION_COMMAND: LexicalCommand<DocumentMentionInfo> =
   createCommand('INSERT_DOCUMENT_MENTION_COMMAND');
 
-export const INSERT_SNAPSHOT_NODE_COMMAND: LexicalCommand<SnapshotNodeInfo> =
+const INSERT_SNAPSHOT_NODE_COMMAND: LexicalCommand<SnapshotNodeInfo> =
   createCommand('INSERT_SNAPSHOT_NODE_COMMAND');
 
 export const INSERT_CONTACT_MENTION_COMMAND: LexicalCommand<ContactMentionInfo> =
@@ -79,7 +79,7 @@ export const INSERT_CONTACT_MENTION_COMMAND: LexicalCommand<ContactMentionInfo> 
 export const INSERT_DATE_MENTION_COMMAND: LexicalCommand<DateMentionInfo> =
   createCommand('INSERT_DATE_MENTION_COMMAND');
 
-export const OPEN_INLINE_SEARCH_COMMAND: LexicalCommand<void> = createCommand(
+const _OPEN_INLINE_SEARCH_COMMAND: LexicalCommand<void> = createCommand(
   'OPEN_INLINE_SEARCH_COMMAND'
 );
 
@@ -87,7 +87,7 @@ export const CLOSE_INLINE_SEARCH_COMMAND: LexicalCommand<void> = createCommand(
   'CLOSE_INLINE_SEARCH_COMMAND'
 );
 
-export const TYPE_AT_SYMBOL_COMMAND: LexicalCommand<void> = createCommand(
+const TYPE_AT_SYMBOL_COMMAND: LexicalCommand<void> = createCommand(
   'TYPE_AT_SYMBOL_COMMAND'
 );
 
@@ -131,7 +131,7 @@ export type ItemMention = {
   groupAlias?: string;
 };
 
-export function $isMentionNode(
+function $isMentionNode(
   node: LexicalNode
 ): node is
   | UserMentionNode
@@ -148,7 +148,7 @@ export function $isMentionNode(
   );
 }
 
-export function $mentionItemFromNode(node: MentionNode): ItemMention {
+function $mentionItemFromNode(node: MentionNode): ItemMention {
   if ($isDocumentMentionNode(node)) {
     let fileType = '';
     let itemType: ItemMention['itemType'] = 'document';
@@ -257,7 +257,7 @@ const getDocumentMentionItemType = (
     .exhaustive();
 };
 
-export type MentionsPluginProps = {
+type MentionsPluginProps = {
   menu?: MenuOperations;
   onCreateMention?: (mention: ItemMention) => void;
   onRemoveMention?: (mention: ItemMention) => void;

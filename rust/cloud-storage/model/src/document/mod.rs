@@ -141,7 +141,7 @@ pub struct BackfillSearchDocumentInformation {
     pub document_version_id: i64,
     pub owner: String,
     pub file_type: FileType,
-    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 #[derive(
     sqlx::FromRow,

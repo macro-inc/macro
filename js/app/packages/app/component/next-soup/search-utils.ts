@@ -5,9 +5,7 @@ import type { EntityData, WithSearch } from '@entity';
 import type { PredicateConfig } from './filters/filter-store/predicates-store';
 import type { SearchPoolItem } from './search-context';
 
-export const getValidSearchFilters = <T>(
-  filters: readonly PredicateConfig<T>[]
-) => {
+const _getValidSearchFilters = <T>(filters: readonly PredicateConfig<T>[]) => {
   return filters.filter((f) => f.id !== 'explicit-noise');
 };
 

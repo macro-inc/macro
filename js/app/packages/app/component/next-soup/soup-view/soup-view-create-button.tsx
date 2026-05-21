@@ -1,4 +1,5 @@
 import { CREATABLE_BLOCKS, runCreateAction } from '@app/component/Launcher';
+import { CollapsibleHeaderItem } from '@app/component/split-layout/components/CollapsibleHeaderItem';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
@@ -10,8 +11,9 @@ import {
   openFolderPicker,
 } from '@core/util/upload';
 import ChevronDownIcon from '@phosphor/caret-down.svg';
+import PlusCircleIcon from '@phosphor/plus.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
-import { Button, Dropdown, Layer } from '@ui';
+import { Button, cn, Dropdown } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { NewCallButton } from './NewCallButton';
 
@@ -50,6 +52,15 @@ const VIEW_ONLY_BLOCK_LABELS: Partial<Record<BlockName | BlockAlias, string>> =
   {
     automation: 'Automation',
   };
+
+const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
+  agents: 'Agent',
+  channels: 'Channel',
+  documents: 'Document',
+  folders: 'Folder',
+  mail: 'Email',
+  tasks: 'Task',
+};
 
 function getViewCreateOptions(view: ListView): CreateOption[] {
   const createNames = VIEW_CREATE_BLOCKNAMES[view] ?? [];
@@ -102,6 +113,11 @@ export const SoupViewCreateButton = () => {
     if (!view) return [];
     return getViewCreateOptions(view);
   });
+  const createLabel = createMemo(() => {
+    const view = currentView();
+    if (!view) return 'Create';
+    return VIEW_CREATE_LABELS[view] ?? 'Create';
+  });
 
   const handleSelect = (option: CreateOption) => {
     if (option.id === 'import-file') {
@@ -121,53 +137,78 @@ export const SoupViewCreateButton = () => {
     runCreateAction(option.id);
   };
 
+  const SingleOptionButton = (props: { hideLabel?: boolean }) => (
+    <Button
+      variant="active"
+      class={cn(
+        'border-0 rounded-full px-3 py-2 pl-1 font-semibold',
+        props.hideLabel && 'pr-1'
+      )}
+      size="sm"
+      onClick={() => handleSelect(options()[0])}
+    >
+      <PlusCircleIcon class="size-3.5 text-accent" />
+      <Show when={!props.hideLabel}>
+        <span>{createLabel()}</span>
+      </Show>
+    </Button>
+  );
+
+  const MultiOptionButton = (props: { hideLabel?: boolean }) => (
+    <Dropdown placement="bottom-start" gutter={4}>
+      <Dropdown.Trigger
+        variant="active"
+        class={cn(
+          'border-0 rounded-full px-3 py-2 pl-1 font-semibold',
+          props.hideLabel && 'pr-1'
+        )}
+      >
+        <PlusCircleIcon class="size-3.5" />
+        <Show when={!props.hideLabel}>
+          <span>{createLabel()}</span>
+        </Show>
+        <ChevronDownIcon class="size-2.5" />
+      </Dropdown.Trigger>
+      <Dropdown.Content class="min-w-35">
+        <Dropdown.Group>
+          <For each={options()}>
+            {(item) => (
+              <Dropdown.Item onSelect={() => handleSelect(item)}>
+                <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
+                  <CreateOptionIcon id={item.id} />
+                </span>
+                <span class="flex-1 truncate text-ink-muted">{item.label}</span>
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
+  );
+
   return (
     <>
       <Show when={currentView() === 'calls'}>
         <NewCallButton />
       </Show>
       <Show when={options().length > 0}>
-        <Show
-          when={options().length > 1}
-          fallback={
-            <Button
-              variant="base"
-              size="sm"
-              onClick={() => handleSelect(options()[0])}
+        <CollapsibleHeaderItem
+          id="create-button"
+          priority={2}
+          expanded={() => (
+            <Show when={options().length > 1} fallback={<SingleOptionButton />}>
+              <MultiOptionButton />
+            </Show>
+          )}
+          collapsed={() => (
+            <Show
+              when={options().length > 1}
+              fallback={<SingleOptionButton hideLabel />}
             >
-              <CreateOptionIcon id={options()[0].id} />
-              <span>Create</span>
-            </Button>
-          }
-        >
-          <Dropdown placement="bottom-start" gutter={4}>
-            <Dropdown.Trigger>
-              <span>Create</span>
-              <ChevronDownIcon class="size-3" />
-            </Dropdown.Trigger>
-            <Dropdown.Portal>
-              <Layer depth={2}>
-                <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-sm min-w-35 p-1">
-                  <For each={options()}>
-                    {(item) => (
-                      <Dropdown.Item
-                        class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
-                        onSelect={() => handleSelect(item)}
-                      >
-                        <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
-                          <CreateOptionIcon id={item.id} />
-                        </span>
-                        <span class="flex-1 truncate text-ink-muted">
-                          {item.label}
-                        </span>
-                      </Dropdown.Item>
-                    )}
-                  </For>
-                </Dropdown.Content>
-              </Layer>
-            </Dropdown.Portal>
-          </Dropdown>
-        </Show>
+              <MultiOptionButton hideLabel />
+            </Show>
+          )}
+        />
       </Show>
     </>
   );

@@ -1,6 +1,6 @@
 use models_opensearch::SearchIndex;
 
-use crate::{Result, error::OpensearchClientError};
+use crate::{Result, documents_shape::alias_uses_join_shape, error::OpensearchClientError};
 
 /// Deletes all document nodes with the specified document_id
 #[tracing::instrument(skip(client))]
@@ -58,19 +58,42 @@ pub async fn delete_document_by_id(
     Ok(())
 }
 
-/// Deletes all documents with the specified owner_id
+/// Deletes every document owned by `owner_id`.
+///
+/// Flat shape: every chunk carries `owner_id`, so a simple term match
+/// catches them all. Join shape: only parents carry `owner_id`, so the
+/// query also matches children of those parents via `has_parent`.
 #[tracing::instrument(skip(client))]
 pub async fn delete_document_by_owner_id(
     client: &opensearch::OpenSearch,
     owner_id: &str,
 ) -> Result<()> {
-    let query = serde_json::json!({
-        "query": {
-            "term": {
-                "owner_id": owner_id
+    let query = if alias_uses_join_shape() {
+        serde_json::json!({
+            "query": {
+                "bool": {
+                    "minimum_should_match": 1,
+                    "should": [
+                        { "term": { "owner_id": owner_id } },
+                        {
+                            "has_parent": {
+                                "parent_type": "document",
+                                "query": { "term": { "owner_id": owner_id } }
+                            }
+                        }
+                    ]
+                }
             }
-        },
-    });
+        })
+    } else {
+        serde_json::json!({
+            "query": {
+                "term": {
+                    "owner_id": owner_id
+                }
+            }
+        })
+    };
 
     let response = client
         .delete_by_query(opensearch::DeleteByQueryParts::Index(&[

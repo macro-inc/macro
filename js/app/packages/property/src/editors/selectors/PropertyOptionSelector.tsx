@@ -58,10 +58,12 @@ const useDropdownSearch = (options: UseDropdownSearchOptions) => {
     const count = options.itemCount();
     if (count === 0) return;
 
-    if (shouldShowHotkeys() && /^[1-9]$/.test(e.key)) {
+    if (shouldShowHotkeys() && /^[0-9]$/.test(e.key)) {
       e.preventDefault();
-      const idx = parseInt(e.key) - 1;
-      if (idx < count) options.onSelect(idx);
+      const keyNum = parseInt(e.key);
+      // 0 selects index 0 (the clear option when present)
+      // 1-9 select indices 1-9 (the actual options)
+      if (keyNum < count) options.onSelect(keyNum);
       return;
     }
 
@@ -98,7 +100,7 @@ type DropdownSearchInputProps = {
 
 const DropdownSearchInput = (props: DropdownSearchInputProps) => {
   return (
-    <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
+    <div class="flex w-full items-center py-2 gap-2 px-2 border-b border-edge-muted">
       <SearchIcon class="h-4 w-4 text-ink-muted" />
       <input
         class="w-full caret-accent"
@@ -126,7 +128,7 @@ const DropdownSelectableRow: ParentComponent<DropdownSelectableRowProps> = (
 ) => {
   return (
     <div
-      class="flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2"
+      class="flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 rounded-md"
       classList={{
         'bg-hover': props.isSelected,
       }}
@@ -136,9 +138,7 @@ const DropdownSelectableRow: ParentComponent<DropdownSelectableRowProps> = (
       <div class="flex items-center gap-2 flex-1 min-w-0">{props.children}</div>
       <div class="flex items-center gap-2 shrink-0">
         <Show when={props.showHotkey && props.hotkeyShortcut}>
-          <div class="text-xxs px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
-            <Hotkey shortcut={props.hotkeyShortcut!} />
-          </div>
+          <Hotkey shortcut={props.hotkeyShortcut!} theme="subtle" />
         </Show>
         {props.rightContent}
       </div>
@@ -378,7 +378,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
               </div>
             }
           >
-            <div class="p-1">
+            <div class="p-1.5">
               <div class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
                 <Show
                   when={selectableItems().length > 0}
@@ -414,9 +414,9 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                                 }}
                                 onMouseEnter={onMouseEnter}
                                 showHotkey={
-                                  dropdown.shouldShowHotkeys() && index() < 9
+                                  dropdown.shouldShowHotkeys() && index() <= 9
                                 }
-                                hotkeyShortcut={`${index() + 1}`}
+                                hotkeyShortcut={`${index()}`}
                                 rightContent={
                                   <Show when={props.config.isMultiSelect}>
                                     <OptionCheckBox
@@ -455,6 +455,8 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                                   }
                                 }}
                                 onMouseEnter={onMouseEnter}
+                                showHotkey={dropdown.shouldShowHotkeys()}
+                                hotkeyShortcut="0"
                               >
                                 <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
                                 <div class="flex-1 min-w-0 text-left">

@@ -27,7 +27,7 @@ import {
   sidebarFilter,
 } from '../sandbox/sandbox-store';
 
-export const MOCK_SIDEBAR_LINKS = [
+const MOCK_SIDEBAR_LINKS = [
   {
     id: 'agents',
     label: 'Agents',

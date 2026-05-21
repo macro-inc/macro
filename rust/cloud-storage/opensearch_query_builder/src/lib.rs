@@ -13,10 +13,10 @@ mod util;
 
 pub use query::{
     BoolQuery, BoolQueryBuilder, BoostMode, DecayFunction, FieldValueFactor, FunctionScoreQuery,
-    FunctionScoreQueryBuilder, MatchPhrasePrefixQuery, MatchPhraseQuery, MatchQuery, QueryType,
-    RandomScore, RangeQuery, RangeQueryBuilder, RegexpQuery, RegexpQueryFlags, ScoreFunction,
-    ScoreFunctionType, ScoreMode, ScriptScore, SimpleQueryStringQuery, TermQuery, TermsQuery,
-    WildcardQuery,
+    FunctionScoreQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery,
+    MatchQuery, QueryType, RandomScore, RangeQuery, RangeQueryBuilder, RegexpQuery,
+    RegexpQueryFlags, ScoreFunction, ScoreFunctionType, ScoreMode, ScriptScore,
+    SimpleQueryStringQuery, TermQuery, TermsQuery, WildcardQuery,
 };
 pub use request::{
     AggregationType, CardinalityAggregation, Collapse, FieldSort, Highlight, HighlightField, Lang,

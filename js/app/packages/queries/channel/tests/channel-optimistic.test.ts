@@ -30,9 +30,12 @@ import {
   type ChannelMessagesData,
   getChannelMessagesQueryKey,
 } from '../channel-messages';
+import { channelKeys } from '../keys';
 import {
+  optimisticDeleteChannelMessage,
   optimisticInsertChannelMessage,
   optimisticUpdateChannelMessage,
+  rollbackDeleteChannelMessage,
   rollbackInsertChannelMessage,
   rollbackUpdateChannelMessage,
 } from '../message';
@@ -444,6 +447,127 @@ describe('channel optimistic cache regressions', () => {
         ],
       })
     );
+  });
+
+  it('soft-deletes top-level messages with replies instead of removing them', () => {
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [
+          createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z', {
+            thread: {
+              preview: [
+                createThreadReply('reply-1', '2024-01-03T01:00:00.000Z'),
+                createThreadReply('reply-2', '2024-01-03T02:00:00.000Z'),
+              ],
+              reply_count: 2,
+              latest_reply_at: '2024-01-03T02:00:00.000Z',
+            },
+          }),
+        ],
+      ])
+    );
+    seedThreadRepliesCache('channel-1', 'parent-1', [
+      createThreadReply('reply-1', '2024-01-03T01:00:00.000Z'),
+      createThreadReply('reply-2', '2024-01-03T02:00:00.000Z'),
+    ]);
+
+    const context = optimisticDeleteChannelMessage({
+      channelId: 'channel-1',
+      message_id: 'parent-1',
+    });
+
+    const message = getChannelMessagesFromCache('channel-1')?.pages[0].items[0];
+    expect(message?.id).toBe('parent-1');
+    expect(message?.deleted_at).toBeTruthy();
+    expect(message?.thread.preview).toHaveLength(2);
+    expect(getThreadRepliesFromCache('channel-1', 'parent-1')).toHaveLength(2);
+
+    if (context) {
+      rollbackDeleteChannelMessage('channel-1', context);
+    }
+
+    const restored =
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0];
+    expect(restored?.id).toBe('parent-1');
+    expect(restored?.deleted_at).toBeFalsy();
+    expect(restored?.thread.preview).toHaveLength(2);
+  });
+
+  it('removes thread replies from caches on optimistic delete and restores them on rollback', () => {
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [
+          createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z', {
+            thread: {
+              preview: [
+                createThreadReply('reply-1', '2024-01-03T01:00:00.000Z'),
+              ],
+              reply_count: 1,
+              latest_reply_at: '2024-01-03T01:00:00.000Z',
+            },
+          }),
+        ],
+      ])
+    );
+    seedThreadRepliesCache('channel-1', 'parent-1', [
+      createThreadReply('reply-1', '2024-01-03T01:00:00.000Z'),
+    ]);
+
+    const context = optimisticDeleteChannelMessage({
+      channelId: 'channel-1',
+      message_id: 'reply-1',
+      threadId: 'parent-1',
+    });
+
+    expect(getThreadRepliesFromCache('channel-1', 'parent-1')).toEqual([]);
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread.preview
+    ).toEqual([]);
+
+    if (context) {
+      rollbackDeleteChannelMessage('channel-1', context);
+    }
+
+    expect(getThreadRepliesFromCache('channel-1', 'parent-1')).toEqual([
+      expect.objectContaining({ id: 'reply-1' }),
+    ]);
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread.preview
+    ).toEqual([expect.objectContaining({ id: 'reply-1' })]);
+  });
+
+  it('preserves a prior deleted_at on rollback when only the by-ids cache is warm', () => {
+    const previousDeletedAt = '2024-01-02T00:00:00.000Z';
+    testQueryClient.setQueryData<ApiChannelMessage[]>(
+      channelKeys.messagesByIds('channel-1', ['parent-1']).queryKey,
+      [
+        createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z', {
+          deleted_at: previousDeletedAt,
+        }),
+      ]
+    );
+
+    const context = optimisticDeleteChannelMessage({
+      channelId: 'channel-1',
+      message_id: 'parent-1',
+    });
+
+    const byIdsAfter = testQueryClient.getQueryData<ApiChannelMessage[]>(
+      channelKeys.messagesByIds('channel-1', ['parent-1']).queryKey
+    );
+    expect(byIdsAfter?.[0].deleted_at).toBeTruthy();
+    expect(byIdsAfter?.[0].deleted_at).not.toBe(previousDeletedAt);
+
+    if (context) {
+      rollbackDeleteChannelMessage('channel-1', context);
+    }
+
+    const byIdsRolledBack = testQueryClient.getQueryData<ApiChannelMessage[]>(
+      channelKeys.messagesByIds('channel-1', ['parent-1']).queryKey
+    );
+    expect(byIdsRolledBack?.[0].deleted_at).toBe(previousDeletedAt);
   });
 
   it('uses distinct query keys for target-message loads', () => {

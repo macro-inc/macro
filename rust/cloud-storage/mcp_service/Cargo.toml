@@ -15,6 +15,7 @@ axum = { workspace = true, features = ["tower-log"] }
 call = { path = "../call", default-features = false, features = ["ports"] }
 chat = { path = "../chat", features = ["ai_tools", "outbound"] }
 comms = { path = "../comms", features = ["outbound"] }
+crm = { path = "../crm" }
 documents = { path = "../documents", features = ["ai_tools"] }
 email = { path = "../email", features = ["outbound"] }
 email_service_client = { path = "../email_service_client" }

@@ -1,5 +1,2 @@
-export type {
-  SidePanelContextType,
-  SidePanelSectionEntry,
-} from './context';
-export { SidePanel, useHasSidePanel, useSidePanel } from './SidePanel';
+export type {} from './context';
+export { SidePanel, useSidePanel } from './SidePanel';

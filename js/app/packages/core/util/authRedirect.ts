@@ -6,7 +6,7 @@ export interface RedirectLocation {
 import { useIsAuthenticated } from '@core/auth';
 import { createEffect } from 'solid-js';
 
-export function useGotoLogin() {
+function useGotoLogin() {
   const navigate = useNavigate();
   const location = useLocation<RedirectLocation>();
 
@@ -24,7 +24,7 @@ export function useGotoLogin() {
   };
 }
 
-export function useAuthRedirect() {
+function _useAuthRedirect() {
   const isAuthenticated = useIsAuthenticated();
   const gotoLogin = useGotoLogin();
 

@@ -2,6 +2,7 @@ import {
   type HoverCardRootProps,
   HoverCard as KobalteHoverCard,
 } from '@kobalte/core/hover-card';
+import { cn } from '@ui';
 import type { JSX, Setter } from 'solid-js';
 import {
   createContext,
@@ -25,7 +26,7 @@ const HoverCardPortalNestedPreviewOpenContext = createContext<
 // and a missed pointerleave (common during scroll) can leave multiple stranded.
 const openTopLevelHoverCards = new Set<() => void>();
 
-export type HoverCardComponentProps = {
+type HoverCardComponentProps = {
   /** The trigger content to hover over */
   trigger: JSX.Element;
   /** The content to show in the hover card */
@@ -173,7 +174,7 @@ export function HoverCard(props: HoverCardComponentProps) {
           ref={(el) => {
             contentEl = el;
           }}
-          class={props.contentClass}
+          class={cn('z-tool-tip', props.contentClass)}
         >
           <HoverCardPortalNestedPreviewOpenContext.Provider
             value={{ count: nestedOpenCount, setCount: setNestedOpenCount }}

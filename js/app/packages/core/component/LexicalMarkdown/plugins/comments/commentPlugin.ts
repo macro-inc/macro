@@ -66,7 +66,7 @@ export const SET_COMMENT_THREAD_ID_COMMAND = createCommand<{
   threadId: number;
 }>('SET_COMMENT_THREAD_ID_COMMAND');
 
-export const CLEANUP_COMMENTS_COMMAND = createCommand<string[]>(
+const CLEANUP_COMMENTS_COMMAND = createCommand<string[]>(
   'CLEANUP_COMMENTS_COMMAND'
 );
 
@@ -74,7 +74,7 @@ const generateMarkId = () => v7();
 
 export const markNodeKeysToIDs: Map<NodeKey, Array<string>> = new Map();
 
-export type CommentPluginProps = {
+type CommentPluginProps = {
   ops: CommentOperations;
   peerId: () => string | undefined;
 };
@@ -424,7 +424,7 @@ export function commentPlugin(props: CommentPluginProps) {
   };
 }
 
-export function $disposeLocalDraftComments() {
+function _$disposeLocalDraftComments() {
   $traverseNodes($getRoot(), (node) => {
     if ($isCommentNode(node)) {
       if (node.getIsDraft() && node.getIsLocal()) {
@@ -434,7 +434,7 @@ export function $disposeLocalDraftComments() {
   });
 }
 
-export function $disposeExternalDraftComments(validPeerIds: string[]) {
+function $disposeExternalDraftComments(validPeerIds: string[]) {
   $traverseNodes($getRoot(), (node) => {
     if ($isCommentNode(node)) {
       const nodePeerId = $getPeerId(node);
@@ -449,7 +449,7 @@ export function $disposeExternalDraftComments(validPeerIds: string[]) {
   });
 }
 
-export function $unwrapOrRemovePeer(node: CommentNode, currentPeerId: string) {
+function $unwrapOrRemovePeer(node: CommentNode, currentPeerId: string) {
   const noRemainingOwner = $removePeerId(node, currentPeerId);
   if (noRemainingOwner) {
     $unwrapMarkNode(node);

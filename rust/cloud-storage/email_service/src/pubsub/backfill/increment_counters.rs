@@ -9,7 +9,7 @@ use models_email::service::attachment::{
 };
 use models_email::service::backfill::{
     BackfillAttachmentPayload, BackfillJobStatus, BackfillMessagePayload, BackfillOperation,
-    BackfillPubsubMessage, UpdateMetadataPayload,
+    BackfillPubsubMessage, JobScopedPayload, UpdateMetadataPayload,
 };
 use models_email::service::link::Link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
@@ -210,9 +210,11 @@ async fn handle_thread_completed(
     };
 
     let ps_message = BackfillPubsubMessage {
-        link_id: link.id,
-        job_id,
-        backfill_operation: BackfillOperation::UpdateThreadMetadata(new_payload),
+        backfill_operation: BackfillOperation::UpdateThreadMetadata(JobScopedPayload {
+            link_id: link.id,
+            job_id,
+            payload: new_payload,
+        }),
     };
 
     ctx.sqs_client
@@ -291,9 +293,11 @@ async fn send_attachment_backfill_messages(
         };
 
         let ps_message = BackfillPubsubMessage {
-            link_id,
-            job_id,
-            backfill_operation: BackfillOperation::BackfillAttachment(new_payload),
+            backfill_operation: BackfillOperation::BackfillAttachment(JobScopedPayload {
+                link_id,
+                job_id,
+                payload: new_payload,
+            }),
         };
 
         ctx.sqs_client

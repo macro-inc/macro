@@ -11,7 +11,7 @@ import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { propertiesKeys } from './keys';
 
-export type ListPropertiesQueryParams = {
+type ListPropertiesQueryParams = {
   scope: PropertyScope;
   includeOptions: boolean;
   forEntityType?: EntityType;
@@ -46,14 +46,14 @@ export function useListPropertiesQuery(
   });
 }
 
-export function invalidatePropertyDefinitions() {
+function invalidatePropertyDefinitions() {
   queryClient.invalidateQueries({
     predicate: ({ queryKey }) =>
       queryKey.includes('properties') && queryKey.includes('definitions'),
   });
 }
 
-export type CreatePropertyDefinitionParams = {
+type CreatePropertyDefinitionParams = {
   body: CreatePropertyDefinitionRequest;
 };
 

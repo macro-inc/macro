@@ -45,7 +45,7 @@ const withAuth = <P extends object>(Comp: Component<P>): Component<P> => {
   };
 };
 
-export type ComponentFactory = (params?: Record<string, any>) => JSXElement;
+type ComponentFactory = (params?: Record<string, any>) => JSXElement;
 
 export type UnifiedListMeta = {
   kind: 'unified-list';
@@ -65,7 +65,7 @@ type ComponentRegistration = {
 
 const REGISTRY = new Map<string, ComponentRegistration>();
 
-export function registerComponent<T extends Omit<ComponentMeta, 'kind'>>(
+function registerComponent<T extends Omit<ComponentMeta, 'kind'>>(
   name: string,
   factory: ComponentFactory,
   initialMeta?: T
@@ -74,13 +74,13 @@ export function registerComponent<T extends Omit<ComponentMeta, 'kind'>>(
   REGISTRY.set(name, { factory, initialMeta: metaWithKind as ComponentMeta });
 }
 
-export type ResolvedComponent = {
+type ResolvedComponent = {
   element: () => JSXElement;
   initialMeta?: ComponentMeta;
 };
 
 // Similar to SolidRouter's `<Navigate />` but for splits
-export function RedirectSplit(props: { to: SplitContent }) {
+function RedirectSplit(props: { to: SplitContent }) {
   const panel = useSplitPanelOrThrow();
 
   onMount(() => {

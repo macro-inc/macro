@@ -3,9 +3,7 @@ import { storageServiceClient } from '../client';
 // we expire slightly before the actual expiry to avoid race condition
 const EXPIRE_OFFSET_SECONDS = 10;
 
-export const parseExpiryTimeFromPresignedUrl = (
-  blobUrl: string
-): Date | undefined => {
+const parseExpiryTimeFromPresignedUrl = (blobUrl: string): Date | undefined => {
   try {
     const url = new URL(blobUrl);
     const expires = url.searchParams.get('Expires');

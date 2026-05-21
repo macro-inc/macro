@@ -247,6 +247,14 @@ pub struct EmailFilters {
     #[serde(default, skip_serializing_if = "SharedEmailFilter::is_default")]
     pub shared: SharedEmailFilter,
 
+    /// When true, expand visibility to every teammate's mailbox: results may
+    /// include emails the requesting user is not a participant on, as long as
+    /// at least one of their teammates is. Requires every sender/cc/bcc/recipient
+    /// value to be a fully-qualified email address or a domain (no partial
+    /// substring matches).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub team_scope: bool,
+
     /// When `Some(true)`, only include threads that have at least one message
     /// with an iCalendar attachment (`.ics` filename or `application/ics` mime
     /// type). `Some(false)` and `None` apply no constraint.
@@ -268,6 +276,7 @@ impl IsEmpty for EmailFilters {
             include_labels,
             exclude_labels,
             shared,
+            team_scope,
             calendar_only,
         } = self;
         senders.is_empty()
@@ -281,6 +290,7 @@ impl IsEmpty for EmailFilters {
             && include_labels.is_empty()
             && exclude_labels.is_empty()
             && shared.is_default()
+            && !team_scope
             && !calendar_only.unwrap_or(false)
     }
 }

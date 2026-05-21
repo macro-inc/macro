@@ -25,10 +25,10 @@ const AVATAR_DIAMETER_PX: Record<StackedAvatarsSize, number> = {
 };
 
 /** Horizontal row shell: stacking context (`isolate`). */
-export const STACKED_AVATARS_ROW_CLASS =
+const STACKED_AVATARS_ROW_CLASS =
   'flex items-center h-full shrink-0 w-fit isolate leading-none min-w-0';
 
-export type StackedAvatarsOverflowContext<T = unknown> = {
+type StackedAvatarsOverflowContext<T = unknown> = {
   overflowItems: T[];
   overflowCount: number;
 };
@@ -96,15 +96,11 @@ export function stackedAvatarInnerClass(size: StackedAvatarsSize = 'sm') {
 }
 
 /** Default +N chip shell (no text); pair with {@link stackedAvatarOverflowChipTextClass}. */
-export function stackedAvatarOverflowChipClass(
-  size: StackedAvatarsSize = 'sm'
-) {
+function stackedAvatarOverflowChipClass(size: StackedAvatarsSize = 'sm') {
   return STACK_STYLE[size].overflowChip;
 }
 
-export function stackedAvatarOverflowChipTextClass(
-  size: StackedAvatarsSize = 'sm'
-) {
+function stackedAvatarOverflowChipTextClass(size: StackedAvatarsSize = 'sm') {
   return STACK_STYLE[size].overflowChipText;
 }
 
@@ -151,7 +147,7 @@ function OverflowTooltip(props: {
   );
 }
 
-export type StackedAvatarsRowProps<T = unknown> = {
+type StackedAvatarsRowProps<T = unknown> = {
   each: Accessor<T[]>;
   max: number | Accessor<number>;
   size?: StackedAvatarsSize;

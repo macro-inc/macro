@@ -39,6 +39,7 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_channels_repo::TeamChannelsRepositoryImpl,
     UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
     NotificationIngressType,
+    teams::outbound::crm_enqueuer::SqsCrmEnqueuer,
 >;
 
 type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;
@@ -81,6 +82,8 @@ pub(crate) struct ApiContext {
     pub rate_limit_service: RateLimiter,
     /// The stripe price ids
     pub legacy_stripe_price_ids: LegacyStripePriceIds,
+    /// The stripe price id
+    pub stripe_price_id: String,
 }
 
 env_var! {

@@ -1,17 +1,19 @@
 import { useBlockId } from '@core/block';
 import { useUserId } from '@core/context/user';
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import CheckIcon from '@phosphor/check.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import XIcon from '@phosphor/x.svg';
-import { Dropdown, type DropdownOption } from '@property';
 import { useCreatePropertyDefinitionMutation } from '@queries/properties/definitions';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDataType } from '@service-properties/generated/schemas/propertyDataType';
-import { Button, Dialog, SegmentedControl, Surface } from '@ui';
+import { Button, Dialog, Dropdown, SegmentedControl, Surface } from '@ui';
 import {
   type Component,
   createMemo,
   createSignal,
+  For,
   Index,
   Show,
 } from 'solid-js';
@@ -219,8 +221,14 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
 
   const userId = useUserId();
 
-  const dataTypeDropdownOptions: DropdownOption<DataTypeValue>[] =
-    getPropertyDataTypeDropdownOptions();
+  const dataTypeDropdownOptions = getPropertyDataTypeDropdownOptions();
+
+  const selectedDataTypeLabel = createMemo(() => {
+    const option = dataTypeDropdownOptions.find(
+      (opt) => opt.value === selectedDataType()
+    );
+    return option?.label ?? 'Select type';
+  });
 
   // Helper to parse selected value back to type and specificType
   const parseDataTypeValue = (
@@ -454,17 +462,36 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                 <label class="block text-xs font-medium text-ink mb-1">
                   Data Type
                 </label>
-                <Dropdown
-                  value={selectedDataType()}
-                  options={dataTypeDropdownOptions}
-                  onChange={(value) => {
-                    setSelectedDataType(value);
-                    setNewStringOptions([]);
-                    setNewNumberOptions([]);
-                    setIsMultiSelect(false);
-                  }}
-                  placeholder="Select type"
-                />
+                <Dropdown gutter={4}>
+                  <Dropdown.Trigger class="w-full p-1.5 border border-edge-muted bg-surface text-sm text-ink text-left flex items-center gap-2 hover:bg-hover rounded-sm justify-between">
+                    <span class="truncate">{selectedDataTypeLabel()}</span>
+                    <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
+                  </Dropdown.Trigger>
+                  <Dropdown.Portal>
+                    <Dropdown.Content class="max-h-64 overflow-y-auto min-w-48">
+                      <For each={dataTypeDropdownOptions}>
+                        {(option) => (
+                          <Dropdown.Item
+                            class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm cursor-pointer"
+                            onSelect={() => {
+                              setSelectedDataType(option.value);
+                              setNewStringOptions([]);
+                              setNewNumberOptions([]);
+                              setIsMultiSelect(false);
+                            }}
+                          >
+                            <Dropdown.ItemLabel>
+                              {option.label}
+                            </Dropdown.ItemLabel>
+                            <Show when={option.value === selectedDataType()}>
+                              <CheckIcon class="size-3 shrink-0" />
+                            </Show>
+                          </Dropdown.Item>
+                        )}
+                      </For>
+                    </Dropdown.Content>
+                  </Dropdown.Portal>
+                </Dropdown>
               </div>
 
               <Show when={shouldShowMultiSelect()}>

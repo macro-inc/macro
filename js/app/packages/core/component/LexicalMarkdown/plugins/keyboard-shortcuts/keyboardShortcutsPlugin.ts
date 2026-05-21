@@ -32,14 +32,14 @@ const metaOrCtrl = (meta: boolean, ctrl: boolean) => {
   return IS_MAC ? meta : ctrl;
 };
 
-export type Shortcut = {
+type Shortcut = {
   test: (e: KeyboardEvent) => boolean;
   handler: (editor: LexicalEditor) => void;
   label: string;
   priority: number;
 };
 
-export type KeyboardShortcutPluginProps = {
+type KeyboardShortcutPluginProps = {
   shortcuts: Shortcut[];
 };
 

@@ -76,14 +76,14 @@ const BulkEditEntityModalContent = (props: {
   );
 };
 
-export type BulkEditEntityModalProps = {
+type BulkEditEntityModalProps = {
   isOpen: Accessor<boolean>;
   setIsOpen: Setter<boolean>;
   view: 'rename' | 'moveToProject' | 'delete';
   entities: Accessor<EntityData[]>;
 };
 
-export const BulkEditEntityModal: ParentComponent<BulkEditEntityModalProps> = (
+const _BulkEditEntityModal: ParentComponent<BulkEditEntityModalProps> = (
   props
 ) => {
   return (

@@ -52,7 +52,7 @@ export function throttledDependent<T>(source: () => T, delay = 150): () => T {
  * @param delay the delay time in ms
  * @returns a derived signal
  */
-export function laggedGate(source: () => boolean, delay = 300): () => boolean {
+function _laggedGate(source: () => boolean, delay = 300): () => boolean {
   const [follow, setFollow] = createSignal(source());
   const up = solidDebounce(() => setFollow(true), delay);
   createEffect(() => {
@@ -81,10 +81,7 @@ export function laggedGate(source: () => boolean, delay = 300): () => boolean {
  * @param delay the delay time in ms
  * @returns a derived signal
  */
-export function deferredGate(
-  source: () => boolean,
-  delay = 300
-): () => boolean {
+function _deferredGate(source: () => boolean, delay = 300): () => boolean {
   const [follow, setFollow] = createSignal(false);
   const up = solidDebounce(() => setFollow(true), delay);
   createEffect(() => {
@@ -110,7 +107,7 @@ export function deferredGate(
  * @param delay the delay time in ms
  * @returns a derived signal
  */
-export function stickyGate(source: () => boolean, delay = 300): () => boolean {
+function _stickyGate(source: () => boolean, delay = 300): () => boolean {
   const [follow, setFollow] = createSignal(source());
   const down = solidDebounce(() => setFollow(false), delay);
   createEffect(() => {

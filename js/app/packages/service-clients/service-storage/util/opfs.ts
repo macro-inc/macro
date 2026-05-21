@@ -3,7 +3,7 @@ import type { DocxExpandedPartList } from './getDocxFile';
 /** If making breaking changes to the OPFS structure / format, increment this */
 const OPFS_VERSION = 0;
 
-export const OPFS_DIR_NAME = `macro-documents-v${OPFS_VERSION}`;
+const OPFS_DIR_NAME = `macro-documents-v${OPFS_VERSION}`;
 
 let opfsHandle_: FileSystemDirectoryHandle | null = null;
 /** OPFS filesystem handle singleton */
@@ -29,7 +29,7 @@ async function getOPFSDocumentDirHandle() {
   return opfsDocumentDirHandle_;
 }
 
-export interface OPFSDocumentStore {
+interface OPFSDocumentStore {
   get: (
     documentID: string,
     options?: { create: boolean }
@@ -40,7 +40,7 @@ export interface OPFSDocumentStore {
 }
 
 /** Abstraction around a Macro DSS Document that exists in OPFS */
-export class OPFSDocument {
+class OPFSDocument {
   private readonly opfsDocumentDirHandle: FileSystemDirectoryHandle;
   readonly documentID: string;
 

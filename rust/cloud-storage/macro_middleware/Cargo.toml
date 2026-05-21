@@ -11,7 +11,6 @@ cloud_storage = [
   "dep:entity_access_db_utils",
   "dep:macro_user_id",
   "dep:model_user",
-  "dep:permission",
   "macro_db_client",
 ]
 default = ["all"]
@@ -38,7 +37,6 @@ model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_user = { path = "../model_user", features = ["axum"], optional = true }
 models_permissions = { path = "../models_permissions" }
-permission = { path = "../permission", optional = true }
 remote_env_var = { path = "../remote_env_var" }
 serde = { workspace = true }
 serde_json = { workspace = true }

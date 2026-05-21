@@ -39,11 +39,7 @@ http-body-util = { workspace = true }
 jsonwebtoken.workspace = true
 last_online_tracker = { path = "../last_online_tracker" }
 macro_auth = { path = "../macro_auth" }
-macro_aws_config = { path = "../macro_aws_config" }
-macro_axum_utils = { path = "../macro_axum_utils" }
-macro_cors = { path = "../macro_cors" }
 macro_db_client = { path = "../macro_db_client" }
-macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [

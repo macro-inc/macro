@@ -25,7 +25,7 @@ document_text_extractor = []
 email = ["uuid", "models_email", "dep:email", "gmail"]
 gmail = ["model", "models_email", "uuid"]
 organization_retention = []
-search = ["chrono", "model", "models_opensearch", "uuid", "futures"]
+search = ["chrono", "model", "uuid", "futures"]
 sfs_delete = []
 sfs_uploader = []
 upload_extractor = []
@@ -43,5 +43,4 @@ serde_json = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 tracing = { workspace = true }
 uuid = { workspace = true, optional = true }
-models_opensearch = { path = "../models_opensearch", optional = true }
 futures = { workspace = true, optional = true }

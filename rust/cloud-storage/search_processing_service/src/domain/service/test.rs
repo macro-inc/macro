@@ -278,6 +278,166 @@ async fn cancel_before_first_fetch_returns_empty_receipt() {
     assert!(source.observed_offsets().is_empty());
 }
 
+/// Fake source for the cursor-based loop. Pages out a programmed
+/// sequence and records the cursor it was called with each time so
+/// tests can assert the cursor advances correctly.
+struct CursorFakeSource {
+    pages: Mutex<std::collections::VecDeque<(SourcePage, Option<usize>)>>,
+    cursors: Mutex<Vec<Option<usize>>>,
+}
+
+impl CursorFakeSource {
+    fn new(pages: Vec<(SourcePage, Option<usize>)>) -> Self {
+        Self {
+            pages: Mutex::new(pages.into_iter().collect()),
+            cursors: Mutex::new(Vec::new()),
+        }
+    }
+
+    async fn fetch_page(
+        &self,
+        cursor: Option<usize>,
+    ) -> Result<(SourcePage, Option<usize>), BackfillError> {
+        self.cursors.lock().unwrap().push(cursor);
+        Ok(self
+            .pages
+            .lock()
+            .unwrap()
+            .pop_front()
+            .unwrap_or_else(|| (SourcePage::empty(), None)))
+    }
+
+    fn observed_cursors(&self) -> Vec<Option<usize>> {
+        self.cursors.lock().unwrap().clone()
+    }
+}
+
+#[tokio::test]
+async fn cursor_drain_threads_cursor_through_pages() {
+    // Three pages: first call passes None; subsequent calls pass the
+    // cursor each previous page returned. Loop stops on empty page.
+    let source = CursorFakeSource::new(vec![
+        (
+            page((0..5).map(|i| msg(&format!("p1-{i}"))).collect()),
+            Some(10),
+        ),
+        (
+            page((0..5).map(|i| msg(&format!("p2-{i}"))).collect()),
+            Some(20),
+        ),
+        (
+            page((0..3).map(|i| msg(&format!("p3-{i}"))).collect()),
+            Some(30),
+        ),
+    ]);
+    let publisher = RecordingPublisher::default();
+    let (progress, cancel) = detached();
+
+    let receipt = drain_source_with_cursor(&publisher, &progress, &cancel, |cursor| {
+        source.fetch_page(cursor)
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(receipt.enqueued, 13);
+    assert_eq!(publisher.batch_sizes(), vec![5, 5, 3]);
+    // Cursors: None (first), Some(10), Some(20), Some(30) (empty terminator).
+    assert_eq!(
+        source.observed_cursors(),
+        vec![None, Some(10), Some(20), Some(30)]
+    );
+}
+
+#[tokio::test]
+async fn cursor_drain_stops_when_non_empty_page_returns_no_cursor() {
+    // Defensive path: source returns a non-empty page but `None` for the
+    // next cursor (e.g. the last row's sort-key column came back NULL).
+    // The loop must treat this as terminator — passing `None` back into
+    // `fetch` would restart pagination from page one.
+    let source = CursorFakeSource::new(vec![
+        (
+            page((0..3).map(|i| msg(&format!("p1-{i}"))).collect()),
+            None,
+        ),
+        (
+            page((0..3).map(|i| msg(&format!("never-{i}"))).collect()),
+            Some(99),
+        ),
+    ]);
+    let publisher = RecordingPublisher::default();
+    let (progress, cancel) = detached();
+
+    let receipt = drain_source_with_cursor(&publisher, &progress, &cancel, |cursor| {
+        source.fetch_page(cursor)
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(receipt.enqueued, 3);
+    assert_eq!(publisher.batch_sizes(), vec![3]);
+    // Only the first fetch happens; the loop bails before re-entering with `None`.
+    assert_eq!(source.observed_cursors(), vec![None]);
+}
+
+#[tokio::test]
+async fn cursor_drain_stops_on_empty_page() {
+    let source = CursorFakeSource::new(vec![]);
+    let publisher = RecordingPublisher::default();
+    let (progress, cancel) = detached();
+
+    let receipt = drain_source_with_cursor(&publisher, &progress, &cancel, |cursor| {
+        source.fetch_page(cursor)
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(receipt.enqueued, 0);
+    assert_eq!(publisher.batch_count(), 0);
+    // Probed once with no cursor, got empty, terminated.
+    assert_eq!(source.observed_cursors(), vec![None]);
+}
+
+#[tokio::test]
+async fn cursor_drain_cancellation_stops_between_pages() {
+    let source = CursorFakeSource::new(vec![
+        (
+            page((0..3).map(|i| msg(&format!("a{i}"))).collect()),
+            Some(7),
+        ),
+        (
+            page((0..3).map(|i| msg(&format!("never-{i}"))).collect()),
+            Some(99),
+        ),
+    ]);
+    let (progress, cancel) = detached();
+    let cancel_clone = cancel.clone();
+    struct CancellingPublisher {
+        cancel: CancellationToken,
+        seen: Mutex<Vec<usize>>,
+    }
+    impl SearchEventPublisher for CancellingPublisher {
+        async fn publish(&self, messages: Vec<SearchQueueMessage>) -> Result<(), BackfillError> {
+            self.seen.lock().unwrap().push(messages.len());
+            self.cancel.cancel();
+            Ok(())
+        }
+    }
+    let publisher = CancellingPublisher {
+        cancel: cancel_clone,
+        seen: Mutex::new(Vec::new()),
+    };
+
+    let receipt = drain_source_with_cursor(&publisher, &progress, &cancel, |cursor| {
+        source.fetch_page(cursor)
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(receipt.enqueued, 3);
+    // First page fetched + published; cancellation stops the second fetch.
+    assert_eq!(source.observed_cursors(), vec![None]);
+}
+
 #[tokio::test]
 async fn cancel_between_pages_stops_drain_after_current_page() {
     // Cancel the token from inside the publisher: the page that triggered

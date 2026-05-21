@@ -147,6 +147,8 @@ pub struct TeamInviteDetails {
 pub struct PatchTeamRequest {
     /// The new name for the team
     pub name: Option<String>,
+    /// The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE.
+    pub slug: Option<String>,
     /// Role updates to apply to team users
     pub user_role_updates: Option<Vec<PatchTeamUserRole>>,
 }
@@ -205,14 +207,25 @@ pub struct TeamCheckoutSessionRequest {
 pub struct Team {
     pub(crate) id: uuid::Uuid,
     pub(crate) name: String,
+    pub(crate) slug: String,
     #[cfg_attr(feature = "axum", schema(value_type = String))]
     pub(crate) owner_id: MacroUserIdStr<'static>,
 }
 
 impl Team {
     /// Creates a new Team
-    pub fn new(id: uuid::Uuid, name: String, owner_id: MacroUserIdStr<'static>) -> Self {
-        Self { id, name, owner_id }
+    pub fn new(
+        id: uuid::Uuid,
+        name: String,
+        slug: String,
+        owner_id: MacroUserIdStr<'static>,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            slug,
+            owner_id,
+        }
     }
 }
 
@@ -225,6 +238,11 @@ impl Team {
     /// The name of the team
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// The slug of the team
+    pub fn slug(&self) -> &str {
+        &self.slug
     }
 
     /// The owner id of the team
@@ -412,6 +430,9 @@ pub enum CustomerError {
     /// Invalid promotion code
     #[error("Invalid promotion code {0}")]
     InvalidPromotionCode(String),
+    /// No subscription line item matched the configured Stripe price id.
+    #[error("No matching line item")]
+    NoMatchingLineItem,
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),

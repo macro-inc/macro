@@ -25,7 +25,7 @@ import { AssistantMessage } from './AssistantMessage';
 import { EmptyChatState } from './EmptyChatState';
 import { UserMessage } from './UserMessage';
 
-export type MessageActions = {};
+type MessageActions = {};
 
 function OnMount(props: {
   onShow: (ref: HTMLDivElement) => void;
@@ -38,7 +38,7 @@ function OnMount(props: {
   return <div ref={ref}>{props.children}</div>;
 }
 
-export type ChatMessagesProps = {
+type ChatMessagesProps = {
   messageActions?: MessageActions;
   editDisabled?: boolean;
   pendingLocationParams?: Accessor<Record<string, string> | undefined>;

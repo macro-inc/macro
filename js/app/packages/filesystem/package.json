@@ -20,9 +20,7 @@
     "@types/wicg-file-system-access": "^2020.9.5",
     "typedoc": "^0.22.18"
   },
-  "dependencies": {
-    "jszip": "^3.10.1"
-  },
+  "dependencies": {},
   "bugs": {
     "url": "https://github.com/coparse-inc/filesystem/issues"
   },

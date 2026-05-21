@@ -28,14 +28,14 @@ export const useGetPermissions = () => {
   return createMemo(() => getPermissions(accessLevel()));
 };
 
-export const useHasAccess = (requestedPermissions: Permissions) => {
+const useHasAccess = (requestedPermissions: Permissions) => {
   const userPermissions = useGetPermissions();
   return createMemo(() =>
     hasPermissions(userPermissions(), requestedPermissions)
   );
 };
 
-export const useIsEditable = () => {
+const useIsEditable = () => {
   const source = blockSourceSignal.get;
   const syncSource = blockSyncSourceSignal.get;
   return createMemo(() => {
@@ -52,7 +52,7 @@ export const useIsEditable = () => {
   });
 };
 
-export const usePermissionCan = (requestedPermissions: Permissions) => {
+const usePermissionCan = (requestedPermissions: Permissions) => {
   const isAuthenticated = useIsAuthenticated();
   const hasAccess = useHasAccess(requestedPermissions);
   const isEditable = useIsEditable();
@@ -69,7 +69,7 @@ export const useCanComment = () => usePermissionCan(Permissions.CAN_COMMENT);
 export const useCanEdit = () => usePermissionCan(Permissions.CAN_EDIT);
 export const useIsDocumentOwner = () => useHasAccess(Permissions.OWNER);
 
-export const useReadOnly = () => {
+const _useReadOnly = () => {
   const canView = useCanView();
   const canComment = useCanComment();
   return createMemo(() => canView() && !canComment());
