@@ -261,7 +261,7 @@ function ToastBodyWrapper(props: {
         </Surface>
       }
     >
-        {props.children}
+      {props.children}
     </Show>
   );
 }
