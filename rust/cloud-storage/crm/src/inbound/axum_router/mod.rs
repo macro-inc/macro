@@ -65,7 +65,7 @@ impl IntoResponse for CrmError {
                     message: "crm company not found for team".into(),
                 }),
             ),
-            CrmError::StorageLayerError(_) => (
+            CrmError::InvalidTeamId | CrmError::StorageLayerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     message: "internal server error".into(),

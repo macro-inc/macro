@@ -49,8 +49,8 @@ pub async fn handler<C: CrmService, Eas: EntityAccessService>(
     Path(company_id): Path<Uuid>,
     Json(req): Json<SetEmailSyncRequest>,
 ) -> Result<StatusCode, CrmError> {
-    let team_id =
-        macro_uuid::string_to_uuid(&access.entity_access_receipt.entity().entity_id).unwrap();
+    let team_id = macro_uuid::string_to_uuid(&access.entity_access_receipt.entity().entity_id)
+        .map_err(|_| CrmError::InvalidTeamId)?;
 
     state
         .service

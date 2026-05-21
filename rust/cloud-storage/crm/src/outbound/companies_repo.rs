@@ -559,7 +559,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         if !email_sync {
             let domains = sqlx::query_scalar!(
                 r#"
-                SELECT LOWER(domain)
+                SELECT LOWER(domain) AS "domain!"
                 FROM crm_domains
                 WHERE company_id = $1 AND team_id = $2
                 ORDER BY LOWER(domain) ASC
@@ -571,7 +571,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-            for domain in domains.into_iter().flatten() {
+            for domain in domains {
                 sqlx::query!(
                     r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))"#,
                     format!("{team_id}:{domain}"),
