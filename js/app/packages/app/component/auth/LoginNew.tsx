@@ -213,6 +213,20 @@ export function LoginNew() {
   const stepIndex = () =>
     stage() === Stage.None ? 0 : stage() === Stage.Email ? 1 : 2;
 
+  const compactHeader = () =>
+    stage() === Stage.Email || stage() === Stage.Verify;
+
+  const headerTitle = () => {
+    switch (stage()) {
+      case Stage.Email:
+        return 'Enter your email';
+      case Stage.Verify:
+        return 'Check your inbox';
+      default:
+        return 'Login to Macro';
+    }
+  };
+
   return (
     <Show when={!userInfo()?.authenticated} fallback={<PostLoginRedirect />}>
       <div class="flex items-center justify-center size-full p-8 overflow-hidden relative">
@@ -246,34 +260,29 @@ export function LoginNew() {
             <div
               class={cn(
                 'p-8 flex flex-col gap-16',
-                stage() === Stage.Email && 'gap-8'
+                compactHeader() && 'gap-8'
               )}
             >
               <div
                 class={cn(
                   'flex flex-col gap-4 items-center',
                   virtualKeyboardVisible() && 'hidden',
-                  stage() === Stage.Email && 'flex-row'
+                  compactHeader() && 'flex-row'
                 )}
               >
                 <LogoIcon
                   class={cn(
                     'size-8 text-accent',
-                    stage() === Stage.Email && 'size-6'
+                    compactHeader() && 'size-6'
                   )}
                 />
                 <span
                   class={cn(
                     'text-3xl font-bold tracking-wide text-ink',
-                    stage() === Stage.Email && 'text-lg'
+                    compactHeader() && 'text-lg'
                   )}
                 >
-                  <Show
-                    when={stage() !== Stage.Email}
-                    fallback={'Enter your email'}
-                  >
-                    Login to Macro
-                  </Show>
+                  {headerTitle()}
                 </span>
               </div>
 
