@@ -23,7 +23,6 @@ import {
   verifyBlockName,
 } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
-import { isMobile } from '@core/mobile/isMobile';
 import { canNestBlock } from '@core/orchestrator';
 import { formatDate } from '@core/util/date';
 import { matches } from '@core/util/match';
@@ -66,6 +65,7 @@ import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { autoRegister, UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { openDocument } from '../core/BlockLink';
 import { MentionTooltip } from './MentionTooltip';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 // Time threshold for showing fallback state for recently created mentions (1 minute)
 const RECENT_MENTION_THRESHOLD_MS = 1 * 60 * 1000;
@@ -506,7 +506,7 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
 
   return (
     <HoverCard
-      disabled={isMobile()}
+      disabled={isTouchDevice()}
       trigger={
         <span class="relative">
           <span

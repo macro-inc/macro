@@ -1,6 +1,6 @@
 import { HoverCard } from '@core/component/HoverCard';
 import { UserTooltip } from '@core/component/UserTooltip';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import type { UserMentionDecoratorProps } from '@lexical-core';
 import { cn } from '@ui';
@@ -38,7 +38,7 @@ export function UserMention(props: UserMentionDecoratorProps) {
   return (
     <HoverCard
       placement="top"
-      disabled={isMobile()}
+      disabled={isTouchDevice()}
       open={open()}
       onOpenChange={setOpen}
       triggerAs="span"

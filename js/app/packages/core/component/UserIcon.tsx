@@ -1,7 +1,6 @@
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
 import { staticFileSizedUrl } from '@core/constant/servers';
 import { internalDrag } from '@core/directive/internalDragState';
-import { isMobile } from '@core/mobile/isMobile';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import {
   macroIdToEmail,
@@ -24,6 +23,7 @@ import {
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { HoverCard } from './HoverCard';
 import { UserTooltip } from './UserTooltip';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export type UserIconSize = AvatarSize;
 
@@ -258,7 +258,7 @@ function UserAvatarWithTooltip(props: {
   return (
     <HoverCard
       placement="left"
-      disabled={isMobile()}
+      disabled={isTouchDevice()}
       open={open()}
       onOpenChange={setOpen}
       triggerAs="div"
