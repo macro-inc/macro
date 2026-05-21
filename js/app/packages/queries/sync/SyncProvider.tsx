@@ -5,6 +5,10 @@ import {
 } from '@queries/channel/sync';
 import { handleCommsTyping } from '@queries/channel/typing';
 import { invalidateContacts } from '@queries/contacts/contacts';
+import {
+  applyNotificationStatusUpdate,
+  type NotificationStatusUpdate,
+} from '@queries/notification/user-notifications';
 // Side-effect import: registers the scheduled-action live-update websocket
 // listener. Must be imported somewhere that always loads on app start — this
 // provider is guaranteed to mount alongside the other sync handlers.
@@ -39,6 +43,9 @@ export function QuerySyncProvider(props: SyncProviderProps) {
         const userId = props.userId();
         if (!userId) return;
         handleCommsTyping(payload, userId);
+      })
+      .with({ type: 'notification_status_updated' }, () => {
+        applyNotificationStatusUpdate(payload as NotificationStatusUpdate);
       })
       .otherwise(() => {});
   });
