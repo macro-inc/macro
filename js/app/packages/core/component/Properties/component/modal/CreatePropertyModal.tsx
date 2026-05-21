@@ -467,12 +467,12 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                     <span class="truncate">{selectedDataTypeLabel()}</span>
                     <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
                   </Dropdown.Trigger>
-                  <Dropdown.Portal>
-                    <Dropdown.Content class="max-h-64 overflow-y-auto min-w-48">
+                  <Dropdown.Content class="max-h-64 overflow-y-auto min-w-48">
+                    <Dropdown.Group>
                       <For each={dataTypeDropdownOptions}>
                         {(option) => (
                           <Dropdown.Item
-                            class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm cursor-pointer"
+                            class="justify-between"
                             onSelect={() => {
                               setSelectedDataType(option.value);
                               setNewStringOptions([]);
@@ -480,17 +480,15 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                               setIsMultiSelect(false);
                             }}
                           >
-                            <Dropdown.ItemLabel>
-                              {option.label}
-                            </Dropdown.ItemLabel>
+                            <span>{option.label}</span>
                             <Show when={option.value === selectedDataType()}>
                               <CheckIcon class="size-3 shrink-0" />
                             </Show>
                           </Dropdown.Item>
                         )}
                       </For>
-                    </Dropdown.Content>
-                  </Dropdown.Portal>
+                    </Dropdown.Group>
+                  </Dropdown.Content>
                 </Dropdown>
               </div>
 

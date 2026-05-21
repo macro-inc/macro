@@ -826,34 +826,38 @@ export const AppSidebar = (props: AppSidebarProps) => {
             <div class="flex items-center gap-1 mr-1">
               <Show when={showEnableNotifications()}>
                 <Button
-                  class="size-7 rounded-xs p-1 [&_svg]:size-4"
+                  class="rounded-md p-1 text-ink-extra-muted"
+                  size="icon-sm"
                   label="Enable Notifications"
                   onClick={handleEnableNotifications}
                 >
-                  <BellIcon class="size-4" />
+                  <BellIcon />
                 </Button>
               </Show>
               <Button
-                class="size-7 rounded-xs p-1 [&_svg]:size-4"
-                label="New Split"
-                hotkey={TOKENS.global.createNewSplit}
-                disabled={!canCreateNewSplit()}
-                onClick={handleNewSplitClick}
-              >
-                <AnimatedNewSplitIcon />
-              </Button>
-              <Button
-                class="size-7 rounded-xs p-1 [&_svg]:size-4"
+                class="rounded-md p-1 text-ink-extra-muted"
+                size="icon-sm"
                 label="Command"
                 hotkey={TOKENS.global.commandMenu}
                 onClick={handleCommandPaletteClick}
               >
                 <CommandKIcon />
               </Button>
+              <Button
+                class="rounded-md p-1 text-ink-extra-muted"
+                size="icon-sm"
+                label="New Split"
+                hotkey={TOKENS.global.createNewSplit}
+                disabled={!canCreateNewSplit()}
+                onClick={handleNewSplitClick}
+              >
+                <AnimatedNewSplitIcon class="size-4" />
+              </Button>
             </div>
           </Show>
           <Button
-            class="size-7 rounded-xs p-1 [&_svg]:size-4"
+            class="rounded-md p-1 text-ink-extra-muted [&_svg]:size-4"
+            size="icon-sm"
             onMouseDown={(e) => {
               if (e.button !== 0) return;
               e.preventDefault();

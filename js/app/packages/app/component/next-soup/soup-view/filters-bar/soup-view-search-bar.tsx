@@ -142,7 +142,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
 
   return (
     <div
-      class="w-full flex items-center shrink-0 grow min-w-0 mobile:-order-2"
+      class="w-full items-center shrink-0 grow min-w-0 mobile:-order-2"
       data-search-bar-wrapper
       data-no-focus-restore
       onFocusOut={(e) => {
@@ -154,7 +154,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     >
       <div
         class={cn(
-          'group w-full relative flex items-center gap-1 rounded-lg mobile:h-9 pl-1 pr-1 py-1 mobile:min-w-35 border text-xs',
+          'group w-full relative flex items-center gap-1 rounded-lg h-7 mobile:h-9 pl-1 pr-1 py-1 mobile:min-w-35 border text-xs',
           variantStyles[props.variant ?? 'secondary']
         )}
       >

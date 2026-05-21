@@ -11,7 +11,7 @@ import {
   openFolderPicker,
 } from '@core/util/upload';
 import ChevronDownIcon from '@phosphor/caret-down.svg';
-import PlusCircleIcon from '@phosphor/plus.svg';
+import PlusCircleIcon from '@phosphor/plus-circle.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
 import { Button, cn, Dropdown } from '@ui';
 import { createMemo, For, Show } from 'solid-js';

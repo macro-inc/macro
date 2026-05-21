@@ -91,7 +91,11 @@ async function generateTaskPrompt(
   );
   lines.push('');
   lines.push(
-    'When committing, please follow the Conventional Commits spec (e.g. `feat: ...`, `fix: ...`, `chore: ...`) so the history stays consistent.'
+    'When committing and titling pull requests, please follow the Conventional Commits spec (e.g. `feat: ...`, `fix: ...`, `chore: ...`) so the history stays consistent.'
+  );
+  lines.push('');
+  lines.push(
+    'Keep the pull request description concise, succinct, and useful. No need for test cases or verification steps — just describe exactly what the PR solves and how, and include a link back to the original session if applicable.'
   );
 
   return lines.join('\n');
