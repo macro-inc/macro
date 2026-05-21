@@ -1063,6 +1063,7 @@ async fn test_join_team_increments_customer_seat_count() {
         channels_repo,
         roles_service,
         Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
     );
 
     service.join_team(&invite_id, &user_id).await.unwrap();
@@ -1110,6 +1111,7 @@ async fn test_join_team_rolls_back_accept_when_customer_increment_fails() {
         channels_repo,
         roles_service,
         Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
     );
 
     let err = service.join_team(&invite_id, &user_id).await.err().unwrap();
@@ -1159,6 +1161,7 @@ async fn test_remove_user_from_team_decrements_customer_seat_count() {
         channels_repo,
         roles_service,
         Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
     );
 
     service
@@ -1216,6 +1219,7 @@ async fn test_remove_user_from_team_rolls_back_remove_when_customer_decrement_fa
         channels_repo,
         roles_service,
         Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
     );
 
     let err = service
@@ -1270,6 +1274,7 @@ async fn test_join_team_rolls_back_customer_roles_and_accept_when_channel_add_fa
         channels_repo,
         roles_service,
         Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
     );
 
     let err = service.join_team(&invite_id, &user_id).await.err().unwrap();
@@ -1324,6 +1329,7 @@ async fn test_remove_user_from_team_rolls_back_customer_and_remove_when_channel_
         channels_repo,
         roles_service,
         Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
     );
 
     let err = service
