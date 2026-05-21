@@ -620,51 +620,53 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
         <CaretUpIcon class="size-3 text-ink-extra-muted shrink-0 group-data-[slim=true]/sidebar:hidden" />
       </Dropdown.Trigger>
       <Dropdown.Content depth={3} class="min-w-56">
-        <For each={topItems()}>
-          {(item) => (
-            <Dropdown.Item
-              class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
-              onSelect={() => props.onSelect(item.tab)}
-            >
-              <span class="size-5 flex items-center justify-center">
-                <Dynamic
-                  component={item.icon}
-                  class="size-4 shrink-0 text-ink-extra-muted"
-                />
-              </span>
-              <div class="flex flex-col min-w-0">
-                <span class="text-ink">{item.label}</span>
-                <span class="text-xxs text-ink-extra-muted leading-tight">
-                  {item.description}
+        <Dropdown.Group>
+          <For each={topItems()}>
+            {(item) => (
+              <Dropdown.Item
+                class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
+                onSelect={() => props.onSelect(item.tab)}
+              >
+                <span class="size-5 flex items-center justify-center">
+                  <Dynamic
+                    component={item.icon}
+                    class="size-4 shrink-0 text-ink-extra-muted"
+                  />
                 </span>
-              </div>
-            </Dropdown.Item>
-          )}
-        </For>
-        <Show when={topItems().length > 0 && bottomItems().length > 0}>
-          <Dropdown.Separator />
-        </Show>
-        <For each={bottomItems()}>
-          {(item) => (
-            <Dropdown.Item
-              class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
-              onSelect={() => props.onSelect(item.tab)}
-            >
-              <span class="size-5 flex items-center justify-center">
-                <Dynamic
-                  component={item.icon}
-                  class="size-4 shrink-0 text-ink-extra-muted"
-                />
-              </span>
-              <div class="flex flex-col min-w-0">
-                <span class="text-ink">{item.label}</span>
-                <span class="text-xxs text-ink-extra-muted leading-tight">
-                  {item.description}
+                <div class="flex flex-col min-w-0">
+                  <span class="text-ink">{item.label}</span>
+                  <span class="text-xxs text-ink-extra-muted leading-tight">
+                    {item.description}
+                  </span>
+                </div>
+              </Dropdown.Item>
+            )}
+          </For>
+          <Show when={topItems().length > 0 && bottomItems().length > 0}>
+            <Dropdown.Separator />
+          </Show>
+          <For each={bottomItems()}>
+            {(item) => (
+              <Dropdown.Item
+                class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
+                onSelect={() => props.onSelect(item.tab)}
+              >
+                <span class="size-5 flex items-center justify-center">
+                  <Dynamic
+                    component={item.icon}
+                    class="size-4 shrink-0 text-ink-extra-muted"
+                  />
                 </span>
-              </div>
-            </Dropdown.Item>
-          )}
-        </For>
+                <div class="flex flex-col min-w-0">
+                  <span class="text-ink">{item.label}</span>
+                  <span class="text-xxs text-ink-extra-muted leading-tight">
+                    {item.description}
+                  </span>
+                </div>
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
   );

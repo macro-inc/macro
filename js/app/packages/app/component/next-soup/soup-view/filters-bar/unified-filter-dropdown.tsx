@@ -447,29 +447,31 @@ function SingleValueSubmenu<T>(props: {
         <span class="text-ink">{props.label}</span>
         <CaretRightIcon class="size-3 text-ink-muted" />
       </Dropdown.SubTrigger>
-      <Dropdown.SubContent class="min-w-40 p-1">
-        <For each={props.options}>
-          {(option) => {
-            const active = () => props.current() === option.value;
-            return (
-              <Dropdown.Item
-                class={FILTER_MENU_ROW_CLASS}
-                onSelect={() => props.onSelect(option.value)}
-                closeOnSelect
-              >
-                <TypeIndicator active={active()} />
-                <span
-                  class={cn(
-                    'flex-1 truncate',
-                    active() ? 'text-ink' : 'text-ink-muted'
-                  )}
+      <Dropdown.SubContent class="min-w-40">
+        <Dropdown.Group>
+          <For each={props.options}>
+            {(option) => {
+              const active = () => props.current() === option.value;
+              return (
+                <Dropdown.Item
+                  class={FILTER_MENU_ROW_CLASS}
+                  onSelect={() => props.onSelect(option.value)}
+                  closeOnSelect
                 >
-                  {option.label}
-                </span>
-              </Dropdown.Item>
-            );
-          }}
-        </For>
+                  <TypeIndicator active={active()} />
+                  <span
+                    class={cn(
+                      'flex-1 truncate',
+                      active() ? 'text-ink' : 'text-ink-muted'
+                    )}
+                  >
+                    {option.label}
+                  </span>
+                </Dropdown.Item>
+              );
+            }}
+          </For>
+        </Dropdown.Group>
       </Dropdown.SubContent>
     </Dropdown.Sub>
   );
@@ -645,8 +647,8 @@ const SearchIndexSubRow = (props: {
       <SearchIndexRowLabel option={props.option} active={props.active} />
       <CaretRightIcon class="size-3 text-ink-muted" />
     </Dropdown.SubTrigger>
-    <Dropdown.SubContent class="min-w-45 p-1">
-      {props.children}
+    <Dropdown.SubContent class="min-w-45">
+      <Dropdown.Group>{props.children}</Dropdown.Group>
     </Dropdown.SubContent>
   </Dropdown.Sub>
 );
@@ -803,181 +805,187 @@ export const UnifiedFilterDropdown = () => {
         </Tooltip>
 
         <Dropdown.Content class="min-w-45">
-          <Show
-            when={
-              categories().length === 1 && !isTasksView() && !isSearchView()
-            }
-            fallback={
-              <>
-                <For each={categories()}>
-                  {(category) => (
-                    <Dropdown.Sub gutter={4}>
-                      <Dropdown.SubTrigger class={FILTER_MENU_SUBTRIGGER_CLASS}>
-                        <span class="text-ink">{category.label}</span>
-                        <CaretRightIcon class="size-3 text-ink-muted" />
-                      </Dropdown.SubTrigger>
+          <Dropdown.Group>
+            <Show
+              when={
+                categories().length === 1 && !isTasksView() && !isSearchView()
+              }
+              fallback={
+                <>
+                  <For each={categories()}>
+                    {(category) => (
+                      <Dropdown.Sub gutter={4}>
+                        <Dropdown.SubTrigger
+                          class={FILTER_MENU_SUBTRIGGER_CLASS}
+                        >
+                          <span class="text-ink">{category.label}</span>
+                          <CaretRightIcon class="size-3 text-ink-muted" />
+                        </Dropdown.SubTrigger>
 
-                      <Dropdown.SubContent class="min-w-40">
-                        <For each={category.options}>
-                          {(option) => {
-                            const active = () => isOptionActive(option.id);
-                            return (
-                              <Dropdown.Item
-                                class={FILTER_MENU_ROW_CLASS}
-                                onSelect={() => toggleFilter(option.id)}
-                                closeOnSelect={!category.multiple}
-                              >
-                                <span
-                                  class={cn(
-                                    'size-4 flex items-center justify-center shrink-0 rounded border',
-                                    active()
-                                      ? 'bg-accent border-accent'
-                                      : 'border-edge'
-                                  )}
-                                >
-                                  <Show when={active()}>
-                                    <CheckIcon class="size-2.5 text-surface" />
-                                  </Show>
-                                </span>
-
-                                <Show when={option.icon}>
-                                  {(icon) => (
-                                    <span class="size-4 flex items-center justify-center shrink-0">
-                                      {icon()()}
+                        <Dropdown.SubContent class="min-w-40">
+                          <Dropdown.Group>
+                            <For each={category.options}>
+                              {(option) => {
+                                const active = () => isOptionActive(option.id);
+                                return (
+                                  <Dropdown.Item
+                                    class={FILTER_MENU_ROW_CLASS}
+                                    onSelect={() => toggleFilter(option.id)}
+                                    closeOnSelect={!category.multiple}
+                                  >
+                                    <span
+                                      class={cn(
+                                        'size-4 flex items-center justify-center shrink-0 rounded border',
+                                        active()
+                                          ? 'bg-accent border-accent'
+                                          : 'border-edge'
+                                      )}
+                                    >
+                                      <Show when={active()}>
+                                        <CheckIcon class="size-2.5 text-surface" />
+                                      </Show>
                                     </span>
-                                  )}
-                                </Show>
 
-                                <span
-                                  class={cn(
-                                    'flex-1 truncate',
-                                    active() ? 'text-ink' : 'text-ink-muted'
-                                  )}
-                                >
-                                  {option.label}
-                                </span>
-                              </Dropdown.Item>
-                            );
-                          }}
-                        </For>
-                      </Dropdown.SubContent>
-                    </Dropdown.Sub>
-                  )}
-                </For>
+                                    <Show when={option.icon}>
+                                      {(icon) => (
+                                        <span class="size-4 flex items-center justify-center shrink-0">
+                                          {icon()()}
+                                        </span>
+                                      )}
+                                    </Show>
 
-                {/* Assignee filter for tasks view */}
-                <Show when={isTasksView()}>
-                  <SearchableFilterSubmenu
-                    label="Assignee"
-                    options={assigneeOptions}
-                    activeIds={assigneeFilter}
-                    onChange={handleAssigneeChange}
-                    placeholder="Search assignees..."
-                  />
-                </Show>
-
-                {/* Search view: 7 type rows (Channels/Email have nested submenus) */}
-                <Show when={isSearchView()}>
-                  <For each={INDEX_OPTIONS}>
-                    {(option) => {
-                      const rowProps = {
-                        option,
-                        active: () => soup.predicates.isActive(option.value),
-                        onSelect: () => handleIndexChange(option.value),
-                        closeRoot: () => setOpen(false),
-                      };
-                      return (
-                        <Switch fallback={<SearchIndexItem {...rowProps} />}>
-                          <Match when={option.value === 'channels'}>
-                            <SearchIndexSubRow {...rowProps}>
-                              <ChannelSearchSubContent
-                                channel={channel}
-                                channelOptions={inChannelOptions}
-                                senderOptions={fromSenderOptions}
-                              />
-                            </SearchIndexSubRow>
-                          </Match>
-                          <Match when={option.value === 'email'}>
-                            <SearchIndexSubRow {...rowProps}>
-                              <EmailSearchSubContent email={email} />
-                            </SearchIndexSubRow>
-                          </Match>
-                          <Match when={option.value === 'calls'}>
-                            <SearchIndexSubRow {...rowProps}>
-                              <CallSearchSubContent
-                                call={call}
-                                channelOptions={inChannelOptions}
-                                senderOptions={fromSenderOptions}
-                              />
-                            </SearchIndexSubRow>
-                          </Match>
-                        </Switch>
-                      );
-                    }}
+                                    <span
+                                      class={cn(
+                                        'flex-1 truncate',
+                                        active() ? 'text-ink' : 'text-ink-muted'
+                                      )}
+                                    >
+                                      {option.label}
+                                    </span>
+                                  </Dropdown.Item>
+                                );
+                              }}
+                            </For>
+                          </Dropdown.Group>
+                        </Dropdown.SubContent>
+                      </Dropdown.Sub>
+                    )}
                   </For>
 
-                  {/* All row */}
-                  <Dropdown.Item
-                    class={FILTER_MENU_ROW_CLASS}
-                    onSelect={() => handleIndexChange('all')}
-                    closeOnSelect
-                  >
-                    <TypeIndicator active={!hasActiveIndex()} />
-                    <span
-                      class={cn(
-                        'flex-1 truncate',
-                        !hasActiveIndex() ? 'text-ink' : 'text-ink-muted'
-                      )}
+                  {/* Assignee filter for tasks view */}
+                  <Show when={isTasksView()}>
+                    <SearchableFilterSubmenu
+                      label="Assignee"
+                      options={assigneeOptions}
+                      activeIds={assigneeFilter}
+                      onChange={handleAssigneeChange}
+                      placeholder="Search assignees..."
+                    />
+                  </Show>
+
+                  {/* Search view: 7 type rows (Channels/Email have nested submenus) */}
+                  <Show when={isSearchView()}>
+                    <For each={INDEX_OPTIONS}>
+                      {(option) => {
+                        const rowProps = {
+                          option,
+                          active: () => soup.predicates.isActive(option.value),
+                          onSelect: () => handleIndexChange(option.value),
+                          closeRoot: () => setOpen(false),
+                        };
+                        return (
+                          <Switch fallback={<SearchIndexItem {...rowProps} />}>
+                            <Match when={option.value === 'channels'}>
+                              <SearchIndexSubRow {...rowProps}>
+                                <ChannelSearchSubContent
+                                  channel={channel}
+                                  channelOptions={inChannelOptions}
+                                  senderOptions={fromSenderOptions}
+                                />
+                              </SearchIndexSubRow>
+                            </Match>
+                            <Match when={option.value === 'email'}>
+                              <SearchIndexSubRow {...rowProps}>
+                                <EmailSearchSubContent email={email} />
+                              </SearchIndexSubRow>
+                            </Match>
+                            <Match when={option.value === 'calls'}>
+                              <SearchIndexSubRow {...rowProps}>
+                                <CallSearchSubContent
+                                  call={call}
+                                  channelOptions={inChannelOptions}
+                                  senderOptions={fromSenderOptions}
+                                />
+                              </SearchIndexSubRow>
+                            </Match>
+                          </Switch>
+                        );
+                      }}
+                    </For>
+
+                    {/* All row */}
+                    <Dropdown.Item
+                      class={FILTER_MENU_ROW_CLASS}
+                      onSelect={() => handleIndexChange('all')}
+                      closeOnSelect
                     >
-                      All
-                    </span>
-                  </Dropdown.Item>
-                </Show>
-              </>
-            }
-          >
-            {/* Single category: render options directly */}
-            <For each={categories()[0]!.options}>
-              {(option) => {
-                const active = () => isOptionActive(option.id);
-                return (
-                  <Dropdown.Item
-                    class={FILTER_MENU_ROW_CLASS}
-                    onSelect={() => toggleFilter(option.id)}
-                    closeOnSelect={!categories()[0]!.multiple}
-                  >
-                    <span
-                      class={cn(
-                        'size-4 flex items-center justify-center shrink-0 rounded border',
-                        active() ? 'bg-accent border-accent' : 'border-edge'
-                      )}
+                      <TypeIndicator active={!hasActiveIndex()} />
+                      <span
+                        class={cn(
+                          'flex-1 truncate',
+                          !hasActiveIndex() ? 'text-ink' : 'text-ink-muted'
+                        )}
+                      >
+                        All
+                      </span>
+                    </Dropdown.Item>
+                  </Show>
+                </>
+              }
+            >
+              {/* Single category: render options directly */}
+              <For each={categories()[0]!.options}>
+                {(option) => {
+                  const active = () => isOptionActive(option.id);
+                  return (
+                    <Dropdown.Item
+                      class={FILTER_MENU_ROW_CLASS}
+                      onSelect={() => toggleFilter(option.id)}
+                      closeOnSelect={!categories()[0]!.multiple}
                     >
-                      <Show when={active()}>
-                        <CheckIcon class="size-2.5 text-surface" />
+                      <span
+                        class={cn(
+                          'size-4 flex items-center justify-center shrink-0 rounded border',
+                          active() ? 'bg-accent border-accent' : 'border-edge'
+                        )}
+                      >
+                        <Show when={active()}>
+                          <CheckIcon class="size-2.5 text-surface" />
+                        </Show>
+                      </span>
+
+                      <Show when={option.icon}>
+                        {(icon) => (
+                          <span class="size-4 flex items-center justify-center shrink-0">
+                            {icon()()}
+                          </span>
+                        )}
                       </Show>
-                    </span>
 
-                    <Show when={option.icon}>
-                      {(icon) => (
-                        <span class="size-4 flex items-center justify-center shrink-0">
-                          {icon()()}
-                        </span>
-                      )}
-                    </Show>
-
-                    <span
-                      class={cn(
-                        'flex-1 truncate',
-                        active() ? 'text-ink' : 'text-ink-muted'
-                      )}
-                    >
-                      {option.label}
-                    </span>
-                  </Dropdown.Item>
-                );
-              }}
-            </For>
-          </Show>
+                      <span
+                        class={cn(
+                          'flex-1 truncate',
+                          active() ? 'text-ink' : 'text-ink-muted'
+                        )}
+                      >
+                        {option.label}
+                      </span>
+                    </Dropdown.Item>
+                  );
+                }}
+              </For>
+            </Show>
+          </Dropdown.Group>
         </Dropdown.Content>
       </Dropdown>
     </Show>
