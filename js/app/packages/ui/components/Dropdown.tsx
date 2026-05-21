@@ -1,8 +1,7 @@
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
-import CheckIcon from '@phosphor/check.svg';
-import { type ComponentProps, Show, splitProps } from 'solid-js';
-import { cn } from '../utils/classname';
 import { Button, type ButtonProps } from './Button';
+import { cn } from '../utils/classname';
+import type { ComponentProps } from 'solid-js';
 
 /*
 <Dropdown>
@@ -20,48 +19,25 @@ type DropdownContentProps = ComponentProps<typeof KobalteDropdownMenu.Content>;
 type DropdownSubContentProps = ComponentProps<typeof KobalteDropdownMenu.SubContent>;
 type DropdownItemProps = ComponentProps<typeof KobalteDropdownMenu.Item>;
 type DropdownSeparatorProps = ComponentProps<typeof KobalteDropdownMenu.Separator>;
-type DropdownIndicatorProps = ComponentProps<'div'> & { checked: boolean };
+
+const DROPDOWN_CONTENT_CLASS = 'z-action-menu bg-surface rounded-xl ring-1 ring-edge shadow-[0_8px_24px_-16px_rgba(0,0,0,0.24),0_2px_8px_-6px_rgba(0,0,0,0.18)] p-1.5';
+const DROPDOWN_ITEM_CLASS = 'rounded-md hover:bg-ink/3 focus:bg-ink/3 data-[highlighted]:bg-ink/3';
+const DROPDOWN_SEPARATOR_CLASS = 'h-px bg-edge-muted border-0 -mx-1.5 my-1';
 
 function DropdownContent(props: DropdownContentProps) {
-  return (
-    <KobalteDropdownMenu.Content
-      {...props}
-      class={cn(
-        'z-action-menu bg-surface rounded-xl ring-1 ring-edge shadow-[0_8px_24px_-16px_rgba(0,0,0,0.24),0_2px_8px_-6px_rgba(0,0,0,0.18)] p-1.5',
-        props.class
-      )}
-    />
-  );
+  return <KobalteDropdownMenu.Content {...props} class={cn(DROPDOWN_CONTENT_CLASS, props.class)} />;
 }
 
 function DropdownSubContent(props: DropdownSubContentProps) {
-  return (
-    <KobalteDropdownMenu.SubContent
-      {...props}
-      class={cn(
-        'z-action-menu bg-surface rounded-xl ring-1 ring-edge shadow-[0_8px_24px_-16px_rgba(0,0,0,0.24),0_2px_8px_-6px_rgba(0,0,0,0.18)] p-1.5',
-        props.class
-      )}
-    />
-  );
+  return <KobalteDropdownMenu.SubContent {...props} class={cn(DROPDOWN_CONTENT_CLASS, props.class)} />;
 }
 
 function DropdownItem(props: DropdownItemProps) {
-  return (
-    <KobalteDropdownMenu.Item
-      {...props}
-      class={cn('rounded-md hover:bg-hover/50 focus:bg-hover/50 data-highlighted:bg-hover/50', props.class)}
-    />
-  );
+  return <KobalteDropdownMenu.Item {...props} class={cn(props.class, DROPDOWN_ITEM_CLASS)} />;
 }
 
 function DropdownSeparator(props: DropdownSeparatorProps) {
-  return (
-    <KobalteDropdownMenu.Separator
-      {...props}
-      class={cn('h-px bg-edge-muted border-0 -mx-1.5 my-1', props.class)}
-    />
-  );
+  return <KobalteDropdownMenu.Separator {...props} class={cn(DROPDOWN_SEPARATOR_CLASS, props.class)} />;
 }
 
 function DropdownTrigger(props: DropdownTriggerProps) {
@@ -75,56 +51,22 @@ function DropdownTrigger(props: DropdownTriggerProps) {
   );
 }
 
-function DropdownSingleSelectIndicator(props: DropdownIndicatorProps) {
-  const [local, others] = splitProps(props, ['class', 'checked']);
-  return (
-    <div
-      {...others}
-      class={cn(
-        'size-4 rounded-full border flex items-center justify-center',
-        local.checked ? 'bg-accent border-accent' : 'bg-transparent border-edge-muted',
-        local.class
-      )}
-    />
-  );
-}
-
-function DropdownMultiSelectIndicator(props: DropdownIndicatorProps) {
-  const [local, others] = splitProps(props, ['class', 'checked']);
-  return (
-    <div
-      {...others}
-      class={cn(
-        'size-4 rounded-sm border flex items-center justify-center',
-        local.checked ? 'bg-accent border-accent' : 'bg-transparent border-edge-muted',
-        local.class
-      )}
-    >
-      <Show when={local.checked}>
-        <CheckIcon class="size-3 text-surface" />
-      </Show>
-    </div>
-  );
-}
-
 export const Dropdown = Object.assign((props: ComponentProps<typeof KobalteDropdownMenu>) => (<KobalteDropdownMenu {...props} />), {
-  ItemDescription: KobalteDropdownMenu.ItemDescription,
-  ItemIndicator: KobalteDropdownMenu.ItemIndicator,
-  CheckboxItem: KobalteDropdownMenu.CheckboxItem,
-  RadioGroup: KobalteDropdownMenu.RadioGroup,
-  GroupLabel: KobalteDropdownMenu.GroupLabel,
+  ItemDescription: KobalteDropdownMenu.ItemDescription, /* todo */
+  ItemIndicator: KobalteDropdownMenu.ItemIndicator,     /* todo */
+  CheckboxItem: KobalteDropdownMenu.CheckboxItem,       /* todo */
+  RadioGroup: KobalteDropdownMenu.RadioGroup,           /* todo */
+  GroupLabel: KobalteDropdownMenu.GroupLabel,           /* todo */
   SubContent: DropdownSubContent,
-  SubTrigger: KobalteDropdownMenu.SubTrigger,
-  ItemLabel: KobalteDropdownMenu.ItemLabel,
-  RadioItem: KobalteDropdownMenu.RadioItem,
+  SubTrigger: KobalteDropdownMenu.SubTrigger,           /* todo */
+  ItemLabel: KobalteDropdownMenu.ItemLabel,             /* todo */
+  RadioItem: KobalteDropdownMenu.RadioItem,             /* todo */
   Content: DropdownContent,
-  Portal: KobalteDropdownMenu.Portal,
-  Group: KobalteDropdownMenu.Group,
+  Portal: KobalteDropdownMenu.Portal,                   /* todo */
+  Group: KobalteDropdownMenu.Group,                     /* todo */
   Item: DropdownItem,
   Separator: DropdownSeparator,
-  Icon: KobalteDropdownMenu.Icon,
-  Sub: KobalteDropdownMenu.Sub,
+  Icon: KobalteDropdownMenu.Icon,                       /* todo */
+  Sub: KobalteDropdownMenu.Sub,                         /* todo */
   Trigger: DropdownTrigger,
-  SingleSelectIndicator: DropdownSingleSelectIndicator,
-  MultiSelectIndicator: DropdownMultiSelectIndicator,
 });
