@@ -78,7 +78,7 @@ function ProviderButton(props: {
   const isSubmit = () => props.type === 'submit';
   const hasLeading = () => !!props.icon;
   return (
-    <button
+    <Button
       type={props.type ?? 'button'}
       disabled={props.disabled}
       onClick={(e) => {
@@ -101,10 +101,9 @@ function ProviderButton(props: {
         }
       }}
       class={cn(
-        'flex items-center justify-center w-full px-4 py-3 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
-        hasLeading() ? 'gap-3' : 'gap-2',
+        'gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
         isPrimary()
-          ? 'bg-ink text-surface outline-2 outline-transparent hover:outline-accent active:outline-accent disabled:bg-ink/30 disabled:text-surface/70 disabled:cursor-not-allowed disabled:hover:outline-transparent'
+          ? 'bg-accent text-surface not-disabled:hover:bg-accent not-disabled:hover:text-surface focus-visible:bg-accent active:outline-accent disabled:bg-ink/30 disabled:text-surface/70 disabled:cursor-not-allowed disabled:hover:outline-transparent'
           : 'bg-surface text-ink border border-edge hover:border-edge hover:bg-hover/50 disabled:opacity-50 disabled:cursor-not-allowed'
       )}
       autofocus={props.autofocus ? true : undefined}
@@ -117,7 +116,7 @@ function ProviderButton(props: {
       <Show when={props.trailingIcon}>
         <span class="shrink-0 inline-flex">{props.trailingIcon}</span>
       </Show>
-    </button>
+    </Button>
   );
 }
 
@@ -127,7 +126,7 @@ function LoginPicker(props: { setStage: (next: Stage) => void }) {
     !isNativeMobilePlatform() || getNativeMobilePlatform() === 'ios';
 
   return (
-    <div class="flex flex-col gap-4">
+    <div class="flex flex-col gap-3">
       <ProviderButton
         variant="primary"
         autofocus
@@ -136,26 +135,19 @@ function LoginPicker(props: { setStage: (next: Stage) => void }) {
         onClick={() => startSsoLogin(GOOGLE_GMAIL_IDP)}
       />
 
-      <div class="flex items-center gap-3 text-[11px] uppercase tracking-wider text-ink-muted">
-        <span class="flex-1 h-px bg-edge-muted" />
-        <span>or</span>
-        <span class="flex-1 h-px bg-edge-muted" />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <Show when={showApple}>
-          <ProviderButton
-            icon={<IconApple />}
-            label="Continue with Apple"
-            onClick={() => startSsoLogin('Apple')}
-          />
-        </Show>
+      <Show when={showApple}>
         <ProviderButton
-          icon={<IconMail />}
-          label="Continue with email"
-          onClick={() => props.setStage(Stage.Email)}
+          icon={<IconApple />}
+          label="Continue with Apple"
+          onClick={() => startSsoLogin('Apple')}
         />
-      </div>
+      </Show>
+
+      <ProviderButton
+        icon={<IconMail />}
+        label="Continue with email"
+        onClick={() => props.setStage(Stage.Email)}
+      />
     </div>
   );
 }
@@ -522,13 +514,13 @@ export function LoginNew() {
       case Stage.Verify:
         return 'Check your inbox';
       default:
-        return 'Sign in to Macro';
+        return 'Log in to Macro';
     }
   });
 
   return (
     <Show when={!userInfo()?.authenticated} fallback={<PostLoginRedirect />}>
-      <div class="flex items-center justify-center size-full p-8 overflow-hidden relative">
+      <div class="flex items-center justify-center size-full overflow-hidden relative">
         <style>{
           /*css*/ `
           @keyframes ln-card-in {
@@ -550,75 +542,48 @@ export function LoginNew() {
         `
         }</style>
 
-        <div class="inset-0 absolute text-ink bg-surface opacity-10 -z-1">
-          <PcNoiseGrid
-            cellSize={20}
-            warp={20}
-            crunch={0.1}
-            freq={0.0002}
-            size={[0, 0.01]}
-            rounding={0}
-            fill={0}
-            stroke={1}
-            speed={[0.01, 0.509]}
-          />
-        </div>
-
-        <div class="w-full max-w-md ln-card">
-          <Surface class="rounded-xl" depth={1}>
-            <div
-              class={cn(
-                'px-8 py-6 flex flex-col gap-16',
-                compactHeader() && 'gap-8'
-              )}
-            >
+        <div class="w-full sm:max-w-md ln-card">
+          <div class="px-8 py-6 flex flex-col gap-16">
+            <div class="flex flex-col gap-8">
               <Show when={!virtualKeyboardVisible()}>
-                <div
-                  class={cn(
-                    compactHeader()
-                      ? 'grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-0.5'
-                      : 'flex flex-col items-center text-center gap-2'
-                  )}
-                >
-                  <Show
-                    when={compactHeader()}
-                    fallback={
-                      <LogoIcon class="shrink-0 text-accent size-10" />
-                    }
-                  >
+                <div class="flex flex-col gap-3">
+                  <Show when={compactHeader()}>
                     <Button
                       variant="ghost"
                       size="icon-sm"
                       noTouchResize
                       onClick={onBack}
                       aria-label="Back"
-                      class="shrink-0"
+                      class="self-start shrink-0"
                     >
                       <ArrowLeft />
                     </Button>
                   </Show>
-                  <h1
-                    class={cn(
-                      'font-semibold tracking-tight text-ink leading-[1.05] min-w-0',
-                      compactHeader() ? 'text-lg' : 'text-3xl'
-                    )}
-                  >
-                    {headerTitle()}
-                  </h1>
+                  <div class="flex flex-col items-center text-center gap-2">
+                    <LogoIcon class="shrink-0 text-accent size-10" />
+                    <h1
+                      class={cn(
+                        'font-semibold tracking-tight text-ink',
+                        compactHeader() ? 'text-lg' : 'text-2xl'
+                      )}
+                    >
+                      {headerTitle()}
+                    </h1>
+                  </div>
                 </div>
               </Show>
 
               <Stepper
                 step={stepIndex()}
-                transition={Stepper.transitions.slideFull}
+                transition={Stepper.transitions.scale}
               >
                 <Stepper.Step>
-                  <div class="flex flex-col gap-4">
+                  <div class="flex flex-col gap-8">
                     <LoginPicker setStage={onStageChange} />
                     <div class="flex justify-center gap-2 text-sm">
-                      <div>New to Macro?</div>
+                      <div class="text-ink/50">New to Macro?</div>
                       <a
-                        class="text-ink underline underline-offset-2 hover:text-accent focus-visible:text-accent"
+                        class="text-ink hover:text-accent focus-visible:text-accent"
                         href={`${ROUTER_BASE_CONCAT}signup`}
                         tabindex={0}
                       >
@@ -634,28 +599,28 @@ export function LoginNew() {
                   <VerifyFormNew setStage={onStageChange} />
                 </Stepper.Step>
               </Stepper>
+            </div>
 
-              <div class="flex flex-col text-center text-xs text-ink-muted">
-                <div class="text-ink/50">
-                  By continuing, you agree to our{' '}
-                  <a
-                    class="underline underline-offset-2 hover:text-ink focus-visible:text-ink"
-                    href="/terms"
-                  >
-                    terms
-                  </a>{' '}
-                  and{' '}
-                  <a
-                    class="underline underline-offset-2 hover:text-ink focus-visible:text-ink"
-                    href="/privacy"
-                  >
-                    privacy policy
-                  </a>
-                  .
-                </div>
+            <div class="flex flex-col text-center text-xs text-ink-muted">
+              <div class="text-ink/50 wrap-break-word">
+                By continuing, you agree to our{' '}
+                <a
+                  class="underline underline-offset-2 hover:text-ink focus-visible:text-ink"
+                  href="/terms"
+                >
+                  terms
+                </a>{' '}
+                and{' '}
+                <a
+                  class="underline underline-offset-2 hover:text-ink focus-visible:text-ink"
+                  href="/privacy"
+                >
+                  privacy policy
+                </a>
+                .
               </div>
             </div>
-          </Surface>
+          </div>
         </div>
       </div>
     </Show>

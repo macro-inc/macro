@@ -52,7 +52,7 @@ const SLIDE: StepperTransitionResolver = (dir) => ({
   enterActiveClass: 'transition-all duration-200 ease-out',
   enterClass: dir === 1 ? 'opacity-0 translate-x-6' : 'opacity-0 -translate-x-6',
   enterToClass: 'opacity-100 translate-x-0',
-  exitActiveClass: 'transition-all duration-100 ease-out',
+  exitActiveClass: 'transition-all duration-100 ease-out absolute inset-0',
   exitClass: 'opacity-100 translate-x-0',
   exitToClass: dir === 1 ? 'opacity-0 -translate-x-6' : 'opacity-0 translate-x-6',
 });
@@ -61,7 +61,7 @@ const SLIDE_FULL: StepperTransitionResolver = (dir) => ({
   enterActiveClass: 'transition-transform duration-200 ease-out',
   enterClass: dir === 1 ? 'translate-x-full' : '-translate-x-full',
   enterToClass: 'translate-x-0',
-  exitActiveClass: 'transition-transform duration-100 ease-out',
+  exitActiveClass: 'transition-transform duration-100 ease-out absolute inset-0',
   exitClass: 'translate-x-0',
   exitToClass: dir === 1 ? '-translate-x-full' : 'translate-x-full',
 });
@@ -149,14 +149,7 @@ function StepperRoot(props: StepperProps) {
           enterActiveClass={transition().enterActiveClass}
           enterClass={transition().enterClass}
           enterToClass={transition().enterToClass}
-          /* `absolute inset-0` on the exiting slot pulls it out of layout
-             flow so the container sizes to the entering slot immediately
-             — eliminates the height/width shift that otherwise happens
-             while both slots overlap in the grid. */
-          exitActiveClass={cn(
-            transition().exitActiveClass,
-            'absolute inset-0'
-          )}
+          exitActiveClass={transition().exitActiveClass}
           exitClass={transition().exitClass}
           exitToClass={transition().exitToClass}
         >
