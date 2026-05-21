@@ -356,7 +356,7 @@ async fn handle_customer_subscription_event(
     }
 
     // Extract the price ID(s) from the subscription items
-    let price_id = subscription
+    let _price_id = subscription
         .items
         .data
         .first() // SAFETY: we only need the first item because we know the user is not in a team
