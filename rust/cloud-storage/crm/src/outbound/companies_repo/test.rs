@@ -436,6 +436,51 @@ async fn set_contact_hidden_returns_not_found_for_unknown_contact(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_email_sync_enable_refuses_hidden_company(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id = insert_company(&pool, team_id, false, &["acme.com"]).await?;
+    sqlx::query(r#"UPDATE crm_companies SET hidden = TRUE WHERE id = $1"#)
+        .bind(company_id)
+        .execute(&pool)
+        .await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let result = repo.set_email_sync(&team_id, &company_id, true).await;
+
+    assert!(matches!(
+        result,
+        Err(crate::domain::model::CrmError::CompanyHidden)
+    ));
+    // State must be unchanged.
+    assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(false));
+    assert_eq!(fetch_company_hidden(&pool, company_id).await?, Some(true));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_email_sync_disable_allowed_on_hidden_company(pool: PgPool) -> anyhow::Result<()> {
+    // Disabling sync on an already-hidden, already-disabled company is
+    // a no-op-shaped call but must not error — the hidden check only
+    // fires on the enable path.
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    let company_id = insert_company(&pool, team_id, false, &["acme.com"]).await?;
+    sqlx::query(r#"UPDATE crm_companies SET hidden = TRUE WHERE id = $1"#)
+        .bind(company_id)
+        .execute(&pool)
+        .await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    repo.set_email_sync(&team_id, &company_id, false).await?;
+
+    assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(false));
+    assert_eq!(fetch_company_hidden(&pool, company_id).await?, Some(true));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn service_set_company_hidden_true_also_disables_email_sync(
     pool: PgPool,
 ) -> anyhow::Result<()> {

@@ -39,6 +39,7 @@ pub struct SetEmailSyncRequest {
         (status = 204),
         (status = 401, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
+        (status = 409, body = ErrorResponse, description = "Company is hidden; un-hide before enabling email sync"),
         (status = 500, body = ErrorResponse),
     ),
 )]

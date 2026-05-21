@@ -85,6 +85,12 @@ impl IntoResponse for CrmError {
                     message: "crm contact not found for team".into(),
                 }),
             ),
+            CrmError::CompanyHidden => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "crm company is hidden; un-hide before enabling email sync".into(),
+                }),
+            ),
             CrmError::InvalidTeamId | CrmError::StorageLayerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {

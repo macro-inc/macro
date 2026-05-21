@@ -166,6 +166,10 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// On disable, the same tx also deletes the company's
     /// `crm_contacts` and `crm_contact_sources`. Returns
     /// [`CrmError::CompanyNotFoundForTeam`] on a non-matching pair.
+    /// Refuses to set `email_sync = true` when the company has
+    /// `hidden = true` (returns [`CrmError::CompanyHidden`]) — a hidden
+    /// company would otherwise have populate re-create contacts under
+    /// it. Un-hide first if you really want sync back on.
     fn set_email_sync(
         &self,
         team_id: &uuid::Uuid,

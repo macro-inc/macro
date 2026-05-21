@@ -74,6 +74,11 @@ pub enum CrmError {
     /// Contact id is not owned by the requesting team.
     #[error("crm contact not found for team")]
     ContactNotFoundForTeam,
+    /// Tried to mutate a CRM company in a way that contradicts its
+    /// `hidden = true` state — currently raised when attempting to
+    /// re-enable `email_sync` on a hidden company.
+    #[error("crm company is hidden")]
+    CompanyHidden,
     /// Entity access receipt did not contain a valid team UUID.
     #[error("invalid team id in entity access receipt")]
     InvalidTeamId,

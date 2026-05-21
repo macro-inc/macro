@@ -21,6 +21,75 @@ impl CompaniesRepositoryImpl {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+
+    /// Take per-`(team_id, lower(domain))` advisory locks for every
+    /// domain attached to the company, in sorted order. This is the
+    /// same lock scheme `populate_contact` and `depopulate_contact`
+    /// hold, so any caller mutating company-scoped sync state should
+    /// take these locks before observing contacts/sources.
+    async fn lock_company_domains(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+    ) -> Result<(), CrmError> {
+        let domains = sqlx::query_scalar!(
+            r#"
+            SELECT LOWER(domain) AS "domain!"
+            FROM crm_domains
+            WHERE company_id = $1 AND team_id = $2
+            ORDER BY LOWER(domain) ASC
+            "#,
+            company_id,
+            team_id,
+        )
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        for domain in domains {
+            sqlx::query!(
+                r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))"#,
+                format!("{team_id}:{domain}"),
+            )
+            .execute(&mut **tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        }
+
+        Ok(())
+    }
+
+    /// Delete every `crm_contact_sources` row pointing at a contact in
+    /// `company_id`, then every `crm_contacts` row for the company.
+    /// Caller is expected to be inside a tx that already holds the
+    /// per-domain advisory locks (see [`Self::lock_company_domains`]).
+    async fn delete_company_contacts(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        company_id: &uuid::Uuid,
+    ) -> Result<(), CrmError> {
+        sqlx::query!(
+            r#"
+            DELETE FROM crm_contact_sources
+            WHERE contact_id IN (
+                SELECT id FROM crm_contacts WHERE company_id = $1
+            )
+            "#,
+            company_id,
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        sqlx::query!(
+            r#"DELETE FROM crm_contacts WHERE company_id = $1"#,
+            company_id,
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(())
+    }
 }
 
 impl CompaniesRepository for CompaniesRepositoryImpl {
@@ -551,35 +620,37 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // Disable path takes the same per-(team, domain) advisory locks
-        // populate_contact uses. Without this, a populate that already
-        // passed its killswitch check could insert a contact into a
-        // company we're about to disable. Sorted lookup gives a
-        // deterministic lock order — populates only hold one domain lock
-        // at a time, so deadlock isn't possible.
         if !email_sync {
-            let domains = sqlx::query_scalar!(
+            // Disable path holds the same per-(team, domain) advisory
+            // locks populate_contact uses, so a populate already past
+            // its killswitch check can't slip a contact in after we
+            // observe state. Populates only hold one domain lock at a
+            // time, so deadlock isn't possible.
+            Self::lock_company_domains(&mut tx, team_id, company_id).await?;
+        } else {
+            // Enabling on a hidden company would let populate re-create
+            // contacts under a row the team has explicitly hidden, so
+            // refuse. Look up state in the same tx; the row read
+            // doesn't need the domain locks because we don't mutate
+            // contacts on the enable path.
+            let row = sqlx::query!(
                 r#"
-                SELECT LOWER(domain) AS "domain!"
-                FROM crm_domains
-                WHERE company_id = $1 AND team_id = $2
-                ORDER BY LOWER(domain) ASC
+                SELECT hidden
+                FROM crm_companies
+                WHERE id = $1 AND team_id = $2
                 "#,
                 company_id,
                 team_id,
             )
-            .fetch_all(&mut *tx)
+            .fetch_optional(&mut *tx)
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-            for domain in domains {
-                sqlx::query!(
-                    r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))"#,
-                    format!("{team_id}:{domain}"),
-                )
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            let Some(row) = row else {
+                return Err(CrmError::CompanyNotFoundForTeam);
+            };
+            if row.hidden {
+                return Err(CrmError::CompanyHidden);
             }
         }
 
@@ -604,26 +675,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         }
 
         if !email_sync {
-            sqlx::query!(
-                r#"
-                DELETE FROM crm_contact_sources
-                WHERE contact_id IN (
-                    SELECT id FROM crm_contacts WHERE company_id = $1
-                )
-                "#,
-                company_id,
-            )
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-
-            sqlx::query!(
-                r#"DELETE FROM crm_contacts WHERE company_id = $1"#,
-                company_id,
-            )
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            Self::delete_company_contacts(&mut tx, company_id).await?;
         }
 
         tx.commit()
@@ -650,34 +702,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             // Hiding implies opting out of email sync — flip both flags
             // and tear down contacts/sources in one transaction so a
             // partial failure can't leave the company visible with its
-            // contacts gone. Take the same per-(team, domain) advisory
-            // locks set_email_sync uses so a concurrent populate that's
-            // already past its killswitch check can't slip a contact in
-            // after we observe state. Sorted lookup gives deterministic
-            // lock order.
-            let domains = sqlx::query_scalar!(
-                r#"
-                SELECT LOWER(domain) AS "domain!"
-                FROM crm_domains
-                WHERE company_id = $1 AND team_id = $2
-                ORDER BY LOWER(domain) ASC
-                "#,
-                company_id,
-                team_id,
-            )
-            .fetch_all(&mut *tx)
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-
-            for domain in domains {
-                sqlx::query!(
-                    r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))"#,
-                    format!("{team_id}:{domain}"),
-                )
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-            }
+            // contacts gone. Take the per-(team, domain) advisory locks
+            // first so a concurrent populate past its killswitch check
+            // can't slip a contact in after we observe state.
+            Self::lock_company_domains(&mut tx, team_id, company_id).await?;
 
             // Scoping UPDATE on both id AND team_id rejects cross-team callers as NotFound.
             let updated = sqlx::query_scalar!(
@@ -698,26 +726,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 return Err(CrmError::CompanyNotFoundForTeam);
             }
 
-            sqlx::query!(
-                r#"
-                DELETE FROM crm_contact_sources
-                WHERE contact_id IN (
-                    SELECT id FROM crm_contacts WHERE company_id = $1
-                )
-                "#,
-                company_id,
-            )
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-
-            sqlx::query!(
-                r#"DELETE FROM crm_contacts WHERE company_id = $1"#,
-                company_id,
-            )
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            Self::delete_company_contacts(&mut tx, company_id).await?;
         } else {
             // Un-hide only flips the flag — email_sync stays whatever
             // the team last set it to. Re-enabling sync is an explicit
