@@ -1,5 +1,5 @@
 import { Switch as KobalteSwitch } from '@kobalte/core/switch';
-import { Show, createEffect, createSignal, on, onCleanup, splitProps } from 'solid-js';
+import { Show, createSignal, onCleanup, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import type { JSX } from 'solid-js';
 
@@ -37,8 +37,6 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
     local.onChange?.(checked);
   };
 
-  createEffect(on(() => local.checked, triggerStretch, { defer: true }));
-
   onCleanup(() => {
     if (stretchTimeout) clearTimeout(stretchTimeout);
   });
@@ -54,7 +52,7 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
     >
       <KobalteSwitch.Input class="sr-only" />
       <Show when={local.label != null}>
-        <KobalteSwitch.Label class={cn('cursor-pointer', local.labelClass)}>
+        <KobalteSwitch.Label class={cn(local.labelClass)}>
           {local.label}
         </KobalteSwitch.Label>
       </Show>
