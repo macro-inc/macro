@@ -14,6 +14,7 @@ import IconGoogle from '@icon/macro-google.svg';
 import LogoIcon from '@icon/macro-logo.svg';
 import IconMail from '@icon/macro-mail.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
+import ArrowRight from '@phosphor/arrow-right.svg';
 import { useUserInfo } from '@queries/auth';
 import {
   invalidateAllAfterLogin,
@@ -64,6 +65,7 @@ function PostLoginRedirect() {
 
 function ProviderButton(props: {
   icon?: JSX.Element;
+  trailingIcon?: JSX.Element;
   label: string;
   onClick?: () => void;
   variant?: 'primary' | 'secondary';
@@ -73,7 +75,7 @@ function ProviderButton(props: {
 }) {
   const isPrimary = () => props.variant === 'primary';
   const isSubmit = () => props.type === 'submit';
-  const hasIcon = () => !!props.icon;
+  const hasLeading = () => !!props.icon;
   return (
     <button
       type={props.type ?? 'button'}
@@ -98,7 +100,7 @@ function ProviderButton(props: {
       }}
       class={cn(
         'flex items-center w-full px-4 py-3 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
-        hasIcon() ? 'gap-3' : 'justify-center',
+        hasLeading() ? 'gap-3' : 'justify-center gap-2',
         isPrimary()
           ? 'bg-ink text-surface outline-2 outline-transparent hover:outline-accent active:outline-accent disabled:bg-ink/30 disabled:text-surface/70 disabled:cursor-not-allowed disabled:hover:outline-transparent'
           : 'bg-surface text-ink border border-edge hover:border-edge hover:bg-hover/50 disabled:opacity-50 disabled:cursor-not-allowed'
@@ -109,7 +111,10 @@ function ProviderButton(props: {
       <Show when={props.icon}>
         <span class="shrink-0 inline-flex">{props.icon}</span>
       </Show>
-      <span class={cn(hasIcon() && 'flex-1 text-left')}>{props.label}</span>
+      <span class={cn(hasLeading() && 'flex-1 text-left')}>{props.label}</span>
+      <Show when={props.trailingIcon}>
+        <span class="shrink-0 inline-flex">{props.trailingIcon}</span>
+      </Show>
     </button>
   );
 }
@@ -187,8 +192,8 @@ function FormInput(props: {
       autocomplete={props.id}
       onInput={props.onInput}
       class={cn(
-        'ln-input w-full px-4 py-3 rounded-lg border border-edge bg-surface text-sm text-ink placeholder:text-ink-muted focus:border-accent focus:outline-none transition-colors',
-        'invalid:border-red-500/60 user-invalid:border-red-500',
+        'ln-input w-full px-4 py-3 rounded-lg border border-edge bg-surface text-sm text-ink placeholder:text-ink-placeholder focus:border-accent focus:outline-none transition-colors',
+        'user-invalid:border-failure',
         props.monospace && 'font-mono tracking-[0.4em] text-base',
         props.centered && 'text-center'
       )}
@@ -199,13 +204,9 @@ function FormInput(props: {
 function FormError(props: { msg?: string }) {
   return (
     <Show when={props.msg}>
-      <div
-        role="alert"
-        class="flex items-start gap-2 px-3 py-2 rounded-md border border-red-500/30 bg-red-500/10 text-xs text-red-500 leading-snug"
-      >
-        <span class="mt-0.5 size-1.5 rounded-full bg-red-500 shrink-0" />
-        <span>{props.msg}</span>
-      </div>
+      <p role="alert" class="text-xs text-failure leading-snug">
+        {props.msg}
+      </p>
     </Show>
   );
 }
@@ -255,6 +256,7 @@ function EmailFormNew(props: { setStage: (next: Stage) => void }) {
         variant="primary"
         type="submit"
         label="Continue"
+        trailingIcon={<ArrowRight />}
         disabled={submission.pending}
       />
     </form>
@@ -378,6 +380,7 @@ function VerifyFormNew(props: { setStage: (next: Stage) => void }) {
         variant="primary"
         type="submit"
         label="Verify"
+        trailingIcon={<ArrowRight />}
         disabled={submission.pending || code().length !== 6}
       />
       <Button
@@ -516,7 +519,7 @@ export function LoginNew() {
       case Stage.Verify:
         return 'Check your inbox';
       default:
-        return 'Login to Macro';
+        return 'Sign in to Macro';
     }
   };
 
@@ -527,7 +530,7 @@ export function LoginNew() {
       case Stage.Verify:
         return 'Enter the 6-digit code we sent you.';
       default:
-        return 'Sign in to your workspace.';
+        return 'Log in or sign up';
     }
   };
 
@@ -573,54 +576,47 @@ export function LoginNew() {
           <Surface class="rounded-xl" depth={1}>
             <div
               class={cn(
-                'p-8 flex flex-col gap-16',
+                'px-8 py-6 flex flex-col gap-16',
                 compactHeader() && 'gap-8'
               )}
             >
               <div class="flex flex-col gap-4">
                 <Show when={compactHeader()}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
+                  <button
+                    type="button"
+                    tabIndex={0}
                     onClick={onBack}
-                    class="self-start -ml-2"
+                    class="self-start flex items-center gap-1 text-xs text-ink-disabled hover:text-ink transition-colors outline-none rounded-sm focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                   >
-                    <ArrowLeft />
+                    <ArrowLeft class="size-3" />
                     Back
-                  </Button>
+                  </button>
                 </Show>
-                <div
-                  class={cn(
-                    'flex items-start gap-4',
-                    virtualKeyboardVisible() && 'hidden',
-                    !compactHeader() && 'flex-col items-center text-center'
-                  )}
-                >
-                <LogoIcon
-                  class={cn(
-                    'shrink-0 text-accent',
-                    compactHeader() ? 'size-8 mt-0.5' : 'size-10'
-                  )}
-                />
-                <div
-                  class={cn(
-                    'flex flex-col min-w-0',
-                    !compactHeader() && 'items-center'
-                  )}
-                >
-                  <h1
-                    class={cn(
-                      'font-semibold tracking-tight text-ink leading-[1.05]',
-                      compactHeader() ? 'text-xl' : 'text-3xl'
-                    )}
+                <Show when={!virtualKeyboardVisible()}>
+                  <Show
+                    when={compactHeader()}
+                    fallback={
+                      <div class="flex flex-col items-center text-center gap-2">
+                        <LogoIcon class="shrink-0 text-accent size-10" />
+                        <h1 class="text-3xl font-semibold tracking-tight text-ink leading-[1.05]">
+                          {headerTitle()}
+                        </h1>
+                      </div>
+                    }
                   >
-                    {headerTitle()}
-                  </h1>
-                  <p class="text-sm text-ink-muted leading-snug">
-                    {headerSubtitle()}
-                  </p>
-                </div>
-                </div>
+                    <div class="flex items-start gap-2">
+                      <IconMail class="shrink-0 text-accent mt-0.5" />
+                      <div class="flex flex-col min-w-0">
+                        <h1 class="text-base font-semibold tracking-tight text-ink leading-[1.05]">
+                          {headerTitle()}
+                        </h1>
+                        <p class="text-xs text-ink-muted leading-snug">
+                          {headerSubtitle()}
+                        </p>
+                      </div>
+                    </div>
+                  </Show>
+                </Show>
               </div>
 
               <Stepper
