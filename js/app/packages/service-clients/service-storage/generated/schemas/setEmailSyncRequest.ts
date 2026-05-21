@@ -6,7 +6,7 @@
  */
 
 /**
- * Request body for `PUT /companies/{company_id}/email-sync`.
+ * Request body for `PUT /crm/companies/{company_id}/email-sync`.
  */
 export interface SetEmailSyncRequest {
   /** New value for `crm_companies.email_sync`. Setting to `false`

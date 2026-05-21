@@ -11516,7 +11516,7 @@
       },
       "SetEmailSyncRequest": {
         "type": "object",
-        "description": "Request body for `PUT /companies/{company_id}/email-sync`.",
+        "description": "Request body for `PUT /crm/companies/{company_id}/email-sync`.",
         "required": ["email_sync"],
         "properties": {
           "email_sync": {

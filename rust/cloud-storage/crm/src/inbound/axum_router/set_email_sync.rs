@@ -16,7 +16,7 @@ use crate::domain::{model::CrmError, service::CrmService};
 
 use super::CrmRouterState;
 
-/// Request body for `PUT /companies/{company_id}/email-sync`.
+/// Request body for `PUT /crm/companies/{company_id}/email-sync`.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SetEmailSyncRequest {
     /// New value for `crm_companies.email_sync`. Setting to `false`

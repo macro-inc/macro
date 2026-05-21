@@ -1810,7 +1810,9 @@ export const setEmailSyncBody = zod
         "New value for `crm_companies.email_sync`. Setting to `false`\npermanently deletes the company's CRM contacts and contact sources."
       ),
   })
-  .describe('Request body for `PUT \/companies\/{company_id}\/email-sync`.');
+  .describe(
+    'Request body for `PUT \/crm\/companies\/{company_id}\/email-sync`.'
+  );
 
 /**
  * @summary Gets the users documents to populate their recent document list
