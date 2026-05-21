@@ -65,7 +65,13 @@ fn test_email_preset_defaults_to_email_results() {
     }))
     .unwrap();
 
-    assert!(list.entity_filter_ast().email_filter.is_some());
+    let ast = list.entity_filter_ast();
+    assert!(ast.email_filter.is_some());
+    assert!(ast.document_filter.is_some());
+    assert!(ast.project_filter.is_some());
+    assert!(ast.chat_filter.is_some());
+    assert!(ast.channel_filter.is_some());
+    assert!(ast.call_filter.is_some());
     assert_eq!(list.effective_include_types(), Some(vec![ItemType::Email]));
 }
 

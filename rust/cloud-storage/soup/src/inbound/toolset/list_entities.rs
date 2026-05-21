@@ -95,19 +95,6 @@ pub enum EntityItem {
     Call { id: Uuid, created_by: String },
 }
 
-impl EntityItem {
-    fn item_type(&self) -> ItemType {
-        match self {
-            EntityItem::Document { .. } => ItemType::Document,
-            EntityItem::AiChat { .. } => ItemType::AiChat,
-            EntityItem::Project { .. } => ItemType::Project,
-            EntityItem::Email { .. } => ItemType::Email,
-            EntityItem::Channel { .. } => ItemType::Channel,
-            EntityItem::Call { .. } => ItemType::Call,
-        }
-    }
-}
-
 impl From<SoupItem> for EntityItem {
     fn from(item: SoupItem) -> Self {
         match item {
@@ -235,24 +222,53 @@ pub struct ListEntities {
 
 impl ListEntities {
     pub(super) fn entity_filter_ast(&self) -> EntityFilterAst {
-        let mut email_filter = self.email_filter.clone();
+        let mut ast = EntityFilterAst {
+            document_filter: self.document_filter.clone(),
+            project_filter: self.project_filter.clone(),
+            chat_filter: self.chat_filter.clone(),
+            email_filter: self.email_filter.clone(),
+            channel_filter: self.channel_filter.clone(),
+            call_filter: self.call_filter.clone(),
+            properties_filter: self.properties_filter.clone(),
+        };
 
         if let Some(email_preset) = self.email_preset {
             let preset_filter = email_preset.filter();
-            email_filter = Some(Arc::new(match email_filter {
+            ast.email_filter = Some(Arc::new(match ast.email_filter.take() {
                 Some(existing) => Expr::and((*existing).clone(), preset_filter),
                 None => preset_filter,
             }));
         }
 
-        EntityFilterAst {
-            document_filter: self.document_filter.clone(),
-            project_filter: self.project_filter.clone(),
-            chat_filter: self.chat_filter.clone(),
-            email_filter,
-            channel_filter: self.channel_filter.clone(),
-            call_filter: self.call_filter.clone(),
-            properties_filter: self.properties_filter.clone(),
+        self.apply_include_types_to_ast(&mut ast);
+        ast
+    }
+
+    fn apply_include_types_to_ast(&self, ast: &mut EntityFilterAst) {
+        let Some(include_types) = self
+            .effective_include_types()
+            .filter(|types| !types.is_empty())
+        else {
+            return;
+        };
+
+        if !include_types.contains(&ItemType::Document) {
+            ast.document_filter = Some(Arc::new(Expr::val(DocumentLiteral::Id(Uuid::nil()))));
+        }
+        if !include_types.contains(&ItemType::Project) {
+            ast.project_filter = Some(Arc::new(Expr::val(ProjectLiteral::ProjectId(Uuid::nil()))));
+        }
+        if !include_types.contains(&ItemType::AiChat) {
+            ast.chat_filter = Some(Arc::new(Expr::val(ChatLiteral::ChatId(Uuid::nil()))));
+        }
+        if !include_types.contains(&ItemType::Email) {
+            ast.email_filter = Some(Arc::new(Expr::val(EmailLiteral::ThreadId(Uuid::nil()))));
+        }
+        if !include_types.contains(&ItemType::Channel) {
+            ast.channel_filter = Some(Arc::new(Expr::val(ChannelLiteral::ChannelId(Uuid::nil()))));
+        }
+        if !include_types.contains(&ItemType::Call) {
+            ast.call_filter = Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil()))));
         }
     }
 
@@ -331,24 +347,14 @@ where
         let paginated = result.type_erase();
         let has_more = paginated.next_cursor.is_some();
 
-        // Convert and filter items
-        let all_items: Vec<EntityItem> = paginated
+        let items: Vec<EntityItem> = paginated
             .items
             .into_iter()
             .map(|FrecencySoupItem { item, .. }| EntityItem::from(item))
             .collect();
 
-        let effective_include_types = self.effective_include_types();
-        let items: Vec<EntityItem> = match &effective_include_types {
-            Some(types) if !types.is_empty() => all_items
-                .into_iter()
-                .filter(|item| types.contains(&item.item_type()))
-                .collect(),
-            _ => all_items,
-        };
-
         // Build summary
-        let summary = build_summary(&items, has_more, &effective_include_types);
+        let summary = build_summary(&items, has_more, &self.effective_include_types());
 
         Ok(ListEntitiesResponse { items, summary })
     }
