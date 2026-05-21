@@ -33,6 +33,7 @@ import { Stepper } from '@ui/components/Stepper';
 import { detect } from 'detect-browser';
 import {
   createEffect,
+  createMemo,
   createSignal,
   type JSX,
   onCleanup,
@@ -90,6 +91,7 @@ function ProviderButton(props: {
       }}
       onPointerDown={(e) => {
         if (!isTouchDevice()) return;
+        if (props.disabled) return;
         e.stopPropagation();
         e.preventDefault();
         if (isSubmit()) {
@@ -393,6 +395,7 @@ function VerifyFormNew(props: { setStage: (next: Stage) => void }) {
         disabled={
           emailSubmission.pending || submission.pending || !showResendCode()
         }
+        aria-live="polite"
         class="w-full px-4 py-3 text-sm"
       >
         <Show when={resendTimer() > 0} fallback="Resend code">
@@ -512,7 +515,7 @@ export function LoginNew() {
   const compactHeader = () =>
     stage() === Stage.Email || stage() === Stage.Verify;
 
-  const headerTitle = () => {
+  const headerTitle = createMemo(() => {
     switch (stage()) {
       case Stage.Email:
         return 'Enter your email';
@@ -521,7 +524,7 @@ export function LoginNew() {
       default:
         return 'Sign in to Macro';
     }
-  };
+  });
 
   return (
     <Show when={!userInfo()?.authenticated} fallback={<PostLoginRedirect />}>
@@ -570,18 +573,19 @@ export function LoginNew() {
               )}
             >
               <Show when={!virtualKeyboardVisible()}>
-                <Show
-                  when={compactHeader()}
-                  fallback={
-                    <div class="flex flex-col items-center text-center gap-2">
-                      <LogoIcon class="shrink-0 text-accent size-10" />
-                      <h1 class="text-3xl font-semibold tracking-tight text-ink leading-[1.05]">
-                        {headerTitle()}
-                      </h1>
-                    </div>
-                  }
+                <div
+                  class={cn(
+                    compactHeader()
+                      ? 'grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-0.5'
+                      : 'flex flex-col items-center text-center gap-2'
+                  )}
                 >
-                  <div class="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-0.5">
+                  <Show
+                    when={compactHeader()}
+                    fallback={
+                      <LogoIcon class="shrink-0 text-accent size-10" />
+                    }
+                  >
                     <Button
                       variant="ghost"
                       size="icon-sm"
@@ -592,11 +596,16 @@ export function LoginNew() {
                     >
                       <ArrowLeft />
                     </Button>
-                    <h1 class="text-lg font-semibold tracking-tight text-ink leading-[1.05] min-w-0">
-                      {headerTitle()}
-                    </h1>
-                  </div>
-                </Show>
+                  </Show>
+                  <h1
+                    class={cn(
+                      'font-semibold tracking-tight text-ink leading-[1.05] min-w-0',
+                      compactHeader() ? 'text-lg' : 'text-3xl'
+                    )}
+                  >
+                    {headerTitle()}
+                  </h1>
+                </div>
               </Show>
 
               <Stepper
