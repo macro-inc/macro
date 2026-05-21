@@ -1199,11 +1199,11 @@ export interface ListEntities {
    */
   emailView?: string | null;
   /**
-   * Filter returned items to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails. This is applied after the soup query.
+   * Filter returned items to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails. This is folded into the AST and applied as part of cursor-level filtering.
    */
   includeTypes?: ItemType[] | null;
   /**
-   * Maximum number of soup items to fetch before includeTypes post-filtering. Defaults to 50; max 500.
+   * Maximum number of items to return. Defaults to 50; max 500.
    */
   limit?: number | null;
   /**

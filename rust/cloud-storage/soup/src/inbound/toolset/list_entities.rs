@@ -141,7 +141,7 @@ pub struct ListEntitiesResponse {
 )]
 pub struct ListEntities {
     #[schemars(
-        description = "Filter returned items to specific item types. If not provided, returns all types. Example: [\"document\", \"email\"] returns only documents and emails. This is applied after the soup query."
+        description = "Filter returned items to specific item types. If not provided, returns all types. Example: [\"document\", \"email\"] returns only documents and emails. This is folded into the AST and applied as part of cursor-level filtering."
     )]
     #[serde(default)]
     pub include_types: Option<Vec<ItemType>>,
@@ -213,9 +213,7 @@ pub struct ListEntities {
     #[serde(default, rename = "emailView")]
     pub email_view: Option<String>,
 
-    #[schemars(
-        description = "Maximum number of soup items to fetch before includeTypes post-filtering. Defaults to 50; max 500."
-    )]
+    #[schemars(description = "Maximum number of items to return. Defaults to 50; max 500.")]
     #[serde(default)]
     pub limit: Option<u16>,
 }
@@ -247,36 +245,36 @@ impl ListEntities {
         };
 
         EntityFilterAst {
-            document_filter: include_types
-                .contains(&ItemType::Document)
-                .then_some(ast.document_filter)
-                .flatten()
-                .or_else(|| Some(Arc::new(Expr::val(DocumentLiteral::Id(Uuid::nil()))))),
-            project_filter: include_types
-                .contains(&ItemType::Project)
-                .then_some(ast.project_filter)
-                .flatten()
-                .or_else(|| Some(Arc::new(Expr::val(ProjectLiteral::ProjectId(Uuid::nil()))))),
-            chat_filter: include_types
-                .contains(&ItemType::AiChat)
-                .then_some(ast.chat_filter)
-                .flatten()
-                .or_else(|| Some(Arc::new(Expr::val(ChatLiteral::ChatId(Uuid::nil()))))),
-            email_filter: include_types
-                .contains(&ItemType::Email)
-                .then_some(ast.email_filter)
-                .flatten()
-                .or_else(|| Some(Arc::new(Expr::val(EmailLiteral::ThreadId(Uuid::nil()))))),
-            channel_filter: include_types
-                .contains(&ItemType::Channel)
-                .then_some(ast.channel_filter)
-                .flatten()
-                .or_else(|| Some(Arc::new(Expr::val(ChannelLiteral::ChannelId(Uuid::nil()))))),
-            call_filter: include_types
-                .contains(&ItemType::Call)
-                .then_some(ast.call_filter)
-                .flatten()
-                .or_else(|| Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil()))))),
+            document_filter: if include_types.contains(&ItemType::Document) {
+                ast.document_filter
+            } else {
+                Some(Arc::new(Expr::val(DocumentLiteral::Id(Uuid::nil()))))
+            },
+            project_filter: if include_types.contains(&ItemType::Project) {
+                ast.project_filter
+            } else {
+                Some(Arc::new(Expr::val(ProjectLiteral::ProjectId(Uuid::nil()))))
+            },
+            chat_filter: if include_types.contains(&ItemType::AiChat) {
+                ast.chat_filter
+            } else {
+                Some(Arc::new(Expr::val(ChatLiteral::ChatId(Uuid::nil()))))
+            },
+            email_filter: if include_types.contains(&ItemType::Email) {
+                ast.email_filter
+            } else {
+                Some(Arc::new(Expr::val(EmailLiteral::ThreadId(Uuid::nil()))))
+            },
+            channel_filter: if include_types.contains(&ItemType::Channel) {
+                ast.channel_filter
+            } else {
+                Some(Arc::new(Expr::val(ChannelLiteral::ChannelId(Uuid::nil()))))
+            },
+            call_filter: if include_types.contains(&ItemType::Call) {
+                ast.call_filter
+            } else {
+                Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil()))))
+            },
             properties_filter: ast.properties_filter,
         }
     }

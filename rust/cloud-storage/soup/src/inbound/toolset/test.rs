@@ -76,6 +76,21 @@ fn test_email_preset_defaults_to_email_results() {
 }
 
 #[test]
+fn test_include_types_document_without_filter_keeps_document_unfiltered() {
+    let list: ListEntities = serde_json::from_value(serde_json::json!({
+        "includeTypes": ["document"]
+    }))
+    .unwrap();
+
+    let ast = list.entity_filter_ast();
+    assert!(ast.document_filter.is_none());
+    assert_eq!(
+        list.effective_include_types(),
+        Some(vec![ItemType::Document])
+    );
+}
+
+#[test]
 fn test_build_summary_empty() {
     let summary = build_summary(&[], false, &None);
     assert_eq!(summary, "No items found in workspace.");
