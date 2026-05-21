@@ -263,6 +263,7 @@ async fn main() -> anyhow::Result<()> {
                 .stripe_price_id_opus
                 .to_string(),
         },
+        config.stripe_price_id.clone(),
     );
     let team_channels_repo_impl = TeamChannelsRepositoryImpl::new(db.clone());
 

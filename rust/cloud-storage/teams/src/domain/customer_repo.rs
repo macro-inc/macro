@@ -28,6 +28,22 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         args: CreateSubscriptionArgs,
     ) -> impl Future<Output = Result<stripe::SubscriptionId, CustomerError>> + Send;
 
+    /// Increment the seat count on a subscription by the provided amount.
+    fn increment_seat_count(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        amount: u64,
+    ) -> impl Future<Output = Result<(), CustomerError>> + Send;
+
+    /// Decrement the seat count on a subscription by the provided amount.
+    ///
+    /// Implementations must not let the resulting seat count drop below one.
+    fn decrement_seat_count(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        amount: u64,
+    ) -> impl Future<Output = Result<(), CustomerError>> + Send;
+
     /// Cancels a subscription immediately.
     fn cancel_subscription(
         &self,

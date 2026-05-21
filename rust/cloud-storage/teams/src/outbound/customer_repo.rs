@@ -60,6 +60,8 @@ pub struct CustomerRepositoryImpl {
     team_plan_stripe_price_ids: TeamStripePriceIds,
     /// The legacy stripe price ids
     legacy_stripe_price_ids: LegacyStripePriceIds,
+    /// The stripe price id for the per-seat subscription item.
+    stripe_price_id: String,
 }
 
 impl CustomerRepositoryImpl {
@@ -68,12 +70,66 @@ impl CustomerRepositoryImpl {
         stripe_client: stripe::Client,
         team_plan_stripe_price_ids: TeamStripePriceIds,
         legacy_stripe_price_ids: LegacyStripePriceIds,
+        stripe_price_id: String,
     ) -> Self {
         Self {
             client: Arc::new(stripe_client),
             team_plan_stripe_price_ids,
             legacy_stripe_price_ids,
+            stripe_price_id,
         }
+    }
+
+    async fn get_seat_subscription_item(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+    ) -> Result<(String, u64), CustomerError> {
+        let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
+            .await
+            .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
+
+        if subscription.status != stripe::SubscriptionStatus::Active {
+            return Err(CustomerError::SubscriptionNotActive);
+        }
+
+        let item = subscription
+            .items
+            .data
+            .iter()
+            .find(|item| {
+                item.price
+                    .as_ref()
+                    .map(|price| price.id == self.stripe_price_id)
+                    .unwrap_or(false)
+            })
+            .ok_or(CustomerError::NoMatchingLineItem)?;
+
+        Ok((item.id.to_string(), item.quantity.unwrap_or(1)))
+    }
+
+    async fn update_seat_subscription_item(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        subscription_item_id: String,
+        quantity: u64,
+    ) -> Result<(), CustomerError> {
+        let update_params = UpdateSubscription {
+            items: Some(vec![stripe::UpdateSubscriptionItems {
+                id: Some(subscription_item_id),
+                quantity: Some(quantity),
+                ..Default::default()
+            }]),
+            proration_behavior: Some(
+                stripe::generated::billing::subscription::SubscriptionProrationBehavior::AlwaysInvoice,
+            ),
+            ..Default::default()
+        };
+
+        stripe::Subscription::update(&self.client, subscription_id, update_params)
+            .await
+            .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
+
+        Ok(())
     }
 }
 
@@ -98,6 +154,36 @@ impl CustomerRepository for CustomerRepositoryImpl {
             .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
 
         Ok(subscription.id)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn increment_seat_count(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        amount: u64,
+    ) -> Result<(), CustomerError> {
+        let (subscription_item_id, current_quantity) =
+            self.get_seat_subscription_item(subscription_id).await?;
+        let quantity = current_quantity
+            .checked_add(amount)
+            .context("seat count overflow")?;
+
+        self.update_seat_subscription_item(subscription_id, subscription_item_id, quantity)
+            .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn decrement_seat_count(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        amount: u64,
+    ) -> Result<(), CustomerError> {
+        let (subscription_item_id, current_quantity) =
+            self.get_seat_subscription_item(subscription_id).await?;
+        let quantity = current_quantity.saturating_sub(amount).max(1);
+
+        self.update_seat_subscription_item(subscription_id, subscription_item_id, quantity)
+            .await
     }
 
     #[tracing::instrument(skip(self), err)]

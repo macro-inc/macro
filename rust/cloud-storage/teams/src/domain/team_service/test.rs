@@ -411,6 +411,22 @@ impl CustomerRepository for MockCustomerRepository {
         async { unimplemented!() }
     }
 
+    fn increment_seat_count(
+        &self,
+        _: &stripe::SubscriptionId,
+        _: u64,
+    ) -> impl Future<Output = Result<(), CustomerError>> + Send {
+        async { unimplemented!() }
+    }
+
+    fn decrement_seat_count(
+        &self,
+        _: &stripe::SubscriptionId,
+        _: u64,
+    ) -> impl Future<Output = Result<(), CustomerError>> + Send {
+        async { unimplemented!() }
+    }
+
     fn cancel_subscription(
         &self,
         _: &stripe::SubscriptionId,

@@ -63,9 +63,11 @@ fn router_with_auth(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<Ap
         )
         .route(
             "/stripe/checkoutv2",
-            post(stripe::create_checkout_session_v2::create_checkout_session::<
-                EntityAccessServiceType,
-            >),
+            post(
+                stripe::create_checkout_session_v2::create_checkout_session::<
+                    EntityAccessServiceType,
+                >,
+            ),
         )
         .route(
             "/stripe/portal",

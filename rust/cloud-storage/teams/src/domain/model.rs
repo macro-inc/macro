@@ -430,6 +430,9 @@ pub enum CustomerError {
     /// Invalid promotion code
     #[error("Invalid promotion code {0}")]
     InvalidPromotionCode(String),
+    /// No subscription line item matched the configured Stripe price id.
+    #[error("No matching line item")]
+    NoMatchingLineItem,
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),
