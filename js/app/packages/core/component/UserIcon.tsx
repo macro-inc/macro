@@ -1,6 +1,7 @@
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
 import { staticFileSizedUrl } from '@core/constant/servers';
 import { internalDrag } from '@core/directive/internalDragState';
+import { isMobile } from '@core/mobile/isMobile';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import {
   macroIdToEmail,
@@ -257,6 +258,7 @@ function UserAvatarWithTooltip(props: {
   return (
     <HoverCard
       placement="left"
+      disabled={isMobile()}
       open={open()}
       onOpenChange={setOpen}
       triggerAs="div"

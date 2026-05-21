@@ -23,6 +23,7 @@ import {
   verifyBlockName,
 } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
+import { isMobile } from '@core/mobile/isMobile';
 import { canNestBlock } from '@core/orchestrator';
 import { formatDate } from '@core/util/date';
 import { matches } from '@core/util/match';
@@ -505,6 +506,7 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
 
   return (
     <HoverCard
+      disabled={isMobile()}
       trigger={
         <span class="relative">
           <span
