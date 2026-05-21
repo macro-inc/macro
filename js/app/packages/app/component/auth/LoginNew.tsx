@@ -67,7 +67,7 @@ function ProviderButton(props: {
       type="button"
       onClick={props.onClick}
       class={cn(
-        'flex items-center gap-3 w-full px-4 py-3 rounded-lg text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-200',
+        'flex items-center gap-3 w-full px-4 py-3 rounded-lg text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
         isPrimary()
           ? 'bg-ink text-surface outline-2 outline-transparent hover:outline-accent active:outline-accent'
           : 'bg-surface text-ink border border-edge hover:border-edge hover:bg-hover/50'
@@ -256,7 +256,7 @@ export function LoginNew() {
               >
                 <LogoIcon
                   class={cn(
-                    'size-10 text-accent',
+                    'size-8 text-accent',
                     stage() === Stage.Email && 'size-6'
                   )}
                 />
