@@ -2,12 +2,12 @@ import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
-import ShareNetwork from '@phosphor/share-network.svg';
 import { useToggleShareWithTeam } from './use-toggle-share-with-team';
 import { cn, Tooltip } from '@ui';
 import { type RemoteParticipant, Track } from 'livekit-client';
 import { For, type JSXElement, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
+import { InlineCheckbox } from './CallControls/CallMenuPrimitives';
 import { CallControls } from './CallControls/CallControls';
 import {
   CALL_PANEL_MEDIUM_NARROW_PX,
@@ -320,7 +320,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
           accent tint. No chunky toggle switch. */}
       <div
         class={cn(
-          'flex items-center px-3 py-2 bg-surface-1 border-t border-ink-muted/[0.08]',
+          'flex items-center px-3 py-2 bg-surface-1',
           !isMediumNarrow() && 'relative justify-center',
           isMediumNarrow() && !isVeryNarrow() && 'justify-between',
           isVeryNarrow() && 'justify-center'
@@ -331,31 +331,28 @@ export function CallOverlay(props: { onLeave: () => void }) {
             placement="top"
             label={
               callCtx.isSharedWithTeam()
-                ? 'Shared with team — everyone can view the transcript and AI summary. Click to make private.'
-                : 'Share with team — let everyone view the transcript and AI summary.'
+                ? 'Everyone can view the transcript and AI summary'
+                : 'Let everyone view the transcript and AI summary'
             }
           >
             <button
               type="button"
               onClick={() => void handleToggleShareWithTeam()}
               disabled={isConnecting()}
-              aria-pressed={callCtx.isSharedWithTeam()}
+              role="checkbox"
+              aria-checked={callCtx.isSharedWithTeam()}
               class={cn(
-                'inline-flex items-center gap-1.5 rounded-md h-7 px-2 text-xs transition-colors select-none',
-                callCtx.isSharedWithTeam()
-                  ? 'text-accent bg-accent/10 hover:bg-accent/15'
-                  : 'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
+                'inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs transition-colors select-none',
+                'border border-ink-muted/[0.08] bg-ink-muted/[0.025]',
+                'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
+                callCtx.isSharedWithTeam() && 'text-ink',
                 !isMediumNarrow() && 'absolute left-3',
                 isConnecting() && 'pointer-events-none opacity-50'
               )}
             >
-              <ShareNetwork class="size-3.5 shrink-0" aria-hidden />
+              <InlineCheckbox checked={callCtx.isSharedWithTeam()} />
               <Show when={!isMediumNarrow()}>
-                <span class="whitespace-nowrap">
-                  {callCtx.isSharedWithTeam()
-                    ? 'Shared with team'
-                    : 'Share with team'}
-                </span>
+                <span class="whitespace-nowrap">Share with team</span>
               </Show>
             </button>
           </Tooltip>

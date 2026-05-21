@@ -1,14 +1,11 @@
 import { StackedAvatarsRow } from '@core/component/StackedAvatarsRow';
 import ArrowsOut from '@phosphor/arrows-out.svg';
-import ShareNetwork from '@phosphor/share-network.svg';
-import { cn, Surface, Tooltip } from '@ui';
+import { cn, Surface } from '@ui';
 import { type Component, createMemo, Show } from 'solid-js';
-import { useCallContext } from '../CallContext';
 import type { CallControlsVariant } from '../CallControls/CallControls';
 import { CallControls } from '../CallControls/CallControls';
 import type { InCallPanelProps } from '../InCallPanel/types';
 import { openChannelCallTab } from '../open-channel-call-tab';
-import { useToggleShareWithTeam } from '../use-toggle-share-with-team';
 import {
   InCallParticipantsListPopover,
   InCallRosterListSection,
@@ -28,9 +25,6 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
     onLeaveCall: props.onLeaveCall,
     onJoinCall: props.onJoinCall,
   });
-  const callCtx = useCallContext();
-  const handleToggleShareWithTeam = useToggleShareWithTeam();
-
   const slim = createMemo((): boolean => {
     const v = props.isSlim;
     return typeof v === 'function' ? v() : v;
@@ -108,33 +102,6 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
           </div>
 
           <div class="flex items-center gap-0.5 shrink-0">
-            <Show when={!slim()}>
-              <Tooltip
-                placement="top"
-                label={
-                  callCtx.isSharedWithTeam()
-                    ? 'Shared with team — everyone can view the transcript and AI summary. Click to make private.'
-                    : 'Share with team — let everyone view the transcript and AI summary.'
-                }
-              >
-                <button
-                  type="button"
-                  onClick={() => void handleToggleShareWithTeam()}
-                  disabled={callCtx.isConnecting()}
-                  aria-pressed={callCtx.isSharedWithTeam()}
-                  class={cn(
-                    'inline-flex items-center justify-center size-6 rounded transition-colors',
-                    callCtx.isSharedWithTeam()
-                      ? 'text-accent bg-accent/10 hover:bg-accent/15'
-                      : 'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
-                    callCtx.isConnecting() && 'pointer-events-none opacity-50'
-                  )}
-                >
-                  <ShareNetwork class="size-3.5 shrink-0" aria-hidden />
-                </button>
-              </Tooltip>
-            </Show>
-
             <Show when={showExpandToFullCall()}>
               <button
                 type="button"
