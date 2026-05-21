@@ -3,8 +3,8 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import ShareNetwork from '@phosphor/share-network.svg';
-import { useToggleShareWithTeamMutation } from '@queries/call/call';
-import { cn, ToggleSwitch, Tooltip } from '@ui';
+import { useToggleShareWithTeam } from './use-toggle-share-with-team';
+import { cn, Tooltip } from '@ui';
 import { type RemoteParticipant, Track } from 'livekit-client';
 import { For, type JSXElement, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
@@ -197,14 +197,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
   const currentUserId = useUserId();
   const currentUserName = useAuthor();
   const isConnecting = () => callCtx.isConnecting();
-  const toggleShareWithTeam = useToggleShareWithTeamMutation();
-
-  const handleToggleShareWithTeam = async () => {
-    const callId = callCtx.activeCallId();
-    if (!callId) return;
-    const newValue = await toggleShareWithTeam.mutateAsync(callId);
-    callCtx.setSharedWithTeam(newValue);
-  };
+  const handleToggleShareWithTeam = useToggleShareWithTeam();
 
   const splitPanel = useSplitPanel();
   const panelWidth = () => splitPanel?.panelSize.width ?? Infinity;
@@ -322,54 +315,50 @@ export function CallOverlay(props: { onLeave: () => void }) {
         </Show>
       </div>
 
-      {/* Controls bar */}
+      {/* Controls bar — soup-notification vocabulary. Share toggle is an
+          icon button (with optional inline label), active state = subtle
+          accent tint. No chunky toggle switch. */}
       <div
         class={cn(
-          'flex items-center p-3 pt-1 bg-surface-1',
+          'flex items-center px-3 py-2 bg-surface-1 border-t border-ink-muted/[0.08]',
           !isMediumNarrow() && 'relative justify-center',
           isMediumNarrow() && !isVeryNarrow() && 'justify-between',
           isVeryNarrow() && 'justify-center'
         )}
       >
         <Show when={!isVeryNarrow()}>
-          <div
-            class={cn(
-              'flex items-center gap-2',
-              !isMediumNarrow() && 'absolute left-3'
-            )}
+          <Tooltip
+            placement="top"
+            label={
+              callCtx.isSharedWithTeam()
+                ? 'Shared with team — everyone can view the transcript and AI summary. Click to make private.'
+                : 'Share with team — let everyone view the transcript and AI summary.'
+            }
           >
-            <Show when={!isMediumNarrow()}>
-              <span class="text-xs text-ink-muted whitespace-nowrap inline-grid">
-                <span class="col-start-1 row-start-1 invisible" aria-hidden>
-                  Shared with team
-                </span>
-                <span class="col-start-1 row-start-1">
+            <button
+              type="button"
+              onClick={() => void handleToggleShareWithTeam()}
+              disabled={isConnecting()}
+              aria-pressed={callCtx.isSharedWithTeam()}
+              class={cn(
+                'inline-flex items-center gap-1.5 rounded-md h-7 px-2 text-xs transition-colors select-none',
+                callCtx.isSharedWithTeam()
+                  ? 'text-accent bg-accent/10 hover:bg-accent/15'
+                  : 'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
+                !isMediumNarrow() && 'absolute left-3',
+                isConnecting() && 'pointer-events-none opacity-50'
+              )}
+            >
+              <ShareNetwork class="size-3.5 shrink-0" aria-hidden />
+              <Show when={!isMediumNarrow()}>
+                <span class="whitespace-nowrap">
                   {callCtx.isSharedWithTeam()
                     ? 'Shared with team'
                     : 'Share with team'}
                 </span>
-              </span>
-            </Show>
-            <Tooltip
-              placement="top"
-              label="When on, all team members can view and search this call's transcript and AI summary."
-            >
-              <div class="flex items-center gap-1">
-                <ShareNetwork
-                  class={cn(
-                    'size-3 shrink-0',
-                    callCtx.isSharedWithTeam() ? 'text-ink' : 'text-ink-muted'
-                  )}
-                  aria-hidden
-                />
-                <ToggleSwitch
-                  onChange={() => void handleToggleShareWithTeam()}
-                  checked={callCtx.isSharedWithTeam()}
-                  disabled={isConnecting()}
-                />
-              </div>
-            </Tooltip>
-          </div>
+              </Show>
+            </button>
+          </Tooltip>
         </Show>
         <CallControls onLeave={props.onLeave} />
       </div>
