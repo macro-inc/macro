@@ -10,8 +10,8 @@ import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import IconApple from '@icon/macro-apple.svg';
 import IconGoogle from '@icon/macro-google.svg';
-import IconMail from '@icon/macro-mail.svg';
 import LogoIcon from '@icon/macro-logo.svg';
+import IconMail from '@icon/macro-mail.svg';
 import { useUserInfo } from '@queries/auth';
 import {
   invalidateAllAfterLogin,
