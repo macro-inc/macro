@@ -1,11 +1,16 @@
 import { useAnalytics } from '@app/component/analytics-context';
-import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
-import { ENABLE_NEW_LOGIN_OVERRIDE } from '@core/constant/featureFlags';
 import { useEmailLinks } from '@core/email-link';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
+import { getNativeMobilePlatform } from '@core/util/platform';
+import IconApple from '@icon/macro-apple.svg';
+import IconGoogle from '@icon/macro-google.svg';
+import IconMail from '@icon/macro-mail.svg';
 import LogoIcon from '@icon/macro-logo.svg';
 import { useUserInfo } from '@queries/auth';
 import {
@@ -19,6 +24,7 @@ import { detect } from 'detect-browser';
 import {
   createEffect,
   createSignal,
+  type JSX,
   Match,
   onCleanup,
   onMount,
@@ -26,22 +32,9 @@ import {
   Switch,
 } from 'solid-js';
 import { EmailForm } from './EmailForm';
-import { LoginNew } from './LoginNew';
-import { LoginOptions } from './LoginOptions';
 import { Stage } from './Shared';
+import { useSsoLogin } from './useSsoLogin';
 import { VerifyForm } from './VerifyForm';
-
-export function Login() {
-  return (
-    <ShowFeatureFlag
-      key="enable-new-login"
-      enabledOverride={ENABLE_NEW_LOGIN_OVERRIDE}
-      fallback={<LoginOld />}
-    >
-      <LoginNew />
-    </ShowFeatureFlag>
-  );
-}
 
 function PostLoginRedirect() {
   const navigate = useNavigate();
@@ -62,7 +55,69 @@ function PostLoginRedirect() {
   return <LoadingBlock />;
 }
 
-function LoginOld() {
+function ProviderButton(props: {
+  icon: JSX.Element;
+  label: string;
+  onClick: () => void;
+  variant?: 'primary' | 'secondary';
+}) {
+  const isPrimary = () => props.variant === 'primary';
+  return (
+    <button
+      type="button"
+      onClick={props.onClick}
+      class={cn(
+        'flex items-center gap-3 w-full px-4 py-3 rounded-lg text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors',
+        isPrimary()
+          ? 'bg-ink text-surface border border-transparent hover:bg-accent/90 active:bg-accent/80'
+          : 'bg-surface text-ink border border-edge hover:border-edge hover:bg-hover/50'
+      )}
+    >
+      <span class="shrink-0 inline-flex">{props.icon}</span>
+      <span class="flex-1 text-left">{props.label}</span>
+    </button>
+  );
+}
+
+function LoginPicker(props: { setStage: (next: Stage) => void }) {
+  const startSsoLogin = useSsoLogin();
+  const showApple =
+    !isNativeMobilePlatform() || getNativeMobilePlatform() === 'ios';
+
+  return (
+    <div class="flex flex-col gap-4">
+      <ProviderButton
+        variant="primary"
+        icon={<IconGoogle />}
+        label="Continue with Google"
+        onClick={() => startSsoLogin(GOOGLE_GMAIL_IDP)}
+      />
+
+      <div class="flex items-center gap-3 text-[11px] uppercase tracking-wider text-ink-muted">
+        <span class="flex-1 h-px bg-edge-muted" />
+        <span>or</span>
+        <span class="flex-1 h-px bg-edge-muted" />
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <Show when={showApple}>
+          <ProviderButton
+            icon={<IconApple />}
+            label="Continue with Apple"
+            onClick={() => startSsoLogin('Apple')}
+          />
+        </Show>
+        <ProviderButton
+          icon={<IconMail />}
+          label="Continue with email"
+          onClick={() => props.setStage(Stage.Email)}
+        />
+      </div>
+    </div>
+  );
+}
+
+export function LoginNew() {
   const [stage, setStage] = createSignal(Stage.None);
   const userInfo = useUserInfo();
   const [searchParams] = useSearchParams();
@@ -86,7 +141,7 @@ function LoginOld() {
 
   createEffect(() => {
     if (userInfo()?.authenticated) {
-      invalidateUserInfo().then(identifyUser);
+      // invalidateUserInfo().then(identifyUser);
     }
   });
 
@@ -159,52 +214,48 @@ function LoginOld() {
       <div class="flex items-center justify-center size-full p-8 overflow-hidden relative">
         <style>{
           /*css*/ `
-          @keyframes login-fade-up {
-            from { opacity: 0; transform: translateY(8px); }
-            to   { opacity: 1; transform: translateY(0); }
+          @keyframes ln-card-in {
+            from { opacity: 0; transform: translateY(14px) scale(0.985); }
+            to   { opacity: 1; transform: translateY(0)    scale(1);     }
           }
-          .login-card {
-            animation: login-fade-up 300ms ease-out both;
-          }
-          .login-stagger > * {
-            animation: login-fade-up 300ms ease-out both;
-          }
-          .login-stagger > *:nth-child(1) { animation-delay: 50ms; }
-          .login-stagger > *:nth-child(2) { animation-delay: 120ms; }
-          .login-stagger > *:nth-child(3) { animation-delay: 190ms; }
-          .login-stagger > *:nth-child(4) { animation-delay: 260ms; }
-          .login-stagger > *:nth-child(5) { animation-delay: 330ms; }
+          .ln-card { animation: ln-card-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
         `
         }</style>
-        <div class="inset-0 absolute text-edge bg-surface opacity-10 -z-1">
+
+        <div class="inset-0 absolute text-ink bg-surface opacity-30 -z-1">
           <PcNoiseGrid
-            cellSize={30}
-            warp={0}
-            crunch={0.2}
-            freq={0.001}
-            size={[0, 0.3]}
+            cellSize={20}
+            warp={20}
+            crunch={0.1}
+            freq={0.0002}
+            size={[0, 0.01]}
             rounding={0}
             fill={0}
             stroke={1}
-            speed={[0.017, 0.209]}
+            speed={[0.01, 0.509]}
           />
         </div>
 
-        <div class="w-full max-w-105 login-card">
+        <div class="w-full max-w-md ln-card shadow-md shadow-ink/10">
           <Surface depth={1}>
-            <div class="login-stagger">
+            <div class="p-8 flex flex-col gap-16">
               <div
                 class={cn(
-                  'flex items-center justify-center py-10',
+                  'flex gap-4 items-center',
                   virtualKeyboardVisible() && 'hidden'
                 )}
               >
-                <LogoIcon class="size-20 text-accent" />
+                <LogoIcon class="size-6 text-accent" />
+
+                <span class="text-2xl font-light font-mono lowercase">
+                  Welcome
+                </span>
               </div>
-              <div class="w-full">
+
+              <div class="flex flex-col gap-4">
                 <Switch>
                   <Match when={stage() === Stage.None}>
-                    <LoginOptions setStage={onStageChange} />
+                    <LoginPicker setStage={onStageChange} />
                   </Match>
                   <Match when={stage() === Stage.Email}>
                     <EmailForm setStage={onStageChange} />
@@ -213,7 +264,39 @@ function LoginOld() {
                     <VerifyForm setStage={onStageChange} />
                   </Match>
                 </Switch>
+
+                <div class="flex gap-2 text-sm">
+                  <div>New to Macro?</div>
+                  <a
+                    class="text-ink underline underline-offset-2 hover:text-accent"
+                    href={`${ROUTER_BASE_CONCAT}signup`}
+                  >
+                    Create an account
+                  </a>
+                </div>
               </div>
+
+              <Show when={stage() === Stage.None}>
+                <div class="flex flex-col text-center text-xs text-ink-muted">
+                  <div class="text-ink/50">
+                    By continuing, you agree to our{' '}
+                    <a
+                      class="underline underline-offset-2 hover:text-ink"
+                      href="/terms"
+                    >
+                      terms
+                    </a>{' '}
+                    and{' '}
+                    <a
+                      class="underline underline-offset-2 hover:text-ink"
+                      href="/privacy"
+                    >
+                      privacy policy
+                    </a>
+                    .
+                  </div>
+                </div>
+              </Show>
             </div>
           </Surface>
         </div>
