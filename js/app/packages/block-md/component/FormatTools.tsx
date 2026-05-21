@@ -458,7 +458,11 @@ export function FormatTools(props: { withinPopup?: boolean }) {
         >
           <TextAA />
         </Dropdown.Trigger>
-        <Dropdown.Content onCloseAutoFocus={() => { lastFocusedEditor()?.focus(); }}>
+        <Dropdown.Content
+          onCloseAutoFocus={() => {
+            lastFocusedEditor()?.focus();
+          }}
+        >
           <Dropdown.Group>
             <div class="w-full flex gap-1 justify-center items-center">
               <For each={InlineFormats}>
@@ -518,7 +522,11 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           <TextAA />
         </Dropdown.Trigger>
         <Show when={!props.buttonIsDisabled()}>
-          <Dropdown.Content onCloseAutoFocus={() => { lastFocusedEditor()?.focus(); }}>
+          <Dropdown.Content
+            onCloseAutoFocus={() => {
+              lastFocusedEditor()?.focus();
+            }}
+          >
             <Dropdown.Group>
               <div class="w-full flex gap-1 justify-center items-center">
                 <For each={props.formats}>
@@ -564,7 +572,11 @@ export function FormatTools(props: { withinPopup?: boolean }) {
         <Dynamic component={props.icon ?? ThreeDots} />
       </Dropdown.Trigger>
       <Show when={!buttonIsDisabled()}>
-        <Dropdown.Content onCloseAutoFocus={() => { lastFocusedEditor()?.focus(); }}>
+        <Dropdown.Content
+          onCloseAutoFocus={() => {
+            lastFocusedEditor()?.focus();
+          }}
+        >
           <Dropdown.Group>
             <For each={Object.keys(InlineIcons)}>
               {(format) => (
@@ -895,7 +907,11 @@ export function FormatTools(props: { withinPopup?: boolean }) {
                 <PlusSquare />
               </Dropdown.Trigger>
               <Show when={!buttonIsDisabled()}>
-                <Dropdown.Content onCloseAutoFocus={() => { lastFocusedEditor()?.focus(); }}>
+                <Dropdown.Content
+                  onCloseAutoFocus={() => {
+                    lastFocusedEditor()?.focus();
+                  }}
+                >
                   <Dropdown.Group>
                     <Dropdown.Item
                       onSelect={() => {
