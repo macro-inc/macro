@@ -1,5 +1,8 @@
 //! Implementation of [`CompaniesRepository`] backed by MacroDB.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::{
     companies_repo::CompaniesRepository,
     model::{CrmCompany, CrmDomain, CrmError, DomainMetadata},
@@ -530,6 +533,72 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .execute(&self.pool)
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn set_email_sync(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        email_sync: bool,
+    ) -> Result<(), CrmError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // Scoping UPDATE on both id AND team_id rejects cross-team callers as NotFound.
+        let updated = sqlx::query_scalar!(
+            r#"
+            UPDATE crm_companies
+            SET email_sync = $3
+            WHERE id = $1 AND team_id = $2
+            RETURNING id
+            "#,
+            company_id,
+            team_id,
+            email_sync,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        if updated.is_none() {
+            tx.rollback()
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            return Err(CrmError::CompanyNotFoundForTeam);
+        }
+
+        if !email_sync {
+            sqlx::query!(
+                r#"
+                DELETE FROM crm_contact_sources
+                WHERE contact_id IN (
+                    SELECT id FROM crm_contacts WHERE company_id = $1
+                )
+                "#,
+                company_id,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+            sqlx::query!(
+                r#"DELETE FROM crm_contacts WHERE company_id = $1"#,
+                company_id,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         Ok(())
     }
