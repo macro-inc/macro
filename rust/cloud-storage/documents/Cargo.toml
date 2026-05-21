@@ -12,14 +12,14 @@ required-features = ["backfill_binary"]
 [features]
 attachment = [
     "dep:attachment",
-    "dep:ai",
+    "dep:ai_toolset",
     "dep:lexical_client",
     "dep:model_file_type",
     "dep:reqwest",
     "ports",
 ]
 ai_tools = [
-  "dep:ai",
+  "dep:ai_toolset",
   "dep:async-trait",
   "dep:model_file_type",
   "dep:schemars",
@@ -115,7 +115,7 @@ sync_service_client = { path = "../sync_service_client" }
 urlencoding = { workspace = true }
 
 # AI Tool dependencies
-ai = { path = "../ai", optional = true }
+ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true, optional = true }
 lexical_client = { path = "../lexical_client", optional = true }
 model_file_type = { path = "../model_file_type", optional = true }

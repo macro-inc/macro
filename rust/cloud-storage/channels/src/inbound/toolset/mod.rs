@@ -9,7 +9,7 @@ mod types;
 mod test;
 
 use crate::domain::ports::ChannelMessagesService;
-use ai::tool::{AsyncToolCollection, RequestContext, ToolCallError};
+use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
 use entity_access::domain::{
     models::{AccessError, AccessLevel, EntityType},
     ports::EntityAccessService,

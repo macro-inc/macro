@@ -1,7 +1,7 @@
 //! ReadChat tool for fetching a chat's message history.
 
 use crate::domain::ports::ChatService;
-use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use entity_access::domain::{
     models::{EntityType, ViewAccessLevel},

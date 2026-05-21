@@ -8,11 +8,11 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
-ai = { path = "../ai" }
+agent = { path = "../agent" }
+anthropic = { path = "../anthropic", features = ["toolset"] }
 attachment = { path = "../attachment" }
 non_empty = { path = "../non_empty" }
 ai_toolset = { path = "../ai_toolset" }
-anthropic = { path = "../anthropic" }
 anyhow.workspace = true
 async-trait.workspace = true
 axum = { workspace = true, features = ["macros"] }

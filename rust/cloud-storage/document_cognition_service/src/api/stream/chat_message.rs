@@ -1,5 +1,5 @@
 //! HTTP endpoint for sending chat messages with streaming responses.
-use super::util::chat_message::ai_request::build_chat_completion_request;
+use super::util::chat_message::ai_request::build_chat_messages;
 use super::util::chat_message::toolset::choose_tools_prompt;
 use super::util::chat_message::{store_conversation_messages, store_incoming_message};
 use super::util::chat_permissions;
@@ -10,10 +10,9 @@ use crate::model::stream::{ChatStream, JwtPayload, SendChatMessagePayload, Strea
 use crate::service::ai_stream_registry::CancellationSubscription;
 use crate::service::get_chat::get_chat;
 use crate::service::notification::notify;
-use ai::tool::ToolLoop;
-use ai::tool::types::StreamPart;
-use ai::types::{AssistantMessagePart, ChatMessageContent, Model};
-use ai_tools::RequestContext;
+use agent::AgentModel;
+use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent};
+use agent::{AgentLoop, StreamPart};
 use async_stream::stream;
 use attachment::FormattedParts;
 use axum::Json;
@@ -74,7 +73,7 @@ pub struct HttpSendChatMessageRequest {
     /// Id of the chat the message belongs to (optional - if not provided, a new chat is created)
     pub chat_id: Option<String>,
     /// The model to respond with
-    pub model: Model,
+    pub model: AgentModel,
     /// Additional system instructions appended to the base system prompt
     #[serde(skip_serializing_if = "Option::is_none")]
     pub additional_instructions: Option<String>,
@@ -276,17 +275,10 @@ async fn send_chat_message_inner(
         .ok()
         .flatten();
 
-    // Build the completion request
+    // Build the chat messages
     let tools_prompt = choose_tools_prompt(&payload, ctx.all_tools_prompt);
-    let ai_request = build_chat_completion_request(
-        &chat,
-        &payload,
-        tools_prompt,
-        user_memory.as_deref(),
-        all_resolved_parts,
-    )
-    .map_err(|err| {
-        tracing::error!(error=?err, "failed to build chat completion request");
+    let ai_request = build_chat_messages(&chat, &payload, all_resolved_parts).map_err(|err| {
+        tracing::error!(error=?err, "failed to build chat messages");
         ChatMessageError {
             error: "Failed to build request".to_string(),
             stream_id: Some(stream_id.clone()),
@@ -308,10 +300,26 @@ async fn send_chat_message_inner(
     // moved into the spawned stream task and dropped when it finishes.
     let cancellation_sub = ctx.ai_stream_registry.register(stream_id.clone()).await;
 
+    // Build the system prompt for the agent session.
+    let system_prompt = {
+        let additional = payload
+            .additional_instructions
+            .as_deref()
+            .unwrap_or_default();
+        let mut prompt = format!("{}\n{}", tools_prompt, additional);
+        if let Some(memory) = user_memory.as_deref() {
+            prompt.push_str("\n\n<user_memory>\n");
+            prompt.push_str(memory);
+            prompt.push_str("\n</user_memory>");
+        }
+        prompt
+    };
+
     // Stream the AI response, save messages when complete
     stream_and_save_message(
         ctx.clone(),
         ai_request,
+        system_prompt,
         (*user_id).clone(),
         jwt_token,
         actual_chat_id.clone(),
@@ -337,7 +345,7 @@ async fn send_chat_message_inner(
 async fn create_new_chat(
     ctx: &Arc<ApiContext>,
     user_id: &Arc<MacroUserIdStr<'static>>,
-    model: Model,
+    model: AgentModel,
     stream_id: &str,
 ) -> Result<(crate::model::chats::ChatResponse, String), ChatMessageError> {
     let share_permission = SharePermissionV2::new_chat_share_permission();
@@ -433,13 +441,14 @@ fn resolve_pending_tool_calls(parts: Vec<AssistantMessagePart>) -> Vec<Assistant
 #[tracing::instrument(skip(ctx, request, user_message_content, cancellation_sub))]
 fn stream_and_save_message(
     ctx: Arc<ApiContext>,
-    request: ai::types::ChatCompletionRequest,
+    request: Vec<ChatMessage>,
+    system_prompt: String,
     user_id: MacroUserIdStr<'static>,
     jwt_token: String,
     chat_id: String,
     message_id: String,
     stream_id: String,
-    model: Model,
+    model: AgentModel,
     now: std::time::Instant,
     user_message_content: String,
     user_message_id: String,
@@ -452,9 +461,6 @@ fn stream_and_save_message(
     let static_tools = ctx.all_tools.clone();
     let mcp_store = ctx.mcp_state.store();
 
-    let request_context = RequestContext {
-        user_id: user_id.clone(),
-    };
     let ctx_outer = ctx.clone();
     // Pull the token out so the select below can reference it without moving
     // the whole subscription; the subscription itself is moved into the
@@ -481,29 +487,22 @@ fn stream_and_save_message(
         }
 
         let mcp_records = mcp_store.list(&user_id).await.unwrap_or_default();
-        let toolset = Arc::new(
+        let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> = Arc::new(
             mcp_client::domain::service::CombinedToolSet::new(static_tools, &mcp_records).await,
         );
-        let client = ToolLoop::new(toolset, tool_context);
-        let mut chat = client.chat();
+        let agent_loop = AgentLoop::new();
+        let rig_messages = agent::to_rig_messages(&request);
+        let mut session = agent_loop
+            .session(toolset, Arc::new(tool_context), &system_prompt, user_id.clone())
+            .await;
 
         // Create the AI stream - yield error if it fails
-        let mut ai_stream = match chat
-            .send_message(request, request_context, user_id.as_ref().to_string())
-            .await
-        {
+        let mut ai_stream = match session.send_message(rig_messages).await {
             Ok(stream) => stream,
             Err(e) => {
                 tracing::error!(error=?e, chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "failed to create AI stream");
-                let stream_error = match e {
-                    ai::types::AiError::ContextWindowExceeded => {
-                        StreamError::ModelContextOverflow {
-                            stream_id: stream_id.clone(),
-                        }
-                    }
-                    ai::types::AiError::Generic(_) => StreamError::InternalError {
-                        stream_id: stream_id.clone(),
-                    },
+                let stream_error = StreamError::InternalError {
+                    stream_id: stream_id.clone(),
                 };
                 if let Ok(json) = serde_json::to_value(ChatStream::Error(stream_error)) {
                     yield json;
@@ -515,11 +514,6 @@ fn stream_and_save_message(
         let mut is_first_token = false;
         let idle_timeout = std::time::Duration::from_secs(3 * 60);
         let mut was_cancelled = false;
-        // Track every AssistantMessagePart we yield so we can persist the
-        // exact partial response if the stream is cancelled. The ToolLoop's
-        // internal conversation state is only flushed after its inner stream
-        // completes, so on cancellation `chat.get_new_conversation_messages()`
-        // returns empty — we build the partial message from this buffer instead.
         let mut yielded_parts: Vec<AssistantMessagePart> = Vec::new();
 
         loop {
@@ -550,7 +544,6 @@ fn stream_and_save_message(
             let Some(response) = next_item else { break; };
             tracing::trace!("{:#?}", response);
 
-            // Log time to first token
             if !is_first_token {
                 is_first_token = true;
                 log::log_timing(log::LatencyMetric::TimeToFirstToken, model, now.elapsed());
@@ -580,15 +573,15 @@ fn stream_and_save_message(
                             },
                         },
                         StreamPart::Usage(usage) => {
-                            tracing::debug!(record=?usage, "usage");
+                            tracing::debug!(?usage, "usage");
                             continue;
                         }
-                        StreamPart::ToolResponse(ai::tool::types::ToolResponse::Json {
+                        StreamPart::ToolResponse(agent::ToolResponse::Json {
                             id,
                             json,
                             name,
                         }) => AssistantMessagePart::ToolCallResponseJson { name, json, id },
-                        StreamPart::ToolResponse(ai::tool::types::ToolResponse::Err {
+                        StreamPart::ToolResponse(agent::ToolResponse::Err {
                             id,
                             name,
                             description,
@@ -614,15 +607,8 @@ fn stream_and_save_message(
                 }
                 Err(e) => {
                     tracing::error!(error=?e, chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "error in AI stream");
-                    let stream_error = match e {
-                        ai::types::AiError::ContextWindowExceeded => {
-                            StreamError::ModelContextOverflow {
-                                stream_id: stream_id.clone(),
-                            }
-                        }
-                        ai::types::AiError::Generic(_) => StreamError::InternalError {
-                            stream_id: stream_id.clone(),
-                        },
+                    let stream_error = StreamError::InternalError {
+                        stream_id: stream_id.clone(),
                     };
                     if let Ok(json) = serde_json::to_value(ChatStream::Error(stream_error)) {
                         yield json;
@@ -632,7 +618,6 @@ fn stream_and_save_message(
             }
         }
 
-        // Drop the AI stream before accessing chat
         drop(ai_stream);
 
         // Send stream end message
@@ -642,43 +627,25 @@ fn stream_and_save_message(
         if let Ok(json) = serde_json::to_value(&end_msg) {
             yield json;
         }
-        // Build the set of messages to persist.
-        //
-        // Natural completion: the ToolLoop has flushed its in-progress stream
-        // into its own `self.messages`, so `get_new_conversation_messages`
-        // returns the full assistant (+ any tool) messages. Use those.
-        //
-        // Early termination (cancellation or mid-stream error): the ToolLoop
-        // never flushed, so that call returns empty. Build a ChatMessage from
-        // the parts we actually yielded — that's exactly what the user saw in
-        // the chunks pushed to the durable stream, so the saved message
-        // matches the UI deterministically.
+        // Build the set of messages to persist from the parts we yielded.
+        // This matches exactly what the user saw in the streamed chunks.
         let new_messages = {
-            let flushed = if was_cancelled {
+            let resolved_parts = resolve_pending_tool_calls(yielded_parts);
+            if resolved_parts.is_empty() {
                 vec![]
             } else {
-                chat.get_new_conversation_messages()
-            };
-            if !flushed.is_empty() {
-                flushed
-            } else {
-                let resolved_parts = resolve_pending_tool_calls(yielded_parts);
-                if resolved_parts.is_empty() {
-                    vec![]
-                } else {
-                    vec![ai::types::ChatMessage {
-                        role: ai::types::Role::Assistant,
-                        content: ChatMessageContent::AssistantMessageParts(resolved_parts),
-                        attachments: None,
-                    }]
-                }
+                vec![agent::types::ChatMessage {
+                    role: agent::types::Role::Assistant,
+                    content: ChatMessageContent::AssistantMessageParts(resolved_parts),
+                    attachments: None,
+                }]
             }
         };
 
         // Extract assistant response text before moving new_messages into store
         let assistant_text = new_messages
             .iter()
-            .find(|m| m.role == ai::types::Role::Assistant)
+            .find(|m| m.role == agent::types::Role::Assistant)
             .and_then(|m| m.content.assistant_message_text());
 
         if let Err(err) = store_conversation_messages(

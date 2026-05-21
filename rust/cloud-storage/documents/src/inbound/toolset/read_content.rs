@@ -7,7 +7,7 @@ use crate::domain::{
     ports::{DocumentService, create::DocumentCreationService},
     response::LocationResponseV3,
 };
-use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use entity_access::domain::{
     models::{EntityAccessReceipt, EntityType, ViewAccessLevel},

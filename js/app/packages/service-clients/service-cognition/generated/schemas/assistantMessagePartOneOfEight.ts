@@ -6,9 +6,15 @@
  */
 import type { AssistantMessagePartOneOfEightType } from './assistantMessagePartOneOfEightType';
 
+/**
+ * A JSON response from a tool call.
+ */
 export type AssistantMessagePartOneOfEight = {
+  /** Corresponding call id. */
   id: string;
+  /** Response payload. */
   json: unknown;
+  /** Tool name. */
   name: string;
   type: AssistantMessagePartOneOfEightType;
 };

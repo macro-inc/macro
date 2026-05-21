@@ -2,6 +2,7 @@
 resolver = "2"
 
 members = [
+  "agent",
   "authentication_service",
   "backfill_entity_access",
   "comms_service",

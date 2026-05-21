@@ -1,4 +1,4 @@
-use ai::types::Model;
+use agent::AgentModel;
 
-pub static CHAT_MODELS: &[Model] = &[Model::Claude45Haiku, Model::Claude46Opus];
-pub static FALLBACK_MODEL: Model = Model::Claude45Haiku;
+pub static CHAT_MODELS: &[AgentModel] = &[AgentModel::Smart, AgentModel::Fast];
+pub static FALLBACK_MODEL: AgentModel = AgentModel::Haiku4_5;

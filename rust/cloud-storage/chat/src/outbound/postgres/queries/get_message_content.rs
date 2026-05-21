@@ -1,6 +1,6 @@
 //! Query to fetch a single message's content by ID, scoped to a chat.
 
-use ai::types::ChatMessageContent;
+use agent::types::ChatMessageContent;
 use sqlx::PgPool;
 
 /// Fetch the content of a single message by ID, scoped to the given chat.

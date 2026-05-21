@@ -6,6 +6,6 @@
  */
 
 /**
- * Human-readable title from the MCP server, if provided
+ * Optional human-readable name.
  */
 export type AssistantMessagePartOneOfFiveDisplayName = string | null;

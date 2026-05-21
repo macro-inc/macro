@@ -2,7 +2,7 @@ use crate::domain::models::{
     ChatResponse, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs,
     PatchChatMessageArgs, Result,
 };
-use ai::types::ChatMessageContent;
+use agent::types::ChatMessageContent;
 use ai_toolset::tool_object::UserToolResponse;
 use attachment::FormattedParts;
 use entity_access::domain::models::{

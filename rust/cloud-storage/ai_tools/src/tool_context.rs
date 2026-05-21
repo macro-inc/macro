@@ -1,3 +1,4 @@
+use anthropic::toolset::AnthropicToolContext;
 use axum::extract::FromRef;
 use call::domain::models::{CallError, CallWebhookEvent, EgressS3Config};
 use call::domain::ports::CallRtcClient;
@@ -456,6 +457,7 @@ pub struct ToolServiceContext {
     pub channel_tool_context: ToolChannelToolContext,
     pub team_tool_context: ToolTeamToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
+    pub anthropic_tool_context: AnthropicToolContext,
 }
 
 impl FromRef<ToolServiceContext> for ai_toolset::NoContext {

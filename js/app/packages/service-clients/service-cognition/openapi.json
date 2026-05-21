@@ -1196,25 +1196,6 @@
         }
       }
     },
-    "/models": {
-      "get": {
-        "tags": ["get_models"],
-        "summary": "Gets all available models",
-        "operationId": "get_models_handler",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetModelsResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/preview": {
       "post": {
         "tags": ["get_batch_preview"],
@@ -1409,21 +1390,6 @@
   },
   "components": {
     "schemas": {
-      "AIModel": {
-        "type": "object",
-        "required": ["name", "provider", "metadata"],
-        "properties": {
-          "metadata": {
-            "$ref": "#/components/schemas/ModelMetadata"
-          },
-          "name": {
-            "type": "string"
-          },
-          "provider": {
-            "$ref": "#/components/schemas/Provider"
-          }
-        }
-      },
       "AccessLevel": {
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
@@ -1444,14 +1410,21 @@
           }
         }
       },
+      "AgentModel": {
+        "type": "string",
+        "description": "Model to use for completions.\n\nUnrecognized model strings (including retired Google/OpenAI variants\nfrom older data) deserialize to `Retired` via the manual\n`Deserialize` impl.",
+        "enum": ["smart", "fast", "opus4_7", "sonnet4_6", "haiku4_5", "retired"]
+      },
       "AssistantMessagePart": {
         "oneOf": [
           {
             "type": "object",
+            "description": "Plain text produced by the model.",
             "required": ["text", "type"],
             "properties": {
               "text": {
-                "type": "string"
+                "type": "string",
+                "description": "The text content."
               },
               "type": {
                 "type": "string",
@@ -1461,14 +1434,19 @@
           },
           {
             "type": "object",
+            "description": "A native tool call issued by the model.",
             "required": ["name", "json", "id", "type"],
             "properties": {
               "id": {
-                "type": "string"
+                "type": "string",
+                "description": "Provider-assigned call id."
               },
-              "json": {},
+              "json": {
+                "description": "Tool arguments as JSON."
+              },
               "name": {
-                "type": "string"
+                "type": "string",
+                "description": "Tool name."
               },
               "type": {
                 "type": "string",
@@ -1478,23 +1456,27 @@
           },
           {
             "type": "object",
+            "description": "A tool call routed through an MCP service.",
             "required": ["name", "service", "json", "id", "type"],
             "properties": {
               "display_name": {
                 "type": ["string", "null"],
-                "description": "Human-readable title from the MCP server, if provided"
+                "description": "Optional human-readable name."
               },
               "id": {
-                "type": "string"
+                "type": "string",
+                "description": "Provider-assigned call id."
               },
-              "json": {},
+              "json": {
+                "description": "Tool arguments as JSON."
+              },
               "name": {
                 "type": "string",
-                "description": "Demangled tool name from the MCP server"
+                "description": "Tool name."
               },
               "service": {
                 "type": "string",
-                "description": "MCP server name"
+                "description": "MCP service identifier."
               },
               "type": {
                 "type": "string",
@@ -1504,14 +1486,19 @@
           },
           {
             "type": "object",
+            "description": "A JSON response from a tool call.",
             "required": ["name", "json", "id", "type"],
             "properties": {
               "id": {
-                "type": "string"
+                "type": "string",
+                "description": "Corresponding call id."
               },
-              "json": {},
+              "json": {
+                "description": "Response payload."
+              },
               "name": {
-                "type": "string"
+                "type": "string",
+                "description": "Tool name."
               },
               "type": {
                 "type": "string",
@@ -1521,16 +1508,20 @@
           },
           {
             "type": "object",
+            "description": "An error response from a tool call.",
             "required": ["name", "description", "id", "type"],
             "properties": {
               "description": {
-                "type": "string"
+                "type": "string",
+                "description": "Human-readable error description."
               },
               "id": {
-                "type": "string"
+                "type": "string",
+                "description": "Corresponding call id."
               },
               "name": {
-                "type": "string"
+                "type": "string",
+                "description": "Tool name."
               },
               "type": {
                 "type": "string",
@@ -1538,7 +1529,8 @@
               }
             }
           }
-        ]
+        ],
+        "description": "A structured part within an assistant message.\n\nWhen the model responds with tool calls the full turn is persisted as a\nflat sequence of these parts.  [`crate::convert::to_rig_messages`]\nreconstructs the turn boundaries that providers expect."
       },
       "AttachmentMetadata": {
         "oneOf": [
@@ -1797,15 +1789,18 @@
       "ChatMessageContent": {
         "oneOf": [
           {
-            "type": "string"
+            "type": "string",
+            "description": "Plain text content."
           },
           {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AssistantMessagePart"
-            }
+            },
+            "description": "Structured assistant message parts."
           }
-        ]
+        ],
+        "description": "The content of a [`ChatMessage`].\n\nFor user and system messages the content is plain [`Text`](Self::Text).\nFor assistant messages it may additionally be a sequence of\n[`AssistantMessagePart`]s that encode tool-call round trips."
       },
       "ChatMessageError": {
         "type": "object",
@@ -1946,7 +1941,7 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/Model",
+                "$ref": "#/components/schemas/AgentModel",
                 "description": "The model used to generate the chat."
               }
             ]
@@ -2121,7 +2116,7 @@
               "available_models": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/Model"
+                  "$ref": "#/components/schemas/AgentModel"
                 }
               },
               "chat_id": {
@@ -2133,7 +2128,7 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "#/components/schemas/Model"
+                    "$ref": "#/components/schemas/AgentModel"
                   }
                 ]
               },
@@ -2342,15 +2337,20 @@
       },
       "DynamicSchema": {
         "type": "object",
+        "description": "Schema definition for dynamic structured completions.",
         "required": ["schema", "name"],
         "properties": {
           "description": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Optional description of what the schema represents."
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "Name of the schema."
           },
-          "schema": {}
+          "schema": {
+            "description": "The JSON schema to validate against."
+          }
         }
       },
       "Entity": {
@@ -2952,18 +2952,6 @@
           }
         }
       },
-      "GetModelsResponse": {
-        "type": "object",
-        "required": ["models"],
-        "properties": {
-          "models": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AIModel"
-            }
-          }
-        }
-      },
       "HttpSendChatMessageRequest": {
         "type": "object",
         "description": "HTTP request payload for sending a chat message.\nUnlike the WebSocket payload, this does not include stream_id as it's generated server-side.",
@@ -2989,7 +2977,7 @@
             "description": "The content of the message"
           },
           "model": {
-            "$ref": "#/components/schemas/Model",
+            "$ref": "#/components/schemas/AgentModel",
             "description": "The model to respond with"
           },
           "toolset": {
@@ -3047,40 +3035,6 @@
           }
         }
       },
-      "Model": {
-        "type": "string",
-        "enum": [
-          "gemini-2.5-pro",
-          "gemini-2.0-flash-001",
-          "gemini-2.0-flash-lite-001",
-          "gemini-pro-1.5",
-          "gpt-5",
-          "gpt-4.1",
-          "gpt-4o",
-          "gpt-4o-mini",
-          "o1",
-          "gpt-4o-search-preview",
-          "o3",
-          "claude-3-5-sonnet",
-          "claude-3-7-sonnet",
-          "claude-sonnet-4",
-          "claude-sonnet-4-5",
-          "claude-sonnet-4-6",
-          "claude-haiku-4-5",
-          "claude-opus-4-5",
-          "claude-opus-4-6"
-        ]
-      },
-      "ModelMetadata": {
-        "type": "object",
-        "required": ["contextWindow"],
-        "properties": {
-          "contextWindow": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
       "NewAttachment": {
         "type": "object",
         "required": ["attachment_type", "attachment_id"],
@@ -3117,7 +3071,7 @@
             "description": "Optional pre-generated ID. If None, the database generates one."
           },
           "model": {
-            "$ref": "#/components/schemas/Model",
+            "$ref": "#/components/schemas/AgentModel",
             "description": "The model used to generate the chat"
           },
           "role": {
@@ -3170,10 +3124,6 @@
           }
         }
       },
-      "Provider": {
-        "type": "string",
-        "enum": ["openai", "google", "anthropic", "googleanthropic", "xai"]
-      },
       "RejectToolCallRequest": {
         "type": "object",
         "description": "Request body for rejecting a pending tool call.",
@@ -3191,6 +3141,7 @@
       },
       "Role": {
         "type": "string",
+        "description": "The role of a message participant.",
         "enum": ["user", "assistant", "system"]
       },
       "SendChatMessagePayload": {
@@ -3222,7 +3173,7 @@
                 "description": "The content of the message"
               },
               "model": {
-                "$ref": "#/components/schemas/Model",
+                "$ref": "#/components/schemas/AgentModel",
                 "description": "the chate model to respond with"
               },
               "stream_id": {
@@ -3385,7 +3336,7 @@
             "required": ["stream_id", "model", "stream_error"],
             "properties": {
               "model": {
-                "$ref": "#/components/schemas/Model"
+                "$ref": "#/components/schemas/AgentModel"
               },
               "stream_error": {
                 "type": "string",
@@ -3450,7 +3401,7 @@
             "type": ["string", "null"]
           },
           "model": {
-            "$ref": "#/components/schemas/Model"
+            "$ref": "#/components/schemas/AgentModel"
           },
           "output_schema": {
             "$ref": "#/components/schemas/DynamicSchema"

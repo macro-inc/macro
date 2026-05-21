@@ -19,7 +19,7 @@ attachment = [
 ]
 ai_schema = ["dep:schemars"]
 ai_tools = [
-  "dep:ai",
+  "dep:ai_toolset",
   "dep:async-trait",
   "dep:schemars",
   "ports",
@@ -39,7 +39,7 @@ outbound = ["dep:sqlx", "ports"]
 ports = ["crm/ports", "dep:tokio", "frecency/ports"]
 
 [dependencies]
-ai = { path = "../ai", optional = true }
+ai_toolset = { path = "../ai_toolset", optional = true }
 attachment = { path = "../attachment", optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
@@ -84,7 +84,3 @@ frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-
-[[example]]
-name = "ai_tools_cli"
-required-features = ["all"]

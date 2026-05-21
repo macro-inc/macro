@@ -2,7 +2,7 @@
 
 use crate::domain::model::{EntityPropertyInfo, PropertyOptionInfo};
 use crate::domain::service::PropertiesService;
-use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::property_value::PropertyValue;

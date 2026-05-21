@@ -7,7 +7,7 @@ use super::types::{
 };
 use crate::domain::models::{ChannelMessageFilters, MessagePageDirection};
 use crate::domain::ports::{ChannelMessagesQueryResult, ChannelMessagesService};
-use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use entity_access::domain::ports::EntityAccessService;

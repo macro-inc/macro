@@ -7,7 +7,7 @@ use super::types::{
 };
 use crate::domain::models::ChannelMessageKind;
 use crate::domain::ports::ChannelMessagesService;
-use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
 use schemars::JsonSchema;

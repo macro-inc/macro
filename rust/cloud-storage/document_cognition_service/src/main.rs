@@ -383,6 +383,7 @@ async fn main() -> anyhow::Result<()> {
         channel_tool_context: ai_tools::build_channel_tool_context(db.clone()),
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
+        anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
     };
     let all_tools = ai_tools::all_tools();
     let all_tools_toolset = all_tools.toolset.clone();

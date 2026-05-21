@@ -1,7 +1,7 @@
 use super::list_labels::build_summary;
 use super::*;
-use ai::generate_tool_input_schema;
-use ai::tool::types::tool_object::validate_tool_schema;
+use ai_toolset::generate_tool_input_schema;
+use ai_toolset::tool_object::validate_tool_schema;
 
 #[test]
 fn test_build_summary_empty() {

@@ -17,7 +17,6 @@ mod completions;
 pub mod context;
 mod health;
 mod id_mapping;
-mod models;
 mod preview;
 pub mod stream;
 pub(crate) mod swagger;
@@ -104,7 +103,6 @@ fn api_router(api_context: ApiContext) -> Router {
                 axum::middleware::from_fn(macro_middleware::auth::ensure_user_exists::handler),
             )),
         )
-        .nest("/models", models::router())
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn(

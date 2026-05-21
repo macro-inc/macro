@@ -6,7 +6,7 @@ use super::types::{
     clamp_limit, clamp_max_chars, content_truncation_omissions,
 };
 use crate::domain::ports::ChannelMessagesService;
-use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use entity_access::domain::ports::EntityAccessService;

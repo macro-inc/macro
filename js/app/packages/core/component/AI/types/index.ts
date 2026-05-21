@@ -1,8 +1,8 @@
 export type {
+  AgentModel as TModel,
   AssistantMessagePart,
   FileType,
-  Model as TModel,
   ToolSet,
 } from '@service-cognition/generated/schemas';
-export { Model } from '@service-cognition/generated/schemas';
+export { AgentModel as Model } from '@service-cognition/generated/schemas';
 export * from './attachment';

@@ -1,16 +1,12 @@
 //! AI-backed implementation of [`CallSummarizer`](crate::domain::ports::CallSummarizer).
 //!
-//! Wraps the [`ai`] crate's `get_chat_completion` entry point to generate a
-//! natural-language summary of a finished call from its finalized transcript.
-//! No external client handle is required — [`ai::chat_completion::get_chat_completion`]
-//! internally constructs its own provider client (see the `memory` crate's
-//! `judge_memory` for the same pattern this mirrors).
+//! Uses [`agent::complete`] to generate a natural-language summary of a
+//! finished call from its finalized transcript.
 
 use std::collections::HashSet;
 use std::fmt::Write as _;
 
-use ai::chat_completion::get_chat_completion;
-use ai::types::{Model, RequestBuilder};
+use agent::AgentModel;
 use uuid::Uuid;
 
 use macro_user_id::user_id::MacroUserIdStr;
@@ -21,7 +17,7 @@ use crate::domain::models::{
 use crate::domain::ports::CallSummarizer;
 
 /// Default model used when summarizing a call transcript.
-const SUMMARIZATION_MODEL: Model = Model::Claude46Sonnet;
+const SUMMARIZATION_MODEL: AgentModel = AgentModel::Sonnet4_6;
 
 /// System prompt framing the LLM's task: produce a concise, factual call summary.
 const SUMMARIZATION_SYSTEM_PROMPT: &str = "\
@@ -122,12 +118,7 @@ const CALL_NAME_SUMMARY_CHAR_CAP: usize = 4_000;
 /// output regardless of the system prompt.
 const CALL_NAME_MAX_CHARS: usize = 80;
 
-/// AI-powered [`CallSummarizer`] that delegates to
-/// [`ai::chat_completion::get_chat_completion`].
-///
-/// Stateless on purpose: the underlying `ai` crate builds its provider client
-/// per request, so this adapter does not need to cache one. Construct once at
-/// service startup and share via the [`CallSummarizer`] trait.
+/// AI-powered [`CallSummarizer`] that delegates to [`agent::complete`].
 #[derive(Debug, Default, Clone, Copy)]
 pub struct AiCallSummarizer;
 
@@ -149,18 +140,15 @@ impl CallSummarizer for AiCallSummarizer {
     ) -> Result<Option<String>, Self::Err> {
         let user_message = format_transcript_prompt(call_id, &transcript);
 
-        let request = RequestBuilder::new()
-            .model(SUMMARIZATION_MODEL)
-            .system_prompt(SUMMARIZATION_SYSTEM_PROMPT)
-            .user_message(user_message)
-            .build();
-
-        let raw = get_chat_completion(request)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))
-            .inspect_err(|e| {
-                tracing::error!(error = ?e, %call_id, "ai call summarization failed");
-            })?;
+        let raw = agent::complete(
+            SUMMARIZATION_MODEL,
+            SUMMARIZATION_SYSTEM_PROMPT,
+            &user_message,
+        )
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error = ?e, %call_id, "ai call summarization failed");
+        })?;
 
         Ok(parse_summary(&raw))
     }
@@ -188,15 +176,8 @@ impl CallSummarizer for AiCallSummarizer {
 
         let user_message = format!("Summary:\n\n{summary_for_prompt}");
 
-        let request = RequestBuilder::new()
-            .model(SUMMARIZATION_MODEL)
-            .system_prompt(CALL_NAME_SYSTEM_PROMPT)
-            .user_message(user_message)
-            .build();
-
-        let raw = get_chat_completion(request)
+        let raw = agent::complete(SUMMARIZATION_MODEL, CALL_NAME_SYSTEM_PROMPT, &user_message)
             .await
-            .map_err(|e| anyhow::anyhow!(e))
             .inspect_err(|e| {
                 tracing::error!(error = ?e, %call_id, "ai call naming failed");
             })?;
@@ -225,18 +206,15 @@ impl CallSummarizer for AiCallSummarizer {
             .collect();
         let user_message = format_custom_speakers_prompt(&transcript, &candidate_speakers);
 
-        let request = RequestBuilder::new()
-            .model(SUMMARIZATION_MODEL)
-            .system_prompt(CUSTOM_SPEAKER_SYSTEM_PROMPT)
-            .user_message(user_message)
-            .build();
-
-        let raw = get_chat_completion(request)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))
-            .inspect_err(|e| {
-                tracing::error!(error = ?e, "ai custom-speaker generation failed");
-            })?;
+        let raw = agent::complete(
+            SUMMARIZATION_MODEL,
+            CUSTOM_SPEAKER_SYSTEM_PROMPT,
+            &user_message,
+        )
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error = ?e, "ai custom-speaker generation failed");
+        })?;
 
         parse_custom_speaker_results(&raw, &transcript_ids, &candidate_user_ids)
     }

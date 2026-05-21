@@ -1,4 +1,4 @@
-use ai::types::Model;
+use agent::AgentModel;
 use model::chat::ChatMessageWithAttachments;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
@@ -59,7 +59,7 @@ pub struct ChatResponse {
     /// The messages in the chat.
     pub messages: Vec<ChatMessageWithAttachments>,
     /// The model used to generate the chat.
-    pub model: Option<Model>,
+    pub model: Option<AgentModel>,
     /// The time the chat was created.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the chat was last updated.

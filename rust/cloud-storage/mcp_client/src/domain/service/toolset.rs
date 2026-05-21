@@ -1,11 +1,9 @@
 use crate::domain::models::{Error, McpServer, McpServerRecord};
 use crate::domain::ports::McpConnector;
-use ai::openai_toolset::OpenAIToolSetExt;
 use ai_toolset::{
     AsyncToolCollection, RequestContext, RequestSchema, ToolCallError, ToolInfo, ToolResult,
     ToolSet, ToolSetError,
 };
-use async_openai::types::chat::{ChatCompletionTool, ChatCompletionTools, FunctionObject};
 use rmcp::RoleClient;
 use rmcp::model::{CallToolRequestParams, CallToolResult, Tool};
 use rmcp::service::Peer;
@@ -223,26 +221,6 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for McpToolSet {
     }
 }
 
-impl OpenAIToolSetExt for McpToolSet {
-    fn openai_chatcompletion_toolset(&self) -> Vec<ChatCompletionTools> {
-        self.tools
-            .iter()
-            .map(|(mangled, entry)| {
-                ChatCompletionTools::Function(ChatCompletionTool {
-                    function: FunctionObject {
-                        name: mangled.as_str().to_string(),
-                        description: entry.tool.description.as_ref().map(|d| d.to_string()),
-                        parameters: Some(
-                            serde_json::to_value(&*entry.tool.input_schema).unwrap_or_default(),
-                        ),
-                        strict: Some(false),
-                    },
-                })
-            })
-            .collect()
-    }
-}
-
 /// Wraps a static [`AsyncToolCollection`] and an optional [`McpToolSet`],
 /// presenting them as a single toolset to the AI loop.
 pub struct CombinedToolSet<T> {
@@ -301,13 +279,5 @@ impl<T: Send + Sync + 'static> ToolSet<T> for CombinedToolSet<T> {
         } else {
             self.static_tools.routing_description(tool_name)
         }
-    }
-}
-
-impl<T: Send + Sync + 'static> OpenAIToolSetExt for CombinedToolSet<T> {
-    fn openai_chatcompletion_toolset(&self) -> Vec<ChatCompletionTools> {
-        let mut tools = self.static_tools.openai_chatcompletion_toolset();
-        tools.extend(self.mcp_tools.openai_chatcompletion_toolset());
-        tools
     }
 }

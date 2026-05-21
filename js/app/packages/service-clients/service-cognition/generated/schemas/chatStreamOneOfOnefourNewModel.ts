@@ -4,6 +4,6 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { Model } from './model';
+import type { AgentModel } from './agentModel';
 
-export type ChatStreamOneOfOnefourNewModel = null | Model;
+export type ChatStreamOneOfOnefourNewModel = null | AgentModel;

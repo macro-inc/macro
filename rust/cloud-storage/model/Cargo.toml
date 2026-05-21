@@ -5,7 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-ai = { path = "../ai" }
+agent = { path = "../agent" }
 anyhow = { workspace = true }
 axum = { workspace = true }
 base64 = { workspace = true }

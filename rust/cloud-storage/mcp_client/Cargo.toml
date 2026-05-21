@@ -10,7 +10,7 @@ providers = ["macro_env_var"]
 
 [dependencies]
 aes-gcm = "0.10"
-ai = { path = "../ai" }
+agent = { path = "../agent" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow.workspace = true
 oauth2 = { version = "5.0", default-features = false }
