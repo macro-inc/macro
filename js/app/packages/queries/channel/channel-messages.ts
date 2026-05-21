@@ -657,6 +657,20 @@ function mapChannelMessagesByIdsItems(
   return didChange ? next : data;
 }
 
+/** Finds a top-level message in any cached by-ids query for the channel. */
+export function findTopLevelMessageInChannelMessagesByIds(
+  channelId: string,
+  messageId: string
+): ApiChannelMessage | undefined {
+  const entries = queryClient.getQueriesData<ApiChannelMessage[]>({
+    queryKey: getChannelMessagesByIdsQueryKeyPrefix(channelId),
+  });
+  for (const [, data] of entries) {
+    const match = data?.find((message) => message.id === messageId);
+    if (match) return match;
+  }
+}
+
 export function replaceTopLevelMessageReactionsInChannelMessagesByIds(
   data: ApiChannelMessage[] | undefined,
   messageId: string,

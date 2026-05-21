@@ -8,6 +8,7 @@ import { queryClient } from '../client';
 import {
   findThreadIdInChannelMessages,
   findThreadPreviewReplySnapshotInChannelMessages,
+  findTopLevelMessageInChannelMessagesByIds,
   findTopLevelMessageSnapshotInChannelMessages,
   insertThreadReplyIntoChannelMessages,
   insertTopLevelMessageIntoChannelMessages,
@@ -206,7 +207,11 @@ export function markTopLevelMessageDeletedInTargetCaches(
   if (target.kind !== 'top_level') return;
 
   setChannelMessagesData(channelId, (prev) =>
-    markTopLevelMessageDeletedInChannelMessages(prev, target.messageId, deletedAt)
+    markTopLevelMessageDeletedInChannelMessages(
+      prev,
+      target.messageId,
+      deletedAt
+    )
   );
   setChannelMessagesByIdsData(channelId, (prev) =>
     markTopLevelMessageDeletedInChannelMessagesByIds(
@@ -222,8 +227,14 @@ export function getTopLevelMessageDeletedAt(
   channelId: string,
   messageId: string
 ): string | null | undefined {
-  return findTopLevelMessageSnapshotInChannelMessages(channelId, messageId)
-    ?.message.deleted_at;
+  const paginated = findTopLevelMessageSnapshotInChannelMessages(
+    channelId,
+    messageId
+  );
+  if (paginated) return paginated.message.deleted_at;
+
+  return findTopLevelMessageInChannelMessagesByIds(channelId, messageId)
+    ?.deleted_at;
 }
 
 /** Captures rollback snapshots for a target before optimistic delete. */

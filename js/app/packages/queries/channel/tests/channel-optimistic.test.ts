@@ -30,6 +30,7 @@ import {
   type ChannelMessagesData,
   getChannelMessagesQueryKey,
 } from '../channel-messages';
+import { channelKeys } from '../keys';
 import {
   optimisticDeleteChannelMessage,
   optimisticInsertChannelMessage,
@@ -486,7 +487,8 @@ describe('channel optimistic cache regressions', () => {
       rollbackDeleteChannelMessage('channel-1', context);
     }
 
-    const restored = getChannelMessagesFromCache('channel-1')?.pages[0].items[0];
+    const restored =
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0];
     expect(restored?.id).toBe('parent-1');
     expect(restored?.deleted_at).toBeFalsy();
     expect(restored?.thread.preview).toHaveLength(2);
@@ -534,6 +536,38 @@ describe('channel optimistic cache regressions', () => {
     expect(
       getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread.preview
     ).toEqual([expect.objectContaining({ id: 'reply-1' })]);
+  });
+
+  it('preserves a prior deleted_at on rollback when only the by-ids cache is warm', () => {
+    const previousDeletedAt = '2024-01-02T00:00:00.000Z';
+    testQueryClient.setQueryData<ApiChannelMessage[]>(
+      channelKeys.messagesByIds('channel-1', ['parent-1']).queryKey,
+      [
+        createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z', {
+          deleted_at: previousDeletedAt,
+        }),
+      ]
+    );
+
+    const context = optimisticDeleteChannelMessage({
+      channelId: 'channel-1',
+      message_id: 'parent-1',
+    });
+
+    const byIdsAfter = testQueryClient.getQueryData<ApiChannelMessage[]>(
+      channelKeys.messagesByIds('channel-1', ['parent-1']).queryKey
+    );
+    expect(byIdsAfter?.[0].deleted_at).toBeTruthy();
+    expect(byIdsAfter?.[0].deleted_at).not.toBe(previousDeletedAt);
+
+    if (context) {
+      rollbackDeleteChannelMessage('channel-1', context);
+    }
+
+    const byIdsRolledBack = testQueryClient.getQueryData<ApiChannelMessage[]>(
+      channelKeys.messagesByIds('channel-1', ['parent-1']).queryKey
+    );
+    expect(byIdsRolledBack?.[0].deleted_at).toBe(previousDeletedAt);
   });
 
   it('uses distinct query keys for target-message loads', () => {
