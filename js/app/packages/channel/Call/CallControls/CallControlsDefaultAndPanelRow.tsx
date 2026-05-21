@@ -6,7 +6,7 @@ import Screencast from '@phosphor/screencast.svg';
 import VideoCamera from '@phosphor/video-camera.svg';
 import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
 import { cn, Dropdown } from '@ui';
-import { type Accessor, Show } from 'solid-js';
+import { type Accessor, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { useCallContext } from '../CallContext';
 import { CallDeviceList } from '../CallDeviceList';
@@ -86,14 +86,16 @@ function BackgroundEffectSelector() {
     <Dropdown.RadioGroup value={currentEffectValue()} onChange={handleChange}>
       <Dropdown.Group>
         <Dropdown.GroupLabel>Background</Dropdown.GroupLabel>
-        {BACKGROUND_OPTIONS.map((option) => (
-          <Dropdown.RadioItem value={option.value}>
-            <span class="flex-1 truncate">{option.label}</span>
-            <Dropdown.ItemIndicator>
-              <CheckIcon class="size-3.5 text-accent" />
-            </Dropdown.ItemIndicator>
-          </Dropdown.RadioItem>
-        ))}
+        <For each={BACKGROUND_OPTIONS}>
+          {(option) => (
+            <Dropdown.RadioItem value={option.value}>
+              <span class="flex-1 truncate">{option.label}</span>
+              <Dropdown.ItemIndicator>
+                <CheckIcon class="size-3.5 text-accent" />
+              </Dropdown.ItemIndicator>
+            </Dropdown.RadioItem>
+          )}
+        </For>
       </Dropdown.Group>
     </Dropdown.RadioGroup>
   );
