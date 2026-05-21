@@ -87,7 +87,7 @@ function SelectEditorBody() {
 
   return (
     <EditorPopover onClose={closeAndSave}>
-      <Show when={!isLoading()} fallback={<div class="h-4" />}>
+      <Show when={!isLoading()}>
         <PropertyOptionSelector
           config={{
             isMultiSelect: property.isMultiSelect,
