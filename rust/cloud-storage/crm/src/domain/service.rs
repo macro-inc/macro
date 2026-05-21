@@ -97,6 +97,17 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         &self,
         macro_id: &str,
     ) -> impl Future<Output = Result<Option<uuid::Uuid>, CrmError>> + Send;
+
+    /// Toggle `email_sync` for `(company_id, team_id)`. Disable cascades
+    /// to contacts and contact_sources; see
+    /// [`crate::domain::companies_repo::CompaniesRepository::set_email_sync`].
+    /// Authorization is the caller's responsibility.
+    fn set_email_sync(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        email_sync: bool,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
 }
 
 /// Implementation of [`CrmService`] backed by a [`CompaniesRepository`]
@@ -259,6 +270,18 @@ where
     async fn get_team_id_for_user(&self, macro_id: &str) -> Result<Option<uuid::Uuid>, CrmError> {
         self.companies_repository
             .get_team_id_for_user(macro_id)
+            .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn set_email_sync(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        email_sync: bool,
+    ) -> Result<(), CrmError> {
+        self.companies_repository
+            .set_email_sync(team_id, company_id, email_sync)
             .await
     }
 }

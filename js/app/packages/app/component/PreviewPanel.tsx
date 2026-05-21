@@ -50,7 +50,10 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   scopedLayoutRefs.headerRight = undefined;
 
   if (props.selectedEntity.type === 'project') {
-    const [previewState, setPreviewState] = createSignal(true);
+    // Isolate the previewed project's preview state from the outer panel so
+    // the nested SoupView's sync effect doesn't clobber the parent. Preview
+    // can only work one level deep, so we never enable preview inside.
+    const [previewState, setPreviewState] = createSignal(false);
     scopedSplitPanelContextType.previewState = [previewState, setPreviewState];
   }
 

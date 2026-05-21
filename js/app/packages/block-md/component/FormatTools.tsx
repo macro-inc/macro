@@ -10,16 +10,11 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/';
 import { CREATE_DRAFT_COMMENT_COMMAND } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
-import {
-  DropdownMenuContent,
-  MenuItem,
-  SubTrigger,
-} from '@core/component/Menu';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { ElementName } from '@lexical-core';
+import CaretRight from '@phosphor/caret-right.svg';
 import ChatTeardrop from '@phosphor/chat-teardrop.svg';
 import Check from '@phosphor/check-square.svg';
 import TextCode from '@phosphor/code.svg';
@@ -49,7 +44,7 @@ import TextSub from '@phosphor/text-subscript.svg';
 import TextSuper from '@phosphor/text-superscript.svg';
 import TextT from '@phosphor/text-t.svg';
 import TextUnderline from '@phosphor/text-underline.svg';
-import { Button, Hotkey, Layer } from '@ui';
+import { Button, Dropdown, Hotkey } from '@ui';
 import { toast } from 'core/component/Toast/Toast';
 import type { ValidHotkey } from 'core/hotkey/types';
 import {
@@ -82,10 +77,6 @@ import { TableInsert } from './TableInsert';
 
 function VerticalBar() {
   return <div class="w-px mx-1 h-full bg-edge"></div>;
-}
-
-function HorizontalBar() {
-  return <div class="w-full h-px bg-edge my-1"></div>;
 }
 
 type DropdownItemProps = {
@@ -218,24 +209,20 @@ const InlineFormatMenuItem = (props: {
   buttonIsDisabled: Accessor<boolean>;
 }) => {
   const icon = InlineIcons[props.format];
-  const inner = () => (
-    <div class="flex justify-between">
-      <span class="capitalize">{props.format}</span>
-      <Show when={InlineShortcuts[props.format]}>
-        {(_shortcut) => {
-          return <Hotkey token={TOKENS.global.commandMenu} />;
-        }}
-      </Show>
-    </div>
-  );
-
   return (
-    <MenuItem
-      text={inner()}
-      icon={icon}
-      onClick={props.onClick}
-      disabled={props.buttonIsDisabled()}
-    />
+    <Dropdown.Item onSelect={props.onClick} disabled={props.buttonIsDisabled()}>
+      <Dynamic component={icon} class="size-4 shrink-0" />
+      <span class="flex-1 truncate capitalize">{props.format}</span>
+      <Show when={InlineShortcuts[props.format]}>
+        {(_shortcut) => (
+          <Hotkey
+            token={TOKENS.global.commandMenu}
+            class="text-ink-muted"
+            showPlus
+          />
+        )}
+      </Show>
+    </Dropdown.Item>
   );
 };
 
@@ -293,13 +280,22 @@ const ElementFormatMenuItem = (
     }
     return <span>{name}</span>;
   };
+  const icon = () =>
+    props.useIcon ? NodeMenuOptions[props.format]?.icon : undefined;
   return (
-    <MenuItem
-      icon={props.useIcon ? NodeMenuOptions[props.format]?.icon : undefined}
-      text={inner()}
-      onClick={props.onClick}
-      disabled={props.buttonIsDisabled()}
-    />
+    <Dropdown.Item onSelect={props.onClick} disabled={props.buttonIsDisabled()}>
+      <Show when={icon()}>
+        {(IconComp) => (
+          <Dynamic
+            component={
+              IconComp() as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
+            }
+            class="size-4 shrink-0"
+          />
+        )}
+      </Show>
+      <span class="flex-1 truncate">{inner()}</span>
+    </Dropdown.Item>
   );
 };
 
@@ -450,9 +446,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
   const FormatDropDown = (props: { buttonIsDisabled: Accessor<boolean> }) => {
     const [menuOpen, setMenuOpen] = createSignal(false);
     return (
-      <DropdownMenu open={menuOpen()} onOpenChange={setMenuOpen}>
-        <DropdownMenu.Trigger
-          as={Button}
+      <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
+        <Dropdown.Trigger
           variant="ghost"
           size="icon-sm"
           class="rounded-md"
@@ -462,17 +457,79 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           tabIndex={-1}
         >
           <TextAA />
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Portal>
-          <Layer depth={2}>
-            <DropdownMenuContent
-              class="w-54 rounded-lg ring-edge p-1"
-              onCloseAutoFocus={() => {
-                lastFocusedEditor()?.focus();
-              }}
-            >
+        </Dropdown.Trigger>
+        <Dropdown.Content
+          onCloseAutoFocus={() => {
+            lastFocusedEditor()?.focus();
+          }}
+        >
+          <Dropdown.Group>
+            <div class="w-full flex gap-1 justify-center items-center">
+              <For each={InlineFormats}>
+                {(format) => (
+                  <InlineFormatButton
+                    format={format}
+                    selection={selection}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      inlineFormat(format);
+                      setMenuOpen(false);
+                    }}
+                    buttonIsDisabled={buttonIsDisabled}
+                  />
+                )}
+              </For>
+            </div>
+          </Dropdown.Group>
+          <Dropdown.Group>
+            <For each={MainFormatOptions}>
+              {(format) => (
+                <ElementFormatMenuItem
+                  format={format}
+                  selection={selection}
+                  onClick={() => {
+                    nodeFormat(format);
+                    setMenuOpen(false);
+                  }}
+                  useIcon={true}
+                  buttonIsDisabled={props.buttonIsDisabled}
+                />
+              )}
+            </For>
+          </Dropdown.Group>
+        </Dropdown.Content>
+      </Dropdown>
+    );
+  };
+
+  const InlineFormatPopDown = (props: {
+    formats: InlineFormat[];
+    buttonIsDisabled: Accessor<boolean>;
+  }) => {
+    const [menuOpen, setMenuOpen] = createSignal(false);
+    return (
+      <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
+        <Dropdown.Trigger
+          variant="ghost"
+          size="icon-sm"
+          class="rounded-md"
+          depth={3}
+          tooltip="Text Styles"
+          disabled={props.buttonIsDisabled()}
+          tabIndex={-1}
+        >
+          <TextAA />
+        </Dropdown.Trigger>
+        <Show when={!props.buttonIsDisabled()}>
+          <Dropdown.Content
+            onCloseAutoFocus={() => {
+              lastFocusedEditor()?.focus();
+            }}
+          >
+            <Dropdown.Group>
               <div class="w-full flex gap-1 justify-center items-center">
-                <For each={InlineFormats}>
+                <For each={props.formats}>
                   {(format) => (
                     <InlineFormatButton
                       format={format}
@@ -488,79 +545,10 @@ export function FormatTools(props: { withinPopup?: boolean }) {
                   )}
                 </For>
               </div>
-
-              <HorizontalBar />
-              <For each={MainFormatOptions}>
-                {(format) => (
-                  <ElementFormatMenuItem
-                    format={format}
-                    selection={selection}
-                    onClick={() => {
-                      nodeFormat(format);
-                      setMenuOpen(false);
-                    }}
-                    useIcon={true}
-                    buttonIsDisabled={props.buttonIsDisabled}
-                  />
-                )}
-              </For>
-            </DropdownMenuContent>
-          </Layer>
-        </DropdownMenu.Portal>
-      </DropdownMenu>
-    );
-  };
-
-  const InlineFormatPopDown = (props: {
-    formats: InlineFormat[];
-    buttonIsDisabled: Accessor<boolean>;
-  }) => {
-    const [menuOpen, setMenuOpen] = createSignal(false);
-    return (
-      <DropdownMenu open={menuOpen()} onOpenChange={setMenuOpen}>
-        <DropdownMenu.Trigger
-          as={Button}
-          variant="ghost"
-          size="icon-sm"
-          class="rounded-md"
-          depth={3}
-          tooltip="Text Styles"
-          disabled={props.buttonIsDisabled()}
-          tabIndex={-1}
-        >
-          <TextAA />
-        </DropdownMenu.Trigger>
-        <Show when={!props.buttonIsDisabled()}>
-          <DropdownMenu.Portal>
-            <Layer depth={2}>
-              <DropdownMenuContent
-                class="w-fit rounded-lg ring-edge p-1"
-                onCloseAutoFocus={() => {
-                  lastFocusedEditor()?.focus();
-                }}
-              >
-                <div class="w-full flex gap-1 justify-center items-center">
-                  <For each={props.formats}>
-                    {(format) => (
-                      <InlineFormatButton
-                        format={format}
-                        selection={selection}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          inlineFormat(format);
-                          setMenuOpen(false);
-                        }}
-                        buttonIsDisabled={buttonIsDisabled}
-                      />
-                    )}
-                  </For>
-                </div>
-              </DropdownMenuContent>
-            </Layer>
-          </DropdownMenu.Portal>
+            </Dropdown.Group>
+          </Dropdown.Content>
         </Show>
-      </DropdownMenu>
+      </Dropdown>
     );
   };
 
@@ -571,9 +559,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     label?: string;
     buttonIsDisabled: Accessor<boolean>;
   }) => (
-    <DropdownMenu>
-      <DropdownMenu.Trigger
-        as={Button}
+    <Dropdown>
+      <Dropdown.Trigger
         variant="ghost"
         size="icon-sm"
         class="rounded-md"
@@ -583,37 +570,32 @@ export function FormatTools(props: { withinPopup?: boolean }) {
         tabIndex={-1}
       >
         <Dynamic component={props.icon ?? ThreeDots} />
-      </DropdownMenu.Trigger>
+      </Dropdown.Trigger>
       <Show when={!buttonIsDisabled()}>
-        <DropdownMenu.Portal>
-          <Layer depth={2}>
-            <DropdownMenuContent
-              class="w-48 rounded-lg ring-edge p-1"
-              onCloseAutoFocus={() => {
-                lastFocusedEditor()?.focus();
-              }}
-            >
-              <For each={Object.keys(InlineIcons)}>
-                {(format) => (
-                  <Show
-                    when={!props.excludes?.includes(format as InlineFormat)}
-                  >
-                    <InlineFormatMenuItem
-                      format={format as InlineFormat}
-                      selection={selection}
-                      onClick={() => {
-                        inlineFormat(format as InlineFormat);
-                      }}
-                      buttonIsDisabled={buttonIsDisabled}
-                    />
-                  </Show>
-                )}
-              </For>
-            </DropdownMenuContent>
-          </Layer>
-        </DropdownMenu.Portal>
+        <Dropdown.Content
+          onCloseAutoFocus={() => {
+            lastFocusedEditor()?.focus();
+          }}
+        >
+          <Dropdown.Group>
+            <For each={Object.keys(InlineIcons)}>
+              {(format) => (
+                <Show when={!props.excludes?.includes(format as InlineFormat)}>
+                  <InlineFormatMenuItem
+                    format={format as InlineFormat}
+                    selection={selection}
+                    onClick={() => {
+                      inlineFormat(format as InlineFormat);
+                    }}
+                    buttonIsDisabled={buttonIsDisabled}
+                  />
+                </Show>
+              )}
+            </For>
+          </Dropdown.Group>
+        </Dropdown.Content>
       </Show>
-    </DropdownMenu>
+    </Dropdown>
   );
 
   const ElementFormatMenu = (props: {
@@ -622,9 +604,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     label?: string;
     buttonIsDisabled: Accessor<boolean>;
   }) => (
-    <DropdownMenu>
-      <DropdownMenu.Trigger
-        as={Button}
+    <Dropdown>
+      <Dropdown.Trigger
         variant="ghost"
         size="icon-sm"
         class="rounded-md"
@@ -634,34 +615,31 @@ export function FormatTools(props: { withinPopup?: boolean }) {
         tabIndex={-1}
       >
         <Dynamic component={props.icon ?? ThreeDots} />
-      </DropdownMenu.Trigger>
+      </Dropdown.Trigger>
       <Show when={!buttonIsDisabled()}>
-        <DropdownMenu.Portal>
-          <Layer depth={2}>
-            <DropdownMenuContent
-              class="w-42 rounded-lg ring-edge p-1"
-              onCloseAutoFocus={() => {
-                lastFocusedEditor()?.focus();
-              }}
-            >
-              <For each={props.elements}>
-                {(format) => (
-                  <ElementFormatMenuItem
-                    format={format}
-                    selection={selection}
-                    onClick={() => {
-                      nodeFormat(format);
-                    }}
-                    useIcon={true}
-                    buttonIsDisabled={buttonIsDisabled}
-                  />
-                )}
-              </For>
-            </DropdownMenuContent>
-          </Layer>
-        </DropdownMenu.Portal>
+        <Dropdown.Content
+          onCloseAutoFocus={() => {
+            lastFocusedEditor()?.focus();
+          }}
+        >
+          <Dropdown.Group>
+            <For each={props.elements}>
+              {(format) => (
+                <ElementFormatMenuItem
+                  format={format}
+                  selection={selection}
+                  onClick={() => {
+                    nodeFormat(format);
+                  }}
+                  useIcon={true}
+                  buttonIsDisabled={buttonIsDisabled}
+                />
+              )}
+            </For>
+          </Dropdown.Group>
+        </Dropdown.Content>
       </Show>
-    </DropdownMenu>
+    </Dropdown>
   );
 
   const FullWithElementButtons: ElementName[] = [
@@ -913,12 +891,11 @@ export function FormatTools(props: { withinPopup?: boolean }) {
               </Button>
             </Show>
             <VerticalBar />
-            <DropdownMenu
+            <Dropdown
               open={moreOptionsOpen()}
               onOpenChange={setMoreOptionsOpen}
             >
-              <DropdownMenu.Trigger
-                as={Button}
+              <Dropdown.Trigger
                 variant="ghost"
                 size="icon-sm"
                 class="rounded-md"
@@ -928,68 +905,67 @@ export function FormatTools(props: { withinPopup?: boolean }) {
                 tabIndex={-1}
               >
                 <PlusSquare />
-              </DropdownMenu.Trigger>
+              </Dropdown.Trigger>
               <Show when={!buttonIsDisabled()}>
-                <DropdownMenu.Portal>
-                  <Layer depth={2}>
-                    <DropdownMenuContent
-                      class="w-42 rounded-lg ring-edge p-2"
-                      onCloseAutoFocus={() => {
-                        lastFocusedEditor()?.focus();
+                <Dropdown.Content
+                  onCloseAutoFocus={() => {
+                    lastFocusedEditor()?.focus();
+                  }}
+                >
+                  <Dropdown.Group>
+                    <Dropdown.Item
+                      onSelect={() => {
+                        setMoreOptionsOpen(false);
+                        nodeFormat('quote');
                       }}
+                      disabled={buttonIsDisabled()}
                     >
-                      <MenuItem
-                        icon={Quote}
-                        text="Block Quote"
-                        onClick={() => {
-                          setMoreOptionsOpen(false);
-                          nodeFormat('quote');
-                        }}
-                        disabled={buttonIsDisabled()}
-                      />
-                      <HorizontalBar />
-                      <MenuItem
-                        icon={Minus}
-                        text="Divider"
-                        onClick={() => {
-                          setMoreOptionsOpen(false);
-                          editor()?.dispatchCommand(
-                            INSERT_HORIZONTAL_RULE_COMMAND,
-                            undefined
-                          );
-                        }}
-                        disabled={buttonIsDisabled()}
-                      />
-                      <MenuItem
-                        icon={MathIcon}
-                        text="Equation"
-                        onClick={() => {
-                          setMoreOptionsOpen(false);
-                          handleInsertEquation();
-                        }}
-                        disabled={buttonIsDisabled()}
-                      />
-                      <DropdownMenu.Sub>
-                        <SubTrigger
-                          text="Table"
-                          icon={Grid}
-                          disabled={buttonIsDisabled()}
-                        />
-                        <DropdownMenu.Portal>
-                          <Layer depth={2}>
-                            <DropdownMenu.SubContent>
-                              <TableInsert
-                                onMenuClose={() => setMoreOptionsOpen(false)}
-                              />
-                            </DropdownMenu.SubContent>
-                          </Layer>
-                        </DropdownMenu.Portal>
-                      </DropdownMenu.Sub>
-                    </DropdownMenuContent>
-                  </Layer>
-                </DropdownMenu.Portal>
+                      <Quote class="size-4 shrink-0" />
+                      <span class="flex-1 truncate">Block Quote</span>
+                    </Dropdown.Item>
+                  </Dropdown.Group>
+                  <Dropdown.Group>
+                    <Dropdown.Item
+                      onSelect={() => {
+                        setMoreOptionsOpen(false);
+                        editor()?.dispatchCommand(
+                          INSERT_HORIZONTAL_RULE_COMMAND,
+                          undefined
+                        );
+                      }}
+                      disabled={buttonIsDisabled()}
+                    >
+                      <Minus class="size-4 shrink-0" />
+                      <span class="flex-1 truncate">Divider</span>
+                    </Dropdown.Item>
+                    <Dropdown.Item
+                      onSelect={() => {
+                        setMoreOptionsOpen(false);
+                        handleInsertEquation();
+                      }}
+                      disabled={buttonIsDisabled()}
+                    >
+                      <MathIcon class="size-4 shrink-0" />
+                      <span class="flex-1 truncate">Equation</span>
+                    </Dropdown.Item>
+                    <Dropdown.Sub>
+                      <Dropdown.SubTrigger disabled={buttonIsDisabled()}>
+                        <Grid class="size-4 shrink-0" />
+                        <span class="flex-1 truncate">Table</span>
+                        <CaretRight class="size-3.5" />
+                      </Dropdown.SubTrigger>
+                      <Dropdown.SubContent>
+                        <Dropdown.Group>
+                          <TableInsert
+                            onMenuClose={() => setMoreOptionsOpen(false)}
+                          />
+                        </Dropdown.Group>
+                      </Dropdown.SubContent>
+                    </Dropdown.Sub>
+                  </Dropdown.Group>
+                </Dropdown.Content>
               </Show>
-            </DropdownMenu>
+            </Dropdown>
           </div>
 
           {/* spacer before the AI button */}

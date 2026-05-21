@@ -1,7 +1,6 @@
 import { openMacroMcpSetupModal } from '@app/component/macro-mcp-setup-modal/MacroMcpSetupModal';
 import { useBlockId } from '@core/block';
 import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { macroIdToEmail, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
@@ -10,7 +9,6 @@ import ClaudeIcon from '@icon/wide-claude.svg';
 import CodexIcon from '@icon/wide-codex-ide.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import ZedIcon from '@icon/wide-zed-ide.svg';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import CaretDown from '@phosphor/caret-down.svg';
 import CopyIcon from '@phosphor/copy.svg';
 import GitBranch from '@phosphor/git-branch.svg';
@@ -20,7 +18,7 @@ import { storageServiceClient } from '@service-storage/client';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
 import { createCallback } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
-import { Button, ButtonGroup } from '@ui';
+import { Button, ButtonGroup, Dropdown } from '@ui';
 import { type Component, createSignal, For, type JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
@@ -199,7 +197,7 @@ export function DispatchAgentButton() {
   };
 
   return (
-    <DropdownMenu open={open()} onOpenChange={setOpen}>
+    <Dropdown open={open()} onOpenChange={setOpen}>
       <ButtonGroup variant="base" size="icon-sm" depth={2} class="bg-surface">
         <Button onClick={handlePrimaryClick} tooltip={lastUsed().name}>
           <Dynamic
@@ -208,48 +206,47 @@ export function DispatchAgentButton() {
           />
         </Button>
         <ButtonGroup.Divider />
-        <DropdownMenu.Trigger as={Button} class="p-1">
+        <Dropdown.Trigger class="p-1">
           <CaretDown class="size-3.5!" />
-        </DropdownMenu.Trigger>
+        </Dropdown.Trigger>
       </ButtonGroup>
-      <DropdownMenu.Portal>
-        <DropdownMenuContent>
-          <MenuItem
-            text={COPY_ACTION.name}
-            icon={COPY_ACTION.icon}
-            onClick={() => executeAction(COPY_ACTION)}
-          />
-          <MenuItem
-            text="Copy branch name"
-            icon={GitBranch}
-            onClick={() => {
+      <Dropdown.Content>
+        <Dropdown.Group>
+          <Dropdown.Item onSelect={() => executeAction(COPY_ACTION)}>
+            <Dynamic component={COPY_ACTION.icon} class="size-4 shrink-0" />
+            <span class="flex-1 truncate">{COPY_ACTION.name}</span>
+          </Dropdown.Item>
+          <Dropdown.Item
+            onSelect={() => {
               copyBranchNameToClipboard(blockId);
               setOpen(false);
             }}
-          />
-          <MenuItem
-            text="MCP setup instructions"
-            icon={PlugIcon}
-            onClick={() => {
+          >
+            <GitBranch class="size-4 shrink-0" />
+            <span class="flex-1 truncate">Copy branch name</span>
+          </Dropdown.Item>
+          <Dropdown.Item
+            onSelect={() => {
               openMacroMcpSetupModal();
               setOpen(false);
             }}
-          />
-          <div class="my-1 h-px bg-edge-muted" />
-          <div class="px-2 py-1 text-xs text-ink-extra-muted font-medium">
-            Open in
-          </div>
+          >
+            <PlugIcon class="size-4 shrink-0" />
+            <span class="flex-1 truncate">MCP setup instructions</span>
+          </Dropdown.Item>
+        </Dropdown.Group>
+        <Dropdown.Group>
+          <Dropdown.GroupLabel>Open in</Dropdown.GroupLabel>
           <For each={PLATFORM_ACTIONS}>
             {(action) => (
-              <MenuItem
-                text={action.name}
-                icon={action.icon}
-                onClick={() => executeAction(action)}
-              />
+              <Dropdown.Item onSelect={() => executeAction(action)}>
+                <Dynamic component={action.icon} class="size-4 shrink-0" />
+                <span class="flex-1 truncate">{action.name}</span>
+              </Dropdown.Item>
             )}
           </For>
-        </DropdownMenuContent>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }

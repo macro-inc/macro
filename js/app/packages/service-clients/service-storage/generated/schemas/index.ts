@@ -575,6 +575,7 @@ export * from './saveDocumentRequestSha';
 export * from './saveDocumentResponse';
 export * from './saveDocumentResponseData';
 export * from './saveDocumentResponseDataPresignedUrl';
+export * from './setEmailSyncRequest';
 export * from './setPropertyValue';
 export * from './setPropertyValueOneOf';
 export * from './setPropertyValueOneOfFive';

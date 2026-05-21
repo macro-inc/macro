@@ -1,7 +1,5 @@
-import { DropdownMenuContent } from '@core/component/Menu';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import CaretDown from '@phosphor/caret-down.svg';
-import { cn } from '@ui';
+import { cn, Dropdown } from '@ui';
 import { createMemo, type JSX, Show } from 'solid-js';
 import {
   CallControlButton,
@@ -61,8 +59,8 @@ export function CallControlButtonWithDropdown(props: {
         <div class="w-px h-8 bg-ink/20 pointer-events-none" />
       </Show>
 
-      <DropdownMenu>
-        <DropdownMenu.Trigger
+      <Dropdown>
+        <Dropdown.Trigger
           as={CallControlButton}
           active={props.active}
           danger={props.danger}
@@ -73,13 +71,9 @@ export function CallControlButtonWithDropdown(props: {
           )}
         >
           <CaretDown class={isSm() ? 'size-2.5 shrink-0' : 'size-3 shrink-0'} />
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Portal>
-          <DropdownMenuContent class="mb-2" width="lg">
-            {props.dropdownContent()}
-          </DropdownMenuContent>
-        </DropdownMenu.Portal>
-      </DropdownMenu>
+        </Dropdown.Trigger>
+        <Dropdown.Content>{props.dropdownContent()}</Dropdown.Content>
+      </Dropdown>
     </div>
   );
 }

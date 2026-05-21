@@ -593,6 +593,10 @@ async fn main() -> anyhow::Result<()> {
         call_internal_state,
         cal_webhook_state,
         entity_access_management_service,
+        crm_state: crm::inbound::axum_router::CrmRouterState {
+            service: Arc::new(crm_service),
+            entity_access_service: entity_access_service.clone(),
+        },
     };
 
     // Spawn the delete document worker

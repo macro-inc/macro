@@ -16,6 +16,7 @@ import Arcanum06 from '@design/arcanum-06.svg';
 import Arcanum07 from '@design/arcanum-07.svg';
 import Arcanum09 from '@design/arcanum-09.svg';
 import { createMemo, Match, Show, Switch } from 'solid-js';
+import { useSoupView } from './soup-view-context';
 
 false && fileSelector;
 false && folderSelector;
@@ -62,6 +63,14 @@ export function EmptyState(props: {
               : undefined
           }
         />
+      </Match>
+      <Match
+        when={
+          props.listView === 'agents' &&
+          useSoupView().activeTab() === 'automations'
+        }
+      >
+        <EmptyStateInner message="No automations to show." />
       </Match>
       <Match when={props.listView === 'agents'}>
         <AgentsEmptyState />

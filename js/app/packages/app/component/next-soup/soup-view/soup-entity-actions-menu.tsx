@@ -1,5 +1,5 @@
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { MenuItem } from '@core/component/Menu';
+import { MenuItem } from '@core/component/ContextMenu';
 import type { EntityData } from '@entity';
 import { For, Show } from 'solid-js';
 import type { SoupState } from '../create-soup-state';

@@ -1,9 +1,8 @@
 import { activeTextEditorSignal } from '@block-canvas/signal/toolManager';
 import { clamp } from '@block-canvas/util/math';
 import { type Vector2, vec2 } from '@block-canvas/util/vector2';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import CaretDown from '@phosphor/caret-down.svg';
-import { cn, Tooltip } from '@ui';
+import { cn, Dropdown, Tooltip } from '@ui';
 import {
   type Component,
   type ComponentProps,
@@ -16,7 +15,6 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { DropdownMenuContent, MenuItem } from './Menu';
 
 export type DropdownPreset = {
   value: string;
@@ -232,54 +230,51 @@ export function SlidableNumberInput(props: SlidableNumberInputProps) {
           </Show>
           <Show when={props.showPresets}>
             <div class="flex h-full items-center ml-auto mr-.5">
-              <DropdownMenu
+              <Dropdown
                 open={dropdownOpen()}
                 onOpenChange={setDropdownOpen}
                 placement={'bottom'}
                 gutter={8}
               >
-                <DropdownMenu.Trigger class="dropdown-menu__trigger">
+                <Dropdown.Trigger
+                  variant="ghost"
+                  class="dropdown-menu__trigger"
+                >
                   <div class="w-3 h-5 ml-1.5 flex items-center text-ink-muted">
                     <CaretDown width={12} height={12} />
                   </div>
-                </DropdownMenu.Trigger>
-                <DropdownMenu.Portal>
-                  <DropdownMenuContent>
+                </Dropdown.Trigger>
+                <Dropdown.Content>
+                  <Dropdown.Group>
                     <For each={props.presets}>
                       {(preset, _index) => (
-                        <MenuItem
-                          text={
-                            <div class="flex w-full gap-2 justify-between">
-                              <span>{preset.displayName}</span>
-                              <span class="text-ink-extra-muted">
-                                {preset.value}
-                              </span>
-                            </div>
-                          }
-                          icon={
-                            preset.icon &&
-                            (() => {
-                              return (
-                                <Dynamic
-                                  component={preset.icon}
-                                  class="size-4"
-                                  classList={{
-                                    'rotate-y-180': props.flip,
-                                  }}
-                                />
-                              );
-                            })
-                          }
-                          onClick={() => {
+                        <Dropdown.Item
+                          onSelect={() => {
                             props.inputChanged(preset.value);
                             setDropdownOpen(false);
                           }}
-                        />
+                        >
+                          <Show when={preset.icon}>
+                            <Dynamic
+                              component={preset.icon!}
+                              class="size-4 shrink-0"
+                              classList={{
+                                'rotate-y-180': props.flip,
+                              }}
+                            />
+                          </Show>
+                          <div class="flex flex-1 w-full gap-2 justify-between">
+                            <span class="truncate">{preset.displayName}</span>
+                            <span class="text-ink-extra-muted">
+                              {preset.value}
+                            </span>
+                          </div>
+                        </Dropdown.Item>
                       )}
                     </For>
-                  </DropdownMenuContent>
-                </DropdownMenu.Portal>
-              </DropdownMenu>
+                  </Dropdown.Group>
+                </Dropdown.Content>
+              </Dropdown>
             </div>
           </Show>
         </div>

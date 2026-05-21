@@ -2,7 +2,7 @@ import type { SidebarState } from '@app/component/app-sidebar/sidebar';
 import { useSenderName } from '@app/component/app-sidebar/utils';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { ContextMenuContent, MenuItem } from '@core/component/Menu';
+import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { UserIcon } from '@core/component/UserIcon';
 import { compareDateDesc } from '@core/util/date';
 import { ContextMenu } from '@kobalte/core/context-menu';

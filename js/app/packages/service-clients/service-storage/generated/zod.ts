@@ -1794,6 +1794,27 @@ export const getChannelParticipantsResponse = zod.array(
 );
 
 /**
+ * @summary Toggle `email_sync` on a CRM company. `false` disables CRM email
+sharing for the company and permanently removes its existing CRM
+contacts and contact sources.
+ */
+export const setEmailSyncParams = zod.object({
+  company_id: zod.uuid().describe('The CRM company to update'),
+});
+
+export const setEmailSyncBody = zod
+  .object({
+    email_sync: zod
+      .boolean()
+      .describe(
+        "New value for `crm_companies.email_sync`. Setting to `false`\npermanently deletes the company's CRM contacts and contact sources."
+      ),
+  })
+  .describe(
+    'Request body for `PUT \/crm\/companies\/{company_id}\/email-sync`.'
+  );
+
+/**
  * @summary Gets the users documents to populate their recent document list
  */
 export const getUserDocumentsHandlerQueryParams = zod.object({

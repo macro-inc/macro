@@ -21,7 +21,6 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
       open={props.open}
       onOpenChange={props.onOpenChange}
       placement="bottom-start"
-      gutter={4}
     >
       <Tooltip label="Group">
         <Dropdown.Trigger depth={2} class="bg-surface">
@@ -29,7 +28,7 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
           <span>Group</span>
         </Dropdown.Trigger>
       </Tooltip>
-      <Dropdown.Content class="min-w-35">
+      <Dropdown.Content>
         <Dropdown.Group>
           <For each={props.options}>
             {(option) => (

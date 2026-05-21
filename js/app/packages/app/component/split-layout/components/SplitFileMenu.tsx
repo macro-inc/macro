@@ -2,8 +2,8 @@ import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntit
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { ResponsiveDropdown } from '@app/component/SimpleDropdown';
 import { useBlockAliasedName, useBlockName } from '@core/block';
+import { MENU_CONTENT_CLASS } from '@core/component/ContextMenu';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
-import { MENU_CONTENT_CLASS } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { useIsDocumentOwner } from '@core/signal/permissions';

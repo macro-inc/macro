@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type HoverCardRootProps,
   HoverCard as KobalteHoverCard,
@@ -121,6 +122,8 @@ export function HoverCard(props: HoverCardComponentProps) {
     if (isTopLevel) openTopLevelHoverCards.delete(closeSelf);
   });
 
+  const isDisabled = () => props.disabled || isTouchDevice();
+
   const shouldForceMount = () => nestedOpenCount() > 0;
 
   // Dismiss on scroll outside the card content. Kobalte only listens for
@@ -164,7 +167,7 @@ export function HoverCard(props: HoverCardComponentProps) {
       <KobalteHoverCard.Trigger
         as={props.triggerAs ?? 'span'}
         class={props.triggerClass}
-        disabled={props.disabled}
+        disabled={isDisabled()}
       >
         {props.trigger}
       </KobalteHoverCard.Trigger>

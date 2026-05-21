@@ -49,17 +49,81 @@ async fn insert_company(
         .await?;
 
     for domain in domains {
-        sqlx::query(
-            r#"INSERT INTO crm_domains (company_id, team_id, domain) VALUES ($1, $2, $3)"#,
-        )
-        .bind(company_id)
-        .bind(team_id)
-        .bind(*domain)
-        .execute(pool)
-        .await?;
+        sqlx::query(r#"INSERT INTO crm_domains (company_id, team_id, domain) VALUES ($1, $2, $3)"#)
+            .bind(company_id)
+            .bind(team_id)
+            .bind(*domain)
+            .execute(pool)
+            .await?;
     }
 
     Ok(company_id)
+}
+
+async fn insert_email_link(pool: &PgPool, owner_id: &str, email: &str) -> sqlx::Result<Uuid> {
+    let link_id = Uuid::now_v7();
+    sqlx::query(
+        r#"INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+           VALUES ($1, $2, $3, $4, 'GMAIL')"#,
+    )
+    .bind(link_id)
+    .bind(owner_id)
+    .bind(format!("fa_{link_id}"))
+    .bind(email)
+    .execute(pool)
+    .await?;
+    Ok(link_id)
+}
+
+async fn insert_contact_with_source(
+    pool: &PgPool,
+    company_id: Uuid,
+    email: &str,
+    link_id: Uuid,
+) -> sqlx::Result<Uuid> {
+    let contact_id = Uuid::now_v7();
+    sqlx::query(r#"INSERT INTO crm_contacts (id, company_id, email) VALUES ($1, $2, $3)"#)
+        .bind(contact_id)
+        .bind(company_id)
+        .bind(email)
+        .execute(pool)
+        .await?;
+    sqlx::query(r#"INSERT INTO crm_contact_sources (contact_id, link_id) VALUES ($1, $2)"#)
+        .bind(contact_id)
+        .bind(link_id)
+        .execute(pool)
+        .await?;
+    Ok(contact_id)
+}
+
+async fn count_contacts(pool: &PgPool, company_id: Uuid) -> sqlx::Result<i64> {
+    let (count,): (i64,) =
+        sqlx::query_as(r#"SELECT COUNT(*) FROM crm_contacts WHERE company_id = $1"#)
+            .bind(company_id)
+            .fetch_one(pool)
+            .await?;
+    Ok(count)
+}
+
+async fn count_sources_for_company(pool: &PgPool, company_id: Uuid) -> sqlx::Result<i64> {
+    let (count,): (i64,) = sqlx::query_as(
+        r#"SELECT COUNT(*) FROM crm_contact_sources cs
+           JOIN crm_contacts ct ON ct.id = cs.contact_id
+           WHERE ct.company_id = $1"#,
+    )
+    .bind(company_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(count)
+}
+
+async fn fetch_email_sync(pool: &PgPool, company_id: Uuid) -> sqlx::Result<Option<bool>> {
+    let row: Option<(bool,)> =
+        sqlx::query_as(r#"SELECT email_sync FROM crm_companies WHERE id = $1"#)
+            .bind(company_id)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.map(|(s,)| s))
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -145,5 +209,114 @@ async fn returns_company_when_email_sync_is_false(pool: PgPool) -> anyhow::Resul
         .expect("company should be returned");
 
     assert!(!company.email_sync);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_email_sync_disable_clears_contacts_and_sources(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+    insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+    insert_contact_with_source(&pool, company_id, "bob@acme.com", link_id).await?;
+
+    assert_eq!(count_contacts(&pool, company_id).await?, 2);
+    assert_eq!(count_sources_for_company(&pool, company_id).await?, 2);
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    repo.set_email_sync(&team_id, &company_id, false).await?;
+
+    assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(false));
+    assert_eq!(count_contacts(&pool, company_id).await?, 0);
+    assert_eq!(count_sources_for_company(&pool, company_id).await?, 0);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_email_sync_enable_preserves_contacts(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    // Start disabled with a lingering contact — re-enabling must NOT touch it.
+    let company_id = insert_company(&pool, team_id, false, &["acme.com"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+    insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    repo.set_email_sync(&team_id, &company_id, true).await?;
+
+    assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(true));
+    assert_eq!(count_contacts(&pool, company_id).await?, 1);
+    assert_eq!(count_sources_for_company(&pool, company_id).await?, 1);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_email_sync_returns_not_found_for_unknown_company(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let result = repo.set_email_sync(&team_id, &Uuid::now_v7(), false).await;
+
+    assert!(matches!(
+        result,
+        Err(crate::domain::model::CrmError::CompanyNotFoundForTeam)
+    ));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_email_sync_isolates_companies_across_teams(pool: PgPool) -> anyhow::Result<()> {
+    let team_a = Uuid::now_v7();
+    let team_b = Uuid::now_v7();
+    let owner_a = "macro|owner_a@test.com";
+    let owner_b = "macro|owner_b@test.com";
+    seed_team(&pool, team_a, owner_a).await?;
+    seed_team(&pool, team_b, owner_b).await?;
+    let company_a = insert_company(&pool, team_a, true, &["acme.com"]).await?;
+    let link_a = insert_email_link(&pool, owner_a, "a@macro.test").await?;
+    insert_contact_with_source(&pool, company_a, "alice@acme.com", link_a).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    // team_b mutating team_a's company must fail without touching the row.
+    let result = repo.set_email_sync(&team_b, &company_a, false).await;
+    assert!(matches!(
+        result,
+        Err(crate::domain::model::CrmError::CompanyNotFoundForTeam)
+    ));
+
+    assert_eq!(fetch_email_sync(&pool, company_a).await?, Some(true));
+    assert_eq!(count_contacts(&pool, company_a).await?, 1);
+    assert_eq!(count_sources_for_company(&pool, company_a).await?, 1);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_email_sync_disable_handles_multi_domain_company(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id =
+        insert_company(&pool, team_id, true, &["acme.com", "acme.io", "acme.co"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+    insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+    insert_contact_with_source(&pool, company_id, "bob@acme.io", link_id).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    repo.set_email_sync(&team_id, &company_id, false).await?;
+
+    assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(false));
+    assert_eq!(count_contacts(&pool, company_id).await?, 0);
+    assert_eq!(count_sources_for_company(&pool, company_id).await?, 0);
+    // Company + its domain rows survive the disable so future populates short-circuit.
+    let (domain_count,): (i64,) =
+        sqlx::query_as(r#"SELECT COUNT(*) FROM crm_domains WHERE company_id = $1"#)
+            .bind(company_id)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(domain_count, 3);
     Ok(())
 }

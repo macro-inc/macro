@@ -155,7 +155,7 @@ export const SoupViewCreateButton = () => {
   );
 
   const MultiOptionButton = (props: { hideLabel?: boolean }) => (
-    <Dropdown placement="bottom-start" gutter={4}>
+    <Dropdown placement="bottom-start">
       <Dropdown.Trigger
         variant="active"
         class={cn(
@@ -169,7 +169,7 @@ export const SoupViewCreateButton = () => {
         </Show>
         <ChevronDownIcon class="size-2.5" />
       </Dropdown.Trigger>
-      <Dropdown.Content class="min-w-35">
+      <Dropdown.Content>
         <Dropdown.Group>
           <For each={options()}>
             {(item) => (
