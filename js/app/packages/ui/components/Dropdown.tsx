@@ -39,28 +39,15 @@ export type DropdownItemProps = ComponentProps<typeof KobalteDropdownMenu.Item>;
 export type DropdownSubProps = ComponentProps<typeof KobalteDropdownMenu.Sub>;
 type PortalMount = ComponentProps<typeof KobalteDropdownMenu.Portal>['mount'];
 
-const ROW_CLASS = 'w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-xs outline-none hover:bg-hover data-highlighted:bg-hover data-disabled:opacity-50 data-disabled:cursor-not-allowed';
-
-function DropdownItemIndicator(props: DropdownItemIndicatorProps) {
-  return <KobalteDropdownMenu.ItemIndicator {...props} />;
-}
-
-function DropdownSubTrigger(props: DropdownSubTriggerProps) {
-  const [local, rest] = splitProps(props, ['class']);
-  return (
-    <KobalteDropdownMenu.SubTrigger
-      class={cn(ROW_CLASS, local.class)}
-      {...rest}
-    />
-  );
-}
+const ROW_CLASS =    'rounded-lg w-full flex items-center gap-2.5 px-2 h-8  text-left text-xs cursor-default outline-none hover:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
+const CONTENT_CLASS ='rounded-xl flex flex-col size-auto z-action-menu gap-1 bg-edge-muted ';
 
 function DropdownContent(props: DropdownContentProps) {
   const [local, rest] = splitProps(props, ['depth', 'class', 'mount']);
   return (
     <KobalteDropdownMenu.Portal mount={local.mount}>
       <KobalteDropdownMenu.Content
-        class={cn('flex flex-col size-auto z-action-menu gap-1 bg-edge-muted', local.class)}
+        class={cn(CONTENT_CLASS, local.class)}
         depth={local.depth ?? 2}
         as={Surface}
         {...rest}
@@ -74,7 +61,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
   return (
     <KobalteDropdownMenu.Portal mount={local.mount}>
       <KobalteDropdownMenu.SubContent
-        class={cn('flex flex-col size-auto z-action-menu gap-1 bg-edge-muted', local.class)}
+        class={cn(CONTENT_CLASS, local.class)}
         depth={local.depth ?? 2}
         as={Surface}
         {...rest}
@@ -87,7 +74,21 @@ function DropdownGroup(props: DropdownGroupProps) {
   const [local, rest] = splitProps(props, ['class']);
   return (
     <KobalteDropdownMenu.Group
-      class={cn('flex flex-col p-1 gap-0.5 bg-surface', local.class)}
+      class={cn('flex flex-col p-1.5 gap-0.5 bg-surface', local.class)}
+      {...rest}
+    />
+  );
+}
+
+function DropdownItemIndicator(props: DropdownItemIndicatorProps) {
+  return <KobalteDropdownMenu.ItemIndicator {...props} />;
+}
+
+function DropdownSubTrigger(props: DropdownSubTriggerProps) {
+  const [local, rest] = splitProps(props, ['class']);
+  return (
+    <KobalteDropdownMenu.SubTrigger
+      class={cn(ROW_CLASS, 'justify-between', local.class)}
       {...rest}
     />
   );
@@ -104,7 +105,12 @@ function DropdownRadioItem(props: DropdownRadioItemProps) {
 }
 
 function DropdownSub(props: DropdownSubProps) {
-  return <KobalteDropdownMenu.Sub gutter={4} {...props} />;
+  return (
+    <KobalteDropdownMenu.Sub
+      gutter={12}
+      {...props}
+    />
+  );
 }
 
 function DropdownItem(props: DropdownItemProps) {

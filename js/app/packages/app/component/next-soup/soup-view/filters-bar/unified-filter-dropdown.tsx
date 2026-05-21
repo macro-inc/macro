@@ -61,11 +61,9 @@ const TypeIndicator = (props: { active: boolean }) => (
   </span>
 );
 
-const FILTER_MENU_ROW_CLASS =
-  'w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-left text-xs hover:bg-ink/5 outline-none data-highlighted:bg-ink/5 cursor-default';
-
-const FILTER_MENU_SUBTRIGGER_CLASS =
-  'w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-md text-left text-xs hover:bg-ink/5 outline-none data-highlighted:bg-ink/5 cursor-default';
+// Sub-trigger rows differ from default Dropdown.Item only by
+// distributing label + caret to the row ends.
+// const FILTER_MENU_SUBTRIGGER_CLASS = 'justify-between gap-2';
 
 export type FilterOption = {
   id: FilterID;
@@ -401,9 +399,8 @@ const SearchableFilterSubmenu = (props: {
   });
 
   return (
-    <Dropdown.Sub gutter={4} open={isOpen()} onOpenChange={setIsOpen}>
+    <Dropdown.Sub open={isOpen()} onOpenChange={setIsOpen}>
       <Dropdown.SubTrigger
-        class={cn(FILTER_MENU_SUBTRIGGER_CLASS, 'py-2')}
         onPointerEnter={(e: PointerEvent & { currentTarget: HTMLElement }) => {
           // Kobalte's "grace polygon" keeps an open sub alive when the
           // pointer crosses toward its content. For sibling In/From triggers,
@@ -442,8 +439,8 @@ function SingleValueSubmenu<T>(props: {
   onSelect: (value: T) => void;
 }) {
   return (
-    <Dropdown.Sub gutter={4}>
-      <Dropdown.SubTrigger class={FILTER_MENU_SUBTRIGGER_CLASS}>
+    <Dropdown.Sub>
+      <Dropdown.SubTrigger >
         <span class="text-ink">{props.label}</span>
         <CaretRightIcon class="size-3 text-ink-muted" />
       </Dropdown.SubTrigger>
@@ -454,7 +451,6 @@ function SingleValueSubmenu<T>(props: {
               const active = () => props.current() === option.value;
               return (
                 <Dropdown.Item
-                  class={FILTER_MENU_ROW_CLASS}
                   onSelect={() => props.onSelect(option.value)}
                   closeOnSelect
                 >
@@ -607,11 +603,7 @@ const SearchIndexItem = (props: {
   active: Accessor<boolean>;
   onSelect: () => void;
 }) => (
-  <Dropdown.Item
-    class={FILTER_MENU_ROW_CLASS}
-    onSelect={props.onSelect}
-    closeOnSelect
-  >
+  <Dropdown.Item onSelect={props.onSelect} closeOnSelect>
     <SearchIndexRowLabel option={props.option} active={props.active} />
   </Dropdown.Item>
 );
@@ -631,9 +623,8 @@ const SearchIndexSubRow = (props: {
   closeRoot: () => void;
   children: JSX.Element;
 }) => (
-  <Dropdown.Sub gutter={4}>
+  <Dropdown.Sub>
     <Dropdown.SubTrigger
-      class={FILTER_MENU_ROW_CLASS}
       onPointerDown={props.onSelect}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -814,10 +805,8 @@ export const UnifiedFilterDropdown = () => {
                 <>
                   <For each={categories()}>
                     {(category) => (
-                      <Dropdown.Sub gutter={4}>
-                        <Dropdown.SubTrigger
-                          class={FILTER_MENU_SUBTRIGGER_CLASS}
-                        >
+                      <Dropdown.Sub>
+                        <Dropdown.SubTrigger>
                           <span class="text-ink">{category.label}</span>
                           <CaretRightIcon class="size-3 text-ink-muted" />
                         </Dropdown.SubTrigger>
@@ -829,7 +818,6 @@ export const UnifiedFilterDropdown = () => {
                                 const active = () => isOptionActive(option.id);
                                 return (
                                   <Dropdown.Item
-                                    class={FILTER_MENU_ROW_CLASS}
                                     onSelect={() => toggleFilter(option.id)}
                                     closeOnSelect={!category.multiple}
                                   >
@@ -925,7 +913,6 @@ export const UnifiedFilterDropdown = () => {
 
                     {/* All row */}
                     <Dropdown.Item
-                      class={FILTER_MENU_ROW_CLASS}
                       onSelect={() => handleIndexChange('all')}
                       closeOnSelect
                     >
@@ -949,7 +936,6 @@ export const UnifiedFilterDropdown = () => {
                   const active = () => isOptionActive(option.id);
                   return (
                     <Dropdown.Item
-                      class={FILTER_MENU_ROW_CLASS}
                       onSelect={() => toggleFilter(option.id)}
                       closeOnSelect={!categories()[0]!.multiple}
                     >

@@ -584,7 +584,6 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   return (
     <Dropdown placement="top-start" gutter={6}>
       <Dropdown.Trigger
-        as={Button}
         variant="ghost"
         class={cn(
           'flex items-center w-full rounded-md cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
