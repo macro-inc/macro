@@ -949,7 +949,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
               setPremiumCardDismissed(true);
               setPremiumHintVisible(true);
             }}
-            icon={() => <LogoIcon class="size-4" />}
             primaryAction={{
               label: 'Upgrade',
               onClick: () => openSettingsTab('Account'),
