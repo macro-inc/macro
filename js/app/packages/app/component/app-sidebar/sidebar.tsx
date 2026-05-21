@@ -944,7 +944,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <div class="w-full px-2 mb-2">
           <SidebarPromoCard
             label="Upgrade to Premium"
-            description="Unlock unlimited agents, advanced search, and priority support."
+            description="Unlock MCP integrations, better AI models, and team collaboration."
             onDismiss={() => {
               setPremiumCardDismissed(true);
               setPremiumHintVisible(true);
