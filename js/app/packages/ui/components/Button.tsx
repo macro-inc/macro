@@ -4,6 +4,7 @@ import { Tooltip } from './Tooltip';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import type { Placement } from '@floating-ui/dom';
 import { cn } from '../utils/classname';
+import { themeReactive } from '@theme/signals/themeReactive';
 import { useButtonGroupContext } from './ButtonGroup';
 import { Layer } from './Layer';
 
@@ -33,7 +34,7 @@ const variantStyles: Record<ButtonVariant, string> = {
   base:             'bg-transparent text-ink-muted  border border-edge-muted not-disabled:hover:bg-hover      not-disabled:hover:text-ink        active:bg-active disabled:opacity-30 ',
   active:           'bg-accent-bg   text-accent     border border-accent                                                                                      disabled:opacity-30 ',
   ghost:            'bg-transparent text-ink-muted                           not-disabled:hover:bg-hover      not-disabled:hover:text-ink        active:bg-active disabled:opacity-30 ',
-  'cta': 'bg-accent      text-surface    border border-transparent not-disabled:hover:bg-accent/90                                  active:bg-accent/80 disabled:opacity-30 ',
+  'cta':            'bg-accent      text-surface    border border-transparent not-disabled:hover:bg-accent/90                                  active:bg-accent/80 disabled:opacity-30 ',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -77,9 +78,12 @@ export const Button = (props: ButtonProps) => {
   const variantStyle = (): JSX.CSSProperties | string | undefined => {
     const variant = local.variant ?? group?.variant;
     if (variant === 'cta') {
+      // TODO (seamus): this is scuffed but better than what we had.
+      const textL = themeReactive.a0.l[0]() < 0.72 ? 0.97 : 0.2;
       return {
-        '--color-edge': 'var(--color-surface)',
-        '--color-edge-muted': 'oklch(from var(--color-surface) l c h / 0.5)',
+        'color': `oklch(${textL} var(--c0c) var(--c0h))`,
+        '--color-edge': `oklch(${textL} var(--c0c) var(--c0h) / 0.7)`,
+        '--color-edge-muted': `oklch(${textL} var(--c0c) var(--c0h) / 0.7)`,
       };
     }
     return others.style;

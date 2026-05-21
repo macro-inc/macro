@@ -31,10 +31,9 @@ export function SendButton(props: SendButtonProps) {
       aria-label={local['aria-label'] ?? 'Send'}
       tooltip={local.tooltip ?? 'Send'}
       class={cn(
-        'rounded-[11px] size-7.5 text-ink-extra-muted [&_svg]:stroke-[4px]',
+        'rounded-[11px] size-7.5 [&_svg]:stroke-[4px]',
         'transition-transform ease duration-150',
-        'not-disabled:bg-accent not-disabled:text-surface not-disabled:hover:bg-accent/90 not-disabled:hover:text-surface',
-        'data-disabled:opacity-100 data-disabled:text-ink-extra-muted data-disabled:bg-ink-muted/5',
+        'data-disabled:opacity-100 data-disabled:text-ink-extra-muted! data-disabled:bg-ink-muted/5',
         'active:not-disabled:scale-95',
         local.hidden && 'opacity-0!',
         local.class
