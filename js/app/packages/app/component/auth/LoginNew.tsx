@@ -67,11 +67,13 @@ function ProviderButton(props: {
       type="button"
       onClick={props.onClick}
       class={cn(
-        'flex items-center gap-3 w-full px-4 py-3 rounded-lg text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors',
+        'flex items-center gap-3 w-full px-4 py-3 rounded-lg text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-200',
         isPrimary()
-          ? 'bg-ink text-surface border border-transparent hover:bg-accent/90 active:bg-accent/80'
+          ? 'bg-ink text-surface outline-2 outline-transparent hover:outline-accent active:outline-accent'
           : 'bg-surface text-ink border border-edge hover:border-edge hover:bg-hover/50'
       )}
+      autofocus
+      tabIndex={0}
     >
       <span class="shrink-0 inline-flex">{props.icon}</span>
       <span class="flex-1 text-left">{props.label}</span>
@@ -141,7 +143,7 @@ export function LoginNew() {
 
   createEffect(() => {
     if (userInfo()?.authenticated) {
-      // invalidateUserInfo().then(identifyUser);
+      invalidateUserInfo().then(identifyUser);
     }
   });
 
@@ -219,6 +221,7 @@ export function LoginNew() {
             to   { opacity: 1; transform: translateY(0)    scale(1);     }
           }
           .ln-card { animation: ln-card-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
         `
         }</style>
 
@@ -236,19 +239,39 @@ export function LoginNew() {
           />
         </div>
 
-        <div class="w-full max-w-md ln-card shadow-md shadow-ink/10">
-          <Surface depth={1}>
-            <div class="p-8 flex flex-col gap-16">
+        <div class="w-full max-w-md ln-card">
+          <Surface active class="rounded-2xl" depth={2}>
+            <div
+              class={cn(
+                'p-8 flex flex-col gap-16',
+                stage() === Stage.Email && 'gap-8'
+              )}
+            >
               <div
                 class={cn(
-                  'flex gap-4 items-center',
-                  virtualKeyboardVisible() && 'hidden'
+                  'flex flex-col gap-4 items-center',
+                  virtualKeyboardVisible() && 'hidden',
+                  stage() === Stage.Email && 'flex-row'
                 )}
               >
-                <LogoIcon class="size-6 text-accent" />
-
-                <span class="text-2xl font-light font-mono lowercase">
-                  Welcome
+                <LogoIcon
+                  class={cn(
+                    'size-10 text-accent',
+                    stage() === Stage.Email && 'size-6'
+                  )}
+                />
+                <span
+                  class={cn(
+                    'text-3xl font-bold tracking-wide text-ink',
+                    stage() === Stage.Email && 'text-lg'
+                  )}
+                >
+                  <Show
+                    when={stage() !== Stage.Email}
+                    fallback={'Enter your email'}
+                  >
+                    Login to Macro
+                  </Show>
                 </span>
               </div>
 
@@ -256,6 +279,16 @@ export function LoginNew() {
                 <Switch>
                   <Match when={stage() === Stage.None}>
                     <LoginPicker setStage={onStageChange} />
+                    <div class="flex gap-2 text-sm">
+                      <div>New to Macro?</div>
+                      <a
+                        class="text-ink underline underline-offset-2 hover:text-accent focus-visible:text-accent"
+                        href={`${ROUTER_BASE_CONCAT}signup`}
+                        tabindex={0}
+                      >
+                        Create an account
+                      </a>
+                    </div>
                   </Match>
                   <Match when={stage() === Stage.Email}>
                     <EmailForm setStage={onStageChange} />
@@ -264,39 +297,27 @@ export function LoginNew() {
                     <VerifyForm setStage={onStageChange} />
                   </Match>
                 </Switch>
-
-                <div class="flex gap-2 text-sm">
-                  <div>New to Macro?</div>
-                  <a
-                    class="text-ink underline underline-offset-2 hover:text-accent"
-                    href={`${ROUTER_BASE_CONCAT}signup`}
-                  >
-                    Create an account
-                  </a>
-                </div>
               </div>
 
-              <Show when={stage() === Stage.None}>
-                <div class="flex flex-col text-center text-xs text-ink-muted">
-                  <div class="text-ink/50">
-                    By continuing, you agree to our{' '}
-                    <a
-                      class="underline underline-offset-2 hover:text-ink"
-                      href="/terms"
-                    >
-                      terms
-                    </a>{' '}
-                    and{' '}
-                    <a
-                      class="underline underline-offset-2 hover:text-ink"
-                      href="/privacy"
-                    >
-                      privacy policy
-                    </a>
-                    .
-                  </div>
+              <div class="flex flex-col text-center text-xs text-ink-muted">
+                <div class="text-ink/50">
+                  By continuing, you agree to our{' '}
+                  <a
+                    class="underline underline-offset-2 hover:text-ink focus-visible:text-ink"
+                    href="/terms"
+                  >
+                    terms
+                  </a>{' '}
+                  and{' '}
+                  <a
+                    class="underline underline-offset-2 hover:text-ink focus-visible:text-ink"
+                    href="/privacy"
+                  >
+                    privacy policy
+                  </a>
+                  .
                 </div>
-              </Show>
+              </div>
             </div>
           </Surface>
         </div>
