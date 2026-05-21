@@ -56,13 +56,13 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
           {local.label}
         </KobalteSwitch.Label>
       </Show>
-      <KobalteSwitch.Control class="relative h-4 w-8 rounded-full bg-edge transition-colors duration-150 data-checked:bg-accent">
+      <KobalteSwitch.Control class="relative h-4 w-6 rounded-full bg-edge transition-colors duration-100 data-checked:bg-accent">
         <KobalteSwitch.Thumb
           class={cn(
-            'absolute top-0.5 left-0.5 h-3 rounded-full bg-surface transition-all duration-150 ease-in-out',
+            'absolute top-0.5 left-0.5 h-3 rounded-full bg-surface transition-all duration-100 ease-in-out',
             isStretched()
-              ? 'w-4 data-checked:translate-x-3'
-              : 'w-3 data-checked:translate-x-4',
+              ? 'w-4 data-checked:translate-x-1'
+              : 'w-3 data-checked:translate-x-2',
           )}
         />
       </KobalteSwitch.Control>
