@@ -3,6 +3,7 @@
 use crate::domain::{
     companies_repo::CompaniesRepository,
     company_metadata_resolver::CompanyMetadataResolver,
+    generic_email_domains::is_generic_email_domain,
     model::{CrmCompany, CrmError},
 };
 
@@ -180,6 +181,16 @@ where
             return Err(CrmError::StorageLayerError(anyhow::anyhow!(
                 "email {email} has an empty domain"
             )));
+        }
+
+        // Skip personal / free-mail-provider domains (gmail, yahoo,
+        // hotmail, …). CRM rows are meant to represent companies
+        if is_generic_email_domain(domain) {
+            tracing::debug!(
+                domain,
+                "Skipping CRM populate for generic email provider domain"
+            );
+            return Ok(());
         }
 
         // Ensure `crm_domain_directory` has an entry for this domain
