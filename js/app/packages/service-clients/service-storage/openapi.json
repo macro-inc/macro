@@ -1804,6 +1804,144 @@
               }
             }
           },
+          "409": {
+            "description": "Company is hidden; un-hide before enabling email sync",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/companies/{company_id}/hidden": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::set_company_hidden"],
+        "summary": "Toggle `hidden` on a CRM company. Hiding also disables `email_sync`\nand cascades to clearing the company's contacts and contact sources.",
+        "operationId": "set_company_hidden",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The CRM company to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCompanyHiddenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/contacts/{contact_id}/hidden": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::set_contact_hidden"],
+        "summary": "Toggle `hidden` on a CRM contact. Hiding is a display-only opt-out\nscoped to the team that owns the contact's company.",
+        "operationId": "set_contact_hidden",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The CRM contact to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetContactHiddenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -11511,6 +11649,28 @@
           "presignedUrl": {
             "type": ["string", "null"],
             "description": "If the document is an editable file, we provide a presigned url to save the updated file to."
+          }
+        }
+      },
+      "SetCompanyHiddenRequest": {
+        "type": "object",
+        "description": "Request body for `PUT /companies/{company_id}/hidden`.",
+        "required": ["hidden"],
+        "properties": {
+          "hidden": {
+            "type": "boolean",
+            "description": "New value for `crm_companies.hidden`. Setting to `true` hides\nthe company from CRM listings AND disables `email_sync` (which\npermanently deletes the company's contacts and contact sources).\nSetting to `false` un-hides the company; `email_sync` is left\nuntouched and the team must re-enable it explicitly."
+          }
+        }
+      },
+      "SetContactHiddenRequest": {
+        "type": "object",
+        "description": "Request body for `PUT /contacts/{contact_id}/hidden`.",
+        "required": ["hidden"],
+        "properties": {
+          "hidden": {
+            "type": "boolean",
+            "description": "New value for `crm_contacts.hidden`. `true` hides the contact\nfrom CRM listings for the team; `false` un-hides it. Display-only\n— does not affect populate/depopulate."
           }
         }
       },

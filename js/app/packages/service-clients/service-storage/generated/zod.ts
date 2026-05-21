@@ -1815,6 +1815,42 @@ export const setEmailSyncBody = zod
   );
 
 /**
+ * @summary Toggle `hidden` on a CRM company. Hiding also disables `email_sync`
+and cascades to clearing the company's contacts and contact sources.
+ */
+export const setCompanyHiddenParams = zod.object({
+  company_id: zod.uuid().describe('The CRM company to update'),
+});
+
+export const setCompanyHiddenBody = zod
+  .object({
+    hidden: zod
+      .boolean()
+      .describe(
+        "New value for `crm_companies.hidden`. Setting to `true` hides\nthe company from CRM listings AND disables `email_sync` (which\npermanently deletes the company's contacts and contact sources).\nSetting to `false` un-hides the company; `email_sync` is left\nuntouched and the team must re-enable it explicitly."
+      ),
+  })
+  .describe('Request body for `PUT \/companies\/{company_id}\/hidden`.');
+
+/**
+ * @summary Toggle `hidden` on a CRM contact. Hiding is a display-only opt-out
+scoped to the team that owns the contact's company.
+ */
+export const setContactHiddenParams = zod.object({
+  contact_id: zod.uuid().describe('The CRM contact to update'),
+});
+
+export const setContactHiddenBody = zod
+  .object({
+    hidden: zod
+      .boolean()
+      .describe(
+        'New value for `crm_contacts.hidden`. `true` hides the contact\nfrom CRM listings for the team; `false` un-hides it. Display-only\n— does not affect populate\/depopulate.'
+      ),
+  })
+  .describe('Request body for `PUT \/contacts\/{contact_id}\/hidden`.');
+
+/**
  * @summary Gets the users documents to populate their recent document list
  */
 export const getUserDocumentsHandlerQueryParams = zod.object({

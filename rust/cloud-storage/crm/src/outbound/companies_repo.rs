@@ -630,14 +630,16 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         } else {
             // Enabling on a hidden company would let populate re-create
             // contacts under a row the team has explicitly hidden, so
-            // refuse. Look up state in the same tx; the row read
-            // doesn't need the domain locks because we don't mutate
+            // refuse. Lock the row FOR UPDATE so a concurrent hide can't
+            // commit between this check and the email_sync UPDATE below.
+            // Domain locks aren't needed because we don't mutate
             // contacts on the enable path.
             let row = sqlx::query!(
                 r#"
                 SELECT hidden
                 FROM crm_companies
                 WHERE id = $1 AND team_id = $2
+                FOR UPDATE
                 "#,
                 company_id,
                 team_id,
