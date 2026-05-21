@@ -1,8 +1,9 @@
 import type { BlockName } from '@core/block';
-import { mergeRegister } from '@lexical/utils';
+import { $dfsIterator, mergeRegister } from '@lexical/utils';
 import { $getId, type NodeIdMappings } from '@lexical-core';
 import {
   $getNodeByKey,
+  $getRoot,
   $getSelection,
   $isRangeSelection,
   type BaseSelection,
@@ -199,6 +200,34 @@ type LocationPluginProps = {
   };
 };
 
+/**
+ * Resolve a node id to its current node key. The cached id→key mapping can be
+ * stale at the moment these commands are dispatched (e.g. right after document
+ * load or a collab reconcile, before nodeIdPlugin's transforms have caught up),
+ * so when the cached lookup misses we scan the live editor state and refresh
+ * the cache.
+ */
+function $resolveNodeKeyForId(
+  id: string,
+  mapping: NodeIdMappings
+): NodeKey | null {
+  const cachedKey = mapping.idToNodeKeyMap.get(id);
+  if (cachedKey !== undefined && $getNodeByKey(cachedKey) !== null) {
+    return cachedKey;
+  }
+
+  for (const { node } of $dfsIterator($getRoot())) {
+    if ($getId(node) === id) {
+      const key = node.getKey();
+      mapping.idToNodeKeyMap.set(id, key);
+      mapping.nodeKeyToIdMap.set(key, id);
+      return key;
+    }
+  }
+
+  return null;
+}
+
 function registerLocationPlugin(
   editor: LexicalEditor,
   props: LocationPluginProps
@@ -216,8 +245,10 @@ function registerLocationPlugin(
           return true;
         }
 
-        const focusNodeKey = props.mapping.idToNodeKeyMap.get(payload.focus.id);
-
+        const focusNodeKey = $resolveNodeKeyForId(
+          payload.focus.id,
+          props.mapping
+        );
         if (!focusNodeKey) return false;
         const focusNode = $getNodeByKey(focusNodeKey);
         if (!focusNode) return false;
@@ -245,11 +276,8 @@ function registerLocationPlugin(
     editor.registerCommand(
       GO_TO_NODE_ID_COMMAND,
       (id) => {
-        const nodeKey = props.mapping.idToNodeKeyMap.get(id);
-        if (nodeKey === undefined) return false;
-
-        const node = $getNodeByKey(nodeKey);
-        if (node === undefined) return false;
+        const nodeKey = $resolveNodeKeyForId(id, props.mapping);
+        if (nodeKey === null) return false;
 
         const elem = editor.getElementByKey(nodeKey);
         if (elem === null) return false;
