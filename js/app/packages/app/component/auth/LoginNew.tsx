@@ -99,8 +99,8 @@ function ProviderButton(props: {
         }
       }}
       class={cn(
-        'flex items-center w-full px-4 py-3 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
-        hasLeading() ? 'gap-3' : 'justify-center gap-2',
+        'flex items-center justify-center w-full px-4 py-3 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
+        hasLeading() ? 'gap-3' : 'gap-2',
         isPrimary()
           ? 'bg-ink text-surface outline-2 outline-transparent hover:outline-accent active:outline-accent disabled:bg-ink/30 disabled:text-surface/70 disabled:cursor-not-allowed disabled:hover:outline-transparent'
           : 'bg-surface text-ink border border-edge hover:border-edge hover:bg-hover/50 disabled:opacity-50 disabled:cursor-not-allowed'
@@ -111,7 +111,7 @@ function ProviderButton(props: {
       <Show when={props.icon}>
         <span class="shrink-0 inline-flex">{props.icon}</span>
       </Show>
-      <span class={cn(hasLeading() && 'flex-1 text-left')}>{props.label}</span>
+      <span>{props.label}</span>
       <Show when={props.trailingIcon}>
         <span class="shrink-0 inline-flex">{props.trailingIcon}</span>
       </Show>
@@ -237,6 +237,9 @@ function EmailFormNew(props: { setStage: (next: Stage) => void }) {
       noValidate={false}
       class="flex flex-col gap-3"
     >
+      <p class="text-xs text-ink-muted leading-snug">
+        We’ll send a one-time code to verify.
+      </p>
       <FormInput
         id="email"
         type="email"
@@ -352,9 +355,9 @@ function VerifyFormNew(props: { setStage: (next: Stage) => void }) {
       class="flex flex-col gap-3"
     >
       <input type="hidden" name="email" value={email() ?? ''} />
-      <p class="text-xs text-ink-muted text-center leading-snug">
-        Sent to{' '}
-        <span class="text-ink font-medium break-all">{email()}</span>
+      <p class="text-xs text-ink-muted leading-snug">
+        Enter the 6-digit code we sent to{' '}
+        <span class="text-ink font-medium break-all">{email()}</span>.
       </p>
       <FormInput
         id="one-time-code"
@@ -431,9 +434,6 @@ export function LoginNew() {
   });
 
   createEffect(() => {
-    if (searchParams.email) {
-      setStage(Stage.Email);
-    }
     // token may be an array if the redirect URL contained duplicate token params;
     // take the last one as it is the most recently appended by the auth service
     const rawToken = searchParams.token;
@@ -523,17 +523,6 @@ export function LoginNew() {
     }
   };
 
-  const headerSubtitle = () => {
-    switch (stage()) {
-      case Stage.Email:
-        return 'We’ll send a one-time code to verify.';
-      case Stage.Verify:
-        return 'Enter the 6-digit code we sent you.';
-      default:
-        return 'Log in or sign up';
-    }
-  };
-
   return (
     <Show when={!userInfo()?.authenticated} fallback={<PostLoginRedirect />}>
       <div class="flex items-center justify-center size-full p-8 overflow-hidden relative">
@@ -580,44 +569,35 @@ export function LoginNew() {
                 compactHeader() && 'gap-8'
               )}
             >
-              <div class="flex flex-col gap-4">
-                <Show when={compactHeader()}>
-                  <button
-                    type="button"
-                    tabIndex={0}
-                    onClick={onBack}
-                    class="self-start flex items-center gap-1 text-xs text-ink-disabled hover:text-ink transition-colors outline-none rounded-sm focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
-                  >
-                    <ArrowLeft class="size-3" />
-                    Back
-                  </button>
-                </Show>
-                <Show when={!virtualKeyboardVisible()}>
-                  <Show
-                    when={compactHeader()}
-                    fallback={
-                      <div class="flex flex-col items-center text-center gap-2">
-                        <LogoIcon class="shrink-0 text-accent size-10" />
-                        <h1 class="text-3xl font-semibold tracking-tight text-ink leading-[1.05]">
-                          {headerTitle()}
-                        </h1>
-                      </div>
-                    }
-                  >
-                    <div class="flex items-start gap-2">
-                      <IconMail class="shrink-0 text-accent mt-0.5" />
-                      <div class="flex flex-col min-w-0">
-                        <h1 class="text-base font-semibold tracking-tight text-ink leading-[1.05]">
-                          {headerTitle()}
-                        </h1>
-                        <p class="text-xs text-ink-muted leading-snug">
-                          {headerSubtitle()}
-                        </p>
-                      </div>
+              <Show when={!virtualKeyboardVisible()}>
+                <Show
+                  when={compactHeader()}
+                  fallback={
+                    <div class="flex flex-col items-center text-center gap-2">
+                      <LogoIcon class="shrink-0 text-accent size-10" />
+                      <h1 class="text-3xl font-semibold tracking-tight text-ink leading-[1.05]">
+                        {headerTitle()}
+                      </h1>
                     </div>
-                  </Show>
+                  }
+                >
+                  <div class="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-0.5">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      noTouchResize
+                      onClick={onBack}
+                      aria-label="Back"
+                      class="shrink-0"
+                    >
+                      <ArrowLeft />
+                    </Button>
+                    <h1 class="text-lg font-semibold tracking-tight text-ink leading-[1.05] min-w-0">
+                      {headerTitle()}
+                    </h1>
+                  </div>
                 </Show>
-              </div>
+              </Show>
 
               <Stepper
                 step={stepIndex()}
@@ -626,7 +606,7 @@ export function LoginNew() {
                 <Stepper.Step>
                   <div class="flex flex-col gap-4">
                     <LoginPicker setStage={onStageChange} />
-                    <div class="flex gap-2 text-sm">
+                    <div class="flex justify-center gap-2 text-sm">
                       <div>New to Macro?</div>
                       <a
                         class="text-ink underline underline-offset-2 hover:text-accent focus-visible:text-accent"
