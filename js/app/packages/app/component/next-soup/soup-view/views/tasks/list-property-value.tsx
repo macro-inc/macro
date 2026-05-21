@@ -13,7 +13,7 @@ type ListPropertyValueProps = {
 
 /**
  * Property pill for list views. Built from @property primitives,
- * with `@max-[840px]/u-list:hidden` collapsing the label and caret on narrow
+ * with `@max-[840px]/u-list:hidden` collapsing the label on narrow
  * containers so cells reduce to icon-only.
  */
 export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
@@ -80,7 +80,6 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
                 class="flex-1 @max-[840px]/u-list:hidden"
               />
             </Show>
-            <Property.Caret class="@max-[840px]/u-list:hidden" />
           </Property.EditTrigger>
         </Layer>
       </Property.Tooltip>
