@@ -1,8 +1,6 @@
 import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
 import {
-  applyNotificationStatusUpdate,
-  notificationStatusUpdatePayloadSchema,
   optimisticInsertNotification,
   useMarkNotificationsAsDoneMutation,
   useMarkNotificationsAsSeenMutation,
@@ -91,7 +89,6 @@ export type NotificationSource = {
 };
 
 const NOTIFICATION_EVENT_TYPE = 'notification';
-const NOTIFICATION_STATUS_UPDATED_EVENT_TYPE = 'notification_status_updated';
 
 const QUERY_LIMIT = 500;
 
@@ -215,22 +212,6 @@ export function createNotificationSource(
   };
 
   createSocketEffect(ws, (wsData) => {
-    if (wsData.type === NOTIFICATION_STATUS_UPDATED_EVENT_TYPE) {
-      const result = notificationStatusUpdatePayloadSchema.safeParse(
-        wsData.data
-      );
-      if (!result.success) {
-        console.warn(
-          'Malformed notification status update payload',
-          wsData.data,
-          fromZodError(result.error)
-        );
-        return;
-      }
-      applyNotificationStatusUpdate(result.data);
-      return;
-    }
-
     if (wsData.type !== NOTIFICATION_EVENT_TYPE) {
       return;
     }
