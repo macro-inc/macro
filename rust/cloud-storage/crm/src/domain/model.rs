@@ -17,6 +17,11 @@ pub struct CrmCompany {
     pub team_id: uuid::Uuid,
     /// Whether email sync is enabled for this company
     pub email_sync: bool,
+    /// Whether the company is hidden from CRM listings for the owning
+    /// team. Display-only opt-out; setting it to `true` also forces
+    /// `email_sync = false` (see
+    /// [`crate::domain::service::CrmService::set_company_hidden`]).
+    pub hidden: bool,
     /// When the company was created
     pub created_at: DateTime<Utc>,
     /// All domains associated with this company

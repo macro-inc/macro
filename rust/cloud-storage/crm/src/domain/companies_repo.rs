@@ -173,8 +173,16 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         email_sync: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
-    /// Toggle `crm_companies.hidden` for `(company_id, team_id)`. Returns
-    /// [`CrmError::CompanyNotFoundForTeam`] on a non-matching pair.
+    /// Toggle `crm_companies.hidden` for `(company_id, team_id)`. When
+    /// `hidden = true` this also sets `email_sync = false` and tears
+    /// down the company's `crm_contacts` and `crm_contact_sources` in
+    /// the **same transaction**, holding the same per-`(team, domain)`
+    /// advisory locks [`set_email_sync`] takes. Un-hide (`hidden =
+    /// false`) only flips the flag; `email_sync` is left as-is.
+    /// Returns [`CrmError::CompanyNotFoundForTeam`] on a non-matching
+    /// pair.
+    ///
+    /// [`set_email_sync`]: CompaniesRepository::set_email_sync
     fn set_company_hidden(
         &self,
         team_id: &uuid::Uuid,

@@ -110,13 +110,12 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
     /// Toggle the `hidden` flag on a CRM company for `(company_id,
-    /// team_id)`. Hiding also disables `email_sync`, which cascades to
-    /// clearing the company's contacts and contact sources (see
-    /// [`set_email_sync`]). Un-hiding leaves `email_sync` untouched —
-    /// the team must explicitly re-enable sync. Authorization is the
-    /// caller's responsibility.
-    ///
-    /// [`set_email_sync`]: CrmService::set_email_sync
+    /// team_id)`. Hiding (`true`) also forces `email_sync = false` and
+    /// tears down contacts/sources atomically; see
+    /// [`crate::domain::companies_repo::CompaniesRepository::set_company_hidden`].
+    /// Un-hiding (`false`) leaves `email_sync` as-is — the team must
+    /// re-enable sync explicitly. Authorization is the caller's
+    /// responsibility.
     fn set_company_hidden(
         &self,
         team_id: &uuid::Uuid,
@@ -318,16 +317,6 @@ where
         company_id: &uuid::Uuid,
         hidden: bool,
     ) -> Result<(), CrmError> {
-        // Hiding implies opting out of email sync — disable first so the
-        // existing cascade clears contacts and contact_sources. Two
-        // separate transactions: the hidden flag may briefly be false
-        // while sync is already false, but the inverse (hidden=true and
-        // sync=true) never holds because we commit sync=false first.
-        if hidden {
-            self.companies_repository
-                .set_email_sync(team_id, company_id, false)
-                .await?;
-        }
         self.companies_repository
             .set_company_hidden(team_id, company_id, hidden)
             .await
