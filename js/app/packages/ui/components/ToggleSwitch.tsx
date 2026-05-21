@@ -51,11 +51,6 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
       {...others}
     >
       <KobalteSwitch.Input class="sr-only" />
-      <Show when={local.label != null}>
-        <KobalteSwitch.Label class={cn(local.labelClass)}>
-          {local.label}
-        </KobalteSwitch.Label>
-      </Show>
       <KobalteSwitch.Control class="relative h-4 w-6 rounded-full bg-edge transition-colors duration-100 data-checked:bg-accent">
         <KobalteSwitch.Thumb
           class={cn(
@@ -66,6 +61,11 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
           )}
         />
       </KobalteSwitch.Control>
+      <Show when={local.label != null}>
+        <KobalteSwitch.Label class={cn(local.labelClass)}>
+          {local.label}
+        </KobalteSwitch.Label>
+      </Show>
     </KobalteSwitch>
   );
 };
