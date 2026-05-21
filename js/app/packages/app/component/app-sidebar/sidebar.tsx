@@ -64,6 +64,7 @@ import PlugIcon from '@phosphor/plug.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { debounce } from '@solid-primitives/scheduled';
+import { makePersisted } from '@solid-primitives/storage';
 import { useLocation } from '@solidjs/router';
 import { Button, cn, Dropdown, Hotkey } from '@ui';
 import {
@@ -75,6 +76,10 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import {
+  SidebarPromoCard,
+  SidebarPromoHint,
+} from '@app/component/app-sidebar/sidebar-promo';
 import { Dynamic } from 'solid-js/web';
 
 interface SidebarItem {
@@ -387,6 +392,15 @@ const registerSidebarHotkeys = ({
     });
   }
 };
+
+/** Persisted dismissal for the Premium upgrade promo card. */
+const [premiumCardDismissed, setPremiumCardDismissed] = makePersisted(
+  createSignal<boolean>(false),
+  { name: 'sidebar-premium-card-dismissed' }
+);
+
+/** Session-only signal so a hint shows after dismissal until the user acknowledges or the timer expires. */
+const [premiumHintVisible, setPremiumHintVisible] = createSignal(false);
 
 type SidebarActionButtonProps = {
   icon: Component<{ triggerAnimation?: boolean; class?: string }>;
@@ -925,6 +939,40 @@ export const AppSidebar = (props: AppSidebarProps) => {
       <div class={cn('px-2 w-full', !callCtx?.isInCall() && 'mt-auto')}>
         <hr class="border-transparent mb-2" />
       </div>
+
+      <Show when={!isSlim() && !premiumCardDismissed()}>
+        <div class="w-full px-2 mb-2">
+          <SidebarPromoCard
+            label="Upgrade to Premium"
+            description="Unlock unlimited agents, advanced search, and priority support."
+            onDismiss={() => {
+              setPremiumCardDismissed(true);
+              setPremiumHintVisible(true);
+            }}
+            icon={() => <LogoIcon class="size-4" />}
+            primaryAction={{
+              label: 'Upgrade',
+              onClick: () => openSettingsTab('Account'),
+            }}
+            secondaryAction={{
+              label: 'Later',
+              onClick: () => {
+                setPremiumCardDismissed(true);
+                setPremiumHintVisible(true);
+              },
+            }}
+          />
+        </div>
+      </Show>
+      <Show when={!isSlim() && premiumHintVisible() && premiumCardDismissed()}>
+        <div class="w-full px-2 mb-2">
+          <SidebarPromoHint
+            title="Premium"
+            message="You can upgrade anytime from Account settings."
+            onDone={() => setPremiumHintVisible(false)}
+          />
+        </div>
+      </Show>
 
       <div class="w-full px-2 flex flex-col gap-1 mb-1">
         <Show when={isTabAvailable('Mobile App')}>
