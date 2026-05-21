@@ -71,7 +71,7 @@ export const ENABLE_PDF_MULTISPLIT = resolveFeatureFlag(
 
 export const ENABLE_PROJECT_SHARING = resolveFeatureFlag(
   'ENABLE_PROJECT_SHARING',
-  DEV_MODE_ENV
+  true
 );
 
 export const ENABLE_CANVAS_IMAGES = resolveFeatureFlag(
