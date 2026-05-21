@@ -48,10 +48,23 @@ function createMobileSearchConfig(
   };
 }
 
+/**
+ * How many entries from {@link topUserCandidates} get pinned above the rest
+ * of the mobile mention hits. Mirrors desktop's user bucket without a visual
+ * separator — user mentions are the common case, so we keep the freshest
+ * couple within easy reach even when docs/channels would otherwise out-rank
+ * them in the blended sort.
+ */
+const TOP_USERS = 2;
+
 export function sortMobileMentions(
   items: MentionItem[],
-  query: string
+  query: string,
+  topUserCandidates: MentionItem[] = []
 ): MentionItem[] {
+  const pinned = topUserCandidates.slice(0, TOP_USERS);
+  const pinnedIds = new Set(pinned.map((item) => item.id));
+
   const hasQuery = query.trim().length > 0;
   const search = createFreshSearch<MentionItem>({
     config: createMobileSearchConfig(hasQuery),
@@ -59,5 +72,9 @@ export function sortMobileMentions(
     isDmItem,
     getTimestamp: getMentionTimestamps,
   });
-  return search(items, query).map(({ item }) => item);
+  const rest = search(items, query)
+    .map(({ item }) => item)
+    .filter((item) => !pinnedIds.has(item.id));
+
+  return [...pinned, ...rest];
 }
