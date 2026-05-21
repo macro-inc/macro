@@ -222,23 +222,18 @@ pub struct ListEntities {
 
 impl ListEntities {
     pub(super) fn entity_filter_ast(&self) -> EntityFilterAst {
-        let mut ast = EntityFilterAst {
+        let ast = EntityFilterAst {
             document_filter: self.document_filter.clone(),
             project_filter: self.project_filter.clone(),
             chat_filter: self.chat_filter.clone(),
-            email_filter: self.email_filter.clone(),
+            email_filter: match self.email_preset {
+                Some(preset) => Some(Arc::new(preset.filter())),
+                None => self.email_filter.clone(),
+            },
             channel_filter: self.channel_filter.clone(),
             call_filter: self.call_filter.clone(),
             properties_filter: self.properties_filter.clone(),
         };
-
-        if let Some(email_preset) = self.email_preset {
-            let preset_filter = email_preset.filter();
-            ast.email_filter = Some(Arc::new(match ast.email_filter.take() {
-                Some(existing) => Expr::and((*existing).clone(), preset_filter),
-                None => preset_filter,
-            }));
-        }
 
         self.apply_include_types_to_ast(ast)
     }
