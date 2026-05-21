@@ -398,9 +398,11 @@ function VerifyFormNew(props: { setStage: (next: Stage) => void }) {
 }
 
 export function LoginNew() {
-  const [stage, setStage] = createSignal(Stage.None);
-  const userInfo = useUserInfo();
   const [searchParams] = useSearchParams();
+  const [stage, setStage] = createSignal(
+    searchParams.email ? Stage.Email : Stage.None
+  );
+  const userInfo = useUserInfo();
   const analytics = useAnalytics();
 
   onMount(() => {
@@ -436,10 +438,8 @@ export function LoginNew() {
       ? rawToken[rawToken.length - 1]
       : rawToken;
     if (session_code && typeof session_code === 'string') {
-      console.log({ session_code });
       unsetTokenPromise();
       authServiceClient.sessionLogin({ session_code }).then(async (res) => {
-        console.log({ res });
         if (res.isOk()) {
           await invalidateAllAfterLogin();
           await initEmailLink().match(
