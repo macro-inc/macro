@@ -1,5 +1,5 @@
-import { cn } from '@ui';
-import { createSignal, type JSX, splitProps } from 'solid-js';
+import { cn, Dropdown } from '@ui';
+import { createSignal, type JSX, onMount, splitProps } from 'solid-js';
 import type { Property } from '../types';
 import {
   type PropertyEditFn,
@@ -32,6 +32,13 @@ export function Root(props: PropertyRootProps) {
   const [editorAnchor, setEditorAnchor] = createSignal<HTMLElement | undefined>(
     undefined
   );
+  const [portalMount, setPortalMount] = createSignal<HTMLElement | undefined>();
+
+  let rootEl!: HTMLDivElement;
+  onMount(() => {
+    const scoped = rootEl.closest<HTMLElement>('.portal-scope');
+    if (scoped) setPortalMount(scoped);
+  });
 
   const value: PropertyRootContextValue = {
     property: () => local.property,
@@ -46,28 +53,36 @@ export function Root(props: PropertyRootProps) {
       return local.onRefresh;
     },
     editorOpen,
-    editorAnchor,
     openEditor: (anchor) => {
-      setEditorAnchor(() => anchor);
+      if (anchor) setEditorAnchor(() => anchor);
       setEditorOpen(true);
     },
     closeEditor: () => {
       setEditorOpen(false);
-      setEditorAnchor(() => undefined);
     },
+    portalMount,
   };
 
   return (
     <PropertyRootContext.Provider value={value}>
-      <div
-        class={cn('property-root', local.class)}
-        data-property
-        data-property-id={local.property.propertyId}
-        data-property-type={local.property.valueType}
-        {...rest}
+      <Dropdown
+        open={editorOpen()}
+        onOpenChange={setEditorOpen}
+        getAnchorRect={() => editorAnchor()?.getBoundingClientRect()}
+        gutter={4}
+        placement="bottom-start"
       >
-        {local.children}
-      </div>
+        <div
+          ref={rootEl}
+          class={cn('property-root', local.class)}
+          data-property
+          data-property-id={local.property.propertyId}
+          data-property-type={local.property.valueType}
+          {...rest}
+        >
+          {local.children}
+        </div>
+      </Dropdown>
     </PropertyRootContext.Provider>
   );
 }

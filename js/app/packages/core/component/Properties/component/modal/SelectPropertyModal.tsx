@@ -1,4 +1,5 @@
 import { useBlockId } from '@core/block';
+import { ENABLE_CREATE_PROPERTY } from '@core/constant/featureFlags';
 import { useListKeyBindings } from '@core/util/useListKeyBindings';
 import PlusIcon from '@phosphor/plus.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
@@ -82,6 +83,8 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
 
   const createIndex = createMemo(() => filteredProperties().length);
 
+  const canCreateProperty = ENABLE_CREATE_PROPERTY;
+
   const addProperty = async (propertyDefinitionId: string) => {
     try {
       await addMutation.mutateAsync({
@@ -130,16 +133,22 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
 
   createEffect(() => {
     const items = filteredProperties();
-    const totalLen = items.length + 1; // +1 for Create row
+    const totalLen = canCreateProperty ? items.length + 1 : items.length; // +1 for Create row if enabled
+    const noop = () => setFocusedIndex(0);
     setKeybindings({
-      next: () => setFocusedIndex((prev) => (prev + 1) % totalLen),
-      previous: () =>
-        setFocusedIndex((prev) => (prev - 1 + totalLen) % totalLen),
+      next:
+        totalLen === 0
+          ? noop
+          : () => setFocusedIndex((prev) => (prev + 1) % totalLen),
+      previous:
+        totalLen === 0
+          ? noop
+          : () => setFocusedIndex((prev) => (prev - 1 + totalLen) % totalLen),
       select: () => {
         const idx = focusedIndex();
-        if (idx >= items.length) {
+        if (canCreateProperty && idx >= items.length) {
           handleCreate();
-        } else {
+        } else if (idx < items.length) {
           addProperty(items[idx].id);
         }
       },
@@ -213,21 +222,23 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                     </button>
                   )}
                 </For>
-                <button
-                  type="button"
-                  id={`select-property-option-${createIndex()}`}
-                  class={cn(
-                    'flex flex-row w-full items-center gap-2 py-1.5 px-2 scroll-my-1',
-                    isFocused(createIndex()) && 'bg-hover'
-                  )}
-                  onClick={handleCreate}
-                  onMouseEnter={() => setFocusedIndex(createIndex())}
-                >
-                  <PlusIcon class="size-4 shrink-0" />
-                  <p class="text-sm font-medium truncate flex-1 text-left">
-                    {createLabel()}
-                  </p>
-                </button>
+                <Show when={canCreateProperty}>
+                  <button
+                    type="button"
+                    id={`select-property-option-${createIndex()}`}
+                    class={cn(
+                      'flex flex-row w-full items-center gap-2 py-1.5 px-2 scroll-my-1',
+                      isFocused(createIndex()) && 'bg-hover'
+                    )}
+                    onClick={handleCreate}
+                    onMouseEnter={() => setFocusedIndex(createIndex())}
+                  >
+                    <PlusIcon class="size-4 shrink-0" />
+                    <p class="text-sm font-medium truncate flex-1 text-left">
+                      {createLabel()}
+                    </p>
+                  </button>
+                </Show>
               </div>
             </Show>
           </div>
