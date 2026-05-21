@@ -906,4 +906,3 @@ async fn test_patch_team_empty_role_updates() {
     assert_eq!(name_calls.len(), 1);
     assert_eq!(name_calls[0], (team_id, Some("New Name".to_string()), None));
 }
-
