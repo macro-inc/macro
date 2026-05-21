@@ -10,7 +10,11 @@ use email::domain::{models::PreviewView, ports::EmailService};
 use filter_ast::Expr;
 use item_filters::{
     SharedEmailFilter,
-    ast::{EntityFilterAst, email::EmailLiteral},
+    ast::{
+        EntityFilterAst, LiteralTree, call::CallLiteral, channel::ChannelLiteral,
+        chat::ChatLiteral, document::DocumentLiteral, email::EmailLiteral, project::ProjectLiteral,
+        properties::PropertiesLiteral,
+    },
 };
 use models_pagination::{SimpleSortMethod, TypeEraseCursor};
 use models_soup::item::SoupItem;
@@ -183,18 +187,25 @@ pub struct ListEntities {
     pub sort_by: SortBy,
 
     #[schemars(
-        description = "Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {\"l\":{\"id\":\"...\"}}."
+        description = "Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {\"l\":{\"id\":\"...\"}}.",
+        with = "Option<serde_json::Value>"
     )]
     #[serde(default, rename = "df")]
-    pub document_filter: Option<serde_json::Value>,
+    pub document_filter: LiteralTree<DocumentLiteral>,
 
-    #[schemars(description = "Full soup AST project filter (pf).")]
+    #[schemars(
+        description = "Full soup AST project filter (pf).",
+        with = "Option<serde_json::Value>"
+    )]
     #[serde(default, rename = "pf")]
-    pub project_filter: Option<serde_json::Value>,
+    pub project_filter: LiteralTree<ProjectLiteral>,
 
-    #[schemars(description = "Full soup AST AI chat filter (cf).")]
+    #[schemars(
+        description = "Full soup AST AI chat filter (cf).",
+        with = "Option<serde_json::Value>"
+    )]
     #[serde(default, rename = "cf")]
-    pub chat_filter: Option<serde_json::Value>,
+    pub chat_filter: LiteralTree<ChatLiteral>,
 
     #[schemars(
         description = "High-level email filter preset. Use \"important\" or \"signal\" for important/signaled inbox emails; this expands to the email AST {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]} and defaults results to emails if includeTypes is omitted."
@@ -203,22 +214,32 @@ pub struct ListEntities {
     pub email_preset: Option<EmailPreset>,
 
     #[schemars(
-        description = "Advanced full soup AST email filter (ef). Prefer emailPreset for common requests. Signal/important emails use {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]}."
+        description = "Advanced full soup AST email filter (ef). Prefer emailPreset for common requests. Signal/important emails use {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]}.",
+        with = "Option<serde_json::Value>"
     )]
     #[serde(default, rename = "ef")]
-    pub email_filter: Option<serde_json::Value>,
+    pub email_filter: LiteralTree<EmailLiteral>,
 
-    #[schemars(description = "Full soup AST channel filter (chanf).")]
+    #[schemars(
+        description = "Full soup AST channel filter (chanf).",
+        with = "Option<serde_json::Value>"
+    )]
     #[serde(default, rename = "chanf")]
-    pub channel_filter: Option<serde_json::Value>,
+    pub channel_filter: LiteralTree<ChannelLiteral>,
 
-    #[schemars(description = "Full soup AST call filter (callf).")]
+    #[schemars(
+        description = "Full soup AST call filter (callf).",
+        with = "Option<serde_json::Value>"
+    )]
     #[serde(default, rename = "callf")]
-    pub call_filter: Option<serde_json::Value>,
+    pub call_filter: LiteralTree<CallLiteral>,
 
-    #[schemars(description = "Full soup AST property filter (propf).")]
+    #[schemars(
+        description = "Full soup AST property filter (propf).",
+        with = "Option<serde_json::Value>"
+    )]
     #[serde(default, rename = "propf")]
-    pub properties_filter: Option<serde_json::Value>,
+    pub properties_filter: LiteralTree<PropertiesLiteral>,
 
     #[schemars(
         description = "Email view to use for email results: inbox (default), sent, drafts, starred, all, important, other, or user:<label>."
@@ -240,60 +261,26 @@ pub struct ListEntities {
 }
 
 impl ListEntities {
-    pub(super) fn entity_filter_ast(&self) -> ToolResult<EntityFilterAst> {
-        let mut map = serde_json::Map::new();
-        if let Some(value) = &self.document_filter {
-            map.insert("df".to_string(), value.clone());
-        }
-        if let Some(value) = &self.project_filter {
-            map.insert("pf".to_string(), value.clone());
-        }
-        if let Some(value) = &self.chat_filter {
-            map.insert("cf".to_string(), value.clone());
-        }
-        if let Some(value) = &self.email_filter {
-            map.insert("ef".to_string(), value.clone());
-        }
-        if let Some(value) = &self.channel_filter {
-            map.insert("chanf".to_string(), value.clone());
-        }
-        if let Some(value) = &self.call_filter {
-            map.insert("callf".to_string(), value.clone());
-        }
-        if let Some(value) = &self.properties_filter {
-            map.insert("propf".to_string(), value.clone());
-        }
-
-        let mut ast: EntityFilterAst = serde_json::from_value(serde_json::Value::Object(map))
-            .map_err(|e| ToolCallError {
-                description: format!("Invalid soup AST filter: {e}"),
-                internal_error: e.into(),
-            })?;
+    pub(super) fn entity_filter_ast(&self) -> EntityFilterAst {
+        let mut email_filter = self.email_filter.clone();
 
         if let Some(email_preset) = self.email_preset {
             let preset_filter = email_preset.filter();
-            ast.email_filter = Some(Arc::new(match ast.email_filter.take() {
-                Some(existing) => {
-                    let existing = match Arc::try_unwrap(existing) {
-                        Ok(existing) => existing,
-                        Err(existing) => serde_json::from_value(
-                            serde_json::to_value(&*existing).map_err(|e| ToolCallError {
-                                description: format!("Failed to clone existing email AST: {e}"),
-                                internal_error: e.into(),
-                            })?,
-                        )
-                        .map_err(|e| ToolCallError {
-                            description: format!("Failed to clone existing email AST: {e}"),
-                            internal_error: e.into(),
-                        })?,
-                    };
-                    Expr::and(existing, preset_filter)
-                }
+            email_filter = Some(Arc::new(match email_filter {
+                Some(existing) => Expr::and((*existing).clone(), preset_filter),
                 None => preset_filter,
             }));
         }
 
-        Ok(ast)
+        EntityFilterAst {
+            document_filter: self.document_filter.clone(),
+            project_filter: self.project_filter.clone(),
+            chat_filter: self.chat_filter.clone(),
+            email_filter,
+            channel_filter: self.channel_filter.clone(),
+            call_filter: self.call_filter.clone(),
+            properties_filter: self.properties_filter.clone(),
+        }
     }
 
     pub(super) fn email_view(&self) -> ToolResult<PreviewView> {
@@ -335,7 +322,7 @@ where
             .sort_method
             .map(SimpleSortMethod::from)
             .unwrap_or_else(|| SimpleSortMethod::from(self.sort_by));
-        let filters = self.entity_filter_ast()?;
+        let filters = self.entity_filter_ast();
         let email_preview_view = self.email_view()?;
         let limit = self
             .limit

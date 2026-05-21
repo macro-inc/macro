@@ -3,6 +3,7 @@ use super::list_entities::build_summary;
 use super::*;
 use ai::generate_tool_input_schema;
 use ai::tool::types::tool_object::validate_tool_schema;
+use non_empty::IsEmpty;
 use uuid::Uuid;
 
 #[test]
@@ -50,7 +51,7 @@ fn test_full_ast_input_deserializes() {
     let list: ListEntities = serde_json::from_value(input).unwrap();
     assert_eq!(list.limit, Some(100));
     assert!(matches!(list.sort_method, Some(ToolSoupSort::UpdatedAt)));
-    assert!(list.entity_filter_ast().is_ok());
+    assert!(!list.entity_filter_ast().is_empty());
     assert_eq!(
         list.email_view().unwrap(),
         email::domain::models::PreviewView::default()
@@ -64,7 +65,7 @@ fn test_email_preset_defaults_to_email_results() {
     }))
     .unwrap();
 
-    assert!(list.entity_filter_ast().unwrap().email_filter.is_some());
+    assert!(list.entity_filter_ast().email_filter.is_some());
     assert_eq!(list.effective_include_types(), Some(vec![ItemType::Email]));
 }
 

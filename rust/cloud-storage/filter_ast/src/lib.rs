@@ -56,7 +56,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ExprFrame<A, B> {
     And(A, A),
     Or(A, A),
@@ -64,7 +64,7 @@ pub enum ExprFrame<A, B> {
     Literal(B),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Expr<B> {
     #[serde(rename = "&")]
     And(Box<Self>, Box<Self>),
