@@ -181,6 +181,25 @@ describe('notification realtime status updates', () => {
     expect(notifications[1].viewed_at).toBe(null);
   });
 
+  it('handles legacy untagged patch/delete updates', () => {
+    const n1 = createMockNotification({ id: 'n1', viewed_at: null });
+    const n2 = createMockNotification({ id: 'n2' });
+    const n3 = createMockNotification({ id: 'n3' });
+    seedQueryCache([createMockNotificationPage([n1, n2, n3])]);
+
+    applyNotificationStatusUpdate({
+      type: 'notification_status_updated',
+      updates: [
+        { id: 'n1', done: false, viewed_at: '2024-01-01T00:00:00.000Z', updated_at: '2024-01-01T00:00:01.000Z' },
+        { id: 'n2' },
+      ],
+    });
+
+    const notifications = getNotificationsFromCache();
+    expect(notifications.map((n) => n.id)).toEqual(['n1', 'n3']);
+    expect(notifications[0].viewed_at).toBe('2024-01-01T00:00:00.000Z');
+  });
+
   it('removes deleted and done notifications from the user cache', () => {
     const n1 = createMockNotification({ id: 'n1' });
     const n2 = createMockNotification({ id: 'n2' });
