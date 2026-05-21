@@ -108,6 +108,32 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         company_id: &uuid::Uuid,
         email_sync: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Toggle the `hidden` flag on a CRM company for `(company_id,
+    /// team_id)`. Hiding also disables `email_sync`, which cascades to
+    /// clearing the company's contacts and contact sources (see
+    /// [`set_email_sync`]). Un-hiding leaves `email_sync` untouched —
+    /// the team must explicitly re-enable sync. Authorization is the
+    /// caller's responsibility.
+    ///
+    /// [`set_email_sync`]: CrmService::set_email_sync
+    fn set_company_hidden(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        hidden: bool,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Toggle the `hidden` flag on a CRM contact, scoped to `team_id`
+    /// via the contact's company. Hiding is a display-only opt-out and
+    /// does not affect populate/depopulate. Authorization is the
+    /// caller's responsibility.
+    fn set_contact_hidden(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        hidden: bool,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
 }
 
 /// Implementation of [`CrmService`] backed by a [`CompaniesRepository`]
@@ -282,6 +308,40 @@ where
     ) -> Result<(), CrmError> {
         self.companies_repository
             .set_email_sync(team_id, company_id, email_sync)
+            .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn set_company_hidden(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        hidden: bool,
+    ) -> Result<(), CrmError> {
+        // Hiding implies opting out of email sync — disable first so the
+        // existing cascade clears contacts and contact_sources. Two
+        // separate transactions: the hidden flag may briefly be false
+        // while sync is already false, but the inverse (hidden=true and
+        // sync=true) never holds because we commit sync=false first.
+        if hidden {
+            self.companies_repository
+                .set_email_sync(team_id, company_id, false)
+                .await?;
+        }
+        self.companies_repository
+            .set_company_hidden(team_id, company_id, hidden)
+            .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn set_contact_hidden(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        hidden: bool,
+    ) -> Result<(), CrmError> {
+        self.companies_repository
+            .set_contact_hidden(team_id, contact_id, hidden)
             .await
     }
 }

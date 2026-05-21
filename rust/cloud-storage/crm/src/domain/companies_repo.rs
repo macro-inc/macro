@@ -172,4 +172,24 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         company_id: &uuid::Uuid,
         email_sync: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Toggle `crm_companies.hidden` for `(company_id, team_id)`. Returns
+    /// [`CrmError::CompanyNotFoundForTeam`] on a non-matching pair.
+    fn set_company_hidden(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        hidden: bool,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Toggle `crm_contacts.hidden` for `contact_id`, scoped to
+    /// `team_id` via the contact's company. Returns
+    /// [`CrmError::ContactNotFoundForTeam`] when the contact does not
+    /// exist or belongs to another team.
+    fn set_contact_hidden(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        hidden: bool,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
 }

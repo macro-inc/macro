@@ -633,6 +633,70 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn set_company_hidden(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        hidden: bool,
+    ) -> Result<(), CrmError> {
+        // Scoping UPDATE on both id AND team_id rejects cross-team callers as NotFound.
+        let updated = sqlx::query_scalar!(
+            r#"
+            UPDATE crm_companies
+            SET hidden = $3
+            WHERE id = $1 AND team_id = $2
+            RETURNING id
+            "#,
+            company_id,
+            team_id,
+            hidden,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        if updated.is_none() {
+            return Err(CrmError::CompanyNotFoundForTeam);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn set_contact_hidden(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        hidden: bool,
+    ) -> Result<(), CrmError> {
+        // Scope to team via the contact's company. A contact owned by a
+        // different team's company won't match and we return NotFound.
+        let updated = sqlx::query_scalar!(
+            r#"
+            UPDATE crm_contacts ct
+            SET hidden = $3
+            FROM crm_companies co
+            WHERE ct.id = $1
+              AND ct.company_id = co.id
+              AND co.team_id = $2
+            RETURNING ct.id
+            "#,
+            contact_id,
+            team_id,
+            hidden,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        if updated.is_none() {
+            return Err(CrmError::ContactNotFoundForTeam);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_id_for_user(&self, macro_id: &str) -> Result<Option<uuid::Uuid>, CrmError> {
         sqlx::query_scalar!(
             r#"
