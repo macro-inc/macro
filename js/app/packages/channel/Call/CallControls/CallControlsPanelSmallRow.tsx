@@ -50,7 +50,7 @@ export function CallControlsPanelSmallRow(
         props.class
       )}
     >
-      <Dropdown placement="top-start" gutter={4}>
+      <Dropdown placement="top-start">
         <Dropdown.Trigger
           as="button"
           type="button"

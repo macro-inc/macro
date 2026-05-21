@@ -159,7 +159,7 @@ function DropdownTrigger(props: DropdownTriggerProps) {
   );
 }
 
-export const Dropdown = Object.assign((props: ComponentProps<typeof KobalteDropdownMenu>) => (<KobalteDropdownMenu {...props} />), {
+export const Dropdown = Object.assign((props: ComponentProps<typeof KobalteDropdownMenu>) => (<KobalteDropdownMenu gutter={4} {...props} />), {
   RadioGroup: KobalteDropdownMenu.RadioGroup, /* passthrough — pure logical wrapper */
   Separator: KobalteDropdownMenu.Separator, /* passthrough — styled via class at use sites */
   ItemIndicator: DropdownItemIndicator,

@@ -29,7 +29,6 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
       open={props.open}
       onOpenChange={props.onOpenChange}
       placement="bottom-start"
-      gutter={4}
     >
       <Tooltip label="Sort" hotkey={TOKENS.soup.sort}>
         <Dropdown.Trigger depth={2} class="bg-surface">

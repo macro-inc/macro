@@ -462,7 +462,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                 <label class="block text-xs font-medium text-ink mb-1">
                   Data Type
                 </label>
-                <Dropdown gutter={4}>
+                <Dropdown>
                   <Dropdown.Trigger class="w-full p-1.5 border border-edge-muted bg-surface text-sm text-ink text-left flex items-center gap-2 hover:bg-hover rounded-sm justify-between">
                     <span class="truncate">{selectedDataTypeLabel()}</span>
                     <CaretDownIcon class="size-3 text-ink-muted shrink-0" />

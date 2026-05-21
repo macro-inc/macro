@@ -201,7 +201,7 @@ const FilterChip = (props: {
             </span>
           }
         >
-          <Dropdown open={open()} onOpenChange={setOpen} gutter={4}>
+          <Dropdown open={open()} onOpenChange={setOpen}>
             <Dropdown.Trigger
               variant="ghost"
               class="inline-flex items-center gap-1.5 px-2 leading-none not-disabled:hover:bg-ink/10 not-disabled:active:bg-ink/12"
