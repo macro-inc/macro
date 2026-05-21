@@ -2,7 +2,6 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import { LoadingBlock } from '@core/component/LoadingBlock';
-import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useEmailLinks } from '@core/email-link';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -28,7 +27,7 @@ import {
   useSearchParams,
   useSubmission,
 } from '@solidjs/router';
-import { Button, cn, Surface } from '@ui';
+import { Button, cn } from '@ui';
 import { Stepper } from '@ui/components/Stepper';
 import { detect } from 'detect-browser';
 import {
@@ -319,7 +318,6 @@ function VerifyFormNew(props: {
   setStage: (next: Stage) => void;
   onBack: () => void;
 }) {
-  const [code, setCode] = createSignal('');
   const [resendError, setResendError] = createSignal<string>();
   const [showResendCode, setShowResendCode] = createSignal(false);
   const [resendTimer, setResendTimer] = createSignal(RESEND_TIMER);
@@ -405,7 +403,6 @@ function VerifyFormNew(props: {
           class="pr-20"
           onInput={(e) => {
             const value = e.currentTarget.value;
-            setCode(value);
             if (value.length === 6) {
               const formData = new FormData(formEl);
               formData.set('email', email());
@@ -555,9 +552,6 @@ export function LoginNew() {
       setStage(Stage.None);
     }
   };
-
-  const compactHeader = () =>
-    stage() === Stage.Email || stage() === Stage.Verify;
 
   const headerTitle = createMemo(() => {
     switch (stage()) {
