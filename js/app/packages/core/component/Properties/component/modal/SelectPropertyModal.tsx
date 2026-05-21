@@ -134,10 +134,16 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
   createEffect(() => {
     const items = filteredProperties();
     const totalLen = canCreateProperty ? items.length + 1 : items.length; // +1 for Create row if enabled
+    const noop = () => setFocusedIndex(0);
     setKeybindings({
-      next: () => setFocusedIndex((prev) => (prev + 1) % totalLen),
-      previous: () =>
-        setFocusedIndex((prev) => (prev - 1 + totalLen) % totalLen),
+      next:
+        totalLen === 0
+          ? noop
+          : () => setFocusedIndex((prev) => (prev + 1) % totalLen),
+      previous:
+        totalLen === 0
+          ? noop
+          : () => setFocusedIndex((prev) => (prev - 1 + totalLen) % totalLen),
       select: () => {
         const idx = focusedIndex();
         if (canCreateProperty && idx >= items.length) {
