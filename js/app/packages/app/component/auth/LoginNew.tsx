@@ -577,24 +577,25 @@ export function LoginNew() {
                 compactHeader() && 'gap-8'
               )}
             >
-              <Show when={compactHeader()}>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onBack}
-                  class="self-start -ml-2"
+              <div class="flex flex-col gap-4">
+                <Show when={compactHeader()}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onBack}
+                    class="self-start -ml-2"
+                  >
+                    <ArrowLeft />
+                    Back
+                  </Button>
+                </Show>
+                <div
+                  class={cn(
+                    'flex items-start gap-4',
+                    virtualKeyboardVisible() && 'hidden',
+                    !compactHeader() && 'flex-col items-center text-center'
+                  )}
                 >
-                  <ArrowLeft />
-                  Back
-                </Button>
-              </Show>
-              <div
-                class={cn(
-                  'flex items-start gap-4',
-                  virtualKeyboardVisible() && 'hidden',
-                  !compactHeader() && 'flex-col items-center text-center'
-                )}
-              >
                 <LogoIcon
                   class={cn(
                     'shrink-0 text-accent',
@@ -618,6 +619,7 @@ export function LoginNew() {
                   <p class="text-sm text-ink-muted leading-snug">
                     {headerSubtitle()}
                   </p>
+                </div>
                 </div>
               </div>
 
