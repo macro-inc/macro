@@ -1,5 +1,5 @@
-import XIcon from '@phosphor/x.svg';
 import ClockIcon from '@phosphor/clock.svg';
+import XIcon from '@phosphor/x.svg';
 import { Button, cn, Layer } from '@ui';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
