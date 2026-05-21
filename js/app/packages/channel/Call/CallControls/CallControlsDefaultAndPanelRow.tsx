@@ -1,17 +1,11 @@
-import {
-  GroupLabel,
-  MenuGroup,
-  MenuItem,
-  MenuSeparator,
-} from '@core/component/Menu';
 import PhoneDisconnect from '@icon/wide-call-disconnect.svg';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import CheckIcon from '@phosphor/check.svg';
 import Microphone from '@phosphor/microphone.svg';
 import MicrophoneSlash from '@phosphor/microphone-slash.svg';
 import Screencast from '@phosphor/screencast.svg';
 import VideoCamera from '@phosphor/video-camera.svg';
 import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
-import { cn } from '@ui';
+import { cn, Dropdown } from '@ui';
 import { type Accessor, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { BACKGROUND_IMAGES, useCallContext } from '../CallContext';
@@ -94,57 +88,56 @@ function BackgroundEffectSelector() {
   };
 
   return (
-    <DropdownMenu.RadioGroup
-      class="w-full"
+    <Dropdown.RadioGroup
       value={currentEffectValue()}
       onChange={handleChange}
     >
-      <MenuGroup>
-        <GroupLabel>Background</GroupLabel>
-        <MenuItem
-          text="None"
-          selectorType="radio"
-          value="none"
-          groupValue={currentEffectValue()}
-        />
-      </MenuGroup>
-      <MenuGroup>
-        <GroupLabel>Blur</GroupLabel>
-        <MenuItem
-          text="Light"
-          selectorType="radio"
-          value="blur-light"
-          groupValue={currentEffectValue()}
-        />
-        <MenuItem
-          text="Medium"
-          selectorType="radio"
-          value="blur-medium"
-          groupValue={currentEffectValue()}
-        />
-        <MenuItem
-          text="Heavy"
-          selectorType="radio"
-          value="blur-heavy"
-          groupValue={currentEffectValue()}
-        />
-      </MenuGroup>
+      <Dropdown.Group>
+        <Dropdown.GroupLabel>Background</Dropdown.GroupLabel>
+        <Dropdown.RadioItem value="none">
+          <span class="flex-1 truncate">None</span>
+          <Dropdown.ItemIndicator>
+            <CheckIcon class="size-3.5 text-accent" />
+          </Dropdown.ItemIndicator>
+        </Dropdown.RadioItem>
+      </Dropdown.Group>
+      <Dropdown.Group>
+        <Dropdown.GroupLabel>Blur</Dropdown.GroupLabel>
+        <Dropdown.RadioItem value="blur-light">
+          <span class="flex-1 truncate">Light</span>
+          <Dropdown.ItemIndicator>
+            <CheckIcon class="size-3.5 text-accent" />
+          </Dropdown.ItemIndicator>
+        </Dropdown.RadioItem>
+        <Dropdown.RadioItem value="blur-medium">
+          <span class="flex-1 truncate">Medium</span>
+          <Dropdown.ItemIndicator>
+            <CheckIcon class="size-3.5 text-accent" />
+          </Dropdown.ItemIndicator>
+        </Dropdown.RadioItem>
+        <Dropdown.RadioItem value="blur-heavy">
+          <span class="flex-1 truncate">Heavy</span>
+          <Dropdown.ItemIndicator>
+            <CheckIcon class="size-3.5 text-accent" />
+          </Dropdown.ItemIndicator>
+        </Dropdown.RadioItem>
+      </Dropdown.Group>
       <Show when={BACKGROUND_IMAGES.length}>
-        <MenuGroup>
-          <GroupLabel>Image</GroupLabel>
+        <Dropdown.Group>
+          <Dropdown.GroupLabel>Image</Dropdown.GroupLabel>
           <For each={BACKGROUND_IMAGES}>
             {(bg) => (
-              <MenuItem
-                text={bg.label}
-                selectorType="radio"
-                value={`image-${bg.id}`}
-                groupValue={currentEffectValue()}
-              />
+              <Dropdown.RadioItem value={`image-${bg.id}`}>
+                <span class="flex-1 truncate">{bg.label}</span>
+                <Dropdown.ItemIndicator>
+                  <CheckIcon class="size-3.5 text-accent" />
+                </Dropdown.ItemIndicator>
+              </Dropdown.RadioItem>
             )}
           </For>
-        </MenuGroup>
+        </Dropdown.Group>
       </Show>
-    </DropdownMenu.RadioGroup>
+    </Dropdown.RadioGroup>
   );
 }
 
@@ -186,7 +179,6 @@ export function CallControlsDefaultAndPanelRow(
               onSelect={(id) => callCtx.switchAudioInput(id)}
             />
             <Show when={callCtx.audioOutputDevices().length > 0}>
-              <MenuSeparator />
               <CallDeviceList
                 label="Speaker"
                 devices={callCtx.audioOutputDevices()}
@@ -194,24 +186,19 @@ export function CallControlsDefaultAndPanelRow(
                 onSelect={(id) => callCtx.switchAudioOutput(id)}
               />
             </Show>
-            <MenuSeparator />
-            <MenuGroup>
-              <GroupLabel>Audio processing</GroupLabel>
-              <MenuItem
-                text={
-                  <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
-                    <span>Noise suppression</span>
-                    <span class="text-xs text-ink-muted">
-                      {noiseSuppressionModeLabel()}
-                    </span>
-                  </div>
-                }
-                selectorType="checkbox"
+            <Dropdown.Group>
+              <Dropdown.GroupLabel>Audio processing</Dropdown.GroupLabel>
+              <Dropdown.CheckboxItem
                 checked={callCtx.isNoiseSuppressed()}
                 closeOnSelect={false}
-                onClick={() => void callCtx.toggleNoiseSuppression()}
-              />
-            </MenuGroup>
+                onChange={() => void callCtx.toggleNoiseSuppression()}
+              >
+                <span class="flex-1 truncate">Noise suppression</span>
+                <span class="text-xs text-ink-muted">
+                  {noiseSuppressionModeLabel()}
+                </span>
+              </Dropdown.CheckboxItem>
+            </Dropdown.Group>
           </>
         )}
       >
@@ -237,7 +224,6 @@ export function CallControlsDefaultAndPanelRow(
               onSelect={(id) => callCtx.switchVideoInput(id)}
             />
             <Show when={isBackgroundBlurSupported()}>
-              <MenuSeparator />
               <BackgroundEffectSelector />
             </Show>
           </>

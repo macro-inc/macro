@@ -19,7 +19,7 @@ import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { InCallPanel } from '@channel/Call';
 import { useCallContextOptional } from '@channel/Call/CallContext';
-import { ContextMenuContent, MenuItem } from '@core/component/Menu';
+import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { UserIcon } from '@core/component/UserIcon';
 import {
   DEV_MODE_ENV,

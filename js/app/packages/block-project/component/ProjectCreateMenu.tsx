@@ -15,10 +15,9 @@ import {
   createMarkdownFile,
   createTask,
 } from '@core/util/create';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import PlusIcon from '@phosphor/plus.svg';
 import { createProject } from '@queries/storage/projects';
-import { Button, cn, Dialog, Layer, Surface } from '@ui';
+import { cn, Dialog, Dropdown, Surface } from '@ui';
 import { type Component, createSignal, For } from 'solid-js';
 
 type MenuItemProps = {
@@ -257,7 +256,7 @@ function MenuItem(props: MenuItemProps) {
   const selectedColor = getIconConfig(props.blockName).foreground;
 
   return (
-    <DropdownMenu.Item
+    <Dropdown.Item
       class={cn(
         'flex justify-between items-center gap-12 px-1.5 py-1 text-sm isolate transition-transform ease-out duration-200 text-ink-extra-muted outline-none data-highlighted:bg-active',
         `data-highlighted:${selectedColor}`
@@ -270,7 +269,7 @@ function MenuItem(props: MenuItemProps) {
         </div>
         <span>{props.label}</span>
       </div>
-    </DropdownMenu.Item>
+    </Dropdown.Item>
   );
 }
 
@@ -292,11 +291,13 @@ function MenuContent(props: { projectId: string }) {
   }));
 
   return (
-    <DropdownMenu.Content class="isolate relative flex flex-col gap-2 bg-surface -mb-1 p-2 border-2 border-accent min-w-max">
-      <For each={items}>
-        {(item, index) => <MenuItem {...item} index={index() + 1} />}
-      </For>
-    </DropdownMenu.Content>
+    <Dropdown.Content class="isolate relative flex flex-col gap-2 -mb-1 p-2 border-2 border-accent min-w-max">
+      <Dropdown.Group class="contents">
+        <For each={items}>
+          {(item, index) => <MenuItem {...item} index={index() + 1} />}
+        </For>
+      </Dropdown.Group>
+    </Dropdown.Content>
   );
 }
 
@@ -333,19 +334,17 @@ export function useProjectCreateTools(
 export function ProjectCreateMenu(props: { id: string }) {
   const [open, setOpen] = createSignal(false);
   return (
-    <DropdownMenu open={open()} onOpenChange={setOpen}>
+    <Dropdown open={open()} onOpenChange={setOpen}>
       <div class="flex items-center">
-        <DropdownMenu.Trigger class="h-min">
-          <Button size="sm" variant={open() ? 'active' : 'base'}>
-            Create
-          </Button>
-        </DropdownMenu.Trigger>
+        <Dropdown.Trigger
+          size="sm"
+          variant={open() ? 'active' : 'base'}
+          class="h-min"
+        >
+          Create
+        </Dropdown.Trigger>
       </div>
-      <DropdownMenu.Portal>
-        <Layer depth={2}>
-          <MenuContent projectId={props.id} />
-        </Layer>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+      <MenuContent projectId={props.id} />
+    </Dropdown>
   );
 }

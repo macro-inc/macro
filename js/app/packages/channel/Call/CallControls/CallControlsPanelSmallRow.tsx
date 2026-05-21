@@ -1,6 +1,4 @@
-import { DropdownMenuContent, MENU_ITEM_CLASS } from '@core/component/Menu';
 import PhoneDisconnect from '@icon/wide-call-disconnect.svg';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import CheckIcon from '@phosphor/check.svg';
 import Info from '@phosphor/info.svg';
 import Microphone from '@phosphor/microphone.svg';
@@ -11,15 +9,10 @@ import VideoCamera from '@phosphor/video-camera.svg';
 import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
 import VideoConference from '@phosphor/video-conference.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
-import { cn, ToggleSwitch, Tooltip } from '@ui';
+import { cn, Dropdown, ToggleSwitch, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { useCallContext } from '../CallContext';
-
-const menuStyles = {
-  item: cn(MENU_ITEM_CLASS, 'hover:bg-hover hover-transition-bg'),
-  groupLabel: cn(MENU_ITEM_CLASS, 'text-xs text-accent'),
-};
 
 const panelSmallIconClass = 'w-4 h-4';
 
@@ -57,8 +50,8 @@ export function CallControlsPanelSmallRow(
         props.class
       )}
     >
-      <DropdownMenu placement="top-start" gutter={4}>
-        <DropdownMenu.Trigger
+      <Dropdown placement="top-start" gutter={4}>
+        <Dropdown.Trigger
           as="button"
           type="button"
           disabled={isConnecting()}
@@ -76,108 +69,89 @@ export function CallControlsPanelSmallRow(
           aria-label="Call options"
         >
           <VideoConference class={panelSmallIconClass} />
-        </DropdownMenu.Trigger>
+        </Dropdown.Trigger>
 
-        <DropdownMenu.Portal>
-          <DropdownMenuContent class="mb-2 z-modal" width="lg">
-            <DropdownMenu.Item
-              class={menuStyles.item}
-              closeOnSelect={false}
-              onSelect={() => void callCtx.toggleAudio()}
-            >
-              <div class="flex min-w-0 flex-1 items-center gap-2">
+        <Dropdown.Content class="mb-2 w-72">
+            <Dropdown.Group>
+              <Dropdown.Item
+                closeOnSelect={false}
+                onSelect={() => void callCtx.toggleAudio()}
+              >
                 <Show
                   when={!callCtx.isAudioMuted()}
                   fallback={<MicrophoneSlash class="size-4 shrink-0" />}
                 >
                   <Microphone class="size-4 shrink-0" />
                 </Show>
-                <span class="min-w-0 flex-1">
+                <span class="flex-1 truncate">
                   {callCtx.isAudioMuted()
                     ? 'Unmute microphone'
                     : 'Mute microphone'}
                 </span>
-              </div>
-            </DropdownMenu.Item>
+              </Dropdown.Item>
+            </Dropdown.Group>
 
-            <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
-
-            <DropdownMenu.Group>
-              <DropdownMenu.GroupLabel class={menuStyles.groupLabel}>
-                Microphone
-              </DropdownMenu.GroupLabel>
-
+            <Dropdown.Group>
+              <Dropdown.GroupLabel>Microphone</Dropdown.GroupLabel>
               <For each={callCtx.audioInputDevices()}>
                 {(device) => (
-                  <DropdownMenu.Item
-                    class={menuStyles.item}
+                  <Dropdown.Item
                     closeOnSelect={false}
                     onSelect={() =>
                       void callCtx.switchAudioInput(device.deviceId)
                     }
                   >
-                    <div class="flex min-w-0 flex-1 items-baseline gap-2">
-                      <span class="min-w-0 flex-1">{device.label}</span>
+                    <span class="flex-1 truncate">{device.label}</span>
+                    <span class="inline-flex w-3 shrink-0 justify-center">
+                      <Show
+                        when={
+                          callCtx.activeAudioInputDeviceId() ===
+                          device.deviceId
+                        }
+                      >
+                        <CheckIcon class="size-3 text-accent" />
+                      </Show>
+                    </span>
+                  </Dropdown.Item>
+                )}
+              </For>
+            </Dropdown.Group>
+
+            <Show when={callCtx.audioOutputDevices().length > 0}>
+              <Dropdown.Group>
+                <Dropdown.GroupLabel>Speaker</Dropdown.GroupLabel>
+                <For each={callCtx.audioOutputDevices()}>
+                  {(device) => (
+                    <Dropdown.Item
+                      closeOnSelect={false}
+                      onSelect={() =>
+                        void callCtx.switchAudioOutput(device.deviceId)
+                      }
+                    >
+                      <span class="flex-1 truncate">{device.label}</span>
                       <span class="inline-flex w-3 shrink-0 justify-center">
                         <Show
                           when={
-                            callCtx.activeAudioInputDeviceId() ===
+                            callCtx.activeAudioOutputDeviceId() ===
                             device.deviceId
                           }
                         >
                           <CheckIcon class="size-3 text-accent" />
                         </Show>
                       </span>
-                    </div>
-                  </DropdownMenu.Item>
-                )}
-              </For>
-            </DropdownMenu.Group>
-
-            <Show when={callCtx.audioOutputDevices().length > 0}>
-              <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
-              <DropdownMenu.Group>
-                <DropdownMenu.GroupLabel class={menuStyles.groupLabel}>
-                  Speaker
-                </DropdownMenu.GroupLabel>
-                <For each={callCtx.audioOutputDevices()}>
-                  {(device) => (
-                    <DropdownMenu.Item
-                      class={menuStyles.item}
-                      closeOnSelect={false}
-                      onSelect={() =>
-                        void callCtx.switchAudioOutput(device.deviceId)
-                      }
-                    >
-                      <div class="flex min-w-0 flex-1 items-baseline gap-2">
-                        <span class="min-w-0 flex-1">{device.label}</span>
-                        <span class="inline-flex w-3 shrink-0 justify-center">
-                          <Show
-                            when={
-                              callCtx.activeAudioOutputDeviceId() ===
-                              device.deviceId
-                            }
-                          >
-                            <CheckIcon class="size-3 text-accent" />
-                          </Show>
-                        </span>
-                      </div>
-                    </DropdownMenu.Item>
+                    </Dropdown.Item>
                   )}
                 </For>
-              </DropdownMenu.Group>
+              </Dropdown.Group>
             </Show>
 
-            <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
-
-            <DropdownMenu.Item
-              class={menuStyles.item}
-              closeOnSelect={false}
-              onSelect={() => void callCtx.toggleNoiseSuppression()}
-            >
-              <div class="flex min-w-0 flex-1 items-center gap-2">
+            <Dropdown.Group>
+              <Dropdown.Item
+                closeOnSelect={false}
+                onSelect={() => void callCtx.toggleNoiseSuppression()}
+              >
                 <Microphone class="size-4 shrink-0" />
-                <span class="min-w-0 flex-1">Noise suppression</span>
+                <span class="flex-1 truncate">Noise suppression</span>
                 <div class="ml-auto flex items-center gap-1.5 shrink-0">
                   <span class="text-xs text-ink-muted">
                     {noiseSuppressionModeLabel()}
@@ -187,91 +161,75 @@ export function CallControlsPanelSmallRow(
                     class="pointer-events-none"
                   />
                 </div>
-              </div>
-            </DropdownMenu.Item>
+              </Dropdown.Item>
+            </Dropdown.Group>
 
-            <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
-
-            <DropdownMenu.Item
-              class={menuStyles.item}
-              closeOnSelect={false}
-              onSelect={() => void callCtx.toggleVideo()}
-            >
-              <div class="flex min-w-0 flex-1 items-center gap-2">
+            <Dropdown.Group>
+              <Dropdown.Item
+                closeOnSelect={false}
+                onSelect={() => void callCtx.toggleVideo()}
+              >
                 <Show
                   when={!callCtx.isVideoMuted()}
                   fallback={<VideoCameraSlash class="size-4 shrink-0" />}
                 >
                   <VideoCamera class="size-4 shrink-0" />
                 </Show>
-                <span class="min-w-0 flex-1">
+                <span class="flex-1 truncate">
                   {callCtx.isVideoMuted()
                     ? 'Turn camera on'
                     : 'Turn camera off'}
                 </span>
-              </div>
-            </DropdownMenu.Item>
+              </Dropdown.Item>
+            </Dropdown.Group>
 
-            <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
-
-            <DropdownMenu.Group class="w-full">
-              <DropdownMenu.GroupLabel class={menuStyles.groupLabel}>
-                Camera
-              </DropdownMenu.GroupLabel>
+            <Dropdown.Group>
+              <Dropdown.GroupLabel>Camera</Dropdown.GroupLabel>
               <For each={callCtx.videoInputDevices()}>
                 {(device) => (
-                  <DropdownMenu.Item
-                    class={menuStyles.item}
+                  <Dropdown.Item
                     closeOnSelect={false}
                     onSelect={() =>
                       void callCtx.switchVideoInput(device.deviceId)
                     }
                   >
-                    <div class="flex min-w-0 flex-1 items-baseline gap-2">
-                      <span class="min-w-0 flex-1">{device.label}</span>
-                      <span class="inline-flex w-3 shrink-0 justify-center">
-                        <Show
-                          when={
-                            callCtx.activeVideoInputDeviceId() ===
-                            device.deviceId
-                          }
-                        >
-                          <CheckIcon class="size-3 text-accent" />
-                        </Show>
-                      </span>
-                    </div>
-                  </DropdownMenu.Item>
+                    <span class="flex-1 truncate">{device.label}</span>
+                    <span class="inline-flex w-3 shrink-0 justify-center">
+                      <Show
+                        when={
+                          callCtx.activeVideoInputDeviceId() ===
+                          device.deviceId
+                        }
+                      >
+                        <CheckIcon class="size-3 text-accent" />
+                      </Show>
+                    </span>
+                  </Dropdown.Item>
                 )}
               </For>
-            </DropdownMenu.Group>
+            </Dropdown.Group>
 
-            <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
-
-            <DropdownMenu.Item
-              class={menuStyles.item}
-              closeOnSelect={false}
-              onSelect={() => void callCtx.toggleScreenShare()}
-            >
-              <div class="flex min-w-0 flex-1 items-center gap-2">
+            <Dropdown.Group>
+              <Dropdown.Item
+                closeOnSelect={false}
+                onSelect={() => void callCtx.toggleScreenShare()}
+              >
                 <Screencast class="size-4 shrink-0" />
-                <span class="min-w-0 flex-1">
+                <span class="flex-1 truncate">
                   {callCtx.isScreenSharing()
                     ? 'Stop sharing screen'
                     : 'Share screen'}
                 </span>
-              </div>
-            </DropdownMenu.Item>
+              </Dropdown.Item>
+            </Dropdown.Group>
 
-            <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
-
-            <DropdownMenu.Item
-              class={menuStyles.item}
-              closeOnSelect={false}
-              onSelect={() => void handleToggleShareWithTeam()}
-            >
-              <div class="flex min-w-0 flex-1 items-center gap-2">
+            <Dropdown.Group>
+              <Dropdown.Item
+                closeOnSelect={false}
+                onSelect={() => void handleToggleShareWithTeam()}
+              >
                 <ShareNetwork class="size-4 shrink-0" />
-                <span class="min-w-0 flex-1">
+                <span class="flex-1 truncate">
                   {callCtx.isSharedWithTeam()
                     ? 'Shared with team'
                     : 'Share with team'}
@@ -288,26 +246,20 @@ export function CallControlsPanelSmallRow(
                     <Info class="size-3 text-ink-subtle" />
                   </Tooltip>
                 </div>
-              </div>
-            </DropdownMenu.Item>
+              </Dropdown.Item>
+            </Dropdown.Group>
 
-            <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
-
-            <DropdownMenu.Item
-              class={cn(
-                MENU_ITEM_CLASS,
-                'text-failure hover:bg-failure/10 hover-transition-bg'
-              )}
-              onSelect={() => void props.onLeave()}
-            >
-              <div class="flex min-w-0 flex-1 items-center gap-2">
+            <Dropdown.Group>
+              <Dropdown.Item
+                class="text-failure hover:bg-failure/10"
+                onSelect={() => void props.onLeave()}
+              >
                 <PhoneDisconnect class="size-4 shrink-0" />
-                <span class="min-w-0 flex-1">Leave call</span>
-              </div>
-            </DropdownMenu.Item>
-          </DropdownMenuContent>
-        </DropdownMenu.Portal>
-      </DropdownMenu>
+                <span class="flex-1 truncate">Leave call</span>
+              </Dropdown.Item>
+            </Dropdown.Group>
+          </Dropdown.Content>
+      </Dropdown>
     </div>
   );
 }

@@ -1,7 +1,6 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import CaretRight from '@phosphor/caret-right.svg?component-solid';
 import CheckIcon from '@phosphor/check.svg?component-solid';
 import { cn, Layer } from '@ui';
@@ -14,17 +13,16 @@ import {
   type ParentProps,
   Show,
   Switch,
-  splitProps,
-  useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { Hotkey } from '../../ui/components/Hotkey';
-import clickOutside from '../directive/clickOutside';
-import { EditingContext } from './Editable';
 
-false && clickOutside;
-
-const _MENU_ITEM_HEIGHT = 28;
+/*
+ * ContextMenu-only abstractions. The DropdownMenu equivalents that used to
+ * live alongside these (in the old `Menu.tsx`) have been retired in favor of
+ * `@ui` `Dropdown`. Right-click menus still use this file because they need
+ * separate behavior + positioning from the click-triggered Dropdown.
+ */
 
 type BaseMenuItemWrapperProps = {
   children: JSX.Element;
@@ -132,49 +130,15 @@ type MenuItemProps =
 export const MENU_ITEM_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1.5 text-base' : 'py-1 pl-2.5 pr-2 text-sm'} font-medium justify-between items-center rounded-md outline-none focus:bg-ink/3 data-[highlighted]:bg-ink/3`;
 
 /**
- * A menu item component that can be used interchangeably within either a ContextMenu or DropdownMenu.
- * Provides consistent styling and behavior for menu items across both menu types.
+ * A context-menu item with consistent styling.
  *
  * Supports three variants:
  * - Regular menu item (with optional icon and chevron)
  * - Checkbox menu item (with checkbox selection)
  * - Radio menu item (with radio button selection)
- *
- * @example Regular menu item
- * ```tsx
- * <MenuItem
- *   text="Open file"
- *   icon={FileIcon}
- *   onClick={() => {}}
- * />
- * ```
- *
- * @example Checkbox menu item
- * ```tsx
- * <MenuItem
-      text={CHANNEL_TYPE_DISPLAY_NAMES[type]}
-      checked={isChannelTypeSelected(type)}
-      selectorType="checkbox"
-      onClick={() => {
-        selectChannelType(type);
-      }}
-    />
- * ```
- *
- * @example Radio menu item
- * ```tsx
- * <MenuItem
- *   text="Light theme"
- *   selectorType="radio"
- *   value="light"
- *   groupValue={currentTheme}
- * />
- * ```
  */
-
 export function MenuItem(props: MenuItemProps) {
   return (
-    // Note: Kobalte's ContextMenu.Item is identical to DropdownMenu.Item. Either can be used inside of the other.
     <MenuItemWrapper
       class={cn(
         MENU_ITEM_CLASS,
@@ -316,27 +280,6 @@ export function GroupLabel(props: { children: JSX.Element }) {
 
 export function MenuSeparator() {
   return <ContextMenu.Separator class="my-1 border-edge border-t w-full" />;
-}
-
-type MenuItemRenameTriggerProps = Omit<GenericMenuItemProps, 'onClick'> & {
-  sideEffect?: () => void;
-};
-
-function _MenuItemRenameTrigger(props: MenuItemRenameTriggerProps) {
-  const [_, setIsRenaming] = useContext(EditingContext);
-  return (
-    <MenuItem
-      text={props.text}
-      icon={props.icon}
-      iconClass={props.iconClass}
-      closeOnSelect={props.closeOnSelect}
-      disabled={props.disabled}
-      onClick={() => {
-        if (props.sideEffect) props.sideEffect();
-        setIsRenaming(true);
-      }}
-    />
-  );
 }
 
 function MobileConditionalOverlay(
@@ -485,42 +428,5 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
         </Layer>
       </Show>
     </MobileConditionalOverlay>
-  );
-}
-
-export function DropdownMenuContent(props: ParentProps<MenuContentProps>) {
-  const [local, rest] = splitProps(props, ['class', 'children', 'width']);
-
-  return (
-    <Show
-      when={props.submenu}
-      fallback={
-        <Layer depth={2}>
-          <DropdownMenu.Content
-            class={cn(
-              MENU_CONTENT_CLASS,
-              local.class,
-              local.width && menuWidths[local.width]
-            )}
-            {...rest}
-          >
-            {local.children}
-          </DropdownMenu.Content>
-        </Layer>
-      }
-    >
-      <Layer depth={2}>
-        <DropdownMenu.SubContent
-          class={cn(
-            MENU_CONTENT_CLASS,
-            local.class,
-            local.width && menuWidths[local.width]
-          )}
-          {...rest}
-        >
-          {local.children}
-        </DropdownMenu.SubContent>
-      </Layer>
-    </Show>
   );
 }

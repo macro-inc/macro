@@ -32,8 +32,10 @@ export type DropdownSubContentProps = ComponentProps<typeof KobalteDropdownMenu.
 export type DropdownContentProps = ComponentProps<typeof KobalteDropdownMenu.Content> & { depth?: SurfaceProps['depth']; mount?: PortalMount; };
 export type DropdownTriggerProps = ComponentProps<typeof KobalteDropdownMenu.Trigger> & ButtonProps;
 export type DropdownItemIndicatorProps = ComponentProps<typeof KobalteDropdownMenu.ItemIndicator>;
+export type DropdownCheckboxItemProps = ComponentProps<typeof KobalteDropdownMenu.CheckboxItem>;
 export type DropdownSubTriggerProps = ComponentProps<typeof KobalteDropdownMenu.SubTrigger>;
 export type DropdownRadioItemProps = ComponentProps<typeof KobalteDropdownMenu.RadioItem>;
+export type DropdownGroupLabelProps = ComponentProps<typeof KobalteDropdownMenu.GroupLabel>;
 export type DropdownGroupProps = ComponentProps<typeof KobalteDropdownMenu.Group>;
 export type DropdownItemProps = ComponentProps<typeof KobalteDropdownMenu.Item>;
 export type DropdownSubProps = ComponentProps<typeof KobalteDropdownMenu.Sub>;
@@ -75,6 +77,26 @@ function DropdownGroup(props: DropdownGroupProps) {
   return (
     <KobalteDropdownMenu.Group
       class={cn('flex flex-col p-1.5 gap-0.5 bg-surface', local.class)}
+      {...rest}
+    />
+  );
+}
+
+function DropdownGroupLabel(props: DropdownGroupLabelProps) {
+  const [local, rest] = splitProps(props, ['class']);
+  return (
+    <KobalteDropdownMenu.GroupLabel
+      class={cn('px-2 h-7 flex items-center text-xs text-ink-extra-muted', local.class)}
+      {...rest}
+    />
+  );
+}
+
+function DropdownCheckboxItem(props: DropdownCheckboxItemProps) {
+  const [local, rest] = splitProps(props, ['class']);
+  return (
+    <KobalteDropdownMenu.CheckboxItem
+      class={cn(ROW_CLASS, local.class)}
       {...rest}
     />
   );
@@ -138,8 +160,10 @@ export const Dropdown = Object.assign((props: ComponentProps<typeof KobalteDropd
   RadioGroup: KobalteDropdownMenu.RadioGroup, /* passthrough — pure logical wrapper */
   Separator: KobalteDropdownMenu.Separator, /* passthrough — styled via class at use sites */
   ItemIndicator: DropdownItemIndicator,
+  CheckboxItem: DropdownCheckboxItem,
   SubContent: DropdownSubContent,
   SubTrigger: DropdownSubTrigger,
+  GroupLabel: DropdownGroupLabel,
   RadioItem: DropdownRadioItem,
   Content: DropdownContent,
   Trigger: DropdownTrigger,
