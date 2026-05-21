@@ -240,35 +240,49 @@ impl ListEntities {
             }));
         }
 
-        self.apply_include_types_to_ast(&mut ast);
-        ast
+        self.apply_include_types_to_ast(ast)
     }
 
-    fn apply_include_types_to_ast(&self, ast: &mut EntityFilterAst) {
+    fn apply_include_types_to_ast(&self, ast: EntityFilterAst) -> EntityFilterAst {
         let Some(include_types) = self
             .effective_include_types()
             .filter(|types| !types.is_empty())
         else {
-            return;
+            return ast;
         };
 
-        if !include_types.contains(&ItemType::Document) {
-            ast.document_filter = Some(Arc::new(Expr::val(DocumentLiteral::Id(Uuid::nil()))));
-        }
-        if !include_types.contains(&ItemType::Project) {
-            ast.project_filter = Some(Arc::new(Expr::val(ProjectLiteral::ProjectId(Uuid::nil()))));
-        }
-        if !include_types.contains(&ItemType::AiChat) {
-            ast.chat_filter = Some(Arc::new(Expr::val(ChatLiteral::ChatId(Uuid::nil()))));
-        }
-        if !include_types.contains(&ItemType::Email) {
-            ast.email_filter = Some(Arc::new(Expr::val(EmailLiteral::ThreadId(Uuid::nil()))));
-        }
-        if !include_types.contains(&ItemType::Channel) {
-            ast.channel_filter = Some(Arc::new(Expr::val(ChannelLiteral::ChannelId(Uuid::nil()))));
-        }
-        if !include_types.contains(&ItemType::Call) {
-            ast.call_filter = Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil()))));
+        EntityFilterAst {
+            document_filter: include_types
+                .contains(&ItemType::Document)
+                .then_some(ast.document_filter)
+                .flatten()
+                .or_else(|| Some(Arc::new(Expr::val(DocumentLiteral::Id(Uuid::nil()))))),
+            project_filter: include_types
+                .contains(&ItemType::Project)
+                .then_some(ast.project_filter)
+                .flatten()
+                .or_else(|| Some(Arc::new(Expr::val(ProjectLiteral::ProjectId(Uuid::nil()))))),
+            chat_filter: include_types
+                .contains(&ItemType::AiChat)
+                .then_some(ast.chat_filter)
+                .flatten()
+                .or_else(|| Some(Arc::new(Expr::val(ChatLiteral::ChatId(Uuid::nil()))))),
+            email_filter: include_types
+                .contains(&ItemType::Email)
+                .then_some(ast.email_filter)
+                .flatten()
+                .or_else(|| Some(Arc::new(Expr::val(EmailLiteral::ThreadId(Uuid::nil()))))),
+            channel_filter: include_types
+                .contains(&ItemType::Channel)
+                .then_some(ast.channel_filter)
+                .flatten()
+                .or_else(|| Some(Arc::new(Expr::val(ChannelLiteral::ChannelId(Uuid::nil()))))),
+            call_filter: include_types
+                .contains(&ItemType::Call)
+                .then_some(ast.call_filter)
+                .flatten()
+                .or_else(|| Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil()))))),
+            properties_filter: ast.properties_filter,
         }
     }
 
