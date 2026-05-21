@@ -77,11 +77,7 @@ export function useSsoLogin(opts?: { signupMode?: boolean }) {
         );
       }
 
-      analytics.track(
-        analyticsEvent,
-        { method: idp_name },
-        analyticsProviders
-      );
+      analytics.track(analyticsEvent, { method: idp_name }, analyticsProviders);
 
       return;
     }
