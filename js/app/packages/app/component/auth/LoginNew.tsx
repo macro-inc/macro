@@ -103,7 +103,7 @@ function ProviderButton(props: {
         'gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
         isPrimary()
           ? 'bg-accent text-surface not-disabled:hover:bg-accent not-disabled:hover:text-surface focus-visible:bg-accent active:outline-accent disabled:bg-ink/30 disabled:text-surface/70 disabled:cursor-not-allowed disabled:hover:outline-transparent'
-          : 'bg-surface text-ink border border-edge hover:border-edge hover:bg-hover/50 disabled:opacity-50 disabled:cursor-not-allowed'
+          : 'bg-surface text-ink border border-edge hover:border-edge disabled:opacity-50 disabled:cursor-not-allowed'
       )}
       autofocus={props.autofocus ? true : undefined}
       tabIndex={0}
@@ -260,15 +260,13 @@ function EmailFormNew(props: {
         trailingIcon={<ArrowRight />}
         disabled={submission.pending}
       />
-      <Button
+      <ProviderButton
         type="button"
-        variant="ghost"
+        variant="secondary"
+        label="Back"
+        icon={<ArrowLeft class="size-4" />}
         onClick={props.onBack}
-        class="w-full rounded-lg"
-      >
-        <ArrowLeft class="size-4" />
-        Back
-      </Button>
+      />
     </form>
   );
 }
@@ -412,7 +410,7 @@ function VerifyFormNew(props: {
         type="submit"
         label="Verify"
         trailingIcon={<ArrowRight />}
-        disabled={submission.pending || code().length !== 6}
+        disabled={submission.pending}
       />
       <Button
         type="button"
