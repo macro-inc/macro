@@ -227,6 +227,17 @@ export function LoginNew() {
     }
   };
 
+  const headerSubtitle = () => {
+    switch (stage()) {
+      case Stage.Email:
+        return 'We’ll send a one-time code to verify.';
+      case Stage.Verify:
+        return 'Enter the 6-digit code we sent you.';
+      default:
+        return 'Sign in to your workspace.';
+    }
+  };
+
   return (
     <Show when={!userInfo()?.authenticated} fallback={<PostLoginRedirect />}>
       <div class="flex items-center justify-center size-full p-8 overflow-hidden relative">
@@ -265,25 +276,35 @@ export function LoginNew() {
             >
               <div
                 class={cn(
-                  'flex flex-col gap-4 items-center',
+                  'flex items-start gap-4',
                   virtualKeyboardVisible() && 'hidden',
-                  compactHeader() && 'flex-row'
+                  !compactHeader() && 'flex-col items-center text-center'
                 )}
               >
                 <LogoIcon
                   class={cn(
-                    'size-8 text-accent',
-                    compactHeader() && 'size-6'
+                    'shrink-0 text-accent',
+                    compactHeader() ? 'size-8 mt-0.5' : 'size-10'
                   )}
                 />
-                <span
+                <div
                   class={cn(
-                    'text-3xl font-bold tracking-wide text-ink',
-                    compactHeader() && 'text-lg'
+                    'flex flex-col min-w-0',
+                    !compactHeader() && 'items-center'
                   )}
                 >
-                  {headerTitle()}
-                </span>
+                  <h1
+                    class={cn(
+                      'font-semibold tracking-tight text-ink leading-[1.05]',
+                      compactHeader() ? 'text-xl' : 'text-3xl'
+                    )}
+                  >
+                    {headerTitle()}
+                  </h1>
+                  <p class="text-sm text-ink-muted leading-snug">
+                    {headerSubtitle()}
+                  </p>
+                </div>
               </div>
 
               <Stepper
