@@ -1,9 +1,8 @@
 use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
 use teams::domain::model::{
-    PatchTeamPlanRequest, PatchTeamRequest, PatchTeamUserRole, Team, TeamCheckoutSessionRequest,
-    TeamInviteDetails, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+    PatchTeamRequest, PatchTeamUserRole, Team, TeamInviteDetails, TeamMember, TeamPlan, TeamRole,
+    TeamWithMembers,
 };
-use teams::inbound::axum_router::create_team_checkout_session::TeamCheckoutSessionResponse;
 use teams::inbound::axum_router::get_team_invites::TeamInvitesResponse as TeamTeamInvitesResponse;
 use teams::inbound::axum_router::get_user_invites::TeamInvitesResponse as UserTeamInvitesResponse;
 use teams::inbound::axum_router::{
@@ -123,13 +122,11 @@ use model::user::{
                 teams::inbound::axum_router::invite_to_team::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::get_team_invites::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::patch_team::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::patch_team_plan::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::reject_invitation::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::get_user_invites::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::get_user_teams::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::remove_user_from_team::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::delete_team_invite::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::create_team_checkout_session::handler::<crate::api::context::TeamServiceType>,
 
                 /// /referral
                 referral::inbound::axum_router::get_referral_code_handler::<crate::api::context::ReferralServiceType>,
@@ -195,12 +192,9 @@ use model::user::{
                         CreateTeamRequest,
                         InviteToTeamRequest,
                         PatchTeamRequest,
-                        PatchTeamPlanRequest,
                         PatchTeamUserRole,
                         TeamTeamInvitesResponse,
                         UserTeamInvitesResponse,
-                        TeamCheckoutSessionRequest,
-                        TeamCheckoutSessionResponse,
 
                         // Mobile welcome email
                         mobile_welcome_email::SendMobileWelcomeEmailRequest,

@@ -241,30 +241,8 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
-    let customer_repo_impl = CustomerRepositoryImpl::new(
-        stripe_client.clone(),
-        teams::outbound::customer_repo::TeamStripePriceIds {
-            idea: config.team_stripe_price_ids.idea,
-            pre_seed: config.team_stripe_price_ids.pre_seed,
-            seed: config.team_stripe_price_ids.seed,
-            series_a: config.team_stripe_price_ids.series_a,
-        },
-        teams::outbound::customer_repo::LegacyStripePriceIds {
-            haiku: config
-                .legacy_stripe_price_ids
-                .stripe_price_id_haiku
-                .to_string(),
-            sonnet: config
-                .legacy_stripe_price_ids
-                .stripe_price_id_sonnet
-                .to_string(),
-            opus: config
-                .legacy_stripe_price_ids
-                .stripe_price_id_opus
-                .to_string(),
-        },
-        config.stripe_price_id.clone(),
-    );
+    let customer_repo_impl =
+        CustomerRepositoryImpl::new(stripe_client.clone(), config.stripe_price_id.clone());
     let team_channels_repo_impl = TeamChannelsRepositoryImpl::new(db.clone());
 
     let notification_ingress_service = Arc::new(notification_ingress_service);

@@ -26,10 +26,10 @@ use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
         CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
-        PatchTeamPlanRequest, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
+        PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
         RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
-        TeamCheckoutError, TeamCheckoutSessionRequest, TeamError, TeamInvite, TeamInviteDetails,
-        TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
+        TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamRole,
+        TeamWithMembers,
     },
     team_repo::{TeamChannelsRepository, TeamMembersService, TeamRepository, TeamService},
 };
@@ -214,11 +214,19 @@ enum GetTeamSubscriptionError {
 }
 
 impl GetTeamSubscriptionError {
-    fn into_team_error(self) -> TeamError {
+    fn into_join_team_error(self) -> JoinTeamError {
         match self {
-            Self::Team(e) => e,
-            Self::Customer(e) => TeamError::StorageLayerError(e.into()),
-            Self::Storage(e) => TeamError::StorageLayerError(e),
+            Self::Team(e) => JoinTeamError::TeamError(e),
+            Self::Customer(e) => JoinTeamError::CustomerError(e),
+            Self::Storage(e) => JoinTeamError::StorageLayerError(e),
+        }
+    }
+
+    fn into_remove_user_from_team_error(self) -> RemoveUserFromTeamError {
+        match self {
+            Self::Team(e) => RemoveUserFromTeamError::TeamError(e),
+            Self::Customer(e) => RemoveUserFromTeamError::CustomerError(e),
+            Self::Storage(e) => RemoveUserFromTeamError::StorageLayerError(e),
         }
     }
 }
@@ -372,23 +380,114 @@ where
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
 
-        self.team_repository
+        let removed_member = self
+            .team_repository
             .remove_user_from_team(&team_id, user_id)
             .await?;
 
-        self.team_channels_repository
+        let subscription_id = match self.get_team_subscription(&team_id).await {
+            Ok(subscription_id) => subscription_id,
+            Err(e) => {
+                self.team_repository
+                    .rollback_remove_user_from_team(&removed_member)
+                    .await
+                    .inspect_err(|rollback_err| {
+                        tracing::error!(
+                            error=?rollback_err,
+                            "unable to rollback removed team member after getting team subscription failed"
+                        );
+                    })
+                    .ok();
+                return Err(e.into_remove_user_from_team_error());
+            }
+        };
+
+        if let Err(e) = self
+            .customer_repository
+            .decrement_seat_count(&subscription_id, 1)
+            .await
+        {
+            self.team_repository
+                .rollback_remove_user_from_team(&removed_member)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error=?rollback_err,
+                        "unable to rollback removed team member after decrementing seat count failed"
+                    );
+                })
+                .ok();
+            return Err(RemoveUserFromTeamError::CustomerError(e));
+        }
+
+        if let Err(e) = self
+            .team_channels_repository
             .remove_team_member_from_channels(&team_id, user_id)
-            .await?;
+            .await
+        {
+            self.customer_repository
+                .increment_seat_count(&subscription_id, 1)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error=?rollback_err,
+                        "unable to rollback customer seat count after removing team member from channels failed"
+                    );
+                })
+                .ok();
+            self.team_repository
+                .rollback_remove_user_from_team(&removed_member)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error=?rollback_err,
+                        "unable to rollback removed team member after removing team member from channels failed"
+                    );
+                })
+                .ok();
+            return Err(RemoveUserFromTeamError::TeamError(e));
+        }
 
         let roles_to_remove = vec![RoleId::TeamSubscriber, RoleId::SubOpus];
+        let roles = non_empty::NonEmpty::new(roles_to_remove.as_slice()).unwrap();
 
-        self.user_roles_and_permissions_service
-            .dangerous_remove_roles_from_user(
-                user_id,
-                &non_empty::NonEmpty::new(roles_to_remove.as_slice()).unwrap(),
-            )
+        if let Err(e) = self
+            .user_roles_and_permissions_service
+            .dangerous_remove_roles_from_user(user_id, &roles)
             .await
-            .map_err(RemoveUserFromTeamError::RemoveRolesFromUserError)?;
+        {
+            self.team_channels_repository
+                .add_team_member_to_channels(&team_id, user_id)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error=?rollback_err,
+                        "unable to rollback team channel membership after removing team member roles failed"
+                    );
+                })
+                .ok();
+            self.customer_repository
+                .increment_seat_count(&subscription_id, 1)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error=?rollback_err,
+                        "unable to rollback customer seat count after removing team member roles failed"
+                    );
+                })
+                .ok();
+            self.team_repository
+                .rollback_remove_user_from_team(&removed_member)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error=?rollback_err,
+                        "unable to rollback removed team member after removing team member roles failed"
+                    );
+                })
+                .ok();
+            return Err(RemoveUserFromTeamError::RemoveRolesFromUserError(e));
+        }
 
         // Best-effort: ask the email service to tear down CRM rows
         // sourced from this user's email link. Log and swallow failures
@@ -515,18 +614,111 @@ where
 
         let team_member = accepted_invite.member.clone();
 
+        let subscription_id = match self.get_team_subscription(&team_member.team_id).await {
+            Ok(subscription_id) => subscription_id,
+            Err(e) => {
+                self.team_repository
+                    .rollback_accept_team_invite(&accepted_invite)
+                    .await
+                    .inspect_err(|rollback_err| {
+                        tracing::error!(
+                            error=?rollback_err,
+                            "unable to rollback accepted team invite after getting team subscription failed"
+                        );
+                    })
+                    .ok();
+                return Err(e.into_join_team_error());
+            }
+        };
+
+        if let Err(e) = self
+            .customer_repository
+            .increment_seat_count(&subscription_id, 1)
+            .await
+        {
+            self.team_repository
+                .rollback_accept_team_invite(&accepted_invite)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error=?rollback_err,
+                        "unable to rollback accepted team invite after incrementing seat count failed"
+                    );
+                })
+                .ok();
+            return Err(JoinTeamError::CustomerError(e));
+        }
+
         // subscribe the user to professional features from the TeamSubscriber role and the role associated with their tier
         let roles_to_add = vec![RoleId::TeamSubscriber, RoleId::SubOpus];
         let roles = non_empty::NonEmpty::new(roles_to_add.as_slice()).unwrap();
 
-        self.user_roles_and_permissions_service
+        if let Err(e) = self
+            .user_roles_and_permissions_service
             .dangerous_upsert_roles_for_user(user_id, roles)
             .await
-            .map_err(JoinTeamError::AddRolesToUserError)?;
+        {
+            self.customer_repository
+                .decrement_seat_count(&subscription_id, 1)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error=?rollback_err,
+                        "unable to rollback customer seat count after adding team member roles failed"
+                    );
+                })
+                .ok();
+            self.team_repository
+                .rollback_accept_team_invite(&accepted_invite)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error=?rollback_err,
+                        "unable to rollback accepted team invite after adding team member roles failed"
+                    );
+                })
+                .ok();
+            return Err(JoinTeamError::AddRolesToUserError(e));
+        }
 
-        self.team_channels_repository
+        if let Err(e) = self
+            .team_channels_repository
             .add_team_member_to_channels(&team_member.team_id, user_id)
-            .await?;
+            .await
+        {
+            let roles = non_empty::NonEmpty::new(roles_to_add.as_slice()).unwrap();
+            self.user_roles_and_permissions_service
+                .dangerous_remove_roles_from_user(user_id, &roles)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error=?rollback_err,
+                        "unable to rollback team member roles after adding team member to channels failed"
+                    );
+                })
+                .ok();
+            self.customer_repository
+                .decrement_seat_count(&subscription_id, 1)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error=?rollback_err,
+                        "unable to rollback customer seat count after adding team member to channels failed"
+                    );
+                })
+                .ok();
+            self.team_repository
+                .rollback_accept_team_invite(&accepted_invite)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error=?rollback_err,
+                        "unable to rollback accepted team invite after adding team member to channels failed"
+                    );
+                })
+                .ok();
+            return Err(JoinTeamError::TeamError(e));
+        }
 
         // Best-effort: ask the email service to seed CRM tables from this
         // user's historical sent mail. Log and swallow failures — the join
@@ -680,114 +872,5 @@ where
             .get_user_permissions(user_id)
             .await
             .map_err(|e| TeamError::StorageLayerError(e.into()))
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn update_team_plan(
-        &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
-        req: &PatchTeamPlanRequest,
-    ) -> Result<(), TeamError> {
-        let team_id =
-            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
-
-        let new_team_plan = req.team_plan;
-
-        // Ensure the user isn't trying to upgrade to growth plan
-        if new_team_plan == TeamPlan::Growth {
-            return Err(TeamError::BadRequest(
-                "cannot upgrade to growth plan automatically".to_string(),
-            ));
-        }
-
-        let team_seat_count = self.team_repository.get_team_seat_count(&team_id).await?;
-
-        let current_team_plan = self.team_repository.get_team_plan(&team_id).await?;
-
-        // Check if plans are equal
-        if let Some(current_team_plan) = current_team_plan
-            && new_team_plan == current_team_plan
-        {
-            return Err(TeamError::BadRequest(
-                "cannot change plan to same plan.".to_string(),
-            ));
-        }
-
-        // Check if the user has the seat capacity to downgrade
-        if team_seat_count > new_team_plan.seat_cap() {
-            return Err(TeamError::BadRequest(
-                "you have too many members to downgrade to this plan".to_string(),
-            ));
-        }
-
-        let subscription_id = match self.get_team_subscription(&team_id).await {
-            Ok(subscription_id) => subscription_id,
-            Err(e) => return Err(e.into_team_error()),
-        };
-
-        // Bump plan in db
-        self.team_repository
-            .patch_team_plan(&team_id, new_team_plan)
-            .await?;
-
-        if let Err(e) = self
-            .customer_repository
-            .update_team_plan(&subscription_id, current_team_plan, new_team_plan)
-            .await
-        {
-            if let Some(team_plan) = current_team_plan {
-                self.team_repository
-                    .patch_team_plan(&team_id, team_plan)
-                    .await?;
-            }
-            return Err(TeamError::StorageLayerError(e.into()));
-        }
-
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn create_checkout_session(
-        &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
-        req: &TeamCheckoutSessionRequest,
-    ) -> Result<String, TeamCheckoutError> {
-        let team_id =
-            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
-
-        let team_plan = self.team_repository.get_team_plan(&team_id).await?;
-
-        if team_plan.is_some() {
-            return Err(TeamCheckoutError::TeamAlreadyHasPlanError);
-        }
-
-        let user_id = entity_access_receipt
-            .get_authenticated_user()
-            .map_err(TeamError::AccessError)?;
-
-        let has_trialed = self.team_repository.has_user_trialed(user_id).await?;
-
-        let stripe_customer_id: stripe::CustomerId =
-            match self.team_repository.get_stripe_customer_id(user_id).await? {
-                Some(customer_id) => customer_id,
-                None => return Err(TeamCheckoutError::MissingCustomerId),
-            };
-
-        // If the user has an active subscription id error out
-        if self
-            .customer_repository
-            .get_subscription_id_for_customer(&stripe_customer_id)
-            .await
-            .is_ok()
-        {
-            return Err(TeamCheckoutError::AlreadySubscribed);
-        }
-
-        let url = self
-            .customer_repository
-            .create_team_checkout_session(&team_id, stripe_customer_id, req, has_trialed)
-            .await?;
-
-        Ok(url)
     }
 }
