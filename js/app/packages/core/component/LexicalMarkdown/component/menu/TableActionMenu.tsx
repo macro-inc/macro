@@ -355,7 +355,7 @@ function ActionMenu({
           </div>
         </Tooltip>
       </Dropdown.Trigger>
-      <Dropdown.Content class="w-44">
+      <Dropdown.Content>
         <Show when={cellMerge && canMergeCells()}>
           <Dropdown.Group>
             <Dropdown.Item onSelect={() => mergeTableCellsAtSelection()}>

@@ -211,7 +211,6 @@ const FilterChip = (props: {
                 hideCategoryLabel={props.hideCategoryLabel}
               />
             </Dropdown.Trigger>
-
             <Dropdown.Content>
               <Dropdown.Group>
                 <For each={props.filter.categoryOptions}>

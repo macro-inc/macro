@@ -618,7 +618,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
         </span>
         <CaretUpIcon class="size-3 text-ink-extra-muted shrink-0 group-data-[slim=true]/sidebar:hidden" />
       </Dropdown.Trigger>
-      <Dropdown.Content depth={3} class="min-w-56">
+      <Dropdown.Content>
         <Dropdown.Group>
           <For each={topItems()}>
             {(item) => (

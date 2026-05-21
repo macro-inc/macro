@@ -114,7 +114,7 @@ function CodeLanguageSelector(props: {
           />
           <span>{LanguageDefinitions[validCurrentLanguage()].label}</span>
         </Dropdown.Trigger>
-        <Dropdown.Content class="w-42">
+        <Dropdown.Content>
           <Dropdown.Group>
             <For
               each={Object.entries(LanguageDefinitions).filter(

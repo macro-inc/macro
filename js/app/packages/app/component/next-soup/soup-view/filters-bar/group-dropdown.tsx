@@ -29,7 +29,7 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
           <span>Group</span>
         </Dropdown.Trigger>
       </Tooltip>
-      <Dropdown.Content class="min-w-35">
+      <Dropdown.Content>
         <Dropdown.Group>
           <For each={props.options}>
             {(option) => (

@@ -72,7 +72,7 @@ export function CallControlButtonWithDropdown(props: {
         >
           <CaretDown class={isSm() ? 'size-2.5 shrink-0' : 'size-3 shrink-0'} />
         </Dropdown.Trigger>
-        <Dropdown.Content class="mb-2 w-72">
+        <Dropdown.Content>
           {props.dropdownContent()}
         </Dropdown.Content>
       </Dropdown>

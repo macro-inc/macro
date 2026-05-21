@@ -71,7 +71,7 @@ export function CallControlsPanelSmallRow(
           <VideoConference class={panelSmallIconClass} />
         </Dropdown.Trigger>
 
-        <Dropdown.Content class="mb-2 w-72">
+        <Dropdown.Content>
           <Dropdown.Group>
             <Dropdown.Item
               closeOnSelect={false}

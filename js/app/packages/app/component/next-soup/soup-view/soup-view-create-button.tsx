@@ -169,7 +169,7 @@ export const SoupViewCreateButton = () => {
         </Show>
         <ChevronDownIcon class="size-2.5" />
       </Dropdown.Trigger>
-      <Dropdown.Content class="min-w-35">
+      <Dropdown.Content>
         <Dropdown.Group>
           <For each={options()}>
             {(item) => (

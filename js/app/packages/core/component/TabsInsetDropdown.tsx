@@ -48,7 +48,7 @@ export const TabsInsetDropdown = (props: TabsInsetDropdownProps) => {
         </span>
         <CaretDown class="size-3 text-ink-extra-muted" />
       </Dropdown.Trigger>
-      <Dropdown.Content depth={local.depth ?? 2} class="min-w-32">
+      <Dropdown.Content>
         <Dropdown.Group>
           <For each={local.list}>
             {(item) => {

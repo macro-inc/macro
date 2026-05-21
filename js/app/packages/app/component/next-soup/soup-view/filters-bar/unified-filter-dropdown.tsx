@@ -795,7 +795,7 @@ export const UnifiedFilterDropdown = () => {
           </Dropdown.Trigger>
         </Tooltip>
 
-        <Dropdown.Content class="min-w-45">
+        <Dropdown.Content>
           <Dropdown.Group>
             <Show
               when={
