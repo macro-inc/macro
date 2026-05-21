@@ -62,18 +62,6 @@ export function SoupFiltersBar() {
     <Show when={!isMobile()}>
       <SplitToolbarLeft>
         <div class="flex items-start gap-2 min-w-0 flex-1">
-          <Tooltip hotkey={TOKENS.unifiedList.togglePreview} label="Preview">
-            <Button
-              onClick={togglePreview}
-              variant="base"
-              size="sm"
-              depth={2}
-              class="bg-surface"
-            >
-              {soup.previewEntity() ? <EyeSlashIcon /> : <EyeIcon />}
-              <span>Preview</span>
-            </Button>
-          </Tooltip>
           <Show when={!isSearchView()}>
             <SoupViewContextSort />
             <SoupViewContextGroup />
@@ -86,6 +74,20 @@ export function SoupFiltersBar() {
             onReplace={replaceFilter}
             onRemove={removeFilter}
           />
+          <div class="ml-auto">
+            <Tooltip hotkey={TOKENS.unifiedList.togglePreview} label="Preview">
+              <Button
+                onClick={togglePreview}
+                variant="base"
+                size="sm"
+                depth={2}
+                class="bg-surface"
+              >
+                {soup.previewEntity() ? <EyeSlashIcon /> : <EyeIcon />}
+                <span>Preview</span>
+              </Button>
+            </Tooltip>
+          </div>
         </div>
       </SplitToolbarLeft>
     </Show>
