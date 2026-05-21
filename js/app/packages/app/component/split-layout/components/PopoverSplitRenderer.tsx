@@ -1,7 +1,7 @@
 import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { Dialog, Panel, Surface } from '@ui';
+import { Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { SplitPanelContext, type SplitPanelContextType } from '../context';

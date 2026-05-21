@@ -2,6 +2,7 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
 import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
 import {
   propertyApiValuesToNormalized,
@@ -29,6 +30,7 @@ import { filterMap } from '@core/util/list';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import ArrowsOutIcon from '@phosphor/arrows-out.svg';
+import PaperclipIcon from '@phosphor/paperclip.svg';
 import SplitIcon from '@phosphor/square-half.svg';
 import XIcon from '@phosphor/x.svg';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
@@ -251,6 +253,19 @@ export function ComposeTask(props: ComposeTaskProps) {
   const [createMore, setCreateMore] = createSignal(false);
   const [errorMessage, setErrorMessage] = createSignal<string>('');
   const [isCreating, setIsCreating] = createSignal(false);
+  let attachInputRef: HTMLInputElement | undefined;
+
+  const handleAttachFiles = async (event: Event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    const editor = bodyEditor();
+    if (!editor || files.length === 0) return;
+    for (const file of files) {
+      const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
+      await addMediaFromFile(editor, file, mediaType);
+    }
+  };
 
   const [propertyValues, setPropertyValues] = createStore<
     Record<string, PropertyApiValues>
@@ -266,7 +281,11 @@ export function ComposeTask(props: ComposeTaskProps) {
   createEffect(() => {
     const currentTitle = title();
     const currentContent = content();
-    const currentProperties = { ...unwrap(propertyValues) };
+    // Deeply read propertyValues so this effect subscribes to any property
+    // change (e.g. setting a due date). unwrap()'d access doesn't subscribe,
+    // so without this the draft only saved when title/content changed.
+    JSON.stringify(propertyValues);
+    const currentProperties = structuredClone(unwrap(propertyValues));
 
     if (hasInitializedFromDraft) {
       hasInitializedFromDraft = false;
@@ -625,7 +644,7 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   return (
     <div
-      class="flex flex-col relative h-full max-h-full min-h-0 p-4 gap-4"
+      class="flex flex-col relative h-full max-h-full min-h-0 p-2 gap-4"
       tabIndex={-1}
       ref={setContainerRef}
     >
@@ -668,10 +687,10 @@ export function ComposeTask(props: ComposeTaskProps) {
         </Show>
       </div>
       <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div class="shrink-0 flex gap-2 items-center">
+        <div class="shrink-0 flex gap-2 items-center px-2">
           <input
             type="text"
-            placeholder="Task name"
+            placeholder="New task"
             value={title()}
             onInput={(e) => {
               setTitle(e.currentTarget.value);
@@ -702,7 +721,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           />
         </div>
 
-        <div class="overflow-auto scrollbar-hidden mb-6 grow">
+        <div class="overflow-auto scrollbar-hidden mb-6 min-h-24 grow px-2">
           <Scroll>
             <MarkdownShell
               config={editorConfig}
@@ -718,7 +737,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           </Scroll>
         </div>
 
-        <Suspense>
+        <Suspense fallback={<div class="h-7" />}>
           <PropertiesProvider
             entityType="TASK"
             canEdit={true}
@@ -728,7 +747,7 @@ export function ComposeTask(props: ComposeTaskProps) {
             onPropertyDeleted={() => {}}
             saveHandler={saveHandler}
           >
-            <div class="flex flex-row flex-wrap items-center gap-2 text-sm mb-6">
+            <div class="flex min-h-7 flex-row flex-wrap items-center gap-2 text-sm m-px">
               <For each={properties()}>
                 {(property) => (
                   <InlinePropertyValue
@@ -750,23 +769,43 @@ export function ComposeTask(props: ComposeTaskProps) {
         </div>
       </Show>
 
-      <div class="shrink-0 flex justify-between items-center gap-2">
-        <ToggleSwitch
-          labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
-          onChange={setCreateMore}
-          checked={createMore()}
-          label="Create More"
+      <div class="shrink-0 flex justify-between items-end gap-2">
+        <input
+          ref={(el) => {
+            attachInputRef = el;
+          }}
+          type="file"
+          class="hidden"
+          multiple
+          accept="image/*,video/*"
+          onChange={handleAttachFiles}
         />
         <Button
-          onClick={handleCreateTask}
-          disabled={title().trim().length === 0 || isCreating()}
-          variant="base"
-          depth={3}
-          class="gap-3"
+          onMouseDown={() => attachInputRef?.click()}
+          tabIndex={-1}
+          tooltip="Attach image or video"
+          size="icon-sm"
         >
-          Create Task
-          <Hotkey shortcut="cmd+enter" theme="subtle" />
+          <PaperclipIcon />
         </Button>
+        <div class="flex items-center gap-3">
+          <ToggleSwitch
+            labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
+            onChange={setCreateMore}
+            checked={createMore()}
+            label="Create More"
+          />
+          <Button
+            onClick={handleCreateTask}
+            disabled={title().trim().length === 0 || isCreating()}
+            variant={title().trim().length === 0 ? 'ghost' : 'active'}
+            depth={3}
+            class="gap-3 rounded-lg border-0"
+          >
+            Create Task
+            <Hotkey shortcut="cmd+enter" theme="current" />
+          </Button>
+        </div>
       </div>
     </div>
   );

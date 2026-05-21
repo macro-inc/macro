@@ -32,7 +32,7 @@ export function EditorPopover(props: EditorPopoverProps) {
       mount={ctx.portalMount()}
       depth={3}
       class={cn(
-        'max-h-96 overflow-hidden flex flex-col w-full max-w-60 p-0',
+        'max-h-96 overflow-hidden flex flex-col w-full max-w-70 p-0 text-xs',
         props.class
       )}
       onEscapeKeyDown={close}
