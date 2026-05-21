@@ -322,7 +322,7 @@ export function ActionMenu(props: {
         >
           <Surface
             depth={2}
-            class="py-1.5 shadow-lg shadow-drop-shadow rounded-lg"
+            class="py-1.5 shadow-lg shadow-drop-shadow rounded-xl"
           >
             <div
               class="overflow-y-auto scrollbar-hidden"
