@@ -161,4 +161,15 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         &self,
         macro_id: &str,
     ) -> impl Future<Output = Result<Option<uuid::Uuid>, CrmError>> + Send;
+
+    /// Toggle `crm_companies.email_sync` for `(company_id, team_id)`.
+    /// On disable, the same tx also deletes the company's
+    /// `crm_contacts` and `crm_contact_sources`. Returns
+    /// [`CrmError::CompanyNotFoundForTeam`] on a non-matching pair.
+    fn set_email_sync(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        email_sync: bool,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
 }

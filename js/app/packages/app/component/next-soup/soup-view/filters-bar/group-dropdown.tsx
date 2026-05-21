@@ -21,7 +21,6 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
       open={props.open}
       onOpenChange={props.onOpenChange}
       placement="bottom-start"
-      gutter={4}
     >
       <Tooltip label="Group">
         <Dropdown.Trigger depth={2} class="bg-surface">

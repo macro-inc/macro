@@ -63,4 +63,10 @@ pub enum CrmError {
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),
+    /// Company id is not owned by the requesting team.
+    #[error("crm company not found for team")]
+    CompanyNotFoundForTeam,
+    /// Entity access receipt did not contain a valid team UUID.
+    #[error("invalid team id in entity access receipt")]
+    InvalidTeamId,
 }

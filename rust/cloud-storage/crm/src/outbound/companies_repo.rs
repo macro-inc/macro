@@ -1,5 +1,8 @@
 //! Implementation of [`CompaniesRepository`] backed by MacroDB.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::{
     companies_repo::CompaniesRepository,
     model::{CrmCompany, CrmDomain, CrmError, DomainMetadata},
@@ -530,6 +533,101 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .execute(&self.pool)
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn set_email_sync(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        email_sync: bool,
+    ) -> Result<(), CrmError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // Disable path takes the same per-(team, domain) advisory locks
+        // populate_contact uses. Without this, a populate that already
+        // passed its killswitch check could insert a contact into a
+        // company we're about to disable. Sorted lookup gives a
+        // deterministic lock order — populates only hold one domain lock
+        // at a time, so deadlock isn't possible.
+        if !email_sync {
+            let domains = sqlx::query_scalar!(
+                r#"
+                SELECT LOWER(domain) AS "domain!"
+                FROM crm_domains
+                WHERE company_id = $1 AND team_id = $2
+                ORDER BY LOWER(domain) ASC
+                "#,
+                company_id,
+                team_id,
+            )
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+            for domain in domains {
+                sqlx::query!(
+                    r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))"#,
+                    format!("{team_id}:{domain}"),
+                )
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            }
+        }
+
+        // Scoping UPDATE on both id AND team_id rejects cross-team callers as NotFound.
+        let updated = sqlx::query_scalar!(
+            r#"
+            UPDATE crm_companies
+            SET email_sync = $3
+            WHERE id = $1 AND team_id = $2
+            RETURNING id
+            "#,
+            company_id,
+            team_id,
+            email_sync,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        if updated.is_none() {
+            return Err(CrmError::CompanyNotFoundForTeam);
+        }
+
+        if !email_sync {
+            sqlx::query!(
+                r#"
+                DELETE FROM crm_contact_sources
+                WHERE contact_id IN (
+                    SELECT id FROM crm_contacts WHERE company_id = $1
+                )
+                "#,
+                company_id,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+            sqlx::query!(
+                r#"DELETE FROM crm_contacts WHERE company_id = $1"#,
+                company_id,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         Ok(())
     }

@@ -8,7 +8,7 @@ import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
 import { cn, Dropdown } from '@ui';
 import { type Accessor, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import { BACKGROUND_IMAGES, useCallContext } from '../CallContext';
+import { useCallContext } from '../CallContext';
 import { CallDeviceList } from '../CallDeviceList';
 import {
   CallControlButton,
@@ -47,14 +47,23 @@ function isBackgroundBlurSupported(): boolean {
   return hasStreamProcessor || hasFallback;
 }
 
+const BACKGROUND_OPTIONS = [
+  { value: 'none', label: 'None' },
+  { value: 'blur-light', label: 'Small blur' },
+  { value: 'blur-medium', label: 'Medium blur' },
+  { value: 'blur-heavy', label: 'Large blur' },
+] as const;
+
+type BackgroundOptionValue = (typeof BACKGROUND_OPTIONS)[number]['value'];
+
 function BackgroundEffectSelector() {
   const callCtx = useCallContext();
 
-  const currentEffectValue = () => {
+  const currentEffectValue = (): BackgroundOptionValue | '' => {
     const effect = callCtx.backgroundEffect();
     if (effect.type === 'none') return 'none';
     if (effect.type === 'blur') return `blur-${effect.intensity}`;
-    return `image-${effect.id}`;
+    return '';
   };
 
   const handleChange = (value: string) => {
@@ -70,20 +79,6 @@ function BackgroundEffectSelector() {
         | 'heavy';
 
       callCtx.setBackgroundEffect({ type: 'blur', intensity });
-      return;
-    }
-
-    if (value.startsWith('image-')) {
-      const id = value.replace('image-', '');
-      const bg = BACKGROUND_IMAGES.find((b) => b.id === id);
-
-      if (!bg) return;
-
-      callCtx.setBackgroundEffect({
-        type: 'image',
-        id: bg.id,
-        path: bg.path,
-      });
     }
   };
 
@@ -91,49 +86,17 @@ function BackgroundEffectSelector() {
     <Dropdown.RadioGroup value={currentEffectValue()} onChange={handleChange}>
       <Dropdown.Group>
         <Dropdown.GroupLabel>Background</Dropdown.GroupLabel>
-        <Dropdown.RadioItem value="none">
-          <span class="flex-1 truncate">None</span>
-          <Dropdown.ItemIndicator>
-            <CheckIcon class="size-3.5 text-accent" />
-          </Dropdown.ItemIndicator>
-        </Dropdown.RadioItem>
+        <For each={BACKGROUND_OPTIONS}>
+          {(option) => (
+            <Dropdown.RadioItem value={option.value}>
+              <span class="flex-1 truncate">{option.label}</span>
+              <Dropdown.ItemIndicator>
+                <CheckIcon class="size-3.5 text-accent" />
+              </Dropdown.ItemIndicator>
+            </Dropdown.RadioItem>
+          )}
+        </For>
       </Dropdown.Group>
-      <Dropdown.Group>
-        <Dropdown.GroupLabel>Blur</Dropdown.GroupLabel>
-        <Dropdown.RadioItem value="blur-light">
-          <span class="flex-1 truncate">Light</span>
-          <Dropdown.ItemIndicator>
-            <CheckIcon class="size-3.5 text-accent" />
-          </Dropdown.ItemIndicator>
-        </Dropdown.RadioItem>
-        <Dropdown.RadioItem value="blur-medium">
-          <span class="flex-1 truncate">Medium</span>
-          <Dropdown.ItemIndicator>
-            <CheckIcon class="size-3.5 text-accent" />
-          </Dropdown.ItemIndicator>
-        </Dropdown.RadioItem>
-        <Dropdown.RadioItem value="blur-heavy">
-          <span class="flex-1 truncate">Heavy</span>
-          <Dropdown.ItemIndicator>
-            <CheckIcon class="size-3.5 text-accent" />
-          </Dropdown.ItemIndicator>
-        </Dropdown.RadioItem>
-      </Dropdown.Group>
-      <Show when={BACKGROUND_IMAGES.length}>
-        <Dropdown.Group>
-          <Dropdown.GroupLabel>Image</Dropdown.GroupLabel>
-          <For each={BACKGROUND_IMAGES}>
-            {(bg) => (
-              <Dropdown.RadioItem value={`image-${bg.id}`}>
-                <span class="flex-1 truncate">{bg.label}</span>
-                <Dropdown.ItemIndicator>
-                  <CheckIcon class="size-3.5 text-accent" />
-                </Dropdown.ItemIndicator>
-              </Dropdown.RadioItem>
-            )}
-          </For>
-        </Dropdown.Group>
-      </Show>
     </Dropdown.RadioGroup>
   );
 }

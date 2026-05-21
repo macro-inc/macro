@@ -69,7 +69,6 @@ export function Root(props: PropertyRootProps) {
         open={editorOpen()}
         onOpenChange={setEditorOpen}
         getAnchorRect={() => editorAnchor()?.getBoundingClientRect()}
-        gutter={4}
         placement="bottom-start"
       >
         <div

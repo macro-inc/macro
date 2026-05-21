@@ -37,7 +37,7 @@ export const TabsInsetDropdown = (props: TabsInsetDropdownProps) => {
   });
 
   return (
-    <Dropdown placement="bottom-start" gutter={4}>
+    <Dropdown placement="bottom-start">
       <Dropdown.Trigger
         class={cn(
           'not-disabled:hover:bg-surface active:bg-surface focus-visible:bg-surface',

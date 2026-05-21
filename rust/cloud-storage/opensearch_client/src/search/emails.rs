@@ -37,19 +37,21 @@ const EMAIL_TEXT_FIELDS: &[&str] = &[
 /// local-part match on the address. This deliberately does NOT use a trailing
 /// `*` on the bare term, so partial local-parts don't leak across addresses
 /// (e.g. `ali` won't match `alice@example.com` via this group).
-/// Email-like terms (containing `@`) are wrapped in quotes to force phrase
-/// matching — otherwise the standard analyzer would tokenize
-/// `alice@example.com` into `[alice, example, com]`.
+/// Email-like terms (containing `@`) and multi-word terms (quoted phrases
+/// from `split_search_terms`) are wrapped in quotes to force phrase matching.
+/// Without the quotes, `default_operator: "AND"` would turn `(reply test)`
+/// into `reply AND test` and match each token independently anywhere in the
+/// field instead of as an adjacent phrase. The standard analyzer also
+/// tokenizes `alice@example.com` into `[alice, example, com]`, so phrase
+/// matching is what keeps the address from matching across unrelated tokens.
 /// The email pattern is lowercased because email addresses are case-insensitive.
 /// Terms are ANDed together with `+`.
 fn build_keyword_query_string(terms: &[String]) -> String {
     terms
         .iter()
         .map(|term| {
-            if term.contains('@') {
+            if term.contains('@') || term.contains(' ') {
                 format!("\"{}\"", term)
-            } else if term.contains(' ') {
-                format!("({})", term)
             } else {
                 format!("({} | {}@*)", term, term.to_lowercase())
             }
@@ -66,15 +68,19 @@ const MIN_PREFIX_LEN: usize = 3;
 /// Builds the simple_query_string over the text-analyzed fields.
 /// Single-word terms become `term*` so a prefix like `scri` matches the
 /// token `script` in subject/content/display-name fields. Terms shorter than
-/// `MIN_PREFIX_LEN` fall back to exact match to keep term expansion bounded.
-/// Multi-word and `@`-containing terms use grouped / phrase matching.
+/// `MIN_PREFIX_LEN` fall back to a grouped exact-token match to keep term
+/// expansion bounded. Multi-word terms (quoted phrases from
+/// `split_search_terms`) and `@`-containing terms are wrapped in quotes to
+/// force phrase matching — otherwise `default_operator: "AND"` would turn
+/// `(reply test)` into `reply AND test` and match each token independently
+/// anywhere in the field instead of as an adjacent phrase.
 fn build_text_query_string(terms: &[String]) -> String {
     terms
         .iter()
         .map(|term| {
-            if term.contains('@') {
+            if term.contains('@') || term.contains(' ') {
                 format!("\"{}\"", term)
-            } else if term.contains(' ') || term.chars().count() < MIN_PREFIX_LEN {
+            } else if term.chars().count() < MIN_PREFIX_LEN {
                 format!("({})", term)
             } else {
                 format!("{}*", term)

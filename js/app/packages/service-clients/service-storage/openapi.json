@@ -1753,6 +1753,70 @@
         }
       }
     },
+    "/crm/companies/{company_id}/email-sync": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::set_email_sync"],
+        "summary": "Toggle `email_sync` on a CRM company. `false` disables CRM email\nsharing for the company and permanently removes its existing CRM\ncontacts and contact sources.",
+        "operationId": "set_email_sync",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The CRM company to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetEmailSyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents": {
       "get": {
         "tags": ["document"],
@@ -11447,6 +11511,17 @@
           "presignedUrl": {
             "type": ["string", "null"],
             "description": "If the document is an editable file, we provide a presigned url to save the updated file to."
+          }
+        }
+      },
+      "SetEmailSyncRequest": {
+        "type": "object",
+        "description": "Request body for `PUT /crm/companies/{company_id}/email-sync`.",
+        "required": ["email_sync"],
+        "properties": {
+          "email_sync": {
+            "type": "boolean",
+            "description": "New value for `crm_companies.email_sync`. Setting to `false`\npermanently deletes the company's CRM contacts and contact sources."
           }
         }
       },

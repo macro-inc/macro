@@ -29,16 +29,18 @@ export function EditorPopover(props: EditorPopoverProps) {
 
   return (
     <Dropdown.Content
-      mount={ctx.portalMount()}
-      depth={3}
       class={cn(
         'max-h-96 overflow-hidden flex flex-col w-full max-w-60 p-0',
         props.class
       )}
-      onEscapeKeyDown={close}
       onInteractOutside={close}
+      onEscapeKeyDown={close}
+      mount={ctx.portalMount()}
+      depth={3}
     >
-      {props.children}
+      <Dropdown.Group class="p-0 gap-0 flex-1 min-h-0">
+        {props.children}
+      </Dropdown.Group>
     </Dropdown.Content>
   );
 }

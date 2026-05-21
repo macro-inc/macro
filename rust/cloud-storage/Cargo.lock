@@ -2639,14 +2639,19 @@ name = "crm"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "chrono",
+ "entity_access",
  "macro_db_migrator",
+ "macro_uuid",
+ "model-error-response",
  "serde",
  "sqlx",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
  "unfurl",
+ "utoipa",
  "uuid",
 ]
 

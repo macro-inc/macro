@@ -438,7 +438,6 @@ const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
 type SettingsMenuItem = {
   tab: SettingsTab;
   label: string;
-  description: string;
   icon: Component<{ class?: string }>;
 };
 
@@ -446,19 +445,16 @@ const SETTINGS_MENU_TOP_ITEMS: SettingsMenuItem[] = [
   {
     tab: 'Mobile App',
     label: 'App',
-    description: 'Get the mobile app',
     icon: DeviceMobileIcon,
   },
   {
     tab: 'Agent',
     label: 'MCPs',
-    description: 'Agent connectors and MCP servers',
     icon: PlugIcon,
   },
   {
     tab: 'Team',
     label: 'Team',
-    description: 'Members and invites',
     icon: UsersThreeIcon,
   },
 ];
@@ -467,19 +463,16 @@ const SETTINGS_MENU_BOTTOM_ITEMS: SettingsMenuItem[] = [
   {
     tab: 'Shortcuts',
     label: 'Shortcuts',
-    description: 'Keyboard shortcuts',
     icon: KeyboardIcon,
   },
   {
     tab: 'Appearance',
     label: 'Appearance',
-    description: 'Theme and UI customization',
     icon: PaintBucketIcon,
   },
   {
     tab: 'Account',
     label: 'Account',
-    description: 'Profile, email, and subscription',
     icon: UserIconPhosphor,
   },
 ];
@@ -623,7 +616,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
           <For each={topItems()}>
             {(item) => (
               <Dropdown.Item
-                class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
+                class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
                 onSelect={() => props.onSelect(item.tab)}
               >
                 <span class="size-5 flex items-center justify-center">
@@ -632,22 +625,16 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
                     class="size-4 shrink-0 text-ink-extra-muted"
                   />
                 </span>
-                <div class="flex flex-col min-w-0">
-                  <span class="text-ink">{item.label}</span>
-                  <span class="text-xxs text-ink-extra-muted leading-tight">
-                    {item.description}
-                  </span>
-                </div>
+                <span class="text-ink">{item.label}</span>
               </Dropdown.Item>
             )}
           </For>
-          <Show when={topItems().length > 0 && bottomItems().length > 0}>
-            <Dropdown.Separator />
-          </Show>
+        </Dropdown.Group>
+        <Dropdown.Group>
           <For each={bottomItems()}>
             {(item) => (
               <Dropdown.Item
-                class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
+                class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
                 onSelect={() => props.onSelect(item.tab)}
               >
                 <span class="size-5 flex items-center justify-center">
@@ -656,12 +643,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
                     class="size-4 shrink-0 text-ink-extra-muted"
                   />
                 </span>
-                <div class="flex flex-col min-w-0">
-                  <span class="text-ink">{item.label}</span>
-                  <span class="text-xxs text-ink-extra-muted leading-tight">
-                    {item.description}
-                  </span>
-                </div>
+                <span class="text-ink">{item.label}</span>
               </Dropdown.Item>
             )}
           </For>
