@@ -408,14 +408,9 @@ export type NotificationStatusPatch = {
   updated_at: string;
 };
 
-type LegacyNotificationStatusPatchDelete =
-  | NotificationStatusPatch
-  | { id: string };
-
 export type NotificationStatusPatchDelete =
   | { t: 'Patch'; c: NotificationStatusPatch }
-  | { t: 'Delete'; c: { id: string } }
-  | LegacyNotificationStatusPatchDelete;
+  | { t: 'Delete'; c: { id: string } };
 
 export type NotificationStatusUpdate = {
   type: 'notification_status_updated';
@@ -434,38 +429,18 @@ function applyNotificationStatusPatch(
   };
 }
 
-function isTaggedNotificationStatusUpdate(
-  update: NotificationStatusPatchDelete
-): update is Extract<
-  NotificationStatusPatchDelete,
-  { t: 'Patch' | 'Delete' }
-> {
-  return 't' in update;
-}
-
-function isLegacyNotificationStatusPatch(
-  update: LegacyNotificationStatusPatchDelete
-): update is NotificationStatusPatch {
-  return 'done' in update || 'viewed_at' in update || 'updated_at' in update;
-}
-
-export function applyNotificationStatusUpdate(update: NotificationStatusUpdate) {
-  const patches: NotificationStatusPatch[] = [];
-  const deletedIds: string[] = [];
-
-  for (const item of update.updates) {
-    if (isTaggedNotificationStatusUpdate(item)) {
-      if (item.t === 'Patch') patches.push(item.c);
-      else deletedIds.push(item.c.id);
-      continue;
-    }
-
-    if (isLegacyNotificationStatusPatch(item)) patches.push(item);
-    else deletedIds.push(item.id);
-  }
-
+export function applyNotificationStatusUpdate(
+  update: NotificationStatusUpdate
+) {
+  const patches = update.updates
+    .filter((item) => item.t === 'Patch')
+    .map((item) => item.c);
   const patchById = new Map(patches.map((patch) => [patch.id, patch]));
-  const deleteIds = new Set(deletedIds);
+  const deleteIds = new Set(
+    update.updates
+      .filter((item) => item.t === 'Delete')
+      .map((item) => item.c.id)
+  );
   const doneIds = new Set(
     [...patchById.values()]
       .filter((patch) => patch.done === true)
