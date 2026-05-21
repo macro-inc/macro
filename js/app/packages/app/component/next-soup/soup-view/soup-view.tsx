@@ -1480,7 +1480,7 @@ const SoupList = (props: SoupListProps) => {
       <VList
         cache={props.cache}
         ref={registerVirtualizerHandler}
-        class={props.virtualizerClass}
+        class={cn('overscroll-none', props.virtualizerClass)}
         data={stableRows}
         itemSize={itemSize()}
         bufferSize={overscan() * itemSize()}
