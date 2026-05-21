@@ -531,7 +531,7 @@ export const SoupView = (props: SoupViewProps) => {
                         <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
                           <Button
                             variant="base"
-                            class="p-1 rounded-lg ml-2 bg-surface"
+                            class="p-1 size-7 rounded-lg ml-2 bg-surface"
                             onClick={() => setNarrowSearchExpanded(true)}
                             depth={2}
                           >
