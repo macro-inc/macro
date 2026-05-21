@@ -53,13 +53,13 @@ impl From<SortBy> for SimpleSortMethod {
 #[derive(Debug, Clone, Copy, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum EmailPreset {
-    Important,
+    Signal,
 }
 
 impl EmailPreset {
     fn filter(self) -> Expr<EmailLiteral> {
         match self {
-            EmailPreset::Important => Expr::and(
+            EmailPreset::Signal => Expr::and(
                 Expr::val(EmailLiteral::Importance(true)),
                 Expr::val(EmailLiteral::Shared(SharedEmailFilter::Exclude)),
             ),
@@ -187,13 +187,13 @@ pub struct ListEntities {
     pub chat_filter: LiteralTree<ChatLiteral>,
 
     #[schemars(
-        description = "High-level email filter preset. Use \"important\" for important/signaled inbox emails; this expands to the email AST {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]} and defaults results to emails if includeTypes is omitted."
+        description = "High-level email filter preset. Use \"signal\" for signal emails. Signal emails and important emails are synonymous: if the user asks for important emails, use emailPreset=\"signal\". This expands to the email AST {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]} and defaults results to emails if includeTypes is omitted."
     )]
     #[serde(default)]
     pub email_preset: Option<EmailPreset>,
 
     #[schemars(
-        description = "Advanced full soup AST email filter (ef). Prefer emailPreset for common requests. Important/signaled emails use {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]}.",
+        description = "Advanced full soup AST email filter (ef). Prefer emailPreset=\"signal\" for common requests. Signal emails and important emails are synonymous; they use {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]}.",
         with = "Option<serde_json::Value>"
     )]
     #[serde(default, rename = "ef")]

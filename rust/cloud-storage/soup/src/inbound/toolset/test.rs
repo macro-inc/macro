@@ -61,7 +61,7 @@ fn test_full_ast_input_deserializes() {
 #[test]
 fn test_email_preset_defaults_to_email_results() {
     let list: ListEntities = serde_json::from_value(serde_json::json!({
-        "emailPreset": "important"
+        "emailPreset": "signal"
     }))
     .unwrap();
 
