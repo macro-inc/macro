@@ -4,7 +4,10 @@ import { SoupViewContextGroup } from '@app/component/next-soup/soup-view/filters
 import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
-import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
+import {
+  SplitToolbarLeft,
+  SplitToolbarRight,
+} from '@app/component/split-layout/components/SplitToolbar';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -74,22 +77,22 @@ export function SoupFiltersBar() {
             onReplace={replaceFilter}
             onRemove={removeFilter}
           />
-          <div class="ml-auto">
-            <Tooltip hotkey={TOKENS.unifiedList.togglePreview} label="Preview">
-              <Button
-                onClick={togglePreview}
-                variant="base"
-                size="sm"
-                depth={2}
-                class="bg-surface"
-              >
-                {soup.previewEntity() ? <EyeSlashIcon /> : <EyeIcon />}
-                <span>Preview</span>
-              </Button>
-            </Tooltip>
-          </div>
         </div>
       </SplitToolbarLeft>
+      <SplitToolbarRight>
+        <Tooltip hotkey={TOKENS.unifiedList.togglePreview} label="Preview">
+          <Button
+            onClick={togglePreview}
+            variant="base"
+            size="sm"
+            depth={2}
+            class="bg-surface"
+          >
+            {soup.previewEntity() ? <EyeSlashIcon /> : <EyeIcon />}
+            <span>Preview</span>
+          </Button>
+        </Tooltip>
+      </SplitToolbarRight>
     </Show>
   );
 }
