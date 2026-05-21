@@ -39,6 +39,7 @@ import {
   onCleanup,
   onMount,
   Show,
+  splitProps,
   untrack,
 } from 'solid-js';
 import { sendEmailCode, useResetEmailCode } from './EmailForm';
@@ -64,56 +65,75 @@ function PostLoginRedirect() {
   return <LoadingBlock />;
 }
 
-function ProviderButton(props: {
+type ActionButtonVariant = 'primary' | 'secondary';
+
+type ActionButtonProps = {
   icon?: JSX.Element;
   trailingIcon?: JSX.Element;
-  label: string;
+  children: JSX.Element;
   onClick?: () => void;
-  variant?: 'primary' | 'secondary';
+  variant?: ActionButtonVariant;
   type?: 'button' | 'submit';
   autofocus?: boolean;
   disabled?: boolean;
-}) {
-  const isPrimary = () => props.variant === 'primary';
-  const isSubmit = () => props.type === 'submit';
+  class?: string;
+};
+
+const actionButtonVariants: Record<ActionButtonVariant, string> = {
+  primary:
+    'bg-accent text-surface not-disabled:hover:bg-accent not-disabled:hover:text-surface focus-visible:bg-accent active:outline-accent disabled:bg-ink/30 disabled:text-surface/70 disabled:cursor-not-allowed disabled:hover:outline-transparent',
+  secondary:
+    'bg-surface text-ink border border-edge hover:border-edge disabled:opacity-50 disabled:cursor-not-allowed',
+};
+
+function ActionButton(props: ActionButtonProps) {
+  const [local, others] = splitProps(props, [
+    'icon',
+    'trailingIcon',
+    'children',
+    'variant',
+    'type',
+    'onClick',
+    'class',
+  ]);
+  const isSubmit = () => local.type === 'submit';
+
   return (
     <Button
-      type={props.type ?? 'button'}
-      disabled={props.disabled}
+      {...others}
+      type={local.type ?? 'button'}
       onClick={(e) => {
         if (isSubmit()) {
           if (isTouchDevice()) e.preventDefault();
           return;
         }
         if (isTouchDevice()) return;
-        props.onClick?.();
+        local.onClick?.();
       }}
       onPointerDown={(e) => {
         if (!isTouchDevice()) return;
-        if (props.disabled) return;
+        if (others.disabled) return;
         e.stopPropagation();
         e.preventDefault();
         if (isSubmit()) {
           e.currentTarget.form?.requestSubmit();
         } else {
-          props.onClick?.();
+          local.onClick?.();
         }
       }}
       class={cn(
         'gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
-        isPrimary()
-          ? 'bg-accent text-surface not-disabled:hover:bg-accent not-disabled:hover:text-surface focus-visible:bg-accent active:outline-accent disabled:bg-ink/30 disabled:text-surface/70 disabled:cursor-not-allowed disabled:hover:outline-transparent'
-          : 'bg-surface text-ink border border-edge hover:border-edge disabled:opacity-50 disabled:cursor-not-allowed'
+        actionButtonVariants[local.variant ?? 'secondary'],
+        local.class
       )}
-      autofocus={props.autofocus ? true : undefined}
       tabIndex={0}
     >
-      <Show when={props.icon}>
-        <span class="shrink-0 inline-flex">{props.icon}</span>
+      <Show when={local.icon}>
+        <span class="shrink-0 inline-flex">{local.icon}</span>
       </Show>
-      <span>{props.label}</span>
-      <Show when={props.trailingIcon}>
-        <span class="shrink-0 inline-flex">{props.trailingIcon}</span>
+      <span>{local.children}</span>
+      <Show when={local.trailingIcon}>
+        <span class="shrink-0 inline-flex">{local.trailingIcon}</span>
       </Show>
     </Button>
   );
@@ -126,27 +146,30 @@ function LoginPicker(props: { setStage: (next: Stage) => void }) {
 
   return (
     <div class="flex flex-col gap-3">
-      <ProviderButton
+      <ActionButton
         variant="primary"
         autofocus
         icon={<IconGoogle />}
-        label="Continue with Google"
         onClick={() => startSsoLogin(GOOGLE_GMAIL_IDP)}
-      />
+      >
+        Continue with Google
+      </ActionButton>
 
       <Show when={showApple}>
-        <ProviderButton
+        <ActionButton
           icon={<IconApple />}
-          label="Continue with Apple"
           onClick={() => startSsoLogin('Apple')}
-        />
+        >
+          Continue with Apple
+        </ActionButton>
       </Show>
 
-      <ProviderButton
+      <ActionButton
         icon={<IconMail />}
-        label="Continue with email"
         onClick={() => props.setStage(Stage.Email)}
-      />
+      >
+        Continue with email
+      </ActionButton>
     </div>
   );
 }
@@ -253,20 +276,22 @@ function EmailFormNew(props: {
         />
       </Show>
       <FormError msg={submission.error?.message} />
-      <ProviderButton
+      <ActionButton
         variant="primary"
         type="submit"
-        label="Continue"
         trailingIcon={<ArrowRight />}
         disabled={submission.pending}
-      />
-      <ProviderButton
+      >
+        Continue
+      </ActionButton>
+      <ActionButton
         type="button"
         variant="secondary"
-        label="Back to sign in"
         icon={<ArrowLeft class="size-4" />}
         onClick={props.onBack}
-      />
+      >
+        Back to sign in
+      </ActionButton>
     </form>
   );
 }
@@ -405,22 +430,22 @@ function VerifyFormNew(props: {
         </Button>
       </div>
       <FormError msg={submission.error?.message ?? resendError()} />
-      <ProviderButton
+      <ActionButton
         variant="primary"
         type="submit"
-        label="Verify"
         trailingIcon={<ArrowRight />}
         disabled={submission.pending}
-      />
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={props.onBack}
-        class="w-full rounded-lg"
       >
-        <ArrowLeft class="size-4" />
+        Verify
+      </ActionButton>
+      <ActionButton
+        type="button"
+        variant="secondary"
+        icon={<ArrowLeft class="size-4" />}
+        onClick={props.onBack}
+      >
         Change email
-      </Button>
+      </ActionButton>
     </form>
   );
 }
