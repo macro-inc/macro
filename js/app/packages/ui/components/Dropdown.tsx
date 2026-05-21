@@ -40,7 +40,7 @@ export type DropdownItemProps = ComponentProps<typeof KobalteDropdownMenu.Item>;
 export type DropdownSubProps = ComponentProps<typeof KobalteDropdownMenu.Sub>;
 type PortalMount = ComponentProps<typeof KobalteDropdownMenu.Portal>['mount'];
 
-const ROW_CLASS = 'rounded-lg w-full flex items-center gap-2.5 px-2 h-8  text-left text-xs cursor-default outline-none hover:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
+const ROW_CLASS = 'rounded-lg w-full flex items-center gap-2.5 px-2 h-8 text-left text-xs cursor-default outline-none hover:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
 
 function DropdownContent(props: DropdownContentProps) {
   const [local, rest] = splitProps(props, ['depth', 'class', 'mount', 'children']);

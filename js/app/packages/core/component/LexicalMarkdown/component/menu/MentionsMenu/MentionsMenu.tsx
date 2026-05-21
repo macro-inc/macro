@@ -510,7 +510,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         >
           <Surface
             depth={2}
-            class="pt-2 pb-1.5 shadow-lg shadow-drop-shadow rounded-lg"
+            class="pt-2 pb-1.5 shadow-lg shadow-drop-shadow rounded-xl"
           >
             <Show
               when={controller.viewAllMode()}

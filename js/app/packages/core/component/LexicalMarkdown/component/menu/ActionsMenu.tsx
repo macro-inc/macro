@@ -85,7 +85,7 @@ function ActionsMenuItem(props: {
       }}
       on:mouseover={() => props.setIndex(props.index)}
       class={cn('group flex items-center p-1.5 mx-1.5 rounded-md', {
-        'bg-hover': props.selected,
+        'bg-ink/5': props.selected,
       })}
     >
       <div class="flex flex-row gap-2 items-center w-full">
