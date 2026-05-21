@@ -263,7 +263,7 @@ function EmailFormNew(props: {
       <ProviderButton
         type="button"
         variant="secondary"
-        label="Back"
+        label="Back to sign in"
         icon={<ArrowLeft class="size-4" />}
         onClick={props.onBack}
       />
@@ -419,7 +419,7 @@ function VerifyFormNew(props: {
         class="w-full rounded-lg"
       >
         <ArrowLeft class="size-4" />
-        Back
+        Change email
       </Button>
     </form>
   );
