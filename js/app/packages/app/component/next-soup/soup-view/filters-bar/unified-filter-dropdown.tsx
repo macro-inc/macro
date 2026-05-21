@@ -440,7 +440,7 @@ function SingleValueSubmenu<T>(props: {
 }) {
   return (
     <Dropdown.Sub>
-      <Dropdown.SubTrigger >
+      <Dropdown.SubTrigger>
         <span class="text-ink">{props.label}</span>
         <CaretRightIcon class="size-3 text-ink-muted" />
       </Dropdown.SubTrigger>
