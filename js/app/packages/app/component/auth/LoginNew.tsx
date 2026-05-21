@@ -252,7 +252,7 @@ export function LoginNew() {
         `
         }</style>
 
-        <div class="inset-0 absolute text-ink bg-surface opacity-30 -z-1">
+        <div class="inset-0 absolute text-ink bg-surface opacity-10 -z-1">
           <PcNoiseGrid
             cellSize={20}
             warp={20}
@@ -267,12 +267,9 @@ export function LoginNew() {
         </div>
 
         <div class="w-full max-w-md ln-card">
-          <Surface active class="rounded-2xl" depth={2}>
+          <Surface class="rounded-xl" depth={1}>
             <div
-              class={cn(
-                'p-8 flex flex-col gap-16',
-                compactHeader() && 'gap-8'
-              )}
+              class={cn('p-8 flex flex-col gap-16', compactHeader() && 'gap-8')}
             >
               <div
                 class={cn(
