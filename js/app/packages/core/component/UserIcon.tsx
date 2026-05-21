@@ -1,6 +1,7 @@
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
 import { staticFileSizedUrl } from '@core/constant/servers';
 import { internalDrag } from '@core/directive/internalDragState';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import {
   macroIdToEmail,
@@ -8,7 +9,6 @@ import {
   useDisplayName,
   useDisplayNameParts,
 } from '@core/user';
-
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
 import { Avatar, type AvatarSize } from '@ui';
@@ -23,7 +23,6 @@ import {
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { HoverCard } from './HoverCard';
 import { UserTooltip } from './UserTooltip';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export type UserIconSize = AvatarSize;
 
