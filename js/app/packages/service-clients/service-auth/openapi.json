@@ -2848,7 +2848,7 @@
     "/user/stripe/checkoutv2": {
       "post": {
         "tags": ["user::stripe::create_checkout_session_v2"],
-        "summary": "Creates a Stripe checkout session for the user to subscribe.\nThe stripe price id",
+        "summary": "Creates a Stripe checkout session for the user to subscribe.",
         "operationId": "create_checkout_session_v2",
         "requestBody": {
           "content": {

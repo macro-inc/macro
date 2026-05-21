@@ -3433,7 +3433,6 @@ export const createCheckoutSession = async (
 
 /**
  * @summary Creates a Stripe checkout session for the user to subscribe.
-The stripe price id
  */
 export type createCheckoutSessionV2Response200 = {
   data: StripeSessionResponse;
