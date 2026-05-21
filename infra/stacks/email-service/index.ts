@@ -377,7 +377,7 @@ emailAttachmentBucket.attachCloudfrontPolicy({
 const containerEnvVars = [
   {
     name: 'RUST_LOG',
-    value: `email=${stack === 'prod' ? 'debug' : 'debug'},email_service=${stack === 'prod' ? 'debug' : 'debug'},entity_access=${stack === 'prod' ? 'debug' : 'debug'},pubsub_workers=${stack === 'prod' ? 'debug' : 'debug'},email_db_client=${stack === 'prod' ? 'info' : 'debug'},gmail_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info`,
+    value: `email=${stack === 'prod' ? 'debug' : 'debug'},email_service=${stack === 'prod' ? 'debug' : 'debug'},entity_access=${stack === 'prod' ? 'debug' : 'debug'},pubsub_workers=${stack === 'prod' ? 'debug' : 'debug'},email_db_client=${stack === 'prod' ? 'info' : 'debug'},gmail_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info,crm=${stack === 'prod' ? 'info' : 'debug'},teams=${stack === 'prod' ? 'info' : 'debug'}`,
   },
   {
     name: 'ENVIRONMENT',

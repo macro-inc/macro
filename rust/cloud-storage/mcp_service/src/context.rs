@@ -160,10 +160,15 @@ async fn build_tool_context(
 
     let frecency_storage = FrecencyPgStorage::new(db.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
+    let crm_service = crm::domain::service::CrmServiceImpl::new(
+        crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+    );
     let email_service = EmailServiceImpl::new(
         EmailPgRepo::new(db.clone()),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
+        crm_service.clone(),
         0,
     );
     let channels_service = ChannelServiceImpl::new(
@@ -249,6 +254,7 @@ async fn build_tool_context(
             EmailPgRepo::new(db.clone()),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             sqs_client,
+            crm_service.clone(),
             0,
         )),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
@@ -275,16 +281,17 @@ async fn build_tool_context(
         EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())),
     );
 
-    let notification_reader_service = NotificationReaderService::new(
-        DbNotificationRepository::new(db.clone()),
-        ToolNotificationQueue::NoOp,
-        NoOpSnsEndpointManager,
-        PlatformArnConfig {
+    let notification_reader_service = NotificationReaderService {
+        repository: DbNotificationRepository::new(db.clone()),
+        queue: ToolNotificationQueue::NoOp,
+        sns_endpoint: NoOpSnsEndpointManager,
+        platform_config: PlatformArnConfig {
             apns_platform_arn: String::new(),
             fcm_platform_arn: String::new(),
             apns_voip_platform_arn: String::new(),
         },
-    );
+        realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
+    };
     let notification_tool_context =
         notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 

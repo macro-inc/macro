@@ -49,6 +49,7 @@ connection = { path = "../connection", default-features = false, features = [
 ] }
 connection_gateway_client = { path = "../connection_gateway_client" }
 cowlike = { path = "../cowlike" }
+crm = { path = "../crm" }
 document_sub_type = { path = "../document_sub_type" }
 documents_hex = { path = "../documents", package = "documents" }
 dynamodb_client = { path = "../dynamodb_client" }

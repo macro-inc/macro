@@ -454,7 +454,7 @@ export const SoupViewContextProvider: FlowComponent<
     const groups = itemsQuery.data?.groups;
 
     // Not grouped - build simple entity rows
-    if (!field || !groups) {
+    if (!field || !groups || search.isSearching()) {
       return entities().map((entity, index) =>
         soup.buildRow({ id: entity.id, index, original: entity })
       );

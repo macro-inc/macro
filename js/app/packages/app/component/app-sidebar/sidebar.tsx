@@ -16,7 +16,6 @@ import {
 } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
-import { clearSidebarBadge, hasSidebarBadge } from '@app/signal/sidebarBadges';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { InCallPanel } from '@channel/Call';
 import { useCallContextOptional } from '@channel/Call/CallContext';
@@ -66,10 +65,9 @@ import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { useLocation } from '@solidjs/router';
-import { Button, cn, Dropdown, Hotkey, Layer } from '@ui';
+import { Button, cn, Dropdown, Hotkey } from '@ui';
 import {
   type Component,
-  createEffect,
   createMemo,
   createSignal,
   For,
@@ -586,7 +584,6 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   return (
     <Dropdown placement="top-start" gutter={6}>
       <Dropdown.Trigger
-        as={Button}
         variant="ghost"
         class={cn(
           'flex items-center w-full rounded-md cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
@@ -621,57 +618,55 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
         </span>
         <CaretUpIcon class="size-3 text-ink-extra-muted shrink-0 group-data-[slim=true]/sidebar:hidden" />
       </Dropdown.Trigger>
-      <Dropdown.Portal>
-        <Layer depth={3}>
-          <Dropdown.Content class="min-w-56">
-            <For each={topItems()}>
-              {(item) => (
-                <Dropdown.Item
-                  class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
-                  onSelect={() => props.onSelect(item.tab)}
-                >
-                  <span class="size-5 flex items-center justify-center">
-                    <Dynamic
-                      component={item.icon}
-                      class="size-4 shrink-0 text-ink-extra-muted"
-                    />
+      <Dropdown.Content depth={3} class="min-w-56">
+        <Dropdown.Group>
+          <For each={topItems()}>
+            {(item) => (
+              <Dropdown.Item
+                class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
+                onSelect={() => props.onSelect(item.tab)}
+              >
+                <span class="size-5 flex items-center justify-center">
+                  <Dynamic
+                    component={item.icon}
+                    class="size-4 shrink-0 text-ink-extra-muted"
+                  />
+                </span>
+                <div class="flex flex-col min-w-0">
+                  <span class="text-ink">{item.label}</span>
+                  <span class="text-xxs text-ink-extra-muted leading-tight">
+                    {item.description}
                   </span>
-                  <div class="flex flex-col min-w-0">
-                    <span class="text-ink">{item.label}</span>
-                    <span class="text-xxs text-ink-extra-muted leading-tight">
-                      {item.description}
-                    </span>
-                  </div>
-                </Dropdown.Item>
-              )}
-            </For>
-            <Show when={topItems().length > 0 && bottomItems().length > 0}>
-              <Dropdown.Separator />
-            </Show>
-            <For each={bottomItems()}>
-              {(item) => (
-                <Dropdown.Item
-                  class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
-                  onSelect={() => props.onSelect(item.tab)}
-                >
-                  <span class="size-5 flex items-center justify-center">
-                    <Dynamic
-                      component={item.icon}
-                      class="size-4 shrink-0 text-ink-extra-muted"
-                    />
+                </div>
+              </Dropdown.Item>
+            )}
+          </For>
+          <Show when={topItems().length > 0 && bottomItems().length > 0}>
+            <Dropdown.Separator />
+          </Show>
+          <For each={bottomItems()}>
+            {(item) => (
+              <Dropdown.Item
+                class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
+                onSelect={() => props.onSelect(item.tab)}
+              >
+                <span class="size-5 flex items-center justify-center">
+                  <Dynamic
+                    component={item.icon}
+                    class="size-4 shrink-0 text-ink-extra-muted"
+                  />
+                </span>
+                <div class="flex flex-col min-w-0">
+                  <span class="text-ink">{item.label}</span>
+                  <span class="text-xxs text-ink-extra-muted leading-tight">
+                    {item.description}
                   </span>
-                  <div class="flex flex-col min-w-0">
-                    <span class="text-ink">{item.label}</span>
-                    <span class="text-xxs text-ink-extra-muted leading-tight">
-                      {item.description}
-                    </span>
-                  </div>
-                </Dropdown.Item>
-              )}
-            </For>
-          </Dropdown.Content>
-        </Layer>
-      </Dropdown.Portal>
+                </div>
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Group>
+      </Dropdown.Content>
     </Dropdown>
   );
 };
@@ -831,34 +826,38 @@ export const AppSidebar = (props: AppSidebarProps) => {
             <div class="flex items-center gap-1 mr-1">
               <Show when={showEnableNotifications()}>
                 <Button
-                  class="size-7 rounded-xs p-1 [&_svg]:size-4"
+                  class="rounded-md p-1 text-ink-extra-muted"
+                  size="icon-sm"
                   label="Enable Notifications"
                   onClick={handleEnableNotifications}
                 >
-                  <BellIcon class="size-4" />
+                  <BellIcon />
                 </Button>
               </Show>
               <Button
-                class="size-7 rounded-xs p-1 [&_svg]:size-4"
-                label="New Split"
-                hotkey={TOKENS.global.createNewSplit}
-                disabled={!canCreateNewSplit()}
-                onClick={handleNewSplitClick}
-              >
-                <AnimatedNewSplitIcon />
-              </Button>
-              <Button
-                class="size-7 rounded-xs p-1 [&_svg]:size-4"
+                class="rounded-md p-1 text-ink-extra-muted"
+                size="icon-sm"
                 label="Command"
                 hotkey={TOKENS.global.commandMenu}
                 onClick={handleCommandPaletteClick}
               >
                 <CommandKIcon />
               </Button>
+              <Button
+                class="rounded-md p-1 text-ink-extra-muted"
+                size="icon-sm"
+                label="New Split"
+                hotkey={TOKENS.global.createNewSplit}
+                disabled={!canCreateNewSplit()}
+                onClick={handleNewSplitClick}
+              >
+                <AnimatedNewSplitIcon class="size-4" />
+              </Button>
             </div>
           </Show>
           <Button
-            class="size-7 rounded-xs p-1 [&_svg]:size-4"
+            class="rounded-md p-1 text-ink-extra-muted [&_svg]:size-4"
+            size="icon-sm"
             onMouseDown={(e) => {
               if (e.button !== 0) return;
               e.preventDefault();
@@ -977,7 +976,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const layoutManager = globalSplitManager();
-  const hasUnread = () => hasSidebarBadge(props.id);
 
   const location = useLocation();
 
@@ -993,10 +991,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
 
     return activeContent?.id === props.id;
   };
-
-  createEffect(() => {
-    if (isActive()) clearSidebarBadge(props.id);
-  });
 
   const content = () =>
     ({
@@ -1060,7 +1054,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
           onMouseLeave={() => setIsHovering(false)}
           onMouseDown={(e) => {
             if (e.button !== 0) return;
-            clearSidebarBadge(props.id);
             analytics.track('sidebar_click', {
               view: props.id,
             });
@@ -1090,11 +1083,8 @@ const SidebarLink = (props: SidebarLinkProps) => {
           }}
         >
           <Show when={props.icon}>
-            <div class="relative shrink-0 [&_svg]:size-4">
+            <div class="shrink-0 [&_svg]:size-4">
               <Dynamic component={props.icon} triggerAnimation={isHovering()} />
-              <Show when={hasUnread() && !isActive()}>
-                <div class="absolute -top-0.5 -right-0.5 size-1.5 bg-accent rounded-full ring-surface ring-2" />
-              </Show>
             </div>
           </Show>
 

@@ -1,3 +1,4 @@
+import { useMaybeBlockId } from '@core/block';
 import { Modals } from '@core/component/Properties/component/modal';
 import {
   PropertiesProvider,
@@ -59,9 +60,9 @@ interface EntityKeyPropertiesProps {
 
 /**
  * Displays key properties (Status, Priority, Assignees) for an entity as a
- * row of condensed icon-only pills. Click routes through the legacy modal
- * stack via `openPropertyEditor` so the existing PropertyEditModal (now
- * itself a thin bridge over Property.PopoverEditor) handles editing.
+ * row of condensed icon-only pills. Each pill owns its own Kobalte-backed
+ * popover editor via <Property.PopoverEditor /> rendered inline below the
+ * trigger — no modal stack involved.
  */
 export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
   const entityType = createMemo(() => getEntityType(props.entity));
@@ -121,6 +122,7 @@ function KeyPropertiesRow(props: {
   onRefresh?: () => void;
 }) {
   const ctx = usePropertiesContext();
+  const blockId = useMaybeBlockId();
 
   return (
     <div class="flex items-center gap-1 justify-start text-xs">
@@ -139,7 +141,8 @@ function KeyPropertiesRow(props: {
             <Property.Root
               property={property}
               canEdit={ctx.canEdit}
-              onEdit={ctx.openPropertyEditor}
+              onSave={ctx.saveHandler.saveProperty}
+              onRefresh={ctx.onRefresh}
             >
               <Property.Tooltip property={property}>
                 <Layer depth={2}>
@@ -179,6 +182,9 @@ function KeyPropertiesRow(props: {
                   </Property.EditTrigger>
                 </Layer>
               </Property.Tooltip>
+              <Property.PopoverEditor
+                entitySelfFilter={{ entityType: ctx.entityType, blockId }}
+              />
             </Property.Root>
           );
         }}

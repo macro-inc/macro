@@ -1,3 +1,4 @@
+use crate::pubsub::context::CrmServiceType;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use gmail_client::GmailClient;
@@ -12,4 +13,5 @@ pub struct LinkManagerContext {
     pub auth_service_client: AuthServiceClient,
     pub redis_client: RedisClient,
     pub sqs_client: SQS,
+    pub crm_service: CrmServiceType,
 }

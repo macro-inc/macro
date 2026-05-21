@@ -6,8 +6,6 @@ export {} from './editors';
 export {
   type CombinedEntity,
   createEntitySearchConfig,
-  Dropdown,
-  type DropdownOption,
   type EntityTypeItemMap,
   getEntityName,
   getEntitySearchText,

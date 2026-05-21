@@ -2,9 +2,7 @@
 
 use macro_user_id::user_id::MacroUserIdStr;
 
-use crate::domain::model::{
-    CreateSubscriptionArgs, CustomerError, TeamCheckoutSessionRequest, TeamPlan,
-};
+use crate::domain::model::CustomerError;
 
 /// The CustomerRepository defines a set of actions to perform on customer data
 pub trait CustomerRepository: Clone + Send + Sync + 'static {
@@ -22,33 +20,25 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         customer_id: &stripe::CustomerId,
     ) -> impl Future<Output = Result<stripe::SubscriptionId, CustomerError>> + Send;
 
-    /// Create a new subscription for a customer
-    fn create_subscription(
+    /// Increment the seat count on a subscription by the provided amount.
+    fn increment_seat_count(
         &self,
-        args: CreateSubscriptionArgs,
-    ) -> impl Future<Output = Result<stripe::SubscriptionId, CustomerError>> + Send;
+        subscription_id: &stripe::SubscriptionId,
+        amount: u64,
+    ) -> impl Future<Output = Result<(), CustomerError>> + Send;
+
+    /// Decrement the seat count on a subscription by the provided amount.
+    ///
+    /// Implementations must not let the resulting seat count drop below one.
+    fn decrement_seat_count(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        amount: u64,
+    ) -> impl Future<Output = Result<(), CustomerError>> + Send;
 
     /// Cancels a subscription immediately.
     fn cancel_subscription(
         &self,
         subscription_id: &stripe::SubscriptionId,
     ) -> impl Future<Output = Result<(), CustomerError>> + Send;
-
-    /// Update the plan for the team
-    fn update_team_plan(
-        &self,
-        subscription_id: &stripe::SubscriptionId,
-        current_team_plan: Option<TeamPlan>,
-        team_plan: TeamPlan,
-    ) -> impl Future<Output = Result<(), CustomerError>> + Send;
-
-    /// Creates the team plan checkout session
-    /// Returns the checkout url
-    fn create_team_checkout_session(
-        &self,
-        team_id: &uuid::Uuid,
-        customer_id: stripe::CustomerId,
-        req: &TeamCheckoutSessionRequest,
-        has_trialed: bool,
-    ) -> impl Future<Output = Result<String, CustomerError>> + Send;
 }

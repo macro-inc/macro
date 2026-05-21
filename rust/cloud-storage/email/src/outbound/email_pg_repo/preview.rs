@@ -21,6 +21,7 @@ pub(super) async fn previews_for_view_cursor(
         link_id,
         limit,
         query,
+        team_id,
     } = query;
 
     let query = query.split_option();
@@ -34,6 +35,7 @@ pub(super) async fn previews_for_view_cursor(
                 &view,
                 dynamic_query,
                 user_id.as_ref(),
+                team_id,
             )
             .await?
         }

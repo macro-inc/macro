@@ -28,7 +28,9 @@ import {
   captureDeleteSnapshotForTarget,
   type DeleteTargetSnapshot,
   getTargetMessageState,
+  getTopLevelMessageDeletedAt,
   insertMessageIntoTargetCaches,
+  markTopLevelMessageDeletedInTargetCaches,
   removeMessageFromTargetCaches,
   replaceTargetMessageId,
   replaceTargetMessageState,
@@ -71,7 +73,13 @@ type DeleteMessageContext = {
   deletedReactions: CountedReaction[];
   deletedAttachments: Attachment[];
   target: ReturnType<typeof resolveMessageTarget>;
+  /** Snapshot used to restore a removed thread reply on rollback. */
   targetSnapshot?: DeleteTargetSnapshot;
+  /**
+   * Previous `deleted_at` value for a soft-deleted top-level message,
+   * captured so rollback can revert the optimistic mutation.
+   */
+  previousDeletedAt?: string | null;
 };
 
 type UpdateMessageContext = {
@@ -231,9 +239,14 @@ function replaceOptimisticMessage(
 
 /**
  * Optimistically delete a message from the channel cache.
- * Returns minimal context: only the deleted message, reactions, and attachments.
+ *
+ * Top-level messages are soft-deleted in place (we set `deleted_at`) so the
+ * UI renders the "this message was deleted" placeholder while preserving any
+ * thread replies hanging off the message. Thread replies don't have a
+ * `deleted_at` field in the schema, so we still remove them from the caches
+ * and capture a snapshot for rollback.
  */
-function optimisticDeleteChannelMessage(
+export function optimisticDeleteChannelMessage(
   vars: WithChannelId<
     Pick<ChannelMessage, 'message_id'> & { threadId?: string }
   >
@@ -249,11 +262,21 @@ function optimisticDeleteChannelMessage(
     target,
   };
 
-  context.targetSnapshot = captureDeleteSnapshotForTarget(
-    vars.channelId,
-    target
-  );
-  removeMessageFromTargetCaches(vars.channelId, target);
+  if (target.kind === 'top_level') {
+    context.previousDeletedAt =
+      getTopLevelMessageDeletedAt(vars.channelId, target.messageId) ?? null;
+    markTopLevelMessageDeletedInTargetCaches(
+      vars.channelId,
+      target,
+      new Date().toISOString()
+    );
+  } else {
+    context.targetSnapshot = captureDeleteSnapshotForTarget(
+      vars.channelId,
+      target
+    );
+    removeMessageFromTargetCaches(vars.channelId, target);
+  }
 
   return context;
 }
@@ -261,10 +284,19 @@ function optimisticDeleteChannelMessage(
 /**
  * Rollback an optimistic message delete by restoring the deleted data.
  */
-function rollbackDeleteChannelMessage(
+export function rollbackDeleteChannelMessage(
   channelId: string,
   context: DeleteMessageContext
 ): void {
+  if (context.target.kind === 'top_level') {
+    markTopLevelMessageDeletedInTargetCaches(
+      channelId,
+      context.target,
+      context.previousDeletedAt
+    );
+    return;
+  }
+
   if (context.targetSnapshot) {
     restoreMessageInTargetCaches(
       channelId,

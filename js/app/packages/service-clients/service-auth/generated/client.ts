@@ -8,6 +8,7 @@ import type {
   AppleLoginRequest,
   CreateAccountMergeRequest,
   CreateCheckoutSessionRequest,
+  CreateCheckoutSessionV2Request,
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
   CreateTeamRequest,
@@ -30,7 +31,6 @@ import type {
   PasswordlessRequest,
   PasswordRequest,
   PatchSubscriptionTierRequest,
-  PatchTeamPlanRequest,
   PatchTeamRequest,
   PatchUserGroupRequest,
   PatchUserOnboardingRequest,
@@ -48,7 +48,6 @@ import type {
   SsoRequiredResponse,
   StripeSessionResponse,
   Team,
-  TeamCheckoutSessionRequest,
   TeamInvitesResponse,
   TeamWithMembers,
   UserLinkResponse,
@@ -1932,66 +1931,6 @@ export const patchTeam = async (
 };
 
 /**
- * @summary Creates a new team.
- */
-export type createTeamCheckoutSessionResponse200 = {
-  data: Team;
-  status: 200;
-};
-
-export type createTeamCheckoutSessionResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type createTeamCheckoutSessionResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type createTeamCheckoutSessionResponseSuccess =
-  createTeamCheckoutSessionResponse200 & {
-    headers: Headers;
-  };
-export type createTeamCheckoutSessionResponseError = (
-  | createTeamCheckoutSessionResponse400
-  | createTeamCheckoutSessionResponse500
-) & {
-  headers: Headers;
-};
-
-export type createTeamCheckoutSessionResponse =
-  | createTeamCheckoutSessionResponseSuccess
-  | createTeamCheckoutSessionResponseError;
-
-export const getCreateTeamCheckoutSessionUrl = () => {
-  return `/team/checkout`;
-};
-
-export const createTeamCheckoutSession = async (
-  teamCheckoutSessionRequest: TeamCheckoutSessionRequest,
-  options?: RequestInit
-): Promise<createTeamCheckoutSessionResponse> => {
-  const res = await fetch(getCreateTeamCheckoutSessionUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(teamCheckoutSessionRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createTeamCheckoutSessionResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createTeamCheckoutSessionResponse;
-};
-
-/**
  * @summary Invites a user to a team.
  */
 export type inviteToTeamResponse201 = {
@@ -2310,75 +2249,6 @@ export const rejectInvitation = async (
     status: res.status,
     headers: res.headers,
   } as rejectInvitationResponse;
-};
-
-/**
- * @summary Updates a team plan.
- */
-export type patchTeamPlanResponse200 = {
-  data: void;
-  status: 200;
-};
-
-export type patchTeamPlanResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type patchTeamPlanResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type patchTeamPlanResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type patchTeamPlanResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type patchTeamPlanResponseSuccess = patchTeamPlanResponse200 & {
-  headers: Headers;
-};
-export type patchTeamPlanResponseError = (
-  | patchTeamPlanResponse400
-  | patchTeamPlanResponse401
-  | patchTeamPlanResponse404
-  | patchTeamPlanResponse500
-) & {
-  headers: Headers;
-};
-
-export type patchTeamPlanResponse =
-  | patchTeamPlanResponseSuccess
-  | patchTeamPlanResponseError;
-
-export const getPatchTeamPlanUrl = () => {
-  return `/team/plan`;
-};
-
-export const patchTeamPlan = async (
-  patchTeamPlanRequest: PatchTeamPlanRequest,
-  options?: RequestInit
-): Promise<patchTeamPlanResponse> => {
-  const res = await fetch(getPatchTeamPlanUrl(), {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(patchTeamPlanRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: patchTeamPlanResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as patchTeamPlanResponse;
 };
 
 /**
@@ -3490,7 +3360,7 @@ export const getUserQuota = async (
 };
 
 /**
- * @summary Creates a Stripe checkout session for the user to subscribe.
+ * @summary **LEGACY DO NOT USE** Creates a Stripe checkout session for the user to subscribe.
  */
 export type createCheckoutSessionResponse200 = {
   data: StripeSessionResponse;
@@ -3559,6 +3429,78 @@ export const createCheckoutSession = async (
     status: res.status,
     headers: res.headers,
   } as createCheckoutSessionResponse;
+};
+
+/**
+ * @summary Creates a Stripe checkout session for the user to subscribe.
+ */
+export type createCheckoutSessionV2Response200 = {
+  data: StripeSessionResponse;
+  status: 200;
+};
+
+export type createCheckoutSessionV2Response400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type createCheckoutSessionV2Response404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type createCheckoutSessionV2Response409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type createCheckoutSessionV2Response500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createCheckoutSessionV2ResponseSuccess =
+  createCheckoutSessionV2Response200 & {
+    headers: Headers;
+  };
+export type createCheckoutSessionV2ResponseError = (
+  | createCheckoutSessionV2Response400
+  | createCheckoutSessionV2Response404
+  | createCheckoutSessionV2Response409
+  | createCheckoutSessionV2Response500
+) & {
+  headers: Headers;
+};
+
+export type createCheckoutSessionV2Response =
+  | createCheckoutSessionV2ResponseSuccess
+  | createCheckoutSessionV2ResponseError;
+
+export const getCreateCheckoutSessionV2Url = () => {
+  return `/user/stripe/checkoutv2`;
+};
+
+export const createCheckoutSessionV2 = async (
+  createCheckoutSessionV2Request: CreateCheckoutSessionV2Request,
+  options?: RequestInit
+): Promise<createCheckoutSessionV2Response> => {
+  const res = await fetch(getCreateCheckoutSessionV2Url(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createCheckoutSessionV2Request),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createCheckoutSessionV2Response['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createCheckoutSessionV2Response;
 };
 
 /**

@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use frecency::domain::models::AggregateFrecency;
 use item_filters::ast::{LiteralTree, email::EmailLiteral};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -18,6 +19,11 @@ pub struct PreviewCursorQuery {
     pub link_id: Uuid,
     pub limit: u32,
     pub query: Query<Uuid, SimpleSortMethod, LiteralTree<EmailLiteral>>,
+    /// When `Some(team_id)`, the dynamic query path expands the candidate
+    /// thread set from "only this `link_id`" to "every `link_id` owned by
+    /// any user on this team." Populated by the service after a successful
+    /// team_scope validation (see `validate_team_scope`).
+    pub team_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, Display)]
@@ -135,4 +141,9 @@ pub struct GetEmailsRequest {
     pub macro_id: MacroUserIdStr<'static>,
     pub limit: Option<u32>,
     pub query: Query<Uuid, SimpleSortMethod, LiteralTree<EmailLiteral>>,
+    /// Proof that the caller belongs to a team, when the query contains an
+    /// `EmailLiteral::TeamScope` literal. The receipt's `entity()` is the
+    /// team's UUID, which the query layer can use to expand visibility to
+    /// teammate mailboxes.
+    pub team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
 }

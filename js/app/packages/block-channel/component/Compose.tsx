@@ -269,7 +269,7 @@ export function ChannelCompose() {
             >
               <Surface
                 depth={2}
-                class="rounded-xl ring-1 ring-ink-muted/8"
+                class="rounded-xl ring-1 ring-edge"
                 style={{ border: '0' }}
               >
                 <Input.DropZone

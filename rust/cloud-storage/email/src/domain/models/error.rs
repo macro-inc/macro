@@ -50,4 +50,12 @@ pub enum EmailErr {
     /// Invalid email filter input.
     #[error("{0}")]
     InvalidEmailFilter(String),
+    /// A team-scoped query referenced an email domain that is either not
+    /// tracked as a CRM organization for the team, or whose organization
+    /// has `email_sync` disabled. Without email_sync, the team has not
+    /// opted into sharing emails for that organization across members.
+    #[error(
+        "Domain {0} is not authorized for team-scoped email queries (no matching CRM organization, or organization has email_sync disabled)"
+    )]
+    DomainNotPermittedForTeamScope(String),
 }

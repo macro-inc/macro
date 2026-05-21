@@ -8,10 +8,27 @@ use crate::{EmailFilters, SharedEmailFilter, ast::ExpandErr, ast::date::DateLite
 /// Possible email values in the ast
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Email {
-    /// A string which is not a valid fully qualified email
+    /// A string which is not a valid fully qualified email or domain
     Partial(String),
     /// a fully valid qualified [EmailStr]
     Complete(EmailStr<'static>),
+    /// a bare domain (e.g. "acme.com"), no local part
+    Domain(String),
+}
+
+/// Returns true if `s` looks like a bare domain: no `@`, at least two
+/// dot-separated segments, each made of alphanumeric or `-` characters.
+fn looks_like_domain(s: &str) -> bool {
+    if s.is_empty() || s.contains('@') {
+        return false;
+    }
+    let segments: Vec<&str> = s.split('.').collect();
+    if segments.len() < 2 {
+        return false;
+    }
+    segments
+        .iter()
+        .all(|seg| !seg.is_empty() && seg.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
 }
 
 /// The literal type that can appear in the item filter ast
@@ -37,6 +54,10 @@ pub enum EmailLiteral {
     NotificationSeen(bool),
     /// Controls whether shared email threads are included in results.
     Shared(SharedEmailFilter),
+    /// Expand visibility to every teammate's mailbox. Results may include
+    /// emails the requesting user is not a participant on, as long as at
+    /// least one teammate is.
+    TeamScope,
     /// When true, only include threads that have at least one message with an
     /// `.ics` calendar attachment (filename or `application/ics` mime type).
     /// When false, no constraint is applied.
@@ -64,31 +85,43 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             include_labels: _,
             exclude_labels: _,
             shared,
+            team_scope,
             calendar_only,
         } = input;
 
         fn map_email(s: String) -> Email {
-            match EmailStr::parse_from_str(&s) {
-                Ok(e) => Email::Complete(e.into_owned()),
-                Err(_) => Email::Partial(s),
+            if let Ok(e) = EmailStr::parse_from_str(&s) {
+                return Email::Complete(e.into_owned());
             }
+            if looks_like_domain(&s) {
+                return Email::Domain(s);
+            }
+            Email::Partial(s)
         }
 
-        let sender_nodes = senders
+        let mapped_senders: Vec<Email> = senders.into_iter().map(map_email).collect();
+        let mapped_cc: Vec<Email> = cc.into_iter().map(map_email).collect();
+        let mapped_bcc: Vec<Email> = bcc.into_iter().map(map_email).collect();
+        let mapped_recipients: Vec<Email> = recipients.into_iter().map(map_email).collect();
+
+        if team_scope
+            && mapped_senders
+                .iter()
+                .chain(&mapped_cc)
+                .chain(&mapped_bcc)
+                .chain(&mapped_recipients)
+                .any(|e| matches!(e, Email::Partial(_)))
+        {
+            return Err(ExpandErr::TeamScopeRequiresQualifiedEmail);
+        }
+
+        let sender_nodes = mapped_senders
             .into_iter()
-            .map(map_email)
             .expand(EmailLiteral::Sender, Expr::or);
-        let cc_nodes = cc
+        let cc_nodes = mapped_cc.into_iter().expand(EmailLiteral::Cc, Expr::or);
+        let bcc_nodes = mapped_bcc.into_iter().expand(EmailLiteral::Bcc, Expr::or);
+        let recipient_nodes = mapped_recipients
             .into_iter()
-            .map(map_email)
-            .expand(EmailLiteral::Cc, Expr::or);
-        let bcc_nodes = bcc
-            .into_iter()
-            .map(map_email)
-            .expand(EmailLiteral::Bcc, Expr::or);
-        let recipient_nodes = recipients
-            .into_iter()
-            .map(map_email)
             .expand(EmailLiteral::Recipient, Expr::or);
 
         let thread_id_nodes = email_thread_ids
@@ -112,6 +145,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
         } else {
             Some(Expr::Literal(EmailLiteral::Shared(shared)))
         };
+        let team_scope_node = team_scope.then_some(Expr::Literal(EmailLiteral::TeamScope));
         let calendar_only_node = calendar_only
             .filter(|v| *v)
             .map(|v| Expr::Literal(EmailLiteral::CalendarOnly(v)));
@@ -127,6 +161,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             notification_done_node,
             notification_seen_node,
             shared_node,
+            team_scope_node,
             calendar_only_node,
         ]
         .into_iter()

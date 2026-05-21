@@ -26,6 +26,7 @@ comms = { path = "../comms", features = ["outbound"] }
 connection = { path = "../connection", default-features = false, features = [
   "ports",
 ] }
+crm = { path = "../crm" }
 documents = { path = "../documents", features = ["ai_tools"] }
 email = { path = "../email", features = ["ai_schema", "ai_tools", "axum", "outbound"] }
 email_service_client = { path = "../email_service_client" }
