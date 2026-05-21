@@ -79,8 +79,6 @@ function VerticalBar() {
   return <div class="w-px mx-1 h-full bg-edge"></div>;
 }
 
-
-
 type DropdownItemProps = {
   label: string;
   icon: Component;
@@ -212,10 +210,7 @@ const InlineFormatMenuItem = (props: {
 }) => {
   const icon = InlineIcons[props.format];
   return (
-    <Dropdown.Item
-      onSelect={props.onClick}
-      disabled={props.buttonIsDisabled()}
-    >
+    <Dropdown.Item onSelect={props.onClick} disabled={props.buttonIsDisabled()}>
       <Dynamic component={icon} class="size-4 shrink-0" />
       <span class="flex-1 truncate capitalize">{props.format}</span>
       <Show when={InlineShortcuts[props.format]}>
@@ -288,10 +283,7 @@ const ElementFormatMenuItem = (
   const icon = () =>
     props.useIcon ? NodeMenuOptions[props.format]?.icon : undefined;
   return (
-    <Dropdown.Item
-      onSelect={props.onClick}
-      disabled={props.buttonIsDisabled()}
-    >
+    <Dropdown.Item onSelect={props.onClick} disabled={props.buttonIsDisabled()}>
       <Show when={icon()}>
         {(IconComp) => (
           <Dynamic
@@ -591,9 +583,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           <Dropdown.Group>
             <For each={Object.keys(InlineIcons)}>
               {(format) => (
-                <Show
-                  when={!props.excludes?.includes(format as InlineFormat)}
-                >
+                <Show when={!props.excludes?.includes(format as InlineFormat)}>
                   <InlineFormatMenuItem
                     format={format as InlineFormat}
                     selection={selection}
@@ -964,9 +954,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
                       <span class="flex-1 truncate">Equation</span>
                     </Dropdown.Item>
                     <Dropdown.Sub>
-                      <Dropdown.SubTrigger
-                        disabled={buttonIsDisabled()}
-                      >
+                      <Dropdown.SubTrigger disabled={buttonIsDisabled()}>
                         <Grid class="size-4 shrink-0" />
                         <span class="flex-1 truncate">Table</span>
                         <CaretRight class="size-3.5" />

@@ -57,7 +57,15 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { Button, ButtonGroup, cn, Dropdown, Panel, ToggleSwitch, Tooltip } from '@ui';
+import {
+  Button,
+  ButtonGroup,
+  cn,
+  Dropdown,
+  Panel,
+  ToggleSwitch,
+  Tooltip,
+} from '@ui';
 import type { Result } from 'neverthrow';
 import {
   type Accessor,
@@ -1413,10 +1421,7 @@ export function ShareOptions(props: {
         <ChevronDownIcon class="size-4 text-ink-extra-muted/50" />
       </Dropdown.Trigger>
       <Dropdown.Content>
-        <Dropdown.RadioGroup
-          value={currentValue()}
-          onChange={handleChange}
-        >
+        <Dropdown.RadioGroup value={currentValue()} onChange={handleChange}>
           <Dropdown.Group>
             <For each={options().filter((o) => o.value !== 'none')}>
               {(option) => {

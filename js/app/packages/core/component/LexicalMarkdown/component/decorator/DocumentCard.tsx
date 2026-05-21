@@ -366,9 +366,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
               <Dropdown.Group>
                 <Dropdown.Item onSelect={convertToMention}>
                   <Minimize class="size-4 shrink-0" />
-                  <span class="flex-1 truncate">
-                    Convert to Inline Mention
-                  </span>
+                  <span class="flex-1 truncate">Convert to Inline Mention</span>
                 </Dropdown.Item>
                 <Dropdown.Item onSelect={handleCopy}>
                   <Clipboard class="size-4 shrink-0" />

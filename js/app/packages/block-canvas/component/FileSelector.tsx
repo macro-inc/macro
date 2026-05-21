@@ -91,7 +91,12 @@ export function FileSelector() {
 
   return (
     <Dropdown open={fileSelectorOpen()} onOpenChange={setFileSelectorOpen}>
-      <Dropdown.Trigger variant="ghost" size="icon-md" label="File" tabIndex={-1}>
+      <Dropdown.Trigger
+        variant="ghost"
+        size="icon-md"
+        label="File"
+        tabIndex={-1}
+      >
         <FileText />
       </Dropdown.Trigger>
       <Dropdown.Content onCloseAutoFocus={focusCanvas}>

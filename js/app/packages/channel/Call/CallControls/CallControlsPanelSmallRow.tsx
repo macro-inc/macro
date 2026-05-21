@@ -72,132 +72,66 @@ export function CallControlsPanelSmallRow(
         </Dropdown.Trigger>
 
         <Dropdown.Content class="mb-2 w-72">
-            <Dropdown.Group>
-              <Dropdown.Item
-                closeOnSelect={false}
-                onSelect={() => void callCtx.toggleAudio()}
-              >
-                <Show
-                  when={!callCtx.isAudioMuted()}
-                  fallback={<MicrophoneSlash class="size-4 shrink-0" />}
-                >
-                  <Microphone class="size-4 shrink-0" />
-                </Show>
-                <span class="flex-1 truncate">
-                  {callCtx.isAudioMuted()
-                    ? 'Unmute microphone'
-                    : 'Mute microphone'}
-                </span>
-              </Dropdown.Item>
-            </Dropdown.Group>
-
-            <Dropdown.Group>
-              <Dropdown.GroupLabel>Microphone</Dropdown.GroupLabel>
-              <For each={callCtx.audioInputDevices()}>
-                {(device) => (
-                  <Dropdown.Item
-                    closeOnSelect={false}
-                    onSelect={() =>
-                      void callCtx.switchAudioInput(device.deviceId)
-                    }
-                  >
-                    <span class="flex-1 truncate">{device.label}</span>
-                    <span class="inline-flex w-3 shrink-0 justify-center">
-                      <Show
-                        when={
-                          callCtx.activeAudioInputDeviceId() ===
-                          device.deviceId
-                        }
-                      >
-                        <CheckIcon class="size-3 text-accent" />
-                      </Show>
-                    </span>
-                  </Dropdown.Item>
-                )}
-              </For>
-            </Dropdown.Group>
-
-            <Show when={callCtx.audioOutputDevices().length > 0}>
-              <Dropdown.Group>
-                <Dropdown.GroupLabel>Speaker</Dropdown.GroupLabel>
-                <For each={callCtx.audioOutputDevices()}>
-                  {(device) => (
-                    <Dropdown.Item
-                      closeOnSelect={false}
-                      onSelect={() =>
-                        void callCtx.switchAudioOutput(device.deviceId)
-                      }
-                    >
-                      <span class="flex-1 truncate">{device.label}</span>
-                      <span class="inline-flex w-3 shrink-0 justify-center">
-                        <Show
-                          when={
-                            callCtx.activeAudioOutputDeviceId() ===
-                            device.deviceId
-                          }
-                        >
-                          <CheckIcon class="size-3 text-accent" />
-                        </Show>
-                      </span>
-                    </Dropdown.Item>
-                  )}
-                </For>
-              </Dropdown.Group>
-            </Show>
-
-            <Dropdown.Group>
-              <Dropdown.Item
-                closeOnSelect={false}
-                onSelect={() => void callCtx.toggleNoiseSuppression()}
+          <Dropdown.Group>
+            <Dropdown.Item
+              closeOnSelect={false}
+              onSelect={() => void callCtx.toggleAudio()}
+            >
+              <Show
+                when={!callCtx.isAudioMuted()}
+                fallback={<MicrophoneSlash class="size-4 shrink-0" />}
               >
                 <Microphone class="size-4 shrink-0" />
-                <span class="flex-1 truncate">Noise suppression</span>
-                <div class="ml-auto flex items-center gap-1.5 shrink-0">
-                  <span class="text-xs text-ink-muted">
-                    {noiseSuppressionModeLabel()}
-                  </span>
-                  <ToggleSwitch
-                    checked={callCtx.isNoiseSuppressed()}
-                    class="pointer-events-none"
-                  />
-                </div>
-              </Dropdown.Item>
-            </Dropdown.Group>
+              </Show>
+              <span class="flex-1 truncate">
+                {callCtx.isAudioMuted()
+                  ? 'Unmute microphone'
+                  : 'Mute microphone'}
+              </span>
+            </Dropdown.Item>
+          </Dropdown.Group>
 
-            <Dropdown.Group>
-              <Dropdown.Item
-                closeOnSelect={false}
-                onSelect={() => void callCtx.toggleVideo()}
-              >
-                <Show
-                  when={!callCtx.isVideoMuted()}
-                  fallback={<VideoCameraSlash class="size-4 shrink-0" />}
+          <Dropdown.Group>
+            <Dropdown.GroupLabel>Microphone</Dropdown.GroupLabel>
+            <For each={callCtx.audioInputDevices()}>
+              {(device) => (
+                <Dropdown.Item
+                  closeOnSelect={false}
+                  onSelect={() =>
+                    void callCtx.switchAudioInput(device.deviceId)
+                  }
                 >
-                  <VideoCamera class="size-4 shrink-0" />
-                </Show>
-                <span class="flex-1 truncate">
-                  {callCtx.isVideoMuted()
-                    ? 'Turn camera on'
-                    : 'Turn camera off'}
-                </span>
-              </Dropdown.Item>
-            </Dropdown.Group>
+                  <span class="flex-1 truncate">{device.label}</span>
+                  <span class="inline-flex w-3 shrink-0 justify-center">
+                    <Show
+                      when={
+                        callCtx.activeAudioInputDeviceId() === device.deviceId
+                      }
+                    >
+                      <CheckIcon class="size-3 text-accent" />
+                    </Show>
+                  </span>
+                </Dropdown.Item>
+              )}
+            </For>
+          </Dropdown.Group>
 
+          <Show when={callCtx.audioOutputDevices().length > 0}>
             <Dropdown.Group>
-              <Dropdown.GroupLabel>Camera</Dropdown.GroupLabel>
-              <For each={callCtx.videoInputDevices()}>
+              <Dropdown.GroupLabel>Speaker</Dropdown.GroupLabel>
+              <For each={callCtx.audioOutputDevices()}>
                 {(device) => (
                   <Dropdown.Item
                     closeOnSelect={false}
                     onSelect={() =>
-                      void callCtx.switchVideoInput(device.deviceId)
+                      void callCtx.switchAudioOutput(device.deviceId)
                     }
                   >
                     <span class="flex-1 truncate">{device.label}</span>
                     <span class="inline-flex w-3 shrink-0 justify-center">
                       <Show
                         when={
-                          callCtx.activeVideoInputDeviceId() ===
+                          callCtx.activeAudioOutputDeviceId() ===
                           device.deviceId
                         }
                       >
@@ -208,57 +142,119 @@ export function CallControlsPanelSmallRow(
                 )}
               </For>
             </Dropdown.Group>
+          </Show>
 
-            <Dropdown.Group>
-              <Dropdown.Item
-                closeOnSelect={false}
-                onSelect={() => void callCtx.toggleScreenShare()}
-              >
-                <Screencast class="size-4 shrink-0" />
-                <span class="flex-1 truncate">
-                  {callCtx.isScreenSharing()
-                    ? 'Stop sharing screen'
-                    : 'Share screen'}
+          <Dropdown.Group>
+            <Dropdown.Item
+              closeOnSelect={false}
+              onSelect={() => void callCtx.toggleNoiseSuppression()}
+            >
+              <Microphone class="size-4 shrink-0" />
+              <span class="flex-1 truncate">Noise suppression</span>
+              <div class="ml-auto flex items-center gap-1.5 shrink-0">
+                <span class="text-xs text-ink-muted">
+                  {noiseSuppressionModeLabel()}
                 </span>
-              </Dropdown.Item>
-            </Dropdown.Group>
+                <ToggleSwitch
+                  checked={callCtx.isNoiseSuppressed()}
+                  class="pointer-events-none"
+                />
+              </div>
+            </Dropdown.Item>
+          </Dropdown.Group>
 
-            <Dropdown.Group>
-              <Dropdown.Item
-                closeOnSelect={false}
-                onSelect={() => void handleToggleShareWithTeam()}
+          <Dropdown.Group>
+            <Dropdown.Item
+              closeOnSelect={false}
+              onSelect={() => void callCtx.toggleVideo()}
+            >
+              <Show
+                when={!callCtx.isVideoMuted()}
+                fallback={<VideoCameraSlash class="size-4 shrink-0" />}
               >
-                <ShareNetwork class="size-4 shrink-0" />
-                <span class="flex-1 truncate">
-                  {callCtx.isSharedWithTeam()
-                    ? 'Shared with team'
-                    : 'Share with team'}
-                </span>
-                <div class="ml-auto flex items-center gap-1.5 shrink-0">
-                  <ToggleSwitch
-                    checked={callCtx.isSharedWithTeam()}
-                    class="pointer-events-none"
-                  />
-                  <Tooltip
-                    placement="left"
-                    label="When on, all team members can view and search this call's transcript and AI summary."
-                  >
-                    <Info class="size-3 text-ink-subtle" />
-                  </Tooltip>
-                </div>
-              </Dropdown.Item>
-            </Dropdown.Group>
+                <VideoCamera class="size-4 shrink-0" />
+              </Show>
+              <span class="flex-1 truncate">
+                {callCtx.isVideoMuted() ? 'Turn camera on' : 'Turn camera off'}
+              </span>
+            </Dropdown.Item>
+          </Dropdown.Group>
 
-            <Dropdown.Group>
-              <Dropdown.Item
-                class="text-failure hover:bg-failure/10"
-                onSelect={() => void props.onLeave()}
-              >
-                <PhoneDisconnect class="size-4 shrink-0" />
-                <span class="flex-1 truncate">Leave call</span>
-              </Dropdown.Item>
-            </Dropdown.Group>
-          </Dropdown.Content>
+          <Dropdown.Group>
+            <Dropdown.GroupLabel>Camera</Dropdown.GroupLabel>
+            <For each={callCtx.videoInputDevices()}>
+              {(device) => (
+                <Dropdown.Item
+                  closeOnSelect={false}
+                  onSelect={() =>
+                    void callCtx.switchVideoInput(device.deviceId)
+                  }
+                >
+                  <span class="flex-1 truncate">{device.label}</span>
+                  <span class="inline-flex w-3 shrink-0 justify-center">
+                    <Show
+                      when={
+                        callCtx.activeVideoInputDeviceId() === device.deviceId
+                      }
+                    >
+                      <CheckIcon class="size-3 text-accent" />
+                    </Show>
+                  </span>
+                </Dropdown.Item>
+              )}
+            </For>
+          </Dropdown.Group>
+
+          <Dropdown.Group>
+            <Dropdown.Item
+              closeOnSelect={false}
+              onSelect={() => void callCtx.toggleScreenShare()}
+            >
+              <Screencast class="size-4 shrink-0" />
+              <span class="flex-1 truncate">
+                {callCtx.isScreenSharing()
+                  ? 'Stop sharing screen'
+                  : 'Share screen'}
+              </span>
+            </Dropdown.Item>
+          </Dropdown.Group>
+
+          <Dropdown.Group>
+            <Dropdown.Item
+              closeOnSelect={false}
+              onSelect={() => void handleToggleShareWithTeam()}
+            >
+              <ShareNetwork class="size-4 shrink-0" />
+              <span class="flex-1 truncate">
+                {callCtx.isSharedWithTeam()
+                  ? 'Shared with team'
+                  : 'Share with team'}
+              </span>
+              <div class="ml-auto flex items-center gap-1.5 shrink-0">
+                <ToggleSwitch
+                  checked={callCtx.isSharedWithTeam()}
+                  class="pointer-events-none"
+                />
+                <Tooltip
+                  placement="left"
+                  label="When on, all team members can view and search this call's transcript and AI summary."
+                >
+                  <Info class="size-3 text-ink-subtle" />
+                </Tooltip>
+              </div>
+            </Dropdown.Item>
+          </Dropdown.Group>
+
+          <Dropdown.Group>
+            <Dropdown.Item
+              class="text-failure hover:bg-failure/10"
+              onSelect={() => void props.onLeave()}
+            >
+              <PhoneDisconnect class="size-4 shrink-0" />
+              <span class="flex-1 truncate">Leave call</span>
+            </Dropdown.Item>
+          </Dropdown.Group>
+        </Dropdown.Content>
       </Dropdown>
     </div>
   );

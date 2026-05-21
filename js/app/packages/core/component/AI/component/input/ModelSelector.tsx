@@ -7,9 +7,9 @@ import {
 import type { TModel } from '@core/component/AI/types';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
 import { Dropdown } from '@ui';
-import { Dynamic } from 'solid-js/web';
 import type { Accessor } from 'solid-js';
 import { For } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 
 type ModelSelectorProps = {
   selectedModel?: TModel;

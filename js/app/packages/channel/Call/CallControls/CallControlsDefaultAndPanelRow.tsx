@@ -88,10 +88,7 @@ function BackgroundEffectSelector() {
   };
 
   return (
-    <Dropdown.RadioGroup
-      value={currentEffectValue()}
-      onChange={handleChange}
-    >
+    <Dropdown.RadioGroup value={currentEffectValue()} onChange={handleChange}>
       <Dropdown.Group>
         <Dropdown.GroupLabel>Background</Dropdown.GroupLabel>
         <Dropdown.RadioItem value="none">

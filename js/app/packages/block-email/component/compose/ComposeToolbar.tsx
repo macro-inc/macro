@@ -230,10 +230,7 @@ function MobileToolbar(props: {
           </Dropdown.Trigger>
           <Dropdown.Content>
             <Dropdown.Group>
-              <Dropdown.Item
-                disabled={!ctx.hasDraft()}
-                onSelect={ctx.onDelete}
-              >
+              <Dropdown.Item disabled={!ctx.hasDraft()} onSelect={ctx.onDelete}>
                 <span class="flex-1 truncate">Delete Draft</span>
               </Dropdown.Item>
             </Dropdown.Group>

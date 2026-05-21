@@ -236,7 +236,10 @@ export function SlidableNumberInput(props: SlidableNumberInputProps) {
                 placement={'bottom'}
                 gutter={8}
               >
-                <Dropdown.Trigger variant="ghost" class="dropdown-menu__trigger">
+                <Dropdown.Trigger
+                  variant="ghost"
+                  class="dropdown-menu__trigger"
+                >
                   <div class="w-3 h-5 ml-1.5 flex items-center text-ink-muted">
                     <CaretDown width={12} height={12} />
                   </div>

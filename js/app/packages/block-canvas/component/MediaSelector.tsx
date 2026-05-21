@@ -129,11 +129,13 @@ export function MediaSelector() {
   });
 
   return (
-    <Dropdown
-      open={imageSelectorOpen()}
-      onOpenChange={setImageSelectorOpen}
-    >
-      <Dropdown.Trigger variant="ghost" size="icon-md" label="Media" tabIndex={-1}>
+    <Dropdown open={imageSelectorOpen()} onOpenChange={setImageSelectorOpen}>
+      <Dropdown.Trigger
+        variant="ghost"
+        size="icon-md"
+        label="Media"
+        tabIndex={-1}
+      >
         <Image />
       </Dropdown.Trigger>
       <Dropdown.Content onCloseAutoFocus={focusCanvas}>
