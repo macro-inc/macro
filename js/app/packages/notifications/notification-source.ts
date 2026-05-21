@@ -2,7 +2,7 @@ import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFla
 import type { Entity } from '@core/types';
 import {
   applyNotificationStatusUpdate,
-  type NotificationStatusUpdate,
+  notificationStatusUpdatePayloadSchema,
   optimisticInsertNotification,
   useMarkNotificationsAsDoneMutation,
   useMarkNotificationsAsSeenMutation,
@@ -216,20 +216,18 @@ export function createNotificationSource(
 
   createSocketEffect(ws, (wsData) => {
     if (wsData.type === NOTIFICATION_STATUS_UPDATED_EVENT_TYPE) {
-      try {
-        const update = (
-          typeof wsData.data === 'string'
-            ? JSON.parse(wsData.data)
-            : wsData.data
-        ) as NotificationStatusUpdate;
-        applyNotificationStatusUpdate(update);
-      } catch (e) {
-        console.error(
-          'Failed to parse notification status update',
+      const result = notificationStatusUpdatePayloadSchema.safeParse(
+        wsData.data
+      );
+      if (!result.success) {
+        console.warn(
+          'Malformed notification status update payload',
           wsData.data,
-          e
+          fromZodError(result.error)
         );
+        return;
       }
+      applyNotificationStatusUpdate(result.data);
       return;
     }
 
