@@ -53,8 +53,9 @@ async fn insert_company(
     .await?;
 
     for domain in domains {
-        sqlx::query(r#"INSERT INTO crm_domains (company_id, domain) VALUES ($1, $2)"#)
+        sqlx::query(r#"INSERT INTO crm_domains (company_id, team_id, domain) VALUES ($1, $2, $3)"#)
             .bind(company_id)
+            .bind(team_id)
             .bind(*domain)
             .execute(pool)
             .await?;
