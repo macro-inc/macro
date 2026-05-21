@@ -76,7 +76,6 @@ function ProviderButton(props: {
 }) {
   const isPrimary = () => props.variant === 'primary';
   const isSubmit = () => props.type === 'submit';
-  const hasLeading = () => !!props.icon;
   return (
     <Button
       type={props.type ?? 'button'}
@@ -164,6 +163,7 @@ function FormInput(props: {
   autoFocus?: boolean;
   monospace?: boolean;
   centered?: boolean;
+  class?: string;
   onInput?: JSX.ChangeEventHandlerUnion<HTMLInputElement, Event>;
 }) {
   const [el, setEl] = createSignal<HTMLInputElement>();
@@ -189,7 +189,8 @@ function FormInput(props: {
         'ln-input w-full px-4 py-3 rounded-lg border border-edge bg-surface text-sm text-ink placeholder:text-ink-placeholder focus:border-accent focus:outline-none transition-colors',
         'user-invalid:border-failure',
         props.monospace && 'font-mono tracking-[0.4em] text-base',
-        props.centered && 'text-center'
+        props.centered && 'text-center',
+        props.class
       )}
     />
   );
@@ -205,7 +206,10 @@ function FormError(props: { msg?: string }) {
   );
 }
 
-function EmailFormNew(props: { setStage: (next: Stage) => void }) {
+function EmailFormNew(props: {
+  setStage: (next: Stage) => void;
+  onBack: () => void;
+}) {
   const [isPasswordLogin, setIsPasswordLogin] = createSignal(false);
   const submission = useSubmission(sendEmailCode);
   const [searchParams] = useSearchParams();
@@ -256,6 +260,15 @@ function EmailFormNew(props: { setStage: (next: Stage) => void }) {
         trailingIcon={<ArrowRight />}
         disabled={submission.pending}
       />
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={props.onBack}
+        class="w-full rounded-lg"
+      >
+        <ArrowLeft class="size-4" />
+        Back
+      </Button>
     </form>
   );
 }
@@ -279,7 +292,10 @@ const verifyCode = action(async (formData: FormData) => {
 
 const RESEND_TIMER = 45;
 
-function VerifyFormNew(props: { setStage: (next: Stage) => void }) {
+function VerifyFormNew(props: {
+  setStage: (next: Stage) => void;
+  onBack: () => void;
+}) {
   const [code, setCode] = createSignal('');
   const [resendError, setResendError] = createSignal<string>();
   const [showResendCode, setShowResendCode] = createSignal(false);
@@ -353,25 +369,43 @@ function VerifyFormNew(props: { setStage: (next: Stage) => void }) {
         Enter the 6-digit code we sent to{' '}
         <span class="text-ink font-medium break-all">{email()}</span>.
       </p>
-      <FormInput
-        id="one-time-code"
-        type="text"
-        inputMode="numeric"
-        pattern="[0-9]{6}"
-        placeholder="••••••"
-        maxLength={6}
-        monospace
-        centered
-        onInput={(e) => {
-          const value = e.currentTarget.value;
-          setCode(value);
-          if (value.length === 6) {
-            const formData = new FormData(formEl);
-            formData.set('email', email());
-            submit(formData);
+      <div class="relative">
+        <FormInput
+          id="one-time-code"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]{6}"
+          placeholder="••••••"
+          maxLength={6}
+          monospace
+          centered
+          class="pr-20"
+          onInput={(e) => {
+            const value = e.currentTarget.value;
+            setCode(value);
+            if (value.length === 6) {
+              const formData = new FormData(formEl);
+              formData.set('email', email());
+              submit(formData);
+            }
+          }}
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={handleResendCode}
+          disabled={
+            emailSubmission.pending || submission.pending || !showResendCode()
           }
-        }}
-      />
+          aria-live="polite"
+          class="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs rounded-lg"
+        >
+          <Show when={resendTimer() > 0} fallback="Resend">
+            {resendTimer()}s
+          </Show>
+        </Button>
+      </div>
       <FormError msg={submission.error?.message ?? resendError()} />
       <ProviderButton
         variant="primary"
@@ -383,16 +417,11 @@ function VerifyFormNew(props: { setStage: (next: Stage) => void }) {
       <Button
         type="button"
         variant="ghost"
-        onClick={handleResendCode}
-        disabled={
-          emailSubmission.pending || submission.pending || !showResendCode()
-        }
-        aria-live="polite"
-        class="w-full px-4 py-3 text-sm"
+        onClick={props.onBack}
+        class="w-full rounded-lg"
       >
-        <Show when={resendTimer() > 0} fallback="Resend code">
-          Resend in {resendTimer()}s
-        </Show>
+        <ArrowLeft class="size-4" />
+        Back
       </Button>
     </form>
   );
@@ -542,34 +571,17 @@ export function LoginNew() {
         `
         }</style>
 
-        <div class="w-full sm:max-w-md ln-card">
-          <div class="px-8 py-6 flex flex-col gap-16">
+        <div class="w-full max-w-sm sm:max-w-md ln-card">
+          <div class="px-4 sm:px-8 flex flex-col gap-16">
             <div class="flex flex-col gap-8">
               <Show when={!virtualKeyboardVisible()}>
-                <div class="flex flex-col gap-3">
-                  <Show when={compactHeader()}>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      noTouchResize
-                      onClick={onBack}
-                      aria-label="Back"
-                      class="self-start shrink-0"
-                    >
-                      <ArrowLeft />
-                    </Button>
-                  </Show>
-                  <div class="flex flex-col items-center text-center gap-2">
-                    <LogoIcon class="shrink-0 text-accent size-10" />
-                    <h1
-                      class={cn(
-                        'font-semibold tracking-tight text-ink',
-                        compactHeader() ? 'text-lg' : 'text-2xl'
-                      )}
-                    >
-                      {headerTitle()}
-                    </h1>
-                  </div>
+                <div class="flex flex-col items-center text-center gap-2">
+                  <LogoIcon class="shrink-0 text-accent size-10" />
+                  <h1
+                    class={cn('font-semibold tracking-tight text-ink text-2xl')}
+                  >
+                    {headerTitle()}
+                  </h1>
                 </div>
               </Show>
 
@@ -593,10 +605,10 @@ export function LoginNew() {
                   </div>
                 </Stepper.Step>
                 <Stepper.Step>
-                  <EmailFormNew setStage={onStageChange} />
+                  <EmailFormNew setStage={onStageChange} onBack={onBack} />
                 </Stepper.Step>
                 <Stepper.Step>
-                  <VerifyFormNew setStage={onStageChange} />
+                  <VerifyFormNew setStage={onStageChange} onBack={onBack} />
                 </Stepper.Step>
               </Stepper>
             </div>
