@@ -15,7 +15,6 @@ export function SendAction(props: SendActionProps) {
   const [local, rest] = splitProps(props, ['class', 'tooltip', 'hidden']);
   const isBlockedByPending = () => !!input().hasPendingAttachments;
   const isBlockedByEmptyInput = () => !hasSendableInputContent(input());
-  const hasTextInput = () => (input().value?.trim().length ?? 0) > 0;
 
   const tooltipText = () => local.tooltip ?? 'Send message';
 
@@ -27,7 +26,7 @@ export function SendAction(props: SendActionProps) {
       data-input-action="send"
       pending={isBlockedByPending()}
       disabled={isBlockedByPending() || isBlockedByEmptyInput()}
-      hidden={isMobile() && !hasTextInput()}
+      hidden={isMobile() && isBlockedByEmptyInput()}
       class={local.class}
       onPointerDown={(event) => {
         event.preventDefault();
