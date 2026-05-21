@@ -11,12 +11,9 @@ export function getBackfillQueue(): {
   backfillQueueName: pulumi.Output<string>;
   backfillQueueArn: pulumi.Output<string>;
 } {
-  const emailServiceStack = new pulumi.StackReference(
-    'backfill-queue-stack',
-    {
-      name: `macro-inc/email-service/${stack}`,
-    }
-  );
+  const emailServiceStack = new pulumi.StackReference('backfill-queue-stack', {
+    name: `macro-inc/email-service/${stack}`,
+  });
 
   const backfillQueueArn: pulumi.Output<string> = emailServiceStack
     .getOutput('backfillQueueArn')
