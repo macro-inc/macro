@@ -131,7 +131,7 @@ function DropdownRadioItem(props: DropdownRadioItemProps) {
 function DropdownSub(props: DropdownSubProps) {
   return (
     <KobalteDropdownMenu.Sub
-      gutter={11}
+      gutter={2}
       shift={-7}
       {...props}
     />
