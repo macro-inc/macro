@@ -1,7 +1,7 @@
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
-import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
+import { EntityIcon } from '@core/component/EntityIcon';
 import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
@@ -15,16 +15,15 @@ import {
   createMarkdownFile,
   createTask,
 } from '@core/util/create';
+import CaretDown from '@phosphor/caret-down.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import CirclePlus from '@phosphor/plus-circle.svg';
 import { createProject } from '@queries/storage/projects';
-import { cn, Dialog, Dropdown, Surface } from '@ui';
+import { Dialog, Dropdown, Surface } from '@ui';
 import { type Component, createSignal, For } from 'solid-js';
 
 type MenuItemProps = {
   label: string;
-  blockName: BlockName | BlockAlias;
-  index?: number;
-  hotkeyToken: HotkeyToken;
   Icon: Component;
   action: () => void | Promise<void>;
 };
@@ -253,22 +252,12 @@ function ProjectCreateDialog(props: {
 }
 
 function MenuItem(props: MenuItemProps) {
-  const selectedColor = getIconConfig(props.blockName).foreground;
-
   return (
-    <Dropdown.Item
-      class={cn(
-        'flex justify-between items-center gap-12 px-1.5 py-1 text-sm isolate transition-transform ease-out duration-200 text-ink-extra-muted outline-none data-highlighted:bg-active',
-        `data-highlighted:${selectedColor}`
-      )}
-      onSelect={props.action}
-    >
-      <div class="flex items-center gap-1">
-        <div class="size-4">
-          <props.Icon />
-        </div>
-        <span>{props.label}</span>
+    <Dropdown.Item onSelect={props.action}>
+      <div class="size-4 shrink-0">
+        <props.Icon />
       </div>
+      <span>{props.label}</span>
     </Dropdown.Item>
   );
 }
@@ -279,8 +268,6 @@ function MenuContent(props: { projectId: string }) {
 
   const items: MenuItemProps[] = BLOCK_CREATE_SPECS.map((spec) => ({
     label: spec.label,
-    blockName: spec.blockName,
-    hotkeyToken: spec.hotkeyToken,
     Icon: spec.icon,
     action: () =>
       createBlock({
@@ -291,11 +278,9 @@ function MenuContent(props: { projectId: string }) {
   }));
 
   return (
-    <Dropdown.Content class="isolate relative flex flex-col gap-2 -mb-1 p-2 border-2 border-accent min-w-max">
-      <Dropdown.Group class="contents">
-        <For each={items}>
-          {(item, index) => <MenuItem {...item} index={index() + 1} />}
-        </For>
+    <Dropdown.Content class="min-w-max">
+      <Dropdown.Group>
+        <For each={items}>{(item) => <MenuItem {...item} />}</For>
       </Dropdown.Group>
     </Dropdown.Content>
   );
@@ -337,11 +322,14 @@ export function ProjectCreateMenu(props: { id: string }) {
     <Dropdown open={open()} onOpenChange={setOpen}>
       <div class="flex items-center">
         <Dropdown.Trigger
+          variant="base"
           size="sm"
-          variant={open() ? 'active' : 'base'}
-          class="h-min"
+          class="bg-surface py-3"
+          depth={2}
         >
+          <CirclePlus />
           Create
+          <CaretDown />
         </Dropdown.Trigger>
       </div>
       <MenuContent projectId={props.id} />
