@@ -324,7 +324,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
             <PlusIcon class="size-3" />
           </Show>
         </div>
-        <p class="text-sm font-medium">Add "{dropdown.searchQuery().trim()}"</p>
+        <p>Add "{dropdown.searchQuery().trim()}"</p>
       </div>
     </div>
   );
@@ -362,7 +362,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                 <Show
                   when={isValidNewOption() && props.onAddOption}
                   fallback={
-                    <div class="text-center py-6 text-ink-muted text-sm">
+                    <div class="text-center py-6 text-ink-muted">
                       No options available
                     </div>
                   }
@@ -383,7 +383,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                 <Show
                   when={selectableItems().length > 0}
                   fallback={
-                    <div class="text-center py-4 text-ink-muted text-sm">
+                    <div class="text-center py-4 text-ink-muted">
                       No options match your search
                     </div>
                   }
@@ -432,7 +432,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                                   optionId={optionItem().option.id}
                                 />
                                 <div class="flex-1 min-w-0 text-left">
-                                  <p class="text-sm font-medium truncate">
+                                  <p class="truncate">
                                     {optionItem().option.label}
                                   </p>
                                 </div>
@@ -460,7 +460,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                               >
                                 <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
                                 <div class="flex-1 min-w-0 text-left">
-                                  <p class="text-sm font-medium text-ink-muted truncate">
+                                  <p class="text-ink-muted truncate">
                                     {clear().label}
                                   </p>
                                 </div>

@@ -206,9 +206,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                       }}
                     >
                       <div class="flex items-center gap-2 flex-1 min-w-0">
-                        <p class="text-sm font-medium truncate">
-                          {option.displayText}
-                        </p>
+                        <p class="truncate">{option.displayText}</p>
                       </div>
 
                       <span class="text-xs text-ink-muted">
@@ -235,7 +233,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                 >
                   <div class="flex items-center gap-2 flex-1 min-w-0">
                     <div class="flex-1 min-w-0">
-                      <p class="text-sm font-medium truncate">Custom date...</p>
+                      <p class="truncate">Custom date...</p>
                     </div>
                   </div>
                   <div class="flex items-center gap-2 shrink-0">
@@ -259,9 +257,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                     }}
                   >
                     <div class="flex items-center gap-2 flex-1 min-w-0">
-                      <p class="text-sm font-medium truncate text-ink-muted">
-                        Clear date
-                      </p>
+                      <p class="truncate text-ink-muted">Clear date</p>
                     </div>
                   </div>
                 </Show>
