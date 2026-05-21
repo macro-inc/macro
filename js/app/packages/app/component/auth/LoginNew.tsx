@@ -20,16 +20,15 @@ import {
 import { authServiceClient } from '@service-auth/client';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { cn, Surface } from '@ui';
+import { Stepper } from '@ui/components/Stepper';
 import { detect } from 'detect-browser';
 import {
   createEffect,
   createSignal,
   type JSX,
-  Match,
   onCleanup,
   onMount,
   Show,
-  Switch,
 } from 'solid-js';
 import { EmailForm } from './EmailForm';
 import { Stage } from './Shared';
@@ -211,6 +210,9 @@ export function LoginNew() {
     setStage(next);
   };
 
+  const stepIndex = () =>
+    stage() === Stage.None ? 0 : stage() === Stage.Email ? 1 : 2;
+
   return (
     <Show when={!userInfo()?.authenticated} fallback={<PostLoginRedirect />}>
       <div class="flex items-center justify-center size-full p-8 overflow-hidden relative">
@@ -275,9 +277,12 @@ export function LoginNew() {
                 </span>
               </div>
 
-              <div class="flex flex-col gap-4">
-                <Switch>
-                  <Match when={stage() === Stage.None}>
+              <Stepper
+                step={stepIndex()}
+                transition={Stepper.transitions.slideFull}
+              >
+                <Stepper.Step>
+                  <div class="flex flex-col gap-4">
                     <LoginPicker setStage={onStageChange} />
                     <div class="flex gap-2 text-sm">
                       <div>New to Macro?</div>
@@ -289,15 +294,15 @@ export function LoginNew() {
                         Create an account
                       </a>
                     </div>
-                  </Match>
-                  <Match when={stage() === Stage.Email}>
-                    <EmailForm setStage={onStageChange} />
-                  </Match>
-                  <Match when={stage() === Stage.Verify}>
-                    <VerifyForm setStage={onStageChange} />
-                  </Match>
-                </Switch>
-              </div>
+                  </div>
+                </Stepper.Step>
+                <Stepper.Step>
+                  <EmailForm setStage={onStageChange} />
+                </Stepper.Step>
+                <Stepper.Step>
+                  <VerifyForm setStage={onStageChange} />
+                </Stepper.Step>
+              </Stepper>
 
               <div class="flex flex-col text-center text-xs text-ink-muted">
                 <div class="text-ink/50">
