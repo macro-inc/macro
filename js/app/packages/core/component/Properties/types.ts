@@ -136,14 +136,6 @@ export type PropertiesPanelProps = {
   onRefresh?: () => void;
 };
 
-export type PropertyEditorProps = {
-  property: Property;
-  onClose: () => void;
-  onSaved: () => void;
-  anchorRef?: HTMLElement;
-  entityType: EntityType;
-};
-
 export type PropertySelectorProps = {
   isOpen: boolean;
   onClose: () => void;

@@ -1,5 +1,3 @@
-export type { DropdownOption } from './Dropdown';
-export { Dropdown } from './Dropdown';
 export {
   type CombinedEntity,
   createEntitySearchConfig,

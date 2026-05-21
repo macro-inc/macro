@@ -7,20 +7,15 @@ import {
 import { Show } from 'solid-js/web';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import { CreatePropertyModal } from './CreatePropertyModal';
-import { EditPropertyValueModal } from './EditPropertyValueModal';
 import { SelectPropertyModal } from './SelectPropertyModal';
 
 export const Modals: Component = () => {
   const {
-    entityType,
     onPropertyAdded,
     properties,
-    onRefresh,
     propertySelectorModal,
-    propertyEditorModal,
     createPropertyModal,
     closePropertySelector,
-    closePropertyEditor,
     closeCreateProperty,
     onPropertyPinned,
   } = usePropertiesContext();
@@ -48,11 +43,6 @@ export const Modals: Component = () => {
     return properties().map((prop) => prop.propertyDefinitionId);
   });
 
-  const handlePropertySaved = () => {
-    onRefresh();
-    closePropertyEditor();
-  };
-
   const handlePropertyCreated = (propertyDefinitionId?: string) => {
     if (propertyDefinitionId) {
       onPropertyAdded([propertyDefinitionId]);
@@ -71,18 +61,6 @@ export const Modals: Component = () => {
           onClose={closePropertySelector}
           existingPropertyIds={existingPropertyIds}
         />
-      </Show>
-
-      <Show when={propertyEditorModal()}>
-        {(state) => (
-          <EditPropertyValueModal
-            property={state().property}
-            onClose={closePropertyEditor}
-            onSaved={handlePropertySaved}
-            anchorRef={state().anchor ?? undefined}
-            entityType={entityType}
-          />
-        )}
       </Show>
 
       <Show when={createPropertyModal()}>

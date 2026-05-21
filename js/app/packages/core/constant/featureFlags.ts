@@ -358,3 +358,8 @@ export const ENABLE_REFOCUS_HIGHLIGHT = resolveFeatureFlag(
   'ENABLE_REFOCUS_HIGHLIGHT',
   true
 );
+
+export const ENABLE_CREATE_PROPERTY = resolveFeatureFlag(
+  'ENABLE_CREATE_PROPERTY',
+  false
+);

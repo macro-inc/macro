@@ -1,3 +1,4 @@
+import { useMaybeBlockId } from '@core/block';
 import { usePropertiesContext } from '@core/component/Properties/context/PropertiesContext';
 import { getEntityValues, hasValue } from '@core/component/Properties/utils';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
@@ -18,6 +19,7 @@ type ListPropertyValueProps = {
  */
 export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
   const ctx = usePropertiesContext();
+  const blockId = useMaybeBlockId();
 
   const isUserEntity = () =>
     props.property.valueType === 'ENTITY' &&
@@ -32,7 +34,8 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
     <Property.Root
       property={props.property}
       canEdit={ctx.canEdit}
-      onEdit={ctx.openPropertyEditor}
+      onSave={ctx.saveHandler.saveProperty}
+      onRefresh={ctx.onRefresh}
     >
       <Property.Tooltip property={props.property}>
         <Layer depth={2}>
@@ -84,6 +87,9 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
           </Property.EditTrigger>
         </Layer>
       </Property.Tooltip>
+      <Property.PopoverEditor
+        entitySelfFilter={{ entityType: ctx.entityType, blockId }}
+      />
     </Property.Root>
   );
 };
