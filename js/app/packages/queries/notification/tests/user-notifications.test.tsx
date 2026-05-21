@@ -33,6 +33,11 @@ vi.mock('@queries/soup/normalized-cache', () => ({
   optimisticUpdateSoupItemUpdatedAt: vi.fn(),
 }));
 
+vi.mock('@app/signal/sidebarBadges', () => ({
+  removeBadgeNotifications: vi.fn(),
+}));
+
+import { removeBadgeNotifications } from '@app/signal/sidebarBadges';
 import { optimisticUpdateSoupItemUpdatedAt } from '@queries/soup/normalized-cache';
 import { notificationServiceClient } from '@service-notification/client';
 
@@ -45,6 +50,7 @@ const mockBulkMarkNotificationAsDone = vi.mocked(
 const mockOptimisticUpdateSoupItemUpdatedAt = vi.mocked(
   optimisticUpdateSoupItemUpdatedAt
 );
+const mockRemoveBadgeNotifications = vi.mocked(removeBadgeNotifications);
 
 let testQueryClient: QueryClient;
 
@@ -179,6 +185,7 @@ describe('notification realtime status updates', () => {
     expect(notifications[0].viewed_at).toBe('2024-01-01T00:00:00.000Z');
     expect(notifications[0].updated_at).toBe('2024-01-01T00:00:01.000Z');
     expect(notifications[1].viewed_at).toBe(null);
+    expect(mockRemoveBadgeNotifications).toHaveBeenCalledWith(['n1']);
   });
 
   it('handles legacy untagged patch/delete updates', () => {
@@ -223,6 +230,7 @@ describe('notification realtime status updates', () => {
     });
 
     expect(getNotificationsFromCache().map((n) => n.id)).toEqual(['n3']);
+    expect(mockRemoveBadgeNotifications).toHaveBeenCalledWith(['n1', 'n2']);
   });
 });
 
