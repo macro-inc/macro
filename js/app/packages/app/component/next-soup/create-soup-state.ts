@@ -307,6 +307,12 @@ export const createSoupState = <TId extends string = FilterID>(
         setFocusedIndex(idx);
         lastFocusedRowId = id;
       },
+      setIndex: (index: number) => {
+        const row = rows()[index];
+        if (!row) return;
+        setFocusedIndex(index);
+        lastFocusedRowId = row.id;
+      },
     },
 
     navigate: {
