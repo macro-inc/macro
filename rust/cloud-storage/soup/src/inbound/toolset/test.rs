@@ -31,6 +31,33 @@ fn test_default_values() {
 }
 
 #[test]
+fn test_full_ast_input_deserializes() {
+    let input = serde_json::json!({
+        "callf": {"l": {"CallId": "00000000-0000-0000-0000-000000000000"}},
+        "cf": {"l": {"cid": "00000000-0000-0000-0000-000000000000"}},
+        "chanf": {"l": {"ChannelId": "00000000-0000-0000-0000-000000000000"}},
+        "df": {"l": {"id": "00000000-0000-0000-0000-000000000000"}},
+        "ef": {"&": [
+            {"l": {"Importance": true}},
+            {"l": {"Shared": "exclude"}}
+        ]},
+        "emailView": "inbox",
+        "limit": 100,
+        "pf": {"l": {"pid": "00000000-0000-0000-0000-000000000000"}},
+        "sort_method": "updated_at"
+    });
+
+    let list: ListEntities = serde_json::from_value(input).unwrap();
+    assert_eq!(list.limit, Some(100));
+    assert!(matches!(list.sort_method, Some(ToolSoupSort::UpdatedAt)));
+    assert!(list.entity_filter_ast().is_ok());
+    assert_eq!(
+        list.email_view().unwrap(),
+        email::domain::models::PreviewView::default()
+    );
+}
+
+#[test]
 fn test_build_summary_empty() {
     let summary = build_summary(&[], false, &None);
     assert_eq!(summary, "No items found in workspace.");

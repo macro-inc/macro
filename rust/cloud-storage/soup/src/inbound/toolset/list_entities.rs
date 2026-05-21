@@ -7,7 +7,7 @@ use crate::domain::{
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use email::domain::{models::PreviewView, ports::EmailService};
-use item_filters::EntityFilters;
+use item_filters::ast::EntityFilterAst;
 use models_pagination::{SimpleSortMethod, TypeEraseCursor};
 use models_soup::item::SoupItem;
 use schemars::JsonSchema;
@@ -20,6 +20,7 @@ use super::SoupToolContext;
 
 /// Internal limit for results - not exposed to agents
 const RESULT_LIMIT: u16 = 50;
+const MAX_RESULT_LIMIT: u16 = 500;
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -36,6 +37,26 @@ impl From<SortBy> for SimpleSortMethod {
             SortBy::RecentlyViewed => SimpleSortMethod::ViewedAt,
             SortBy::RecentlyUpdated => SimpleSortMethod::UpdatedAt,
             SortBy::RecentlyCreated => SimpleSortMethod::CreatedAt,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolSoupSort {
+    ViewedAt,
+    UpdatedAt,
+    CreatedAt,
+    ViewedUpdated,
+}
+
+impl From<ToolSoupSort> for SimpleSortMethod {
+    fn from(sort: ToolSoupSort) -> Self {
+        match sort {
+            ToolSoupSort::ViewedAt => SimpleSortMethod::ViewedAt,
+            ToolSoupSort::UpdatedAt => SimpleSortMethod::UpdatedAt,
+            ToolSoupSort::CreatedAt => SimpleSortMethod::CreatedAt,
+            ToolSoupSort::ViewedUpdated => SimpleSortMethod::ViewedUpdated,
         }
     }
 }
@@ -127,16 +148,110 @@ pub struct ListEntitiesResponse {
 )]
 pub struct ListEntities {
     #[schemars(
-        description = "Filter to specific item types. If not provided, returns all types. Example: [\"document\", \"email\"] returns only documents and emails."
+        description = "Filter returned items to specific item types. If not provided, returns all types. Example: [\"document\", \"email\"] returns only documents and emails. This is applied after the soup query."
     )]
     #[serde(default)]
     pub include_types: Option<Vec<ItemType>>,
 
     #[schemars(
-        description = "How to sort results: recently_viewed (default), recently_updated, or recently_created."
+        description = "Legacy sort selector: recently_viewed (default), recently_updated, or recently_created. Prefer sort_method when using AST filters."
     )]
     #[serde(default)]
     pub sort_by: SortBy,
+
+    #[schemars(
+        description = "Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {\"l\":{\"id\":\"...\"}}."
+    )]
+    #[serde(default, rename = "df")]
+    pub document_filter: Option<serde_json::Value>,
+
+    #[schemars(description = "Full soup AST project filter (pf).")]
+    #[serde(default, rename = "pf")]
+    pub project_filter: Option<serde_json::Value>,
+
+    #[schemars(description = "Full soup AST AI chat filter (cf).")]
+    #[serde(default, rename = "cf")]
+    pub chat_filter: Option<serde_json::Value>,
+
+    #[schemars(
+        description = "Full soup AST email filter (ef). For signal emails use {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]}."
+    )]
+    #[serde(default, rename = "ef")]
+    pub email_filter: Option<serde_json::Value>,
+
+    #[schemars(description = "Full soup AST channel filter (chanf).")]
+    #[serde(default, rename = "chanf")]
+    pub channel_filter: Option<serde_json::Value>,
+
+    #[schemars(description = "Full soup AST call filter (callf).")]
+    #[serde(default, rename = "callf")]
+    pub call_filter: Option<serde_json::Value>,
+
+    #[schemars(description = "Full soup AST property filter (propf).")]
+    #[serde(default, rename = "propf")]
+    pub properties_filter: Option<serde_json::Value>,
+
+    #[schemars(
+        description = "Email view to use for email results: inbox (default), sent, drafts, starred, all, important, other, or user:<label>."
+    )]
+    #[serde(default, rename = "emailView")]
+    pub email_view: Option<String>,
+
+    #[schemars(
+        description = "Maximum number of soup items to fetch before includeTypes post-filtering. Defaults to 50; max 500."
+    )]
+    #[serde(default)]
+    pub limit: Option<u16>,
+
+    #[schemars(
+        description = "Soup sort method for AST queries: viewed_at, updated_at, created_at, or viewed_updated."
+    )]
+    #[serde(default, rename = "sort_method")]
+    pub sort_method: Option<ToolSoupSort>,
+}
+
+impl ListEntities {
+    pub(super) fn entity_filter_ast(&self) -> ToolResult<EntityFilterAst> {
+        let mut map = serde_json::Map::new();
+        if let Some(value) = &self.document_filter {
+            map.insert("df".to_string(), value.clone());
+        }
+        if let Some(value) = &self.project_filter {
+            map.insert("pf".to_string(), value.clone());
+        }
+        if let Some(value) = &self.chat_filter {
+            map.insert("cf".to_string(), value.clone());
+        }
+        if let Some(value) = &self.email_filter {
+            map.insert("ef".to_string(), value.clone());
+        }
+        if let Some(value) = &self.channel_filter {
+            map.insert("chanf".to_string(), value.clone());
+        }
+        if let Some(value) = &self.call_filter {
+            map.insert("callf".to_string(), value.clone());
+        }
+        if let Some(value) = &self.properties_filter {
+            map.insert("propf".to_string(), value.clone());
+        }
+
+        serde_json::from_value(serde_json::Value::Object(map)).map_err(|e| ToolCallError {
+            description: format!("Invalid soup AST filter: {e}"),
+            internal_error: e.into(),
+        })
+    }
+
+    pub(super) fn email_view(&self) -> ToolResult<PreviewView> {
+        self.email_view
+            .as_deref()
+            .map(|view| view.parse::<PreviewView>())
+            .transpose()
+            .map(|view| view.unwrap_or_default())
+            .map_err(|e| ToolCallError {
+                description: format!("Invalid emailView: {e}"),
+                internal_error: anyhow::anyhow!(e),
+            })
+    }
 }
 
 #[async_trait]
@@ -155,7 +270,16 @@ where
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "List entities");
 
-        let sort_method = SimpleSortMethod::from(self.sort_by);
+        let sort_method = self
+            .sort_method
+            .map(SimpleSortMethod::from)
+            .unwrap_or_else(|| SimpleSortMethod::from(self.sort_by));
+        let filters = self.entity_filter_ast()?;
+        let email_preview_view = self.email_view()?;
+        let limit = self
+            .limit
+            .unwrap_or(RESULT_LIMIT)
+            .clamp(1, MAX_RESULT_LIMIT);
 
         let link_id = service_context
             .email_service
@@ -172,10 +296,10 @@ where
             .get_user_soup(
                 SoupRequest {
                     soup_type: SoupType::Expanded,
-                    limit: RESULT_LIMIT,
-                    cursor: SoupQuery::new_sort_simple(sort_method, EntityFilters::default()),
+                    limit,
+                    cursor: SoupQuery::new_sort_simple(sort_method, filters),
                     user: request_context.user_id,
-                    email_preview_view: PreviewView::default(),
+                    email_preview_view,
                     link_id,
                 },
                 None,
