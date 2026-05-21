@@ -148,7 +148,7 @@ export const SidebarPromoHint = (props: SidebarPromoHintProps) => {
         fading() ? 'opacity-0' : 'opacity-100'
       )}
     >
-      <Surface depth={1}>
+      <Surface depth={2}>
         <div
           role="progressbar"
           aria-label="Auto-dismiss countdown"
@@ -169,10 +169,10 @@ export const SidebarPromoHint = (props: SidebarPromoHintProps) => {
               {props.title}
             </h3>
           </header>
-          <p class="text-xs text-ink-extra-muted leading-snug m-0">
+          <p class="text-xs text-ink-extra-muted leading-snug m-0 min-h-[3lh]">
             {props.message}
           </p>
-          <div class="flex items-center justify-end gap-1 mt-1">
+          <div class="flex items-center justify-end gap-1 mt-2.5">
             <Show when={props.secondaryAction}>
               {(action) => (
                 <Button
