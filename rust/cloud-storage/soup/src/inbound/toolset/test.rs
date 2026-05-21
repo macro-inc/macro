@@ -58,6 +58,17 @@ fn test_full_ast_input_deserializes() {
 }
 
 #[test]
+fn test_email_preset_defaults_to_email_results() {
+    let list: ListEntities = serde_json::from_value(serde_json::json!({
+        "emailPreset": "important"
+    }))
+    .unwrap();
+
+    assert!(list.entity_filter_ast().unwrap().email_filter.is_some());
+    assert_eq!(list.effective_include_types(), Some(vec![ItemType::Email]));
+}
+
+#[test]
 fn test_build_summary_empty() {
     let summary = build_summary(&[], false, &None);
     assert_eq!(summary, "No items found in workspace.");

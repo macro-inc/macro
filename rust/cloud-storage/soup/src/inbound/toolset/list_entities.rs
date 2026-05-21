@@ -7,7 +7,11 @@ use crate::domain::{
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use email::domain::{models::PreviewView, ports::EmailService};
-use item_filters::ast::EntityFilterAst;
+use filter_ast::Expr;
+use item_filters::{
+    SharedEmailFilter,
+    ast::{EntityFilterAst, email::EmailLiteral},
+};
 use models_pagination::{SimpleSortMethod, TypeEraseCursor};
 use models_soup::item::SoupItem;
 use schemars::JsonSchema;
@@ -15,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use cowlike::CowLike;
+use std::sync::Arc;
 
 use super::SoupToolContext;
 
@@ -57,6 +62,24 @@ impl From<ToolSoupSort> for SimpleSortMethod {
             ToolSoupSort::UpdatedAt => SimpleSortMethod::UpdatedAt,
             ToolSoupSort::CreatedAt => SimpleSortMethod::CreatedAt,
             ToolSoupSort::ViewedUpdated => SimpleSortMethod::ViewedUpdated,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum EmailPreset {
+    Important,
+    Signal,
+}
+
+impl EmailPreset {
+    fn filter(self) -> Expr<EmailLiteral> {
+        match self {
+            EmailPreset::Important | EmailPreset::Signal => Expr::and(
+                Expr::val(EmailLiteral::Importance(true)),
+                Expr::val(EmailLiteral::Shared(SharedEmailFilter::Exclude)),
+            ),
         }
     }
 }
@@ -174,7 +197,13 @@ pub struct ListEntities {
     pub chat_filter: Option<serde_json::Value>,
 
     #[schemars(
-        description = "Full soup AST email filter (ef). For signal emails use {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]}."
+        description = "High-level email filter preset. Use \"important\" or \"signal\" for important/signaled inbox emails; this expands to the email AST {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]} and defaults results to emails if includeTypes is omitted."
+    )]
+    #[serde(default)]
+    pub email_preset: Option<EmailPreset>,
+
+    #[schemars(
+        description = "Advanced full soup AST email filter (ef). Prefer emailPreset for common requests. Signal/important emails use {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]}."
     )]
     #[serde(default, rename = "ef")]
     pub email_filter: Option<serde_json::Value>,
@@ -235,10 +264,36 @@ impl ListEntities {
             map.insert("propf".to_string(), value.clone());
         }
 
-        serde_json::from_value(serde_json::Value::Object(map)).map_err(|e| ToolCallError {
-            description: format!("Invalid soup AST filter: {e}"),
-            internal_error: e.into(),
-        })
+        let mut ast: EntityFilterAst = serde_json::from_value(serde_json::Value::Object(map))
+            .map_err(|e| ToolCallError {
+                description: format!("Invalid soup AST filter: {e}"),
+                internal_error: e.into(),
+            })?;
+
+        if let Some(email_preset) = self.email_preset {
+            let preset_filter = email_preset.filter();
+            ast.email_filter = Some(Arc::new(match ast.email_filter.take() {
+                Some(existing) => {
+                    let existing = match Arc::try_unwrap(existing) {
+                        Ok(existing) => existing,
+                        Err(existing) => serde_json::from_value(
+                            serde_json::to_value(&*existing).map_err(|e| ToolCallError {
+                                description: format!("Failed to clone existing email AST: {e}"),
+                                internal_error: e.into(),
+                            })?,
+                        )
+                        .map_err(|e| ToolCallError {
+                            description: format!("Failed to clone existing email AST: {e}"),
+                            internal_error: e.into(),
+                        })?,
+                    };
+                    Expr::and(existing, preset_filter)
+                }
+                None => preset_filter,
+            }));
+        }
+
+        Ok(ast)
     }
 
     pub(super) fn email_view(&self) -> ToolResult<PreviewView> {
@@ -251,6 +306,12 @@ impl ListEntities {
                 description: format!("Invalid emailView: {e}"),
                 internal_error: anyhow::anyhow!(e),
             })
+    }
+
+    pub(super) fn effective_include_types(&self) -> Option<Vec<ItemType>> {
+        self.include_types
+            .clone()
+            .or_else(|| self.email_preset.is_some().then_some(vec![ItemType::Email]))
     }
 }
 
@@ -320,7 +381,8 @@ where
             .map(|FrecencySoupItem { item, .. }| EntityItem::from(item))
             .collect();
 
-        let items: Vec<EntityItem> = match &self.include_types {
+        let effective_include_types = self.effective_include_types();
+        let items: Vec<EntityItem> = match &effective_include_types {
             Some(types) if !types.is_empty() => all_items
                 .into_iter()
                 .filter(|item| types.contains(&item.item_type()))
@@ -329,7 +391,7 @@ where
         };
 
         // Build summary
-        let summary = build_summary(&items, has_more, &self.include_types);
+        let summary = build_summary(&items, has_more, &effective_include_types);
 
         Ok(ListEntitiesResponse { items, summary })
     }
