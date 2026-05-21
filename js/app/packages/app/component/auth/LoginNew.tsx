@@ -63,28 +63,53 @@ function PostLoginRedirect() {
 }
 
 function ProviderButton(props: {
-  icon: JSX.Element;
+  icon?: JSX.Element;
   label: string;
-  onClick: () => void;
+  onClick?: () => void;
   variant?: 'primary' | 'secondary';
+  type?: 'button' | 'submit';
   autofocus?: boolean;
+  disabled?: boolean;
 }) {
   const isPrimary = () => props.variant === 'primary';
+  const isSubmit = () => props.type === 'submit';
+  const hasIcon = () => !!props.icon;
   return (
     <button
-      type="button"
-      onClick={props.onClick}
+      type={props.type ?? 'button'}
+      disabled={props.disabled}
+      onClick={(e) => {
+        if (isSubmit()) {
+          if (isTouchDevice()) e.preventDefault();
+          return;
+        }
+        if (isTouchDevice()) return;
+        props.onClick?.();
+      }}
+      onPointerDown={(e) => {
+        if (!isTouchDevice()) return;
+        e.stopPropagation();
+        e.preventDefault();
+        if (isSubmit()) {
+          e.currentTarget.form?.requestSubmit();
+        } else {
+          props.onClick?.();
+        }
+      }}
       class={cn(
-        'flex items-center gap-3 w-full px-4 py-3 rounded-lg text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
+        'flex items-center w-full px-4 py-3 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
+        hasIcon() ? 'gap-3' : 'justify-center',
         isPrimary()
-          ? 'bg-ink text-surface outline-2 outline-transparent hover:outline-accent active:outline-accent'
-          : 'bg-surface text-ink border border-edge hover:border-edge hover:bg-hover/50'
+          ? 'bg-ink text-surface outline-2 outline-transparent hover:outline-accent active:outline-accent disabled:bg-ink/30 disabled:text-surface/70 disabled:cursor-not-allowed disabled:hover:outline-transparent'
+          : 'bg-surface text-ink border border-edge hover:border-edge hover:bg-hover/50 disabled:opacity-50 disabled:cursor-not-allowed'
       )}
       autofocus={props.autofocus ? true : undefined}
       tabIndex={0}
     >
-      <span class="shrink-0 inline-flex">{props.icon}</span>
-      <span class="flex-1 text-left">{props.label}</span>
+      <Show when={props.icon}>
+        <span class="shrink-0 inline-flex">{props.icon}</span>
+      </Show>
+      <span class={cn(hasIcon() && 'flex-1 text-left')}>{props.label}</span>
     </button>
   );
 }
@@ -171,32 +196,6 @@ function FormInput(props: {
   );
 }
 
-function SubmitButton(props: {
-  label: string;
-  pending?: boolean;
-  disabled?: boolean;
-}) {
-  const isDisabled = () => props.pending || props.disabled;
-  return (
-    <button
-      type="submit"
-      disabled={isDisabled()}
-      onClick={(e) => {
-        if (isTouchDevice()) e.preventDefault();
-      }}
-      onPointerDown={(e) => {
-        if (!isTouchDevice()) return;
-        e.stopPropagation();
-        e.preventDefault();
-        e.currentTarget.form?.requestSubmit();
-      }}
-      class="flex items-center justify-center w-full px-4 py-3 rounded-lg text-sm font-medium bg-ink text-surface outline-2 outline-transparent hover:outline-accent active:outline-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:bg-ink/30 disabled:text-surface/70 disabled:cursor-not-allowed disabled:hover:outline-transparent transition-colors"
-    >
-      {props.label}
-    </button>
-  );
-}
-
 function FormError(props: { msg?: string }) {
   return (
     <Show when={props.msg}>
@@ -252,7 +251,12 @@ function EmailFormNew(props: { setStage: (next: Stage) => void }) {
         />
       </Show>
       <FormError msg={submission.error?.message} />
-      <SubmitButton label="Continue" pending={submission.pending} />
+      <ProviderButton
+        variant="primary"
+        type="submit"
+        label="Continue"
+        disabled={submission.pending}
+      />
     </form>
   );
 }
@@ -370,20 +374,20 @@ function VerifyFormNew(props: { setStage: (next: Stage) => void }) {
         }}
       />
       <FormError msg={submission.error?.message ?? resendError()} />
-      <SubmitButton
+      <ProviderButton
+        variant="primary"
+        type="submit"
         label="Verify"
-        pending={submission.pending}
-        disabled={code().length !== 6}
+        disabled={submission.pending || code().length !== 6}
       />
       <Button
         type="button"
         variant="ghost"
-        size="sm"
         onClick={handleResendCode}
         disabled={
           emailSubmission.pending || submission.pending || !showResendCode()
         }
-        class="self-center text-accent hover:text-accent hover:bg-accent/10"
+        class="w-full px-4 py-3 text-sm"
       >
         <Show when={resendTimer() > 0} fallback="Resend code">
           Resend in {resendTimer()}s
@@ -569,19 +573,20 @@ export function LoginNew() {
           <Surface class="rounded-xl" depth={1}>
             <div
               class={cn(
-                'relative p-8 flex flex-col gap-16',
+                'p-8 flex flex-col gap-16',
                 compactHeader() && 'gap-8'
               )}
             >
               <Show when={compactHeader()}>
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={onBack}
-                  class="absolute top-4 right-4 z-10 flex items-center gap-1 px-2 py-1 rounded-md text-xs text-ink-muted hover:text-ink hover:bg-hover/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  class="self-start -ml-2"
                 >
-                  <ArrowLeft class="size-3" />
-                  <span>Back</span>
-                </button>
+                  <ArrowLeft />
+                  Back
+                </Button>
               </Show>
               <div
                 class={cn(
