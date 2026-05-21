@@ -1,6 +1,0 @@
-import '../database.just'
-
-mod sqlx '../sqlx.just'
-
-prepare_db:
-    just sqlx::prepare_db {{ DATABASE_URL }}
