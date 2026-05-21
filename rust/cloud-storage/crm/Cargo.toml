@@ -21,4 +21,5 @@ uuid = { workspace = true }
 sqlx = { workspace = true, optional = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros"] }
