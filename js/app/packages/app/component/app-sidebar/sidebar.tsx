@@ -4,6 +4,10 @@ import {
   InviteModal,
   setInviteModalOpen,
 } from '@app/component/app-sidebar/invite-modal';
+import {
+  SidebarPromoCard,
+  SidebarPromoHint,
+} from '@app/component/app-sidebar/sidebar-promo';
 import { CommandState } from '@app/component/command';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
 import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
@@ -76,10 +80,6 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import {
-  SidebarPromoCard,
-  SidebarPromoHint,
-} from '@app/component/app-sidebar/sidebar-promo';
 import { Dynamic } from 'solid-js/web';
 
 interface SidebarItem {
