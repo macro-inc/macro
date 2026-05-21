@@ -10,9 +10,7 @@ use ai::tool::AsyncToolCollection;
 use email::domain::ports::EmailService;
 use std::sync::Arc;
 
-pub use list_entities::{
-    EntityItem, ItemType, ListEntities, ListEntitiesResponse, SortBy, ToolSoupSort,
-};
+pub use list_entities::{EntityItem, ItemType, ListEntities, ListEntitiesResponse, SortBy};
 
 /// Service context for soup AI tools
 pub struct SoupToolContext<T: SoupService, E: EmailService> {

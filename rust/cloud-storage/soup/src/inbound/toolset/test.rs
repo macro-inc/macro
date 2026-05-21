@@ -45,12 +45,12 @@ fn test_full_ast_input_deserializes() {
         "emailView": "inbox",
         "limit": 100,
         "pf": {"l": {"pid": "00000000-0000-0000-0000-000000000000"}},
-        "sort_method": "updated_at"
+        "sortBy": "recently_updated"
     });
 
     let list: ListEntities = serde_json::from_value(input).unwrap();
     assert_eq!(list.limit, Some(100));
-    assert!(matches!(list.sort_method, Some(ToolSoupSort::UpdatedAt)));
+    assert!(matches!(list.sort_by, SortBy::RecentlyUpdated));
     assert!(!list.entity_filter_ast().is_empty());
     assert_eq!(
         list.email_view().unwrap(),

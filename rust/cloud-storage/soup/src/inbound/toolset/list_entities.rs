@@ -50,37 +50,16 @@ impl From<SortBy> for SimpleSortMethod {
     }
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ToolSoupSort {
-    ViewedAt,
-    UpdatedAt,
-    CreatedAt,
-    ViewedUpdated,
-}
-
-impl From<ToolSoupSort> for SimpleSortMethod {
-    fn from(sort: ToolSoupSort) -> Self {
-        match sort {
-            ToolSoupSort::ViewedAt => SimpleSortMethod::ViewedAt,
-            ToolSoupSort::UpdatedAt => SimpleSortMethod::UpdatedAt,
-            ToolSoupSort::CreatedAt => SimpleSortMethod::CreatedAt,
-            ToolSoupSort::ViewedUpdated => SimpleSortMethod::ViewedUpdated,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum EmailPreset {
     Important,
-    Signal,
 }
 
 impl EmailPreset {
     fn filter(self) -> Expr<EmailLiteral> {
         match self {
-            EmailPreset::Important | EmailPreset::Signal => Expr::and(
+            EmailPreset::Important => Expr::and(
                 Expr::val(EmailLiteral::Importance(true)),
                 Expr::val(EmailLiteral::Shared(SharedEmailFilter::Exclude)),
             ),
@@ -181,7 +160,7 @@ pub struct ListEntities {
     pub include_types: Option<Vec<ItemType>>,
 
     #[schemars(
-        description = "Legacy sort selector: recently_viewed (default), recently_updated, or recently_created. Prefer sort_method when using AST filters."
+        description = "How to sort results: recently_viewed (default), recently_updated, or recently_created. Use recently_updated for updated_at-style soup results."
     )]
     #[serde(default)]
     pub sort_by: SortBy,
@@ -208,13 +187,13 @@ pub struct ListEntities {
     pub chat_filter: LiteralTree<ChatLiteral>,
 
     #[schemars(
-        description = "High-level email filter preset. Use \"important\" or \"signal\" for important/signaled inbox emails; this expands to the email AST {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]} and defaults results to emails if includeTypes is omitted."
+        description = "High-level email filter preset. Use \"important\" for important/signaled inbox emails; this expands to the email AST {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]} and defaults results to emails if includeTypes is omitted."
     )]
     #[serde(default)]
     pub email_preset: Option<EmailPreset>,
 
     #[schemars(
-        description = "Advanced full soup AST email filter (ef). Prefer emailPreset for common requests. Signal/important emails use {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]}.",
+        description = "Advanced full soup AST email filter (ef). Prefer emailPreset for common requests. Important/signaled emails use {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]}.",
         with = "Option<serde_json::Value>"
     )]
     #[serde(default, rename = "ef")]
@@ -252,12 +231,6 @@ pub struct ListEntities {
     )]
     #[serde(default)]
     pub limit: Option<u16>,
-
-    #[schemars(
-        description = "Soup sort method for AST queries: viewed_at, updated_at, created_at, or viewed_updated."
-    )]
-    #[serde(default, rename = "sort_method")]
-    pub sort_method: Option<ToolSoupSort>,
 }
 
 impl ListEntities {
@@ -318,10 +291,7 @@ where
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "List entities");
 
-        let sort_method = self
-            .sort_method
-            .map(SimpleSortMethod::from)
-            .unwrap_or_else(|| SimpleSortMethod::from(self.sort_by));
+        let sort_method = SimpleSortMethod::from(self.sort_by);
         let filters = self.entity_filter_ast();
         let email_preview_view = self.email_view()?;
         let limit = self
