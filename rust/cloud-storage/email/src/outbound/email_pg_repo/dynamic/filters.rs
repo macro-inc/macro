@@ -85,11 +85,12 @@ fn build_address_predicate_on_m(
     email: &Email,
     resolved: &ResolvedFilters,
 ) -> SqlFragment {
-    match (resolved.contact_id_for(email), email) {
-        (Some(contact_id), _) => match kind {
+    match (resolved.contact_ids_for(email), email) {
+        (Some(contact_ids), _) => match kind {
             AddressKind::Sender => {
-                let mut f = SqlFragment::raw("m.from_contact_id = ");
-                f.extend(SqlFragment::bind_uuid(contact_id));
+                let mut f = SqlFragment::raw("m.from_contact_id = ANY(");
+                f.extend(SqlFragment::bind_uuid_array(contact_ids.to_vec()));
+                f.push_raw(")");
                 f
             }
             _ => {
@@ -99,43 +100,71 @@ fn build_address_predicate_on_m(
                     SELECT 1 FROM email_message_recipients mr
                     WHERE mr.message_id = m.id
                     AND mr.recipient_type = '{recipient_type}'
-                    AND mr.contact_id = "#,
+                    AND mr.contact_id = ANY("#,
                 ));
-                f.extend(SqlFragment::bind_uuid(contact_id));
-                f.push_raw("\n                )");
+                f.extend(SqlFragment::bind_uuid_array(contact_ids.to_vec()));
+                f.push_raw(")\n                )");
                 f
             }
         },
         (None, Email::Complete(_)) => SqlFragment::raw("FALSE"),
+        // Partial: substring match against the full address text. Used for
+        // fuzzy "type a fragment" lookups (e.g. searching "jo" → "john@..."
+        // and "joe@..."). Rides the trigram index on email_address.
         (None, Email::Partial(s)) => {
             let pattern = format!("%{}%", escape_like_pattern(s));
-            match kind {
-                AddressKind::Sender => {
-                    let mut f = SqlFragment::raw(
-                        r#"EXISTS (
+            build_address_text_match(kind, "c.email_address ILIKE ", pattern)
+        }
+        // Domain: exact match on the domain portion of the address. Backed
+        // by the expression index on `LOWER(SPLIT_PART(email_address, '@', 2))`
+        // so the lookup is an index seek rather than a trigram substring
+        // scan, and there are no false positives like `macro.community`
+        // matching the domain `macro.com`.
+        (None, Email::Domain(s)) => {
+            let domain = s.to_ascii_lowercase();
+            build_address_text_match(
+                kind,
+                "LOWER(SPLIT_PART(c.email_address, '@', 2)) = ",
+                domain,
+            )
+        }
+    }
+}
+
+/// Shared shape for "join `email_contacts`, apply a single bound predicate
+/// against `c.*`". `predicate_prefix` is the SQL up to the bind site
+/// (e.g. `"c.email_address ILIKE "`), and `bind_value` is the string that
+/// gets bound at that position.
+fn build_address_text_match(
+    kind: AddressKind,
+    predicate_prefix: &str,
+    bind_value: String,
+) -> SqlFragment {
+    match kind {
+        AddressKind::Sender => {
+            let mut f = SqlFragment::raw(format!(
+                r#"EXISTS (
                     SELECT 1 FROM email_contacts c
                     WHERE c.id = m.from_contact_id
-                    AND c.email_address ILIKE "#,
-                    );
-                    f.extend(SqlFragment::bind_string(pattern));
-                    f.push_raw("\n                )");
-                    f
-                }
-                _ => {
-                    let recipient_type = kind.recipient_type_sql().expect("non-sender kind");
-                    let mut f = SqlFragment::raw(format!(
-                        r#"EXISTS (
+                    AND {predicate_prefix}"#
+            ));
+            f.extend(SqlFragment::bind_string(bind_value));
+            f.push_raw("\n                )");
+            f
+        }
+        _ => {
+            let recipient_type = kind.recipient_type_sql().expect("non-sender kind");
+            let mut f = SqlFragment::raw(format!(
+                r#"EXISTS (
                     SELECT 1 FROM email_message_recipients mr
                     JOIN email_contacts c ON mr.contact_id = c.id
                     WHERE mr.message_id = m.id
                     AND mr.recipient_type = '{recipient_type}'
-                    AND c.email_address ILIKE "#,
-                    ));
-                    f.extend(SqlFragment::bind_string(pattern));
-                    f.push_raw("\n                )");
-                    f
-                }
-            }
+                    AND {predicate_prefix}"#,
+            ));
+            f.extend(SqlFragment::bind_string(bind_value));
+            f.push_raw("\n                )");
+            f
         }
     }
 }
@@ -287,6 +316,7 @@ pub(super) fn build_message_email_filter(
             SqlFragment::raw("TRUE")
         }
         filter_ast::ExprFrame::Literal(EmailLiteral::Shared(_)) => SqlFragment::raw("TRUE"),
+        filter_ast::ExprFrame::Literal(EmailLiteral::TeamScope) => SqlFragment::raw("TRUE"),
         filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(_)) => SqlFragment::raw("TRUE"),
         filter_ast::ExprFrame::Literal(EmailLiteral::CreatedAt(_)) => SqlFragment::raw("TRUE"),
         filter_ast::ExprFrame::Literal(EmailLiteral::UpdatedAt(_)) => SqlFragment::raw("TRUE"),
@@ -381,28 +411,28 @@ fn build_address_message_predicate(
 }
 
 /// Builds the `NOT EXISTS (… TRASH …)` fragment used inside the candidate
-/// subquery. Uses a direct `ml.label_id = $trash_label_id` probe (full PK
-/// match on `email_message_labels`) when the trash label is resolved.
-/// Returns `TRUE` (no exclusion) when the link has no TRASH label —
-/// callers must always pre-resolve via `resolve_filters`, and a missing
-/// TRASH label means no message can be trashed in the first place.
+/// subquery. Uses `ml.label_id = ANY($trash_label_ids)` so the probe
+/// excludes TRASH messages across every link in scope (one link for
+/// per-mailbox queries, all team links for team-scoped queries).
+/// Returns `TRUE` (no exclusion) when no in-scope link has a TRASH label —
+/// callers must always pre-resolve via `resolve_filters`, and an empty set
+/// means no message can be trashed in the first place.
 fn build_trash_check(resolved: &ResolvedFilters) -> SqlFragment {
-    match resolved.trash_label_id() {
-        Some(id) => {
-            let mut f = SqlFragment::raw(
-                r#"NOT EXISTS (
-                      SELECT 1 FROM email_message_labels ml
-                      WHERE ml.message_id = m.id AND ml.label_id = "#,
-            );
-            f.extend(SqlFragment::bind_uuid(id));
-            f.push_raw(
-                r#"
-                  )"#,
-            );
-            f
-        }
-        None => SqlFragment::raw("TRUE"),
+    let ids = resolved.trash_label_ids();
+    if ids.is_empty() {
+        return SqlFragment::raw("TRUE");
     }
+    let mut f = SqlFragment::raw(
+        r#"NOT EXISTS (
+                  SELECT 1 FROM email_message_labels ml
+                  WHERE ml.message_id = m.id AND ml.label_id = ANY("#,
+    );
+    f.extend(SqlFragment::bind_uuid_array(ids.to_vec()));
+    f.push_raw(
+        r#")
+              )"#,
+    );
+    f
 }
 
 /// True when the AST contains at least one pure-address top-level
@@ -471,14 +501,15 @@ fn build_union_branch(
     resolved: &ResolvedFilters,
 ) -> Option<SqlFragment> {
     let trash = build_trash_check(resolved);
-    match (resolved.contact_id_for(email), email) {
-        (Some(contact_id), _) => {
+    match (resolved.contact_ids_for(email), email) {
+        (Some(contact_ids), _) => {
             let mut f = match kind {
                 AddressKind::Sender => {
                     let mut f = SqlFragment::raw(
-                        "SELECT m.thread_id FROM email_messages m WHERE m.from_contact_id = ",
+                        "SELECT m.thread_id FROM email_messages m WHERE m.from_contact_id = ANY(",
                     );
-                    f.extend(SqlFragment::bind_uuid(contact_id));
+                    f.extend(SqlFragment::bind_uuid_array(contact_ids.to_vec()));
+                    f.push_raw(")");
                     f
                 }
                 _ => {
@@ -486,10 +517,10 @@ fn build_union_branch(
                     let mut f = SqlFragment::raw(
                         "SELECT m.thread_id FROM email_message_recipients mr \
                          JOIN email_messages m ON m.id = mr.message_id \
-                         WHERE mr.contact_id = ",
+                         WHERE mr.contact_id = ANY(",
                     );
-                    f.extend(SqlFragment::bind_uuid(contact_id));
-                    f.push_raw(format!(" AND mr.recipient_type = '{recipient_type}'"));
+                    f.extend(SqlFragment::bind_uuid_array(contact_ids.to_vec()));
+                    f.push_raw(format!(") AND mr.recipient_type = '{recipient_type}'"));
                     f
                 }
             };
@@ -500,32 +531,53 @@ fn build_union_branch(
         (None, Email::Complete(_)) => None,
         (None, Email::Partial(s)) => {
             let pattern = format!("%{}%", escape_like_pattern(s));
-            let mut f = match kind {
-                AddressKind::Sender => {
-                    let mut f = SqlFragment::raw(
-                        "SELECT m.thread_id FROM email_contacts c \
-                         JOIN email_messages m ON m.from_contact_id = c.id \
-                         WHERE c.email_address ILIKE ",
-                    );
-                    f.extend(SqlFragment::bind_string(pattern));
-                    f
-                }
-                _ => {
-                    let recipient_type = kind.recipient_type_sql().expect("non-sender kind");
-                    let mut f = SqlFragment::raw(
-                        "SELECT m.thread_id FROM email_contacts c \
-                         JOIN email_message_recipients mr ON mr.contact_id = c.id \
-                         JOIN email_messages m ON m.id = mr.message_id \
-                         WHERE c.email_address ILIKE ",
-                    );
-                    f.extend(SqlFragment::bind_string(pattern));
-                    f.push_raw(format!(" AND mr.recipient_type = '{recipient_type}'"));
-                    f
-                }
-            };
+            let mut f = build_union_branch_text_match(kind, "c.email_address ILIKE ", pattern);
             f.push_raw(" AND ");
             f.extend(trash);
             Some(f)
+        }
+        (None, Email::Domain(s)) => {
+            let domain = s.to_ascii_lowercase();
+            let mut f = build_union_branch_text_match(
+                kind,
+                "LOWER(SPLIT_PART(c.email_address, '@', 2)) = ",
+                domain,
+            );
+            f.push_raw(" AND ");
+            f.extend(trash);
+            Some(f)
+        }
+    }
+}
+
+/// Shared shape for a union-branch SELECT that joins through
+/// `email_contacts` with a single bound predicate against `c.*`.
+fn build_union_branch_text_match(
+    kind: AddressKind,
+    predicate_prefix: &str,
+    bind_value: String,
+) -> SqlFragment {
+    match kind {
+        AddressKind::Sender => {
+            let mut f = SqlFragment::raw(format!(
+                "SELECT m.thread_id FROM email_contacts c \
+                 JOIN email_messages m ON m.from_contact_id = c.id \
+                 WHERE {predicate_prefix}"
+            ));
+            f.extend(SqlFragment::bind_string(bind_value));
+            f
+        }
+        _ => {
+            let recipient_type = kind.recipient_type_sql().expect("non-sender kind");
+            let mut f = SqlFragment::raw(format!(
+                "SELECT m.thread_id FROM email_contacts c \
+                 JOIN email_message_recipients mr ON mr.contact_id = c.id \
+                 JOIN email_messages m ON m.id = mr.message_id \
+                 WHERE {predicate_prefix}"
+            ));
+            f.extend(SqlFragment::bind_string(bind_value));
+            f.push_raw(format!(" AND mr.recipient_type = '{recipient_type}'"));
+            f
         }
     }
 }
@@ -651,7 +703,8 @@ pub(super) fn build_thread_email_filter(
             | EmailLiteral::Importance(_)
             | EmailLiteral::NotificationDone(_)
             | EmailLiteral::NotificationSeen(_)
-            | EmailLiteral::Shared(_),
+            | EmailLiteral::Shared(_)
+            | EmailLiteral::TeamScope,
         ) => SqlFragment::raw("TRUE"),
     });
 
@@ -758,20 +811,19 @@ pub(super) fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
 /// means no message can be trashed. Anchored on `m.id` inside the LATERAL,
 /// so callers shouldn't add their own AND prefix.
 pub(super) fn build_lateral_trash_exclusion(resolved: &ResolvedFilters) -> SqlFragment {
-    match resolved.trash_label_id() {
-        Some(id) => {
-            let mut f = SqlFragment::raw(
-                r#"NOT EXISTS (
-                SELECT 1 FROM email_message_labels ml
-                WHERE ml.message_id = m.id AND ml.label_id = "#,
-            );
-            f.extend(SqlFragment::bind_uuid(id));
-            f.push_raw(
-                r#"
-              )"#,
-            );
-            f
-        }
-        None => SqlFragment::raw("TRUE"),
+    let ids = resolved.trash_label_ids();
+    if ids.is_empty() {
+        return SqlFragment::raw("TRUE");
     }
+    let mut f = SqlFragment::raw(
+        r#"NOT EXISTS (
+            SELECT 1 FROM email_message_labels ml
+            WHERE ml.message_id = m.id AND ml.label_id = ANY("#,
+    );
+    f.extend(SqlFragment::bind_uuid_array(ids.to_vec()));
+    f.push_raw(
+        r#")
+          )"#,
+    );
+    f
 }

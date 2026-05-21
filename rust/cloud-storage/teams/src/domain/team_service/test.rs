@@ -20,6 +20,8 @@ use roles_and_permissions::domain::{
     port::UserRolesAndPermissionsService,
 };
 
+use crate::domain::crm_enqueuer::NoOpCrmEnqueuer;
+
 fn test_team_receipt<T: RequiredPermission>(
     team_id: uuid::Uuid,
     user_id: &MacroUserIdStr<'_>,
@@ -578,6 +580,7 @@ fn build_service(
         MockTeamChannelsRepository,
         MockUserRolesAndPermissionsService,
         notification_ingress.clone(),
+        NoOpCrmEnqueuer,
     );
     (service, notification_ingress)
 }
@@ -736,6 +739,7 @@ fn build_service_with_team(
         MockTeamChannelsRepository,
         MockUserRolesAndPermissionsService,
         notification_ingress,
+        NoOpCrmEnqueuer,
     );
     (service, role_calls, name_calls)
 }

@@ -191,7 +191,8 @@ async fn main() -> anyhow::Result<()> {
         &macro_aws_config::get_macro_aws_config().await,
     ))
     .search_event_queue(&config.search_event_queue)
-    .email_link_manager_queue(&config.link_manager_queue);
+    .email_link_manager_queue(&config.link_manager_queue)
+    .email_backfill_queue(&config.email_backfill_queue);
     tracing::trace!("initialized sqs client");
 
     // Initialize analytics client with configured providers
@@ -267,12 +268,15 @@ async fn main() -> anyhow::Result<()> {
 
     let notification_ingress_service = Arc::new(notification_ingress_service);
 
+    let crm_enqueuer = teams::outbound::crm_enqueuer::SqsCrmEnqueuer::new(sqs_client.clone());
+
     let teams_service_impl = TeamServiceImpl::new(
         teams_repo_impl,
         customer_repo_impl,
         team_channels_repo_impl,
         user_roles_and_permissions_service.clone(),
         notification_ingress_service.clone(),
+        crm_enqueuer,
     );
 
     let github_link_service_impl = GithubLinkServiceImpl::new(

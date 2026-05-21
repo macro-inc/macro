@@ -48,7 +48,7 @@ pub struct NotificationStatusPatch {
 
 /// A patch-or-delete update for an entity identified by `I`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
+#[serde(tag = "t", content = "c")]
 pub enum PatchDelete<I, T> {
     /// The value with id I should be patched with data T.
     Patch {

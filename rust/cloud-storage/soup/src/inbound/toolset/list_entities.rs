@@ -169,14 +169,17 @@ where
 
         let result = service_context
             .service
-            .get_user_soup(SoupRequest {
-                soup_type: SoupType::Expanded,
-                limit: RESULT_LIMIT,
-                cursor: SoupQuery::new_sort_simple(sort_method, EntityFilters::default()),
-                user: request_context.user_id,
-                email_preview_view: PreviewView::default(),
-                link_id,
-            })
+            .get_user_soup(
+                SoupRequest {
+                    soup_type: SoupType::Expanded,
+                    limit: RESULT_LIMIT,
+                    cursor: SoupQuery::new_sort_simple(sort_method, EntityFilters::default()),
+                    user: request_context.user_id,
+                    email_preview_view: PreviewView::default(),
+                    link_id,
+                },
+                None,
+            )
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to list entities: {e}"),

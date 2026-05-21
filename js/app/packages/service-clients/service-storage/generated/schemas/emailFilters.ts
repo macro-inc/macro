@@ -44,4 +44,10 @@ Note: SPAM and TRASH emails are not indexed in OpenSearch, so they will never ap
   /** Controls whether shared email threads are included in results.
 Defaults to "exclude" (only the user's own threads). */
   shared?: SharedEmailFilter;
+  /** When true, expand visibility to every teammate's mailbox: results may
+include emails the requesting user is not a participant on, as long as
+at least one of their teammates is. Requires every sender/cc/bcc/recipient
+value to be a fully-qualified email address or a domain (no partial
+substring matches). */
+  team_scope?: boolean;
 }

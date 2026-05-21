@@ -15,7 +15,7 @@ use model::response::ErrorResponse;
 use model::user::UserContext;
 use model::user::axum_extractor::MacroUserExtractor;
 use models_email::email::service::backfill::{
-    BackfillJobStatus, BackfillOperation, BackfillPubsubMessage,
+    BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
 use models_email::service::link;
 use models_email::service::link::Link;
@@ -157,9 +157,11 @@ pub async fn handler(
             .context("Failed to create backfill job")?;
 
             let ps_message = BackfillPubsubMessage {
-                link_id: link.id,
-                job_id: backfill_job.id,
-                backfill_operation: BackfillOperation::Init,
+                backfill_operation: BackfillOperation::Init(JobScopedPayload {
+                    link_id: link.id,
+                    job_id: backfill_job.id,
+                    payload: InitPayload {},
+                }),
             };
 
             if let Err(e) = ctx

@@ -344,7 +344,7 @@ export const ENABLE_SOUP_GROUP_BY_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
 export const ENABLE_AUTO_UPDATE_UI = resolveFeatureFlag(
   'ENABLE_AUTO_UPDATE_UI',
-  false
+  true
 );
 
 export const ENABLE_CALLKIT = resolveFeatureFlag('ENABLE_CALLKIT', false);

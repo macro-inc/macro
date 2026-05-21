@@ -8,9 +8,12 @@ import { queryClient } from '../client';
 import {
   findThreadIdInChannelMessages,
   findThreadPreviewReplySnapshotInChannelMessages,
+  findTopLevelMessageInChannelMessagesByIds,
   findTopLevelMessageSnapshotInChannelMessages,
   insertThreadReplyIntoChannelMessages,
   insertTopLevelMessageIntoChannelMessages,
+  markTopLevelMessageDeletedInChannelMessages,
+  markTopLevelMessageDeletedInChannelMessagesByIds,
   removeThreadReplyFromChannelMessages,
   removeTopLevelMessageFromChannelMessages,
   replaceThreadReplyAttachmentsInChannelMessages,
@@ -186,6 +189,52 @@ export function removeMessageFromTargetCaches(
   setChannelMessagesData(channelId, (prev) =>
     removeTopLevelMessageFromChannelMessages(prev, target.messageId)
   );
+}
+
+/**
+ * Marks a top-level message as soft-deleted in the rendered caches.
+ * Pass `undefined` (or `null`) to clear the soft-delete (used for rollback).
+ *
+ * Thread replies don't have a `deleted_at` field in the schema, so this is
+ * a no-op for thread reply targets — callers should remove thread replies
+ * from caches instead.
+ */
+export function markTopLevelMessageDeletedInTargetCaches(
+  channelId: string,
+  target: MessageTarget,
+  deletedAt: string | null | undefined
+) {
+  if (target.kind !== 'top_level') return;
+
+  setChannelMessagesData(channelId, (prev) =>
+    markTopLevelMessageDeletedInChannelMessages(
+      prev,
+      target.messageId,
+      deletedAt
+    )
+  );
+  setChannelMessagesByIdsData(channelId, (prev) =>
+    markTopLevelMessageDeletedInChannelMessagesByIds(
+      prev,
+      target.messageId,
+      deletedAt
+    )
+  );
+}
+
+/** Returns the current `deleted_at` value for a top-level message, if cached. */
+export function getTopLevelMessageDeletedAt(
+  channelId: string,
+  messageId: string
+): string | null | undefined {
+  const paginated = findTopLevelMessageSnapshotInChannelMessages(
+    channelId,
+    messageId
+  );
+  if (paginated) return paginated.message.deleted_at;
+
+  return findTopLevelMessageInChannelMessagesByIds(channelId, messageId)
+    ?.deleted_at;
 }
 
 /** Captures rollback snapshots for a target before optimistic delete. */

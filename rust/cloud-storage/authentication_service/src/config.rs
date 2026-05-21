@@ -63,6 +63,11 @@ pub struct Config {
     /// The email link manager queue
     pub link_manager_queue: String,
 
+    /// The email backfill queue. Used by `join_team` to enqueue a
+    /// `PopulateCrmForUser` message that seeds CRM tables with the new
+    /// member's historical sent-mail contacts.
+    pub email_backfill_queue: String,
+
     /// The github client id
     pub github_client_id: String,
     /// The github client secret
@@ -188,6 +193,9 @@ impl Config {
         let link_manager_queue =
             std::env::var("LINK_MANAGER_QUEUE").context("LINK_MANAGER_QUEUE must be provided")?;
 
+        let email_backfill_queue = std::env::var("EMAIL_BACKFILL_QUEUE")
+            .context("EMAIL_BACKFILL_QUEUE must be provided")?;
+
         let github_client_id =
             std::env::var("GITHUB_CLIENT_ID").context("GITHUB_CLIENT_ID must be provided")?;
         let github_client_secret = std::env::var("GITHUB_CLIENT_SECRET")
@@ -231,6 +239,7 @@ impl Config {
             notification_queue,
             search_event_queue,
             link_manager_queue,
+            email_backfill_queue,
             environment,
             github_client_id,
             github_client_secret,

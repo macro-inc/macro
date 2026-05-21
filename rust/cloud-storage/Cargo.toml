@@ -8,6 +8,8 @@ members = [
   "connection_gateway",
   "contacts_service",
   "convert_service",
+  "cowlike",
+  "crm",
   "dataloss_prevention_handler",
   "delete_chat_handler",
   "deleted_item_poller",

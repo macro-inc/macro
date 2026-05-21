@@ -4,6 +4,7 @@ mod labels;
 mod link;
 mod message;
 mod preview;
+mod team_scope_dynamic_query;
 mod thread;
 mod thread_labels;
 

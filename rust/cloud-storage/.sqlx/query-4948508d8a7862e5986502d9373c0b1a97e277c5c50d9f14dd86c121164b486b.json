@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO crm_contact_sources (contact_id, link_id)\n            VALUES ($1, $2)\n            ON CONFLICT (contact_id, link_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4948508d8a7862e5986502d9373c0b1a97e277c5c50d9f14dd86c121164b486b"
+}

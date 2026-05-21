@@ -27,6 +27,7 @@ enum SqlSegment {
     Raw(String),
     BindString(String),
     BindUuid(Uuid),
+    BindUuidArray(Vec<Uuid>),
 }
 
 struct SqlFragment {
@@ -53,6 +54,12 @@ impl SqlFragment {
     fn bind_uuid(u: Uuid) -> Self {
         Self {
             segments: vec![SqlSegment::BindUuid(u)],
+        }
+    }
+
+    fn bind_uuid_array(ids: impl Into<Vec<Uuid>>) -> Self {
+        Self {
+            segments: vec![SqlSegment::BindUuidArray(ids.into())],
         }
     }
 
@@ -114,6 +121,9 @@ impl SqlFragment {
                 SqlSegment::BindUuid(u) => {
                     builder.push_bind(u);
                 }
+                SqlSegment::BindUuidArray(ids) => {
+                    builder.push_bind(ids);
+                }
             }
         }
     }
@@ -135,6 +145,15 @@ impl SqlFragment {
                     bind_idx += 1;
                     result.push_str(&format!("${bind_idx}[uuid={u}]"));
                 }
+                SqlSegment::BindUuidArray(ids) => {
+                    bind_idx += 1;
+                    let joined = ids
+                        .iter()
+                        .map(|u| u.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    result.push_str(&format!("${bind_idx}[uuid_array=[{joined}]]"));
+                }
             }
         }
         result
@@ -146,10 +165,18 @@ impl SqlFragment {
             .any(|s| matches!(s, SqlSegment::BindString(v) if v == expected))
     }
 
+    /// True if `expected` is bound somewhere in this fragment — either as a
+    /// single-uuid bind or as an element of a uuid-array bind. The array
+    /// case exists because address-id resolution now returns
+    /// `Vec<Uuid>` (one entry per link in scope) and the predicate uses
+    /// `= ANY($ids)`. Existing tests that assert "this contact id is in the
+    /// query" should still pass without caring which shape it's bound as.
     fn has_bind_uuid(&self, expected: &Uuid) -> bool {
-        self.segments
-            .iter()
-            .any(|s| matches!(s, SqlSegment::BindUuid(v) if v == expected))
+        self.segments.iter().any(|s| match s {
+            SqlSegment::BindUuid(v) => v == expected,
+            SqlSegment::BindUuidArray(vs) => vs.contains(expected),
+            _ => false,
+        })
     }
 
     fn has_no_raw_containing(&self, needle: &str) -> bool {

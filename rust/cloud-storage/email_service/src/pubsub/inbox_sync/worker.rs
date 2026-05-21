@@ -1,4 +1,4 @@
-use crate::pubsub::context::{NotificationIngressType, PubSubContext};
+use crate::pubsub::context::{CrmServiceType, NotificationIngressType, PubSubContext};
 use crate::pubsub::inbox_sync::process;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
@@ -26,6 +26,7 @@ pub async fn run_worker(
     connection_gateway_client: ConnectionGatewayClient,
     dss_client: DocumentStorageServiceClient,
     system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
+    crm_service: CrmServiceType,
     notifications_enabled: bool,
     retry_worker: bool,
 ) {
@@ -42,6 +43,7 @@ pub async fn run_worker(
         connection_gateway_client,
         dss_client,
         system_properties_service,
+        crm_service,
         notifications_enabled,
         retry_worker,
     };

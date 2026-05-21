@@ -5879,6 +5879,12 @@ export const postItemsSoupBody = zod
           .describe(
             'Controls whether shared email threads are included in results.'
           ),
+        team_scope: zod
+          .boolean()
+          .optional()
+          .describe(
+            "When true, expand visibility to every teammate's mailbox: results may\ninclude emails the requesting user is not a participant on, as long as\nat least one of their teammates is. Requires every sender\/cc\/bcc\/recipient\nvalue to be a fully-qualified email address or a domain (no partial\nsubstring matches)."
+          ),
       })
       .optional()
       .describe(

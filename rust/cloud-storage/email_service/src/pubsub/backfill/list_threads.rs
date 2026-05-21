@@ -1,7 +1,7 @@
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use models_email::email::service::backfill::{
-    BackfillJob, BackfillOperation, BackfillPubsubMessage, BackfillThreadPayload,
+    BackfillJob, BackfillOperation, BackfillPubsubMessage, BackfillThreadPayload, JobScopedPayload,
 };
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
@@ -20,11 +20,11 @@ const BACKFILL_THREAD_BATCH_SIZE: u32 = 500;
 pub async fn list_threads(
     ctx: &PubSubContext,
     access_token: &str,
-    data: &BackfillPubsubMessage,
+    scope: &JobScopedPayload<ListThreadsPayload>,
     link: &link::Link,
-    p: &ListThreadsPayload,
     job: &BackfillJob,
 ) -> Result<(), ProcessingError> {
+    let p = &scope.payload;
     let total_threads = job.total_threads;
     let threads_retrieved_count = job.threads_retrieved_count;
 
@@ -67,7 +67,7 @@ pub async fn list_threads(
     // add the threads we just discovered to the job counter
     email_db_client::backfill::job::update::update_job_threads_retrieved_count(
         &ctx.db,
-        data.job_id,
+        scope.job_id,
         thread_list.threads.len() as i32,
     )
     .await
@@ -81,10 +81,12 @@ pub async fn list_threads(
     // send a pubsub message for each discovered thread
     for thread in thread_list.threads {
         let thread_sqs_msg = BackfillPubsubMessage {
-            link_id: data.link_id,
-            job_id: data.job_id,
-            backfill_operation: BackfillOperation::BackfillThread(BackfillThreadPayload {
-                thread_provider_id: thread.provider_id.clone(),
+            backfill_operation: BackfillOperation::BackfillThread(JobScopedPayload {
+                link_id: scope.link_id,
+                job_id: scope.job_id,
+                payload: BackfillThreadPayload {
+                    thread_provider_id: thread.provider_id.clone(),
+                },
             }),
         };
 
@@ -102,10 +104,10 @@ pub async fn list_threads(
     // if we have more threads to fetch, send another pubsub message
     if next_page_token.is_some() {
         let list_thread_msg = BackfillPubsubMessage {
-            link_id: data.link_id,
-            job_id: data.job_id,
-            backfill_operation: BackfillOperation::ListThreads(ListThreadsPayload {
-                next_page_token,
+            backfill_operation: BackfillOperation::ListThreads(JobScopedPayload {
+                link_id: scope.link_id,
+                job_id: scope.job_id,
+                payload: ListThreadsPayload { next_page_token },
             }),
         };
 

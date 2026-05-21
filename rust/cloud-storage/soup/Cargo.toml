@@ -29,7 +29,7 @@ axum = [
   "models_pagination/axum",
   "models_soup/schema",
 ]
-inbound = ["email/inbound", "ports"]
+inbound = ["email/inbound", "entity_access/inbound", "ports"]
 outbound = ["dep:readonly_pool", "dep:sqlx", "ports"]
 ports = ["dep:tokio", "frecency/ports"]
 
@@ -44,10 +44,12 @@ call = { path = "../call", default-features = false, features = ["ports"] }
 chrono = { workspace = true }
 comms = { path = "../comms", default-features = false }
 cowlike = { path = "../cowlike" }
+crm = { path = "../crm", default-features = false }
 document_sub_type = { path = "../document_sub_type" }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 either = { workspace = true }
 email = { path = "../email", features = ["ports"] }
+entity_access = { path = "../entity_access", default-features = false }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
 item_filters = { path = "../item_filters" }
@@ -77,7 +79,6 @@ uuid = { workspace = true }
 [dev-dependencies]
 ai = { path = "../ai" }
 cool_asserts = "2"
-entity_access = { path = "../entity_access" }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency", features = ["mock", "outbound"] }
 futures = { workspace = true }

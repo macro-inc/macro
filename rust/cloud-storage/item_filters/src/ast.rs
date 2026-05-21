@@ -79,6 +79,11 @@ pub enum ExpandErr {
     /// invalid API AST expansion
     #[error("invalid API AST expansion: {0}")]
     ApiAst(String),
+    /// team_scope requires fully-qualified email addresses or domains
+    #[error(
+        "team_scope=true requires all sender/recipient/cc/bcc values to be a complete email address or domain; partial matches are not allowed"
+    )]
+    TeamScopeRequiresQualifiedEmail,
 }
 
 /// type alias for a maybe empty, cheaply cloneable ast literal tree

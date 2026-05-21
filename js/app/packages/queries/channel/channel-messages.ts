@@ -326,6 +326,20 @@ export function replaceTopLevelMessageStateInChannelMessages(
   );
 }
 
+export function markTopLevelMessageDeletedInChannelMessages(
+  data: ChannelMessagesData | undefined,
+  messageId: string,
+  deletedAt: string | null | undefined
+): ChannelMessagesData | undefined {
+  if (!data) return data;
+
+  return mapChannelMessagesItems(data, (message) =>
+    message.id === messageId
+      ? { ...message, deleted_at: deletedAt ?? undefined }
+      : message
+  );
+}
+
 function getTopLevelMessageSnapshot(
   data: ChannelMessagesData | undefined,
   messageId: string
@@ -643,6 +657,20 @@ function mapChannelMessagesByIdsItems(
   return didChange ? next : data;
 }
 
+/** Finds a top-level message in any cached by-ids query for the channel. */
+export function findTopLevelMessageInChannelMessagesByIds(
+  channelId: string,
+  messageId: string
+): ApiChannelMessage | undefined {
+  const entries = queryClient.getQueriesData<ApiChannelMessage[]>({
+    queryKey: getChannelMessagesByIdsQueryKeyPrefix(channelId),
+  });
+  for (const [, data] of entries) {
+    const match = data?.find((message) => message.id === messageId);
+    if (match) return match;
+  }
+}
+
 export function replaceTopLevelMessageReactionsInChannelMessagesByIds(
   data: ApiChannelMessage[] | undefined,
   messageId: string,
@@ -685,6 +713,19 @@ export function replaceTopLevelMessageStateInChannelMessagesByIds(
           updated_at: nextState.updatedAt,
           attachments: nextState.attachments,
         }
+      : message
+  );
+}
+
+export function markTopLevelMessageDeletedInChannelMessagesByIds(
+  data: ApiChannelMessage[] | undefined,
+  messageId: string,
+  deletedAt: string | null | undefined
+): ApiChannelMessage[] | undefined {
+  if (!data) return data;
+  return mapChannelMessagesByIdsItems(data, (message) =>
+    message.id === messageId
+      ? { ...message, deleted_at: deletedAt ?? undefined }
       : message
   );
 }
