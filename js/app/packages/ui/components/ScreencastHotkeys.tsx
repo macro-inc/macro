@@ -63,7 +63,7 @@ export function ScreencastHotkeys() {
 	return (
 		<Show when={enableScreencastHotkeys() && entries().length > 0}>
 			<Portal>
-				<div class="fixed right-3 bottom-3 z-2147483647 flex flex-col gap-1 pointer-events-none text-xs">
+				<div class="fixed right-3 top-3 z-2147483647 flex flex-col-reverse gap-1 pointer-events-none text-xs">
 					<For each={entries()}>
 						{(entry) => (
 							<div class="flex items-center gap-2 bg-surface p-1 border border-edge rounded-md">
