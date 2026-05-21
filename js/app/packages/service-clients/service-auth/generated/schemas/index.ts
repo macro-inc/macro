@@ -14,6 +14,8 @@ export * from './checkoutSessionMetadataGaClientId';
 export * from './createAccountMergeRequest';
 export * from './createCheckoutSessionRequest';
 export * from './createCheckoutSessionRequestDiscount';
+export * from './createCheckoutSessionV2Request';
+export * from './createCheckoutSessionV2RequestDiscount';
 export * from './createInProgressLinkResponse';
 export * from './createPortalSessionRequest';
 export * from './createTeamRequest';

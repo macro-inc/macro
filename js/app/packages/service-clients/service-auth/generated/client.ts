@@ -8,6 +8,7 @@ import type {
   AppleLoginRequest,
   CreateAccountMergeRequest,
   CreateCheckoutSessionRequest,
+  CreateCheckoutSessionV2Request,
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
   CreateTeamRequest,
@@ -3490,7 +3491,7 @@ export const getUserQuota = async (
 };
 
 /**
- * @summary Creates a Stripe checkout session for the user to subscribe.
+ * @summary **LEGACY DO NOT USE** Creates a Stripe checkout session for the user to subscribe.
  */
 export type createCheckoutSessionResponse200 = {
   data: StripeSessionResponse;
@@ -3559,6 +3560,78 @@ export const createCheckoutSession = async (
     status: res.status,
     headers: res.headers,
   } as createCheckoutSessionResponse;
+};
+
+/**
+ * @summary Creates a Stripe checkout session for the user to subscribe.
+ */
+export type createCheckoutSessionV2Response200 = {
+  data: StripeSessionResponse;
+  status: 200;
+};
+
+export type createCheckoutSessionV2Response400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type createCheckoutSessionV2Response404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type createCheckoutSessionV2Response409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type createCheckoutSessionV2Response500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createCheckoutSessionV2ResponseSuccess =
+  createCheckoutSessionV2Response200 & {
+    headers: Headers;
+  };
+export type createCheckoutSessionV2ResponseError = (
+  | createCheckoutSessionV2Response400
+  | createCheckoutSessionV2Response404
+  | createCheckoutSessionV2Response409
+  | createCheckoutSessionV2Response500
+) & {
+  headers: Headers;
+};
+
+export type createCheckoutSessionV2Response =
+  | createCheckoutSessionV2ResponseSuccess
+  | createCheckoutSessionV2ResponseError;
+
+export const getCreateCheckoutSessionV2Url = () => {
+  return `/user/stripe/checkoutv2`;
+};
+
+export const createCheckoutSessionV2 = async (
+  createCheckoutSessionV2Request: CreateCheckoutSessionV2Request,
+  options?: RequestInit
+): Promise<createCheckoutSessionV2Response> => {
+  const res = await fetch(getCreateCheckoutSessionV2Url(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createCheckoutSessionV2Request),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createCheckoutSessionV2Response['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createCheckoutSessionV2Response;
 };
 
 /**

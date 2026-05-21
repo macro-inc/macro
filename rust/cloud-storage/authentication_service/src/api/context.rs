@@ -82,6 +82,8 @@ pub(crate) struct ApiContext {
     pub rate_limit_service: RateLimiter,
     /// The stripe price ids
     pub legacy_stripe_price_ids: LegacyStripePriceIds,
+    /// The stripe price id
+    pub stripe_price_id: String,
 }
 
 env_var! {

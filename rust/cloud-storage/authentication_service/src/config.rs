@@ -97,6 +97,9 @@ pub struct Config {
 
     /// The team stripe price ids
     pub team_stripe_price_ids: TeamStripePriceIds,
+
+    /// The stripe price id
+    pub stripe_price_id: String,
 }
 
 env_var! {
@@ -140,6 +143,15 @@ impl From<Environment> for TeamStripePriceIds {
                 series_a: "price_1TX2HUJaD7zvQeOBMWwI4FFK".to_string(),
             },
         }
+    }
+}
+
+/// Grab the stripe product price id using the environment
+fn get_stripe_price_id_from_environment(environment: Environment) -> String {
+    // SAFETY: stripe price ids are not sensitive information so hard coding them here is simpler
+    match environment {
+        Environment::Production => "price_1TZY5FJaD7zvQeOBMldBpUHg".to_string(),
+        Environment::Develop | Environment::Local => "price_1TZY5uJaD7zvQeOBRu9a5v8P".to_string(),
     }
 }
 
@@ -220,6 +232,8 @@ impl Config {
 
         let team_stripe_price_ids = TeamStripePriceIds::from(environment);
 
+        let stripe_price_id = get_stripe_price_id_from_environment(environment);
+
         Ok(Config {
             base_url,
             database_url,
@@ -253,6 +267,7 @@ impl Config {
             posthog_host,
             legacy_stripe_price_ids,
             team_stripe_price_ids,
+            stripe_price_id,
         })
     }
 }

@@ -1,28 +1,20 @@
-use axum::{Extension, Json, extract::State};
+use axum::{Json, extract::State};
+use entity_access::domain::models::OwnerTeamRole;
+use entity_access::domain::ports::EntityAccessService;
+use entity_access::inbound::axum_extractors::OptionalMacroUserTeamExtractor;
+use model_user::axum_extractor::MacroUserExtractor;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use super::{StripeOperationError, StripeProductTier, StripeSessionResponse};
+use super::{StripeOperationError, StripeSessionResponse};
 use crate::api::context::ApiContext;
+use crate::api::user::stripe::create_checkout_session::CheckoutSessionMetadata;
 use model::response::ErrorResponse;
-use model::user::UserContext;
-
-/// Tracking metadata for conversion attribution
-#[derive(Debug, Default, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct CheckoutSessionMetadata {
-    /// Google Analytics client ID for conversion tracking
-    pub ga_client_id: Option<String>,
-    /// Meta (Facebook) browser ID from _fbp cookie
-    pub fbp: Option<String>,
-    /// Meta (Facebook) click ID from _fbc cookie
-    pub fbc: Option<String>,
-}
 
 /// Request body for creating a Stripe checkout session
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateCheckoutSessionRequest {
+pub struct CreateCheckoutSessionV2Request {
     /// The URL to redirect to on successful checkout
     pub success_url: String,
     /// The URL to redirect to if checkout is cancelled
@@ -32,17 +24,14 @@ pub struct CreateCheckoutSessionRequest {
     /// Tracking metadata for conversion attribution
     #[serde(default)]
     pub metadata: CheckoutSessionMetadata,
-    /// The tier, defaults to haiku
-    #[serde(default)]
-    pub tier: StripeProductTier,
 }
 
-/// **LEGACY DO NOT USE** Creates a Stripe checkout session for the user to subscribe.
+/// Creates a Stripe checkout session for the user to subscribe.
 #[utoipa::path(
     post,
-    path = "/user/stripe/checkout",
-    operation_id = "create_checkout_session",
-    request_body = CreateCheckoutSessionRequest,
+    path = "/user/stripe/checkoutv2",
+    operation_id = "create_checkout_session_v2",
+    request_body = CreateCheckoutSessionV2Request,
     responses(
         (status = 200, body = StripeSessionResponse),
         (status = 400, body = ErrorResponse),
@@ -51,18 +40,17 @@ pub struct CreateCheckoutSessionRequest {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), err, fields(user_id = %user_context.user_id))]
-pub async fn create_checkout_session(
+/// The stripe price id
+#[tracing::instrument(skip(ctx, user, optional_team), err, fields(user_id = %user.macro_user_id))]
+pub async fn create_checkout_session<Eas: EntityAccessService>(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
-    Json(req): Json<CreateCheckoutSessionRequest>,
+    user: MacroUserExtractor,
+    optional_team: OptionalMacroUserTeamExtractor<OwnerTeamRole, Eas>,
+    Json(req): Json<CreateCheckoutSessionV2Request>,
 ) -> Result<Json<StripeSessionResponse>, StripeOperationError> {
-    let user_id =
-        macro_user_id::user_id::MacroUserId::parse_from_str(&user_context.user_id)?.lowercase();
-
     // Get the stripe customer ID from the database
     let stripe_customer_id =
-        macro_db_client::user::get::get_stripe_customer_id_by_user_id(&ctx.db, &user_id)
+        macro_db_client::user::get::get_stripe_customer_id_by_user_id(&ctx.db, &user.macro_user_id)
             .await?
             .ok_or(StripeOperationError::MissingStripeId)?;
 
@@ -112,6 +100,15 @@ pub async fn create_checkout_session(
 
     // Build subscription metadata from optional tracking fields
     let mut metadata = std::collections::HashMap::new();
+
+    // If the user is the owner of a team, we need to insert team metadata into subscription
+    if let Some(team) = optional_team.entity_access_receipt {
+        let team_id = team.entity().entity_id.clone();
+        metadata.insert("team_id".to_string(), team_id);
+
+        metadata.insert("owner_id".to_string(), user.macro_user_id.to_string());
+    }
+
     if let Some(ga_client_id) = req.metadata.ga_client_id {
         metadata.insert("ga_client_id".to_string(), ga_client_id);
     }
@@ -129,11 +126,7 @@ pub async fn create_checkout_session(
             ..Default::default()
         });
 
-    let price_id = match req.tier {
-        StripeProductTier::Haiku => ctx.legacy_stripe_price_ids.stripe_price_id_haiku.as_ref(),
-        StripeProductTier::Sonnet => ctx.legacy_stripe_price_ids.stripe_price_id_sonnet.as_ref(),
-        StripeProductTier::Opus => ctx.legacy_stripe_price_ids.stripe_price_id_opus.as_ref(),
-    };
+    let price_id = ctx.stripe_price_id;
 
     // Create the checkout session
     let params = stripe::CreateCheckoutSession {

@@ -2890,13 +2890,82 @@
     "/user/stripe/checkout": {
       "post": {
         "tags": ["user::stripe::create_checkout_session"],
-        "summary": "Creates a Stripe checkout session for the user to subscribe.",
+        "summary": "**LEGACY DO NOT USE** Creates a Stripe checkout session for the user to subscribe.",
         "operationId": "create_checkout_session",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CreateCheckoutSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StripeSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/stripe/checkoutv2": {
+      "post": {
+        "tags": ["user::stripe::create_checkout_session_v2"],
+        "summary": "Creates a Stripe checkout session for the user to subscribe.",
+        "operationId": "create_checkout_session_v2",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCheckoutSessionV2Request"
               }
             }
           },
@@ -3207,6 +3276,29 @@
           "tier": {
             "$ref": "#/components/schemas/StripeProductTier",
             "description": "The tier, defaults to haiku"
+          }
+        }
+      },
+      "CreateCheckoutSessionV2Request": {
+        "type": "object",
+        "description": "Request body for creating a Stripe checkout session",
+        "required": ["successUrl", "cancelUrl"],
+        "properties": {
+          "cancelUrl": {
+            "type": "string",
+            "description": "The URL to redirect to if checkout is cancelled"
+          },
+          "discount": {
+            "type": ["string", "null"],
+            "description": "Optional discount/promo code to apply"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/CheckoutSessionMetadata",
+            "description": "Tracking metadata for conversion attribution"
+          },
+          "successUrl": {
+            "type": "string",
+            "description": "The URL to redirect to on successful checkout"
           }
         }
       },
