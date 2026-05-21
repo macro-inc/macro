@@ -279,14 +279,35 @@ function registerLocationPlugin(
         const nodeKey = $resolveNodeKeyForId(id, props.mapping);
         if (nodeKey === null) return false;
 
-        const elem = editor.getElementByKey(nodeKey);
-        if (elem === null) return false;
+        const scrollAndHighlight = (elem: HTMLElement) => {
+          elem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          elem.classList.add('highlighted');
+          setTimeout(() => {
+            elem.classList.remove('highlighted');
+          }, 2000);
+        };
 
-        elem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        elem.classList.add('highlighted');
-        setTimeout(() => {
-          elem.classList.remove('highlighted');
-        }, 2000);
+        const elem = editor.getElementByKey(nodeKey);
+        if (elem !== null) {
+          scrollAndHighlight(elem);
+          return true;
+        }
+
+        // The node exists in the editor state, but its DOM element hasn't been
+        // reconciled yet (common on initial document load). Wait for the next
+        // editor update and retry the scroll once the element is available.
+        let unsub: (() => void) | undefined;
+        const safetyTimeout = setTimeout(() => {
+          unsub?.();
+        }, 5000);
+        unsub = editor.registerUpdateListener(() => {
+          const retried = editor.getElementByKey(nodeKey);
+          if (retried !== null) {
+            scrollAndHighlight(retried);
+            clearTimeout(safetyTimeout);
+            unsub?.();
+          }
+        });
         return true;
       },
       COMMAND_PRIORITY_LOW
