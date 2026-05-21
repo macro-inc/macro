@@ -18,7 +18,7 @@ type GetDocumentLocationResult = Awaited<
   ReturnType<typeof storageServiceClient.getDocumentLocation>
 >;
 
-export type DocumentLocation = ResultType<GetDocumentLocationResult>['data'];
+type DocumentLocation = ResultType<GetDocumentLocationResult>['data'];
 
 type WaitForDocumentLocationOptions = {
   target: string;
@@ -47,7 +47,7 @@ function retryDelay(
   return Math.min(initialDelayMs * 2 ** attempt, maxDelayMs);
 }
 
-export function documentLocationQueryOptions(args: DocumentLocationArgs) {
+function _documentLocationQueryOptions(args: DocumentLocationArgs) {
   return {
     queryKey: documentLocationKeys.location(args.documentId, args.versionId)
       .queryKey,
@@ -58,7 +58,7 @@ export function documentLocationQueryOptions(args: DocumentLocationArgs) {
   };
 }
 
-export async function fetchDocumentLocation(
+async function fetchDocumentLocation(
   args: DocumentLocationArgs
 ): Promise<DocumentLocation> {
   return throwOnErr(async () =>
@@ -66,7 +66,7 @@ export async function fetchDocumentLocation(
   ).then((result) => result.data);
 }
 
-export function invalidateDocumentLocation(args: DocumentLocationArgs) {
+function invalidateDocumentLocation(args: DocumentLocationArgs) {
   storageServiceClient.getDocumentLocation.invalidate({
     documentId: args.documentId,
   });
@@ -80,7 +80,7 @@ export function invalidateDocumentLocation(args: DocumentLocationArgs) {
   });
 }
 
-export async function waitForDocumentLocation(
+async function waitForDocumentLocation(
   args: DocumentLocationArgs,
   options: WaitForDocumentLocationOptions
 ): Promise<DocumentLocation> {
@@ -186,17 +186,17 @@ export function waitForDocumentPresignedUrlReady(
   });
 }
 
-export function locationToAppResult(
+function _locationToAppResult(
   location: DocumentLocation
 ): Result<{ data: DocumentLocation }, ResultError<string>[]> {
   return ok({ data: location });
 }
 
-export function isDocumentLocationReady(location: DocumentLocation) {
+function isDocumentLocationReady(location: DocumentLocation) {
   return location.content.state === DocumentContentState.ready;
 }
 
-export function isDocumentLocationResultReady(
+function _isDocumentLocationResultReady(
   result: Result<{ data: DocumentLocation }, ResultError<string>[]>
 ) {
   return !result.isErr() && isDocumentLocationReady(result.value.data);

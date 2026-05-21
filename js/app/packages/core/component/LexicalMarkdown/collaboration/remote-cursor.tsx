@@ -33,13 +33,13 @@ const warn = (...args: any[]) => {
 const SMALLEST_RECT_WIDTH = 1.5;
 const SMALLEST_SELECTION_WIDTH = 5;
 
-export type RemoteCursorWithStyle = {
+type RemoteCursorWithStyle = {
   user: string | undefined;
   style: FloatingStyle[];
 };
 
 /** Processes the remote cursor updates and returns a list of RemoteCursorWithStyle */
-export function $processRemoteCursorUpdates(
+function $processRemoteCursorUpdates(
   editor: LexicalEditor,
   loroManager: LoroManager,
   mapping: NodeIdMappings,
@@ -184,14 +184,14 @@ function $getRemoteCursorStyle(
   });
 }
 
-export type UseRemoteCursorsProps = {
+type UseRemoteCursorsProps = {
   loroManager: LoroManager;
   mapping: NodeIdMappings;
   editor: LexicalEditor;
   awareness: Awareness<LexicalSelectionAwareness>;
 };
 
-export type UseRemoteCursors = {
+type UseRemoteCursors = {
   remoteCursors: Accessor<RemoteCursorWithStyle[]>;
   setRemoteCursors: Setter<RemoteCursorWithStyle[]>;
   refreshRemoteCursors: () => void;

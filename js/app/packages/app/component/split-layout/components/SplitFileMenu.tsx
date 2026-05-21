@@ -3,6 +3,7 @@ import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { ResponsiveDropdown } from '@app/component/SimpleDropdown';
 import { useBlockAliasedName, useBlockName } from '@core/block';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
+import { MENU_CONTENT_CLASS } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { useIsDocumentOwner } from '@core/signal/permissions';
@@ -199,7 +200,7 @@ export function SplitFileMenu(props: {
       </ResponsiveDropdown.Trigger>
       <ResponsiveDropdown.Portal>
         <Layer depth={2}>
-          <ResponsiveDropdown.Content class="w-fit">
+          <ResponsiveDropdown.Content class={cn(MENU_CONTENT_CLASS, 'w-fit')}>
             <For each={ops()}>
               {(op, i) => (
                 <>

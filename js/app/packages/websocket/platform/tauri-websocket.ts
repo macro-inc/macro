@@ -9,7 +9,7 @@ import type { MinimalWebSocket, WebSocketFactory } from './minimal-websocket';
 /**
  * Tauri WebSocket wrapper that implements MinimalWebSocket interface
  */
-export class TauriWebSocketWrapper implements MinimalWebSocket {
+class TauriWebSocketWrapper implements MinimalWebSocket {
   private ws: TauriWebsocket; // Tauri WebSocket instance
   private _readyState: number = 0; // CONNECTING
   private _url: string;

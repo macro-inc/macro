@@ -18,7 +18,7 @@ import { getBlockNameFromEntity } from './entityUtils';
 /**
  * Handle entity mention (documents, channels, emails, etc.).
  */
-export async function handleEntityMention(
+async function handleEntityMention(
   item: EntityItem,
   dependencies: HandlerDependencies
 ): Promise<void> {
@@ -71,7 +71,7 @@ export async function handleEntityMention(
 /**
  * Handle date mention from DateOption.
  */
-export async function handleDateMentionFromOption(
+async function handleDateMentionFromOption(
   dateOption: DateOption,
   dependencies: HandlerDependencies
 ): Promise<void> {
@@ -85,7 +85,7 @@ export async function handleDateMentionFromOption(
 /**
  * Handle group mention (e.g., @here).
  */
-export async function handleGroupMentionItem(
+async function handleGroupMentionItem(
   group: { id: string; groupAlias: string },
   dependencies: HandlerDependencies
 ): Promise<void> {

@@ -2,10 +2,10 @@ import type { Component, JSX } from 'solid-js';
 import type { HotkeyToken } from './tokens';
 
 export const HOTKEY_PRIORITY_DEFAULT = 0;
-export const HOTKEY_PRIORITY_LOW = 1;
-export const HOTKEY_PRIORITY_NORMAL = 2;
+const HOTKEY_PRIORITY_LOW = 1;
+const HOTKEY_PRIORITY_NORMAL = 2;
 export const HOTKEY_PRIORITY_HIGH = 3;
-export const HOTKEY_PRIORITY_CRITICAL = 4;
+const HOTKEY_PRIORITY_CRITICAL = 4;
 
 const HOTKEY_TYPE = [
   HOTKEY_PRIORITY_DEFAULT,

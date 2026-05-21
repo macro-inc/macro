@@ -19,7 +19,7 @@ import {
   INSERT_USER_MENTION_COMMAND,
 } from '../plugins/mentions';
 
-export type GroupItem = {
+type GroupItem = {
   id: string;
   groupAlias: string;
 };
@@ -28,7 +28,7 @@ export type GroupItem = {
  * Creates a group mention entity from an alias.
  * Use this to define new group aliases (e.g., @here, @team, @online).
  */
-export function createGroupAlias(alias: string): Entity<'group'> {
+function _createGroupAlias(alias: string): Entity<'group'> {
   return {
     kind: 'group',
     id: alias,
@@ -39,7 +39,7 @@ export function createGroupAlias(alias: string): Entity<'group'> {
   };
 }
 
-export type EntityMap = {
+type EntityMap = {
   item: Item;
   user: IUser;
   channel: ChannelWithParticipants;
@@ -48,7 +48,7 @@ export type EntityMap = {
   group: GroupItem;
 };
 
-export type Entity<T extends keyof EntityMap> = {
+type Entity<T extends keyof EntityMap> = {
   kind: T;
   id: EntityMap[T]['id'];
   data: EntityMap[T];
@@ -58,7 +58,7 @@ type PickEntity<K extends keyof EntityMap> = {
   [P in K]: Entity<P>;
 }[K];
 
-export type CombinedEntity<K extends keyof EntityMap = keyof EntityMap> =
+type CombinedEntity<K extends keyof EntityMap = keyof EntityMap> =
   PickEntity<K>;
 
 // mapper fn that converts  entity data to its entity type
@@ -66,13 +66,11 @@ type EntityMapper<K extends keyof EntityMap> = (
   data: EntityMap[K]
 ) => PickEntity<K>;
 
-export function entityMapper<K extends keyof EntityMap>(
-  kind: K
-): EntityMapper<K> {
+function entityMapper<K extends keyof EntityMap>(kind: K): EntityMapper<K> {
   return (data: EntityMap[K]) => ({ kind, data, id: data.id });
 }
 
-export type DateItem = ParsedDate & {
+type DateItem = ParsedDate & {
   id: string;
 };
 
@@ -83,7 +81,7 @@ export type UserMentionRecord = {
   metadata: DocumentMentionMetadata;
 };
 
-export const getCombinedEntityBlockName = (
+const getCombinedEntityBlockName = (
   item: CombinedEntity<'item' | 'channel' | 'email'>,
   icon?: boolean
 ): BlockName | BlockAlias => {
@@ -110,7 +108,7 @@ const getUserName = (item: IUser): string => {
   return `${name} | ${email}`;
 };
 
-export const getItemName = (item: CombinedEntity): string => {
+const getItemName = (item: CombinedEntity): string => {
   switch (item.kind) {
     case 'item':
       return item.data.name;
@@ -184,7 +182,7 @@ export async function handleUserMention(
  * @param date
  * @param dependencies
  */
-export async function handleDateMention(
+async function _handleDateMention(
   date: DateItem,
   dependencies: HandlerDependencies
 ) {
@@ -195,7 +193,7 @@ export async function handleDateMention(
   });
 }
 
-export async function handleGroupMention(
+async function _handleGroupMention(
   group: GroupItem,
   dependencies: HandlerDependencies
 ) {
@@ -205,7 +203,7 @@ export async function handleGroupMention(
   });
 }
 
-export async function handleEmailMention(
+async function _handleEmailMention(
   email: EmailEntity,
   dependencies: HandlerDependencies
 ) {
@@ -313,7 +311,7 @@ export async function handleBasicMention(
  * @param channel
  * @param dependencies
  */
-export async function handleChannelMention(
+async function _handleChannelMention(
   channel: ChannelWithParticipants,
   dependencies: HandlerDependencies
 ) {
@@ -384,15 +382,13 @@ export type MentionItem = QuickAccessItem | DateMentionItem | GroupMentionItem;
 /**
  * Type guard for DateMentionItem.
  */
-export function isDateMentionItem(item: MentionItem): item is DateMentionItem {
+function _isDateMentionItem(item: MentionItem): item is DateMentionItem {
   return item.kind === 'date';
 }
 
 /**
  * Type guard for GroupMentionItem.
  */
-export function isGroupMentionItem(
-  item: MentionItem
-): item is GroupMentionItem {
+function _isGroupMentionItem(item: MentionItem): item is GroupMentionItem {
   return item.kind === 'group';
 }

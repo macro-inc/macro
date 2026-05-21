@@ -69,11 +69,6 @@ export function formatRelativeTimestamp(
   return format(date, 'M/d/yy');
 }
 
-export interface TimestampData {
-  formatted: string;
-  raw: number;
-}
-
 /**
  * Formats a date + time in a single concise line, e.g. "Apr 15, 2:30 PM" or
  * "1/27/24, 2:30 PM". Used when a row needs both pieces (e.g. automation

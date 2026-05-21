@@ -7,7 +7,7 @@ const INTERACTION_TIMEOUT_MS = 300;
 
 export type ScrollDirection = 'up' | 'down';
 
-export type ScrollIntentTracker = {
+type ScrollIntentTracker = {
   /**
    * Signal that a user-initiated navigation is about to cause a
    * programmatic scroll (e.g. hotkey-driven `scrollToId`).

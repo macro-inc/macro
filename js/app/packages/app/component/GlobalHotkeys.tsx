@@ -5,7 +5,10 @@ import { useLogout } from '@core/auth/logout';
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { toast } from '@core/component/Toast/Toast';
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
-import { useSettingsState } from '@core/constant/SettingsState';
+import {
+  type SettingsTab,
+  useSettingsState,
+} from '@core/constant/SettingsState';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
   handleFolderSelect,
@@ -95,7 +98,8 @@ export default function GlobalShortcuts() {
 
   useHotkeyAnalytics();
 
-  const { toggleSettings, openSettings } = useSettingsState();
+  const { openSettings, closeSettings, settingsOpen, setActiveTabId } =
+    useSettingsState();
   const logout = useLogout();
 
   const handleFileUpload = useHandleFileUpload();
@@ -176,13 +180,36 @@ export default function GlobalShortcuts() {
     keyDownHandler: createNewSplit,
   });
 
+  const openSettingsInNewSplit = (tab?: SettingsTab) => {
+    if (settingsOpen()) {
+      if (tab) setActiveTabId(tab);
+      return;
+    }
+    if (canFit()) {
+      if (tab) setActiveTabId(tab);
+      analytics.track('split_created', { from: 'global_hotkey' });
+      openWithSplit(
+        { type: 'component', id: 'settings' },
+        {
+          referredFrom: 'hotkey',
+          allowDuplicate: true,
+          preferNewSplit: true,
+          mergeHistory: false,
+        }
+      );
+      return;
+    }
+    openSettings(tab);
+  };
+
   registerHotkey({
     hotkeyToken: TOKENS.global.toggleSettings,
     hotkey: 'cmd+;',
     scopeId: 'global',
     description: 'Toggle settings',
     keyDownHandler: () => {
-      toggleSettings();
+      if (settingsOpen()) closeSettings();
+      else openSettingsInNewSplit();
       return true;
     },
     runWithInputFocused: true,
@@ -193,7 +220,7 @@ export default function GlobalShortcuts() {
     description: 'Account',
     icon: UserIcon,
     keyDownHandler: () => {
-      openSettings('Account & Team');
+      openSettingsInNewSplit('Account');
       return true;
     },
     runWithInputFocused: true,

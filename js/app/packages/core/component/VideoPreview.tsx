@@ -4,7 +4,7 @@ import { staticFileIdEndpoint } from '@core/constant/servers';
  * @deprecated Prefer the composable media primitives in `@channel/Media`.
  * Keep this only for legacy callers until they are migrated.
  */
-export type VideoPreviewProps = {
+type VideoPreviewProps = {
   id: string;
   variant: 'small' | 'dynamic';
   width?: string | number | undefined | null;

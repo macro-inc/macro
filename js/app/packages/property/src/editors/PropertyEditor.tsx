@@ -4,7 +4,7 @@ import { useProperty } from '../core/context';
 import { InlineEditor } from './inline/InlineEditor';
 import { PopoverEditor } from './popover/PopoverEditor';
 
-export type PropertyEditorProps = {
+type PropertyEditorProps = {
   /**
    * Forwarded to entity popover editor. Has no effect for non-entity types.
    */

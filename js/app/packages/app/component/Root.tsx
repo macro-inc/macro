@@ -371,7 +371,7 @@ const ROUTES: RouteDefinition[] = [
   },
 ];
 
-export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
+function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   // Initialize global notification helpers
   const notifInterface = usePlatformNotificationState();
 

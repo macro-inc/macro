@@ -6,7 +6,7 @@ import { $getRoot, type LexicalNode, type RangeSelection } from 'lexical';
  * ListItemNodes in checklists have getChecked() returning a boolean,
  * while regular list items return undefined.
  */
-export function $isCheckboxNode(node: LexicalNode): node is ListItemNode {
+function $isCheckboxNode(node: LexicalNode): node is ListItemNode {
   if (!$isListItemNode(node)) return false;
   return typeof node.getChecked() === 'boolean';
 }

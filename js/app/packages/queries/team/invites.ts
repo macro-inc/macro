@@ -20,7 +20,7 @@ export function useTeamInvitesQuery(teamId: Accessor<string>) {
   }));
 }
 
-export function invalidateTeamInvites(teamId: string) {
+function invalidateTeamInvites(teamId: string) {
   return queryClient.invalidateQueries({
     queryKey: teamKeys.invites(teamId).queryKey,
   });

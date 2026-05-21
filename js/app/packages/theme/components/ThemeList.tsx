@@ -6,7 +6,7 @@ import { ThemeCrud } from './ThemeCrud';
 
 import { For } from 'solid-js';
 
-export function ThemeList() {
+function ThemeList() {
   const analytics = useAnalytics()
 
   return (

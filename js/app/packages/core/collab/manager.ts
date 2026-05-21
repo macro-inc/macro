@@ -573,7 +573,7 @@ export function createLoroDoc(): LoroDoc {
   return doc;
 }
 
-export function createMirror<S extends GenericRootSchema>(
+function createMirror<S extends GenericRootSchema>(
   doc: LoroDoc,
   schema: S
 ): Mirror<S> {

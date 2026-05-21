@@ -5,7 +5,7 @@ import type { Theme } from 'core/component/Themes';
 import { IS_MAC } from '@core/constant/isMac';
 import { cn } from '@ui';
 
-export const modifierMap = {
+const modifierMap = {
   shift: IS_MAC ? '⇧' : 'Shift',
   ctrl: IS_MAC ? '⌃' : 'Ctrl',
   meta: IS_MAC ? '⌘' : 'Ctrl',
@@ -25,7 +25,7 @@ const symbolMap = {
   ENTER: '↵',
 };
 
-export const hotkeyStyles: Record<Theme, { label: string; hotkey: string }> = {
+const hotkeyStyles: Record<Theme, { label: string; hotkey: string }> = {
 
   extraMuted: {
     hotkey: 'bg-surface border border-ink-extra-muted text-ink-extra-muted',

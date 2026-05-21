@@ -28,7 +28,7 @@ export function isCodeEditorExtensionSupported(extension: string): boolean {
 /**
  * Check if an extension is supported by markdown code-boxes.
  */
-export function isMarkdownExtensionSupported(extension: string): boolean {
+function _isMarkdownExtensionSupported(extension: string): boolean {
   return lexicalExtensionSupported(extension);
 }
 
@@ -42,7 +42,7 @@ export function isCodeEditorLanguageSupported(language: string): boolean {
 /**
  * Check if a language is supported by markdown code-boxes.
  */
-export function isMarkdownLanguageSupported(language: string): boolean {
+function _isMarkdownLanguageSupported(language: string): boolean {
   return lexicalLanguageSupported(language);
 }
 

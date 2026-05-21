@@ -1,4 +1,4 @@
-export type ChatSendMode = 'foreground' | 'background';
+type ChatSendMode = 'foreground' | 'background';
 
 export function getSendModeFromEnterKeyEvent(event: {
   shiftKey: boolean;

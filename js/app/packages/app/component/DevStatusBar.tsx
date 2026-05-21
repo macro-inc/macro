@@ -15,7 +15,7 @@ const PORT_COLORS = [
   '#0d9488', // teal - 3009
 ];
 
-export const [gitBranch, setGitBranch] = createSignal<string>(
+const [gitBranch, setGitBranch] = createSignal<string>(
   import.meta.env.__GIT_BRANCH__ ?? ''
 );
 
@@ -23,7 +23,7 @@ if (import.meta.env.DEV && import.meta.hot) {
   import.meta.hot.on('git-branch:update', (data: string) => setGitBranch(data));
 }
 
-export const [devStatusBarOpen, setDevStatusBarOpen] = makePersisted(
+const [devStatusBarOpen, _setDevStatusBarOpen] = makePersisted(
   createSignal<boolean>(false),
   { name: 'dev-status-bar-open' }
 );

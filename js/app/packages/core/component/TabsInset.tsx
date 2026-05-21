@@ -6,12 +6,12 @@ import {
 import { cn, Layer } from '@ui';
 import { For, type JSX, splitProps } from 'solid-js';
 
-export type TabItem = {
+type TabItem = {
   value: string;
   label: string | JSX.Element;
 };
 
-export type TabsInsetProps = {
+type TabsInsetProps = {
   list: TabItem[];
   value?: string;
   defaultValue?: string;

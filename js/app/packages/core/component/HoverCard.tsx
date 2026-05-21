@@ -26,7 +26,7 @@ const HoverCardPortalNestedPreviewOpenContext = createContext<
 // and a missed pointerleave (common during scroll) can leave multiple stranded.
 const openTopLevelHoverCards = new Set<() => void>();
 
-export type HoverCardComponentProps = {
+type HoverCardComponentProps = {
   /** The trigger content to hover over */
   trigger: JSX.Element;
   /** The content to show in the hover card */

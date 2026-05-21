@@ -24,7 +24,7 @@ import { EditingContext } from './Editable';
 
 false && clickOutside;
 
-export const MENU_ITEM_HEIGHT = 28;
+const _MENU_ITEM_HEIGHT = 28;
 
 type BaseMenuItemWrapperProps = {
   children: JSX.Element;
@@ -91,7 +91,7 @@ function MenuItemWrapper(props: MenuItemWrapperProps) {
   );
 }
 
-export type BaseMenuItemProps = {
+type BaseMenuItemProps = {
   text?: string | JSX.Element;
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | JSX.Element;
   iconClass?: string;
@@ -102,14 +102,14 @@ export type BaseMenuItemProps = {
   hotkeyToken?: HotkeyToken;
 };
 
-export type CheckboxMenuItemProps = BaseMenuItemProps & {
+type CheckboxMenuItemProps = BaseMenuItemProps & {
   selectorType: 'checkbox';
   checked: boolean;
   onChange?: (value: boolean) => void;
   value?: undefined;
 };
 
-export type RadioMenuItemProps = BaseMenuItemProps & {
+type RadioMenuItemProps = BaseMenuItemProps & {
   selectorType: 'radio';
   value: string;
   groupValue: string;
@@ -117,14 +117,14 @@ export type RadioMenuItemProps = BaseMenuItemProps & {
   onChange?: undefined;
 };
 
-export type GenericMenuItemProps = BaseMenuItemProps & {
+type GenericMenuItemProps = BaseMenuItemProps & {
   selectorType?: undefined;
   onChange?: undefined;
   checked?: undefined;
   value?: undefined;
 };
 
-export type MenuItemProps =
+type MenuItemProps =
   | GenericMenuItemProps
   | CheckboxMenuItemProps
   | RadioMenuItemProps;
@@ -322,7 +322,7 @@ type MenuItemRenameTriggerProps = Omit<GenericMenuItemProps, 'onClick'> & {
   sideEffect?: () => void;
 };
 
-export function MenuItemRenameTrigger(props: MenuItemRenameTriggerProps) {
+function _MenuItemRenameTrigger(props: MenuItemRenameTriggerProps) {
   const [_, setIsRenaming] = useContext(EditingContext);
   return (
     <MenuItem

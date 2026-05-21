@@ -39,7 +39,7 @@ export function $getPinnedProperties(): string[] {
  * Set property IDs on the root node
  * Must be called within an editor.update() callback
  */
-export function $setPinnedProperties(propertyIds: string[]): void {
+function $setPinnedProperties(propertyIds: string[]): void {
   const root = $getRoot();
   $setState(root, pinnedPropertyIdsState, propertyIds);
 }
@@ -49,7 +49,7 @@ export function $setPinnedProperties(propertyIds: string[]): void {
  * Must be called within an editor.update() callback
  * @param propertyId - Property ID to add
  */
-export function $addPinnedProperty(propertyId: string): void {
+function $addPinnedProperty(propertyId: string): void {
   const currentIds = $getPinnedProperties();
   if (!currentIds.includes(propertyId)) {
     $setPinnedProperties([...currentIds, propertyId]);
@@ -61,7 +61,7 @@ export function $addPinnedProperty(propertyId: string): void {
  * Must be called within an editor.update() callback
  * @param propertyId - Property ID to remove
  */
-export function $removePinnedProperty(propertyId: string): void {
+function $removePinnedProperty(propertyId: string): void {
   const currentIds = $getPinnedProperties();
   const filteredIds = currentIds.filter((id) => id !== propertyId);
   $setPinnedProperties(filteredIds);
@@ -72,7 +72,7 @@ export function $removePinnedProperty(propertyId: string): void {
  * Must be called within an editor.read() or editor.update() callback
  * @param propertyId - Property ID to check
  */
-export function $hasPinnedProperty(propertyId: string): boolean {
+function _$hasPinnedProperty(propertyId: string): boolean {
   const currentIds = $getPinnedProperties();
   return currentIds.includes(propertyId);
 }
@@ -81,7 +81,7 @@ export function $hasPinnedProperty(propertyId: string): boolean {
  * Clear all property IDs from the root node
  * Must be called within an editor.update() callback
  */
-export function $clearPinnedProperties(): void {
+function _$clearPinnedProperties(): void {
   $setPinnedProperties([]);
 }
 
@@ -90,7 +90,7 @@ export function $clearPinnedProperties(): void {
  * @param editor - The Lexical editor instance
  * @returns Promise that resolves to array of property IDs
  */
-export function getPinnedProperties(editor: LexicalEditor): Promise<string[]> {
+function _getPinnedProperties(editor: LexicalEditor): Promise<string[]> {
   return new Promise((resolve) => {
     editor.getEditorState().read(() => {
       resolve($getPinnedProperties());

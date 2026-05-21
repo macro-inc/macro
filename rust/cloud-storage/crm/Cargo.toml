@@ -22,4 +22,5 @@ sqlx = { workspace = true, optional = true }
 unfurl = { path = "../unfurl", features = ["ports"], optional = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros"] }

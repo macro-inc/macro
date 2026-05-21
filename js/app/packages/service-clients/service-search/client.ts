@@ -14,17 +14,17 @@ import type { ChannelSearchResponse } from './generated/models/channelSearchResp
 import type { UnifiedSearchRequest } from './generated/models/unifiedSearchRequest';
 import type { UnifiedSearchResponse } from './generated/models/unifiedSearchResponse';
 
-export type { ChannelSearchRequest, ChannelSearchResponse };
+export type { ChannelSearchRequest };
 
-export function searchServiceFetch(
+function searchServiceFetch(
   url: string,
   init?: SafeFetchInit
 ): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
-export function searchServiceFetch<T extends ObjectLike>(
+function searchServiceFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
 ): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
-export function searchServiceFetch<T extends ObjectLike = never>(
+function searchServiceFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
@@ -43,7 +43,7 @@ export type SearchArgs = {
   request: UnifiedSearchRequest;
 };
 
-export type ChannelSearchArgs = {
+type ChannelSearchArgs = {
   params: SearchParams;
   request: ChannelSearchRequest;
 };

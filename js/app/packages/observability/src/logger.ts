@@ -34,7 +34,7 @@ interface ErrorContext extends Context {
  * @param message - The message to log.
  * @param context - The context of the log such as error, level, etc.
  */
-export function warn(message: string, context?: Context) {
+function warn(message: string, context?: Context) {
   if (import.meta.hot || !isInitialized())
     return console.warn(message, context);
 

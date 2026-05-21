@@ -42,7 +42,7 @@ export function fileExtension(
  * @param extensions - An array of allowed extensions.
  * @returns True if the filename has a valid extension, false otherwise.
  */
-export function hasExtension(filename: string, extensions: string[]): boolean {
+function _hasExtension(filename: string, extensions: string[]): boolean {
   const extension = fileExtension(filename);
   if (!extension) return false;
   return extensions.some(
@@ -52,10 +52,7 @@ export function hasExtension(filename: string, extensions: string[]): boolean {
   );
 }
 
-export const reverseFormatDocumentName = (
-  name: string,
-  fileType?: string | null
-) => {
+const _reverseFormatDocumentName = (name: string, fileType?: string | null) => {
   if (!fileType) return name;
 
   const blockName = fileTypeToBlockName(fileType);

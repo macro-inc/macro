@@ -7,7 +7,8 @@ use crate::domain::models::device::DeviceType;
 use crate::domain::models::request::NotificationListFilters;
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NotificationIdAndCollapseKey,
-    SendNotificationRequestBuilder, TaggedContent, UserNotificationRow,
+    NotificationStatusPatch, PatchDelete, SendNotificationRequestBuilder, TaggedContent,
+    UserNotificationRow,
 };
 use crate::domain::ports::NotificationRepository;
 use crate::outbound::device_registration::DeviceRegistrationDbOps;
@@ -313,7 +314,9 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
+    ) -> impl std::future::Future<
+        Output = Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report>,
+    > + Send;
 
     /// Mark notifications as done or undone for a user.
     fn mark_notifications_done(
@@ -321,7 +324,9 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
+    ) -> impl std::future::Future<
+        Output = Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report>,
+    > + Send;
 
     /// Get basic notification data (collapse keys) for push clearing.
     fn get_basic_notifications(
@@ -619,22 +624,41 @@ impl NotificationDbOps for PgPool {
         &self,
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
         let user_id_str = user_id.to_string();
 
-        sqlx::query!(
+        let rows = sqlx::query!(
             r#"
-            UPDATE user_notification
-            SET seen_at = NOW()
-            WHERE user_id = $1 AND notification_id = ANY($2)
+            WITH updated AS (
+                UPDATE user_notification
+                SET seen_at = NOW()
+                WHERE user_id = $1 AND notification_id = ANY($2) AND deleted_at IS NULL
+                RETURNING notification_id, done, seen_at::timestamptz as viewed_at
+            )
+            SELECT
+                updated.notification_id,
+                updated.done,
+                updated.viewed_at,
+                NOW()::timestamptz as "updated_at!"
+            FROM updated
             "#,
             user_id_str,
             notification_ids
         )
-        .execute(self)
+        .fetch_all(self)
         .await?;
 
-        Ok(())
+        Ok(rows
+            .into_iter()
+            .map(|row| PatchDelete::Patch {
+                id: row.notification_id,
+                diff: NotificationStatusPatch {
+                    done: row.done,
+                    viewed_at: row.viewed_at,
+                    updated_at: row.updated_at,
+                },
+            })
+            .collect())
     }
 
     async fn mark_notifications_done(
@@ -642,23 +666,42 @@ impl NotificationDbOps for PgPool {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
         let user_id_str = user_id.to_string();
 
-        sqlx::query!(
+        let rows = sqlx::query!(
             r#"
-            UPDATE user_notification
-            SET done = $3
-            WHERE user_id = $1 AND notification_id = ANY($2)
+            WITH updated AS (
+                UPDATE user_notification
+                SET done = $3
+                WHERE user_id = $1 AND notification_id = ANY($2) AND deleted_at IS NULL
+                RETURNING notification_id, done, seen_at::timestamptz as viewed_at
+            )
+            SELECT
+                updated.notification_id,
+                updated.done,
+                updated.viewed_at,
+                NOW()::timestamptz as "updated_at!"
+            FROM updated
             "#,
             user_id_str,
             notification_ids,
             done
         )
-        .execute(self)
+        .fetch_all(self)
         .await?;
 
-        Ok(())
+        Ok(rows
+            .into_iter()
+            .map(|row| PatchDelete::Patch {
+                id: row.notification_id,
+                diff: NotificationStatusPatch {
+                    done: row.done,
+                    viewed_at: row.viewed_at,
+                    updated_at: row.updated_at,
+                },
+            })
+            .collect())
     }
 
     async fn get_basic_notifications(
@@ -1156,7 +1199,7 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
         self.db
             .mark_notifications_seen(&user_id, notification_ids)
             .await
@@ -1167,7 +1210,7 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
         self.db
             .mark_notifications_done(user_id, notification_ids, done)
             .await

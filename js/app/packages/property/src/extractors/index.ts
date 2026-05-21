@@ -1,6 +1,6 @@
 export { PropertyAddButton } from './PropertyAddButton';
 export { PropertyCaret } from './PropertyCaret';
-export { type ChipInfo, PropertyChips } from './PropertyChips';
+export { PropertyChips } from './PropertyChips';
 export { PropertyEditTrigger } from './PropertyEditTrigger';
 export { PropertyEmpty } from './PropertyEmpty';
 export { PropertyIcon } from './PropertyIcon';

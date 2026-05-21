@@ -11,7 +11,7 @@ import type {
 import type { Notification, WithNotification } from '../src/types/notification';
 import type { WithSearch } from '../src/types/search';
 
-export const MOCK_USER_IDS = {
+const MOCK_USER_IDS = {
   owner: 'macro|alex@example.com',
   sharedUser: 'macro|sam@example.com',
   teamMember1: 'macro|jordan@example.com',
@@ -28,7 +28,7 @@ export const MOCK_USERS = [
 ] as const;
 
 const now = new Date();
-export const MOCK_TIMESTAMPS = {
+const MOCK_TIMESTAMPS = {
   now,
   today: applyDurationToDate(now, { value: -30, unit: 'min' }),
   yesterday: applyDurationToDate(now, { value: -1, unit: 'd' }),
@@ -37,7 +37,7 @@ export const MOCK_TIMESTAMPS = {
   lastYear: applyDurationToDate(now, { value: -365, unit: 'd' }),
 } as const;
 
-export const MOCK_PROPERTIES: Property[] = [
+const MOCK_PROPERTIES: Property[] = [
   {
     propertyId: 'prop_priority_1',
     propertyDefinitionId: 'def_priority',
@@ -125,7 +125,7 @@ export const MOCK_PROPERTIES: Property[] = [
   },
 ];
 
-export const createMockNotification = (
+const createMockNotification = (
   overrides?: Partial<Notification>
 ): Notification => ({
   id: 'notif_123',
@@ -185,7 +185,7 @@ export const MOCK_DOCUMENT_BASIC: DocumentEntity = {
   frecencyScore: 0.85,
 };
 
-export const MOCK_DOCUMENT_WITH_PROJECT: DocumentEntity = {
+const MOCK_DOCUMENT_WITH_PROJECT: DocumentEntity = {
   type: 'document',
   id: 'doc_project_1',
   name: 'Project Roadmap Q1 2025',
@@ -197,7 +197,7 @@ export const MOCK_DOCUMENT_WITH_PROJECT: DocumentEntity = {
   frecencyScore: 0.92,
 };
 
-export const MOCK_DOCUMENT_PDF: DocumentEntity = {
+const MOCK_DOCUMENT_PDF: DocumentEntity = {
   type: 'document',
   id: 'doc_pdf_1',
   name: 'Design Specifications.pdf',
@@ -208,7 +208,7 @@ export const MOCK_DOCUMENT_PDF: DocumentEntity = {
   frecencyScore: 0.65,
 };
 
-export const MOCK_DOCUMENT_LONG_NAME: DocumentEntity = {
+const MOCK_DOCUMENT_LONG_NAME: DocumentEntity = {
   type: 'document',
   id: 'doc_long_1',
   name: 'This is a very long document name that should test truncation behavior and how the UI handles overflow text in the entity component',
@@ -219,7 +219,7 @@ export const MOCK_DOCUMENT_LONG_NAME: DocumentEntity = {
   frecencyScore: 0.45,
 };
 
-export const MOCK_DOCUMENT_SPECIAL_CHARS: DocumentEntity = {
+const MOCK_DOCUMENT_SPECIAL_CHARS: DocumentEntity = {
   type: 'document',
   id: 'doc_special_1',
   name: 'Test [Document] with "Special" & <Characters>!',
@@ -230,7 +230,7 @@ export const MOCK_DOCUMENT_SPECIAL_CHARS: DocumentEntity = {
   frecencyScore: 0.75,
 };
 
-export const MOCK_TASK_TODO: TaskEntity = {
+const MOCK_TASK_TODO: TaskEntity = {
   type: 'document',
   id: 'task_todo_1',
   name: 'Review Q1 Budget',
@@ -243,7 +243,7 @@ export const MOCK_TASK_TODO: TaskEntity = {
   frecencyScore: 0.88,
 };
 
-export const MOCK_TASK_COMPLETED: TaskEntity = {
+const MOCK_TASK_COMPLETED: TaskEntity = {
   type: 'document',
   id: 'task_done_1',
   name: 'Setup CI/CD Pipeline',
@@ -256,7 +256,7 @@ export const MOCK_TASK_COMPLETED: TaskEntity = {
   frecencyScore: 0.95,
 };
 
-export const MOCK_TASK_HIGH_PRIORITY: TaskEntity = {
+const MOCK_TASK_HIGH_PRIORITY: TaskEntity = {
   type: 'document',
   id: 'task_urgent_1',
   name: 'Fix Critical Security Bug',
@@ -268,7 +268,7 @@ export const MOCK_TASK_HIGH_PRIORITY: TaskEntity = {
   frecencyScore: 0.99,
 };
 
-export const MOCK_CHANNEL_PUBLIC: ChannelEntity = {
+const MOCK_CHANNEL_PUBLIC: ChannelEntity = {
   type: 'channel',
   id: 'channel_public_1',
   name: 'general',
@@ -285,7 +285,7 @@ export const MOCK_CHANNEL_PUBLIC: ChannelEntity = {
   frecencyScore: 0.91,
 };
 
-export const MOCK_CHANNEL_PRIVATE: ChannelEntity = {
+const MOCK_CHANNEL_PRIVATE: ChannelEntity = {
   type: 'channel',
   id: 'channel_private_1',
   name: 'design-team',
@@ -302,7 +302,7 @@ export const MOCK_CHANNEL_PRIVATE: ChannelEntity = {
   frecencyScore: 0.83,
 };
 
-export const MOCK_CHANNEL_DIRECT_MESSAGE: ChannelEntity = {
+const MOCK_CHANNEL_DIRECT_MESSAGE: ChannelEntity = {
   type: 'channel',
   id: 'channel_dm_1',
   name: 'Direct Message',
@@ -320,7 +320,7 @@ export const MOCK_CHANNEL_DIRECT_MESSAGE: ChannelEntity = {
   frecencyScore: 0.87,
 };
 
-export const MOCK_CHANNEL_ORGANIZATION: ChannelEntity = {
+const MOCK_CHANNEL_ORGANIZATION: ChannelEntity = {
   type: 'channel',
   id: 'channel_org_1',
   name: 'company-announcements',
@@ -337,7 +337,7 @@ export const MOCK_CHANNEL_ORGANIZATION: ChannelEntity = {
   frecencyScore: 0.72,
 };
 
-export const MOCK_CHANNEL_EMPTY_MESSAGE: ChannelEntity = {
+const MOCK_CHANNEL_EMPTY_MESSAGE: ChannelEntity = {
   type: 'channel',
   id: 'channel_attachment_1',
   name: 'project-files',
@@ -354,7 +354,7 @@ export const MOCK_CHANNEL_EMPTY_MESSAGE: ChannelEntity = {
   frecencyScore: 0.68,
 };
 
-export const MOCK_EMAIL_UNREAD: EmailEntity = {
+const MOCK_EMAIL_UNREAD: EmailEntity = {
   type: 'email',
   id: 'email_unread_1',
   name: 'Q1 Planning Session',
@@ -375,7 +375,7 @@ export const MOCK_EMAIL_UNREAD: EmailEntity = {
   frecencyScore: 0.94,
 };
 
-export const MOCK_EMAIL_READ: EmailEntity = {
+const MOCK_EMAIL_READ: EmailEntity = {
   type: 'email',
   id: 'email_read_1',
   name: 'Re: Project Update',
@@ -393,7 +393,7 @@ export const MOCK_EMAIL_READ: EmailEntity = {
   frecencyScore: 0.76,
 };
 
-export const MOCK_EMAIL_DRAFT: EmailEntity = {
+const MOCK_EMAIL_DRAFT: EmailEntity = {
   type: 'email',
   id: 'email_draft_1',
   name: 'Draft: Team Announcement',
@@ -409,7 +409,7 @@ export const MOCK_EMAIL_DRAFT: EmailEntity = {
   frecencyScore: 0.81,
 };
 
-export const MOCK_EMAIL_THREAD: EmailEntity = {
+const MOCK_EMAIL_THREAD: EmailEntity = {
   type: 'email',
   id: 'email_thread_1',
   name: 'Re: Design Review [4 messages]',
@@ -431,7 +431,7 @@ export const MOCK_EMAIL_THREAD: EmailEntity = {
   frecencyScore: 0.89,
 };
 
-export const MOCK_EMAIL_MULTIPLE_PARTICIPANTS: EmailEntity = {
+const MOCK_EMAIL_MULTIPLE_PARTICIPANTS: EmailEntity = {
   type: 'email',
   id: 'email_multi_1',
   name: 'All Hands Meeting Next Week',
@@ -466,7 +466,7 @@ export const MOCK_PROJECT_1: ProjectEntity = {
   frecencyScore: 0.91,
 };
 
-export const MOCK_PROJECT_2: ProjectEntity = {
+const MOCK_PROJECT_2: ProjectEntity = {
   type: 'project',
   id: 'proj_2',
   name: 'Mobile App Development',
@@ -476,7 +476,7 @@ export const MOCK_PROJECT_2: ProjectEntity = {
   frecencyScore: 0.84,
 };
 
-export const MOCK_PROJECT_SHARED: ProjectEntity = {
+const MOCK_PROJECT_SHARED: ProjectEntity = {
   type: 'project',
   id: 'proj_shared_1',
   name: 'Marketing Campaign 2025',
@@ -486,7 +486,7 @@ export const MOCK_PROJECT_SHARED: ProjectEntity = {
   frecencyScore: 0.79,
 };
 
-export const MOCK_CHAT_BASIC: ChatEntity = {
+const MOCK_CHAT_BASIC: ChatEntity = {
   type: 'chat',
   id: 'chat_1',
   name: 'Product Brainstorm',
@@ -496,7 +496,7 @@ export const MOCK_CHAT_BASIC: ChatEntity = {
   frecencyScore: 0.86,
 };
 
-export const MOCK_CHAT_WITH_PROJECT: ChatEntity = {
+const MOCK_CHAT_WITH_PROJECT: ChatEntity = {
   type: 'chat',
   id: 'chat_project_1',
   name: 'Design Discussion',
@@ -507,7 +507,7 @@ export const MOCK_CHAT_WITH_PROJECT: ChatEntity = {
   frecencyScore: 0.82,
 };
 
-export const MOCK_SEARCH_DOCUMENT: WithSearch<DocumentEntity> = {
+const MOCK_SEARCH_DOCUMENT: WithSearch<DocumentEntity> = {
   ...MOCK_DOCUMENT_BASIC,
   search: {
     nameHighlight: 'Meeting **Notes**',
@@ -528,7 +528,7 @@ export const MOCK_SEARCH_DOCUMENT: WithSearch<DocumentEntity> = {
   },
 };
 
-export const MOCK_SEARCH_CHANNEL: WithSearch<ChannelEntity> = {
+const MOCK_SEARCH_CHANNEL: WithSearch<ChannelEntity> = {
   ...MOCK_CHANNEL_PUBLIC,
   search: {
     nameHighlight: '**general**',
@@ -561,7 +561,7 @@ export const MOCK_SEARCH_CHANNEL: WithSearch<ChannelEntity> = {
   },
 };
 
-export const MOCK_SEARCH_EMAIL: WithSearch<EmailEntity> = {
+const MOCK_SEARCH_EMAIL: WithSearch<EmailEntity> = {
   ...MOCK_EMAIL_THREAD,
   search: {
     nameHighlight: '**Design** Review',
@@ -594,7 +594,7 @@ export const MOCK_SEARCH_EMAIL: WithSearch<EmailEntity> = {
   },
 };
 
-export const MOCK_SEARCH_PDF: WithSearch<DocumentEntity> = {
+const MOCK_SEARCH_PDF: WithSearch<DocumentEntity> = {
   ...MOCK_DOCUMENT_PDF,
   search: {
     nameHighlight: '**Design** Specifications.pdf',
@@ -624,39 +624,39 @@ export const createEntityWithNotifications = <T extends object>(
   notifications: () => notifications,
 });
 
-export const MOCK_DOCUMENT_WITH_NOTIFICATIONS = createEntityWithNotifications(
+const MOCK_DOCUMENT_WITH_NOTIFICATIONS = createEntityWithNotifications(
   MOCK_DOCUMENT_BASIC,
   [MOCK_NOTIFICATIONS[0]]
 );
 
-export const MOCK_TASK_WITH_NOTIFICATIONS = createEntityWithNotifications(
+const MOCK_TASK_WITH_NOTIFICATIONS = createEntityWithNotifications(
   MOCK_TASK_TODO,
   [MOCK_NOTIFICATIONS[1]]
 );
 
-export const MOCK_CHANNEL_WITH_NOTIFICATIONS = createEntityWithNotifications(
+const MOCK_CHANNEL_WITH_NOTIFICATIONS = createEntityWithNotifications(
   MOCK_CHANNEL_PUBLIC,
   [MOCK_NOTIFICATIONS[2]]
 );
 
-export const MOCK_SHARED_DOCUMENT: DocumentEntity = {
+const MOCK_SHARED_DOCUMENT: DocumentEntity = {
   ...MOCK_DOCUMENT_BASIC,
   id: 'doc_shared_1',
   name: 'Shared Project Plan',
   ownerId: MOCK_USER_IDS.sharedUser,
 };
 
-export const MOCK_SHARED_TASK: TaskEntity = {
+const MOCK_SHARED_TASK: TaskEntity = {
   ...MOCK_TASK_TODO,
   id: 'task_shared_1',
   name: 'Shared Task',
   ownerId: MOCK_USER_IDS.teamMember1,
 };
 
-export const MOCK_TASK_WITH_PROPERTIES = MOCK_TASK_TODO;
-export const MOCK_TASK_PROPERTIES = MOCK_PROPERTIES;
+const _MOCK_TASK_WITH_PROPERTIES = MOCK_TASK_TODO;
+const _MOCK_TASK_PROPERTIES = MOCK_PROPERTIES;
 
-export const MOCK_ENTITY_MISSING_FIELDS: DocumentEntity = {
+const MOCK_ENTITY_MISSING_FIELDS: DocumentEntity = {
   type: 'document',
   id: 'doc_minimal_1',
   name: 'Minimal Document',
@@ -665,7 +665,7 @@ export const MOCK_ENTITY_MISSING_FIELDS: DocumentEntity = {
   // Missing optional fields like createdAt, updatedAt, frecencyScore
 };
 
-export const MOCK_ENTITY_VERY_OLD: DocumentEntity = {
+const MOCK_ENTITY_VERY_OLD: DocumentEntity = {
   type: 'document',
   id: 'doc_old_1',
   name: 'Archive Document 2020',
@@ -676,7 +676,7 @@ export const MOCK_ENTITY_VERY_OLD: DocumentEntity = {
   frecencyScore: 0.12,
 };
 
-export const MOCK_ENTITY_UNICODE: DocumentEntity = {
+const MOCK_ENTITY_UNICODE: DocumentEntity = {
   type: 'document',
   id: 'doc_unicode_1',
   name: '🚀 Product Launch 2025 💡 Ideas & Notes ✨',
@@ -687,7 +687,7 @@ export const MOCK_ENTITY_UNICODE: DocumentEntity = {
   frecencyScore: 0.88,
 };
 
-export const ALL_DOCUMENT_ENTITIES = [
+const ALL_DOCUMENT_ENTITIES = [
   MOCK_DOCUMENT_BASIC,
   MOCK_DOCUMENT_WITH_PROJECT,
   MOCK_DOCUMENT_PDF,
@@ -699,14 +699,14 @@ export const ALL_DOCUMENT_ENTITIES = [
   MOCK_ENTITY_UNICODE,
 ];
 
-export const ALL_TASK_ENTITIES = [
+const ALL_TASK_ENTITIES = [
   MOCK_TASK_TODO,
   MOCK_TASK_COMPLETED,
   MOCK_TASK_HIGH_PRIORITY,
   MOCK_SHARED_TASK,
 ];
 
-export const ALL_CHANNEL_ENTITIES = [
+const ALL_CHANNEL_ENTITIES = [
   MOCK_CHANNEL_PUBLIC,
   MOCK_CHANNEL_PRIVATE,
   MOCK_CHANNEL_DIRECT_MESSAGE,
@@ -714,7 +714,7 @@ export const ALL_CHANNEL_ENTITIES = [
   MOCK_CHANNEL_EMPTY_MESSAGE,
 ];
 
-export const ALL_EMAIL_ENTITIES = [
+const ALL_EMAIL_ENTITIES = [
   MOCK_EMAIL_UNREAD,
   MOCK_EMAIL_READ,
   MOCK_EMAIL_DRAFT,
@@ -722,28 +722,28 @@ export const ALL_EMAIL_ENTITIES = [
   MOCK_EMAIL_MULTIPLE_PARTICIPANTS,
 ];
 
-export const ALL_PROJECT_ENTITIES = [
+const ALL_PROJECT_ENTITIES = [
   MOCK_PROJECT_1,
   MOCK_PROJECT_2,
   MOCK_PROJECT_SHARED,
 ];
 
-export const ALL_CHAT_ENTITIES = [MOCK_CHAT_BASIC, MOCK_CHAT_WITH_PROJECT];
+const ALL_CHAT_ENTITIES = [MOCK_CHAT_BASIC, MOCK_CHAT_WITH_PROJECT];
 
-export const ALL_SEARCH_ENTITIES = [
+const _ALL_SEARCH_ENTITIES = [
   MOCK_SEARCH_DOCUMENT,
   MOCK_SEARCH_CHANNEL,
   MOCK_SEARCH_EMAIL,
   MOCK_SEARCH_PDF,
 ];
 
-export const ALL_ENTITIES_WITH_NOTIFICATIONS = [
+const _ALL_ENTITIES_WITH_NOTIFICATIONS = [
   MOCK_DOCUMENT_WITH_NOTIFICATIONS,
   MOCK_TASK_WITH_NOTIFICATIONS,
   MOCK_CHANNEL_WITH_NOTIFICATIONS,
 ];
 
-export const ALL_SHARED_ENTITIES = [
+const _ALL_SHARED_ENTITIES = [
   MOCK_SHARED_DOCUMENT,
   MOCK_SHARED_TASK,
   MOCK_PROJECT_SHARED,

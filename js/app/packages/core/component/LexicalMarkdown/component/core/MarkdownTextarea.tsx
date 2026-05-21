@@ -73,7 +73,7 @@ import { NodeAccessoryRenderer } from './NodeAccessoryRenderer';
  * @param onEscape - A callback function that is called when the user presses Escape in the textarea. If the function
  *     returns true Lexical's default behavior will be prevented.
  */
-export interface MarkdownTextareaProps {
+interface MarkdownTextareaProps {
   editable: Accessor<boolean>;
   onChange?: (value: string, editor?: LexicalEditor) => void;
   initialValue?: string;
@@ -338,9 +338,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
         <Show when={showPlaceholder()}>
           <div class="pointer-events-none text-ink-placeholder absolute top-0">
-            <p class="my-1.5 pointer-events-none">
-              {props.placeholder ?? '...'}
-            </p>
+            <p class="pointer-events-none">{props.placeholder ?? '...'}</p>
           </div>
         </Show>
         <Show when={props.watermark}>

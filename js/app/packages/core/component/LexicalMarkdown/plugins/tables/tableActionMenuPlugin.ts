@@ -23,7 +23,7 @@ import type { Accessor } from 'solid-js';
 import { nodeByKey } from '../../utils';
 import { registerEditorWidthObserver } from '../shared/utils';
 
-export interface TableActionsMenuPluginProps {
+interface TableActionsMenuPluginProps {
   menuButtonRef: Accessor<HTMLDivElement | undefined>;
   anchorElem: Accessor<HTMLElement | undefined>;
   tableCellNodeKey: Accessor<string | undefined>;

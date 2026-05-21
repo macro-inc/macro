@@ -94,7 +94,7 @@ function createHiddenFileInput(
  * Returns a cleanup function; you generally don't need it because the util
  * removes listeners and DOM nodes once a selection is made.
  */
-export function openUploadPicker(
+function openUploadPicker(
   options: UploadPickerOptions,
   onSelect: (files: File[]) => void | Promise<void>
 ): UploadPickerCleanup {
@@ -205,7 +205,7 @@ const getDestination = (file: File, ruleset: DestinationRuleset) => {
   return ruleset instanceof Function ? ruleset(file) : ruleset;
 };
 
-export const DEFAULT_DESTINATION_RULESET: DestinationRuleset = 'dss';
+const DEFAULT_DESTINATION_RULESET: DestinationRuleset = 'dss';
 
 // Shared ruleset for chat input -> images/videos are static for inline display, everything else to DSS
 export const chatRuleset: DestinationRuleset = (file: File) => {
@@ -230,7 +230,7 @@ export const chatRuleset: DestinationRuleset = (file: File) => {
 // Ruleset that forces an upload to dss.
 export const forceDssRuleset: DestinationRuleset = (_: File) => 'dss';
 
-export class FileSizeExceededError extends Error {
+class FileSizeExceededError extends Error {
   public limit: number;
   public fileName: string;
   private sizeString: string;
@@ -258,7 +258,7 @@ export class FileSizeExceededError extends Error {
   }
 }
 
-export class UnsupportedFileTypeError extends Error {
+class UnsupportedFileTypeError extends Error {
   public fileName: string;
   public fileType: string;
 
@@ -275,7 +275,7 @@ export class UnsupportedFileTypeError extends Error {
   }
 }
 
-export class UploadError extends Error {
+class UploadError extends Error {
   constructor(
     file: File,
     destination?: UploadDestination,

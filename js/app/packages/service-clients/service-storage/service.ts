@@ -10,20 +10,20 @@ import {
 import { z } from 'zod';
 import * as schemas from './generated/zod';
 
-export const ChatMessageSchema = z.object({
+const _ChatMessageSchema = z.object({
   content: z.string().describe('Content of the message'),
   id: z.number().describe('The chat message id'),
   role: z.string().describe('Whether the chat is from the user or system'),
 });
 
-export const ChatResponseSchema = z.object({});
+const _ChatResponseSchema = z.object({});
 
-export const DocxDocumentPartLocation = z.object({
+const DocxDocumentPartLocation = z.object({
   sha: z.string(),
   url: z.string(),
 });
 
-export const GetWriterPartsResponse = z.object({
+const GetWriterPartsResponse = z.object({
   presignedUrls: z.array(DocxDocumentPartLocation),
 });
 
@@ -98,7 +98,7 @@ const AnnotationsSvc = new Svc('Annotations Service')
     modifies: true,
   });
 
-export const ProjectsSvc = new Svc('Projects Service')
+const ProjectsSvc = new Svc('Projects Service')
   .use('fetchErrors', fetchErrorsSvc)
   .fn('getAll', {
     description: 'Get all projects',
@@ -197,7 +197,7 @@ export const ProjectsSvc = new Svc('Projects Service')
     throws: withFetchErrors(),
   });
 
-export const ViewsSvc = new Svc('Views Service')
+const ViewsSvc = new Svc('Views Service')
   .use('fetchErrors', fetchErrorsSvc)
   .fn('getSavedViews', {
     description: 'Get the list of saved views',
@@ -235,7 +235,7 @@ export const ViewsSvc = new Svc('Views Service')
     throws: withFetchErrors(),
   });
 
-export const PermissionsTokensSvc = new Svc('Permissions Tokens Service')
+const PermissionsTokensSvc = new Svc('Permissions Tokens Service')
   .use('fetchErrors', fetchErrorsSvc)
   .fn('createPermissionToken', {
     description: 'creates a permission token for a document',
@@ -250,7 +250,7 @@ export const PermissionsTokensSvc = new Svc('Permissions Tokens Service')
     throws: withFetchErrors(),
   });
 
-export const InstructionsSvc = new Svc('Instructions Service')
+const InstructionsSvc = new Svc('Instructions Service')
   .use('fetchErrors', fetchErrorsSvc)
   .fn('create', {
     description: schemas.createInstructionsHandlerResponse.description!,

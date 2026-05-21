@@ -46,7 +46,7 @@ export interface ToolHandler<TName extends ToolName, TRenderContext> {
   render: Component<ToolRenderContext<TName> & TRenderContext>;
 }
 
-export interface ToolRendererConfig<TName extends ToolName, TRenderContext> {
+interface ToolRendererConfig<TName extends ToolName, TRenderContext> {
   name: TName;
   render: Component<ToolRenderContext<TName> & TRenderContext>;
   handleCall?: (

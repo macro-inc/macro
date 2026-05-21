@@ -36,7 +36,7 @@ axum = [
 gmail_token = ["dep:authentication_service_client", "dep:redis", "ports"]
 inbound = ["ports"]
 outbound = ["dep:sqlx", "ports"]
-ports = ["dep:tokio", "frecency/ports"]
+ports = ["crm/ports", "dep:tokio", "frecency/ports"]
 
 [dependencies]
 ai = { path = "../ai", optional = true }

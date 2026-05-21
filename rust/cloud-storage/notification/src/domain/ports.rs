@@ -15,14 +15,14 @@ use uuid::Uuid;
 
 use models_pagination::{CreatedAt, Query};
 
-use crate::domain::models::TaggedContent;
 use crate::domain::models::device::DeviceType;
+use crate::domain::models::{PatchDelete, TaggedContent, UserNotificationStatusUpdate};
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::request::NotificationListFilters;
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NotificationExtEmail, NotificationIdAndCollapseKey,
-    SendNotificationRequestBuilder, UserNotificationRow,
+    NotificationStatusPatch, SendNotificationRequestBuilder, UserNotificationRow,
     android::FCMMessage,
     apple::{APNSPushNotification, VoipPushPayload},
     mobile::MessageAttributes,
@@ -98,7 +98,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report>> + Send;
 
     /// Mark notifications as done or undone for a user.
     fn mark_notifications_done(
@@ -106,7 +106,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report>> + Send;
 
     /// Get basic notification data (collapse keys) needed for push clearing.
     fn get_basic_notifications(
@@ -225,6 +225,31 @@ pub trait NotificationRepository: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
         notification_event_type: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for receiving realtime notification database events.
+pub trait NotificationEventsReceiver: Send + 'static {
+    /// Receive the next raw notification database event payload.
+    fn receive(&mut self) -> impl Future<Output = Result<String, Report>> + Send;
+}
+
+/// Port for publishing realtime notification updates.
+pub trait NotificationRealtimePublisher: Send + Sync + 'static {
+    /// Publish notification status updates to the users who own the notifications.
+    fn publish_updates(
+        &self,
+        updates: &[UserNotificationStatusUpdate<'_>],
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// No-op realtime publisher for consumers that do not wire connection gateway.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopNotificationRealtimePublisher;
+
+impl NotificationRealtimePublisher for NoopNotificationRealtimePublisher {
+    async fn publish_updates(&self, _: &[UserNotificationStatusUpdate<'_>]) -> Result<(), Report> {
+        Ok(())
+    }
 }
 
 /// Port for WebSocket delivery via connection gateway.

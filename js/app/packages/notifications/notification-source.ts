@@ -1,6 +1,8 @@
 import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
 import {
+  applyNotificationStatusUpdate,
+  type NotificationStatusUpdate,
   optimisticInsertNotification,
   useMarkNotificationsAsDoneMutation,
   useMarkNotificationsAsSeenMutation,
@@ -89,6 +91,7 @@ export type NotificationSource = {
 };
 
 const NOTIFICATION_EVENT_TYPE = 'notification';
+const NOTIFICATION_STATUS_UPDATED_EVENT_TYPE = 'notification_status_updated';
 
 const QUERY_LIMIT = 500;
 
@@ -212,6 +215,24 @@ export function createNotificationSource(
   };
 
   createSocketEffect(ws, (wsData) => {
+    if (wsData.type === NOTIFICATION_STATUS_UPDATED_EVENT_TYPE) {
+      try {
+        const update = (
+          typeof wsData.data === 'string'
+            ? JSON.parse(wsData.data)
+            : wsData.data
+        ) as NotificationStatusUpdate;
+        applyNotificationStatusUpdate(update);
+      } catch (e) {
+        console.error(
+          'Failed to parse notification status update',
+          wsData.data,
+          e
+        );
+      }
+      return;
+    }
+
     if (wsData.type !== NOTIFICATION_EVENT_TYPE) {
       return;
     }

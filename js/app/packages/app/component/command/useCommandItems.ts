@@ -1,6 +1,5 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import {
-  type Bucket,
   type EntityItem,
   exclude,
   type QuickAccessItem,
@@ -61,7 +60,7 @@ function isEntityItem(item: CommandMenuItem): item is EntityItem {
   return item.kind === 'entity';
 }
 
-function isUserItem(item: CommandMenuItem): item is UserItem {
+function _isUserItem(item: CommandMenuItem): item is UserItem {
   return item.kind === 'user';
 }
 
@@ -297,11 +296,5 @@ export function useCommandItems(
   return filteredItems;
 }
 
-export type {
-  Bucket,
-  CommandItem,
-  CommandMenuItem,
-  QuickAccessItem,
-  SearchItem,
-};
-export { isCommandItem, isEntityItem, isSearchItem, isUserItem };
+export type { CommandMenuItem, SearchItem };
+export { isCommandItem, isEntityItem, isSearchItem };

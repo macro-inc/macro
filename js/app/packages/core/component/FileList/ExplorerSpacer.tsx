@@ -8,7 +8,7 @@ import {
   type FileListSize,
 } from './constants';
 
-export function FileLevelSpacer(props: { size: FileListSize }) {
+function FileLevelSpacer(props: { size: FileListSize }) {
   return (
     <div
       class={cn(
@@ -21,7 +21,7 @@ export function FileLevelSpacer(props: { size: FileListSize }) {
   );
 }
 
-export function CaretSpacer(props: { size: FileListSize }) {
+function _CaretSpacer(props: { size: FileListSize }) {
   return (
     <div
       class={cn('caret-spacer min-h-full', FILE_LIST_CARET_WIDTH[props.size])}
@@ -29,7 +29,7 @@ export function CaretSpacer(props: { size: FileListSize }) {
   );
 }
 
-export function Caret(props: { isExpanded: boolean; size: FileListSize }) {
+function _Caret(props: { isExpanded: boolean; size: FileListSize }) {
   return (
     <div
       class={cn(

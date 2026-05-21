@@ -409,6 +409,8 @@ export function MarkdownPopup(props: {
           <Show when={shouldShowCheckboxToTaskButton()}>
             <Button
               size="sm"
+              class="rounded-md"
+              depth={3}
               variant="ghost"
               onClick={handleConvertToTasks}
               disabled={isConverting()}
@@ -422,7 +424,8 @@ export function MarkdownPopup(props: {
           </Show>
           <Button
             size="sm"
-            class="px-2 text-xs rounded-xs py-1.25"
+            class="px-2 text-xs rounded-md py-1.25"
+            depth={3}
             variant="ghost"
             onClick={async () => {
               const location = editor.read(() =>

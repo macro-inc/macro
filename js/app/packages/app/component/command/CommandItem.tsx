@@ -20,7 +20,7 @@ import {
   type SearchItem,
 } from './useCommandItems';
 
-export interface CommandItemProps {
+interface CommandItemProps {
   item: CommandMenuItem;
   index: number;
   selected: boolean;

@@ -48,7 +48,7 @@ export function docx_upload_unzip_response(
   return DocxUploadResponseDataUploadUnzippedSchema.safeParse(data).success;
 }
 
-export function docx_upload_response_data_validate(
+function _docx_upload_response_data_validate(
   data: unknown
 ): data is DocxUploadResponseData {
   return DocxUploadResponseData.safeParse(data).success;

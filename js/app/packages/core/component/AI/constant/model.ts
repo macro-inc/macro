@@ -5,7 +5,6 @@ import type { Model } from '@core/component/AI/types';
 // import OpenAiLogoIcon from '@phosphor-icons/core/regular/open-ai-logo.svg?component-solid';
 
 export { Model } from '@core/component/AI/types';
-export { AllModels } from '@service-cognition/generated/schemas/model';
 
 type ExhaustiveMap = {
   [K in Model]: any;
@@ -25,6 +24,6 @@ export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
   'claude-opus-4-6': AnthropicIcon,
 };
 
-export const SMART_MODE_MODEL: Model = 'claude-opus-4-6';
+const _SMART_MODE_MODEL: Model = 'claude-opus-4-6';
 
 export const DEFAULT_MODEL: Model = 'claude-opus-4-6';

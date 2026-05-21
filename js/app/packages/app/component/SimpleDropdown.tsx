@@ -126,7 +126,7 @@ function useSimpleDropdownContext() {
 
 // --- Item ---
 
-export type DropdownItemProps = {
+type DropdownItemProps = {
   text: string | JSX.Element;
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   onClick?: (e?: MouseEvent) => void;
@@ -262,14 +262,14 @@ function SimpleDropdownRoot(props: {
   );
 }
 
-export const SimpleDropdown = Object.assign(SimpleDropdownRoot, {
+const SimpleDropdown = Object.assign(SimpleDropdownRoot, {
   Trigger: SimpleDropdownTrigger,
   Portal: SimpleDropdownPortal,
   Content: SimpleDropdownContent,
   Item: DropdownItem,
 });
 
-export type DropdownMenuLike = {
+type DropdownMenuLike = {
   (props: {
     open: boolean;
     onOpenChange: (v: boolean) => void;

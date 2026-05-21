@@ -38,7 +38,11 @@ async fn main() -> anyhow::Result<()> {
         },
         Arc::new(LocalSessionManager::default()),
         {
-            let mut config = StreamableHttpServerConfig::default();
+            let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
+                context.mcp_public_host.clone(),
+                "localhost".into(),
+                "127.0.0.1".into(),
+            ]);
             config.stateful_mode = false;
             config.json_response = true;
             config
