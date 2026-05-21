@@ -40,7 +40,6 @@ pub struct CreateCheckoutSessionV2Request {
         (status = 500, body = ErrorResponse),
     )
 )]
-/// The stripe price id
 #[tracing::instrument(skip(ctx, user, optional_team), err, fields(user_id = %user.macro_user_id))]
 pub async fn create_checkout_session<Eas: EntityAccessService>(
     State(ctx): State<ApiContext>,
