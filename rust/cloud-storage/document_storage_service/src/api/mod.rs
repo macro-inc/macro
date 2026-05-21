@@ -203,8 +203,18 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/comms",
-            comms_service::comms_router(&CommsHandlerState::from_ref(&state))
+            comms_service::comms_router_without_channels(&CommsHandlerState::from_ref(&state))
                 .with_state(CommsHandlerState::from_ref(&state)),
+        )
+        .nest(
+            "/comms/channels",
+            comms_service::api::channels::read_router()
+                .with_state(CommsHandlerState::from_ref(&state)),
+        )
+        .nest(
+            "/comms/channels",
+            channels::inbound::axum_router::legacy_channel_mutation_alias_router()
+                .with_state(state.channels_state.clone()),
         )
         .nest("/entity", entity::router())
         .nest(

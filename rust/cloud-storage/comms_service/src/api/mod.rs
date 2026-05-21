@@ -16,15 +16,21 @@ pub mod swagger;
 /// Creates the public comms router.
 /// This router contains all public-facing comms endpoints.
 /// It does NOT include JWT decoding middleware - that should be applied by the host service.
-pub fn router(app_state: &AppState) -> Router<AppState> {
+
+/// Creates the public comms router without channel routes.
+/// Hosts can mount a custom channel router beside the existing reads.
+pub fn router_without_channels(app_state: &AppState) -> Router<AppState> {
     Router::new()
         .merge(comms::inbound::router::comms_router(
             app_state.comms_state.clone(),
         ))
         .route("/activity", post(post_activity::post_activity_handler))
-        .nest("/channels", channels::router())
         .nest("/preview", preview::router())
         .nest("/attachments", attachments::router())
         .nest("/mentions", mentions::router())
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
+}
+
+pub fn router(app_state: &AppState) -> Router<AppState> {
+    router_without_channels(app_state).nest("/channels", channels::router())
 }

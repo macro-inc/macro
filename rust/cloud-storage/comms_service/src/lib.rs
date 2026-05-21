@@ -14,6 +14,7 @@ pub use api::context::ChannelImpl;
 pub use api::context::DocumentPermissionJwtSecretKey;
 pub use api::context::EntityAccessServiceType;
 pub use api::router as comms_router;
+pub use api::router_without_channels as comms_router_without_channels;
 pub use api::swagger::ApiDoc as CommsApiDoc;
 
 // Re-export comms types needed to construct the state

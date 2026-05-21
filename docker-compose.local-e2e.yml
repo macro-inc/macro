@@ -38,7 +38,7 @@ x-local-e2e-env: &local-e2e-env
   GMAIL_OPS_QUEUE: email-service-gmail-ops-queue
   GMAIL_OPS_RETRY_QUEUE: email-service-gmail-ops-retry-queue
   LINK_MANAGER_QUEUE: email-service-refresh-queue
-  NOTIFICATION_QUEUE: notification-queue
+  NOTIFICATION_QUEUE: http://localstack:4566/000000000000/notification-queue
   NOTIFICATION_INGRESS_QUEUE: http://localstack:4566/000000000000/notification-ingress-queue
   PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE: push-delivery-queue
   SEARCH_EVENT_QUEUE: search-event-queue

@@ -253,7 +253,12 @@ impl SortOn<CreatedAt> for ChannelAttachment {
 }
 
 /// Role of a channel participant.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(
+    feature = "outbound",
+    sqlx(type_name = "comms_participant_role", rename_all = "lowercase")
+)]
 pub enum ParticipantRole {
     /// Channel owner.
     Owner,
@@ -345,6 +350,11 @@ pub struct ThreadReplyRow {
 /// Type of channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(
+    feature = "outbound",
+    sqlx(type_name = "comms_channel_type", rename_all = "snake_case")
+)]
 #[serde(rename_all = "snake_case")]
 pub enum ChannelType {
     /// Public channel.

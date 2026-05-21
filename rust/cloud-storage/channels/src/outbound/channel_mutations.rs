@@ -1,53 +1,17 @@
-//! Outbound adapters for channel mutation ports.
+//! Outbound adapters for channel mutations.
 
 use crate::domain::{
+    events::{ChannelEvent, ChannelNotificationEvent},
     models::{
-        ChannelInfo, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
-        CreateChannelRequest, MutatedAttachment, MutatedMessage, NewChannelAttachment,
-        ParticipantRole, PatchChannelRequest, SimpleMention,
+        ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction, MutatedAttachment,
+        MutatedMessage, SimpleMention, TypingAction,
     },
     ports::{
-        ChannelContactsDispatcher, ChannelMutationsRepo, ChannelNotificationDispatcher,
+        ChannelContactsDispatcher, ChannelEventDispatcher, ChannelNotificationDispatcher,
         ChannelRealtimeGateway, ChannelSearchIndexer, ChannelSharePermissionService,
     },
 };
 use anyhow::Context;
-use comms::outbound::postgres::channel_name::batch_resolve_channel_names;
-use comms_db_client::{
-    activity::upsert_activity::upsert_activity,
-    attachments::{
-        delete_attachments::delete_attachments_by_ids,
-        get_attachments::get_attachments_by_message_id,
-    },
-    channels::{
-        create_channel::{CreateChannelOptions, create_channel},
-        delete_channel::delete_channel,
-        get_channel_info::get_channel_info,
-        get_dm::maybe_get_dm,
-        get_private::maybe_get_private_channel,
-        patch_channel::{PatchChannelOptions, patch_channel},
-        updated_at::updated_at,
-    },
-    entity_mentions::{delete_entity_mentions_by_entity, delete_entity_mentions_by_source},
-    messages::{
-        add_attachments::add_attachments_to_message,
-        create_message::{CreateMessageOptions, create_message},
-        create_message_mentions::{CreateMessageMentionOptions, create_message_mentions},
-        delete_message::delete_message,
-        get_count::get_channel_message_count,
-        get_message_owner::get_message_owner,
-        patch_message::{patch_message, patch_message_attachments},
-    },
-    participants::{
-        add_participant::{AddParticipantOptions, add_participant},
-        get_participants::{get_channel_participants_for_thread_id, get_participants},
-        remove_participant::{RemoveParticipantOptions, remove_participant},
-    },
-    reactions::{
-        add_reaction::add_reaction, get_reactions::get_message_reactions, group_reactions,
-        remove_reaction::remove_reaction,
-    },
-};
 use connection_gateway_client::ConnectionGatewayClient;
 use contacts::domain::ports::ContactsIngress;
 use entity_access::domain::{models::EntityType, ports::EntityAccessService};
@@ -67,439 +31,8 @@ use notification_hex::domain::{
 };
 use serde::Serialize;
 use sqlx::PgPool;
-use std::{collections::HashSet, iter::once, str::FromStr, sync::Arc};
+use std::{collections::HashSet, str::FromStr, sync::Arc};
 use uuid::Uuid;
-
-/// Postgres-backed mutation repository.
-#[derive(Clone)]
-pub struct PgChannelMutationsRepo {
-    pool: PgPool,
-}
-
-impl PgChannelMutationsRepo {
-    /// Create a Postgres mutation repository.
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
-    }
-}
-
-fn to_model_channel_type(channel_type: ChannelType) -> model::comms::ChannelType {
-    match channel_type {
-        ChannelType::Public => model::comms::ChannelType::Public,
-        ChannelType::Organization => model::comms::ChannelType::Organization,
-        ChannelType::Private => model::comms::ChannelType::Private,
-        ChannelType::DirectMessage => model::comms::ChannelType::DirectMessage,
-        ChannelType::Team => model::comms::ChannelType::Team,
-    }
-}
-
-fn from_model_channel_type(channel_type: model::comms::ChannelType) -> ChannelType {
-    match channel_type {
-        model::comms::ChannelType::Public => ChannelType::Public,
-        model::comms::ChannelType::Organization => ChannelType::Organization,
-        model::comms::ChannelType::Private => ChannelType::Private,
-        model::comms::ChannelType::DirectMessage => ChannelType::DirectMessage,
-        model::comms::ChannelType::Team => ChannelType::Team,
-    }
-}
-
-fn to_model_participant_role(role: ParticipantRole) -> model::comms::ParticipantRole {
-    match role {
-        ParticipantRole::Owner => model::comms::ParticipantRole::Owner,
-        ParticipantRole::Admin => model::comms::ParticipantRole::Admin,
-        ParticipantRole::Member => model::comms::ParticipantRole::Member,
-    }
-}
-
-fn from_models_participant_role(role: models_comms::channel::ParticipantRole) -> ParticipantRole {
-    match role {
-        models_comms::channel::ParticipantRole::Owner => ParticipantRole::Owner,
-        models_comms::channel::ParticipantRole::Admin => ParticipantRole::Admin,
-        models_comms::channel::ParticipantRole::Member => ParticipantRole::Member,
-    }
-}
-
-fn to_db_mention(mention: SimpleMention) -> comms_db_client::model::SimpleMention {
-    comms_db_client::model::SimpleMention {
-        entity_type: mention.entity_type,
-        entity_id: mention.entity_id,
-    }
-}
-
-fn to_db_attachment(attachment: NewChannelAttachment) -> comms_db_client::model::NewAttachment {
-    comms_db_client::model::NewAttachment {
-        entity_type: attachment.entity_type,
-        entity_id: attachment.entity_id,
-        height: attachment.height,
-        width: attachment.width,
-    }
-}
-
-fn from_db_message(message: comms_db_client::model::Message) -> MutatedMessage {
-    MutatedMessage {
-        id: message.id,
-        channel_id: message.channel_id,
-        thread_id: message.thread_id,
-        sender_id: message.sender_id,
-        content: message.content,
-        created_at: message.created_at,
-        updated_at: message.updated_at,
-        edited_at: message.edited_at,
-        deleted_at: message.deleted_at,
-    }
-}
-
-fn from_db_attachment(attachment: comms_db_client::model::Attachment) -> MutatedAttachment {
-    MutatedAttachment {
-        id: attachment.id,
-        channel_id: attachment.channel_id,
-        message_id: attachment.message_id,
-        entity_type: attachment.entity_type,
-        entity_id: attachment.entity_id,
-        width: attachment.width,
-        height: attachment.height,
-        created_at: attachment.created_at,
-    }
-}
-
-fn from_db_counted_reaction(reaction: comms_db_client::model::CountedReaction) -> CountedReaction {
-    CountedReaction {
-        emoji: reaction.emoji,
-        users: reaction.users,
-    }
-}
-
-fn from_db_participant(
-    participant: models_comms::channel::ChannelParticipant,
-) -> ChannelParticipant {
-    ChannelParticipant {
-        channel_id: participant.channel_id.0,
-        user_id: participant.user_id.as_ref().to_string(),
-        role: from_models_participant_role(participant.role),
-        joined_at: participant.joined_at,
-        left_at: participant.left_at,
-    }
-}
-
-impl ChannelMutationsRepo for PgChannelMutationsRepo {
-    type Err = anyhow::Error;
-
-    async fn get_channel_info(&self, channel_id: Uuid) -> Result<ChannelInfo, Self::Err> {
-        let info = get_channel_info(&self.pool, &channel_id).await?;
-        Ok(ChannelInfo {
-            id: channel_id,
-            name: info.name,
-            channel_type: from_model_channel_type(info.channel_type),
-            org_id: info.org_id,
-            team_id: None,
-        })
-    }
-
-    async fn get_channel_metadata(
-        &self,
-        channel_id: Uuid,
-        viewer_user_id: MacroUserIdStr<'static>,
-    ) -> Result<ChannelMetadata, Self::Err> {
-        let info = self.get_channel_info(channel_id).await?;
-        let channel_name = batch_resolve_channel_names(&self.pool, &[channel_id], viewer_user_id)
-            .await?
-            .remove(&channel_id)
-            .unwrap_or_else(|| info.name.clone().unwrap_or_default());
-        Ok(ChannelMetadata {
-            channel_type: info.channel_type,
-            channel_name,
-        })
-    }
-
-    async fn user_has_team(&self, user_id: String, team_id: Uuid) -> Result<bool, Self::Err> {
-        let teams = macro_db_client::team::get::get_user_teams(&self.pool, &user_id).await?;
-        Ok(teams.into_iter().any(|team| team.id == team_id))
-    }
-
-    async fn create_channel(
-        &self,
-        owner_id: String,
-        org_id: Option<i64>,
-        req: CreateChannelRequest,
-    ) -> Result<Uuid, Self::Err> {
-        create_channel(
-            &self.pool,
-            CreateChannelOptions {
-                name: req.name,
-                owner_id,
-                org_id,
-                channel_type: to_model_channel_type(req.channel_type),
-                participants: req.participants,
-                team_id: req.team_id,
-            },
-        )
-        .await
-    }
-
-    async fn maybe_get_dm(
-        &self,
-        user_id: String,
-        recipient_id: String,
-    ) -> Result<Option<Uuid>, Self::Err> {
-        maybe_get_dm(&self.pool, &user_id, &recipient_id).await
-    }
-
-    async fn maybe_get_private_channel(
-        &self,
-        participants: Vec<String>,
-    ) -> Result<Option<Uuid>, Self::Err> {
-        maybe_get_private_channel(&self.pool, &participants).await
-    }
-
-    async fn patch_channel(
-        &self,
-        channel_id: Uuid,
-        user_id: String,
-        req: PatchChannelRequest,
-    ) -> Result<(), Self::Err> {
-        patch_channel(
-            &self.pool,
-            &channel_id,
-            &user_id,
-            PatchChannelOptions {
-                channel_name: req.channel_name,
-            },
-        )
-        .await
-    }
-
-    async fn delete_channel(&self, channel_id: Uuid, user_id: String) -> Result<(), Self::Err> {
-        delete_channel(&self.pool, channel_id, &user_id).await
-    }
-
-    async fn add_participant(
-        &self,
-        channel_id: Uuid,
-        user_id: String,
-        role: ParticipantRole,
-    ) -> Result<(), Self::Err> {
-        add_participant(
-            &self.pool,
-            AddParticipantOptions {
-                channel_id: &channel_id,
-                user_id: &user_id,
-                participant_role: Some(to_model_participant_role(role)),
-            },
-        )
-        .await
-    }
-
-    async fn remove_participant(&self, channel_id: Uuid, user_id: String) -> Result<(), Self::Err> {
-        remove_participant(
-            &self.pool,
-            RemoveParticipantOptions {
-                channel_id: &channel_id,
-                user_id: &user_id,
-            },
-        )
-        .await
-    }
-
-    async fn create_message(
-        &self,
-        channel_id: Uuid,
-        sender_id: String,
-        content: String,
-        thread_id: Option<Uuid>,
-    ) -> Result<MutatedMessage, Self::Err> {
-        create_message(
-            &self.pool,
-            CreateMessageOptions {
-                channel_id,
-                sender_id,
-                content,
-                thread_id,
-            },
-        )
-        .await
-        .map(from_db_message)
-    }
-
-    async fn touch_channel_updated_at(&self, channel_id: Uuid) -> Result<(), Self::Err> {
-        updated_at(&self.pool, &channel_id).await.map(|_| ())
-    }
-
-    async fn create_message_mentions(
-        &self,
-        message_id: Uuid,
-        mentions: Vec<SimpleMention>,
-    ) -> Result<(), Self::Err> {
-        let mentions = mentions.into_iter().map(to_db_mention).collect();
-        create_message_mentions(
-            &self.pool,
-            CreateMessageMentionOptions {
-                message_id,
-                mentions,
-            },
-        )
-        .await
-        .map(|_| ())
-    }
-
-    async fn sync_message_mentions(
-        &self,
-        message_id: Uuid,
-        mentions: Vec<SimpleMention>,
-    ) -> Result<(), Self::Err> {
-        let mut tx = self.pool.begin().await?;
-        delete_entity_mentions_by_source(&mut *tx, vec![message_id.to_string()]).await?;
-        create_message_mentions(
-            &mut *tx,
-            CreateMessageMentionOptions {
-                message_id,
-                mentions: mentions.into_iter().map(to_db_mention).collect(),
-            },
-        )
-        .await?;
-        tx.commit().await?;
-        Ok(())
-    }
-
-    async fn add_attachments(
-        &self,
-        message_id: Uuid,
-        channel_id: Uuid,
-        attachments: Vec<NewChannelAttachment>,
-    ) -> Result<Vec<MutatedAttachment>, Self::Err> {
-        add_attachments_to_message(
-            &self.pool,
-            &message_id,
-            &channel_id,
-            attachments.into_iter().map(to_db_attachment).collect(),
-        )
-        .await
-        .map(|a| a.into_iter().map(from_db_attachment).collect())
-    }
-
-    async fn get_message_attachments(
-        &self,
-        message_id: Uuid,
-    ) -> Result<Vec<MutatedAttachment>, Self::Err> {
-        get_attachments_by_message_id(&self.pool, message_id)
-            .await
-            .map(|a| a.into_iter().map(from_db_attachment).collect())
-    }
-
-    async fn delete_attachments(&self, attachment_ids: Vec<Uuid>) -> Result<(), Self::Err> {
-        delete_attachments_by_ids(&self.pool, attachment_ids)
-            .await
-            .map(|_| ())
-    }
-
-    async fn delete_entity_mentions_for_entities(
-        &self,
-        entity_ids: Vec<String>,
-        source_entity_id: String,
-    ) -> Result<(), Self::Err> {
-        delete_entity_mentions_by_entity(&self.pool, entity_ids, source_entity_id)
-            .await
-            .map(|_| ())
-    }
-
-    async fn patch_message_attachments(
-        &self,
-        message_id: Uuid,
-        attachments: Vec<MutatedAttachment>,
-    ) -> Result<MutatedMessage, Self::Err> {
-        let attachments = attachments
-            .into_iter()
-            .map(|a| comms_db_client::model::Attachment {
-                id: a.id,
-                channel_id: a.channel_id,
-                message_id: a.message_id,
-                entity_type: a.entity_type,
-                entity_id: a.entity_id,
-                width: a.width,
-                height: a.height,
-                created_at: a.created_at,
-            })
-            .collect();
-        patch_message_attachments(&self.pool, message_id, attachments)
-            .await
-            .map(from_db_message)
-    }
-
-    async fn patch_message(
-        &self,
-        message_id: Uuid,
-        content: String,
-    ) -> Result<MutatedMessage, Self::Err> {
-        patch_message(&self.pool, message_id, &content)
-            .await
-            .map(from_db_message)
-    }
-
-    async fn delete_message(&self, message_id: Uuid) -> Result<MutatedMessage, Self::Err> {
-        delete_message(&self.pool, message_id)
-            .await
-            .map(from_db_message)
-    }
-
-    async fn get_message_owner(&self, message_id: Uuid) -> Result<String, Self::Err> {
-        get_message_owner(&self.pool, &message_id).await
-    }
-
-    async fn get_participants(
-        &self,
-        channel_id: Uuid,
-    ) -> Result<Vec<ChannelParticipant>, Self::Err> {
-        get_participants(&self.pool, &channel_id)
-            .await
-            .map(|p| p.into_iter().map(from_db_participant).collect())
-            .map_err(Into::into)
-    }
-
-    async fn get_thread_participants(
-        &self,
-        thread_id: Uuid,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
-        get_channel_participants_for_thread_id(&self.pool, &thread_id).await
-    }
-
-    async fn upsert_activity(&self, user_id: String, channel_id: Uuid) -> Result<(), Self::Err> {
-        upsert_activity(
-            &self.pool,
-            &user_id,
-            &channel_id,
-            &comms_db_client::model::ActivityType::Interact,
-        )
-        .await?;
-        Ok(())
-    }
-
-    async fn add_reaction(
-        &self,
-        message_id: Uuid,
-        emoji: String,
-        user_id: String,
-    ) -> Result<(), Self::Err> {
-        add_reaction(&self.pool, message_id, emoji, user_id).await
-    }
-
-    async fn remove_reaction(
-        &self,
-        message_id: Uuid,
-        emoji: String,
-        user_id: String,
-    ) -> Result<(), Self::Err> {
-        remove_reaction(&self.pool, message_id, emoji, user_id).await
-    }
-
-    async fn get_message_reactions(
-        &self,
-        message_id: Uuid,
-    ) -> Result<Vec<CountedReaction>, Self::Err> {
-        get_message_reactions(&self.pool, message_id)
-            .await
-            .map(group_reactions)
-            .map(|r| r.into_iter().map(from_db_counted_reaction).collect())
-    }
-}
 
 /// Connection-gateway realtime adapter.
 #[derive(Clone)]
@@ -540,10 +73,70 @@ impl ChannelRealtimeGateway for ConnectionGatewayChannelRealtimeGateway {
     }
 }
 
+#[derive(Serialize)]
+struct WithNonce<T: Serialize> {
+    #[serde(flatten)]
+    data: T,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    nonce: Option<String>,
+}
+
+#[derive(Serialize)]
+struct AttachmentRealtimeData {
+    channel_id: Uuid,
+    message_id: Uuid,
+    attachments: Vec<MutatedAttachment>,
+}
+
+#[derive(Serialize)]
+struct ReactionRealtimeData {
+    channel_id: Uuid,
+    message_id: Uuid,
+    reactions: Vec<CountedReaction>,
+}
+
+#[derive(Serialize)]
+struct TypingRealtimeData {
+    channel_id: Uuid,
+    user_id: String,
+    action: TypingAction,
+    thread_id: Option<Uuid>,
+}
+
+#[derive(sqlx::FromRow)]
+struct SenderIdRow {
+    sender_id: MacroUserIdStr<'static>,
+}
+
+#[derive(sqlx::FromRow)]
+struct CountRow {
+    count: i64,
+}
+
+#[derive(sqlx::FromRow)]
+struct UserIdRow {
+    user_id: MacroUserIdStr<'static>,
+}
+
+fn participant_ids(participants: &[ChannelParticipant]) -> Vec<MacroUserIdStr<'static>> {
+    participants
+        .iter()
+        .filter_map(|p| MacroUserIdStr::parse_from_str(&p.user_id).ok())
+        .map(|id| id.into_owned())
+        .collect()
+}
+
 /// Contacts ingress adapter.
-#[derive(Clone)]
 pub struct ContactsChannelDispatcher<I> {
     ingress: Arc<I>,
+}
+
+impl<I> Clone for ContactsChannelDispatcher<I> {
+    fn clone(&self) -> Self {
+        Self {
+            ingress: self.ingress.clone(),
+        }
+    }
 }
 
 impl<I> ContactsChannelDispatcher<I> {
@@ -622,6 +215,286 @@ impl ChannelSearchIndexer for SqsChannelSearchIndexer {
             })
             .ok();
         });
+    }
+}
+
+/// Dispatches durable channel events to side-effect adapters.
+#[derive(Clone)]
+pub struct ChannelSideEffectsDispatcher<G, N, S, C> {
+    realtime: G,
+    notifications: N,
+    search: S,
+    contacts: C,
+}
+
+impl<G, N, S, C> ChannelSideEffectsDispatcher<G, N, S, C> {
+    /// Create a channel event dispatcher.
+    pub fn new(realtime: G, notifications: N, search: S, contacts: C) -> Self {
+        Self {
+            realtime,
+            notifications,
+            search,
+            contacts,
+        }
+    }
+}
+
+impl<G, N, S, C> ChannelEventDispatcher for ChannelSideEffectsDispatcher<G, N, S, C>
+where
+    G: ChannelRealtimeGateway + Clone,
+    N: ChannelNotificationDispatcher + Clone,
+    S: ChannelSearchIndexer + Clone,
+    C: ChannelContactsDispatcher + Clone,
+{
+    fn dispatch(&self, event: ChannelEvent) {
+        let realtime = self.realtime.clone();
+        let notifications = self.notifications.clone();
+        let search = self.search.clone();
+        let contacts = self.contacts.clone();
+        tokio::spawn(async move {
+            dispatch_channel_event(&realtime, &notifications, &search, &contacts, event).await;
+        });
+    }
+}
+
+async fn dispatch_channel_event<G, N, S, C>(
+    realtime: &G,
+    notifications: &N,
+    search: &S,
+    contacts: &C,
+    event: ChannelEvent,
+) where
+    G: ChannelRealtimeGateway,
+    N: ChannelNotificationDispatcher,
+    S: ChannelSearchIndexer,
+    C: ChannelContactsDispatcher,
+{
+    let contact_sync_users = contact_sync_users_for_event(&event);
+
+    match event {
+        ChannelEvent::ChannelCreated { .. } => {}
+        ChannelEvent::ChannelDeleted { channel_id } => {
+            search.remove_message(channel_id, None).await;
+        }
+        ChannelEvent::MessagePosted {
+            channel_id,
+            metadata,
+            participants,
+            message,
+            mentions,
+            has_attachments,
+            attachments,
+            nonce,
+        } => {
+            send_realtime(
+                realtime,
+                "comms_message",
+                WithNonce {
+                    data: message.clone(),
+                    nonce: nonce.clone(),
+                },
+                participant_ids(&participants),
+            )
+            .await;
+
+            if !attachments.is_empty() {
+                send_realtime(
+                    realtime,
+                    "comms_attachment",
+                    WithNonce {
+                        data: AttachmentRealtimeData {
+                            channel_id,
+                            message_id: message.id,
+                            attachments,
+                        },
+                        nonce: nonce.clone(),
+                    },
+                    participant_ids(&participants),
+                )
+                .await;
+            }
+
+            notifications.dispatch(ChannelNotificationEvent::MessagePosted {
+                channel_id,
+                metadata,
+                participants,
+                message: message.clone(),
+                mentions,
+                has_attachments,
+            });
+            search.index_message(channel_id, message.id).await;
+        }
+        ChannelEvent::AttachmentsChanged {
+            channel_id,
+            message_id,
+            attachments,
+            recipients,
+            nonce,
+        } => {
+            send_realtime(
+                realtime,
+                "comms_attachment",
+                WithNonce {
+                    data: AttachmentRealtimeData {
+                        channel_id,
+                        message_id,
+                        attachments,
+                    },
+                    nonce,
+                },
+                recipients,
+            )
+            .await;
+            search.index_message(channel_id, message_id).await;
+        }
+        ChannelEvent::MessageChanged {
+            channel_id,
+            message,
+            recipients,
+            nonce,
+        } => {
+            send_realtime(
+                realtime,
+                "comms_message",
+                WithNonce {
+                    data: message.clone(),
+                    nonce,
+                },
+                recipients,
+            )
+            .await;
+            search.index_message(channel_id, message.id).await;
+        }
+        ChannelEvent::MessageDeleted {
+            channel_id,
+            message,
+            recipients,
+            nonce,
+        } => {
+            let message_id = message.id;
+            send_realtime(
+                realtime,
+                "comms_message",
+                WithNonce {
+                    data: message,
+                    nonce,
+                },
+                recipients,
+            )
+            .await;
+            search.remove_message(channel_id, Some(message_id)).await;
+        }
+        ChannelEvent::ReactionChanged {
+            channel_id,
+            message_id,
+            reactions,
+            recipients,
+            nonce,
+        } => {
+            send_realtime(
+                realtime,
+                "comms_reaction",
+                WithNonce {
+                    data: ReactionRealtimeData {
+                        channel_id,
+                        message_id,
+                        reactions,
+                    },
+                    nonce,
+                },
+                recipients,
+            )
+            .await;
+        }
+        ChannelEvent::TypingChanged {
+            channel_id,
+            user_id,
+            action,
+            thread_id,
+            recipients,
+            nonce,
+        } => {
+            send_realtime(
+                realtime,
+                "comms_typing",
+                WithNonce {
+                    data: TypingRealtimeData {
+                        channel_id,
+                        user_id,
+                        action,
+                        thread_id,
+                    },
+                    nonce,
+                },
+                recipients,
+            )
+            .await;
+        }
+        ChannelEvent::ParticipantsAdded {
+            channel_id,
+            invited_by_user_id,
+            recipient_user_ids,
+            metadata,
+            message_content,
+            ..
+        } => {
+            notifications.dispatch(ChannelNotificationEvent::ParticipantsAdded {
+                channel_id,
+                invited_by_user_id,
+                recipient_user_ids,
+                metadata,
+                message_content,
+            });
+        }
+        ChannelEvent::ParticipantJoined { .. } => {}
+    }
+
+    if let Some(users) = contact_sync_users {
+        if let Err(err) = contacts.enqueue_contacts(users).await {
+            let err: anyhow::Error = err.into();
+            tracing::error!(error=?err, "unable to enqueue channel contact sync");
+        }
+    }
+}
+
+fn contact_sync_users_for_event(event: &ChannelEvent) -> Option<HashSet<MacroUserIdStr<'static>>> {
+    match event {
+        ChannelEvent::ChannelCreated {
+            channel_type: ChannelType::Private | ChannelType::DirectMessage,
+            participant_user_ids,
+            ..
+        } => Some(participant_user_ids.iter().cloned().collect()),
+        ChannelEvent::ParticipantsAdded {
+            channel_type: ChannelType::Private | ChannelType::Team,
+            active_participant_user_ids,
+            ..
+        } => Some(active_participant_user_ids.iter().cloned().collect()),
+        ChannelEvent::ParticipantJoined {
+            channel_type: ChannelType::Public | ChannelType::Private | ChannelType::Team,
+            active_participant_user_ids,
+            ..
+        } if active_participant_user_ids.len() > 1 => {
+            Some(active_participant_user_ids.iter().cloned().collect())
+        }
+        _ => None,
+    }
+}
+
+async fn send_realtime<G, T>(
+    realtime: &G,
+    message_type: &'static str,
+    payload: T,
+    recipients: Vec<MacroUserIdStr<'static>>,
+) where
+    G: ChannelRealtimeGateway,
+    T: Serialize + Send,
+{
+    if let Err(err) = realtime
+        .send_update(message_type, payload, recipients)
+        .await
+    {
+        let err: anyhow::Error = err.into();
+        tracing::error!(error=?err, message_type, "unable to dispatch channel realtime event");
     }
 }
 
@@ -805,15 +678,103 @@ async fn get_sender_profile_picture_url(
     .and_then(|pics| pics.pictures.into_iter().next().map(|p| p.url))
 }
 
-async fn send_invite_notifications(
-    ingress: &impl NotificationIngress,
-    channel_id: &Uuid,
-    invited_by_user_id: &MacroUserIdStr<'static>,
+async fn get_message_owner(pool: &PgPool, message_id: Uuid) -> anyhow::Result<String> {
+    let row = sqlx::query_as::<_, SenderIdRow>(
+        r#"
+        SELECT sender_id
+        FROM comms_messages
+        WHERE id = $1
+        ORDER BY created_at ASC
+        "#,
+    )
+    .bind(message_id)
+    .fetch_one(pool)
+    .await
+    .context("unable to get message owner")?;
+    Ok(row.sender_id.to_string())
+}
+
+async fn get_channel_message_count(pool: &PgPool, channel_id: Uuid) -> anyhow::Result<i64> {
+    let row = sqlx::query_as::<_, CountRow>(
+        r#"
+        SELECT COUNT(id) AS count
+        FROM comms_messages
+        WHERE channel_id = $1
+        "#,
+    )
+    .bind(channel_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(row.count)
+}
+
+async fn get_channel_participants_for_thread_id(
+    pool: &PgPool,
+    thread_id: Uuid,
+) -> anyhow::Result<Vec<MacroUserIdStr<'static>>> {
+    let rows = sqlx::query_as::<_, UserIdRow>(
+        r#"
+        SELECT DISTINCT id AS user_id FROM (
+            SELECT m.sender_id AS id
+            FROM comms_channel_participants cp
+            JOIN comms_channels c ON c.id = cp.channel_id
+            JOIN comms_messages m ON m.channel_id = c.id
+            WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
+            UNION
+            SELECT em.entity_id AS id
+            FROM comms_entity_mentions em
+            JOIN comms_messages m ON m.id::text = em.source_entity_id
+            JOIN comms_channel_participants cp
+              ON cp.channel_id = m.channel_id AND cp.user_id = em.entity_id
+            WHERE (m.id = $1 OR m.thread_id = $1)
+              AND em.source_entity_type = 'message'
+              AND em.entity_type = 'user'
+              AND cp.left_at IS NULL
+        ) AS combined
+        "#,
+    )
+    .bind(thread_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|row| row.user_id).collect())
+}
+
+struct PostedMessageNotificationContext {
+    common: CommonChannelMetadata,
+    sender_profile_picture_url: Option<String>,
+    user_mentions: Vec<String>,
+    document_mentions: Vec<macro_db_client::notification::BasicCloudStorageItemMetadata>,
+    thread_participants: Vec<MacroUserIdStr<'static>>,
+    thread_parent_sender_id: Option<MacroUserIdStr<'static>>,
+    excluded_user_ids: Vec<String>,
+    recipients_without_sender_and_mentions: HashSet<MacroUserIdStr<'static>>,
+    existing_user_ids: HashSet<String>,
+    is_first_top_level_message: bool,
+}
+
+struct InviteNotifications {
+    channel_id: Uuid,
+    invited_by_user_id: MacroUserIdStr<'static>,
     recipient_user_ids: Vec<MacroUserIdStr<'static>>,
     existing_user_ids: HashSet<String>,
     sender_profile_picture_url: Option<String>,
+    message_content: Option<String>,
     common: CommonChannelMetadata,
+}
+
+async fn send_invite_notifications(
+    ingress: &impl NotificationIngress,
+    request: InviteNotifications,
 ) -> anyhow::Result<()> {
+    let InviteNotifications {
+        channel_id,
+        invited_by_user_id,
+        recipient_user_ids,
+        existing_user_ids,
+        sender_profile_picture_url,
+        message_content,
+        common,
+    } = request;
     let (existing_users, not_existing_users): (HashSet<_>, HashSet<_>) = recipient_user_ids
         .into_iter()
         .partition(|id| existing_user_ids.contains(id.as_ref()));
@@ -827,6 +788,7 @@ async fn send_invite_notifications(
                     invited_by: invited_by_user_id.clone(),
                     channel_name: common.channel_name.clone(),
                     sender_profile_picture_url: sender_profile_picture_url.clone(),
+                    message_content: message_content.clone(),
                 },
                 sender_id: Some(invited_by_user_id.copied().into_owned()),
                 recipient_ids: existing_users,
@@ -843,6 +805,7 @@ async fn send_invite_notifications(
                     invited_by: invited_by_user_id.clone(),
                     channel_name: common.channel_name.clone(),
                     sender_profile_picture_url,
+                    message_content,
                 },
                 sender_id: Some(invited_by_user_id.copied().into_owned()),
                 recipient_ids: not_existing_users,
@@ -856,13 +819,50 @@ async fn send_invite_notifications(
     Ok(())
 }
 
-impl<I> ChannelNotificationDispatcher for NotificationChannelDispatcher<I>
+impl<I> NotificationChannelDispatcher<I>
 where
-    I: NotificationIngress,
+    I: NotificationIngress + 'static,
 {
-    type Err = anyhow::Error;
+    async fn dispatch_event(&self, event: ChannelNotificationEvent) -> anyhow::Result<()> {
+        match event {
+            ChannelNotificationEvent::MessagePosted {
+                channel_id,
+                metadata,
+                participants,
+                message,
+                mentions,
+                has_attachments,
+            } => {
+                self.dispatch_message_posted(
+                    channel_id,
+                    metadata,
+                    participants,
+                    message,
+                    mentions,
+                    has_attachments,
+                )
+                .await
+            }
+            ChannelNotificationEvent::ParticipantsAdded {
+                channel_id,
+                invited_by_user_id,
+                recipient_user_ids,
+                metadata,
+                message_content,
+            } => {
+                self.dispatch_participants_added(
+                    channel_id,
+                    invited_by_user_id,
+                    recipient_user_ids,
+                    metadata,
+                    message_content,
+                )
+                .await
+            }
+        }
+    }
 
-    async fn dispatch_message_notifications(
+    async fn dispatch_message_posted(
         &self,
         channel_id: Uuid,
         metadata: ChannelMetadata,
@@ -870,55 +870,138 @@ where
         message: MutatedMessage,
         mentions: Vec<SimpleMention>,
         has_attachments: bool,
-    ) -> Result<(), Self::Err> {
-        let common = to_common_metadata(metadata);
-        let channel_message_count = get_channel_message_count(&self.pool, &channel_id).await?;
-        let existing_user_ids: HashSet<String> =
-            if channel_message_count <= 1 && message.thread_id.is_none() {
-                let participant_ids: Vec<_> = participants
-                    .iter()
-                    .filter_map(|p| MacroUserIdStr::parse_from_str(&p.user_id).ok())
-                    .map(|id| id.0)
-                    .collect();
-                macro_db_client::user::get_all::get_existing_users(&self.pool, &participant_ids)
-                    .await?
-                    .into_iter()
-                    .collect()
-            } else {
-                HashSet::new()
-            };
+    ) -> anyhow::Result<()> {
+        let context = self
+            .build_posted_message_context(channel_id, metadata, &participants, &message, mentions)
+            .await?;
 
-        let (user_mentions, document_mention_ids) =
-            mentions
-                .into_iter()
-                .fold((Vec::new(), Vec::new()), |(mut users, mut docs), m| {
-                    match m.entity_type.as_str() {
-                        "user" => users.push(m.entity_id),
-                        "document" => docs.push(m.entity_id),
-                        _ => {}
-                    }
-                    (users, docs)
-                });
+        self.send_user_mention_notifications(channel_id, &message, has_attachments, &context)
+            .await?;
+        self.send_document_mention_notifications(
+            channel_id,
+            &participants,
+            &message,
+            has_attachments,
+            &context,
+        )
+        .await?;
 
-        let document_mentions =
-            macro_db_client::notification::get_basic_cloud_storage_documents_metadata(
-                &self.pool,
-                &document_mention_ids,
+        if let Some(thread_id) = message.thread_id {
+            self.send_reply_notification(
+                thread_id,
+                channel_id,
+                &message,
+                has_attachments,
+                &context,
             )
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error=?e, "unable to get documents metadata");
-            })
-            .unwrap_or_default();
+            .await?;
+        } else if context.is_first_top_level_message {
+            self.send_first_message_invites(channel_id, &message, context)
+                .await?;
+        } else {
+            self.send_channel_message_notification(channel_id, &message, has_attachments, &context)
+                .await?;
+        }
 
-        let (thread_participants, thread_parent_sender_id): (
-            Vec<MacroUserIdStr<'static>>,
-            Option<MacroUserIdStr<'static>>,
-        ) = if let Some(thread_id) = message.thread_id {
-            let participants = get_channel_participants_for_thread_id(&self.pool, &thread_id)
+        Ok(())
+    }
+
+    async fn build_posted_message_context(
+        &self,
+        channel_id: Uuid,
+        metadata: ChannelMetadata,
+        participants: &[ChannelParticipant],
+        message: &MutatedMessage,
+        mentions: Vec<SimpleMention>,
+    ) -> anyhow::Result<PostedMessageNotificationContext> {
+        let common = to_common_metadata(metadata);
+        let is_first_top_level_message = get_channel_message_count(&self.pool, channel_id).await?
+            <= 1
+            && message.thread_id.is_none();
+        let existing_user_ids = if is_first_top_level_message {
+            let participant_ids: Vec<_> = participants
+                .iter()
+                .filter_map(|participant| MacroUserIdStr::parse_from_str(&participant.user_id).ok())
+                .map(|id| id.0)
+                .collect();
+            macro_db_client::user::get_all::get_existing_users(&self.pool, &participant_ids)
+                .await?
+                .into_iter()
+                .collect()
+        } else {
+            HashSet::new()
+        };
+
+        let (user_mentions, document_mention_ids) = mentions.into_iter().fold(
+            (Vec::new(), Vec::new()),
+            |(mut users, mut docs), mention| {
+                match mention.entity_type.as_str() {
+                    "user" => users.push(mention.entity_id),
+                    "document" => docs.push(mention.entity_id),
+                    _ => {}
+                }
+                (users, docs)
+            },
+        );
+        let document_mentions = self.load_document_mentions(&document_mention_ids).await;
+        let (thread_participants, thread_parent_sender_id) = self
+            .load_thread_notification_context(message.thread_id)
+            .await;
+        let sender_profile_picture_url =
+            get_sender_profile_picture_url(&self.pool, &message.sender_id).await;
+
+        let excluded_user_ids = std::iter::once(message.sender_id.as_ref().to_string())
+            .chain(user_mentions.iter().cloned())
+            .collect::<Vec<_>>();
+        let recipients_without_sender_and_mentions = recipients_excluding(
+            participants
+                .iter()
+                .map(|participant| participant.user_id.as_str()),
+            excluded_user_ids.iter().map(String::as_str),
+        )
+        .collect();
+
+        Ok(PostedMessageNotificationContext {
+            common,
+            sender_profile_picture_url,
+            user_mentions,
+            document_mentions,
+            thread_participants,
+            thread_parent_sender_id,
+            excluded_user_ids,
+            recipients_without_sender_and_mentions,
+            existing_user_ids,
+            is_first_top_level_message,
+        })
+    }
+
+    async fn load_document_mentions(
+        &self,
+        document_mention_ids: &[String],
+    ) -> Vec<macro_db_client::notification::BasicCloudStorageItemMetadata> {
+        macro_db_client::notification::get_basic_cloud_storage_documents_metadata(
+            &self.pool,
+            document_mention_ids,
+        )
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error=?e, "unable to get documents metadata");
+        })
+        .unwrap_or_default()
+    }
+
+    async fn load_thread_notification_context(
+        &self,
+        thread_id: Option<Uuid>,
+    ) -> (
+        Vec<MacroUserIdStr<'static>>,
+        Option<MacroUserIdStr<'static>>,
+    ) {
+        if let Some(thread_id) = thread_id {
+            let participants = get_channel_participants_for_thread_id(&self.pool, thread_id)
                 .await
                 .unwrap_or_default();
-            let sender_id = match get_message_owner(&self.pool, &thread_id).await {
+            let sender_id = match get_message_owner(&self.pool, thread_id).await {
                 Ok(id) => MacroUserIdStr::parse_from_str(&id)
                     .ok()
                     .map(|id| id.into_owned()),
@@ -927,33 +1010,97 @@ where
             (participants, sender_id)
         } else {
             (vec![], None)
-        };
+        }
+    }
 
-        let sender_profile_picture_url =
-            get_sender_profile_picture_url(&self.pool, &message.sender_id).await;
-        let entity =
-            || model_entity::EntityType::Channel.with_entity_string(channel_id.to_string());
-        let sender = || Some(message.sender_id.clone());
+    async fn send_user_mention_notifications(
+        &self,
+        channel_id: Uuid,
+        message: &MutatedMessage,
+        has_attachments: bool,
+        context: &PostedMessageNotificationContext,
+    ) -> anyhow::Result<()> {
+        if context.user_mentions.is_empty() {
+            return Ok(());
+        }
 
-        if !user_mentions.is_empty() {
+        self.ingress
+            .send_notification(
+                SendNotificationRequestBuilder {
+                    notification_entity: model_entity::EntityType::Channel
+                        .with_entity_string(channel_id.to_string()),
+                    notification: ChannelMentionMetadata {
+                        message_content: message.content.clone(),
+                        message_id: message.id.to_string(),
+                        has_attachments,
+                        thread_id: message.thread_id.map(|thread_id| thread_id.to_string()),
+                        common: context.common.clone(),
+                        sender_profile_picture_url: context.sender_profile_picture_url.clone(),
+                    },
+                    sender_id: Some(message.sender_id.clone()),
+                    recipient_ids: recipients_excluding(
+                        context.user_mentions.iter().map(String::as_str),
+                        std::iter::once(message.sender_id.as_ref()),
+                    )
+                    .collect(),
+                }
+                .into_request()
+                .with_apns()
+                .with_conn_gateway(),
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+
+        Ok(())
+    }
+
+    async fn send_document_mention_notifications(
+        &self,
+        channel_id: Uuid,
+        participants: &[ChannelParticipant],
+        message: &MutatedMessage,
+        has_attachments: bool,
+        context: &PostedMessageNotificationContext,
+    ) -> anyhow::Result<()> {
+        if context.document_mentions.is_empty() {
+            return Ok(());
+        }
+
+        let recipients: HashSet<_> = recipients_excluding(
+            participants
+                .iter()
+                .map(|participant| participant.user_id.as_str()),
+            std::iter::once(message.sender_id.as_ref()),
+        )
+        .collect();
+
+        for mention in &context.document_mentions {
             self.ingress
                 .send_notification(
                     SendNotificationRequestBuilder {
-                        notification_entity: entity(),
-                        notification: ChannelMentionMetadata {
-                            message_content: message.content.clone(),
-                            message_id: message.id.to_string(),
-                            has_attachments,
-                            thread_id: message.thread_id.map(|t| t.to_string()),
-                            common: common.clone(),
-                            sender_profile_picture_url: sender_profile_picture_url.clone(),
+                        notification_entity: model_entity::EntityType::Channel
+                            .with_entity_string(channel_id.to_string()),
+                        notification: DocumentMentionMetadata {
+                            document_name: mention.item_name.clone(),
+                            owner: mention.item_owner.clone(),
+                            file_type: mention.file_type.clone(),
+                            sub_type: match mention.sub_type.as_deref() {
+                                Some("task") => Some(NotificationDocumentSubType::Task),
+                                _ => None,
+                            },
+                            channel: ChannelMentionMetadata {
+                                message_content: message.content.clone(),
+                                message_id: message.id.to_string(),
+                                has_attachments,
+                                thread_id: message.thread_id.map(|thread_id| thread_id.to_string()),
+                                common: context.common.clone(),
+                                sender_profile_picture_url: context
+                                    .sender_profile_picture_url
+                                    .clone(),
+                            },
                         },
-                        sender_id: sender(),
-                        recipient_ids: recipients_excluding(
-                            user_mentions.iter().map(|m| m.as_str()),
-                            once(message.sender_id.as_ref()),
-                        )
-                        .collect(),
+                        sender_id: Some(message.sender_id.clone()),
+                        recipient_ids: recipients.clone(),
                     }
                     .into_request()
                     .with_apns()
@@ -963,136 +1110,122 @@ where
                 .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         }
 
-        if !document_mentions.is_empty() {
-            let doc_recipients: HashSet<_> = recipients_excluding(
-                participants.iter().map(|p| p.user_id.as_str()),
-                once(message.sender_id.as_ref()),
-            )
-            .collect();
-
-            for mention in document_mentions {
-                self.ingress
-                    .send_notification(
-                        SendNotificationRequestBuilder {
-                            notification_entity: entity(),
-                            notification: DocumentMentionMetadata {
-                                document_name: mention.item_name.clone(),
-                                owner: mention.item_owner.clone(),
-                                file_type: mention.file_type.clone(),
-                                sub_type: match mention.sub_type.as_deref() {
-                                    Some("task") => Some(NotificationDocumentSubType::Task),
-                                    _ => None,
-                                },
-                                channel: ChannelMentionMetadata {
-                                    message_content: message.content.clone(),
-                                    message_id: message.id.to_string(),
-                                    has_attachments,
-                                    thread_id: message.thread_id.map(|t| t.to_string()),
-                                    common: common.clone(),
-                                    sender_profile_picture_url: sender_profile_picture_url.clone(),
-                                },
-                            },
-                            sender_id: sender(),
-                            recipient_ids: doc_recipients.clone(),
-                        }
-                        .into_request()
-                        .with_apns()
-                        .with_conn_gateway(),
-                    )
-                    .await
-                    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-            }
-        }
-
-        let sender_and_mentions = once(message.sender_id.as_ref())
-            .chain(user_mentions.iter().map(String::as_str))
-            .collect::<Vec<&str>>();
-        let recipients_without_sender_and_mentions: HashSet<_> = recipients_excluding(
-            participants.iter().map(|p| p.user_id.as_str()),
-            sender_and_mentions.clone(),
-        )
-        .collect();
-
-        match (channel_message_count, message.thread_id) {
-            (_, Some(thread_id)) => {
-                if !thread_participants.is_empty() {
-                    self.ingress
-                        .send_notification(
-                            SendNotificationRequestBuilder {
-                                notification_entity: entity(),
-                                notification: ChannelReplyMetadata {
-                                    thread_id: thread_id.to_string(),
-                                    message_id: message.id.to_string(),
-                                    user_id: message.sender_id.clone(),
-                                    message_content: message.content.clone(),
-                                    has_attachments,
-                                    thread_parent_sender_id,
-                                    common,
-                                    sender_profile_picture_url,
-                                },
-                                sender_id: sender(),
-                                recipient_ids: recipients_excluding(
-                                    thread_participants.iter().map(|p| p.as_ref()),
-                                    sender_and_mentions,
-                                )
-                                .collect(),
-                            }
-                            .into_request()
-                            .with_apns()
-                            .with_conn_gateway(),
-                        )
-                        .await
-                        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-                } else {
-                    tracing::warn!("thread participants is empty, but message has thread id");
-                }
-            }
-            (..=1, None) => {
-                send_invite_notifications(
-                    &*self.ingress,
-                    &channel_id,
-                    &message.sender_id,
-                    recipients_without_sender_and_mentions.into_iter().collect(),
-                    existing_user_ids,
-                    sender_profile_picture_url,
-                    common,
-                )
-                .await?;
-            }
-            (_, None) => {
-                self.ingress
-                    .send_notification(
-                        SendNotificationRequestBuilder {
-                            notification_entity: entity(),
-                            notification: ChannelMessageSendMetadata {
-                                message_id: message.id.to_string(),
-                                sender: message.sender_id.clone(),
-                                message_content: message.content.clone(),
-                                has_attachments,
-                                common,
-                                sender_profile_picture_url,
-                            },
-                            sender_id: sender(),
-                            recipient_ids: recipients_without_sender_and_mentions,
-                        }
-                        .into_request()
-                        .with_apns()
-                        .with_conn_gateway(),
-                    )
-                    .await
-                    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-            }
-        }
         Ok(())
     }
 
-    async fn dispatch_invite_notifications(
+    async fn send_reply_notification(
+        &self,
+        thread_id: Uuid,
+        channel_id: Uuid,
+        message: &MutatedMessage,
+        has_attachments: bool,
+        context: &PostedMessageNotificationContext,
+    ) -> anyhow::Result<()> {
+        if context.thread_participants.is_empty() {
+            tracing::warn!(thread_id = %thread_id, "thread participants is empty, but message has thread id");
+            return Ok(());
+        }
+
+        self.ingress
+            .send_notification(
+                SendNotificationRequestBuilder {
+                    notification_entity: model_entity::EntityType::Channel
+                        .with_entity_string(channel_id.to_string()),
+                    notification: ChannelReplyMetadata {
+                        thread_id: thread_id.to_string(),
+                        message_id: message.id.to_string(),
+                        user_id: message.sender_id.clone(),
+                        message_content: message.content.clone(),
+                        has_attachments,
+                        thread_parent_sender_id: context.thread_parent_sender_id.clone(),
+                        common: context.common.clone(),
+                        sender_profile_picture_url: context.sender_profile_picture_url.clone(),
+                    },
+                    sender_id: Some(message.sender_id.clone()),
+                    recipient_ids: recipients_excluding(
+                        context
+                            .thread_participants
+                            .iter()
+                            .map(|participant| participant.as_ref()),
+                        context.excluded_user_ids.iter().map(String::as_str),
+                    )
+                    .collect(),
+                }
+                .into_request()
+                .with_apns()
+                .with_conn_gateway(),
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+
+        Ok(())
+    }
+
+    async fn send_first_message_invites(
+        &self,
+        channel_id: Uuid,
+        message: &MutatedMessage,
+        context: PostedMessageNotificationContext,
+    ) -> anyhow::Result<()> {
+        send_invite_notifications(
+            &*self.ingress,
+            InviteNotifications {
+                channel_id,
+                invited_by_user_id: message.sender_id.clone(),
+                recipient_user_ids: context
+                    .recipients_without_sender_and_mentions
+                    .into_iter()
+                    .collect(),
+                existing_user_ids: context.existing_user_ids,
+                sender_profile_picture_url: context.sender_profile_picture_url,
+                message_content: Some(message.content.clone()),
+                common: context.common,
+            },
+        )
+        .await
+    }
+
+    async fn send_channel_message_notification(
+        &self,
+        channel_id: Uuid,
+        message: &MutatedMessage,
+        has_attachments: bool,
+        context: &PostedMessageNotificationContext,
+    ) -> anyhow::Result<()> {
+        self.ingress
+            .send_notification(
+                SendNotificationRequestBuilder {
+                    notification_entity: model_entity::EntityType::Channel
+                        .with_entity_string(channel_id.to_string()),
+                    notification: ChannelMessageSendMetadata {
+                        message_id: message.id.to_string(),
+                        sender: message.sender_id.clone(),
+                        message_content: message.content.clone(),
+                        has_attachments,
+                        common: context.common.clone(),
+                        sender_profile_picture_url: context.sender_profile_picture_url.clone(),
+                    },
+                    sender_id: Some(message.sender_id.clone()),
+                    recipient_ids: context.recipients_without_sender_and_mentions.clone(),
+                }
+                .into_request()
+                .with_apns()
+                .with_conn_gateway(),
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+
+        Ok(())
+    }
+
+    async fn dispatch_participants_added(
         &self,
         channel_id: Uuid,
         invited_by_user_id: MacroUserIdStr<'static>,
         recipient_user_ids: Vec<MacroUserIdStr<'static>>,
         metadata: ChannelMetadata,
-    ) -> Result<(), Self::Err> {
+        message_content: Option<String>,
+    ) -> anyhow::Result<()> {
         let common = to_common_metadata(metadata);
         let sender_profile_picture_url =
             get_sender_profile_picture_url(&self.pool, &invited_by_user_id).await;
@@ -1109,13 +1242,102 @@ where
 
         send_invite_notifications(
             &*self.ingress,
-            &channel_id,
-            &invited_by_user_id,
-            recipient_user_ids,
-            existing_user_ids,
-            sender_profile_picture_url,
-            common,
+            InviteNotifications {
+                channel_id,
+                invited_by_user_id,
+                recipient_user_ids,
+                existing_user_ids,
+                sender_profile_picture_url,
+                message_content,
+                common,
+            },
         )
         .await
+    }
+}
+
+impl<I> ChannelNotificationDispatcher for NotificationChannelDispatcher<I>
+where
+    I: NotificationIngress + 'static,
+{
+    fn dispatch(&self, event: ChannelNotificationEvent) {
+        let this = Self {
+            pool: self.pool.clone(),
+            ingress: self.ingress.clone(),
+        };
+        tokio::spawn(async move {
+            if let Err(err) = this.dispatch_event(event).await {
+                tracing::error!(error=?err, "unable to dispatch channel notification event");
+            }
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn user(email: &str) -> MacroUserIdStr<'static> {
+        MacroUserIdStr::try_from_email(email).unwrap()
+    }
+
+    fn users(emails: &[&str]) -> Vec<MacroUserIdStr<'static>> {
+        emails.iter().map(|email| user(email)).collect()
+    }
+
+    #[test]
+    fn contact_sync_is_derived_from_private_channel_created() {
+        let event = ChannelEvent::ChannelCreated {
+            channel_id: Uuid::nil(),
+            channel_type: ChannelType::Private,
+            participant_user_ids: users(&["alice@example.com", "bob@example.com"]),
+        };
+
+        let contact_users = contact_sync_users_for_event(&event).unwrap();
+
+        assert_eq!(contact_users.len(), 2);
+        assert!(contact_users.contains(&user("alice@example.com")));
+        assert!(contact_users.contains(&user("bob@example.com")));
+    }
+
+    #[test]
+    fn contact_sync_ignores_public_channel_created() {
+        let event = ChannelEvent::ChannelCreated {
+            channel_id: Uuid::nil(),
+            channel_type: ChannelType::Public,
+            participant_user_ids: users(&["alice@example.com", "bob@example.com"]),
+        };
+
+        assert!(contact_sync_users_for_event(&event).is_none());
+    }
+
+    #[test]
+    fn contact_sync_is_derived_from_team_participants_added() {
+        let event = ChannelEvent::ParticipantsAdded {
+            channel_id: Uuid::nil(),
+            channel_type: ChannelType::Team,
+            active_participant_user_ids: users(&["alice@example.com", "bob@example.com"]),
+            invited_by_user_id: user("alice@example.com"),
+            recipient_user_ids: users(&["bob@example.com"]),
+            metadata: ChannelMetadata {
+                channel_type: ChannelType::Team,
+                channel_name: "team".to_string(),
+            },
+            message_content: None,
+        };
+
+        assert_eq!(contact_sync_users_for_event(&event).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn contact_sync_ignores_single_user_join() {
+        let event = ChannelEvent::ParticipantJoined {
+            channel_id: Uuid::nil(),
+            channel_type: ChannelType::Public,
+            user_id: user("alice@example.com"),
+            active_participant_user_ids: users(&["alice@example.com"]),
+        };
+
+        assert!(contact_sync_users_for_event(&event).is_none());
     }
 }

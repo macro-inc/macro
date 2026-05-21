@@ -1,23 +1,25 @@
 use super::*;
 use crate::domain::{
+    events::{ChannelEvent, ChannelNotificationEvent},
     models::{
-        ChannelInfo, ChannelMessageFilters, ChannelMetadata, ChannelParticipant, ChannelType,
-        CountedReaction, MessageAttachment, MessagePageDirection, MutatedAttachment,
-        MutatedMessage, NewChannelAttachment, ParticipantRole, PatchChannelRequest,
-        PatchMessageRequest, PostMessageRequest, PostReactionRequest, ReactionAction,
-        SimpleMention, ThreadData, ThreadReplyRow, TopLevelMessageRow,
+        ChannelAttachment, ChannelAttachmentType, ChannelInfo, ChannelMessageFilters,
+        ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction, MessageAttachment,
+        MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
+        ParticipantRole, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
+        PostReactionRequest, ReactionAction, ResolvedChannelMessage, SimpleMention, ThreadData,
+        ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{
-        ChannelContactsDispatcher, ChannelMutationsRepo, ChannelNotificationDispatcher,
-        ChannelRealtimeGateway, ChannelSearchIndexer, ChannelSharePermissionService,
-        MockChannelMessagesRepo, TopLevelMessagesQueryResult,
+        ChannelEventDispatcher, ChannelNotificationDispatcher, ChannelRealtimeGateway, ChannelRepo,
+        ChannelSearchIndexer, ChannelSharePermissionService, MockChannelRepo,
+        TopLevelMessagesQueryResult,
     },
 };
 use chrono::Utc;
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use serde::Serialize;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{Arc, Mutex},
 };
 
@@ -35,8 +37,8 @@ fn make_row(id: Uuid, minutes_ago: i64) -> TopLevelMessageRow {
     }
 }
 
-fn empty_repo() -> MockChannelMessagesRepo {
-    let mut repo = MockChannelMessagesRepo::new();
+fn empty_repo() -> MockChannelRepo {
+    let mut repo = MockChannelRepo::new();
     repo.expect_get_top_level_messages()
         .returning(|_, _, _, _, _, _| {
             Box::pin(async {
@@ -67,7 +69,7 @@ fn empty_repo() -> MockChannelMessagesRepo {
 
 #[tokio::test]
 async fn returns_empty_page_for_no_messages() {
-    let svc = ChannelMessagesServiceImpl::new(empty_repo());
+    let svc = ChannelServiceImpl::new(empty_repo());
     let result = svc
         .get_channel_messages(
             Uuid::nil(),
@@ -102,7 +104,7 @@ async fn returns_messages_with_thread_info() {
         edited_at: None,
     };
 
-    let mut repo = MockChannelMessagesRepo::new();
+    let mut repo = MockChannelRepo::new();
 
     let row_clone = row.clone();
     repo.expect_get_top_level_messages()
@@ -156,7 +158,7 @@ async fn returns_messages_with_thread_info() {
         Box::pin(async move { Ok(map) })
     });
 
-    let svc = ChannelMessagesServiceImpl::new(repo);
+    let svc = ChannelServiceImpl::new(repo);
     let result = svc
         .get_channel_messages(
             Uuid::nil(),
@@ -241,8 +243,92 @@ impl FakeMutationRepo {
     }
 }
 
-impl ChannelMutationsRepo for FakeMutationRepo {
+impl ChannelRepo for FakeMutationRepo {
     type Err = anyhow::Error;
+
+    async fn get_top_level_messages(
+        &self,
+        _channel_id: Uuid,
+        _query: &Query<Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
+        _limit: u16,
+        _filters: &ChannelMessageFilters,
+        _notification_user_id: Option<MacroUserIdStr<'static>>,
+    ) -> Result<TopLevelMessagesQueryResult, Self::Err> {
+        Ok(TopLevelMessagesQueryResult {
+            rows: vec![],
+            has_more_newer: false,
+        })
+    }
+
+    async fn get_thread_data(
+        &self,
+        _parent_ids: &[Uuid],
+        _preview_count: u16,
+    ) -> Result<HashMap<Uuid, ThreadData>, Self::Err> {
+        Ok(HashMap::new())
+    }
+
+    async fn get_thread_replies(&self, _parent_id: Uuid) -> Result<Vec<ThreadReplyRow>, Self::Err> {
+        Ok(vec![])
+    }
+
+    async fn get_reactions_batch(
+        &self,
+        _message_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<CountedReaction>>, Self::Err> {
+        Ok(HashMap::new())
+    }
+
+    async fn get_attachments_batch(
+        &self,
+        _message_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<MessageAttachment>>, Self::Err> {
+        Ok(HashMap::new())
+    }
+
+    async fn get_channel_attachments(
+        &self,
+        _channel_id: Uuid,
+        _query: &Query<Uuid, CreatedAt, ()>,
+        _limit: u16,
+        _attachment_type: Option<ChannelAttachmentType>,
+    ) -> Result<Vec<ChannelAttachment>, Self::Err> {
+        Ok(vec![])
+    }
+
+    async fn get_channel_participants(
+        &self,
+        _channel_id: Uuid,
+    ) -> Result<Vec<ChannelParticipant>, Self::Err> {
+        Ok(self.state.lock().unwrap().participants.clone())
+    }
+
+    async fn resolve_top_level_parent(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<Option<TopLevelMessageRow>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn resolve_message(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<Option<ResolvedChannelMessage>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn get_top_level_messages_around(
+        &self,
+        _channel_id: Uuid,
+        _anchor_created_at: chrono::DateTime<chrono::Utc>,
+        _anchor_id: Uuid,
+        _limit: u16,
+    ) -> Result<(Vec<TopLevelMessageRow>, Vec<TopLevelMessageRow>), Self::Err> {
+        Ok((vec![], vec![]))
+    }
 
     async fn get_channel_info(&self, channel_id: Uuid) -> Result<ChannelInfo, Self::Err> {
         Ok(ChannelInfo {
@@ -524,49 +610,26 @@ struct FakeMessageNotification {
 }
 
 impl ChannelNotificationDispatcher for FakeNotifications {
-    type Err = anyhow::Error;
-
-    async fn dispatch_message_notifications(
-        &self,
-        _channel_id: Uuid,
-        metadata: ChannelMetadata,
-        participants: Vec<ChannelParticipant>,
-        message: MutatedMessage,
-        _mentions: Vec<SimpleMention>,
-        has_attachments: bool,
-    ) -> Result<(), Self::Err> {
-        self.messages.lock().unwrap().push(FakeMessageNotification {
-            metadata,
-            participants: participants.into_iter().map(|p| p.user_id).collect(),
-            message_id: message.id,
-            has_attachments,
-        });
-        Ok(())
-    }
-
-    async fn dispatch_invite_notifications(
-        &self,
-        _channel_id: Uuid,
-        _invited_by_user_id: MacroUserIdStr<'static>,
-        _recipient_user_ids: Vec<MacroUserIdStr<'static>>,
-        _metadata: ChannelMetadata,
-    ) -> Result<(), Self::Err> {
-        *self.invites.lock().unwrap() += 1;
-        Ok(())
-    }
-}
-
-#[derive(Clone, Default)]
-struct FakeContacts;
-
-impl ChannelContactsDispatcher for FakeContacts {
-    type Err = anyhow::Error;
-
-    async fn enqueue_contacts(
-        &self,
-        _users: HashSet<MacroUserIdStr<'static>>,
-    ) -> Result<(), Self::Err> {
-        Ok(())
+    fn dispatch(&self, event: ChannelNotificationEvent) {
+        match event {
+            ChannelNotificationEvent::MessagePosted {
+                metadata,
+                participants,
+                message,
+                has_attachments,
+                ..
+            } => {
+                self.messages.lock().unwrap().push(FakeMessageNotification {
+                    metadata,
+                    participants: participants.into_iter().map(|p| p.user_id).collect(),
+                    message_id: message.id,
+                    has_attachments,
+                });
+            }
+            ChannelNotificationEvent::ParticipantsAdded { .. } => {
+                *self.invites.lock().unwrap() += 1;
+            }
+        }
     }
 }
 
@@ -583,6 +646,228 @@ impl ChannelSearchIndexer for FakeSearch {
 
     async fn remove_message(&self, channel_id: Uuid, message_id: Option<Uuid>) {
         self.removed.lock().unwrap().push((channel_id, message_id));
+    }
+}
+
+#[derive(Clone)]
+struct FakeEvents {
+    gateway: FakeGateway,
+    notifications: FakeNotifications,
+    search: FakeSearch,
+}
+
+#[derive(Serialize)]
+struct FakeWithNonce<T: Serialize> {
+    #[serde(flatten)]
+    data: T,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    nonce: Option<String>,
+}
+
+#[derive(Serialize)]
+struct FakeAttachmentRealtimeData {
+    channel_id: Uuid,
+    message_id: Uuid,
+    attachments: Vec<MutatedAttachment>,
+}
+
+#[derive(Serialize)]
+struct FakeReactionRealtimeData {
+    channel_id: Uuid,
+    message_id: Uuid,
+    reactions: Vec<CountedReaction>,
+}
+
+fn fake_recipient_strings(recipients: Vec<MacroUserIdStr<'static>>) -> Vec<String> {
+    recipients
+        .into_iter()
+        .map(|recipient| recipient.as_ref().to_string())
+        .collect()
+}
+
+fn fake_participant_ids(participants: &[ChannelParticipant]) -> Vec<MacroUserIdStr<'static>> {
+    participants
+        .iter()
+        .filter_map(|participant| MacroUserIdStr::parse_from_str(&participant.user_id).ok())
+        .map(|id| id.into_owned())
+        .collect()
+}
+
+impl FakeEvents {
+    fn push_gateway<T: Serialize>(
+        &self,
+        message_type: &'static str,
+        payload: T,
+        recipients: Vec<MacroUserIdStr<'static>>,
+    ) {
+        self.gateway.events.lock().unwrap().push(FakeGatewayEvent {
+            message_type,
+            payload: serde_json::to_value(payload).unwrap(),
+            recipients: fake_recipient_strings(recipients),
+        });
+    }
+}
+
+impl ChannelEventDispatcher for FakeEvents {
+    fn dispatch(&self, event: ChannelEvent) {
+        match event {
+            ChannelEvent::ChannelCreated { .. } => {}
+            ChannelEvent::ChannelDeleted { channel_id } => {
+                self.search.removed.lock().unwrap().push((channel_id, None));
+            }
+            ChannelEvent::MessagePosted {
+                channel_id,
+                metadata,
+                participants,
+                message,
+                mentions,
+                has_attachments,
+                attachments,
+                nonce,
+            } => {
+                self.push_gateway(
+                    "comms_message",
+                    FakeWithNonce {
+                        data: message.clone(),
+                        nonce: nonce.clone(),
+                    },
+                    fake_participant_ids(&participants),
+                );
+                if !attachments.is_empty() {
+                    self.push_gateway(
+                        "comms_attachment",
+                        FakeWithNonce {
+                            data: FakeAttachmentRealtimeData {
+                                channel_id,
+                                message_id: message.id,
+                                attachments,
+                            },
+                            nonce: nonce.clone(),
+                        },
+                        fake_participant_ids(&participants),
+                    );
+                }
+                self.notifications
+                    .dispatch(ChannelNotificationEvent::MessagePosted {
+                        channel_id,
+                        metadata,
+                        participants,
+                        message: message.clone(),
+                        mentions,
+                        has_attachments,
+                    });
+                self.search
+                    .indexed
+                    .lock()
+                    .unwrap()
+                    .push((channel_id, message.id));
+            }
+            ChannelEvent::AttachmentsChanged {
+                channel_id,
+                message_id,
+                attachments,
+                recipients,
+                nonce,
+            } => {
+                self.push_gateway(
+                    "comms_attachment",
+                    FakeWithNonce {
+                        data: FakeAttachmentRealtimeData {
+                            channel_id,
+                            message_id,
+                            attachments,
+                        },
+                        nonce,
+                    },
+                    recipients,
+                );
+                self.search
+                    .indexed
+                    .lock()
+                    .unwrap()
+                    .push((channel_id, message_id));
+            }
+            ChannelEvent::MessageChanged {
+                channel_id,
+                message,
+                recipients,
+                nonce,
+            } => {
+                self.push_gateway(
+                    "comms_message",
+                    FakeWithNonce {
+                        data: message.clone(),
+                        nonce,
+                    },
+                    recipients,
+                );
+                self.search
+                    .indexed
+                    .lock()
+                    .unwrap()
+                    .push((channel_id, message.id));
+            }
+            ChannelEvent::MessageDeleted {
+                channel_id,
+                message,
+                recipients,
+                nonce,
+            } => {
+                let message_id = message.id;
+                self.push_gateway(
+                    "comms_message",
+                    FakeWithNonce {
+                        data: message,
+                        nonce,
+                    },
+                    recipients,
+                );
+                self.search
+                    .removed
+                    .lock()
+                    .unwrap()
+                    .push((channel_id, Some(message_id)));
+            }
+            ChannelEvent::ReactionChanged {
+                channel_id,
+                message_id,
+                reactions,
+                recipients,
+                nonce,
+            } => {
+                self.push_gateway(
+                    "comms_reaction",
+                    FakeWithNonce {
+                        data: FakeReactionRealtimeData {
+                            channel_id,
+                            message_id,
+                            reactions,
+                        },
+                        nonce,
+                    },
+                    recipients,
+                );
+            }
+            ChannelEvent::TypingChanged { .. } => {}
+            ChannelEvent::ParticipantsAdded {
+                channel_id,
+                invited_by_user_id,
+                recipient_user_ids,
+                metadata,
+                message_content,
+                ..
+            } => {
+                self.notifications
+                    .dispatch(ChannelNotificationEvent::ParticipantsAdded {
+                        channel_id,
+                        invited_by_user_id,
+                        recipient_user_ids,
+                        metadata,
+                        message_content,
+                    });
+            }
+            ChannelEvent::ParticipantJoined { .. } => {}
+        }
     }
 }
 
@@ -611,15 +896,13 @@ fn mutation_service(
     notifications: FakeNotifications,
     search: FakeSearch,
     share: FakeSharePermissions,
-) -> ChannelMutationsServiceImpl<
-    FakeMutationRepo,
-    FakeGateway,
-    FakeNotifications,
-    FakeContacts,
-    FakeSearch,
-    FakeSharePermissions,
-> {
-    ChannelMutationsServiceImpl::new(repo, gateway, notifications, FakeContacts, search, share)
+) -> ChannelServiceImpl<FakeMutationRepo, FakeEvents, FakeSharePermissions> {
+    let events = FakeEvents {
+        gateway,
+        notifications,
+        search,
+    };
+    ChannelServiceImpl::with_dependencies(repo, events, share)
 }
 
 fn macro_id(user_id: &str) -> MacroUserIdStr<'static> {
@@ -780,7 +1063,7 @@ async fn reaction_mutation_sends_grouped_reaction_gateway_message() {
 
 #[tokio::test]
 async fn clamps_limit() {
-    let mut repo = MockChannelMessagesRepo::new();
+    let mut repo = MockChannelRepo::new();
     repo.expect_get_top_level_messages()
         .withf(|_, _, _, limit, _, _| *limit == 100)
         .returning(|_, _, _, _, _, _| {
@@ -798,7 +1081,7 @@ async fn clamps_limit() {
     repo.expect_get_attachments_batch()
         .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
 
-    let svc = ChannelMessagesServiceImpl::new(repo);
+    let svc = ChannelServiceImpl::new(repo);
     let result = svc
         .get_channel_messages(
             Uuid::nil(),
@@ -817,7 +1100,7 @@ async fn clamps_limit() {
 
 #[tokio::test]
 async fn returns_empty_attachments_page() {
-    let svc = ChannelMessagesServiceImpl::new(empty_repo());
+    let svc = ChannelServiceImpl::new(empty_repo());
     let page = svc
         .get_channel_attachments(Uuid::nil(), Query::Sort(CreatedAt, ()), 50, None)
         .await
@@ -829,7 +1112,7 @@ async fn returns_empty_attachments_page() {
 
 #[tokio::test]
 async fn returns_empty_participants_list() {
-    let svc = ChannelMessagesServiceImpl::new(empty_repo());
+    let svc = ChannelServiceImpl::new(empty_repo());
     let participants = svc.get_channel_participants(Uuid::nil()).await.unwrap();
 
     assert!(participants.is_empty());
@@ -924,7 +1207,7 @@ fn center_window_limit_one() {
 
 #[tokio::test]
 async fn around_message_not_found() {
-    let svc = ChannelMessagesServiceImpl::new(empty_repo());
+    let svc = ChannelServiceImpl::new(empty_repo());
     let message_id = Uuid::new_v4();
 
     let err = svc
@@ -944,7 +1227,7 @@ async fn around_deleted_top_level_without_active_replies_is_not_found() {
     let mut anchor = make_row(message_id, 0);
     anchor.deleted_at = Some(Utc::now());
 
-    let mut repo = MockChannelMessagesRepo::new();
+    let mut repo = MockChannelRepo::new();
     repo.expect_resolve_top_level_parent()
         .returning(move |_, _| {
             let anchor = anchor.clone();
@@ -953,7 +1236,7 @@ async fn around_deleted_top_level_without_active_replies_is_not_found() {
     repo.expect_get_thread_data()
         .returning(|_, _| Box::pin(async { Ok(HashMap::new()) }));
 
-    let svc = ChannelMessagesServiceImpl::new(repo);
+    let svc = ChannelServiceImpl::new(repo);
     let err = svc
         .get_channel_messages_around(Uuid::nil(), message_id, 50)
         .await
@@ -972,7 +1255,7 @@ async fn around_reply_to_deleted_top_level_with_active_replies_still_works() {
     anchor.deleted_at = Some(Utc::now());
 
     let anchor_clone = anchor.clone();
-    let mut repo = MockChannelMessagesRepo::new();
+    let mut repo = MockChannelRepo::new();
 
     repo.expect_resolve_top_level_parent()
         .returning(move |_, _| {
@@ -999,7 +1282,7 @@ async fn around_reply_to_deleted_top_level_with_active_replies_still_works() {
     repo.expect_get_attachments_batch()
         .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
 
-    let svc = ChannelMessagesServiceImpl::new(repo);
+    let svc = ChannelServiceImpl::new(repo);
     let result = svc
         .get_channel_messages_around(Uuid::nil(), reply_id, 50)
         .await
@@ -1020,7 +1303,7 @@ async fn around_resolves_and_hydrates() {
     let before_clone = before_row.clone();
     let after_clone = after_row.clone();
 
-    let mut repo = MockChannelMessagesRepo::new();
+    let mut repo = MockChannelRepo::new();
 
     repo.expect_resolve_top_level_parent()
         .returning(move |_, _| {
@@ -1040,7 +1323,7 @@ async fn around_resolves_and_hydrates() {
     repo.expect_get_attachments_batch()
         .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
 
-    let svc = ChannelMessagesServiceImpl::new(repo);
+    let svc = ChannelServiceImpl::new(repo);
     let result = svc
         .get_channel_messages_around(Uuid::nil(), anchor.id, 50)
         .await
@@ -1057,7 +1340,7 @@ async fn around_resolves_and_hydrates() {
 
 #[tokio::test]
 async fn thread_replies_message_not_found() {
-    let svc = ChannelMessagesServiceImpl::new(empty_repo());
+    let svc = ChannelServiceImpl::new(empty_repo());
     let message_id = Uuid::new_v4();
 
     let err = svc
@@ -1097,7 +1380,7 @@ async fn thread_replies_resolve_and_hydrate() {
     let reply_1_clone = reply_1.clone();
     let reply_2_clone = reply_2.clone();
 
-    let mut repo = MockChannelMessagesRepo::new();
+    let mut repo = MockChannelRepo::new();
 
     repo.expect_resolve_top_level_parent()
         .returning(move |_, _| {
@@ -1135,7 +1418,7 @@ async fn thread_replies_resolve_and_hydrate() {
         Box::pin(async move { Ok(map) })
     });
 
-    let svc = ChannelMessagesServiceImpl::new(repo);
+    let svc = ChannelServiceImpl::new(repo);
     let replies = svc
         .get_thread_replies(Uuid::nil(), reply_1.id)
         .await

@@ -1,3 +1,5 @@
+/// Domain events emitted by channel workflows.
+pub mod events;
 /// Domain models for channel messages.
 pub mod models;
 #[cfg(feature = "ports")]

@@ -1930,8 +1930,6 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
- "comms",
- "comms_db_client",
  "connection_gateway_client",
  "contacts",
  "entity_access",
@@ -1948,7 +1946,6 @@ dependencies = [
  "model-error-response",
  "model_notifications",
  "model_user",
- "models_comms",
  "models_pagination",
  "models_permissions",
  "notification",
@@ -6180,8 +6177,10 @@ dependencies = [
  "reqwest 0.13.3",
  "serde",
  "serde_json",
+ "sqlx",
  "tokio",
  "tokio-tungstenite 0.28.0",
+ "uuid",
 ]
 
 [[package]]
@@ -6538,6 +6537,7 @@ dependencies = [
  "doppleganger",
  "nom 8.0.0",
  "serde",
+ "sqlx",
  "thiserror 2.0.17",
  "tracing",
  "utoipa",

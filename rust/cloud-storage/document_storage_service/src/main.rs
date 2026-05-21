@@ -24,19 +24,19 @@ use call::{
     },
 };
 use channels::{
-    domain::service::{ChannelMessagesServiceImpl, ChannelMutationsServiceImpl},
+    domain::service::ChannelServiceImpl,
     inbound::axum_router::ChannelsRouterState,
     outbound::{
         channel_mutations::{
-            ConnectionGatewayChannelRealtimeGateway, ContactsChannelDispatcher,
-            EntityAccessChannelSharePermissions, NotificationChannelDispatcher,
-            PgChannelMutationsRepo, SqsChannelSearchIndexer,
+            ChannelSideEffectsDispatcher, ConnectionGatewayChannelRealtimeGateway,
+            ContactsChannelDispatcher, EntityAccessChannelSharePermissions,
+            NotificationChannelDispatcher, SqsChannelSearchIndexer,
         },
-        pg_channels_repo::PgChannelMessagesRepo,
+        pg_channels_repo::PgChannelsRepo,
     },
 };
 use comms::{
-    domain::service::ChannelServiceImpl,
+    domain::service::ChannelServiceImpl as CommsChannelServiceImpl,
     inbound::router::CommsRouterState,
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
@@ -271,7 +271,7 @@ async fn main() -> anyhow::Result<()> {
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
     let ingress_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.vars.notification_queue.as_ref().to_string(),
+        config.vars.notification_ingress_queue.as_ref().to_string(),
     );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue.clone(),
@@ -294,13 +294,13 @@ async fn main() -> anyhow::Result<()> {
         Some(notification_service),
     ));
 
-    // Create the ChannelServiceImpl - we need to create separate instances as it doesn't impl Clone
-    let channel_service_for_soup = ChannelServiceImpl::new(
+    // Create the comms ChannelServiceImpl instances.
+    let channel_service_for_soup = CommsChannelServiceImpl::new(
         PgCommsRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
         PgUserRepo::new(readonly_db.clone()),
         frecency_storage.clone(),
     );
-    let channel_service_for_comms = ChannelServiceImpl::new(
+    let channel_service_for_comms = CommsChannelServiceImpl::new(
         PgCommsRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
         PgUserRepo::new(db.clone()),
         frecency_storage.clone(),
@@ -541,6 +541,18 @@ async fn main() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
+    let channels_repo = PgChannelsRepo::new(db.clone());
+
+    let channels_service = ChannelServiceImpl::with_dependencies(
+        channels_repo,
+        ChannelSideEffectsDispatcher::new(
+            ConnectionGatewayChannelRealtimeGateway::new(conn_gateway_client.clone()),
+            NotificationChannelDispatcher::new(db.clone(), notification_ingress_service.clone()),
+            SqsChannelSearchIndexer::new(sqs_client.clone()),
+            ContactsChannelDispatcher::new(contacts_ingress.clone()),
+        ),
+        EntityAccessChannelSharePermissions::new(db.clone(), entity_access_service.clone()),
+    );
 
     let api_context = ApiContext {
         contacts_ingress: contacts_ingress.clone(),
@@ -587,16 +599,9 @@ async fn main() -> anyhow::Result<()> {
             ),
         },
         channels_state: ChannelsRouterState::with_mutations(
-            ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(db.clone())),
+            channels_service.clone(),
             (*entity_access_service).clone(),
-            ChannelMutationsServiceImpl::new(
-                PgChannelMutationsRepo::new(db.clone()),
-                ConnectionGatewayChannelRealtimeGateway::new(conn_gateway_client.clone()),
-                NotificationChannelDispatcher::new(db.clone(), notification_ingress_service.clone()),
-                ContactsChannelDispatcher::new(contacts_ingress.clone()),
-                SqsChannelSearchIndexer::new(sqs_client.clone()),
-                EntityAccessChannelSharePermissions::new(db.clone(), entity_access_service.clone()),
-            ),
+            channels_service,
         ),
         call_state,
         call_webhook_state,

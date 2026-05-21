@@ -1,25 +1,22 @@
 use crate::domain::{
+    events::ChannelEvent,
     models::{
         AddParticipantsRequest, ChannelAttachmentType, ChannelMessage, ChannelMessageFilters,
         ChannelParticipant, ChannelType, DeleteMessageQuery, GetOrCreateAction,
         GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest,
-        MessagePageDirection, MutatedAttachment, NewChannelAttachment, ParticipantRole,
-        PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostMessageResponse,
-        PostReactionRequest, PostTypingRequest, ReactionAction, RemoveParticipantsRequest,
-        ResolvedChannelMessage, SimpleMention, ThreadInfo, ThreadReply, TopLevelMessageRow,
+        MessagePageDirection, NewChannelAttachment, ParticipantRole, PatchChannelRequest,
+        PatchMessageRequest, PostMessageRequest, PostMessageResponse, PostReactionRequest,
+        PostTypingRequest, ReactionAction, RemoveParticipantsRequest, ResolvedChannelMessage,
+        SimpleMention, ThreadInfo, ThreadReply, TopLevelMessageRow,
     },
     ports::{
-        ChannelAttachmentsPage, ChannelContactsDispatcher, ChannelMessagesErr,
-        ChannelMessagesQueryResult, ChannelMessagesRepo, ChannelMessagesService,
-        ChannelMutationErr, ChannelMutationsRepo, ChannelMutationsService,
-        ChannelNotificationDispatcher, ChannelRealtimeGateway, ChannelSearchIndexer,
-        ChannelSharePermissionService,
+        ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr,
+        ChannelMessagesQueryResult, ChannelMessagesService, ChannelMutationErr,
+        ChannelMutationsService, ChannelRepo, ChannelSharePermissionService,
     },
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Query};
-use serde::Serialize;
-use std::collections::HashSet;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -28,21 +25,73 @@ mod test;
 /// Default number of preview replies per thread.
 const THREAD_PREVIEW_COUNT: u16 = 3;
 
-/// Service implementation backed by a [`ChannelMessagesRepo`].
-pub struct ChannelMessagesServiceImpl<R> {
+/// Service implementation backed by a [`ChannelRepo`].
+#[derive(Clone)]
+pub struct ChannelServiceImpl<
+    R,
+    E = NoopChannelEventDispatcher,
+    P = NoopChannelSharePermissionService,
+> {
     repo: R,
+    events: E,
+    share_permissions: P,
 }
 
-impl<R> ChannelMessagesServiceImpl<R>
+/// No-op event dispatcher used by read-only contexts.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopChannelEventDispatcher;
+
+impl ChannelEventDispatcher for NoopChannelEventDispatcher {
+    fn dispatch(&self, _event: ChannelEvent) {}
+}
+
+/// No-op share-permission service used by read-only contexts.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopChannelSharePermissionService;
+
+impl ChannelSharePermissionService for NoopChannelSharePermissionService {
+    type Err = anyhow::Error;
+
+    async fn update_channel_share_permissions(
+        &self,
+        _user_id: String,
+        _channel_id: Uuid,
+        _items: Vec<(String, String)>,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+}
+
+impl<R> ChannelServiceImpl<R, NoopChannelEventDispatcher, NoopChannelSharePermissionService>
 where
-    R: ChannelMessagesRepo,
+    R: ChannelRepo,
+{
+    /// Create a new read-only service with no-op side-effect dependencies.
+    pub fn new(repo: R) -> Self {
+        Self {
+            repo,
+            events: NoopChannelEventDispatcher,
+            share_permissions: NoopChannelSharePermissionService,
+        }
+    }
+}
+
+impl<R, E, P> ChannelServiceImpl<R, E, P> {
+    /// Create a new service with outbound dependencies wired.
+    pub fn with_dependencies(repo: R, events: E, share_permissions: P) -> Self {
+        Self {
+            repo,
+            events,
+            share_permissions,
+        }
+    }
+}
+
+impl<R, E, P> ChannelServiceImpl<R, E, P>
+where
+    R: ChannelRepo,
     anyhow::Error: From<R::Err>,
 {
-    /// Create a new service with the given repository.
-    pub fn new(repo: R) -> Self {
-        Self { repo }
-    }
-
     /// Hydrate top-level message rows with thread data, reactions, and attachments.
     async fn hydrate_messages(
         &self,
@@ -117,79 +166,6 @@ where
     }
 }
 
-/// Service implementation for channel mutations.
-pub struct ChannelMutationsServiceImpl<R, G, N, C, S, P> {
-    repo: R,
-    gateway: G,
-    notifications: N,
-    contacts: C,
-    search: S,
-    share_permissions: P,
-}
-
-impl<R, G, N, C, S, P> ChannelMutationsServiceImpl<R, G, N, C, S, P>
-where
-    R: ChannelMutationsRepo,
-    G: ChannelRealtimeGateway,
-    N: ChannelNotificationDispatcher,
-    C: ChannelContactsDispatcher,
-    S: ChannelSearchIndexer,
-    P: ChannelSharePermissionService,
-{
-    /// Create a new mutation service.
-    pub fn new(
-        repo: R,
-        gateway: G,
-        notifications: N,
-        contacts: C,
-        search: S,
-        share_permissions: P,
-    ) -> Self {
-        Self {
-            repo,
-            gateway,
-            notifications,
-            contacts,
-            search,
-            share_permissions,
-        }
-    }
-}
-
-/// Mutation service used by read-only router states.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct NoopChannelMutationsService;
-
-#[derive(Serialize)]
-struct WithNonce<T: Serialize> {
-    #[serde(flatten)]
-    data: T,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    nonce: Option<String>,
-}
-
-#[derive(Serialize)]
-struct AttachmentRealtimeData {
-    channel_id: Uuid,
-    message_id: Uuid,
-    attachments: Vec<MutatedAttachment>,
-}
-
-#[derive(Serialize)]
-struct ReactionRealtimeData {
-    channel_id: Uuid,
-    message_id: Uuid,
-    reactions: Vec<crate::domain::models::CountedReaction>,
-}
-
-#[derive(Serialize)]
-struct TypingRealtimeData {
-    channel_id: Uuid,
-    user_id: String,
-    action: crate::domain::models::TypingAction,
-    thread_id: Option<Uuid>,
-}
-
 fn lower_macro_users(users: &[String]) -> Vec<String> {
     users
         .iter()
@@ -212,7 +188,7 @@ fn participant_ids(participants: &[ChannelParticipant]) -> Vec<MacroUserIdStr<'s
         .collect()
 }
 
-fn share_items(
+fn extract_share_items(
     attachments: &[NewChannelAttachment],
     mentions: &[SimpleMention],
 ) -> Vec<(String, String)> {
@@ -233,15 +209,29 @@ fn is_admin_or_owner(role: ParticipantRole) -> bool {
     matches!(role, ParticipantRole::Owner | ParticipantRole::Admin)
 }
 
-fn all_contacts(
+fn parse_user_ids(
     users: impl IntoIterator<Item = String>,
-) -> Result<HashSet<MacroUserIdStr<'static>>, ChannelMutationErr> {
+) -> Result<Vec<MacroUserIdStr<'static>>, ChannelMutationErr> {
     users
         .into_iter()
         .map(parse_macro_user_id)
-        .collect::<Result<HashSet<_>, _>>()
+        .collect::<Result<Vec<_>, _>>()
 }
 
+fn created_channel_participant_ids(
+    owner_id: &str,
+    participants: &[String],
+) -> Result<Vec<MacroUserIdStr<'static>>, ChannelMutationErr> {
+    let mut users = participants.to_vec();
+    if !users.iter().any(|user| user == owner_id) {
+        users.push(owner_id.to_string());
+    }
+    parse_user_ids(users)
+}
+
+/// Mutation service used by read-only router states.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopChannelMutationsService;
 impl ChannelMutationsService for NoopChannelMutationsService {
     async fn create_channel(
         &self,
@@ -396,13 +386,10 @@ impl ChannelMutationsService for NoopChannelMutationsService {
     }
 }
 
-impl<R, G, N, C, S, P> ChannelMutationsService for ChannelMutationsServiceImpl<R, G, N, C, S, P>
+impl<R, E, P> ChannelMutationsService for ChannelServiceImpl<R, E, P>
 where
-    R: ChannelMutationsRepo,
-    G: ChannelRealtimeGateway,
-    N: ChannelNotificationDispatcher,
-    C: ChannelContactsDispatcher,
-    S: ChannelSearchIndexer,
+    R: ChannelRepo,
+    E: ChannelEventDispatcher,
     P: ChannelSharePermissionService,
 {
     #[tracing::instrument(err, skip(self, req))]
@@ -450,21 +437,14 @@ where
         };
 
         let channel_id = self
-            .repo
-            .create_channel(actor.as_ref().to_string(), org_id, create_req)
-            .await
-            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+            .create_channel_record(actor.as_ref().to_string(), org_id, create_req)
+            .await?;
 
-        if req.channel_type == ChannelType::Private {
-            let mut users = participants;
-            if !users.iter().any(|u| u == actor.as_ref()) {
-                users.push(actor.as_ref().to_string());
-            }
-            self.contacts
-                .enqueue_contacts(all_contacts(users)?)
-                .await
-                .map_err(|e| ChannelMutationErr::Contacts(e.into()))?;
-        }
+        self.events.dispatch(ChannelEvent::ChannelCreated {
+            channel_id,
+            channel_type: req.channel_type,
+            participant_user_ids: created_channel_participant_ids(actor.as_ref(), &participants)?,
+        });
 
         Ok(crate::domain::models::CreateChannelResponse {
             id: channel_id.to_string(),
@@ -496,42 +476,24 @@ where
             ));
         }
 
-        if let Some(channel_id) = self
+        let existing_channel_id = self
             .repo
             .maybe_get_dm(user_id.clone(), recipient_id.clone())
             .await
-            .map_err(|e| ChannelMutationErr::Repo(e.into()))?
-        {
-            return Ok(GetOrCreateChannelResponse {
-                channel_id: channel_id.to_string(),
-                action: GetOrCreateAction::Get,
-            });
-        }
-
-        let channel_id = self
-            .repo
-            .create_channel(
-                user_id.clone(),
-                None,
-                crate::domain::models::CreateChannelRequest {
-                    name: None,
-                    channel_type: ChannelType::DirectMessage,
-                    team_id: None,
-                    participants: vec![user_id.clone(), recipient_id.clone()],
-                },
-            )
-            .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
 
-        self.contacts
-            .enqueue_contacts(all_contacts(vec![user_id, recipient_id])?)
-            .await
-            .map_err(|e| ChannelMutationErr::Contacts(e.into()))?;
-
-        Ok(GetOrCreateChannelResponse {
-            channel_id: channel_id.to_string(),
-            action: GetOrCreateAction::Create,
-        })
+        self.get_or_create_channel(
+            existing_channel_id,
+            user_id.clone(),
+            None,
+            crate::domain::models::CreateChannelRequest {
+                name: None,
+                channel_type: ChannelType::DirectMessage,
+                team_id: None,
+                participants: vec![user_id.clone(), recipient_id.clone()],
+            },
+        )
+        .await
     }
 
     #[tracing::instrument(err, skip(self, req))]
@@ -550,44 +512,24 @@ where
         let user_id = actor.as_ref().to_lowercase();
         let mut lookup = req.recipients.clone();
         lookup.push(user_id.clone());
-        if let Some(channel_id) = self
+        let existing_channel_id = self
             .repo
             .maybe_get_private_channel(lookup)
             .await
-            .map_err(|e| ChannelMutationErr::Repo(e.into()))?
-        {
-            return Ok(GetOrCreateChannelResponse {
-                channel_id: channel_id.to_string(),
-                action: GetOrCreateAction::Get,
-            });
-        }
-
-        let channel_id = self
-            .repo
-            .create_channel(
-                user_id.clone(),
-                None,
-                crate::domain::models::CreateChannelRequest {
-                    name: None,
-                    channel_type: ChannelType::Private,
-                    team_id: None,
-                    participants: req.recipients.clone(),
-                },
-            )
-            .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
 
-        let mut contacts_users = req.recipients;
-        contacts_users.push(user_id);
-        self.contacts
-            .enqueue_contacts(all_contacts(contacts_users)?)
-            .await
-            .map_err(|e| ChannelMutationErr::Contacts(e.into()))?;
-
-        Ok(GetOrCreateChannelResponse {
-            channel_id: channel_id.to_string(),
-            action: GetOrCreateAction::Create,
-        })
+        self.get_or_create_channel(
+            existing_channel_id,
+            user_id,
+            None,
+            crate::domain::models::CreateChannelRequest {
+                name: None,
+                channel_type: ChannelType::Private,
+                team_id: None,
+                participants: req.recipients,
+            },
+        )
+        .await
     }
 
     #[tracing::instrument(err, skip(self, req))]
@@ -623,7 +565,8 @@ where
             .delete_channel(channel_id, actor.as_ref().to_string())
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-        self.search.remove_message(channel_id, None).await;
+        self.events
+            .dispatch(ChannelEvent::ChannelDeleted { channel_id });
         Ok(())
     }
 
@@ -657,16 +600,15 @@ where
             tracing::error!(error=?err.into(), "unable to create mentions");
         }
 
-        let items = share_items(&req.attachments, &req.mentions);
-        if !items.is_empty() {
-            if let Err(err) = self
+        let items = extract_share_items(&req.attachments, &req.mentions);
+        if !items.is_empty()
+            && let Err(err) = self
                 .share_permissions
                 .update_channel_share_permissions(actor.as_ref().to_string(), channel_id, items)
                 .await
-            {
-                let err: anyhow::Error = err.into();
-                tracing::error!(error=?err, "unable to update channel share permissions");
-            }
+        {
+            let err: anyhow::Error = err.into();
+            tracing::error!(error=?err, "unable to update channel share permissions");
         }
 
         let channel_metadata = self
@@ -679,18 +621,6 @@ where
             .get_participants(channel_id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-
-        self.gateway
-            .send_update(
-                "comms_message",
-                WithNonce {
-                    data: message.clone(),
-                    nonce: req.nonce.clone(),
-                },
-                participant_ids(&participants),
-            )
-            .await
-            .map_err(|e| ChannelMutationErr::Gateway(e.into()))?;
 
         if let Err(err) = self
             .repo
@@ -707,37 +637,17 @@ where
             .add_attachments(message.id, channel_id, req.attachments.clone())
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-        if !attachments.is_empty() {
-            self.gateway
-                .send_update(
-                    "comms_attachment",
-                    WithNonce {
-                        data: AttachmentRealtimeData {
-                            channel_id,
-                            message_id: message.id,
-                            attachments,
-                        },
-                        nonce: req.nonce.clone(),
-                    },
-                    participant_ids(&participants),
-                )
-                .await
-                .map_err(|e| ChannelMutationErr::Gateway(e.into()))?;
-        }
 
-        self.notifications
-            .dispatch_message_notifications(
-                channel_id,
-                channel_metadata,
-                participants,
-                message.clone(),
-                req.mentions,
-                has_attachments,
-            )
-            .await
-            .map_err(|e| ChannelMutationErr::Notification(e.into()))?;
-
-        self.search.index_message(channel_id, message.id).await;
+        self.events.dispatch(ChannelEvent::MessagePosted {
+            channel_id,
+            metadata: channel_metadata,
+            participants,
+            message: message.clone(),
+            mentions: req.mentions,
+            has_attachments,
+            attachments,
+            nonce: req.nonce.clone(),
+        });
 
         Ok(PostMessageResponse {
             id: message.id.to_string(),
@@ -795,9 +705,9 @@ where
                     .await
                     .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
 
-                let items = share_items(&[], &mentions);
-                if !items.is_empty() {
-                    if let Err(err) = self
+                let items = extract_share_items(&[], &mentions);
+                if !items.is_empty()
+                    && let Err(err) = self
                         .share_permissions
                         .update_channel_share_permissions(
                             actor.as_ref().to_string(),
@@ -805,10 +715,9 @@ where
                             items,
                         )
                         .await
-                    {
-                        let err: anyhow::Error = err.into();
-                        tracing::error!(error=?err, "unable to update channel share permissions");
-                    }
+                {
+                    let err: anyhow::Error = err.into();
+                    tracing::error!(error=?err, "unable to update channel share permissions");
                 }
             }
 
@@ -827,17 +736,12 @@ where
                 )
             };
 
-            self.gateway
-                .send_update(
-                    "comms_message",
-                    WithNonce {
-                        data: message.clone(),
-                        nonce: req.nonce.clone(),
-                    },
-                    participants,
-                )
-                .await
-                .map_err(|e| ChannelMutationErr::Gateway(e.into()))?;
+            self.events.dispatch(ChannelEvent::MessageChanged {
+                channel_id,
+                message: message.clone(),
+                recipients: participants,
+                nonce: req.nonce.clone(),
+            });
 
             if let Err(err) = self
                 .repo
@@ -847,20 +751,17 @@ where
                 let err: anyhow::Error = err.into();
                 tracing::error!(error=?err, "unable to upsert activity for message");
             }
-
-            self.search.index_message(channel_id, message.id).await;
         }
 
-        if attachments_changed && req.content.is_none() {
-            if let Err(err) = self
+        if attachments_changed
+            && req.content.is_none()
+            && let Err(err) = self
                 .repo
                 .upsert_activity(actor.as_ref().to_string(), channel_id)
                 .await
-            {
-                let err: anyhow::Error = err.into();
-                tracing::error!(error=?err, "unable to upsert activity for attachment patch");
-            }
-            self.search.index_message(channel_id, message_id).await;
+        {
+            let err: anyhow::Error = err.into();
+            tracing::error!(error=?err, "unable to upsert activity for attachment patch");
         }
 
         Ok(())
@@ -897,20 +798,12 @@ where
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
 
-        self.gateway
-            .send_update(
-                "comms_message",
-                WithNonce {
-                    data: message,
-                    nonce: query.nonce,
-                },
-                participant_ids(&participants),
-            )
-            .await
-            .map_err(|e| ChannelMutationErr::Gateway(e.into()))?;
-        self.search
-            .remove_message(channel_id, Some(message_id))
-            .await;
+        self.events.dispatch(ChannelEvent::MessageDeleted {
+            channel_id,
+            message,
+            recipients: participant_ids(&participants),
+            nonce: query.nonce,
+        });
         Ok(())
     }
 
@@ -948,21 +841,13 @@ where
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
 
-        self.gateway
-            .send_update(
-                "comms_reaction",
-                WithNonce {
-                    data: ReactionRealtimeData {
-                        channel_id,
-                        message_id,
-                        reactions,
-                    },
-                    nonce: req.nonce,
-                },
-                participant_ids(&participants),
-            )
-            .await
-            .map_err(|e| ChannelMutationErr::Gateway(e.into()))?;
+        self.events.dispatch(ChannelEvent::ReactionChanged {
+            channel_id,
+            message_id,
+            reactions,
+            recipients: participant_ids(&participants),
+            nonce: req.nonce,
+        });
 
         if let Err(err) = self
             .repo
@@ -993,22 +878,14 @@ where
             .get_participants(channel_id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-        self.gateway
-            .send_update(
-                "comms_typing",
-                WithNonce {
-                    data: TypingRealtimeData {
-                        channel_id,
-                        user_id: actor.as_ref().to_string(),
-                        action: req.action,
-                        thread_id,
-                    },
-                    nonce: req.nonce,
-                },
-                participant_ids(&participants),
-            )
-            .await
-            .map_err(|e| ChannelMutationErr::Gateway(e.into()))?;
+        self.events.dispatch(ChannelEvent::TypingChanged {
+            channel_id,
+            user_id: actor.as_ref().to_string(),
+            action: req.action,
+            thread_id,
+            recipients: participant_ids(&participants),
+            nonce: req.nonce,
+        });
         Ok(())
     }
 
@@ -1038,6 +915,12 @@ where
                 .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         }
 
+        let active_participants = self
+            .repo
+            .get_participants(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
         let recipients = participants_to_add
             .iter()
             .filter_map(|id| MacroUserIdStr::try_from(id.clone()).ok())
@@ -1047,29 +930,20 @@ where
             .get_channel_metadata(channel_id, actor.clone())
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-        if let Err(err) = self
-            .notifications
-            .dispatch_invite_notifications(channel_id, actor.clone(), recipients, channel_metadata)
-            .await
-        {
-            let err: anyhow::Error = err.into();
-            tracing::error!(error=?err, "unable to send channel invite notification");
-        }
-
-        if matches!(info.channel_type, ChannelType::Private | ChannelType::Team) {
-            let existing = self
-                .repo
-                .get_participants(channel_id)
-                .await
-                .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+        let active_participant_user_ids = parse_user_ids(
+            active_participants
                 .into_iter()
-                .map(|p| p.user_id);
-            let users = participants_to_add.into_iter().chain(existing);
-            self.contacts
-                .enqueue_contacts(all_contacts(users)?)
-                .await
-                .map_err(|e| ChannelMutationErr::Contacts(e.into()))?;
-        }
+                .map(|participant| participant.user_id),
+        )?;
+        self.events.dispatch(ChannelEvent::ParticipantsAdded {
+            channel_id,
+            channel_type: info.channel_type,
+            active_participant_user_ids,
+            invited_by_user_id: actor.clone(),
+            recipient_user_ids: recipients,
+            metadata: channel_metadata,
+            message_content: None,
+        });
 
         Ok(())
     }
@@ -1129,20 +1003,18 @@ where
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
 
-        if !matches!(
-            info.channel_type,
-            ChannelType::DirectMessage | ChannelType::Organization
-        ) && !before.is_empty()
-        {
-            let users = before
+        let active_participant_user_ids = parse_user_ids(
+            before
                 .into_iter()
-                .map(|p| p.user_id)
-                .chain(std::iter::once(actor.as_ref().to_string()));
-            if let Err(err) = self.contacts.enqueue_contacts(all_contacts(users)?).await {
-                let err: anyhow::Error = err.into();
-                tracing::error!(error=?err, "unable to create join channel contacts message");
-            }
-        }
+                .map(|participant| participant.user_id)
+                .chain(std::iter::once(actor.as_ref().to_string())),
+        )?;
+        self.events.dispatch(ChannelEvent::ParticipantJoined {
+            channel_id,
+            channel_type: info.channel_type,
+            user_id: actor,
+            active_participant_user_ids,
+        });
         Ok(())
     }
 
@@ -1182,15 +1054,55 @@ where
     }
 }
 
-impl<R, G, N, C, S, P> ChannelMutationsServiceImpl<R, G, N, C, S, P>
+impl<R, E, P> ChannelServiceImpl<R, E, P>
 where
-    R: ChannelMutationsRepo,
-    G: ChannelRealtimeGateway,
-    N: ChannelNotificationDispatcher,
-    C: ChannelContactsDispatcher,
-    S: ChannelSearchIndexer,
+    R: ChannelRepo,
+    E: ChannelEventDispatcher,
     P: ChannelSharePermissionService,
 {
+    async fn create_channel_record(
+        &self,
+        owner_id: String,
+        org_id: Option<i64>,
+        req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<Uuid, ChannelMutationErr> {
+        self.repo
+            .create_channel(owner_id, org_id, req)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))
+    }
+
+    async fn get_or_create_channel(
+        &self,
+        existing_channel_id: Option<Uuid>,
+        owner_id: String,
+        org_id: Option<i64>,
+        create_req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
+        if let Some(channel_id) = existing_channel_id {
+            return Ok(GetOrCreateChannelResponse {
+                channel_id: channel_id.to_string(),
+                action: GetOrCreateAction::Get,
+            });
+        }
+
+        let channel_type = create_req.channel_type;
+        let participant_user_ids =
+            created_channel_participant_ids(&owner_id, &create_req.participants)?;
+        let channel_id = self
+            .create_channel_record(owner_id, org_id, create_req)
+            .await?;
+        self.events.dispatch(ChannelEvent::ChannelCreated {
+            channel_id,
+            channel_type,
+            participant_user_ids,
+        });
+        Ok(GetOrCreateChannelResponse {
+            channel_id: channel_id.to_string(),
+            action: GetOrCreateAction::Create,
+        })
+    }
+
     async fn patch_message_attachments(
         &self,
         user_id: String,
@@ -1247,16 +1159,15 @@ where
                 .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         }
 
-        let items = share_items(&attachments_to_add, &[]);
-        if !items.is_empty() {
-            if let Err(err) = self
+        let items = extract_share_items(&attachments_to_add, &[]);
+        if !items.is_empty()
+            && let Err(err) = self
                 .share_permissions
                 .update_channel_share_permissions(user_id, channel_id, items)
                 .await
-            {
-                let err: anyhow::Error = err.into();
-                tracing::error!(error=?err, "unable to update channel share permissions");
-            }
+        {
+            let err: anyhow::Error = err.into();
+            tracing::error!(error=?err, "unable to update channel share permissions");
         }
 
         let all_attachments = self
@@ -1264,31 +1175,23 @@ where
             .get_message_attachments(message_id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        self.repo
+            .patch_message_attachments(message_id, all_attachments.clone())
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
         let participants = self
             .repo
             .get_participants(channel_id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-        self.gateway
-            .send_update(
-                "comms_attachment",
-                WithNonce {
-                    data: AttachmentRealtimeData {
-                        channel_id,
-                        message_id,
-                        attachments: all_attachments.clone(),
-                    },
-                    nonce,
-                },
-                participant_ids(&participants),
-            )
-            .await
-            .map_err(|e| ChannelMutationErr::Gateway(e.into()))?;
-
-        self.repo
-            .patch_message_attachments(message_id, all_attachments)
-            .await
-            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        self.events.dispatch(ChannelEvent::AttachmentsChanged {
+            channel_id,
+            message_id,
+            attachments: all_attachments,
+            recipients: participant_ids(&participants),
+            nonce,
+        });
 
         Ok(())
     }
@@ -1360,9 +1263,11 @@ fn center_window(
     }
 }
 
-impl<R> ChannelMessagesService for ChannelMessagesServiceImpl<R>
+impl<R, E, P> ChannelMessagesService for ChannelServiceImpl<R, E, P>
 where
-    R: ChannelMessagesRepo,
+    R: ChannelRepo,
+    E: ChannelEventDispatcher,
+    P: ChannelSharePermissionService,
     anyhow::Error: From<R::Err>,
 {
     #[tracing::instrument(err, skip(self))]

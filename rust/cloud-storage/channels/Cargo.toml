@@ -25,8 +25,6 @@ inbound = [
 ]
 outbound = [
   "ports",
-  "dep:comms",
-  "dep:comms_db_client",
   "dep:connection_gateway_client",
   "dep:contacts",
   "dep:entity_access",
@@ -38,11 +36,12 @@ outbound = [
   "dep:model",
   "dep:model-entity",
   "dep:model_notifications",
-  "dep:models_comms",
   "dep:models_permissions",
   "dep:notification_hex",
   "dep:serde_json",
   "dep:sqs_client",
+  "dep:sqlx",
+  "macro_user_id/sqlx",
 ]
 ports = ["dep:tokio"]
 
@@ -50,8 +49,6 @@ ports = ["dep:tokio"]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
-comms = { path = "../comms", features = ["outbound"], optional = true }
-comms_db_client = { path = "../comms_db_client", optional = true }
 connection_gateway_client = { path = "../connection_gateway_client", optional = true }
 contacts = { path = "../contacts", default-features = false, features = ["outbound"], optional = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false }
@@ -64,14 +61,13 @@ macro_uuid = { path = "../macro_uuid", optional = true }
 model = { path = "../model", optional = true }
 model-entity = { path = "../model-entity", optional = true }
 model_notifications = { path = "../model_notifications", optional = true }
-models_comms = { path = "../models_comms", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions", optional = true }
 notification_hex = { path = "../notification", package = "notification", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
-sqlx = { workspace = true }
+sqlx = { workspace = true, optional = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = ["search"], optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"], optional = true }

@@ -172,6 +172,13 @@ pub struct ThreadRepliesPath {
     message_id: Uuid,
 }
 
+/// Path params for channel-level endpoints.
+#[derive(Debug, Deserialize)]
+pub struct ChannelPath {
+    /// Channel ID from path.
+    channel_id: Uuid,
+}
+
 fn parse_messages_query(
     cursor: Option<BidirectionalCursor<Uuid, CreatedAt, ()>>,
 ) -> (
@@ -213,13 +220,12 @@ fn cursor_from_first_message(
     })
 }
 
-/// Create the channels router.
-pub fn channels_router<S, Svc, M, T>(state: ChannelsRouterState<S, Svc, M>) -> Router<T>
+/// Build the legacy `/comms/channels` mutation-only compatibility router.
+pub fn legacy_channel_mutation_alias_router<S, Svc, M>() -> Router<ChannelsRouterState<S, Svc, M>>
 where
     S: ChannelMessagesService,
     Svc: EntityAccessService,
     M: ChannelMutationsService,
-    T: Send + Sync,
 {
     Router::new()
         .route("/", post(create_channel_handler::<S, Svc, M>))
@@ -269,6 +275,17 @@ where
             "/{channel_id}/participants",
             delete(remove_participants_handler::<S, Svc, M>),
         )
+}
+
+/// Create the channels router.
+pub fn channels_router<S, Svc, M, T>(state: ChannelsRouterState<S, Svc, M>) -> Router<T>
+where
+    S: ChannelMessagesService,
+    Svc: EntityAccessService,
+    M: ChannelMutationsService,
+    T: Send + Sync,
+{
+    legacy_channel_mutation_alias_router::<S, Svc, M>()
         .route(
             "/{channel_id}/messages",
             get(get_channel_messages_handler::<S, Svc, M>)
@@ -383,10 +400,7 @@ pub async fn delete_channel_handler<
         .mutation_service
         .delete_channel(actor, channel_id)
         .await?;
-    Ok((
-        StatusCode::NOT_FOUND,
-        "channel successfully deleted".to_string(),
-    ))
+    Ok((StatusCode::OK, "channel successfully deleted".to_string()))
 }
 
 /// Handler for `POST /channels/{channel_id}/message`.
@@ -538,10 +552,11 @@ pub async fn join_channel_handler<
     M: ChannelMutationsService,
 >(
     State(state): State<ChannelsRouterState<S, Svc, M>>,
-    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
+    Path(path): Path<ChannelPath>,
+    Extension(user_context): Extension<UserContext>,
 ) -> Result<StatusCode, ChannelsHandlerErr> {
-    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
-    let actor = actor_from_receipt(&access.entity_access_receipt)?;
+    let channel_id = path.channel_id;
+    let actor = actor_from_user_context(&user_context)?;
     state
         .mutation_service
         .join_channel(actor, channel_id)
