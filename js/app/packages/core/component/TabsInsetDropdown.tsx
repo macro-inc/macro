@@ -1,34 +1,34 @@
 import CaretDown from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
-import { cn, Dropdown } from '@ui';
+import { cn, Dropdown, Layer } from '@ui';
 import { createMemo, For, type JSX, Show, splitProps } from 'solid-js';
 
 export type TabItem = {
-  value: string;
   label: string | JSX.Element;
+  value: string;
 };
 
 export type TabsInsetDropdownProps = {
-  list: TabItem[];
-  value?: string;
-  defaultValue?: string;
-  onChange?: (value: string) => void;
-  disabled?: boolean;
-  class?: string;
-  depth?: 0 | 1 | 2 | 3 | 4 | 5;
   placeholder?: string | JSX.Element;
+  onChange?: (value: string) => void;
+  depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  defaultValue?: string;
+  disabled?: boolean;
+  list: TabItem[];
+  class?: string;
+  value?: string;
 };
 
 export const TabsInsetDropdown = (props: TabsInsetDropdownProps) => {
   const [local] = splitProps(props, [
-    'list',
-    'value',
     'defaultValue',
+    'placeholder',
     'onChange',
     'disabled',
     'class',
     'depth',
-    'placeholder',
+    'value',
+    'list',
   ]);
 
   const current = createMemo(() => {
@@ -39,16 +39,24 @@ export const TabsInsetDropdown = (props: TabsInsetDropdownProps) => {
   return (
     <Dropdown placement="bottom-start" gutter={4}>
       <Dropdown.Trigger
-        class={cn('bg-surface', local.class)}
+        class={cn(
+          'not-disabled:hover:bg-surface active:bg-surface focus-visible:bg-surface',
+          'h-auto p-0.5 rounded-lg border-0 ring ring-edge-muted bg-surface',
+          local.class
+        )}
         disabled={local.disabled}
-        depth={local.depth ?? 2}
+        depth={local.depth ?? 0}
       >
-        <span class="truncate">
-          {current()?.label ?? local.placeholder ?? ''}
+        <Layer depth={2}>
+          <span class="flex items-center px-2.5 py-1 text-xs font-medium ring ring-edge-muted ring-inset rounded-md bg-surface text-ink shadow-sm">
+            {current()?.label ?? local.placeholder ?? ''}
+          </span>
+        </Layer>
+        <span class="flex items-center justify-center px-1.5 text-ink-extra-muted">
+          <CaretDown class="size-3" />
         </span>
-        <CaretDown class="size-3 text-ink-extra-muted" />
       </Dropdown.Trigger>
-      <Dropdown.Content>
+      <Dropdown.Content depth={local.depth ?? 2}>
         <Dropdown.Group>
           <For each={local.list}>
             {(item) => {
