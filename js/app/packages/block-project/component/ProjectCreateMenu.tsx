@@ -253,10 +253,7 @@ function ProjectCreateDialog(props: {
 
 function MenuItem(props: MenuItemProps) {
   return (
-    <Dropdown.Item
-      class="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer"
-      onSelect={props.action}
-    >
+    <Dropdown.Item onSelect={props.action}>
       <div class="size-4 shrink-0">
         <props.Icon />
       </div>
@@ -282,7 +279,9 @@ function MenuContent(props: { projectId: string }) {
 
   return (
     <Dropdown.Content class="min-w-max">
-      <For each={items}>{(item) => <MenuItem {...item} />}</For>
+      <Dropdown.Group>
+        <For each={items}>{(item) => <MenuItem {...item} />}</For>
+      </Dropdown.Group>
     </Dropdown.Content>
   );
 }
@@ -333,9 +332,7 @@ export function ProjectCreateMenu(props: { id: string }) {
           <CaretDown />
         </Dropdown.Trigger>
       </div>
-      <Dropdown.Portal>
-        <MenuContent projectId={props.id} />
-      </Dropdown.Portal>
+      <MenuContent projectId={props.id} />
     </Dropdown>
   );
 }
