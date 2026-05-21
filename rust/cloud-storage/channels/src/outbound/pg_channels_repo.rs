@@ -259,15 +259,15 @@ async fn create_activity<'e, E>(executor: E, channel_id: Uuid, user_id: &str) ->
 where
     E: Executor<'e, Database = Postgres>,
 {
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO comms_activity (id, user_id, channel_id, created_at, updated_at)
         VALUES ($1, $2, $3, NOW(), NOW())
         "#,
+        macro_uuid::generate_uuid_v7(),
+        user_id,
+        channel_id,
     )
-    .bind(macro_uuid::generate_uuid_v7())
-    .bind(user_id)
-    .bind(channel_id)
     .execute(executor)
     .await?;
     Ok(())
@@ -294,7 +294,9 @@ where
         .map(|mention| mention.entity_id.clone())
         .collect();
 
-    let mentioned_users = sqlx::query_as::<_, UserIdRow>(
+    let message_id_text = message_id.to_string();
+    let mentioned_users = sqlx::query_as!(
+        UserIdRow,
         r#"
         WITH message_channel AS (
             SELECT channel_id FROM comms_messages WHERE id = $1
@@ -312,13 +314,13 @@ where
                 entity_id,
                 user_id
             )
-            SELECT gen_random_uuid(), 'message', $1::text, m.entity_type, m.entity_id, NULL
+            SELECT gen_random_uuid(), 'message', $4::text, m.entity_type, m.entity_id, NULL
             FROM mentions_to_insert m
             WHERE NOT EXISTS (
                 SELECT 1
                 FROM comms_entity_mentions em
                 WHERE em.source_entity_type = 'message'
-                  AND em.source_entity_id = $1::text
+                  AND em.source_entity_id = $4::text
                   AND em.entity_type = m.entity_type
                   AND em.entity_id = m.entity_id
             )
@@ -331,10 +333,11 @@ where
           AND cp.channel_id = mc.channel_id
           AND cp.left_at IS NULL
         "#,
+        message_id,
+        &entity_types,
+        &entity_ids,
+        message_id_text,
     )
-    .bind(message_id)
-    .bind(&entity_types)
-    .bind(&entity_ids)
     .fetch_all(executor)
     .await?;
 
@@ -348,28 +351,29 @@ async fn delete_entity_mentions_by_source<'e, E>(
 where
     E: Executor<'e, Database = Postgres>,
 {
-    let result = sqlx::query(
+    let result = sqlx::query!(
         r#"
         DELETE FROM comms_entity_mentions
         WHERE source_entity_id = ANY($1)
         "#,
+        source_entity_ids,
     )
-    .bind(source_entity_ids)
     .execute(executor)
     .await?;
     Ok(result.rows_affected())
 }
 
 async fn get_message_owner(pool: &PgPool, message_id: Uuid) -> anyhow::Result<String> {
-    let row = sqlx::query_as::<_, SenderIdRow>(
+    let row = sqlx::query_as!(
+        SenderIdRow,
         r#"
-        SELECT sender_id
+        SELECT sender_id AS "sender_id: MacroUserIdStr"
         FROM comms_messages
         WHERE id = $1
         ORDER BY created_at ASC
         "#,
+        message_id,
     )
-    .bind(message_id)
     .fetch_one(pool)
     .await
     .context("unable to get message owner")?;
@@ -380,9 +384,10 @@ async fn get_channel_participants_for_thread_id(
     pool: &PgPool,
     thread_id: Uuid,
 ) -> anyhow::Result<Vec<MacroUserIdStr<'static>>> {
-    let rows = sqlx::query_as::<_, MacroUserIdRow>(
+    let rows = sqlx::query_as!(
+        MacroUserIdRow,
         r#"
-        SELECT DISTINCT id AS user_id FROM (
+        SELECT DISTINCT id AS "user_id!: MacroUserIdStr" FROM (
             SELECT m.sender_id AS id
             FROM comms_channel_participants cp
             JOIN comms_channels c ON c.id = cp.channel_id
@@ -400,8 +405,8 @@ async fn get_channel_participants_for_thread_id(
               AND cp.left_at IS NULL
         ) AS combined
         "#,
+        thread_id,
     )
-    .bind(thread_id)
     .fetch_all(pool)
     .await?;
     Ok(rows.into_iter().map(|row| row.user_id).collect())
@@ -482,15 +487,16 @@ async fn load_active_participant_ids(
     pool: &PgPool,
     channel_id: Uuid,
 ) -> anyhow::Result<Vec<String>> {
-    let rows = sqlx::query_as::<_, UserIdRow>(
+    let rows = sqlx::query_as!(
+        UserIdRow,
         r#"
         SELECT user_id
         FROM comms_channel_participants
         WHERE channel_id = $1 AND left_at IS NULL
         ORDER BY joined_at ASC, user_id ASC
         "#,
+        channel_id,
     )
-    .bind(channel_id)
     .fetch_all(pool)
     .await?;
     Ok(rows.into_iter().map(|row| row.user_id).collect())
@@ -504,15 +510,16 @@ async fn load_user_display_names(
         return Ok(HashMap::new());
     }
 
-    let rows = sqlx::query_as::<_, UserDisplayNameRow>(
+    let rows = sqlx::query_as!(
+        UserDisplayNameRow,
         r#"
         SELECT u.id AS user_profile_id, mui.first_name, mui.last_name
         FROM macro_user_info mui
         JOIN "User" u ON mui.macro_user_id = u.macro_user_id
         WHERE u.id = ANY($1)
         "#,
+        user_ids,
     )
-    .bind(user_ids)
     .fetch_all(pool)
     .await?;
 
@@ -1058,15 +1065,21 @@ impl ChannelRepo for PgChannelsRepo {
         &self,
         channel_id: Uuid,
     ) -> Result<Vec<ChannelParticipant>, Self::Err> {
-        let rows = sqlx::query_as::<_, ParticipantRow>(
+        let rows = sqlx::query_as!(
+            ParticipantRow,
             r#"
-            SELECT channel_id, user_id, role, joined_at, left_at
+            SELECT
+                channel_id,
+                user_id,
+                role AS "role: ParticipantRole",
+                joined_at,
+                left_at::timestamptz AS "left_at?"
             FROM comms_channel_participants
             WHERE channel_id = $1 AND left_at IS NULL
             ORDER BY joined_at ASC
             "#,
+            channel_id,
         )
-        .bind(channel_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -1253,14 +1266,15 @@ impl ChannelRepo for PgChannelsRepo {
     }
 
     async fn get_channel_info(&self, channel_id: Uuid) -> Result<ChannelInfo, Self::Err> {
-        let row = sqlx::query_as::<_, ChannelInfoRow>(
+        let row = sqlx::query_as!(
+            ChannelInfoRow,
             r#"
-            SELECT id, name, channel_type, org_id, team_id
+            SELECT id, name, channel_type AS "channel_type: ChannelType", org_id, team_id
             FROM comms_channels
             WHERE id = $1
             "#,
+            channel_id,
         )
-        .bind(channel_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(ChannelInfo {
@@ -1298,31 +1312,31 @@ impl ChannelRepo for PgChannelsRepo {
     ) -> Result<Uuid, Self::Err> {
         let channel_id = macro_uuid::generate_uuid_v7();
         let mut transaction = self.pool.begin().await?;
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO comms_channels (id, name, owner_id, org_id, team_id, channel_type)
             VALUES ($1, $2, $3, $4, $5, $6)
             "#,
+            channel_id,
+            req.name.as_deref(),
+            &owner_id,
+            org_id,
+            req.team_id,
+            req.channel_type as ChannelType,
         )
-        .bind(channel_id)
-        .bind(req.name)
-        .bind(&owner_id)
-        .bind(org_id)
-        .bind(req.team_id)
-        .bind(req.channel_type)
         .execute(&mut *transaction)
         .await
         .context("unable to create channel")?;
 
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO comms_channel_participants (channel_id, role, user_id)
             VALUES ($1, $2, $3)
             "#,
+            channel_id,
+            ParticipantRole::Owner as ParticipantRole,
+            &owner_id,
         )
-        .bind(channel_id)
-        .bind(ParticipantRole::Owner)
-        .bind(&owner_id)
         .execute(&mut *transaction)
         .await
         .context("unable to create channel participant for owner")?;
@@ -1332,15 +1346,15 @@ impl ChannelRepo for PgChannelsRepo {
             .into_iter()
             .filter(|participant| participant != &owner_id)
         {
-            sqlx::query(
+            sqlx::query!(
                 r#"
                 INSERT INTO comms_channel_participants (channel_id, role, user_id)
                 VALUES ($1, $2, $3)
                 "#,
+                channel_id,
+                ParticipantRole::Member as ParticipantRole,
+                participant,
             )
-            .bind(channel_id)
-            .bind(ParticipantRole::Member)
-            .bind(participant)
             .execute(&mut *transaction)
             .await
             .context("unable to create channel participant")?;
@@ -1361,7 +1375,8 @@ impl ChannelRepo for PgChannelsRepo {
         user_id: String,
         recipient_id: String,
     ) -> Result<Option<Uuid>, Self::Err> {
-        let row = sqlx::query_as::<_, ChannelIdRow>(
+        let row = sqlx::query_as!(
+            ChannelIdRow,
             r#"
             SELECT id
             FROM comms_channels
@@ -1379,9 +1394,9 @@ impl ChannelRepo for PgChannelsRepo {
                     AND cp.user_id = $2
               )
             "#,
+            user_id,
+            recipient_id,
         )
-        .bind(user_id)
-        .bind(recipient_id)
         .fetch_optional(&self.pool)
         .await
         .context("unable to get direct message channel")?;
@@ -1392,7 +1407,8 @@ impl ChannelRepo for PgChannelsRepo {
         &self,
         participants: Vec<String>,
     ) -> Result<Option<Uuid>, Self::Err> {
-        let row = sqlx::query_as::<_, ChannelIdRow>(
+        let row = sqlx::query_as!(
+            ChannelIdRow,
             r#"
             SELECT id
             FROM comms_channels
@@ -1411,8 +1427,8 @@ impl ChannelRepo for PgChannelsRepo {
                   ) = CARDINALITY($1)
               )
             "#,
+            &participants,
         )
-        .bind(&participants)
         .fetch_optional(&self.pool)
         .await
         .context("unable to get private channel")?;
@@ -1425,7 +1441,8 @@ impl ChannelRepo for PgChannelsRepo {
         user_id: String,
         req: PatchChannelRequest,
     ) -> Result<(), Self::Err> {
-        let row = sqlx::query_as::<_, ExistsRow>(
+        let row = sqlx::query_as!(
+            ExistsRow,
             r#"
             SELECT EXISTS (
                 SELECT 1
@@ -1436,11 +1453,11 @@ impl ChannelRepo for PgChannelsRepo {
                       'admin'::comms_participant_role,
                       'owner'::comms_participant_role
                   )
-            ) AS exists
+            ) AS "exists!"
             "#,
+            channel_id,
+            user_id,
         )
-        .bind(channel_id)
-        .bind(&user_id)
         .fetch_one(&self.pool)
         .await
         .context("failed to check user authorization")?;
@@ -1452,15 +1469,15 @@ impl ChannelRepo for PgChannelsRepo {
         }
 
         if let Some(channel_name) = req.channel_name {
-            sqlx::query(
+            sqlx::query!(
                 r#"
                 UPDATE comms_channels
                 SET name = $1
                 WHERE id = $2
                 "#,
+                channel_name,
+                channel_id,
             )
-            .bind(channel_name)
-            .bind(channel_id)
             .execute(&self.pool)
             .await?;
         }
@@ -1468,7 +1485,7 @@ impl ChannelRepo for PgChannelsRepo {
     }
 
     async fn delete_channel(&self, channel_id: Uuid, user_id: String) -> Result<(), Self::Err> {
-        let result = sqlx::query(
+        let result = sqlx::query!(
             r#"
             DELETE FROM comms_channels
             WHERE id = $1
@@ -1480,9 +1497,9 @@ impl ChannelRepo for PgChannelsRepo {
                     AND role = 'owner'::comms_participant_role
               )
             "#,
+            channel_id,
+            user_id,
         )
-        .bind(channel_id)
-        .bind(user_id)
         .execute(&self.pool)
         .await
         .context("failed to delete channel")?;
@@ -1501,15 +1518,15 @@ impl ChannelRepo for PgChannelsRepo {
         user_id: String,
         role: ParticipantRole,
     ) -> Result<(), Self::Err> {
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO comms_channel_participants (channel_id, user_id, role)
             VALUES ($1, $2, $3)
             "#,
+            channel_id,
+            user_id,
+            role as ParticipantRole,
         )
-        .bind(channel_id)
-        .bind(user_id)
-        .bind(role)
         .execute(&self.pool)
         .await
         .context("unable to add participant to channel")?;
@@ -1517,14 +1534,14 @@ impl ChannelRepo for PgChannelsRepo {
     }
 
     async fn remove_participant(&self, channel_id: Uuid, user_id: String) -> Result<(), Self::Err> {
-        sqlx::query(
+        sqlx::query!(
             r#"
             DELETE FROM comms_channel_participants
             WHERE channel_id = $1 AND user_id = $2
             "#,
+            channel_id,
+            user_id,
         )
-        .bind(channel_id)
-        .bind(user_id)
         .execute(&self.pool)
         .await
         .context("unable to remove participant from channel")?;
@@ -1539,27 +1556,28 @@ impl ChannelRepo for PgChannelsRepo {
         thread_id: Option<Uuid>,
     ) -> Result<MutatedMessage, Self::Err> {
         let message_id = macro_uuid::generate_uuid_v7();
-        let row = sqlx::query_as::<_, MutatedMessageRow>(
+        let row = sqlx::query_as!(
+            MutatedMessageRow,
             r#"
             INSERT INTO comms_messages (id, channel_id, sender_id, content, thread_id)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING
                 id,
                 channel_id,
-                sender_id,
+                sender_id AS "sender_id: MacroUserIdStr",
                 content,
                 created_at,
                 updated_at,
                 thread_id,
-                edited_at::timestamptz AS edited_at,
-                deleted_at::timestamptz AS deleted_at
+                edited_at::timestamptz AS "edited_at?",
+                deleted_at::timestamptz AS "deleted_at?"
             "#,
+            message_id,
+            channel_id,
+            sender_id,
+            content,
+            thread_id,
         )
-        .bind(message_id)
-        .bind(channel_id)
-        .bind(sender_id)
-        .bind(content)
-        .bind(thread_id)
         .fetch_one(&self.pool)
         .await
         .context("unable to create message")?;
@@ -1567,15 +1585,15 @@ impl ChannelRepo for PgChannelsRepo {
     }
 
     async fn touch_channel_updated_at(&self, channel_id: Uuid) -> Result<(), Self::Err> {
-        sqlx::query(
+        sqlx::query!(
             r#"
             UPDATE comms_channels
             SET updated_at = $2
             WHERE id = $1
             "#,
+            channel_id,
+            Utc::now(),
         )
-        .bind(channel_id)
-        .bind(Utc::now())
         .execute(&self.pool)
         .await
         .context("unable to update the channel updated_at timestamp")?;
@@ -1615,30 +1633,10 @@ impl ChannelRepo for PgChannelsRepo {
             return Ok(vec![]);
         }
 
-        let ids: Vec<Uuid> = attachments
-            .iter()
-            .map(|_| macro_uuid::generate_uuid_v7())
-            .collect();
-        let message_ids = vec![message_id; attachments.len()];
-        let channel_ids = vec![channel_id; attachments.len()];
-        let entity_types: Vec<_> = attachments
-            .iter()
-            .map(|attachment| attachment.entity_type.clone())
-            .collect();
-        let entity_ids: Vec<_> = attachments
-            .iter()
-            .map(|attachment| attachment.entity_id.clone())
-            .collect();
-        let widths: Vec<_> = attachments
-            .iter()
-            .map(|attachment| attachment.width)
-            .collect();
-        let heights: Vec<_> = attachments
-            .iter()
-            .map(|attachment| attachment.height)
-            .collect();
-        Ok(
-            sqlx::query_as::<_, MutatedAttachmentRow>(
+        let mut inserted = Vec::with_capacity(attachments.len());
+        for attachment in attachments {
+            let row = sqlx::query_as!(
+                MutatedAttachmentRow,
                 r#"
                 INSERT INTO comms_attachments (
                     id,
@@ -1649,45 +1647,37 @@ impl ChannelRepo for PgChannelsRepo {
                     width,
                     height
                 )
-                SELECT * FROM UNNEST(
-                    $1::uuid[],
-                    $2::uuid[],
-                    $3::uuid[],
-                    $4::varchar[],
-                    $5::varchar[],
-                    $6::int[],
-                    $7::int[]
-                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id, message_id, channel_id, entity_type, entity_id, width, height, created_at
                 "#,
+                macro_uuid::generate_uuid_v7(),
+                message_id,
+                channel_id,
+                attachment.entity_type,
+                attachment.entity_id,
+                attachment.width,
+                attachment.height,
             )
-            .bind(&ids)
-            .bind(&message_ids)
-            .bind(&channel_ids)
-            .bind(&entity_types)
-            .bind(&entity_ids)
-            .bind(&widths)
-            .bind(&heights)
-            .fetch_all(&self.pool)
-            .await?
-            .into_iter()
-            .map(Into::into)
-            .collect::<Vec<_>>(),
-        )
+            .fetch_one(&self.pool)
+            .await?;
+            inserted.push(row.into());
+        }
+        Ok(inserted)
     }
 
     async fn get_message_attachments(
         &self,
         message_id: Uuid,
     ) -> Result<Vec<MutatedAttachment>, Self::Err> {
-        Ok(sqlx::query_as::<_, MutatedAttachmentRow>(
+        Ok(sqlx::query_as!(
+            MutatedAttachmentRow,
             r#"
                 SELECT id, message_id, channel_id, entity_type, entity_id, width, height, created_at
                 FROM comms_attachments
                 WHERE message_id = $1
                 "#,
+            message_id,
         )
-        .bind(message_id)
         .fetch_all(&self.pool)
         .await?
         .into_iter()
@@ -1699,13 +1689,13 @@ impl ChannelRepo for PgChannelsRepo {
         if attachment_ids.is_empty() {
             return Ok(());
         }
-        sqlx::query(
+        sqlx::query!(
             r#"
             DELETE FROM comms_attachments
             WHERE id = ANY($1)
             "#,
+            &attachment_ids,
         )
-        .bind(&attachment_ids)
         .execute(&self.pool)
         .await
         .context("failed to delete attachments by IDs")?;
@@ -1720,14 +1710,14 @@ impl ChannelRepo for PgChannelsRepo {
         if entity_ids.is_empty() {
             return Ok(());
         }
-        sqlx::query(
+        sqlx::query!(
             r#"
             DELETE FROM comms_entity_mentions
             WHERE entity_id = ANY($1) AND source_entity_id = $2
             "#,
+            &entity_ids,
+            source_entity_id,
         )
-        .bind(&entity_ids)
-        .bind(source_entity_id)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -1739,7 +1729,8 @@ impl ChannelRepo for PgChannelsRepo {
         attachments: Vec<MutatedAttachment>,
     ) -> Result<MutatedMessage, Self::Err> {
         let has_attachments = !attachments.is_empty();
-        let row = sqlx::query_as::<_, MutatedMessageRow>(
+        let row = sqlx::query_as!(
+            MutatedMessageRow,
             r#"
             UPDATE comms_messages
             SET
@@ -1753,17 +1744,17 @@ impl ChannelRepo for PgChannelsRepo {
             RETURNING
                 id,
                 channel_id,
-                sender_id,
+                sender_id AS "sender_id: MacroUserIdStr",
                 content,
                 created_at,
                 updated_at,
                 thread_id,
-                edited_at::timestamptz AS edited_at,
-                deleted_at::timestamptz AS deleted_at
+                edited_at::timestamptz AS "edited_at?",
+                deleted_at::timestamptz AS "deleted_at?"
             "#,
+            message_id,
+            has_attachments,
         )
-        .bind(message_id)
-        .bind(has_attachments)
         .fetch_one(&self.pool)
         .await
         .context("unable to update message")?;
@@ -1775,7 +1766,8 @@ impl ChannelRepo for PgChannelsRepo {
         message_id: Uuid,
         content: String,
     ) -> Result<MutatedMessage, Self::Err> {
-        let row = sqlx::query_as::<_, MutatedMessageRow>(
+        let row = sqlx::query_as!(
+            MutatedMessageRow,
             r#"
             UPDATE comms_messages
             SET content = $1, updated_at = NOW(), edited_at = NOW()
@@ -1783,24 +1775,25 @@ impl ChannelRepo for PgChannelsRepo {
             RETURNING
                 id,
                 channel_id,
-                sender_id,
+                sender_id AS "sender_id: MacroUserIdStr",
                 content,
                 created_at,
                 updated_at,
                 thread_id,
-                edited_at::timestamptz AS edited_at,
-                deleted_at::timestamptz AS deleted_at
+                edited_at::timestamptz AS "edited_at?",
+                deleted_at::timestamptz AS "deleted_at?"
             "#,
+            content,
+            message_id,
         )
-        .bind(content)
-        .bind(message_id)
         .fetch_one(&self.pool)
         .await
         .context("unable to update message")?;
         Ok(row.into())
     }
     async fn delete_message(&self, message_id: Uuid) -> Result<MutatedMessage, Self::Err> {
-        let row = sqlx::query_as::<_, MutatedMessageRow>(
+        let row = sqlx::query_as!(
+            MutatedMessageRow,
             r#"
             UPDATE comms_messages
             SET content = '', updated_at = NOW(), deleted_at = NOW()
@@ -1808,16 +1801,16 @@ impl ChannelRepo for PgChannelsRepo {
             RETURNING
                 id,
                 channel_id,
-                sender_id,
+                sender_id AS "sender_id: MacroUserIdStr",
                 content,
                 created_at,
                 updated_at,
                 thread_id,
-                edited_at::timestamptz AS edited_at,
-                deleted_at::timestamptz AS deleted_at
+                edited_at::timestamptz AS "edited_at?",
+                deleted_at::timestamptz AS "deleted_at?"
             "#,
+            message_id,
         )
-        .bind(message_id)
         .fetch_one(&self.pool)
         .await
         .context("unable to delete message")?;
@@ -1832,15 +1825,21 @@ impl ChannelRepo for PgChannelsRepo {
         &self,
         channel_id: Uuid,
     ) -> Result<Vec<ChannelParticipant>, Self::Err> {
-        let rows = sqlx::query_as::<_, ParticipantRow>(
+        let rows = sqlx::query_as!(
+            ParticipantRow,
             r#"
-            SELECT user_id, channel_id, joined_at, left_at, role
+            SELECT
+                user_id,
+                channel_id,
+                joined_at,
+                left_at::timestamptz AS "left_at?",
+                role AS "role: ParticipantRole"
             FROM comms_channel_participants
             WHERE channel_id = $1
             ORDER BY joined_at DESC
             "#,
+            channel_id,
         )
-        .bind(channel_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -1864,17 +1863,17 @@ impl ChannelRepo for PgChannelsRepo {
     }
 
     async fn upsert_activity(&self, user_id: String, channel_id: Uuid) -> Result<(), Self::Err> {
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO comms_activity (id, user_id, channel_id, interacted_at)
             VALUES ($1, $2, $3, NOW())
             ON CONFLICT (user_id, channel_id) DO UPDATE
             SET interacted_at = NOW(), updated_at = NOW()
             "#,
+            macro_uuid::generate_uuid_v7(),
+            user_id,
+            channel_id,
         )
-        .bind(macro_uuid::generate_uuid_v7())
-        .bind(user_id)
-        .bind(channel_id)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -1886,16 +1885,16 @@ impl ChannelRepo for PgChannelsRepo {
         emoji: String,
         user_id: String,
     ) -> Result<(), Self::Err> {
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO comms_reactions (message_id, emoji, user_id)
             VALUES ($1, $2, $3)
             ON CONFLICT DO NOTHING
             "#,
+            message_id,
+            emoji,
+            user_id,
         )
-        .bind(message_id)
-        .bind(emoji)
-        .bind(user_id)
         .execute(&self.pool)
         .await
         .context("failed to add reaction")?;
@@ -1908,15 +1907,15 @@ impl ChannelRepo for PgChannelsRepo {
         emoji: String,
         user_id: String,
     ) -> Result<(), Self::Err> {
-        sqlx::query(
+        sqlx::query!(
             r#"
             DELETE FROM comms_reactions
             WHERE message_id = $1 AND emoji = $2 AND user_id = $3
             "#,
+            message_id,
+            emoji,
+            user_id,
         )
-        .bind(message_id)
-        .bind(emoji)
-        .bind(user_id)
         .execute(&self.pool)
         .await
         .context("failed to remove reaction")?;
@@ -1927,14 +1926,15 @@ impl ChannelRepo for PgChannelsRepo {
         &self,
         message_id: Uuid,
     ) -> Result<Vec<CountedReaction>, Self::Err> {
-        let reactions = sqlx::query_as::<_, ReactionWithCreatedAtRow>(
+        let reactions = sqlx::query_as!(
+            ReactionWithCreatedAtRow,
             r#"
             SELECT emoji, user_id, created_at
             FROM comms_reactions
             WHERE message_id = $1
             "#,
+            message_id,
         )
-        .bind(message_id)
         .fetch_all(&self.pool)
         .await
         .context("unable to fetch reactions")?

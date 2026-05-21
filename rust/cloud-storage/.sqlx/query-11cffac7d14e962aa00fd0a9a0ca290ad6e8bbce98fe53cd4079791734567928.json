@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT user_id\n        FROM comms_channel_participants\n        WHERE channel_id = $1 AND left_at IS NULL\n        ORDER BY joined_at ASC, user_id ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "11cffac7d14e962aa00fd0a9a0ca290ad6e8bbce98fe53cd4079791734567928"
+}
