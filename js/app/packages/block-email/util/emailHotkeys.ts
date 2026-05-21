@@ -1,7 +1,7 @@
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 
-export interface EmailHotkeyHandlers {
+interface EmailHotkeyHandlers {
   blockSender: () => boolean;
   markSenderSignal: () => boolean;
   markSenderNoise: () => boolean;

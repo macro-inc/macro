@@ -44,7 +44,7 @@ export function invalidateTeam(teamId: string) {
 type CreateTeamArgs = CreateTeamRequest;
 type CreateTeamCallbacks = MutationCallbacks<Team, Error, CreateTeamArgs>;
 
-export function useCreateTeamMutation(callbacks?: CreateTeamCallbacks) {
+function _useCreateTeamMutation(callbacks?: CreateTeamCallbacks) {
   return useMutation(() => ({
     mutationFn: async (args: CreateTeamArgs) =>
       await throwOnErr(() => authServiceClient.createTeam(args)),

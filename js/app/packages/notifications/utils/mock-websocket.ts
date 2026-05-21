@@ -2,7 +2,7 @@ import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { createSignal } from 'solid-js';
 import type { UnifiedNotification } from '../types';
 
-export type MockWebsocketEmitter = (notification: UnifiedNotification) => void;
+type MockWebsocketEmitter = (notification: UnifiedNotification) => void;
 
 export function createMockWebsocket(): {
   ws: ConnectionGatewayWebsocket;

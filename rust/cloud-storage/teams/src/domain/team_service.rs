@@ -261,10 +261,7 @@ where
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
     ) -> Result<Team, CreateTeamError> {
-        let team = self
-            .team_repository
-            .create_team(user_id, team_name)
-            .await?;
+        let team = self.team_repository.create_team(user_id, team_name).await?;
 
         // Best-effort: ask the email service to seed CRM tables from this
         // user's historical sent mail. Log and swallow failures — the team

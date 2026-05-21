@@ -35,7 +35,7 @@ false && floatWithElement;
 // Surface's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
 
-export function ActionsMenuItem(props: {
+function ActionsMenuItem(props: {
   action: Action;
   index: number;
   selected: boolean;

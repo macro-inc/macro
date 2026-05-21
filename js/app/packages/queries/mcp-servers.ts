@@ -24,7 +24,7 @@ export function useMcpServersQuery() {
   }));
 }
 
-export function invalidateMcpServers() {
+function invalidateMcpServers() {
   return queryClient.invalidateQueries({ queryKey: KEYS.list });
 }
 

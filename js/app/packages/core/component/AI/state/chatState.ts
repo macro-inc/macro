@@ -39,7 +39,7 @@ export type SideEffect =
 
 // --- Transition result ---
 
-export type TransitionResult = {
+type TransitionResult = {
   phase: ChatPhase;
   messages?: (
     prev: ChatMessageWithAttachments[]

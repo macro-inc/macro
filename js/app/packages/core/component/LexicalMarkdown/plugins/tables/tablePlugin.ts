@@ -8,7 +8,7 @@ import {
 import { mergeRegister } from '@lexical/utils';
 import type { LexicalEditor } from 'lexical';
 
-export interface TablePluginProps {
+interface TablePluginProps {
   // When `false` (default `true`), merged cell support (colspan and rowspan) will be disabled and all
   // tables will be forced into a regular grid with 1x1 table cells.
   hasCellMerge?: boolean;

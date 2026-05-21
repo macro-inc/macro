@@ -45,19 +45,7 @@ export type SoupRow = {
   isSelected: () => boolean;
 };
 
-export type NavigationResult = { row: SoupRow; index: number } | undefined;
-
-export type GroupConfig<T> = {
-  id: string;
-  label: string;
-  getValue: (item: T) => unknown;
-  getLabel?: (value: unknown) => string;
-  renderHeader?: (props: {
-    value: unknown;
-    label: string;
-    count: number;
-  }) => JSX.Element;
-};
+type NavigationResult = { row: SoupRow; index: number } | undefined;
 
 export type SortConfig<T> = {
   id: string;
@@ -224,36 +212,41 @@ export const createSoupState = <TId extends string = FilterID>(
     return calculateFocusRow(current + offset);
   };
 
+  const shouldSkipRow = (row: SoupRow): boolean => {
+    if (!row.group) return false;
+    if (row.getIsGrouped()) {
+      return !!skipGroupHeaders;
+    }
+    return !row.group.isExpanded();
+  };
+
   const findNextIndex = (startIndex: number, offset: number): number => {
     const allRows = rows();
     if (allRows.length === 0) return -1;
 
-    let targetIndex = startIndex;
     const direction = offset > 0 ? 1 : -1;
     let steps = Math.abs(offset);
+    let cursor = startIndex;
+    let lastValid = startIndex;
 
     while (steps > 0) {
-      targetIndex += direction;
+      cursor += direction;
 
-      if (targetIndex < 0) {
-        targetIndex = wrapNavigation ? allRows.length - 1 : 0;
+      if (cursor < 0 || cursor >= allRows.length) {
         if (!wrapNavigation) break;
-      } else if (targetIndex >= allRows.length) {
-        targetIndex = wrapNavigation ? 0 : allRows.length - 1;
-        if (!wrapNavigation) break;
+        cursor = (cursor + allRows.length) % allRows.length;
       }
 
-      const row = allRows[targetIndex];
+      const row = allRows[cursor];
       if (!row) break;
 
-      if (skipGroupHeaders && row.group) {
-        continue;
-      }
+      if (shouldSkipRow(row)) continue;
 
+      lastValid = cursor;
       steps--;
     }
 
-    return targetIndex;
+    return lastValid;
   };
 
   const navigateBy = (offset: number): NavigationResult => {
@@ -261,14 +254,14 @@ export const createSoupState = <TId extends string = FilterID>(
     const allRows = rows();
 
     if (current === -1) {
-      let startIndex = offset > 0 ? 0 : allRows.length - 1;
-      if (skipGroupHeaders) {
-        const row = allRows[startIndex];
-        if (row?.group) {
-          startIndex = findNextIndex(startIndex, offset);
-        }
+      const startIndex = offset > 0 ? 0 : allRows.length - 1;
+      const direction = offset > 0 ? 1 : -1;
+      let i = startIndex;
+      while (i >= 0 && i < allRows.length && shouldSkipRow(allRows[i])) {
+        i += direction;
       }
-      return setFocus(startIndex);
+      if (i < 0 || i >= allRows.length) return;
+      return setFocus(i);
     }
 
     const nextIndex = findNextIndex(current, offset);

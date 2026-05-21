@@ -39,7 +39,7 @@ function userQuotaQueryOptions() {
  * useQuery hook for retrieving the user's quota information.
  * Returns the current quota including documents, AI chat messages, and their limits.
  */
-export function useUserQuotaQuery() {
+function _useUserQuotaQuery() {
   return useQuery(() => userQuotaQueryOptions());
 }
 
@@ -57,7 +57,7 @@ export function invalidateUserQuota() {
  * Hook to get a function that invalidates the user quota query cache.
  * Useful for refreshing quota data after mutations that might affect it.
  */
-export function useInvalidateUserQuota() {
+function _useInvalidateUserQuota() {
   return invalidateUserQuota;
 }
 
@@ -65,7 +65,7 @@ export function useInvalidateUserQuota() {
  * Hook to get a function that updates the user quota in the query cache.
  * Useful for optimistic updates when quota changes are known.
  */
-export function useUpdateUserQuotaCache() {
+function _useUpdateUserQuotaCache() {
   return (quota: UserQuota) => {
     queryClient.setQueryData(authKeys.userQuota.queryKey, quota);
   };

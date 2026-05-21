@@ -30,15 +30,9 @@ export type ChannelMessagesData = InfiniteData<
   ChannelMessagesPageParam | null
 >;
 
-export type ChannelMessagesQueryKey = ReturnType<
+type ChannelMessagesQueryKey = ReturnType<
   typeof channelKeys.messages
 >['queryKey'];
-
-export type IndexedChannelMessages = {
-  items: ApiChannelMessage[];
-  keys: string[];
-  byId: Map<string, ApiChannelMessage>;
-};
 
 export type TopLevelMessageSnapshot = {
   itemIndex: number;
@@ -171,7 +165,7 @@ export function setChannelMessagesData(
 }
 
 /** Returns all cached message query entries for a channel. */
-export function getChannelMessagesEntries(channelId: string) {
+function getChannelMessagesEntries(channelId: string) {
   return queryClient.getQueriesData<ChannelMessagesData>({
     queryKey: getChannelMessagesQueryKeyPrefix(channelId),
   });
@@ -332,7 +326,7 @@ export function replaceTopLevelMessageStateInChannelMessages(
   );
 }
 
-export function getTopLevelMessageSnapshot(
+function getTopLevelMessageSnapshot(
   data: ChannelMessagesData | undefined,
   messageId: string
 ): TopLevelMessageSnapshot | undefined {
@@ -518,7 +512,7 @@ export function replaceThreadReplyStateInChannelMessages(
   });
 }
 
-export function getThreadPreviewReplySnapshot(
+function getThreadPreviewReplySnapshot(
   data: ChannelMessagesData | undefined,
   threadId: string,
   replyId: string
@@ -555,7 +549,7 @@ export function restoreThreadPreviewReplyInChannelMessages(
 }
 
 /** Finds a top-level message across all cached variants for a channel. */
-export function findTopLevelMessageInChannelMessages(
+function _findTopLevelMessageInChannelMessages(
   channelId: string,
   messageId: string
 ): ApiChannelMessage | undefined {
@@ -619,7 +613,7 @@ export function softInvalidateChannelMessages(channelId: string) {
 }
 
 /** Returns the shared prefix for all by-ids message queries in a channel. */
-export function getChannelMessagesByIdsQueryKeyPrefix(channelId: string) {
+function getChannelMessagesByIdsQueryKeyPrefix(channelId: string) {
   return [...channelKeys.messagesByIds._def, channelId];
 }
 

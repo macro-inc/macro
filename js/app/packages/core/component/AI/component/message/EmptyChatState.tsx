@@ -5,14 +5,16 @@ import {
 } from '@core/constant/SettingsState';
 import ArrowRightIcon from '@phosphor-icons/core/assets/bold/arrow-right-bold.svg?component-solid';
 import AtIcon from '@phosphor-icons/core/assets/bold/at-bold.svg?component-solid';
+import PaperPlaneTiltIcon from '@phosphor-icons/core/assets/bold/paper-plane-tilt-bold.svg?component-solid';
 import PlugsConnectedIcon from '@phosphor-icons/core/assets/bold/plugs-connected-bold.svg?component-solid';
 import PuzzlePieceIcon from '@phosphor-icons/core/assets/bold/puzzle-piece-bold.svg?component-solid';
+import { Hotkey } from '@ui';
 import type { JSXElement } from 'solid-js';
 
 function EmptyStateCard(props: {
   icon: JSXElement;
   title: string;
-  description: string;
+  description: JSXElement;
   action?: { label: string; onClick: () => void };
 }) {
   return (
@@ -60,6 +62,17 @@ export function EmptyChatState(props: { minHeight: number }) {
           icon={<AtIcon class="size-4" />}
           title="@mention anything"
           description="Type @ in the chat input to attach files, documents, emails, and more as context for the AI."
+        />
+        <EmptyStateCard
+          icon={<PaperPlaneTiltIcon class="size-4" />}
+          title="Send in the background"
+          description={
+            <>
+              Press <Hotkey shortcut="meta+enter" theme="subtle" /> to send your
+              message in the background. You'll get a notification when the AI
+              responds.
+            </>
+          }
         />
         <EmptyStateCard
           icon={<PlugsConnectedIcon class="size-4" />}

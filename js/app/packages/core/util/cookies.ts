@@ -1,13 +1,13 @@
-export const LOGIN_COOKIE_AGE = 2592000; // 1 month in seconds
+const LOGIN_COOKIE_AGE = 2592000; // 1 month in seconds
 
-export type CookieOptions = {
+type CookieOptions = {
   expires?: Date;
   maxAge?: number;
   path?: string;
   sameSite?: string;
 };
 
-export type LoginCookieOptions = {
+type LoginCookieOptions = {
   value: 'true' | 'false';
   expires: Date;
   maxAge: number;

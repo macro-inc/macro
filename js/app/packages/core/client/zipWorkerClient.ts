@@ -93,28 +93,28 @@ export class DirectoryFileSizeExceededError extends Error {
 }
 
 // Types for the worker communication
-export interface ZipTaskMessage {
+interface ZipTaskMessage {
   action: 'zipFiles';
   files: File[];
   fileDetails: FileDetail[];
   taskId?: string; // Added by the pool
 }
 
-export interface ZipProgressData {
+interface ZipProgressData {
   percentage?: number;
   message: string;
 }
 
-export interface ZipCompleteData {
+interface ZipCompleteData {
   zipBlob: Blob;
   tempFilename: string;
 }
 
-export interface ZipErrorData {
+interface ZipErrorData {
   message: string;
 }
 
-export interface WorkerMessage {
+interface WorkerMessage {
   taskId: string;
   type: 'progress' | 'complete' | 'error' | 'status';
   data: ZipProgressData | ZipCompleteData | ZipErrorData;
@@ -124,7 +124,7 @@ export interface FileDetail {
   path: string;
 }
 
-export interface Task {
+interface Task {
   id: string;
   message: ZipTaskMessage;
   onProgress?: (data: ZipProgressData) => void;
@@ -157,7 +157,7 @@ class ZipWorkerWrapper {
 const MIN_WORKERS = 2;
 const MAX_WORKERS = 6;
 
-export class ZipWorkerPool {
+class ZipWorkerPool {
   private workerConstructor: new () => Worker;
   private size: number;
   private workers: ZipWorkerWrapper[];

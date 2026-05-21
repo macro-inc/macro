@@ -27,7 +27,6 @@ search_processing_service/helpers/*
 convert_service/helpers/*
 
 # Testing 
-**/load-test/*
 **/test.rs
 
 # Documentation 

@@ -65,7 +65,7 @@ function enqueueDocumentIdWakeup(documentId: string) {
   documentWakeupBatcher.addItem(documentId);
 }
 
-export type WakeableDocument = ItemLike & {
+type WakeableDocument = ItemLike & {
   id: string;
   type: 'document';
   fileType: 'md';

@@ -1,5 +1,8 @@
 //! Implementation of [`CompaniesRepository`] backed by MacroDB.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::{
     companies_repo::CompaniesRepository,
     model::{CrmCompany, CrmDomain, CrmError},

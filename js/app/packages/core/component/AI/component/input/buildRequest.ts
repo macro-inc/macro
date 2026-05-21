@@ -16,7 +16,7 @@ export type ChatSendInput = {
   metaKey?: boolean;
 };
 
-export type SendChatMessageResult =
+type SendChatMessageResult =
   | { stream: ChatMessageStream; chat_id: string }
   | { error: true; paymentError?: boolean };
 

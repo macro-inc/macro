@@ -197,7 +197,9 @@ function ChannelGroupItem(props: {
     <Button
       class={cn(
         'flex items-center cursor-default rounded-md text-ink-extra-muted not-disabled:hover:bg-ink/3',
-        isSlim() ? 'justify-center size-8' : 'justify-start gap-2 w-full py-1'
+        isSlim()
+          ? 'justify-center size-8'
+          : 'justify-start gap-2 w-full h-8 py-1'
       )}
       draggable={false}
       variant="ghost"

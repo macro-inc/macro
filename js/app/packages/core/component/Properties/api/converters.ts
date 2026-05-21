@@ -14,7 +14,7 @@ import { isEntityReferenceArray, isStringArray } from '../utils/typeGuards';
  * Normalized flat value type for PropertyApiValues conversion
  * Contains the actual value with proper TypeScript typing based on the PropertyApiValues type
  */
-export type NormalizedPropertyValue =
+type NormalizedPropertyValue =
   | { type: 'STRING'; value: string }
   | { type: 'NUMBER'; value: number }
   | { type: 'BOOLEAN'; value: boolean }

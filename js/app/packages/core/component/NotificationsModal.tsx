@@ -12,9 +12,9 @@ import { createMemo, Show, Suspense } from 'solid-js';
 import { Notifications } from './Notifications';
 
 false && clickOutside;
-export const NOTIFICATIONS_DRAWER_ID = 'notifications';
+const NOTIFICATIONS_DRAWER_ID = 'notifications';
 
-export function NotificationsButton(props: {
+function _NotificationsButton(props: {
   entity: Entity;
   notificationSource: NotificationSource;
   buttonSize?: 'sm';

@@ -12,10 +12,7 @@ import type {
   PropertyDefinitionDomain,
 } from '../../core/component/Properties/types';
 import { isInstantiatedProperty } from '../../core/component/Properties/utils';
-import {
-  type PropertiesEntityType,
-  propertiesServiceClient,
-} from '../../service-clients/service-properties/client';
+import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '../../service-clients/service-storage/generated/schemas/soupProperty';
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
@@ -62,7 +59,7 @@ export function useEntityPropertiesQuery(
   );
 }
 
-export function invalidatePropertiesForEntity(
+function invalidatePropertiesForEntity(
   entityType: EntityType,
   entityId: string
 ) {
@@ -204,7 +201,7 @@ function apiValuesToSoupPropertyValue(
   }
 }
 
-export type DeleteEntityPropertyParams = {
+type DeleteEntityPropertyParams = {
   entityPropertyId: string;
   entityType: EntityType;
   entityId: string;
@@ -240,7 +237,7 @@ export function useDeleteEntityPropertyMutation(
   }));
 }
 
-export type AddEntityPropertyParams = {
+type AddEntityPropertyParams = {
   entityId: string;
   entityType: EntityType;
   propertyDefinitionId: string;
@@ -282,12 +279,7 @@ export function useAddEntityPropertyMutation(
   }));
 }
 
-export type SetPropertyStatusCompleteParams = {
-  entityType: PropertiesEntityType;
-  entityId: string;
-};
-
-export type BulkSaveEntityPropertiesParams = {
+type BulkSaveEntityPropertiesParams = {
   properties: Array<{
     entityId: string;
     entityType: EntityType;

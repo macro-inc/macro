@@ -30,7 +30,7 @@ export type Plan = (typeof PLANS)[number];
 /** Tiers that correspond to real Stripe products. Excludes 'free'. */
 export type PaidPlanTier = Exclude<PlanTier, 'free'>;
 
-export interface PlanFeature {
+interface PlanFeature {
   label: string;
   values: Record<PlanTier, string>;
 }

@@ -8,16 +8,13 @@ import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import { fileSelector } from '@core/directive/fileSelector';
 import { isMobile } from '@core/mobile/isMobile';
 import { plural } from '@core/util/string';
-import PaperPlane from '@icon/wide-paper-plane-cutout.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import PaperPlaneRight from '@phosphor/paper-plane-right.svg?component-solid';
 import PaperclipIcon from '@phosphor/paperclip.svg?component-solid';
 import TextAa from '@phosphor/text-aa.svg';
 import Trash from '@phosphor/trash.svg';
 import DotsThreeIcon from '@phosphor-icons/core/bold/dots-three-bold.svg?component-solid';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import PaperclipHorizontalIcon from '@phosphor-icons/core/regular/paperclip-horizontal.svg?component-solid';
-import { Button, Tooltip } from '@ui';
+import { Button, SendButton, Tooltip } from '@ui';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,
@@ -152,7 +149,7 @@ export function EmailComposeToolbar(props: {
               </Button>
             </Show>
             <Tooltip label={ctx.sendTime() ? 'Send time is scheduled' : ''}>
-              <Button
+              <SendButton
                 onClick={() => ctx.onSend()}
                 disabled={
                   ctx.isSavingDraft?.() ||
@@ -160,16 +157,10 @@ export function EmailComposeToolbar(props: {
                   ctx.isSending() ||
                   ctx.disabled()
                 }
-                tooltip="Send"
-                size="icon-sm"
-              >
-                <Show
-                  fallback={<Spinner class="animate-spin" />}
-                  when={!ctx.isSending()}
-                >
-                  <PaperPlaneRight />
-                </Show>
-              </Button>
+                pending={ctx.isSending()}
+                tooltip="Send email"
+                shortcut="cmd+enter"
+              />
             </Tooltip>
           </div>
         </Show>
@@ -223,17 +214,17 @@ function MobileToolbar(props: {
               {ctx.isSavingDraft?.() ? 'Saving…' : 'Draft'}
             </Button>
           </Show>
-          <Button
+          <SendButton
             disabled={
               ctx.isSending() ||
               ctx.isSavingDraft?.() ||
               ctx.disabled() ||
               !!ctx.sendTime()
             }
+            pending={ctx.isSending()}
             onClick={() => ctx.onSend()}
-          >
-            <PaperPlane class="size-4.5 text-accent" />
-          </Button>
+            tooltip="Send email"
+          />
         </Tooltip>
         <DropdownMenu placement="bottom-end">
           <DropdownMenu.Trigger as={Button} class="aspect-square p-1">

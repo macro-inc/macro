@@ -7,7 +7,7 @@ import { type Accessor, createMemo } from 'solid-js';
  * @param anchor - Accessor for the anchor HTMLElement (or null/undefined)
  * @returns Position object with top and left coordinates, or undefined
  */
-export function useModalPosition(
+function _useModalPosition(
   anchor: Accessor<HTMLElement | null | undefined>
 ): Accessor<{ top: number; left: number } | undefined> {
   return createMemo(() => {

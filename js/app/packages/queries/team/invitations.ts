@@ -18,7 +18,7 @@ export function useUserInvitesQuery() {
   }));
 }
 
-export function invalidateUserInvites() {
+function invalidateUserInvites() {
   return queryClient.invalidateQueries({
     queryKey: teamKeys.userInvites.queryKey,
   });

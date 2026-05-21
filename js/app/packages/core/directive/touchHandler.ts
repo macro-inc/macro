@@ -1,7 +1,7 @@
 import { hapticImpact } from '@core/mobile/haptics';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 
-export interface TouchHandlerOptions {
+interface TouchHandlerOptions {
   onLongPress?: (e: TouchEvent) => void;
   onTouchStart?: (e: TouchEvent) => void;
   onShortTouch?: (e: TouchEvent) => void;

@@ -31,7 +31,7 @@ export const FILE_LIST_SPACER_WIDTH = {
   [FILE_LIST_SIZE.lg]: 'min-w-[12px]',
 } as const;
 
-export const FILE_LIST_TEXT_SIZE = {
+const _FILE_LIST_TEXT_SIZE = {
   [FILE_LIST_SIZE.sm]: 'text-sm',
   [FILE_LIST_SIZE.md]: 'text-md',
   [FILE_LIST_SIZE.lg]: 'text-lg',
@@ -47,19 +47,16 @@ export const TEXT_SIZE_CLASSES = {
 } as const;
 
 // These are deprecated, only in use until we migrate Item.tsx and ProjectItem.tsx to use the new ListViewRow system, with size.ts
-export const SMALL_ITEM_HEIGHT = 'h-[37px] ';
-export const LARGE_ITEM_HEIGHT = 'h-[54px] ';
+const _SMALL_ITEM_HEIGHT = 'h-[37px] ';
+const _LARGE_ITEM_HEIGHT = 'h-[54px] ';
 
-export const SMALL_BLOCK_ICON = 'sm';
-export const LARGE_BLOCK_ICON = 'md';
+const _SMALL_BLOCK_ICON = 'sm';
+const _LARGE_BLOCK_ICON = 'md';
 
 // Enumerate the background styles for selected-state items.
-export const defaultFileColor = 'bg-hover/20 group/item';
+const defaultFileColor = 'bg-hover/20 group/item';
 
-export const fileTypeColors: Record<
-  BlockName | BlockAlias | 'default',
-  string
-> = {
+const _fileTypeColors: Record<BlockName | BlockAlias | 'default', string> = {
   write: 'bg-write/20 group/item',
   pdf: 'bg-pdf/20 group/item',
   md: 'bg-note/20 group/item',

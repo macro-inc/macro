@@ -13,7 +13,7 @@ import { type ContentHitData, isSearchEntity } from '../types/search';
  * windowSearchMatch + HighlightRender (as opposed to entity-derived previews
  * such as channel latest messages or task properties).
  */
-export type SnippetEntity = EmailEntity | CallEntity;
+type SnippetEntity = EmailEntity | CallEntity;
 
 export const isSnippetEntity = (entity: EntityData): entity is SnippetEntity =>
   isEmailEntity(entity) || isCallEntity(entity);

@@ -69,6 +69,7 @@ pub struct McpContext {
     pub jwt_args: JwtValidationArgs,
     pub tool_context: ToolServiceContext,
     pub auth_proxy: McpAuthProxyServiceImpl<RedisInflightAuth>,
+    pub mcp_public_host: String,
 }
 
 pub async fn build_context() -> anyhow::Result<McpContext> {
@@ -120,10 +121,17 @@ pub async fn build_context() -> anyhow::Result<McpContext> {
 
     let auth_proxy = build_auth_proxy(&env_vars, &secretsmanager_client).await?;
 
+    let mcp_public_host = http::Uri::try_from(env_vars.mcp_public_url.as_ref())
+        .context("MCP_PUBLIC_URL is not a valid URI")?
+        .host()
+        .context("MCP_PUBLIC_URL has no host")?
+        .to_owned();
+
     Ok(McpContext {
         jwt_args,
         tool_context,
         auth_proxy,
+        mcp_public_host,
     })
 }
 
@@ -272,16 +280,17 @@ async fn build_tool_context(
         EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())),
     );
 
-    let notification_reader_service = NotificationReaderService::new(
-        DbNotificationRepository::new(db.clone()),
-        ToolNotificationQueue::NoOp,
-        NoOpSnsEndpointManager,
-        PlatformArnConfig {
+    let notification_reader_service = NotificationReaderService {
+        repository: DbNotificationRepository::new(db.clone()),
+        queue: ToolNotificationQueue::NoOp,
+        sns_endpoint: NoOpSnsEndpointManager,
+        platform_config: PlatformArnConfig {
             apns_platform_arn: String::new(),
             fcm_platform_arn: String::new(),
             apns_voip_platform_arn: String::new(),
         },
-    );
+        realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
+    };
     let notification_tool_context =
         notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 

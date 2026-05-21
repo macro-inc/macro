@@ -18,7 +18,7 @@ import { createMemo, createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import { registerEditorWidthObserver } from '../../plugins/shared/utils';
 
 // Constants
-export const MIN_ROW_HEIGHT = 35;
+const MIN_ROW_HEIGHT = 35;
 export const MIN_COLUMN_WIDTH = 120;
 
 // Types

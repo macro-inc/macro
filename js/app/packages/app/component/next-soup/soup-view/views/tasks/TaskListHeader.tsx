@@ -51,7 +51,7 @@ export function ResponsiveTaskListHeader(props: { class?: string }) {
  *
  * Status, Priority, and Updated columns are clickable to set the active sort.
  */
-export function TaskListHeader(props: { class?: string }) {
+function TaskListHeader(props: { class?: string }) {
   const { soup } = useSoupView();
   const activeSort = createMemo(() => soup.sort.active()[0]);
   const setSort = (id: SystemSortOption) => {

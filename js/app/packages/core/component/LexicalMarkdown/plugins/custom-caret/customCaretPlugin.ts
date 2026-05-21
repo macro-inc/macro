@@ -29,7 +29,7 @@ function matchCaret(caretElement: HTMLDivElement, selection: Selection | null) {
   caretElement.style.top = `${rect.top}px`;
 }
 
-export function customCursorPlugin() {
+function _customCursorPlugin() {
   return () => {
     const caretElement = document.createElement('div');
     caretElement.className = 'fixed w-[2px] h-[10px] bg-accent';
@@ -59,3 +59,5 @@ export function customCursorPlugin() {
     };
   };
 }
+
+export {};

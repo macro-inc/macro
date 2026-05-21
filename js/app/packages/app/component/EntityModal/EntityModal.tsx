@@ -99,7 +99,7 @@ const EntityModalContent = (props: {
     </SplitModal>
   );
 };
-export const EntityModal: ParentComponent<{
+const _EntityModal: ParentComponent<{
   isOpen: Accessor<boolean>;
   setIsOpen: Setter<boolean>;
   view: Accessor<'rename' | 'moveToProject'>;

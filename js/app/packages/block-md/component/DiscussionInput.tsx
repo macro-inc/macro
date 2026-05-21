@@ -87,7 +87,7 @@ function DefaultActions(props: { input: InputData }) {
         </Show>
       </Input.Actions.Left>
       <Input.Actions.Right>
-        <Input.SendAction />
+        <Input.SendAction tooltip="Send comment" />
       </Input.Actions.Right>
     </Input.Actions>
   );

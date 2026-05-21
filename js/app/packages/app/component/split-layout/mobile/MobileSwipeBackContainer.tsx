@@ -24,7 +24,7 @@ const SWIPE_DISTANCE_THRESHOLD = 0.5; // fraction of screen width
 const SWIPE_ANIMATION_MS = 88;
 const BG_PEEK_OFFSET = 110; // px the BG panel is offset left at rest; closes to 0 as FG slides away
 
-export type MobileSwipeBackContainerProps = {
+type MobileSwipeBackContainerProps = {
   splitManager: SplitManager;
   mobileSwipeLayout: MobileSwipeLayout;
   splits: Accessor<ReadonlyArray<SplitState>>;

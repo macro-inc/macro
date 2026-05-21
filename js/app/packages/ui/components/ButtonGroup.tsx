@@ -30,7 +30,7 @@ const groupVariantStyles: Record<ButtonVariant, string> = {
   base:             'border border-edge-muted  ',
   active:           'border border-accent  ',
   ghost:            '                          ',
-  'accent-reverse': 'border border-transparent ',
+  'cta': 'border border-transparent ',
 };
 
 const dividerVariantStyles: Record<ButtonVariant, string> = {
@@ -38,7 +38,7 @@ const dividerVariantStyles: Record<ButtonVariant, string> = {
   base:             'bg-edge-muted',
   active:           'bg-accent',
   ghost:            'bg-edge-muted',
-  'accent-reverse': 'bg-surface/50',
+  'cta': 'bg-surface/50',
 };
 
 /* explicit cross-axis size so the group's outer box matches a standalone

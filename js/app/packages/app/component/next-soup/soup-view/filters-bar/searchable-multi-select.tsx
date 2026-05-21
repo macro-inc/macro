@@ -17,7 +17,7 @@ import type { SearchableOption } from './search-filter-controls';
 const ITEM_HEIGHT = 36;
 const LISTBOX_CLASS = 'max-h-[240px] overflow-y-auto scrollbar-hidden';
 
-export type SearchableMultiSelectProps = {
+type SearchableMultiSelectProps = {
   options: Accessor<SearchableOption[]>;
   activeIds: Accessor<string[]>;
   onChange: (ids: string[]) => void;
@@ -212,7 +212,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   );
 };
 
-export type SearchableMultiSelectInlineProps = {
+type SearchableMultiSelectInlineProps = {
   options: Accessor<SearchableOption[]>;
   activeIds: Accessor<string[]>;
   onChange: (ids: string[]) => void;

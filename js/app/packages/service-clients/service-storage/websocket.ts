@@ -20,7 +20,7 @@ const HEARTBEAT_INTERVAL = 300000;
  */
 const HEARTBEAT_TIMEOUT = 5000;
 
-export const ws = new WebsocketBuilder(SERVER_HOSTS['websocket-service'])
+const ws = new WebsocketBuilder(SERVER_HOSTS['websocket-service'])
   .withBackoff(new ConstantBackoff(2_000))
   .withMaxRetries(20)
   .withHeartbeat({
@@ -34,7 +34,7 @@ export const ws = new WebsocketBuilder(SERVER_HOSTS['websocket-service'])
 
 export const storageWS = ws;
 
-export const state = createWebsocketStateSignal(ws);
+const _state = createWebsocketStateSignal(ws);
 
 type WebSocketJobConfig<T, R, D, U> = {
   // websocket request data

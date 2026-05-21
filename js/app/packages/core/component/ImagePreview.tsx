@@ -36,7 +36,7 @@ type ImageData = {
  * @deprecated Prefer the composable media primitives in `@channel/Media`.
  * Keep this only for legacy callers until they are migrated.
  */
-export type ImagePreviewProps = {
+type ImagePreviewProps = {
   image: ImageData;
   variant: 'small' | 'dynamic';
   square?: boolean;

@@ -172,6 +172,15 @@ const CHANNEL_BODY = {
   settings: {
     ...SHARD_SETTINGS,
     refresh_interval: '1s',
+    analysis: {
+      analyzer: {
+        content_text: {
+          type: 'custom',
+          tokenizer: 'standard',
+          filter: ['icu_folding'],
+        },
+      },
+    },
   },
   mappings: {
     dynamic: 'false',
@@ -206,7 +215,7 @@ const CHANNEL_BODY = {
       },
       content: {
         type: 'text',
-        analyzer: 'standard',
+        analyzer: 'content_text',
       },
       created_at_seconds: {
         type: 'date',

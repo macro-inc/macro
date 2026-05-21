@@ -27,7 +27,7 @@ import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
 
-export type SplitPanelProps = {
+type SplitPanelProps = {
   setPanelRef: (ref: HTMLDivElement) => void;
   handle: SplitHandle;
   split: SplitState;

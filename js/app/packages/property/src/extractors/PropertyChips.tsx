@@ -19,7 +19,7 @@ type Props = {
   renderChip?: (chip: ChipInfo) => JSX.Element;
 };
 
-export type ChipInfo = {
+type ChipInfo = {
   /** Stable identifier for the chip (option ID, entity ID, URL, etc.). */
   key: string;
   /** Human-readable label. */

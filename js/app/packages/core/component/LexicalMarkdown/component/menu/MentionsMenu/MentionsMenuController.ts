@@ -24,15 +24,15 @@ export interface BucketConfig<T extends MentionItem = MentionItem> {
  * - null: show all categories with limited items
  * - string: show all items for the specified category
  */
-export type ViewAllMode = string | null;
+type ViewAllMode = string | null;
 
 /** the currently selected category id, or null if in view-all mode */
-export type SelectedCategory = string | null;
+type SelectedCategory = string | null;
 
 /** result of bin computation - how many items to show per bucket */
-export type MentionBins = Record<string, number>;
+type MentionBins = Record<string, number>;
 
-export class MentionsMenuController {
+class MentionsMenuController {
   private buckets: Accessor<BucketConfig[]>;
   private maxItems: number;
   private ignoredIds: Accessor<string[]> = () => [];

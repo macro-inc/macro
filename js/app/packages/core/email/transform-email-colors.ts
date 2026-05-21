@@ -1,4 +1,4 @@
-export interface TextNodeContrast {
+interface TextNodeContrast {
   text: string;
   fg: OKLCH | null;
   bg: OKLCH | null;
@@ -205,7 +205,7 @@ export function normalizeRGBA(rgba: RGBA | null) {
   };
 }
 
-export function computeTextNodeColor(root: Node): TextNodeContrast[] {
+function computeTextNodeColor(root: Node): TextNodeContrast[] {
   const out: TextNodeContrast[] = [];
 
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {

@@ -73,7 +73,7 @@ export function useBinaryDocumentQuery(documentId: Accessor<string>) {
   return useQuery(() => binaryDocumentQueryOptions(documentId()));
 }
 
-export function invalidateBinaryDocument(documentId: string) {
+function _invalidateBinaryDocument(documentId: string) {
   return queryClient.invalidateQueries({
     queryKey: binaryDocumentKeys.document(documentId).queryKey,
   });

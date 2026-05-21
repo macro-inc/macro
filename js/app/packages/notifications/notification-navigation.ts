@@ -117,7 +117,7 @@ async function openChannelNotification(
 // Minimal entity shape — the live entity from the UI is authoritative when
 // available (notification metadata is a snapshot at notification time and may
 // lack `subType` for older events).
-export type NotificationEntityOverride = {
+type NotificationEntityOverride = {
   fileType?: string | null;
   subType?: { type: string } | null;
 };
@@ -153,7 +153,7 @@ type NotFoundError = {
   notificationId: string;
 };
 
-export type OpenNotificationFromIdError = NotSupportedError | NotFoundError;
+type OpenNotificationFromIdError = NotSupportedError | NotFoundError;
 
 function getSupportedHandler(
   notification: UnifiedNotification,

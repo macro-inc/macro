@@ -61,12 +61,12 @@ type WithChannelId<T> = T & { channelId: string };
 type WithOptimisticId<T> = T & { optimisticId: string };
 type WithSenderId<T> = T & { senderId: string };
 
-export type InsertMessageContext = {
+type InsertMessageContext = {
   optimisticId: string;
   target: ReturnType<typeof resolveMessageTarget>;
 };
 
-export type DeleteMessageContext = {
+type DeleteMessageContext = {
   deletedMessage?: Message;
   deletedReactions: CountedReaction[];
   deletedAttachments: Attachment[];
@@ -74,7 +74,7 @@ export type DeleteMessageContext = {
   targetSnapshot?: DeleteTargetSnapshot;
 };
 
-export type UpdateMessageContext = {
+type UpdateMessageContext = {
   messageId: string;
   target: ReturnType<typeof resolveMessageTarget>;
   previousContent: string;
@@ -211,7 +211,7 @@ export function rollbackInsertChannelMessage(
  * Replace an optimistic message ID with the real server-assigned ID.
  * Called in mutation onSuccess after server returns the real message.
  */
-export function replaceOptimisticMessage(
+function replaceOptimisticMessage(
   vars: WithChannelId<{
     optimisticId: string;
     realId: string;
@@ -233,7 +233,7 @@ export function replaceOptimisticMessage(
  * Optimistically delete a message from the channel cache.
  * Returns minimal context: only the deleted message, reactions, and attachments.
  */
-export function optimisticDeleteChannelMessage(
+function optimisticDeleteChannelMessage(
   vars: WithChannelId<
     Pick<ChannelMessage, 'message_id'> & { threadId?: string }
   >
@@ -261,7 +261,7 @@ export function optimisticDeleteChannelMessage(
 /**
  * Rollback an optimistic message delete by restoring the deleted data.
  */
-export function rollbackDeleteChannelMessage(
+function rollbackDeleteChannelMessage(
   channelId: string,
   context: DeleteMessageContext
 ): void {

@@ -97,7 +97,7 @@ export const NonDocumentBlockTypes = [
  * The key is block on the left of the the split and the value is a set of
  * allowed blocks on the right.
  */
-export type BlockCombinationRules = {
+type BlockCombinationRules = {
   [Key in BlockName | BlockAlias]: Set<BlockName>;
 };
 
@@ -124,7 +124,7 @@ function exclude(excludeSet: BlockName[]) {
 /**
  * Defines the block combinations that are valid.
  */
-export const ValidBlockCombinations: BlockCombinationRules = {
+const _ValidBlockCombinations: BlockCombinationRules = {
   call: allBlockNames,
   chat: allBlockNames,
   pdf: ENABLE_PDF_MULTISPLIT ? allBlockNames : exclude(['pdf']),
@@ -188,7 +188,7 @@ type LoadErrorCodes = keyof typeof LoadErrors;
  * @param {Result<T, ResultError<string>[]>} result - The result to convert.
  * @returns {Result<T, ResultError<keyof typeof LoadErrors>[]>} A new Result with a load error code.
  */
-export function toLoadResult<E extends string, T extends ObjectLike>(
+function toLoadResult<E extends string, T extends ObjectLike>(
   result: Result<T, ResultError<E>[]>
 ): Result<T, ResultError<keyof typeof LoadErrors>[]> {
   if (result.isErr() && result.error.some((error) => error.code === 'GONE')) {
@@ -234,7 +234,7 @@ export async function loadResult<
  * @param {(value: T) => U} fn - The function to apply to the ok value.
  * @returns {Result<U, ResultError<LoadErrorCodes>[]>} A new Result with the mapped value or a load error.
  */
-export function mapLoadResult<T extends ObjectLike, U extends ObjectLike>(
+function _mapLoadResult<T extends ObjectLike, U extends ObjectLike>(
   result: Result<T, ResultError<string>[]>,
   fn: (value: T) => U
 ): Result<U, ResultError<LoadErrorCodes>[]> {
@@ -415,7 +415,7 @@ export function defineBlock<
 /**
  * Represents a function that can be used as a block effect.
  */
-export type BlockEffect = (...args: any[]) => any;
+type BlockEffect = (...args: any[]) => any;
 
 /**
  * After the the render phase, automatically reruns the function whenever the block's signal and
@@ -742,7 +742,7 @@ If you are calling a block signal directly in an async method, you need to destr
   };
 }
 
-export type BlockSignal<T> = [get: Accessor<T>, set: Setter<T>] & {
+type BlockSignal<T> = [get: Accessor<T>, set: Setter<T>] & {
   (): T;
   get: Accessor<T>;
   set: Setter<T>;
@@ -856,7 +856,7 @@ export function createBlockStore<T extends object>(
   return createBlockEntity(createStore, structuredClone(initialValue)) as any;
 }
 
-export type BlockInitializedResource<T, R = unknown> = [
+type BlockInitializedResource<T, R = unknown> = [
   get: InitializedResource<T>,
   set: ResourceActions<T, R>,
 ] & {
@@ -865,7 +865,7 @@ export type BlockInitializedResource<T, R = unknown> = [
   set: ResourceActions<T, R>;
 };
 
-export type BlockResource<T, R = unknown> = [
+type BlockResource<T, R = unknown> = [
   get: Resource<T>,
   set: ResourceActions<T, R>,
 ] & {
@@ -951,7 +951,7 @@ export function createBlockResource<T, S, R>(
   ) as any;
 }
 
-export type BlockMemo<T> = Accessor<T>;
+type BlockMemo<T> = Accessor<T>;
 
 /**
  * Creates a block-scoped memo that derives a value from other reactive dependencies.
@@ -1077,7 +1077,7 @@ export const blockDataSignalAs = <T extends Record<string, any>>(
  * @param args Block signals or stores
  * @returns New function with bound getters
  */
-export function withBlock<A extends any[], B extends any[], R>(
+function _withBlock<A extends any[], B extends any[], R>(
   fn: (...args: [...A, ...B]) => R,
   ...args: A
 ): (...args: B) => R {

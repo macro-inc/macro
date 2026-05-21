@@ -19,7 +19,7 @@ import { twMerge } from 'tailwind-merge';
 import { match } from 'ts-pattern';
 import type { Property } from '../types';
 
-export const EntityDataTypeIcon: Component<{
+const EntityDataTypeIcon: Component<{
   property: Pick<Property, 'specificEntityType'>;
   class?: string;
 }> = (props) => {

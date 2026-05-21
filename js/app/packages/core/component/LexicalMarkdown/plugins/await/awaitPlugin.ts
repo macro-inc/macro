@@ -15,7 +15,7 @@ import {
 } from 'lexical';
 import { $collapseSelection, $traverseNodes } from '../../utils';
 
-export type InsertAwaitPayload = {
+type InsertAwaitPayload = {
   awaitId: string;
   text?: string;
   inline?: boolean;
@@ -29,7 +29,7 @@ export const INSERT_AWAIT_NODE_COMMAND = createCommand<InsertAwaitPayload>(
   'INSERT_AWAIT_NODE_COMMAND'
 );
 
-export type ReplaceAwaitPayload = {
+type ReplaceAwaitPayload = {
   awaitId: string;
   /**
    * Run inside `editor.update`. Return node(s) to replace the await with, or

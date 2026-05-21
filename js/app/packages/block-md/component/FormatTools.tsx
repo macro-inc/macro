@@ -196,6 +196,8 @@ const InlineFormatButton = (props: {
       hotkey={TOKENS.global.commandMenu}
       size="icon-sm"
       variant="ghost"
+      class="rounded-md"
+      depth={3}
       classList={{
         'bg-active text-ink': !!props.selection()?.[props.format],
       }}
@@ -249,7 +251,8 @@ export const ElementFormatButton = (props: {
     <Button
       tooltip={name}
       size="icon-sm"
-      class="rounded-xs"
+      class="rounded-md"
+      depth={3}
       variant="ghost"
       classList={{
         'bg-active text-ink': !!props
@@ -452,7 +455,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           as={Button}
           variant="ghost"
           size="icon-sm"
-          class="rounded-xs"
+          class="rounded-md"
+          depth={3}
           tooltip={'Text Styles'}
           disabled={buttonIsDisabled()}
           tabIndex={-1}
@@ -460,46 +464,48 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           <TextAA />
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenuContent
-            class="w-54"
-            onCloseAutoFocus={() => {
-              lastFocusedEditor()?.focus();
-            }}
-          >
-            <div class="w-full flex gap-1 justify-center items-center p-1">
-              <For each={InlineFormats}>
+          <Layer depth={2}>
+            <DropdownMenuContent
+              class="w-54 rounded-lg ring-edge p-1"
+              onCloseAutoFocus={() => {
+                lastFocusedEditor()?.focus();
+              }}
+            >
+              <div class="w-full flex gap-1 justify-center items-center">
+                <For each={InlineFormats}>
+                  {(format) => (
+                    <InlineFormatButton
+                      format={format}
+                      selection={selection}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        inlineFormat(format);
+                        setMenuOpen(false);
+                      }}
+                      buttonIsDisabled={buttonIsDisabled}
+                    />
+                  )}
+                </For>
+              </div>
+
+              <HorizontalBar />
+              <For each={MainFormatOptions}>
                 {(format) => (
-                  <InlineFormatButton
+                  <ElementFormatMenuItem
                     format={format}
                     selection={selection}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      inlineFormat(format);
+                    onClick={() => {
+                      nodeFormat(format);
                       setMenuOpen(false);
                     }}
-                    buttonIsDisabled={buttonIsDisabled}
+                    useIcon={true}
+                    buttonIsDisabled={props.buttonIsDisabled}
                   />
                 )}
               </For>
-            </div>
-
-            <HorizontalBar />
-            <For each={MainFormatOptions}>
-              {(format) => (
-                <ElementFormatMenuItem
-                  format={format}
-                  selection={selection}
-                  onClick={() => {
-                    nodeFormat(format);
-                    setMenuOpen(false);
-                  }}
-                  useIcon={true}
-                  buttonIsDisabled={props.buttonIsDisabled}
-                />
-              )}
-            </For>
-          </DropdownMenuContent>
+            </DropdownMenuContent>
+          </Layer>
         </DropdownMenu.Portal>
       </DropdownMenu>
     );
@@ -516,7 +522,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           as={Button}
           variant="ghost"
           size="icon-sm"
-          class="rounded-xs"
+          class="rounded-md"
+          depth={3}
           tooltip="Text Styles"
           disabled={props.buttonIsDisabled()}
           tabIndex={-1}
@@ -525,30 +532,32 @@ export function FormatTools(props: { withinPopup?: boolean }) {
         </DropdownMenu.Trigger>
         <Show when={!props.buttonIsDisabled()}>
           <DropdownMenu.Portal>
-            <DropdownMenuContent
-              class="w-fit"
-              onCloseAutoFocus={() => {
-                lastFocusedEditor()?.focus();
-              }}
-            >
-              <div class="w-full flex gap-1 justify-center items-center p-1">
-                <For each={props.formats}>
-                  {(format) => (
-                    <InlineFormatButton
-                      format={format}
-                      selection={selection}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        inlineFormat(format);
-                        setMenuOpen(false);
-                      }}
-                      buttonIsDisabled={buttonIsDisabled}
-                    />
-                  )}
-                </For>
-              </div>
-            </DropdownMenuContent>
+            <Layer depth={2}>
+              <DropdownMenuContent
+                class="w-fit rounded-lg ring-edge p-1"
+                onCloseAutoFocus={() => {
+                  lastFocusedEditor()?.focus();
+                }}
+              >
+                <div class="w-full flex gap-1 justify-center items-center">
+                  <For each={props.formats}>
+                    {(format) => (
+                      <InlineFormatButton
+                        format={format}
+                        selection={selection}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          inlineFormat(format);
+                          setMenuOpen(false);
+                        }}
+                        buttonIsDisabled={buttonIsDisabled}
+                      />
+                    )}
+                  </For>
+                </div>
+              </DropdownMenuContent>
+            </Layer>
           </DropdownMenu.Portal>
         </Show>
       </DropdownMenu>
@@ -567,7 +576,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
         as={Button}
         variant="ghost"
         size="icon-sm"
-        class="rounded-xs"
+        class="rounded-md"
+        depth={3}
         tooltip={props.label ?? 'More Formats'}
         disabled={buttonIsDisabled()}
         tabIndex={-1}
@@ -576,27 +586,31 @@ export function FormatTools(props: { withinPopup?: boolean }) {
       </DropdownMenu.Trigger>
       <Show when={!buttonIsDisabled()}>
         <DropdownMenu.Portal>
-          <DropdownMenuContent
-            class="w-48"
-            onCloseAutoFocus={() => {
-              lastFocusedEditor()?.focus();
-            }}
-          >
-            <For each={Object.keys(InlineIcons)}>
-              {(format) => (
-                <Show when={!props.excludes?.includes(format as InlineFormat)}>
-                  <InlineFormatMenuItem
-                    format={format as InlineFormat}
-                    selection={selection}
-                    onClick={() => {
-                      inlineFormat(format as InlineFormat);
-                    }}
-                    buttonIsDisabled={buttonIsDisabled}
-                  />
-                </Show>
-              )}
-            </For>
-          </DropdownMenuContent>
+          <Layer depth={2}>
+            <DropdownMenuContent
+              class="w-48 rounded-lg ring-edge p-1"
+              onCloseAutoFocus={() => {
+                lastFocusedEditor()?.focus();
+              }}
+            >
+              <For each={Object.keys(InlineIcons)}>
+                {(format) => (
+                  <Show
+                    when={!props.excludes?.includes(format as InlineFormat)}
+                  >
+                    <InlineFormatMenuItem
+                      format={format as InlineFormat}
+                      selection={selection}
+                      onClick={() => {
+                        inlineFormat(format as InlineFormat);
+                      }}
+                      buttonIsDisabled={buttonIsDisabled}
+                    />
+                  </Show>
+                )}
+              </For>
+            </DropdownMenuContent>
+          </Layer>
         </DropdownMenu.Portal>
       </Show>
     </DropdownMenu>
@@ -613,7 +627,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
         as={Button}
         variant="ghost"
         size="icon-sm"
-        class="rounded-xs"
+        class="rounded-md"
+        depth={3}
         tooltip={props.label ?? 'More Formats'}
         disabled={buttonIsDisabled()}
         tabIndex={-1}
@@ -622,26 +637,28 @@ export function FormatTools(props: { withinPopup?: boolean }) {
       </DropdownMenu.Trigger>
       <Show when={!buttonIsDisabled()}>
         <DropdownMenu.Portal>
-          <DropdownMenuContent
-            class="w-42"
-            onCloseAutoFocus={() => {
-              lastFocusedEditor()?.focus();
-            }}
-          >
-            <For each={props.elements}>
-              {(format) => (
-                <ElementFormatMenuItem
-                  format={format}
-                  selection={selection}
-                  onClick={() => {
-                    nodeFormat(format);
-                  }}
-                  useIcon={true}
-                  buttonIsDisabled={buttonIsDisabled}
-                />
-              )}
-            </For>
-          </DropdownMenuContent>
+          <Layer depth={2}>
+            <DropdownMenuContent
+              class="w-42 rounded-lg ring-edge p-1"
+              onCloseAutoFocus={() => {
+                lastFocusedEditor()?.focus();
+              }}
+            >
+              <For each={props.elements}>
+                {(format) => (
+                  <ElementFormatMenuItem
+                    format={format}
+                    selection={selection}
+                    onClick={() => {
+                      nodeFormat(format);
+                    }}
+                    useIcon={true}
+                    buttonIsDisabled={buttonIsDisabled}
+                  />
+                )}
+              </For>
+            </DropdownMenuContent>
+          </Layer>
         </DropdownMenu.Portal>
       </Show>
     </DropdownMenu>
@@ -720,7 +737,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           <Button
             variant="ghost"
             size="icon-sm"
-            class="rounded-xs"
+            class="rounded-md"
+            depth={3}
             onClick={handleLink}
             tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
             disabled={buttonIsDisabled()}
@@ -734,7 +752,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           <Button
             variant="ghost"
             size="icon-sm"
-            class="rounded-xs"
+            class="rounded-md"
+            depth={3}
             tooltip="Comment"
             onClick={(e) => {
               e.preventDefault();
@@ -865,7 +884,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
             <Button
               variant="ghost"
               size="icon-sm"
-              class="rounded-xs"
+              class="rounded-md"
+              depth={3}
               onClick={handleLink}
               tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
               disabled={buttonIsDisabled()}
@@ -879,7 +899,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                class="rounded-xs"
+                class="rounded-md"
+                depth={3}
                 tooltip="Comment"
                 onClick={(e) => {
                   e.preventDefault();
@@ -900,7 +921,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
                 as={Button}
                 variant="ghost"
                 size="icon-sm"
-                class="rounded-xs"
+                class="rounded-md"
+                depth={3}
                 tooltip="More"
                 disabled={buttonIsDisabled()}
                 tabIndex={-1}
@@ -909,60 +931,62 @@ export function FormatTools(props: { withinPopup?: boolean }) {
               </DropdownMenu.Trigger>
               <Show when={!buttonIsDisabled()}>
                 <DropdownMenu.Portal>
-                  <DropdownMenuContent
-                    class="w-42"
-                    onCloseAutoFocus={() => {
-                      lastFocusedEditor()?.focus();
-                    }}
-                  >
-                    <MenuItem
-                      icon={Quote}
-                      text="Block Quote"
-                      onClick={() => {
-                        setMoreOptionsOpen(false);
-                        nodeFormat('quote');
+                  <Layer depth={2}>
+                    <DropdownMenuContent
+                      class="w-42 rounded-lg ring-edge p-2"
+                      onCloseAutoFocus={() => {
+                        lastFocusedEditor()?.focus();
                       }}
-                      disabled={buttonIsDisabled()}
-                    />
-                    <HorizontalBar />
-                    <MenuItem
-                      icon={Minus}
-                      text="Divider"
-                      onClick={() => {
-                        setMoreOptionsOpen(false);
-                        editor()?.dispatchCommand(
-                          INSERT_HORIZONTAL_RULE_COMMAND,
-                          undefined
-                        );
-                      }}
-                      disabled={buttonIsDisabled()}
-                    />
-                    <MenuItem
-                      icon={MathIcon}
-                      text="Equation"
-                      onClick={() => {
-                        setMoreOptionsOpen(false);
-                        handleInsertEquation();
-                      }}
-                      disabled={buttonIsDisabled()}
-                    />
-                    <DropdownMenu.Sub>
-                      <SubTrigger
-                        text="Table"
-                        icon={Grid}
+                    >
+                      <MenuItem
+                        icon={Quote}
+                        text="Block Quote"
+                        onClick={() => {
+                          setMoreOptionsOpen(false);
+                          nodeFormat('quote');
+                        }}
                         disabled={buttonIsDisabled()}
                       />
-                      <DropdownMenu.Portal>
-                        <Layer depth={2}>
-                          <DropdownMenu.SubContent>
-                            <TableInsert
-                              onMenuClose={() => setMoreOptionsOpen(false)}
-                            />
-                          </DropdownMenu.SubContent>
-                        </Layer>
-                      </DropdownMenu.Portal>
-                    </DropdownMenu.Sub>
-                  </DropdownMenuContent>
+                      <HorizontalBar />
+                      <MenuItem
+                        icon={Minus}
+                        text="Divider"
+                        onClick={() => {
+                          setMoreOptionsOpen(false);
+                          editor()?.dispatchCommand(
+                            INSERT_HORIZONTAL_RULE_COMMAND,
+                            undefined
+                          );
+                        }}
+                        disabled={buttonIsDisabled()}
+                      />
+                      <MenuItem
+                        icon={MathIcon}
+                        text="Equation"
+                        onClick={() => {
+                          setMoreOptionsOpen(false);
+                          handleInsertEquation();
+                        }}
+                        disabled={buttonIsDisabled()}
+                      />
+                      <DropdownMenu.Sub>
+                        <SubTrigger
+                          text="Table"
+                          icon={Grid}
+                          disabled={buttonIsDisabled()}
+                        />
+                        <DropdownMenu.Portal>
+                          <Layer depth={2}>
+                            <DropdownMenu.SubContent>
+                              <TableInsert
+                                onMenuClose={() => setMoreOptionsOpen(false)}
+                              />
+                            </DropdownMenu.SubContent>
+                          </Layer>
+                        </DropdownMenu.Portal>
+                      </DropdownMenu.Sub>
+                    </DropdownMenuContent>
+                  </Layer>
                 </DropdownMenu.Portal>
               </Show>
             </DropdownMenu>
@@ -975,7 +999,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           <Button
             variant="ghost"
             size="icon-sm"
-            class="rounded-xs"
+            class="rounded-md"
+            depth={3}
             tooltip="Comment"
             onClick={(e) => {
               e.preventDefault();

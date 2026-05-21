@@ -1,3 +1,4 @@
+import { removeBadgeNotifications } from '@app/signal/sidebarBadges';
 import type { Maybe } from '@core/types';
 import { type ResultError, throwOnErr } from '@core/util/result';
 import type { UnifiedNotification } from '@notifications/types';
@@ -26,8 +27,6 @@ function stripOwnerId({
 }: ApiUserNotification): UnifiedNotification {
   return rest;
 }
-
-export { notificationKeys } from './keys';
 
 const DEFAULT_NOTIFICATION_LIMIT = 20;
 const NOTIFICATION_STALE_TIME = 5 * 60 * 1000; // 5 minutes
@@ -115,7 +114,7 @@ function entityNotificationsQueryOptions(eventItemId: string, limit: number) {
 }
 
 /** Paginated query for notifications for a single entity. */
-export function useEntityNotificationsQuery(args: {
+function _useEntityNotificationsQuery(args: {
   eventItemId: () => string;
   limit?: number;
 }) {
@@ -169,7 +168,7 @@ function entitiesNotificationsQueryOptions(
 }
 
 /** Paginated query for notifications across multiple entities. */
-export function useEntitiesNotificationsQuery(args: {
+function _useEntitiesNotificationsQuery(args: {
   eventItemIds: () => string[];
   limit?: number;
 }) {
@@ -223,7 +222,7 @@ export function invalidateEntityNotifications(eventItemId: string) {
   });
 }
 
-export function invalidateAllNotifications() {
+function _invalidateAllNotifications() {
   return queryClient.invalidateQueries({
     queryKey: notificationKeys._def,
   });
@@ -401,6 +400,86 @@ export const useMarkNotificationsAsDoneMutation = createNotificationsMutation(
 );
 
 type NotificationItem = GetAllUserNotificationsResponse['items'][number];
+
+export type NotificationStatusPatch = {
+  id: string;
+  done: boolean;
+  viewed_at: string | null;
+  updated_at: string;
+};
+
+export type NotificationStatusPatchDelete =
+  | { t: 'Patch'; c: NotificationStatusPatch }
+  | { t: 'Delete'; c: { id: string } };
+
+export type NotificationStatusUpdate = {
+  type: 'notification_status_updated';
+  updates: NotificationStatusPatchDelete[];
+};
+
+function applyNotificationStatusPatch(
+  notification: NotificationItem,
+  patch: NotificationStatusPatch
+): NotificationItem {
+  return {
+    ...notification,
+    ...(patch.done !== undefined ? { done: patch.done } : {}),
+    ...(patch.viewed_at !== undefined ? { viewed_at: patch.viewed_at } : {}),
+    ...(patch.updated_at !== undefined ? { updated_at: patch.updated_at } : {}),
+  };
+}
+
+export function applyNotificationStatusUpdate(
+  update: NotificationStatusUpdate
+) {
+  const patches = update.updates
+    .filter((item) => item.t === 'Patch')
+    .map((item) => item.c);
+  const patchById = new Map(patches.map((patch) => [patch.id, patch]));
+  const deleteIds = new Set(
+    update.updates
+      .filter((item) => item.t === 'Delete')
+      .map((item) => item.c.id)
+  );
+  const doneIds = new Set(
+    [...patchById.values()]
+      .filter((patch) => patch.done === true)
+      .map((patch) => patch.id)
+  );
+  const removeIds = new Set([...deleteIds, ...doneIds]);
+  const viewedIds = patches
+    .filter((patch) => patch.viewed_at)
+    .map((patch) => patch.id);
+
+  queryClient.setQueriesData<NotificationData<UserNotificationsPageParam>>(
+    { queryKey: notificationKeys.user._def },
+    (data) => {
+      if (!data) return data;
+
+      return {
+        ...data,
+        pages: data.pages.map((page) => ({
+          ...page,
+          items: page.items
+            .filter((notification) => !removeIds.has(notification.id))
+            .map((notification) => {
+              const patch = patchById.get(notification.id);
+              return patch
+                ? applyNotificationStatusPatch(notification, patch)
+                : notification;
+            }),
+        })),
+      };
+    }
+  );
+
+  removeBadgeNotifications([...removeIds, ...viewedIds]);
+
+  queryClient.invalidateQueries({
+    queryKey: notificationKeys.user._def,
+    refetchType: 'none',
+  });
+}
 
 /**
  * Lookup a notification by id via the notification-service.

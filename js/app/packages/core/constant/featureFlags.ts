@@ -94,8 +94,8 @@ export const ENABLE_LIVE_INDICATORS = resolveFeatureFlag(
   true
 );
 
-export const ENABLE_CONTACTS = resolveFeatureFlag('ENABLE_CONTACTS', true);
-export const ENABLE_GMAIL_BASED_CONTACTS = resolveFeatureFlag(
+const _ENABLE_CONTACTS = resolveFeatureFlag('ENABLE_CONTACTS', true);
+const _ENABLE_GMAIL_BASED_CONTACTS = resolveFeatureFlag(
   'ENABLE_GMAIL_BASED_CONTACTS',
   DEV_MODE_ENV
 );
@@ -183,7 +183,7 @@ export const ENABLE_MENTION_TRACKING = resolveFeatureFlag(
   true
 );
 
-export const ENABLE_SEARCH_PAGINATION = resolveFeatureFlag(
+const _ENABLE_SEARCH_PAGINATION = resolveFeatureFlag(
   'ENABLE_SEARCH_PAGINATION',
   true
 );
@@ -205,21 +205,21 @@ export const ENABLE_ANIMATED_ICONS = resolveFeatureFlag(
   true
 );
 
-export const ENABLE_PROPERTY_DISPLAY = resolveFeatureFlag(
+const _ENABLE_PROPERTY_DISPLAY = resolveFeatureFlag(
   'ENABLE_PROPERTY_DISPLAY',
   DEV_MODE_ENV
 );
-export const ENABLE_PROPERTY_SORT = resolveFeatureFlag(
+const _ENABLE_PROPERTY_SORT = resolveFeatureFlag(
   'ENABLE_PROPERTY_SORT',
   DEV_MODE_ENV
 );
-export const ENABLE_PROPERTY_FILTER = resolveFeatureFlag(
+const _ENABLE_PROPERTY_FILTER = resolveFeatureFlag(
   'ENABLE_PROPERTY_FILTER',
   DEV_MODE_ENV
 );
 
 // TODO: re-enable when supported in backend
-export const ENABLE_SOUP_FROM_FILTER = resolveFeatureFlag(
+const _ENABLE_SOUP_FROM_FILTER = resolveFeatureFlag(
   'ENABLE_SOUP_FROM_FILTER',
   false
 );
@@ -230,13 +230,13 @@ export const ENABLE_PROJECT_VIEW_PREVIEW = resolveFeatureFlag(
   true
 );
 
-export const ENABLE_DOCK_NOTITIFCATIONS = resolveFeatureFlag(
+const _ENABLE_DOCK_NOTITIFCATIONS = resolveFeatureFlag(
   'ENABLE_DOCK_NOTITIFCATIONS',
   DEV_MODE_ENV
 );
 export const ENABLE_TTFT = resolveFeatureFlag('ENABLE_TTFT', DEV_MODE_ENV);
 
-export const ENABLE_TASKS_TABS = resolveFeatureFlag('ENABLE_TASKS_TABS', true);
+const _ENABLE_TASKS_TABS = resolveFeatureFlag('ENABLE_TASKS_TABS', true);
 
 export const ENABLE_EMAIL_SHARING = resolveFeatureFlag(
   'ENABLE_EMAIL_SHARING',
@@ -269,7 +269,7 @@ export const ENABLE_EMAIL_SCHEDULED_SEND = resolveFeatureFlag(
   true
 );
 
-export const ENABLE_AI_AUTO_TAB_ATTACHMENTS = resolveFeatureFlag(
+const _ENABLE_AI_AUTO_TAB_ATTACHMENTS = resolveFeatureFlag(
   'ENABLE_AI_AUTO_TAB_ATTACHMENTS',
   true
 );
@@ -279,14 +279,14 @@ export const ENABLE_FEATURED_SEARCH_RESULTS = resolveFeatureFlag(
   true
 );
 
-export const ENABLE_SEARCH_QUERY_OPERATORS = resolveFeatureFlag(
+const _ENABLE_SEARCH_QUERY_OPERATORS = resolveFeatureFlag(
   'ENABLE_SEARCH_QUERY_OPERATORS',
   false
 );
 
 const ENABLE_NEW_CHANNELS_OVERRIDE = true;
 
-export function ENABLE_NEW_CHANNELS(): boolean {
+function _ENABLE_NEW_CHANNELS(): boolean {
   if (ENABLE_NEW_CHANNELS_OVERRIDE !== undefined) {
     return ENABLE_NEW_CHANNELS_OVERRIDE;
   }

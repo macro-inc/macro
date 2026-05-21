@@ -7,9 +7,7 @@ import { z } from 'zod';
 
 type IndicatorStore = Record<string, string[]>;
 
-export const [indicatorStore, setIndicatorStore] = createStore<IndicatorStore>(
-  {}
-);
+const [indicatorStore, setIndicatorStore] = createStore<IndicatorStore>({});
 
 type IncomingTrackingUpdate = {
   type: 'user_tracking_change';

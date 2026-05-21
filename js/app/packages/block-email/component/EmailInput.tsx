@@ -43,7 +43,7 @@ export function EmailInput(props: EmailInputProps) {
 
   return (
     <Show when={ctx.drafts.initialDraftsSettled()}>
-      <Layer depth={1}>
+      <Layer depth={2}>
         <BaseInput
           replyingTo={props.replyingTo}
           draft={props.draft}

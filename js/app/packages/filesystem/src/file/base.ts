@@ -12,7 +12,7 @@ export enum FileSource {
 type DiskSource = FileSource.Path | FileSource.Browser;
 type ManagerSource = FileSource.DocumentStorageService;
 
-export interface FileFromDisk extends File {
+interface FileFromDisk extends File {
   source: DiskSource;
   filehandle: FileHandle;
 }

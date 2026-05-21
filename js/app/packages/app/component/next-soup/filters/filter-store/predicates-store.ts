@@ -15,16 +15,16 @@ export type SetPredicatesInput<TId extends string> = {
   or?: readonly IdInput<TId>[];
 };
 
-export type CurrentPredicatesState<TId extends string> = {
+type CurrentPredicatesState<TId extends string> = {
   andIds: TId[];
   orIds: TId[];
 };
 
-export type SetPredicatesCallback<TId extends string> = (
+type SetPredicatesCallback<TId extends string> = (
   current: CurrentPredicatesState<TId>
 ) => SetPredicatesInput<TId>;
 
-export type PredicatesStoreOptions<
+type PredicatesStoreOptions<
   T,
   TConfig extends PredicateConfig<T>,
   TId extends string = TConfig['id'],

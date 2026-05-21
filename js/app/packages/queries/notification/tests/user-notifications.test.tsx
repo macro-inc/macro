@@ -12,6 +12,7 @@ import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { notificationKeys } from '../keys';
 import {
+  applyNotificationStatusUpdate,
   optimisticInsertNotification,
   useMarkNotificationsAsDoneMutation,
   useMarkNotificationsAsSeenMutation,
@@ -32,6 +33,11 @@ vi.mock('@queries/soup/normalized-cache', () => ({
   optimisticUpdateSoupItemUpdatedAt: vi.fn(),
 }));
 
+vi.mock('@app/signal/sidebarBadges', () => ({
+  removeBadgeNotifications: vi.fn(),
+}));
+
+import { removeBadgeNotifications } from '@app/signal/sidebarBadges';
 import { optimisticUpdateSoupItemUpdatedAt } from '@queries/soup/normalized-cache';
 import { notificationServiceClient } from '@service-notification/client';
 
@@ -44,6 +50,7 @@ const mockBulkMarkNotificationAsDone = vi.mocked(
 const mockOptimisticUpdateSoupItemUpdatedAt = vi.mocked(
   optimisticUpdateSoupItemUpdatedAt
 );
+const mockRemoveBadgeNotifications = vi.mocked(removeBadgeNotifications);
 
 let testQueryClient: QueryClient;
 
@@ -138,6 +145,75 @@ function renderWithClient(Component: () => JSX.Element): () => void {
     container.remove();
   };
 }
+
+describe('notification realtime status updates', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    testQueryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+  });
+
+  afterEach(() => {
+    testQueryClient.clear();
+  });
+
+  it('patches notifications in the user cache', () => {
+    const n1 = createMockNotification({ id: 'n1', viewed_at: null });
+    const n2 = createMockNotification({ id: 'n2', viewed_at: null });
+    seedQueryCache([createMockNotificationPage([n1, n2])]);
+
+    applyNotificationStatusUpdate({
+      type: 'notification_status_updated',
+      updates: [
+        {
+          t: 'Patch',
+          c: {
+            id: 'n1',
+            done: false,
+            viewed_at: '2024-01-01T00:00:00.000Z',
+            updated_at: '2024-01-01T00:00:01.000Z',
+          },
+        },
+      ],
+    });
+
+    const notifications = getNotificationsFromCache();
+    expect(notifications[0].viewed_at).toBe('2024-01-01T00:00:00.000Z');
+    expect(notifications[0].updated_at).toBe('2024-01-01T00:00:01.000Z');
+    expect(notifications[1].viewed_at).toBe(null);
+    expect(mockRemoveBadgeNotifications).toHaveBeenCalledWith(['n1']);
+  });
+
+  it('removes deleted and done notifications from the user cache', () => {
+    const n1 = createMockNotification({ id: 'n1' });
+    const n2 = createMockNotification({ id: 'n2' });
+    const n3 = createMockNotification({ id: 'n3' });
+    seedQueryCache([createMockNotificationPage([n1, n2, n3])]);
+
+    applyNotificationStatusUpdate({
+      type: 'notification_status_updated',
+      updates: [
+        { t: 'Delete', c: { id: 'n1' } },
+        {
+          t: 'Patch',
+          c: {
+            id: 'n2',
+            done: true,
+            viewed_at: null,
+            updated_at: '2024-01-01T00:00:01.000Z',
+          },
+        },
+      ],
+    });
+
+    expect(getNotificationsFromCache().map((n) => n.id)).toEqual(['n3']);
+    expect(mockRemoveBadgeNotifications).toHaveBeenCalledWith(['n1', 'n2']);
+  });
+});
 
 describe('notification mutations', () => {
   beforeEach(() => {

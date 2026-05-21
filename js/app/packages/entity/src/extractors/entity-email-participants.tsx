@@ -16,12 +16,12 @@ import type { EmailEntity, EmailThreadParticipants } from '../types/entity';
 import { isSearchEntity } from '../types/search';
 
 /** Checks if a value is likely an email address */
-export function isLikelyEmail(value?: string): boolean {
+function isLikelyEmail(value?: string): boolean {
   return typeof value === 'string' && value.includes('@');
 }
 
 /** Extracts the local part of an email address (before @) */
-export function getEmailLocalPart(email: string): string {
+function getEmailLocalPart(email: string): string {
   return email.split('@')[0];
 }
 
@@ -29,7 +29,7 @@ export function getEmailLocalPart(email: string): string {
  * Resolves the best display name for a participant
  * Priority: macroDisplayName > participant.name > email local part
  */
-export function resolveParticipantName(
+function resolveParticipantName(
   participant: EmailThreadParticipants[number],
   macroDisplayName?: string
 ): string {

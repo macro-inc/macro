@@ -7,7 +7,7 @@ export const projectsKeys = createQueryKeys('projects', {
   }),
 });
 
-export const deletedKeys = createQueryKeys('deleted', {
+const deletedKeys = createQueryKeys('deleted', {
   list: null,
 });
 

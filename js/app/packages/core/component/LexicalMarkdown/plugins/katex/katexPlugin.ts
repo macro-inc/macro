@@ -23,7 +23,7 @@ type UpdateCommandPayload = {
   equation: string;
 };
 
-export type KatexPluginProps = {
+type KatexPluginProps = {
   onClickEquation?: (nodeKey: string) => void;
   onCreateEquation?: () => void;
 };

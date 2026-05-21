@@ -11,7 +11,7 @@ import { isEntityProperty } from '../../utils';
 import { PropertyEntitySelector } from '../selectors/PropertyEntitySelector';
 import { EditorPopover } from './EditorPopover';
 
-export type EntityEditorProps = {
+type EntityEditorProps = {
   /**
    * Owning entity context for the property — used by PropertyEntitySelector
    * to filter the current entity out of the picker. Omit when no self-filter

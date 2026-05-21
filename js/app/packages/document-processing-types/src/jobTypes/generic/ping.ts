@@ -17,7 +17,7 @@ const PingResponseDataSchema = z.object({
   pong: z.literal(true),
 });
 
-export type PingResponseData = z.infer<typeof PingResponseDataSchema>;
+type PingResponseData = z.infer<typeof PingResponseDataSchema>;
 
 const PingResponse = BaseResponse.extend({
   data: PingResponseDataSchema.optional(),

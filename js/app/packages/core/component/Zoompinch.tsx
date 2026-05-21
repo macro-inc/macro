@@ -6,7 +6,7 @@ export type ZoompinchHandle = {
   wrapperElement: HTMLDivElement;
 };
 
-export type ZoompinchProps = {
+type ZoompinchProps = {
   handleRef?: (handle: ZoompinchHandle | undefined) => void;
   minScale?: number;
   maxScale?: number;

@@ -18,7 +18,7 @@ function parseEmails(raw: string): string[] {
 
 const [inviteModalOpen, setInviteModalOpen] = createSignal(false);
 
-export { inviteModalOpen, setInviteModalOpen };
+export { setInviteModalOpen };
 
 export const InviteModal = () => {
   const [value, setValue] = createSignal('');

@@ -1,10 +1,5 @@
 import { AnimatedStarIcon } from '@icon/wide-star';
-import type { StreamEvent } from '@service-connection/generated/schemas';
 import { createSignal, onCleanup } from 'solid-js';
-
-export type StreamIndicatorProps = {
-  streamState?: StreamEvent;
-};
 
 const kind = {
   listIcon: 'size-4 text-chat',
