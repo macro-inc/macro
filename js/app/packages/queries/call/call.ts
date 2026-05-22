@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
-import { callServiceClient, type CallRecord } from '@service-call/client';
+import { type CallRecord, callServiceClient } from '@service-call/client';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
