@@ -205,9 +205,8 @@ export type UploadInput = File | UploadFileEntry;
 const getFileName = (file: { name: string }) =>
   filenameWithoutExtension(file.name) ?? file.name;
 
-export const isFileUploadEntry = (
-  file: UploadInput
-): file is UploadFileEntry => 'isFolder' in file;
+export const isFileUploadEntry = (file: UploadInput): file is UploadFileEntry =>
+  'isFolder' in file;
 
 const getDestination = (file: UploadFile, ruleset: DestinationRuleset) => {
   return ruleset instanceof Function ? ruleset(file) : ruleset;
@@ -356,7 +355,11 @@ async function uploadToDSS(
   options: DssUploadFileOptions
 ): Promise<DssUploadSuccessResult> {
   if (isNativeStagedUpload(file)) {
-    throw new UploadError(file, 'dss', 'Native staged uploads require static upload');
+    throw new UploadError(
+      file,
+      'dss',
+      'Native staged uploads require static upload'
+    );
   }
 
   try {
@@ -366,7 +369,9 @@ async function uploadToDSS(
   }
 }
 
-async function uploadToStatic(file: UploadFile): Promise<StaticUploadSuccessResult> {
+async function uploadToStatic(
+  file: UploadFile
+): Promise<StaticUploadSuccessResult> {
   const name = getFileName(file);
   try {
     // `createStaticUploadFile` is the single static-file path for UploadFile:

@@ -26,6 +26,11 @@ export { createMentionsTracker } from './mentions-tracker';
 export {
   attachmentEntityType,
   buildPostMessageRequest,
+  buildPostMessageSendPayload,
+} from './message-payload';
+export type {
+  OptimisticPostMessageAttachment,
+  PostMessageSendPayload,
 } from './message-payload';
 export { Root } from './Root';
 export { SendAction } from './SendAction';

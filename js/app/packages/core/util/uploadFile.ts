@@ -65,7 +65,9 @@ export function isNativeStagedUpload(
   return file.kind === 'native-staged';
 }
 
-export async function createStaticUploadFile(file: UploadFile): Promise<string> {
+export async function createStaticUploadFile(
+  file: UploadFile
+): Promise<string> {
   const result = await staticFileClient.makePresignedUrl({
     file_name: file.name,
     content_type: file.mimeType,
@@ -95,7 +97,9 @@ export async function createStaticUploadFile(file: UploadFile): Promise<string> 
  * returns the File itself.
  */
 export function getUploadFilePreviewSource(file: UploadFile): File | string {
-  return isNativeStagedUpload(file) ? (file.previewSrc ?? file.file) : file.file;
+  return isNativeStagedUpload(file)
+    ? (file.previewSrc ?? file.file)
+    : file.file;
 }
 
 /**

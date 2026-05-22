@@ -2,6 +2,7 @@ import { blockNameToFileExtensionSet } from '@core/constant/allBlocks';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { heicConversionService } from '@core/heic/service';
 import type { FetchError } from '@core/service';
+import type { ResultError } from '@core/util/result';
 import {
   createStaticUploadFile,
   createUploadFilePreviewUrl,
@@ -9,7 +10,6 @@ import {
   getUploadFileCacheKey,
   type UploadFile,
 } from '@core/util/uploadFile';
-import type { ResultError } from '@core/util/result';
 
 import { mergeRegister } from '@lexical/utils';
 import {

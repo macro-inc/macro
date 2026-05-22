@@ -71,8 +71,6 @@ class PhotoLibraryPlugin: Plugin {
         typeIdentifier: String?,
         suggestedName: String?
     ) throws -> StagedPhotoLibraryImage {
-        cleanupStalePhotoLibraryImages()
-
         let sourceType = imageType(typeIdentifier: typeIdentifier, sourceURL: sourceURL)
         let shouldConvertToJpeg = isHeicOrHeif(type: sourceType, sourceURL: sourceURL)
         let token = "photo-stage-\(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased())"
@@ -96,6 +94,10 @@ class PhotoLibraryPlugin: Plugin {
         } else {
             try FileManager.default.copyItem(at: sourceURL, to: targetURL)
         }
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date()],
+            ofItemAtPath: targetURL.path
+        )
 
         let size = try FileManager.default.attributesOfItem(
             atPath: targetURL.path
@@ -131,7 +133,7 @@ class PhotoLibraryPlugin: Plugin {
         )
     }
 
-    private func cleanupStalePhotoLibraryImages() {
+    fileprivate func cleanupStalePhotoLibraryImages() {
         let directory = stagingDirectory()
         guard
             let entries = try? FileManager.default.contentsOfDirectory(
@@ -188,6 +190,8 @@ private class PhotoLibraryPickerDelegate: NSObject, PHPickerViewControllerDelega
         }
 
         DispatchQueue.global(qos: .userInitiated).async {
+            plugin.cleanupStalePhotoLibraryImages()
+
             let group = DispatchGroup()
             let lock = NSLock()
             var stagedImages = Array<StagedPhotoLibraryImage?>(

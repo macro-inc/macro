@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import type { OptimisticPostMessageAttachment } from '@channel/Input/message-payload';
 import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
@@ -19,6 +20,7 @@ import type {
 } from '@service-comms/generated/models';
 import type { NewAttachment } from '@service-comms/generated/models/newAttachment';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
+import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { createMutationNonce, registerNonce } from '../nonce';
@@ -83,24 +85,28 @@ type UpdateMessageContext = {
   previousAttachments: Attachment[];
 };
 
+type OptimisticApiMessageAttachment = ApiMessageAttachment & {
+  previewSrc?: string;
+};
+
 function makeOptimisticAttachments(
-  channelId: string,
-  optimisticId: string,
-  attachments: PostMessageRequest['attachments'],
+  attachments: readonly OptimisticPostMessageAttachment[],
   now: string
-): Attachment[] {
-  return attachments.map((attachment) => ({
+): OptimisticApiMessageAttachment[] {
+  return attachments.map(({ attachment, previewSrc }) => ({
     id: crypto.randomUUID(),
-    channel_id: channelId,
+    entity_id: attachment.entity_id,
+    entity_type: attachment.entity_type,
     created_at: now,
-    message_id: optimisticId,
-    ...attachment,
+    width: attachment.width ?? undefined,
+    height: attachment.height ?? undefined,
+    previewSrc,
   }));
 }
 
 function makeOptimisticTopLevelMessage(
   vars: WithChannelId<WithOptimisticId<WithSenderId<PostMessageRequest>>>,
-  attachments: Attachment[],
+  attachments: OptimisticApiMessageAttachment[],
   now: string
 ): ApiChannelMessage {
   return {
@@ -112,14 +118,7 @@ function makeOptimisticTopLevelMessage(
     updated_at: now,
     deleted_at: undefined,
     edited_at: undefined,
-    attachments: attachments.map(
-      ({ id, entity_id, entity_type, created_at }) => ({
-        id,
-        entity_id,
-        entity_type,
-        created_at,
-      })
-    ),
+    attachments,
     reactions: [],
     thread: {
       preview: [],
@@ -131,7 +130,7 @@ function makeOptimisticTopLevelMessage(
 
 function makeOptimisticThreadReply(
   vars: WithChannelId<WithOptimisticId<WithSenderId<PostMessageRequest>>>,
-  attachments: Attachment[],
+  attachments: OptimisticApiMessageAttachment[],
   now: string
 ): ApiThreadReply {
   return {
@@ -141,14 +140,7 @@ function makeOptimisticThreadReply(
     created_at: now,
     updated_at: now,
     edited_at: undefined,
-    attachments: attachments.map(
-      ({ id, entity_id, entity_type, created_at }) => ({
-        id,
-        entity_id,
-        entity_type,
-        created_at,
-      })
-    ),
+    attachments,
     reactions: [],
   };
 }
@@ -158,13 +150,20 @@ function makeOptimisticThreadReply(
  * Returns minimal context for rollback (just the optimistic ID).
  */
 export function optimisticInsertChannelMessage(
-  vars: WithChannelId<WithOptimisticId<WithSenderId<PostMessageRequest>>>
+  vars: WithChannelId<
+    WithOptimisticId<
+      WithSenderId<
+        PostMessageRequest & {
+          optimisticAttachments?: readonly OptimisticPostMessageAttachment[];
+        }
+      >
+    >
+  >
 ): InsertMessageContext | undefined {
   const now = new Date().toISOString();
   const newAttachments = makeOptimisticAttachments(
-    vars.channelId,
-    vars.optimisticId,
-    vars.attachments,
+    vars.optimisticAttachments ??
+      vars.attachments.map((attachment) => ({ attachment })),
     now
   );
   const threadId = vars.thread_id ?? undefined;
@@ -355,6 +354,7 @@ export function rollbackUpdateChannelMessage(
 type SendMessageParams = {
   channelID: string;
   message: PostMessageRequest;
+  optimisticAttachments?: readonly OptimisticPostMessageAttachment[];
   optimisticId: string;
   senderId: string;
 };
@@ -401,6 +401,7 @@ export function useSendMessageMutation(
             channelId: vars.channelID,
             optimisticId: vars.optimisticId,
             senderId: vars.senderId,
+            optimisticAttachments: vars.optimisticAttachments,
             ...vars.message,
           });
         },

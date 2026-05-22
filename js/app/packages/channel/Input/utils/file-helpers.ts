@@ -53,9 +53,11 @@ export function iconTypeFromFilename(filename: string) {
   return fileTypeToBlockName(fileExtension(filename), true);
 }
 
-export function getAttachmentKindFromFile(
-  file: { name: string; mimeType?: string; type?: string }
-): InputAttachmentKind {
+export function getAttachmentKindFromFile(file: {
+  name: string;
+  mimeType?: string;
+  type?: string;
+}): InputAttachmentKind {
   const mimeType = file.mimeType ?? file.type ?? '';
   if (mimeType.startsWith('image/')) return 'image';
   if (mimeType.startsWith('video/')) return 'video';

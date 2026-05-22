@@ -119,11 +119,13 @@ export async function uploadInputAttachments(options: {
       void resolveMediaDimensions(uploadSource, pendingKind).then((dims) => {
         if (!dims) return;
         options.tracker.setAttachments(
-          options.tracker.attachments().map((attachment) =>
-            attachment.id === uploaded.id
-              ? { ...attachment, width: dims.width, height: dims.height }
-              : attachment
-          )
+          options.tracker
+            .attachments()
+            .map((attachment) =>
+              attachment.id === uploaded.id
+                ? { ...attachment, width: dims.width, height: dims.height }
+                : attachment
+            )
         );
       });
     } catch (error) {

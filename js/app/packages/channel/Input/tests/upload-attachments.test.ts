@@ -54,11 +54,7 @@ describe('uploadInputAttachments', () => {
     const tracker = createInputAttachmentTracker();
     const file = new File(['abc'], 'image.png', { type: 'image/png' });
     let resolveUpload:
-      | ((result: {
-          failed: false;
-          destination: 'static';
-          id: string;
-        }) => void)
+      | ((result: { failed: false; destination: 'static'; id: string }) => void)
       | undefined;
 
     const uploadPromise = uploadInputAttachments({
