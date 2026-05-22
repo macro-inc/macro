@@ -6909,10 +6909,6 @@
             "format": "date-time",
             "description": "When the call ended (None if still active)."
           },
-          "shareWithTeam": {
-            "type": "boolean",
-            "description": "Whether the call is shared with the creator's team."
-          },
           "isActive": {
             "type": "boolean",
             "description": "Whether the call is currently active (from `calls` table)."
@@ -6936,6 +6932,10 @@
           "roomName": {
             "type": "string",
             "description": "The RTC room name."
+          },
+          "shareWithTeam": {
+            "type": "boolean",
+            "description": "Whether the call is shared with the creator's team."
           },
           "startedAt": {
             "type": "string",

@@ -966,6 +966,9 @@ export const getCallRecordResponse = zod
       .nullish()
       .describe('Presigned URL for the call recording, if available.'),
     roomName: zod.string().describe('The RTC room name.'),
+    shareWithTeam: zod
+      .boolean()
+      .describe("Whether the call is shared with the creator's team."),
     startedAt: zod.iso
       .datetime({})
       .describe(
@@ -977,9 +980,6 @@ export const getCallRecordResponse = zod
       .describe(
         'AI-generated summary of the call. Only set on archived `call_records`\nonce summarization has run; active calls always return `None`.'
       ),
-    shareWithTeam: zod
-      .boolean()
-      .describe("Whether the call is shared with the creator's team."),
     transcript: zod
       .array(
         zod
