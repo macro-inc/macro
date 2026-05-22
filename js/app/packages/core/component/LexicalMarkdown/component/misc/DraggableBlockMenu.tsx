@@ -161,8 +161,10 @@ export function DraggableBlockMenu(props: {
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
         >
-          <Dots class="size-5 text-ink-extra-muted opacity-50 pointer-events-none bg-
-          [yellow]" />
+          <Dots
+            class="size-5 text-ink-extra-muted opacity-50 pointer-events-none bg-
+          [yellow]"
+          />
         </div>
 
         <Show when={props.state.isDragging && targetLinePosition()}>
