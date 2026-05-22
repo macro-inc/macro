@@ -188,6 +188,12 @@
   --z-index-modal:         110;
   --z-index-modal-content: 120;
   --z-index-tool-tip:      200;
+
+  /* Shared label column width for side-panel two-column grids so labels line
+     up across sub-panels (Details, Properties, ...). Consumers should use
+     `grid-cols-[var(--sidepanel-label-width,auto)_1fr]` so the column falls
+     back to auto when the variable isn't set. */
+  --sidepanel-label-width: 5.5rem;
 }
 
 /* scuffed: might wan to use signals for this */

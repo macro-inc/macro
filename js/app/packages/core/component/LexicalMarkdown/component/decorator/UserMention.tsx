@@ -43,7 +43,7 @@ export function UserMention(props: UserMentionDecoratorProps) {
       trigger={
         <span
           class={cn(
-            'relative p-0.5 cursor-default rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent',
+            'relative p-0.5 cursor-default rounded-md bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent',
             isSelectedAsNode() && 'bg-active'
           )}
         >

@@ -239,16 +239,16 @@ function Section(
       order: props.order,
       component: () => (
         <Accordion.Item value={props.id}>
-          <Panel depth={2} style={{ height: 'auto' }} class="rounded-lg">
+          <Panel depth={2} style={{ height: 'auto' }} class="rounded-xl">
             <Accordion.Header class="group">
-              <Accordion.Trigger class="px-2 py-3 flex w-full items-center gap-2 text-sm hover:underline">
+              <Accordion.Trigger class="px-2 py-3 flex w-full items-center gap-2 text-xs hover:underline">
                 <CaretRight class="size-3 text-ink-muted transition-transform duration-90 group-data-expanded:rotate-90" />
                 <span>{props.title}</span>
               </Accordion.Trigger>
             </Accordion.Header>
             <Accordion.Content class="group/content overflow-hidden data-expanded:animate-accordion-down data-closed:animate-accordion-up">
               <Suspense fallback={<div class="h-4" />}>
-                <div class="px-2 pb-3 text-sm opacity-0 group-data-expanded/content:opacity-100 transition-opacity duration-150 ease-out">
+                <div class="px-2 pb-2 text-sm opacity-0 group-data-expanded/content:opacity-100 transition-opacity duration-150 ease-out">
                   {props.children}
                 </div>
               </Suspense>

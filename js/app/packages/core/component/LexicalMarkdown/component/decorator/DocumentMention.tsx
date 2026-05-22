@@ -221,7 +221,7 @@ function InlinePreview(props: {
               <Show when={props.documentName} fallback={'Unknown'}>
                 {(name) => name().replaceAll('\n', ' ').trim()}
               </Show>
-              <span class="relative text-[0.8em] text-current/50 rounded-xs">
+              <span class="relative text-[0.8em] text-current/50 rounded-md">
                 {(() => {
                   const accessories = mentionsAccessories(
                     props.blockName as BlockName,

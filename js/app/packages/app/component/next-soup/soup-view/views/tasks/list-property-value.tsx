@@ -46,7 +46,7 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
                 <>
                   <CircleDashedEmpty class="size-3 shrink-0 opacity-50" />
                   <span class="truncate flex-1 opacity-50 @max-[840px]/u-list:hidden">
-                    None
+                    {props.property.displayName}
                   </span>
                 </>
               }

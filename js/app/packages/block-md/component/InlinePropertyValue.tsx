@@ -72,7 +72,11 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
             </Switch>
             <Property.Text
               property={props.property}
-              fallback={<Property.Empty label={props.emptyLabel ?? 'None'} />}
+              fallback={
+                <Property.Empty
+                  label={props.emptyLabel ?? props.property.displayName}
+                />
+              }
             />
             <Property.Caret />
           </Property.EditTrigger>
