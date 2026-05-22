@@ -9,9 +9,9 @@ use sqs_client::search::{
 
 use crate::config::BackfillPageSizes;
 use crate::domain::models::{
-    BackfillError, CallBackfillRequest, ChannelBackfillRequest, ChatBackfillCursor,
-    ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest, EmailBackfillRequest,
-    SourcePage,
+    BackfillError, CallBackfillCursor, CallBackfillRequest, ChannelBackfillRequest,
+    ChatBackfillCursor, ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest,
+    EmailBackfillRequest, SourcePage,
 };
 use crate::domain::ports::BackfillSource;
 
@@ -35,20 +35,30 @@ impl BackfillSource for PgBackfillSource {
     async fn fetch_calls(
         &self,
         req: &CallBackfillRequest,
-        offset: usize,
-    ) -> Result<SourcePage, BackfillError> {
-        // Caller passed an explicit set of ids: page through them at the
-        // configured page size so this branch and the full-scan branch share
-        // the same loop shape and failure semantics.
+        cursor: Option<CallBackfillCursor>,
+    ) -> Result<(SourcePage, Option<CallBackfillCursor>), BackfillError> {
+        // Caller passed an explicit set of ids: walk them in order,
+        // using the cursor's call_id as the "where to resume" anchor.
+        // The cursor's started_at is irrelevant for this branch since
+        // the ids list isn't ordered by it; we just position by id.
         if !req.call_ids.is_empty() {
-            let start = offset;
-            if start >= req.call_ids.len() {
-                return Ok(SourcePage::empty());
+            let resume_from = cursor
+                .as_ref()
+                .and_then(|c| {
+                    req.call_ids
+                        .iter()
+                        .position(|id| id.parse::<uuid::Uuid>().ok() == Some(c.call_id))
+                })
+                .map(|i| i + 1)
+                .unwrap_or(0);
+            if resume_from >= req.call_ids.len() {
+                return Ok((SourcePage::empty(), None));
             }
-            let end = start
+            let end = resume_from
                 .saturating_add(self.page_sizes.calls)
                 .min(req.call_ids.len());
-            let messages: Vec<SearchQueueMessage> = req.call_ids[start..end]
+            let slice = &req.call_ids[resume_from..end];
+            let messages: Vec<SearchQueueMessage> = slice
                 .iter()
                 .map(|id| {
                     SearchQueueMessage::CallRecord(CallRecordMessage {
@@ -58,20 +68,43 @@ impl BackfillSource for PgBackfillSource {
                 })
                 .collect();
             let rows_consumed = messages.len();
-            return Ok(SourcePage {
-                messages,
-                rows_consumed,
+            // started_at is a placeholder for this branch (epoch) because
+            // the explicit-id list isn't sorted by it; we navigate by
+            // call_id position. Using Utc::now is also fine; either way
+            // the only thing the loop uses next time is call_id.
+            let next_cursor = slice.last().and_then(|last_id| {
+                last_id
+                    .parse::<uuid::Uuid>()
+                    .ok()
+                    .map(|call_id| CallBackfillCursor {
+                        started_at: chrono::Utc::now(),
+                        call_id,
+                    })
             });
+            return Ok((
+                SourcePage {
+                    messages,
+                    rows_consumed,
+                },
+                next_cursor,
+            ));
         }
 
+        let db_cursor = cursor.map(|c| (c.started_at, c.call_id));
         let batch = macro_db_client::call_record::get::get_call_records_for_search_backfill(
             &self.db,
             self.page_sizes.calls as i64,
-            offset as i64,
+            db_cursor,
+            req.started_after,
+            req.started_before,
         )
         .await
         .map_err(BackfillError::Source)?;
 
+        let next_cursor = batch.last().map(|r| CallBackfillCursor {
+            started_at: r.started_at,
+            call_id: r.call_id,
+        });
         let rows_consumed = batch.len();
         let messages: Vec<SearchQueueMessage> = batch
             .into_iter()
@@ -83,10 +116,13 @@ impl BackfillSource for PgBackfillSource {
             })
             .collect();
 
-        Ok(SourcePage {
-            messages,
-            rows_consumed,
-        })
+        Ok((
+            SourcePage {
+                messages,
+                rows_consumed,
+            },
+            next_cursor,
+        ))
     }
 
     async fn fetch_chats(

@@ -59,12 +59,30 @@ impl DeletionFilter {
 }
 
 /// Call-record backfill filter. Empty `call_ids` means "all archived calls".
+///
+/// `started_after` / `started_before` filter on `call_records.started_at`
+/// because the table doesn't carry an updated_at — calls are immutable
+/// after creation, so this gives the equivalent "since X" semantics.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct CallBackfillRequest {
     pub call_ids: Vec<String>,
+    pub started_after: Option<DateTime<Utc>>,
+    pub started_before: Option<DateTime<Utc>>,
     /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
     pub index_override: Option<String>,
+}
+
+/// Keyset (seek-method) pagination cursor for call backfills.
+///
+/// `get_call_records_for_search_backfill` walks `call_records` in
+/// `(started_at ASC, id ASC)` order; the cursor carries the last row's
+/// pair so the next page resumes with `WHERE (started_at, id) > cursor`.
+/// `None` starts at the beginning.
+#[derive(Debug, Clone)]
+pub struct CallBackfillCursor {
+    pub started_at: DateTime<Utc>,
+    pub call_id: uuid::Uuid,
 }
 
 /// Chat-message backfill filter. Empty vectors mean "all messages for every

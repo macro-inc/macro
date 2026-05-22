@@ -165,8 +165,8 @@ where
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source(&self.publisher, &progress, &cancel, |offset| {
-            self.source.fetch_calls(&req, offset)
+        drain_source_with_cursor(&self.publisher, &progress, &cancel, |cursor| {
+            self.source.fetch_calls(&req, cursor)
         })
         .await
     }
