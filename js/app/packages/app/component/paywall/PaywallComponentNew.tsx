@@ -6,7 +6,7 @@ import { stripeServiceClient } from '@service-stripe/client';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import type { PaywallProps } from './PaywallComponent';
-import { type PlanTier, PLAN_FEATURES, NEW_PLANS } from './plans';
+import { NEW_PLANS, PLAN_FEATURES, type PlanTier } from './plans';
 import SubscriptionTier from './SubscriptionTier';
 
 const PaywallComponentNew = (props: PaywallProps) => {
