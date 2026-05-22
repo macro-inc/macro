@@ -17,7 +17,6 @@ import {
   type JSXElement,
   on,
   type Setter,
-  Show,
 } from 'solid-js';
 import { For, Portal } from 'solid-js/web';
 import type { FloatingStyle } from '../plugins/find-and-replace';
