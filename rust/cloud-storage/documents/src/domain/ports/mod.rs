@@ -330,13 +330,6 @@ pub trait DocumentService: Send + Sync + 'static {
         job_id: Option<String>,
     ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
 
-    /// Resolve the team to use for per-team task numbering.
-    fn resolve_task_team_id(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-        requested_team_id: Option<uuid::Uuid>,
-    ) -> impl Future<Output = Result<uuid::Uuid, DocumentError>> + Send;
-
     /// Get content lifecycle metadata for a document.
     fn get_document_content(
         &self,

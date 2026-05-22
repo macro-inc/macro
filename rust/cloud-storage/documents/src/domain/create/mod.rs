@@ -501,18 +501,14 @@ where
             } => Some((property_values.clone(), *share_with_team, *team_id)),
         };
 
-        let resolved_team_id = if let Some((_, _, requested_team_id)) = task.as_ref() {
-            Some(
-                self.document_service
-                    .resolve_task_team_id(user_id.clone(), *requested_team_id)
-                    .await?,
-            )
+        let task_name = metadata.document_name.clone();
+        let project_id = metadata.project_id;
+        let team_id = if let Some((_, _, team_id)) = task.as_ref() {
+            *team_id
         } else {
             None
         };
 
-        let task_name = metadata.document_name.clone();
-        let project_id = metadata.project_id;
         let args = metadata.into_repo_args(
             user_id.clone(),
             RepoDocumentKind {
@@ -523,7 +519,7 @@ where
                 } else {
                     RepoDocumentSubtype::Regular
                 },
-                team_id: resolved_team_id,
+                team_id,
             },
         );
 
@@ -540,7 +536,7 @@ where
             .clone();
 
         let finalize_result = async {
-            if let Some((property_values, share_with_team, _)) = task {
+            if let Some((property_values, share_with_team, team_id)) = task {
                 self.document_service
                     .handle_task_properties(
                         user_id,
@@ -549,7 +545,7 @@ where
                             task_name,
                             markdown: None,
                             project_id,
-                            team_id: resolved_team_id,
+                            team_id,
                             property_values,
                             share_with_team,
                         },

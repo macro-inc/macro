@@ -377,38 +377,6 @@ impl<
         }
     }
 
-    async fn resolve_task_team_id_for_user(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        requested_team_id: Option<uuid::Uuid>,
-    ) -> Result<uuid::Uuid, DocumentError> {
-        let team_ids = self
-            .repo
-            .get_team_ids_for_user(user_id.as_ref())
-            .await
-            .map_err(|e| DocumentError::Internal(e.into()))?;
-
-        if let Some(requested_team_id) = requested_team_id {
-            if team_ids.contains(&requested_team_id) {
-                return Ok(requested_team_id);
-            }
-
-            return Err(DocumentError::BadRequest(
-                "user is not a member of the requested team".to_string(),
-            ));
-        }
-
-        match team_ids.as_slice() {
-            [team_id] => Ok(*team_id),
-            [] => Err(DocumentError::BadRequest(
-                "teamId is required because the user does not belong to a team".to_string(),
-            )),
-            _ => Err(DocumentError::BadRequest(
-                "teamId is required because the user belongs to multiple teams".to_string(),
-            )),
-        }
-    }
-
     async fn team_task_metadata_for_document(
         &self,
         document_id: &str,
@@ -445,15 +413,6 @@ impl<
         request: &CreateTaskRequest,
     ) -> Result<(), DocumentError> {
         <Self as DocumentService>::handle_task_properties(self, user_id, document_id, request).await
-    }
-
-    async fn resolve_task_team_id(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-        requested_team_id: Option<uuid::Uuid>,
-    ) -> Result<uuid::Uuid, DocumentError> {
-        self.resolve_task_team_id_for_user(&user_id, requested_team_id)
-            .await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -734,31 +693,15 @@ impl<
         .await
     }
 
-    async fn resolve_task_team_id(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-        requested_team_id: Option<uuid::Uuid>,
-    ) -> Result<uuid::Uuid, DocumentError> {
-        self.resolve_task_team_id_for_user(&user_id, requested_team_id)
-            .await
-    }
-
     #[tracing::instrument(err, skip(self, args))]
     async fn create_document(
         &self,
         user_id: MacroUserIdStr<'static>,
-        mut args: CreateDocumentRepoArgs,
+        args: CreateDocumentRepoArgs,
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         if args.document_name.graphemes(true).count() > 100 {
             return Err(DocumentError::BadRequest("name too long".to_string()));
-        }
-
-        if args.is_task {
-            let team_id = self
-                .resolve_task_team_id_for_user(&args.user_id, args.team_id)
-                .await?;
-            args.team_id = Some(team_id);
         }
 
         let file_type = args.file_type;
@@ -1077,7 +1020,15 @@ impl<
         let document_name = FileType::clean_document_name(&document_name).unwrap_or(document_name);
 
         let copy_team_id = if original_metadata.sub_type == Some(DocumentSubType::Task) {
-            Some(self.resolve_task_team_id_for_user(&user_id, None).await?)
+            let team_id = self
+                .repo
+                .get_team_ids_for_user(user_id.as_ref())
+                .await
+                .map_err(|e| DocumentError::Internal(e.into()))?;
+
+            let team_id = team_id.first();
+
+            team_id.copied()
         } else {
             None
         };
