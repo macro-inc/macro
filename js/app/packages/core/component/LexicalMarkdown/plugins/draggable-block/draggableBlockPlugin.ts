@@ -246,7 +246,6 @@ function registerDraggableBlock(
   let hasNonCollapsedSelection = false;
   let rafId: number | null = null;
   let latestMouseEvent: MouseEvent | null = null;
-  let currentHoveredElement: HTMLElement | null = null;
 
   // Attached to `document` so movement in the left margin (where the drag
   // handle sits) is still tracked.  We use the editor root rect to scope
