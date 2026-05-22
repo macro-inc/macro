@@ -1,6 +1,5 @@
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { useCanEdit } from '@core/signal/permissions';
 import ShareNetwork from '@phosphor/share-network.svg';
 import {
   useSetCallRecordShareWithTeamMutation,
@@ -30,15 +29,15 @@ import {
 
 function CallRecordingShareWithTeam(props: { record: Accessor<CallRecord> }) {
   const record = props.record;
-  const canEdit = useCanEdit();
   const callCtx = useCallContextOptional();
   const toggleActiveShare = useToggleShareWithTeamMutation();
   const setArchivedShare = useSetCallRecordShareWithTeamMutation();
 
   const isShared = createMemo(() => record().shareWithTeam);
+  // Call blocks do not currently hydrate document edit permissions; rely on
+  // the call mutation endpoints to enforce access instead of disabling this.
   const isDisabled = createMemo(
-    () =>
-      !canEdit() || toggleActiveShare.isPending || setArchivedShare.isPending
+    () => toggleActiveShare.isPending || setArchivedShare.isPending
   );
 
   const handleChange = async (checked: boolean) => {
