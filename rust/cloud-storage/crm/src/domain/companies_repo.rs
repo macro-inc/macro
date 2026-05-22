@@ -1,6 +1,6 @@
 //! Port for persistence operations on CRM companies.
 
-use crate::domain::model::{CrmCompany, CrmError, DomainMetadata};
+use crate::domain::model::{CrmCompany, CrmError, CrmScopePrecheck, DomainMetadata};
 
 /// The CompaniesRepository defines persistence operations for CRM
 /// companies and their associated domains.
@@ -212,4 +212,23 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         contact_id: &uuid::Uuid,
         hidden: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Batched authorization probe for a CRM-scoped email query. Returns
+    /// per-input status the email service maps into typed `EmailErr`
+    /// variants (`CrmDomainNotFound`, `CrmDomainNotPermitted`,
+    /// `CrmAddressNotFound`, `CrmAddressNotPermitted`,
+    /// `CrmDisabledForTeam`).
+    ///
+    /// `domains` and `addresses` are expected to be lowercased by the
+    /// caller. Either may be empty; both may be non-empty but the
+    /// service-layer caller enforces mutual exclusivity.
+    ///
+    /// Read-only and not transactional — the dynamic query that follows
+    /// re-checks the team-level killswitch via JOIN to close the race.
+    fn crm_scope_precheck(
+        &self,
+        team_id: &uuid::Uuid,
+        domains: &[String],
+        addresses: &[String],
+    ) -> impl Future<Output = Result<CrmScopePrecheck, CrmError>> + Send;
 }

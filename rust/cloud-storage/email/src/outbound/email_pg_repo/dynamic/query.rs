@@ -24,7 +24,7 @@ struct QueryParams {
     resolved: ResolvedFilters,
     /// When `Some(team_id)`, the "Owned" candidate source expands from
     /// `t.link_id = $link_id` to `t.link_id IN (links of every member of
-    /// $team_id)`. Set only after team_scope has been validated upstream.
+    /// $team_id)`. Set only after CRM scope has been validated upstream.
     team_id: Option<Uuid>,
 }
 
@@ -120,15 +120,21 @@ fn push_thread_candidate_select(
                 builder.push("t.link_id = ");
                 builder.push_bind(params.link_id);
             }
-            // Team-scoped query: expand to every email_link owned by any
+            // CRM-scoped query: expand to every email_link owned by any
             // member of the team. The receipt has already been validated
-            // upstream, so the team_id is trusted here.
+            // upstream, so the team_id is trusted here. The JOIN to
+            // team_crm_settings enforces the team-level killswitch a
+            // second time as belt-and-suspenders against a race where
+            // `crm_enabled` flips between the pre-check and this query:
+            // if it goes false, the candidate set collapses to empty.
             Some(team_id) => {
                 builder.push(
                     r#"t.link_id IN (
                         SELECT el.id
                         FROM email_links el
                         JOIN team_user tu ON tu.user_id = el.macro_id
+                        JOIN team_crm_settings tcs
+                            ON tcs.team_id = tu.team_id AND tcs.crm_enabled
                         WHERE tu.team_id = "#,
                 );
                 builder.push_bind(team_id);

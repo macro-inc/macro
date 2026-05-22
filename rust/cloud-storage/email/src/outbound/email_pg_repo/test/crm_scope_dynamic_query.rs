@@ -1,7 +1,8 @@
-//! DB-backed tests for team-scoped dynamic email queries.
+//! DB-backed tests for CRM-scoped dynamic email queries.
 //!
-//! These exercise the changes that wire `team_id: Option<Uuid>` from the
-//! soup/email service down through `resolve_filters` and into the SQL
+//! These exercise the candidate-set widening that fires when `team_id`
+//! is `Some(_)` (the resolved CRM scope), plumbed from the soup/email
+//! service down through `resolve_filters` and into the SQL
 //! candidate-thread selection:
 //!
 //!   • `dynamic/query.rs::push_thread_candidate_select` — `Owned` source's
@@ -14,7 +15,7 @@
 //!     mailbox match when the same address resolves to multiple contact
 //!     UUIDs (one per link).
 //!
-//! Fixture: `email/fixtures/email_dynamic_query_team_scope.sql`. Two team
+//! Fixture: `email/fixtures/email_dynamic_query_crm_scope.sql`. Two team
 //! members (Alice, Bob) and one non-member (Carol). Each link has its own
 //! `email_contacts` row for `outsider@acme.com` and its own TRASH label
 //! UUID — both of which the new ANY-based resolution must cover.
@@ -66,17 +67,17 @@ async fn run_and_collect_ids(
 }
 
 // =====================================================================
-// 1. Regression check: team_scope OFF still only returns the caller's link.
+// 1. Regression check: CRM scope OFF still only returns the caller's link.
 // =====================================================================
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
         path = "../../../../fixtures",
-        scripts("email_dynamic_query_team_scope")
+        scripts("email_dynamic_query_crm_scope")
     )
 )]
-async fn team_scope_off_returns_only_callers_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn crm_scope_off_returns_only_callers_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
     // Broad partial filter that matches both "outsider@acme.com" and
     // "other@elsewhere.com" (their email_address strings contain "com").
     let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
@@ -101,7 +102,7 @@ async fn team_scope_off_returns_only_callers_link(pool: Pool<Postgres>) -> anyho
     );
     assert!(
         !ids.contains(TB1_BOB_INBOX_ACME),
-        "bob's thread must not appear without team_scope"
+        "bob's thread must not appear without CRM scope"
     );
     assert!(
         !ids.contains(TC1_CAROL_INBOX_ACME),
@@ -113,17 +114,17 @@ async fn team_scope_off_returns_only_callers_link(pool: Pool<Postgres>) -> anyho
 }
 
 // =====================================================================
-// 2. team_scope expands `Owned` to every team-member link.
+// 2. CRM scope expands `Owned` to every team-member link.
 // =====================================================================
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
         path = "../../../../fixtures",
-        scripts("email_dynamic_query_team_scope")
+        scripts("email_dynamic_query_crm_scope")
     )
 )]
-async fn team_scope_returns_all_team_member_threads(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn crm_scope_returns_all_team_member_threads(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
     // Broad partial match — should hit every acme/elsewhere thread on team
     // links (alice + bob), TRASH excluded, carol excluded.
@@ -160,17 +161,17 @@ async fn team_scope_returns_all_team_member_threads(pool: Pool<Postgres>) -> any
 }
 
 // =====================================================================
-// 3. team_scope + `Sender(Domain(...))` filters across team links.
+// 3. CRM scope + `Sender(Domain(...))` filters across team links.
 // =====================================================================
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
         path = "../../../../fixtures",
-        scripts("email_dynamic_query_team_scope")
+        scripts("email_dynamic_query_crm_scope")
     )
 )]
-async fn team_scope_with_domain_filter(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn crm_scope_with_domain_filter(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
     let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Domain(
         "acme.com".to_string(),
@@ -194,7 +195,7 @@ async fn team_scope_with_domain_filter(pool: Pool<Postgres>) -> anyhow::Result<(
 }
 
 // =====================================================================
-// 4. team_scope + `Sender(Complete(...))` resolves the address to ALL
+// 4. CRM scope + `Sender(Complete(...))` resolves the address to ALL
 //    matching contact_ids across team links, not just the caller's link.
 //
 //    This is the headline fix from option 2 — the same address has a
@@ -206,10 +207,10 @@ async fn team_scope_with_domain_filter(pool: Pool<Postgres>) -> anyhow::Result<(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
         path = "../../../../fixtures",
-        scripts("email_dynamic_query_team_scope")
+        scripts("email_dynamic_query_crm_scope")
     )
 )]
-async fn team_scope_with_complete_sender_resolves_across_links(
+async fn crm_scope_with_complete_sender_resolves_across_links(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
@@ -245,7 +246,7 @@ async fn team_scope_with_complete_sender_resolves_across_links(
 }
 
 // =====================================================================
-// 5. team_scope's TRASH exclusion covers every team link's TRASH label.
+// 5. CRM scope's TRASH exclusion covers every team link's TRASH label.
 //    Each link has a different TRASH label UUID; the multi-id ANY probe
 //    must exclude trashed threads in every link, not just the caller's.
 // =====================================================================
@@ -254,10 +255,10 @@ async fn team_scope_with_complete_sender_resolves_across_links(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
         path = "../../../../fixtures",
-        scripts("email_dynamic_query_team_scope")
+        scripts("email_dynamic_query_crm_scope")
     )
 )]
-async fn team_scope_excludes_trash_in_every_team_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn crm_scope_excludes_trash_in_every_team_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
     // Match all acme threads across team links.
     let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Domain(
@@ -286,7 +287,7 @@ async fn team_scope_excludes_trash_in_every_team_link(pool: Pool<Postgres>) -> a
 }
 
 // =====================================================================
-// 6. team_scope short-circuits when the Complete address has no matching
+// 6. CRM scope short-circuits when the Complete address has no matching
 //    contact in any team link (no rows in `contact_ids` map).
 // =====================================================================
 
@@ -294,10 +295,10 @@ async fn team_scope_excludes_trash_in_every_team_link(pool: Pool<Postgres>) -> a
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
         path = "../../../../fixtures",
-        scripts("email_dynamic_query_team_scope")
+        scripts("email_dynamic_query_crm_scope")
     )
 )]
-async fn team_scope_with_unknown_complete_sender_short_circuits(
+async fn crm_scope_with_unknown_complete_sender_short_circuits(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
@@ -332,12 +333,10 @@ async fn team_scope_with_unknown_complete_sender_short_circuits(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
         path = "../../../../fixtures",
-        scripts("email_dynamic_query_team_scope")
+        scripts("email_dynamic_query_crm_scope")
     )
 )]
-async fn team_scope_uses_team_mailboxes_not_caller_link(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
+async fn crm_scope_uses_team_mailboxes_not_caller_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
     let carol_link = Uuid::parse_str("a0000003-0000-0000-0000-000000000003")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
@@ -376,7 +375,7 @@ async fn team_scope_uses_team_mailboxes_not_caller_link(
 }
 
 // =====================================================================
-// 8. Recipient (TO) under team_scope resolves across team links. The same
+// 8. Recipient (TO) under CRM scope resolves across team links. The same
 //    address has one `email_contacts` row per link (different UUIDs); the
 //    `mr.contact_id = ANY($ids)` predicate must match the recipient row
 //    that points at the per-link contact row.
@@ -386,10 +385,10 @@ async fn team_scope_uses_team_mailboxes_not_caller_link(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
         path = "../../../../fixtures",
-        scripts("email_dynamic_query_team_scope")
+        scripts("email_dynamic_query_crm_scope")
     )
 )]
-async fn team_scope_with_complete_recipient_resolves_across_links(
+async fn crm_scope_with_complete_recipient_resolves_across_links(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
@@ -421,10 +420,10 @@ async fn team_scope_with_complete_recipient_resolves_across_links(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
         path = "../../../../fixtures",
-        scripts("email_dynamic_query_team_scope")
+        scripts("email_dynamic_query_crm_scope")
     )
 )]
-async fn team_scope_with_complete_cc_resolves_across_links(
+async fn crm_scope_with_complete_cc_resolves_across_links(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
@@ -449,10 +448,10 @@ async fn team_scope_with_complete_cc_resolves_across_links(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
         path = "../../../../fixtures",
-        scripts("email_dynamic_query_team_scope")
+        scripts("email_dynamic_query_crm_scope")
     )
 )]
-async fn team_scope_with_complete_bcc_resolves_across_links(
+async fn crm_scope_with_complete_bcc_resolves_across_links(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
@@ -470,7 +469,7 @@ async fn team_scope_with_complete_bcc_resolves_across_links(
 }
 
 // =====================================================================
-// 11. NOT operator under team_scope with an unresolved Complete sender.
+// 11. NOT operator under CRM scope with an unresolved Complete sender.
 //     `fold_unresolved` reduces the inner literal to `Some(false)`, then
 //     `Not(Some(false)) -> Some(true)` — which is *not* a `Some(false)`
 //     constant, so `can_short_circuit` returns false and the query runs.
@@ -481,10 +480,10 @@ async fn team_scope_with_complete_bcc_resolves_across_links(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
         path = "../../../../fixtures",
-        scripts("email_dynamic_query_team_scope")
+        scripts("email_dynamic_query_crm_scope")
     )
 )]
-async fn team_scope_not_unresolved_sender_does_not_short_circuit(
+async fn crm_scope_not_unresolved_sender_does_not_short_circuit(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
@@ -525,10 +524,10 @@ async fn team_scope_not_unresolved_sender_does_not_short_circuit(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
         path = "../../../../fixtures",
-        scripts("email_dynamic_query_team_scope")
+        scripts("email_dynamic_query_crm_scope")
     )
 )]
-async fn team_scope_with_asymmetric_complete_sender(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn crm_scope_with_asymmetric_complete_sender(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
     let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(complete(
         "bob-only@onlybob.com",
@@ -551,17 +550,17 @@ async fn team_scope_with_asymmetric_complete_sender(pool: Pool<Postgres>) -> any
 // 13. OR of one known and one unknown Complete sender. The unknown branch
 //     folds to FALSE via `fold_unresolved`; the OR collapses to just the
 //     known branch's results. Verifies short-circuit + multi-id ANY
-//     resolution compose correctly under team_scope.
+//     resolution compose correctly under CRM scope.
 // =====================================================================
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
         path = "../../../../fixtures",
-        scripts("email_dynamic_query_team_scope")
+        scripts("email_dynamic_query_crm_scope")
     )
 )]
-async fn team_scope_or_of_known_and_unknown_complete_senders(
+async fn crm_scope_or_of_known_and_unknown_complete_senders(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
@@ -589,17 +588,17 @@ async fn team_scope_or_of_known_and_unknown_complete_senders(
 // 14. Composed AND of two address kinds (Domain sender + Domain
 //     recipient). Threads must satisfy BOTH constraints. Exercises the
 //     intersection of the candidate-thread CTE pushdown across address
-//     kinds under team_scope.
+//     kinds under CRM scope.
 // =====================================================================
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
         path = "../../../../fixtures",
-        scripts("email_dynamic_query_team_scope")
+        scripts("email_dynamic_query_crm_scope")
     )
 )]
-async fn team_scope_composed_and_sender_domain_and_recipient_domain(
+async fn crm_scope_composed_and_sender_domain_and_recipient_domain(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
@@ -626,7 +625,7 @@ async fn team_scope_composed_and_sender_domain_and_recipient_domain(
 }
 
 // =====================================================================
-// 15. Cursor-based pagination under team_scope: result set spans multiple
+// 15. Cursor-based pagination under CRM scope: result set spans multiple
 //     team links. Page 1 + Page 2 must cover all 4 team-member inbox
 //     threads with no overlap and no missing rows.
 // =====================================================================
@@ -635,10 +634,10 @@ async fn team_scope_composed_and_sender_domain_and_recipient_domain(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
         path = "../../../../fixtures",
-        scripts("email_dynamic_query_team_scope")
+        scripts("email_dynamic_query_crm_scope")
     )
 )]
-async fn team_scope_pagination_across_team_links(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn crm_scope_pagination_across_team_links(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
     let link_id = Uuid::parse_str(ALICE_LINK_ID)?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
@@ -717,5 +716,41 @@ async fn team_scope_pagination_across_team_links(pool: Pool<Postgres>) -> anyhow
         all_ids
     );
 
+    Ok(())
+}
+
+// 16. Killswitch race: if team_crm_settings.crm_enabled flips to FALSE
+//     between the pre-check and the dynamic query, the candidate-source
+//     JOIN drops every team link out of the candidate set. This is the
+//     belt-and-suspenders gate; the typical entry point (validate_crm_scope)
+//     would already reject the request with CrmDisabledForTeam, but this
+//     test exercises the JOIN-level guard directly by calling the dynamic
+//     query with team_id = Some after flipping the flag.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query_crm_scope")
+    )
+)]
+async fn crm_scope_collapses_to_empty_when_killswitch_off(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
+    // Flip the killswitch off after the fixture (which sets it ON).
+    sqlx::query("UPDATE team_crm_settings SET crm_enabled = FALSE WHERE team_id = $1")
+        .bind(team_id)
+        .execute(&pool)
+        .await?;
+
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Domain(
+        "acme.com".to_string(),
+    ))));
+    let ids = run_and_collect_ids(&pool, filter, Some(team_id)).await?;
+    assert!(
+        ids.is_empty(),
+        "candidate set must be empty when crm_enabled = FALSE, got: {:?}",
+        ids
+    );
     Ok(())
 }

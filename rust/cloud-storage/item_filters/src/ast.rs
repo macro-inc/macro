@@ -79,18 +79,68 @@ pub enum ExpandErr {
     /// invalid API AST expansion
     #[error("invalid API AST expansion: {0}")]
     ApiAst(String),
-    /// team_scope requires fully-qualified email addresses or domains
-    #[error(
-        "team_scope=true requires all sender/recipient/cc/bcc values to be a complete email address or domain; partial matches are not allowed"
-    )]
-    TeamScopeRequiresQualifiedEmail,
+    /// crm_domains and crm_addresses cannot both be populated in the same request
+    #[error("crm_domains and crm_addresses cannot both be populated in the same request")]
+    CrmDomainsAndAddressesMutuallyExclusive,
+    /// a value in crm_domains does not look like a bare domain
+    #[error("invalid crm_domains value (must be a bare domain like 'acme.com'): {0}")]
+    InvalidCrmDomain(String),
+    /// a value in crm_addresses does not parse as a fully-qualified email address
+    #[error("invalid crm_addresses value (must be a fully-qualified email): {0}")]
+    InvalidCrmAddress(String),
+}
+
+/// CRM-scoped query authorization tag produced by [`EmailFilters`] expansion.
+///
+/// Carried alongside the email AST through [`EntityFilterAst`] and into the
+/// email service, where it drives:
+///   1. authorization (each domain/address must pass a CRM pre-check), and
+///   2. candidate-set widening (the dynamic query expands from the caller's
+///      single `link_id` to every team member's `link_id`).
+///
+/// Mutually exclusive: at most one of `domains` / `addresses` is non-empty.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum CrmScope {
+    /// caller is asking for team-visible threads involving any of these domains
+    Domains(Vec<String>),
+    /// caller is asking for team-visible threads involving any of these addresses
+    Addresses(Vec<String>),
+}
+
+impl CrmScope {
+    /// Extract a [`CrmScope`] from the raw filter, validating mutual
+    /// exclusivity. Per-value validation (parseability) lives in
+    /// [`crate::EmailFilters::expand_ast`].
+    pub fn from_email_filters(filters: &crate::EmailFilters) -> Result<Option<Self>, ExpandErr> {
+        let has_domains = !filters.crm_domains.is_empty();
+        let has_addresses = !filters.crm_addresses.is_empty();
+        match (has_domains, has_addresses) {
+            (false, false) => Ok(None),
+            (true, false) => Ok(Some(CrmScope::Domains(
+                filters
+                    .crm_domains
+                    .iter()
+                    .map(|s| s.to_lowercase())
+                    .collect(),
+            ))),
+            (false, true) => Ok(Some(CrmScope::Addresses(
+                filters
+                    .crm_addresses
+                    .iter()
+                    .map(|s| s.to_lowercase())
+                    .collect(),
+            ))),
+            (true, true) => Err(ExpandErr::CrmDomainsAndAddressesMutuallyExclusive),
+        }
+    }
 }
 
 /// type alias for a maybe empty, cheaply cloneable ast literal tree
 pub type LiteralTree<T> = Option<Arc<Expr<T>>>;
 
 /// Describes a bundle of filters that should be applied across different entity types
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct EntityFilterAst {
     /// the filters that should be applied to the document entity
@@ -121,6 +171,13 @@ pub struct EntityFilterAst {
     #[serde(default, rename = "propf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub properties_filter: LiteralTree<PropertiesLiteral>,
+    /// CRM scope tag for the email entity, when the request asks for a
+    /// CRM-authorized team-scoped view. Set from [`crate::EmailFilters::crm_domains`]
+    /// / [`crate::EmailFilters::crm_addresses`] during expansion. The email
+    /// service uses this to drive authorization and candidate-set widening.
+    #[serde(default, rename = "ecrm", skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
+    pub email_crm_scope: Option<CrmScope>,
 }
 
 impl EntityFilterAst {
@@ -129,6 +186,7 @@ impl EntityFilterAst {
         if entity_filter.is_empty() {
             return Ok(None);
         }
+        let email_crm_scope = CrmScope::from_email_filters(&entity_filter.email_filters)?;
         Ok(Some(EntityFilterAst {
             document_filter: DocumentFilters::expand_ast(entity_filter.document_filters)?
                 .map(Arc::new),
@@ -141,6 +199,7 @@ impl EntityFilterAst {
             call_filter: CallFilters::expand_ast(entity_filter.call_filters)?.map(Arc::new),
             properties_filter: Vec::<PropertyFilter>::expand_ast(entity_filter.property_filters)?
                 .map(Arc::new),
+            email_crm_scope,
         }))
     }
 
@@ -155,6 +214,7 @@ impl EntityFilterAst {
             channel_filter: None,
             call_filter: None,
             properties_filter: None,
+            email_crm_scope: None,
         }
     }
 }
@@ -169,6 +229,7 @@ impl IsEmpty for EntityFilterAst {
             channel_filter,
             call_filter,
             properties_filter,
+            email_crm_scope,
         } = self;
         document_filter.is_none()
             && project_filter.is_none()
@@ -177,5 +238,6 @@ impl IsEmpty for EntityFilterAst {
             && channel_filter.is_none()
             && call_filter.is_none()
             && properties_filter.is_none()
+            && email_crm_scope.is_none()
     }
 }

@@ -674,3 +674,146 @@ async fn service_populate_contact_writes_when_domain_differs(pool: PgPool) -> an
     );
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn precheck_reports_killswitch_off_when_settings_missing(pool: PgPool) -> anyhow::Result<()> {
+    let team = Uuid::now_v7();
+    let owner = "macro|owner@test.com";
+    seed_team(&pool, team, owner).await?;
+    // intentionally no team_crm_settings row
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let result = repo
+        .crm_scope_precheck(&team, &["acme.com".to_string()], &[])
+        .await?;
+    // Killswitch off short-circuits: the email service rejects with
+    // CrmDisabledForTeam regardless of per-input state, so the probes
+    // are skipped and per-input rows come back empty.
+    assert!(!result.crm_enabled);
+    assert!(result.domains.is_empty());
+    assert!(result.addresses.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn precheck_resolves_domain_with_company_state(pool: PgPool) -> anyhow::Result<()> {
+    let team = Uuid::now_v7();
+    let owner = "macro|owner@test.com";
+    seed_team(&pool, team, owner).await?;
+    enable_crm_for_team(&pool, team).await?;
+    insert_company(&pool, team, true, &["acme.com"]).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let result = repo
+        .crm_scope_precheck(
+            &team,
+            &["acme.com".to_string(), "missing.com".to_string()],
+            &[],
+        )
+        .await?;
+    assert!(result.crm_enabled);
+    assert_eq!(result.domains.len(), 2);
+
+    let acme = result
+        .domains
+        .iter()
+        .find(|d| d.domain == "acme.com")
+        .unwrap();
+    assert!(acme.exists);
+    assert!(!acme.company_hidden);
+    assert!(acme.email_sync);
+
+    let missing = result
+        .domains
+        .iter()
+        .find(|d| d.domain == "missing.com")
+        .unwrap();
+    assert!(!missing.exists);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn precheck_reports_hidden_and_email_sync_disabled_companies(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team = Uuid::now_v7();
+    let owner = "macro|owner@test.com";
+    seed_team(&pool, team, owner).await?;
+    enable_crm_for_team(&pool, team).await?;
+    let hidden_co = insert_company(&pool, team, false, &["hidden.com"]).await?;
+    sqlx::query("UPDATE crm_companies SET hidden = TRUE WHERE id = $1")
+        .bind(hidden_co)
+        .execute(&pool)
+        .await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let result = repo
+        .crm_scope_precheck(&team, &["hidden.com".to_string()], &[])
+        .await?;
+    let d = &result.domains[0];
+    assert!(d.exists);
+    assert!(d.company_hidden);
+    assert!(!d.email_sync);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn precheck_address_resolves_contact_within_team(pool: PgPool) -> anyhow::Result<()> {
+    let team = Uuid::now_v7();
+    let owner = "macro|owner@test.com";
+    seed_team(&pool, team, owner).await?;
+    enable_crm_for_team(&pool, team).await?;
+    let company = insert_company(&pool, team, true, &["acme.com"]).await?;
+    let link = insert_email_link(&pool, owner, "owner@macro.test").await?;
+    insert_contact_with_source(&pool, company, "alice@acme.com", link).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let result = repo
+        .crm_scope_precheck(
+            &team,
+            &[],
+            &["alice@acme.com".to_string(), "bob@acme.com".to_string()],
+        )
+        .await?;
+
+    let alice = result
+        .addresses
+        .iter()
+        .find(|a| a.address == "alice@acme.com")
+        .unwrap();
+    assert!(alice.exists);
+    assert!(!alice.contact_hidden);
+    assert!(!alice.company_hidden);
+    assert!(alice.email_sync);
+
+    let bob = result
+        .addresses
+        .iter()
+        .find(|a| a.address == "bob@acme.com")
+        .unwrap();
+    assert!(!bob.exists);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn precheck_address_does_not_leak_other_team_contacts(pool: PgPool) -> anyhow::Result<()> {
+    let team_a = Uuid::now_v7();
+    let team_b = Uuid::now_v7();
+    let owner_a = "macro|owner_a@test.com";
+    let owner_b = "macro|owner_b@test.com";
+    seed_team(&pool, team_a, owner_a).await?;
+    seed_team(&pool, team_b, owner_b).await?;
+    enable_crm_for_team(&pool, team_b).await?;
+    let company_a = insert_company(&pool, team_a, true, &["acme.com"]).await?;
+    let link_a = insert_email_link(&pool, owner_a, "a@macro.test").await?;
+    insert_contact_with_source(&pool, company_a, "alice@acme.com", link_a).await?;
+
+    // team_b asks about an address that only exists under team_a — must
+    // report as non-existent, not leak team_a's contact state.
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let result = repo
+        .crm_scope_precheck(&team_b, &[], &["alice@acme.com".to_string()])
+        .await?;
+    assert!(!result.addresses[0].exists);
+    Ok(())
+}

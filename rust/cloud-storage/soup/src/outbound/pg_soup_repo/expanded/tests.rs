@@ -5458,6 +5458,7 @@ fn mock_empty_ast() -> EntityFilterAst {
         channel_filter: None,
         call_filter: None,
         properties_filter: None,
+        email_crm_scope: None,
     }
 }
 

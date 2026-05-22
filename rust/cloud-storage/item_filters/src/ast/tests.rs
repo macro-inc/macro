@@ -863,3 +863,104 @@ fn it_expands_call_filter_without_attended_is_none_when_empty() {
     let ast = CallFilters::expand_ast(f).unwrap();
     assert!(ast.is_none(), "empty filter should expand to None");
 }
+
+#[test]
+fn crm_domains_expand_to_any_direction_or() {
+    let f = EntityFilters {
+        email_filters: crate::EmailFilters {
+            crm_domains: vec!["acme.com".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = EntityFilterAst::new_from_filters(f).unwrap().unwrap();
+    let scope = ast.email_crm_scope.expect("crm scope should be set");
+    assert_matches!(scope, CrmScope::Domains(ref ds) if ds == &vec!["acme.com".to_string()]);
+
+    let email_filter = Arc::into_inner(ast.email_filter.expect("email filter set")).unwrap();
+    let json = serde_json::to_value(email_filter).unwrap();
+    // OR of Sender/Cc/Bcc/Recipient Domain literals — exact tree shape isn't
+    // load-bearing; we just want to confirm any-direction expansion happened.
+    let s = json.to_string();
+    assert!(s.contains("Sender"));
+    assert!(s.contains("Cc"));
+    assert!(s.contains("Bcc"));
+    assert!(s.contains("Recipient"));
+    assert!(s.contains("acme.com"));
+}
+
+#[test]
+fn crm_addresses_expand_to_any_direction_or() {
+    let f = EntityFilters {
+        email_filters: crate::EmailFilters {
+            crm_addresses: vec!["alice@acme.com".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = EntityFilterAst::new_from_filters(f).unwrap().unwrap();
+    let scope = ast.email_crm_scope.expect("crm scope should be set");
+    assert_matches!(scope, CrmScope::Addresses(ref a) if a == &vec!["alice@acme.com".to_string()]);
+
+    let email_filter = Arc::into_inner(ast.email_filter.expect("email filter set")).unwrap();
+    let json = serde_json::to_value(email_filter).unwrap();
+    let s = json.to_string();
+    assert!(s.contains("Sender"));
+    assert!(s.contains("Recipient"));
+    assert!(s.contains("alice@acme.com"));
+}
+
+#[test]
+fn crm_domains_and_addresses_together_is_rejected() {
+    let f = EntityFilters {
+        email_filters: crate::EmailFilters {
+            crm_domains: vec!["acme.com".to_string()],
+            crm_addresses: vec!["alice@acme.com".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let err = EntityFilterAst::new_from_filters(f).unwrap_err();
+    assert_matches!(err, ExpandErr::CrmDomainsAndAddressesMutuallyExclusive);
+}
+
+#[test]
+fn crm_domains_rejects_non_domain_string() {
+    let f = EntityFilters {
+        email_filters: crate::EmailFilters {
+            crm_domains: vec!["not a domain".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let err = EntityFilterAst::new_from_filters(f).unwrap_err();
+    assert_matches!(err, ExpandErr::InvalidCrmDomain(_));
+}
+
+#[test]
+fn crm_addresses_rejects_unparseable_email() {
+    let f = EntityFilters {
+        email_filters: crate::EmailFilters {
+            crm_addresses: vec!["not an email".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let err = EntityFilterAst::new_from_filters(f).unwrap_err();
+    assert_matches!(err, ExpandErr::InvalidCrmAddress(_));
+}
+
+#[test]
+fn empty_crm_lists_produce_no_scope_tag() {
+    let f = EntityFilters {
+        email_filters: crate::EmailFilters {
+            senders: vec!["bob@example.com".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let ast = EntityFilterAst::new_from_filters(f).unwrap().unwrap();
+    assert!(ast.email_crm_scope.is_none());
+}

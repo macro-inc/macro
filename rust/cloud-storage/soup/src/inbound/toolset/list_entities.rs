@@ -231,6 +231,9 @@ impl ListEntities {
             channel_filter: self.channel_filter.clone(),
             call_filter: self.call_filter.clone(),
             properties_filter: self.properties_filter.clone(),
+            // Toolset doesn't (yet) expose CRM scope; the tool surface stays
+            // per-link unless we add explicit fields for it.
+            email_crm_scope: None,
         };
 
         self.apply_include_types_to_ast(ast)
@@ -276,6 +279,7 @@ impl ListEntities {
                 Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil()))))
             },
             properties_filter: ast.properties_filter,
+            email_crm_scope: ast.email_crm_scope,
         }
     }
 

@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use frecency::domain::models::AggregateFrecency;
-use item_filters::ast::{LiteralTree, email::EmailLiteral};
+use item_filters::ast::{CrmScope, LiteralTree, email::EmailLiteral};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Identify, Query, SimpleSortMethod, SortOn};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
@@ -22,7 +22,7 @@ pub struct PreviewCursorQuery {
     /// When `Some(team_id)`, the dynamic query path expands the candidate
     /// thread set from "only this `link_id`" to "every `link_id` owned by
     /// any user on this team." Populated by the service after a successful
-    /// team_scope validation (see `validate_team_scope`).
+    /// CRM-scope validation (see `validate_crm_scope`).
     pub team_id: Option<Uuid>,
 }
 
@@ -141,9 +141,14 @@ pub struct GetEmailsRequest {
     pub macro_id: MacroUserIdStr<'static>,
     pub limit: Option<u32>,
     pub query: Query<Uuid, SimpleSortMethod, LiteralTree<EmailLiteral>>,
-    /// Proof that the caller belongs to a team, when the query contains an
-    /// `EmailLiteral::TeamScope` literal. The receipt's `entity()` is the
-    /// team's UUID, which the query layer can use to expand visibility to
-    /// teammate mailboxes.
+    /// Proof that the caller belongs to a team. Forwarded by the soup
+    /// router unconditionally (when the user is on a team); the email
+    /// service uses it only when `crm_scope` is `Some` to authorize the
+    /// CRM-scoped widening of the candidate set.
     pub team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    /// CRM scope tag extracted from `EntityFilterAst::email_crm_scope`.
+    /// When `Some`, the email service runs the per-team CRM pre-check
+    /// and (on success) widens the candidate set to every team
+    /// member's mailbox.
+    pub crm_scope: Option<CrmScope>,
 }

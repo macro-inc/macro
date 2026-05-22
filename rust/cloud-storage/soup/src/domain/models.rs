@@ -273,13 +273,23 @@ impl SoupRequest<Option<EntityFilterAst>> {
     /// take the parts of the [SoupRequest] that are only relevant to email
     /// and move them into a [GetEmailsRequest] if it is possible to create one.
     ///
-    /// `team_receipt` is forwarded onto the email request so the query layer
-    /// can verify and use it when the email AST contains
-    /// `EmailLiteral::TeamScope`.
+    /// `team_receipt` is forwarded onto the email request so the query
+    /// layer can verify and use it when the email filter carries a CRM
+    /// scope tag (`EntityFilterAst::email_crm_scope`).
     pub(crate) fn build_email_request(
         &self,
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
     ) -> Option<GetEmailsRequest> {
+        let entity_ast: Option<&EntityFilterAst> = match &self.cursor {
+            SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => f.as_ref(),
+            SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
+                filter,
+                ..
+            }))) => filter.as_ref(),
+            SoupQuery::Frecency(_) => None,
+        };
+        let crm_scope = entity_ast.and_then(|a| a.email_crm_scope.clone());
+
         Some(GetEmailsRequest {
             view: self.email_preview_view.clone(),
             link_id: self.link_id?,
@@ -305,6 +315,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
                 SoupQuery::Frecency(_) => None,
             }?,
             team_receipt,
+            crm_scope,
         })
     }
 

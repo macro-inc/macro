@@ -60,8 +60,8 @@ pub trait SoupService: Send + Sync + 'static {
     ///
     /// `team_receipt` proves the user belongs to a team and may be used by
     /// filters that broaden visibility beyond the user's own mailboxes (e.g.
-    /// `EmailLiteral::TeamScope`). Pass `None` when no team-scoped filter is
-    /// active.
+    /// `EmailFilters::crm_domains` / `crm_addresses`). Pass `None` when
+    /// no CRM-scoped filter is active.
     fn get_user_soup<T>(
         &self,
         req: SoupRequest<T>,

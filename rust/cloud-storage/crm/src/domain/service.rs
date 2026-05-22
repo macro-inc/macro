@@ -4,7 +4,7 @@ use crate::domain::{
     companies_repo::CompaniesRepository,
     company_metadata_resolver::CompanyMetadataResolver,
     generic_email_domains::is_generic_email_domain,
-    model::{CrmCompany, CrmError},
+    model::{CrmCompany, CrmError, CrmScopePrecheck},
 };
 
 /// The CrmService exposes operations over CRM records (companies, their
@@ -140,6 +140,15 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         contact_id: &uuid::Uuid,
         hidden: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Batched authorization probe for a CRM-scoped email query. See
+    /// [`CompaniesRepository::crm_scope_precheck`].
+    fn crm_scope_precheck(
+        &self,
+        team_id: &uuid::Uuid,
+        domains: &[String],
+        addresses: &[String],
+    ) -> impl Future<Output = Result<CrmScopePrecheck, CrmError>> + Send;
 }
 
 /// Implementation of [`CrmService`] backed by a [`CompaniesRepository`]
@@ -358,6 +367,18 @@ where
     ) -> Result<(), CrmError> {
         self.companies_repository
             .set_contact_hidden(team_id, contact_id, hidden)
+            .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn crm_scope_precheck(
+        &self,
+        team_id: &uuid::Uuid,
+        domains: &[String],
+        addresses: &[String],
+    ) -> Result<CrmScopePrecheck, CrmError> {
+        self.companies_repository
+            .crm_scope_precheck(team_id, domains, addresses)
             .await
     }
 }

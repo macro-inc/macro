@@ -62,6 +62,55 @@ pub struct CrmDomain {
     pub created_at: DateTime<Utc>,
 }
 
+/// Result of [`crate::domain::companies_repo::CompaniesRepository::crm_scope_precheck`].
+///
+/// Carries the per-input authorization status the caller (`EmailService`)
+/// needs to either accept or reject a CRM-scoped query before it runs.
+#[derive(Debug, Clone)]
+pub struct CrmScopePrecheck {
+    /// `team_crm_settings.crm_enabled` for the requesting team. `false`
+    /// when the team's row exists with `crm_enabled = false`, *or* when no
+    /// row exists at all (older teams predating `team_crm_settings`).
+    pub crm_enabled: bool,
+    /// One row per requested domain. Order matches the input list.
+    pub domains: Vec<CrmDomainStatus>,
+    /// One row per requested address. Order matches the input list.
+    pub addresses: Vec<CrmAddressStatus>,
+}
+
+/// Per-domain authorization status. See [`CrmScopePrecheck`].
+#[derive(Debug, Clone)]
+pub struct CrmDomainStatus {
+    /// The domain as supplied (lowercased).
+    pub domain: String,
+    /// Whether a `crm_domains` row exists for this `(team_id, domain)`.
+    pub exists: bool,
+    /// `crm_companies.hidden` for the company owning the matched
+    /// `crm_domains` row. `false` when `!exists`.
+    pub company_hidden: bool,
+    /// `crm_companies.email_sync` for the company owning the matched
+    /// `crm_domains` row. `false` when `!exists`.
+    pub email_sync: bool,
+}
+
+/// Per-address authorization status. See [`CrmScopePrecheck`].
+#[derive(Debug, Clone)]
+pub struct CrmAddressStatus {
+    /// The address as supplied (lowercased).
+    pub address: String,
+    /// Whether a `crm_contacts` row exists whose company belongs to the
+    /// requesting team. Cross-team contacts (same email under a different
+    /// team's company) are reported as `exists = false` so existence
+    /// doesn't leak across teams.
+    pub exists: bool,
+    /// `crm_contacts.hidden` for the matched contact. `false` when `!exists`.
+    pub contact_hidden: bool,
+    /// `crm_companies.hidden` for the matched contact's company. `false` when `!exists`.
+    pub company_hidden: bool,
+    /// `crm_companies.email_sync` for the matched contact's company. `false` when `!exists`.
+    pub email_sync: bool,
+}
+
 /// Errors that can occur in the CRM domain.
 #[derive(Debug, thiserror::Error)]
 pub enum CrmError {

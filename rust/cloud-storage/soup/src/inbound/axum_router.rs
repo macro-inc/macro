@@ -322,7 +322,7 @@ where
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
     where
         SoupRequest<R>: IntoSoupReqAst,
-        R: Clone + Serialize + Send + RequestsTeamScope,
+        R: Clone + Serialize + Send + RequestsCrmScope,
     {
         let create_fallback = move || -> SoupQuery<R> {
             let params_sort = params
@@ -346,13 +346,13 @@ where
                 .unwrap_or_else(create_fallback),
         };
 
-        // Derive team_scope authorization from the *effective* filter (the
+        // Derive CRM-scope authorization from the *effective* filter (the
         // one embedded in the resolved SoupQuery), not the raw request body.
         // For cursor-paginated requests the body's filters may be empty and
         // the real filter lives inside the cursor — checking the body would
-        // miss team_scope on follow-up pages.
+        // miss CRM scope on follow-up pages.
         let team_receipt =
-            resolve_team_receipt(cursor.filter().requests_team_scope(), team_receipt_option)?;
+            resolve_crm_team_receipt(cursor.filter().requests_crm_scope(), team_receipt_option)?;
 
         let res = self
             .service
@@ -442,22 +442,26 @@ where
 /// (`EntityFilters` for the typed POST, `ApiEntityFilterAst` for the AST
 /// endpoint). Lets `handle` inspect the *materialized* SoupQuery's filter
 /// — which may have come from the request body or from the cursor — and
-/// decide whether team_scope is in play.
-pub trait RequestsTeamScope {
+/// decide whether CRM scope is in play.
+pub trait RequestsCrmScope {
     /// True when this filter asks the query to expand visibility across
-    /// the requesting user's team.
-    fn requests_team_scope(&self) -> bool;
+    /// the requesting user's team via a CRM-scoped attribute
+    /// (`crm_domains` or `crm_addresses`).
+    fn requests_crm_scope(&self) -> bool;
 }
 
-impl RequestsTeamScope for EntityFilters {
-    fn requests_team_scope(&self) -> bool {
-        self.email_filters.team_scope
+impl RequestsCrmScope for EntityFilters {
+    fn requests_crm_scope(&self) -> bool {
+        !self.email_filters.crm_domains.is_empty() || !self.email_filters.crm_addresses.is_empty()
     }
 }
 
-impl RequestsTeamScope for ApiEntityFilterAst {
-    fn requests_team_scope(&self) -> bool {
-        email_filter_contains_team_scope(&self.email_filter)
+impl RequestsCrmScope for ApiEntityFilterAst {
+    fn requests_crm_scope(&self) -> bool {
+        // CRM scope cannot be requested via the raw AST endpoint — the
+        // tag lives on `EntityFilterAst::email_crm_scope`, which is only
+        // populated by the typed-filters expansion path.
+        false
     }
 }
 
@@ -508,8 +512,8 @@ pub enum SoupHandlerErr {
     ExpandErr(ExpandErr),
     #[error("Invalid compound filter could not be expanded")]
     Expand,
-    #[error("team_scope requires team membership")]
-    TeamScopeForbidden,
+    #[error("CRM-scoped queries require team membership")]
+    CrmScopeForbidden,
 }
 
 impl From<SoupErr> for SoupHandlerErr {
@@ -525,7 +529,7 @@ impl IntoResponse for SoupHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {
             SoupHandlerErr::ExpandErr(_) | SoupHandlerErr::Expand => StatusCode::BAD_REQUEST,
-            SoupHandlerErr::TeamScopeForbidden => StatusCode::FORBIDDEN,
+            SoupHandlerErr::CrmScopeForbidden => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -649,7 +653,7 @@ where
         Err(e) => Err(e)?,
     };
     // Pass the raw extractor receipt through — `handle` resolves the
-    // team_scope check against the *effective* filter (which may come from
+    // CRM-scope check against the *effective* filter (which may come from
     // the cursor on follow-up pages), not the request body.
     service
         .handle(
@@ -718,7 +722,7 @@ where
         Err(e) => Err(e)?,
     };
     // Pass the raw extractor receipt through — `handle` resolves the
-    // team_scope check against the *effective* filter (which may come from
+    // CRM-scope check against the *effective* filter (which may come from
     // the cursor on follow-up pages), not the request body.
     service
         .handle(
@@ -803,33 +807,19 @@ where
         .await
 }
 
-/// Returns the team receipt to use when team-scoped visibility is required.
-/// `team_scope_requested` is true when the request body asks for team_scope
-/// (via the typed flag on POST or the `EmailLiteral::TeamScope` literal on
-/// the AST endpoint). Returns `Err(TeamScopeForbidden)` when team_scope was
-/// requested but the user has no qualifying team membership.
-fn resolve_team_receipt(
-    team_scope_requested: bool,
+/// Returns the team receipt to use when CRM-scoped visibility is required.
+/// `crm_scope_requested` is true when the request body carries a
+/// `crm_domains` / `crm_addresses` attribute. Returns
+/// `Err(CrmScopeForbidden)` when CRM scope was requested but the user has
+/// no qualifying team membership.
+fn resolve_crm_team_receipt(
+    crm_scope_requested: bool,
     receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
 ) -> Result<Option<EntityAccessReceipt<MemberTeamRole>>, SoupHandlerErr> {
-    if team_scope_requested && receipt.is_none() {
-        return Err(SoupHandlerErr::TeamScopeForbidden);
+    if crm_scope_requested && receipt.is_none() {
+        return Err(SoupHandlerErr::CrmScopeForbidden);
     }
     Ok(receipt)
-}
-
-/// Walks an AST email filter tree and returns true if any node is the
-/// `TeamScope` literal.
-fn email_filter_contains_team_scope(filter: &LiteralTree<EmailLiteral>) -> bool {
-    fn walk(expr: &Expr<EmailLiteral>) -> bool {
-        match expr {
-            Expr::And(a, b) | Expr::Or(a, b) => walk(a) || walk(b),
-            Expr::Not(a) => walk(a),
-            Expr::Literal(EmailLiteral::TeamScope) => true,
-            Expr::Literal(_) => false,
-        }
-    }
-    filter.as_ref().map(|e| walk(e)).unwrap_or(false)
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
@@ -955,6 +945,8 @@ impl ApiEntityFilterAst {
             channel_filter,
             call_filter,
             properties_filter,
+            // AST endpoint does not expose CRM scope — only the typed POST does.
+            email_crm_scope: None,
         })
     }
 }

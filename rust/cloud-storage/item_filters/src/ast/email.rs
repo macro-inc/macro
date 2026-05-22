@@ -54,10 +54,6 @@ pub enum EmailLiteral {
     NotificationSeen(bool),
     /// Controls whether shared email threads are included in results.
     Shared(SharedEmailFilter),
-    /// Expand visibility to every teammate's mailbox. Results may include
-    /// emails the requesting user is not a participant on, as long as at
-    /// least one teammate is.
-    TeamScope,
     /// When true, only include threads that have at least one message with an
     /// `.ics` calendar attachment (filename or `application/ics` mime type).
     /// When false, no constraint is applied.
@@ -85,9 +81,14 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             include_labels: _,
             exclude_labels: _,
             shared,
-            team_scope,
+            crm_domains,
+            crm_addresses,
             calendar_only,
         } = input;
+
+        if !crm_domains.is_empty() && !crm_addresses.is_empty() {
+            return Err(ExpandErr::CrmDomainsAndAddressesMutuallyExclusive);
+        }
 
         fn map_email(s: String) -> Email {
             if let Ok(e) = EmailStr::parse_from_str(&s) {
@@ -103,17 +104,6 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
         let mapped_cc: Vec<Email> = cc.into_iter().map(map_email).collect();
         let mapped_bcc: Vec<Email> = bcc.into_iter().map(map_email).collect();
         let mapped_recipients: Vec<Email> = recipients.into_iter().map(map_email).collect();
-
-        if team_scope
-            && mapped_senders
-                .iter()
-                .chain(&mapped_cc)
-                .chain(&mapped_bcc)
-                .chain(&mapped_recipients)
-                .any(|e| matches!(e, Email::Partial(_)))
-        {
-            return Err(ExpandErr::TeamScopeRequiresQualifiedEmail);
-        }
 
         let sender_nodes = mapped_senders
             .into_iter()
@@ -145,10 +135,33 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
         } else {
             Some(Expr::Literal(EmailLiteral::Shared(shared)))
         };
-        let team_scope_node = team_scope.then_some(Expr::Literal(EmailLiteral::TeamScope));
         let calendar_only_node = calendar_only
             .filter(|v| *v)
             .map(|v| Expr::Literal(EmailLiteral::CalendarOnly(v)));
+
+        let crm_domain_node = crm_domains
+            .into_iter()
+            .map(|d| -> Result<Expr<EmailLiteral>, ExpandErr> {
+                if !looks_like_domain(&d) {
+                    return Err(ExpandErr::InvalidCrmDomain(d));
+                }
+                Ok(any_direction(Email::Domain(d.to_lowercase())))
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .reduce(Expr::or);
+
+        let crm_address_node = crm_addresses
+            .into_iter()
+            .map(|s| -> Result<Expr<EmailLiteral>, ExpandErr> {
+                let parsed = EmailStr::parse_from_str(&s)
+                    .map_err(|_| ExpandErr::InvalidCrmAddress(s.clone()))?
+                    .into_owned();
+                Ok(any_direction(Email::Complete(parsed)))
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .reduce(Expr::or);
 
         Ok([
             sender_nodes,
@@ -161,10 +174,27 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             notification_done_node,
             notification_seen_node,
             shared_node,
-            team_scope_node,
+            crm_domain_node,
+            crm_address_node,
             calendar_only_node,
         ]
         .into_iter()
         .fold_with(Expr::and))
     }
+}
+
+/// Builds an OR-tree over all four address directions for a single [`Email`].
+/// Used by `crm_domains` / `crm_addresses` expansion so a single CRM literal
+/// matches a thread regardless of which header field the participant appears in.
+fn any_direction(e: Email) -> Expr<EmailLiteral> {
+    Expr::or(
+        Expr::or(
+            Expr::Literal(EmailLiteral::Sender(e.clone())),
+            Expr::Literal(EmailLiteral::Cc(e.clone())),
+        ),
+        Expr::or(
+            Expr::Literal(EmailLiteral::Bcc(e.clone())),
+            Expr::Literal(EmailLiteral::Recipient(e)),
+        ),
+    )
 }

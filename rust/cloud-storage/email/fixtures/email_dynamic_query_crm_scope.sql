@@ -1,4 +1,4 @@
--- Fixture for testing team_scope dynamic queries.
+-- Fixture for testing CRM-scoped dynamic queries.
 --
 -- Sets up:
 --   • Team Alpha with two members (Alice, Bob).
@@ -36,6 +36,14 @@ VALUES
     ('e0000001-0000-0000-0000-000000000001', 'macro|alice@team.com', 'owner'),
     ('e0000001-0000-0000-0000-000000000001', 'macro|bob@team.com',   'member');
 -- Carol is intentionally NOT a member.
+
+-- Team-level CRM killswitch ON. The candidate-source SQL joins
+-- team_crm_settings (crm_enabled = TRUE), so this row must be present
+-- for any CRM-scoped query to return rows. Tests that exercise the
+-- killswitch-off behavior flip this in their own fixture script.
+INSERT INTO team_crm_settings (team_id, crm_enabled)
+VALUES
+    ('e0000001-0000-0000-0000-000000000001', TRUE);
 
 -- == Email links (one per user) ==
 INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)

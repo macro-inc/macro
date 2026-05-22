@@ -5,7 +5,10 @@ mod test;
 
 use crate::domain::{
     companies_repo::CompaniesRepository,
-    model::{CrmCompany, CrmDomain, CrmError, DomainMetadata},
+    model::{
+        CrmAddressStatus, CrmCompany, CrmDomain, CrmDomainStatus, CrmError, CrmScopePrecheck,
+        DomainMetadata,
+    },
 };
 use sqlx::PgPool;
 
@@ -835,5 +838,119 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .fetch_optional(&self.pool)
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn crm_scope_precheck(
+        &self,
+        team_id: &uuid::Uuid,
+        domains: &[String],
+        addresses: &[String],
+    ) -> Result<CrmScopePrecheck, CrmError> {
+        // Killswitch read: a missing row is treated as `crm_enabled = false`.
+        let crm_enabled: bool = sqlx::query_scalar!(
+            r#"SELECT crm_enabled FROM team_crm_settings WHERE team_id = $1"#,
+            team_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?
+        .unwrap_or(false);
+
+        // When the team killswitch is off, the email service will reject the
+        // request with `CrmDisabledForTeam` before looking at per-input
+        // statuses — so skip the probes entirely.
+        if !crm_enabled {
+            return Ok(CrmScopePrecheck {
+                crm_enabled: false,
+                domains: Vec::new(),
+                addresses: Vec::new(),
+            });
+        }
+
+        let domain_statuses: Vec<CrmDomainStatus> = if domains.is_empty() {
+            Vec::new()
+        } else {
+            sqlx::query!(
+                r#"
+                SELECT
+                    input.domain                       AS "domain!",
+                    (d.id IS NOT NULL)                 AS "exists!",
+                    COALESCE(c.hidden, FALSE)          AS "company_hidden!",
+                    COALESCE(c.email_sync, FALSE)      AS "email_sync!"
+                FROM UNNEST($2::text[]) AS input(domain)
+                LEFT JOIN crm_domains d
+                    ON d.team_id = $1 AND LOWER(d.domain) = input.domain
+                LEFT JOIN crm_companies c
+                    ON c.id = d.company_id
+                "#,
+                team_id,
+                domains,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?
+            .into_iter()
+            .map(|r| CrmDomainStatus {
+                domain: r.domain,
+                exists: r.exists,
+                company_hidden: r.company_hidden,
+                email_sync: r.email_sync,
+            })
+            .collect()
+        };
+
+        let address_statuses: Vec<CrmAddressStatus> = if addresses.is_empty() {
+            Vec::new()
+        } else {
+            // Pre-materialize the team's contact rows in a derived table,
+            // then hash-join against the input array. Avoids LATERAL's
+            // per-outer-row execution. Safe to assume at most one row per
+            // (team, email) thanks to crm_contacts_company_id_email_key
+            // UNIQUE (company_id, email) plus the populate-path invariant
+            // that an email's domain uniquely identifies its company
+            // within a team (via crm_domains_team_id_lower_domain_unique).
+            sqlx::query!(
+                r#"
+                SELECT
+                    input.address                          AS "address!",
+                    (m.email IS NOT NULL)                  AS "exists!",
+                    COALESCE(m.contact_hidden, FALSE)      AS "contact_hidden!",
+                    COALESCE(m.company_hidden, FALSE)      AS "company_hidden!",
+                    COALESCE(m.email_sync,     FALSE)      AS "email_sync!"
+                FROM UNNEST($2::text[]) AS input(address)
+                LEFT JOIN (
+                    SELECT
+                        ct.email     AS email,
+                        ct.hidden    AS contact_hidden,
+                        c.hidden     AS company_hidden,
+                        c.email_sync AS email_sync
+                    FROM crm_contacts ct
+                    JOIN crm_companies c ON c.id = ct.company_id
+                    WHERE c.team_id = $1
+                ) m ON m.email = input.address
+                "#,
+                team_id,
+                addresses,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?
+            .into_iter()
+            .map(|r| CrmAddressStatus {
+                address: r.address,
+                exists: r.exists,
+                contact_hidden: r.contact_hidden,
+                company_hidden: r.company_hidden,
+                email_sync: r.email_sync,
+            })
+            .collect()
+        };
+
+        Ok(CrmScopePrecheck {
+            crm_enabled,
+            domains: domain_statuses,
+            addresses: address_statuses,
+        })
     }
 }
