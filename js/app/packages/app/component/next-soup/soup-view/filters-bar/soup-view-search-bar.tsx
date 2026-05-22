@@ -22,6 +22,7 @@ import {
   onCleanup,
   onMount,
   Show,
+  untrack,
 } from 'solid-js';
 
 type SearchbarVariant = 'filled' | 'secondary';
@@ -42,9 +43,15 @@ const variantStyles: Record<SearchbarVariant, string> = {
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
-  const { setSearchText, setSearchPaused, queryFilters } = useSoupView();
+  const { searchText, setSearchText, setSearchPaused, queryFilters } =
+    useSoupView();
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
+
+  // Read the current search-text signal once at mount so the editor opens
+  // with whatever was captured into per-entry state by the last visit.
+  // Falls back to the explicit `initialValue` prop when entry state is empty.
+  const initialEditorValue = untrack(() => searchText() || props.initialValue);
 
   const [hasContent, setHasContent] = createSignal(false);
   const [latestMarkdown, setLatestMarkdown] = createSignal('');
@@ -167,7 +174,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
             config={editor}
             placeholder={props.placeholder ?? 'Search'}
             autofocus={props.autoFocus}
-            initialValue={props.initialValue}
+            initialValue={initialEditorValue}
             class="min-h-0! overflow-visible!"
           />
         </div>

@@ -15,6 +15,8 @@ import {
 import { createInfiniteQueries } from '@app/component/next-soup/soup-view/create-infinite-queries';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
+import { useEntryState } from '@app/component/split-layout/entry-state';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
@@ -50,10 +52,12 @@ import {
   createSignal,
   type FlowComponent,
   on,
+  onCleanup,
   type Setter,
   Suspense,
   useContext,
 } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 
 type DataSource<T> = {
   data: Accessor<T[]>;
@@ -140,7 +144,22 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
-  const store = createQueryStore({ initial: props.initialQuery });
+  const panel = useSplitPanelOrThrow();
+
+  // Restore filter state from this history entry if it was captured during a
+  // previous nav-away; otherwise fall back to the caller-provided initial.
+  const persistedFilters = panel.handle.currentEntryState()?.[
+    'search.filters'
+  ] as Query | undefined;
+  const store = createQueryStore({
+    initial: persistedFilters ?? props.initialQuery,
+  });
+
+  const filterCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    'search.filters',
+    () => structuredClone(unwrap(store.state)) as Query
+  );
+  onCleanup(filterCaptorTeardown);
 
   const invalidateCache = () => {
     queryClient.setQueryData(
@@ -208,13 +227,18 @@ export const SoupViewContextProvider: FlowComponent<
   // soupBody is derived from the query filter store's compiled AST
   const soupBody = createMemo(() => queryFilters.compile());
 
+  const [searchText, setSearchText] = useEntryState<string>('search.text', {
+    default: props.initialSearchText ?? '',
+  });
+
   const search = createSearchState({
     soup,
     filters: () => queryFilters.state,
     assignees: assigneeFilter,
     disableLocalSearch: props.disableLocalSearch,
     searchPaused,
-    initialText: props.initialSearchText,
+    searchText,
+    setSearchText,
   });
 
   const notificationSource = useGlobalNotificationSource();

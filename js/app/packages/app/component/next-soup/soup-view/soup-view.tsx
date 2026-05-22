@@ -62,6 +62,7 @@ import {
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
 import { SplitPanelContext } from '@app/component/split-layout/context';
+import { useNavigationCause } from '@app/component/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
@@ -906,6 +907,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const persistenceDisabled = isProjectList || isDuplicate;
 
+  // On back/forward navigation, filters were already restored from per-entry
+  // state during SoupViewContextProvider's body — don't let the cross-session
+  // localStorage hack overwrite them on this mount.
+  const navCause = useNavigationCause();
+  const skipFiltersOnMount =
+    navCause() === 'history-back' || navCause() === 'history-forward';
+
   const [persistedState, setPersistedState] = makePersisted(
     createSignal<PersistedSoupViewState>(),
     { name: soupViewCacheKey(contentId) }
@@ -933,19 +941,21 @@ export const SoupViewList = (props: SoupViewListProps) => {
         applyTabPreset(contentId, initialPersistedState.activeTab);
       if (!applied) {
         batch(() => {
-          soup.predicates.set(
-            isStale
-              ? (props.initialClientFilters ?? {})
-              : initialPersistedState.filters
-          );
-          const persistedFilterData = isStale
-            ? {}
-            : (initialPersistedState.queryFilters ?? {});
-          queryFilters.replace({
-            include: persistedFilterData.include,
-            exclude: persistedFilterData.exclude,
-            emailView: persistedFilterData.emailView,
-          });
+          if (!skipFiltersOnMount) {
+            soup.predicates.set(
+              isStale
+                ? (props.initialClientFilters ?? {})
+                : initialPersistedState.filters
+            );
+            const persistedFilterData = isStale
+              ? {}
+              : (initialPersistedState.queryFilters ?? {});
+            queryFilters.replace({
+              include: persistedFilterData.include,
+              exclude: persistedFilterData.exclude,
+              emailView: persistedFilterData.emailView,
+            });
+          }
           if (isListViewID(contentId)) {
             const tab =
               initialPersistedState.activeTab ??
