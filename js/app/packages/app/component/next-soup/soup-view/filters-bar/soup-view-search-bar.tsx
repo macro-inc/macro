@@ -22,7 +22,6 @@ import {
   onCleanup,
   onMount,
   Show,
-  untrack,
 } from 'solid-js';
 
 type SearchbarVariant = 'filled' | 'secondary';
@@ -51,7 +50,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   // Read the current search-text signal once at mount so the editor opens
   // with whatever was captured into per-entry state by the last visit.
   // Falls back to the explicit `initialValue` prop when entry state is empty.
-  const initialEditorValue = untrack(() => searchText() || props.initialValue);
+  const initialEditorValue = searchText() || props.initialValue;
 
   const [hasContent, setHasContent] = createSignal(false);
   const [latestMarkdown, setLatestMarkdown] = createSignal('');
