@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    Result, delegate_methods,
+    Result,
     chats_shape::{alias_uses_join_shape, chats_search_alias},
+    delegate_methods,
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
         model::{Highlight, SearchGotoChat, SearchGotoContent, SearchHit, parse_highlight_hit},
@@ -14,8 +15,8 @@ use crate::{
 use chrono::{DateTime, Utc};
 use models_opensearch::{OpenSearchEntityType, SearchEntityType};
 use opensearch_query_builder::{
-    BoolQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery, QueryType,
-    ToOpenSearchJson,
+    BoolQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery,
+    QueryType, ToOpenSearchJson,
 };
 
 /// Relation names for the join field. Kept in sync with the upsert path
@@ -130,10 +131,7 @@ impl ChatQueryBuilder {
         // Restrict to parent chats in the chats alias (overridable via
         // CHATS_INDEX_NAME for local end-to-end testing against a side
         // alias).
-        bool_query.filter(QueryType::term(
-            "_index",
-            chats_search_alias().to_string(),
-        ));
+        bool_query.filter(QueryType::term("_index", chats_search_alias().to_string()));
         bool_query.filter(QueryType::term(
             "chat_relation",
             PARENT_RELATION.to_string(),

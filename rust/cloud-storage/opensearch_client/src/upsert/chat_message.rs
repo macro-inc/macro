@@ -80,13 +80,14 @@ async fn upsert_chat_message_flat(
         return Ok(());
     }
 
-    let body = response
-        .text()
-        .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("upsert_chat_message".to_string()),
-        })?;
+    let body =
+        response
+            .text()
+            .await
+            .map_err(|err| OpensearchClientError::DeserializationFailed {
+                details: err.to_string(),
+                method: Some("upsert_chat_message".to_string()),
+            })?;
 
     tracing::error!(
         status_code=%status_code,
@@ -192,14 +193,12 @@ async fn upsert_chat_message_join(
         return Ok(());
     }
 
-    let body =
-        child_response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("upsert_chat_message_join_child".to_string()),
-            })?;
+    let body = child_response.text().await.map_err(|err| {
+        OpensearchClientError::DeserializationFailed {
+            details: err.to_string(),
+            method: Some("upsert_chat_message_join_child".to_string()),
+        }
+    })?;
 
     tracing::error!(
         status_code=%status_code,
@@ -266,13 +265,14 @@ async fn update_chat_metadata_join(
         return Ok(());
     }
 
-    let body = response
-        .text()
-        .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("update_chat_metadata_join".to_string()),
-        })?;
+    let body =
+        response
+            .text()
+            .await
+            .map_err(|err| OpensearchClientError::DeserializationFailed {
+                details: err.to_string(),
+                method: Some("update_chat_metadata_join".to_string()),
+            })?;
 
     tracing::error!(
         status_code=?status_code,
