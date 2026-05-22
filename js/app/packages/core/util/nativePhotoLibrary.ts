@@ -4,14 +4,14 @@ import {
   type NativeStagedUploadData,
 } from './nativeStagedUpload';
 
-export async function pickNativePhotoLibraryImages(): Promise<File[]> {
+export async function pickNativePhotoLibraryMedia(): Promise<File[]> {
   if (!isTauri()) return [];
 
-  const images = await invoke<NativeStagedUploadData[]>(
+  const media = await invoke<NativeStagedUploadData[]>(
     'plugin:photo-library|pick_photo_library_images'
   );
 
-  return images
-    .map((image) => createNativeStagedUploadFile('photo-library', image))
+  return media
+    .map((item) => createNativeStagedUploadFile('photo-library', item))
     .filter((file): file is File => file !== null);
 }

@@ -3,9 +3,10 @@ import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 /**
  * Native staged upload bridge.
  *
- * Some iOS sources, like pasteboard images and photo-library picks, stage bytes
- * on disk and hand JS a placeholder `File`. Staging does not start a network
- * upload; the Rust upload starts later, after JS obtains a presigned URL.
+ * Some iOS sources, like pasteboard images and photo-library media, stage
+ * bytes on disk and hand JS a placeholder `File`. Staging does not start a
+ * network upload; the Rust upload starts later, after JS obtains a presigned
+ * URL.
  */
 
 export type NativeStagedUploadSource = 'pasteboard' | 'photo-library';
@@ -31,21 +32,21 @@ const nativeStagedUploads = new WeakMap<File, NativeStagedUpload>();
 
 export function createNativeStagedUploadFile(
   source: NativeStagedUploadSource,
-  image: NativeStagedUploadData
+  media: NativeStagedUploadData
 ): File | null {
-  if (!image.token || !image.name || !image.mimeType || image.size == null) {
+  if (!media.token || !media.name || !media.mimeType || media.size == null) {
     return null;
   }
 
-  const file = new File([], image.name, { type: image.mimeType });
+  const file = new File([], media.name, { type: media.mimeType });
   nativeStagedUploads.set(file, {
     source,
-    token: image.token,
-    name: image.name,
-    mimeType: image.mimeType,
-    size: image.size,
-    previewSrc: image.previewPath
-      ? convertFileSrc(image.previewPath)
+    token: media.token,
+    name: media.name,
+    mimeType: media.mimeType,
+    size: media.size,
+    previewSrc: media.previewPath
+      ? convertFileSrc(media.previewPath)
       : undefined,
   });
   return file;

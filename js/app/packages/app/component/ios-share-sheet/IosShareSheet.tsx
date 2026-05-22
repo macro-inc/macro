@@ -464,7 +464,7 @@ function IosShareSheetComposer(props: {
                   <Input.Footer>
                     <Input.Actions>
                       <Input.Actions.Left>
-                        <Input.AttachNativePhotosAction />
+                        <Input.AttachNativeMediaAction />
                         <Input.ToggleFormatAction />
                       </Input.Actions.Left>
                     </Input.Actions>

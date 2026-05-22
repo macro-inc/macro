@@ -15,7 +15,7 @@ private let maxPhotoLibrarySelectionCount = 10
 
 class UnavailablePhotoLibraryPlugin: Plugin {
     @objc public func pickPhotoLibraryImages(_ invoke: Invoke) {
-        invoke.reject("Photo library picker requires iOS 14 or newer")
+        invoke.reject("Photo library media picker requires iOS 14 or newer")
     }
 }
 
@@ -42,7 +42,7 @@ class PhotoLibraryPlugin: Plugin {
             }
 
             var configuration = PHPickerConfiguration(photoLibrary: .shared())
-            configuration.filter = .images
+            configuration.filter = .any(of: [.images, .videos])
             configuration.preferredAssetRepresentationMode = .current
             configuration.selectionLimit = maxPhotoLibrarySelectionCount
 
@@ -66,18 +66,29 @@ class PhotoLibraryPlugin: Plugin {
             .appendingPathComponent(stagingDirectoryName, isDirectory: true)
     }
 
-    fileprivate func stageImageFile(
+    fileprivate func stageMediaFile(
         sourceURL: URL,
         typeIdentifier: String?,
-        suggestedName: String?
-    ) throws -> StagedPhotoLibraryImage {
-        let sourceType = imageType(typeIdentifier: typeIdentifier, sourceURL: sourceURL)
-        let shouldConvertToJpeg = isHeicOrHeif(type: sourceType, sourceURL: sourceURL)
+        suggestedName: String?,
+        mediaKind: PhotoLibraryMediaKind
+    ) throws -> StagedPhotoLibraryMedia {
+        let sourceType: UTType?
+        if mediaKind == .image {
+            sourceType = imageType(typeIdentifier: typeIdentifier, sourceURL: sourceURL)
+        } else {
+            sourceType = mediaType(typeIdentifier: typeIdentifier, sourceURL: sourceURL)
+        }
+        let shouldConvertToJpeg =
+            mediaKind == .image && isHeicOrHeif(type: sourceType, sourceURL: sourceURL)
         let token = "photo-stage-\(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased())"
         let fileExtension = shouldConvertToJpeg
             ? "jpg"
-            : preferredFilenameExtension(type: sourceType, sourceURL: sourceURL)
-        let name = sanitizedImageFilename(suggestedName, fileExtension: fileExtension)
+            : preferredFilenameExtension(type: sourceType, sourceURL: sourceURL, mediaKind: mediaKind)
+        let name = sanitizedMediaFilename(
+            suggestedName,
+            fileExtension: fileExtension,
+            mediaKind: mediaKind
+        )
         let targetURL = stagingDirectory().appendingPathComponent("\(token)-\(name)")
 
         try FileManager.default.createDirectory(
@@ -103,12 +114,16 @@ class PhotoLibraryPlugin: Plugin {
             atPath: targetURL.path
         )[.size] as? NSNumber
 
-        return StagedPhotoLibraryImage(
+        return StagedPhotoLibraryMedia(
             token: token,
             name: name,
             mimeType: shouldConvertToJpeg
                 ? "image/jpeg"
-                : mimeType(type: sourceType, sourceURL: targetURL),
+                : mimeType(
+                    type: sourceType,
+                    sourceURL: targetURL,
+                    mediaKind: mediaKind
+                ),
             size: size?.uint64Value ?? 0,
             previewPath: targetURL.path
         )
@@ -133,7 +148,7 @@ class PhotoLibraryPlugin: Plugin {
         )
     }
 
-    fileprivate func cleanupStalePhotoLibraryImages() {
+    fileprivate func cleanupStalePhotoLibraryMedia() {
         let directory = stagingDirectory()
         guard
             let entries = try? FileManager.default.contentsOfDirectory(
@@ -154,7 +169,17 @@ class PhotoLibraryPlugin: Plugin {
     }
 }
 
-private struct StagedPhotoLibraryImage: Encodable {
+private enum PhotoLibraryMediaKind {
+    case image
+    case video
+}
+
+private struct PhotoLibraryMediaType {
+    let identifier: String
+    let kind: PhotoLibraryMediaKind
+}
+
+private struct StagedPhotoLibraryMedia: Encodable {
     let token: String
     let name: String
     let mimeType: String
@@ -178,7 +203,7 @@ private class PhotoLibraryPickerDelegate: NSObject, PHPickerViewControllerDelega
         picker.dismiss(animated: true)
 
         guard !results.isEmpty else {
-            invoke.resolve([StagedPhotoLibraryImage]())
+            invoke.resolve([StagedPhotoLibraryMedia]())
             onComplete()
             return
         }
@@ -190,11 +215,11 @@ private class PhotoLibraryPickerDelegate: NSObject, PHPickerViewControllerDelega
         }
 
         DispatchQueue.global(qos: .userInitiated).async {
-            plugin.cleanupStalePhotoLibraryImages()
+            plugin.cleanupStalePhotoLibraryMedia()
 
             let group = DispatchGroup()
             let lock = NSLock()
-            var stagedImages = Array<StagedPhotoLibraryImage?>(
+            var stagedMedia = Array<StagedPhotoLibraryMedia?>(
                 repeating: nil,
                 count: results.count
             )
@@ -202,12 +227,12 @@ private class PhotoLibraryPickerDelegate: NSObject, PHPickerViewControllerDelega
 
             for (index, result) in results.enumerated() {
                 let provider = result.itemProvider
-                guard let typeIdentifier = imageTypeIdentifier(from: provider) else {
+                guard let mediaType = mediaTypeIdentifier(from: provider) else {
                     continue
                 }
 
                 group.enter()
-                provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, error in
+                provider.loadFileRepresentation(forTypeIdentifier: mediaType.identifier) { url, error in
                     defer { group.leave() }
 
                     if let error = error {
@@ -219,19 +244,20 @@ private class PhotoLibraryPickerDelegate: NSObject, PHPickerViewControllerDelega
 
                     guard let url = url else {
                         lock.lock()
-                        firstError = firstError ?? "Selected photo did not provide a file"
+                        firstError = firstError ?? "Selected media did not provide a file"
                         lock.unlock()
                         return
                     }
 
                     do {
-                        let staged = try plugin.stageImageFile(
+                        let staged = try plugin.stageMediaFile(
                             sourceURL: url,
-                            typeIdentifier: typeIdentifier,
-                            suggestedName: provider.suggestedName
+                            typeIdentifier: mediaType.identifier,
+                            suggestedName: provider.suggestedName,
+                            mediaKind: mediaType.kind
                         )
                         lock.lock()
-                        stagedImages[index] = staged
+                        stagedMedia[index] = staged
                         lock.unlock()
                     } catch {
                         lock.lock()
@@ -242,13 +268,13 @@ private class PhotoLibraryPickerDelegate: NSObject, PHPickerViewControllerDelega
             }
 
             group.notify(queue: .main) {
-                let orderedStagedImages = stagedImages.compactMap { $0 }
-                if !orderedStagedImages.isEmpty {
-                    self.invoke.resolve(orderedStagedImages)
+                let orderedStagedMedia = stagedMedia.compactMap { $0 }
+                if !orderedStagedMedia.isEmpty {
+                    self.invoke.resolve(orderedStagedMedia)
                 } else if let firstError = firstError {
-                    self.invoke.reject("Failed to stage photo library image: \(firstError)")
+                    self.invoke.reject("Failed to stage photo library media: \(firstError)")
                 } else {
-                    self.invoke.resolve([StagedPhotoLibraryImage]())
+                    self.invoke.resolve([StagedPhotoLibraryMedia]())
                 }
                 self.onComplete()
             }
@@ -275,11 +301,33 @@ private func topmostPresentableViewController(from root: UIViewController) -> UI
 }
 
 @available(iOS 14.0, *)
+private func mediaTypeIdentifier(from provider: NSItemProvider) -> PhotoLibraryMediaType? {
+    if let typeIdentifier = videoTypeIdentifier(from: provider) {
+        return PhotoLibraryMediaType(identifier: typeIdentifier, kind: .video)
+    }
+
+    if let typeIdentifier = imageTypeIdentifier(from: provider) {
+        return PhotoLibraryMediaType(identifier: typeIdentifier, kind: .image)
+    }
+
+    return nil
+}
+
+@available(iOS 14.0, *)
 private func imageTypeIdentifier(from provider: NSItemProvider) -> String? {
     preferredTypeIdentifier(
         from: provider,
         preferredTypes: preferredImageTypes(),
-        fallbackType: .image
+        fallbackTypes: [.image]
+    )
+}
+
+@available(iOS 14.0, *)
+private func videoTypeIdentifier(from provider: NSItemProvider) -> String? {
+    preferredTypeIdentifier(
+        from: provider,
+        preferredTypes: preferredVideoTypes(),
+        fallbackTypes: [.movie, .video]
     )
 }
 
@@ -291,13 +339,23 @@ private func preferredImageTypes() -> [UTType] {
 }
 
 @available(iOS 14.0, *)
+private func preferredVideoTypes() -> [UTType] {
+    var types = ["mp4", "mov", "m4v"].compactMap {
+        UTType(filenameExtension: $0)
+    }
+    types.append(contentsOf: [.mpeg4Movie, .quickTimeMovie, .movie])
+    return types
+}
+
+@available(iOS 14.0, *)
 private func preferredTypeIdentifier(
     from provider: NSItemProvider,
     preferredTypes: [UTType],
-    fallbackType: UTType
+    fallbackTypes: [UTType]
 ) -> String? {
+    let fallbackIdentifiers = Set(fallbackTypes.map(\.identifier))
     let concreteRegisteredTypes = provider.registeredTypeIdentifiers.compactMap { identifier -> (String, UTType)? in
-        guard identifier != fallbackType.identifier, let type = UTType(identifier) else {
+        guard !fallbackIdentifiers.contains(identifier), let type = UTType(identifier) else {
             return nil
         }
         return (identifier, type)
@@ -312,13 +370,19 @@ private func preferredTypeIdentifier(
         }
     }
 
-    if let match = concreteRegisteredTypes.first(where: { $0.1.conforms(to: fallbackType) }) {
-        return match.0
+    for fallbackType in fallbackTypes {
+        if let match = concreteRegisteredTypes.first(where: { $0.1.conforms(to: fallbackType) }) {
+            return match.0
+        }
     }
 
-    return provider.hasItemConformingToTypeIdentifier(fallbackType.identifier)
-        ? fallbackType.identifier
-        : nil
+    for fallbackType in fallbackTypes {
+        if provider.hasItemConformingToTypeIdentifier(fallbackType.identifier) {
+            return fallbackType.identifier
+        }
+    }
+
+    return nil
 }
 
 @available(iOS 14.0, *)
@@ -326,6 +390,17 @@ private func imageType(typeIdentifier: String?, sourceURL: URL) -> UTType? {
     if let sourceType = imageSourceType(from: sourceURL) {
         return sourceType
     }
+    if let typeIdentifier = typeIdentifier, let type = UTType(typeIdentifier) {
+        return type
+    }
+    if let type = UTType(filenameExtension: sourceURL.pathExtension) {
+        return type
+    }
+    return nil
+}
+
+@available(iOS 14.0, *)
+private func mediaType(typeIdentifier: String?, sourceURL: URL) -> UTType? {
     if let typeIdentifier = typeIdentifier, let type = UTType(typeIdentifier) {
         return type
     }
@@ -347,8 +422,17 @@ private func imageSourceType(from sourceURL: URL) -> UTType? {
     return UTType(typeIdentifier as String)
 }
 
-private func sanitizedImageFilename(_ suggestedName: String?, fileExtension: String) -> String {
-    let fallback = "photo-library-image"
+private func sanitizedMediaFilename(
+    _ suggestedName: String?,
+    fileExtension: String,
+    mediaKind: PhotoLibraryMediaKind
+) -> String {
+    let fallback: String
+    if mediaKind == .video {
+        fallback = "photo-library-video"
+    } else {
+        fallback = "photo-library-image"
+    }
     let rawName = suggestedName?.trimmingCharacters(in: .whitespacesAndNewlines)
     let basename = rawName?.isEmpty == false ? rawName! : fallback
     let filename = URL(fileURLWithPath: basename).lastPathComponent
@@ -357,23 +441,32 @@ private func sanitizedImageFilename(_ suggestedName: String?, fileExtension: Str
         .lastPathComponent
     let normalizedName = nameWithoutExtension.isEmpty ? fallback : nameWithoutExtension
     let normalizedExtension = fileExtension.trimmingCharacters(in: .whitespacesAndNewlines)
+    let fallbackExtension = mediaKind == .video ? "mov" : "jpg"
 
-    return "\(normalizedName).\(normalizedExtension.isEmpty ? "jpg" : normalizedExtension)"
+    return "\(normalizedName).\(normalizedExtension.isEmpty ? fallbackExtension : normalizedExtension)"
 }
 
 @available(iOS 14.0, *)
-private func preferredFilenameExtension(type: UTType?, sourceURL: URL) -> String {
+private func preferredFilenameExtension(
+    type: UTType?,
+    sourceURL: URL,
+    mediaKind: PhotoLibraryMediaKind
+) -> String {
     if let fileExtension = type?.preferredFilenameExtension, !fileExtension.isEmpty {
         return fileExtension
     }
     if !sourceURL.pathExtension.isEmpty {
         return sourceURL.pathExtension
     }
-    return "jpg"
+    return mediaKind == .video ? "mov" : "jpg"
 }
 
 @available(iOS 14.0, *)
-private func mimeType(type: UTType?, sourceURL: URL) -> String {
+private func mimeType(
+    type: UTType?,
+    sourceURL: URL,
+    mediaKind: PhotoLibraryMediaKind
+) -> String {
     if let mimeType = type?.preferredMIMEType {
         return mimeType
     }
@@ -389,8 +482,14 @@ private func mimeType(type: UTType?, sourceURL: URL) -> String {
         return "image/heic"
     case "webp":
         return "image/webp"
+    case "mov", "qt":
+        return "video/quicktime"
+    case "mp4":
+        return "video/mp4"
+    case "m4v":
+        return "video/x-m4v"
     default:
-        return "application/octet-stream"
+        return mediaKind == .video ? "video/quicktime" : "application/octet-stream"
     }
 }
 

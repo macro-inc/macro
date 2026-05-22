@@ -315,7 +315,7 @@ export function ChannelCompose() {
                         <Input.Actions.Left>
                           <Show
                             when={!isPlatform('ios')}
-                            fallback={<Input.AttachNativePhotosAction />}
+                            fallback={<Input.AttachNativeMediaAction />}
                           >
                             <Input.AttachFilesAction />
                           </Show>

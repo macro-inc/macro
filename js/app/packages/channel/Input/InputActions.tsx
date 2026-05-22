@@ -1,4 +1,4 @@
-import { pickNativePhotoLibraryImages } from '@core/util/nativePhotoLibrary';
+import { pickNativePhotoLibraryMedia } from '@core/util/nativePhotoLibrary';
 import FormatIcon from '@phosphor/text-aa.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import ImageIcon from '@phosphor-icons/core/regular/image.svg?component-solid';
@@ -44,11 +44,11 @@ export function AttachFilesAction() {
   );
 }
 
-export function AttachNativePhotosAction() {
+export function AttachNativeMediaAction() {
   const commands = useInputCommands();
 
-  const onAttachPhotos = async () => {
-    const files = await pickNativePhotoLibraryImages();
+  const onAttachMedia = async () => {
+    const files = await pickNativePhotoLibraryMedia();
     if (files.length > 0) {
       await commands.attachFiles(files);
     }
@@ -56,13 +56,15 @@ export function AttachNativePhotosAction() {
 
   return (
     <InputActionButton
-      label="Attach photos"
-      onClick={() => void onAttachPhotos()}
+      label="Attach photos or videos"
+      onClick={() => void onAttachMedia()}
     >
       <ImageIcon />
     </InputActionButton>
   );
 }
+
+export const AttachNativePhotosAction = AttachNativeMediaAction;
 
 export function ToggleFormatAction() {
   const input = useInput();

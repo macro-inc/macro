@@ -36,7 +36,7 @@ impl StagedUploadSource {
         match self {
             Self::Share => "staged shared file",
             Self::Pasteboard => "staged pasteboard image",
-            Self::PhotoLibrary => "staged photo library image",
+            Self::PhotoLibrary => "staged photo library media",
         }
     }
 
@@ -44,7 +44,7 @@ impl StagedUploadSource {
         match self {
             Self::Share => "staged shared file not found",
             Self::Pasteboard => "staged pasteboard image not found",
-            Self::PhotoLibrary => "staged photo library image not found",
+            Self::PhotoLibrary => "staged photo library media not found",
         }
     }
 }

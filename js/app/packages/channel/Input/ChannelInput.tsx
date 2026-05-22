@@ -69,7 +69,7 @@ function IosDefaultActions(props: { input: InputData }) {
   return (
     <Input.Actions>
       <Input.Actions.Left>
-        <Input.AttachNativePhotosAction />
+        <Input.AttachNativeMediaAction />
         <Input.ToggleFormatAction />
         <Show when={isReplyInput(props.input)}>
           <Input.CloseReplyAction />
