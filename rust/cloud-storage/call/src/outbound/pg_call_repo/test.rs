@@ -565,19 +565,19 @@ async fn stored_call_record_share_with_team(
     pool: &Pool<Postgres>,
     call_id: Uuid,
 ) -> anyhow::Result<bool> {
-    Ok(
-        sqlx::query_scalar::<_, bool>(r#"SELECT share_with_team FROM call_records WHERE id = $1"#)
-            .bind(call_id)
-            .fetch_one(pool)
-            .await?,
+    Ok(sqlx::query_scalar!(
+        r#"SELECT share_with_team FROM call_records WHERE id = $1"#,
+        call_id,
     )
+    .fetch_one(pool)
+    .await?)
 }
 
 async fn team_entity_access_count(pool: &Pool<Postgres>, call_id: Uuid) -> anyhow::Result<i64> {
-    Ok(sqlx::query_scalar::<_, i64>(
-        r#"SELECT COUNT(*) FROM entity_access WHERE entity_id = $1 AND source_type = 'team'"#,
+    Ok(sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM entity_access WHERE entity_id = $1 AND source_type = 'team'"#,
+        call_id,
     )
-    .bind(call_id)
     .fetch_one(pool)
     .await?)
 }
@@ -1206,10 +1206,12 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
     let repo = repo(pool.clone());
     let now = Utc::now();
 
-    sqlx::query(r#"UPDATE calls SET share_with_team = false WHERE id = $1"#)
-        .bind(CALL1)
-        .execute(&pool)
-        .await?;
+    sqlx::query!(
+        r#"UPDATE calls SET share_with_team = false WHERE id = $1"#,
+        CALL1,
+    )
+    .execute(&pool)
+    .await?;
 
     // Ingest two transcript segments into the active call.
     repo.create_transcript_segment(
@@ -1290,10 +1292,12 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
 async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
 
-    sqlx::query(r#"UPDATE call_records SET share_with_team = false WHERE id = $1"#)
-        .bind(CALL_ARCHIVED)
-        .execute(&pool)
-        .await?;
+    sqlx::query!(
+        r#"UPDATE call_records SET share_with_team = false WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .execute(&pool)
+    .await?;
 
     let record = repo
         .get_call_record_by_call_id(&CALL_ARCHIVED)
@@ -1643,10 +1647,12 @@ async fn get_call_records_by_user_returns_share_with_team(
 ) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
 
-    sqlx::query(r#"UPDATE call_records SET share_with_team = false WHERE id = $1"#)
-        .bind(CALL_ARCHIVED)
-        .execute(&pool)
-        .await?;
+    sqlx::query!(
+        r#"UPDATE call_records SET share_with_team = false WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .execute(&pool)
+    .await?;
 
     let records = repo
         .get_call_records_by_user(USER_A.deref().copied(), 10, &None)
@@ -2327,12 +2333,12 @@ async fn patch_call_record_share_with_team_false_updates_archived_record_and_rem
 
     give_user_a_team(&pool, USER_A.as_ref(), &team_id).await?;
 
-    sqlx::query(
+    sqlx::query!(
         r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
            VALUES ($1, 'call', $2, 'team', 'view')"#,
+        CALL_ARCHIVED,
+        team_id.to_string(),
     )
-    .bind(CALL_ARCHIVED)
-    .bind(team_id.to_string())
     .execute(&pool)
     .await?;
 
