@@ -200,10 +200,15 @@ pub(in crate::api::search) async fn perform_unified_search(
     // Emails and channels both get whitespace-split terms — emails match
     // each term independently across many fields ANDed inside OpenSearch;
     // channel messages are single-doc-per-message so each token must
-    // appear in the same message via bool.must. Documents get split terms
-    // once the alias points at a join-shape index, where each term becomes
-    // a separate has_child clause ANDed via bool.must.
+    // appear in the same message via bool.must. Documents and chats get
+    // split terms once their alias points at a join-shape index, where
+    // each term becomes a separate has_child clause ANDed via bool.must.
     let document_terms = if opensearch_client::documents_shape::alias_uses_join_shape() {
+        split_search_terms(&terms)
+    } else {
+        terms.clone()
+    };
+    let chat_terms = if opensearch_client::chats_shape::alias_uses_join_shape() {
         split_search_terms(&terms)
     } else {
         terms.clone()
@@ -211,7 +216,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     let channel_terms = split_search_terms(&terms);
     filter_document_response.terms = document_terms;
     filter_channel_response.terms = channel_terms;
-    filter_chat_response.terms = terms.clone();
+    filter_chat_response.terms = chat_terms;
     filter_email_response.terms = email_terms.clone();
     filter_call_record_response.terms = terms.clone();
 
