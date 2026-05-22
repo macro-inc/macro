@@ -233,8 +233,10 @@ where
         // populate path; the link's email is treated as the source of
         // truth elsewhere, so we don't want a bad value here to error
         // out an otherwise valid contact populate.
-        if let Some((_, user_domain)) = user_email.trim().split_once('@')
+        if let Some((user_local_part, user_domain)) = user_email.trim().split_once('@')
+            && !user_local_part.is_empty()
             && !user_domain.is_empty()
+            && !user_domain.contains('@')
             && user_domain.eq_ignore_ascii_case(domain)
         {
             tracing::debug!(
