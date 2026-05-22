@@ -55,6 +55,8 @@ this value when present, falling back to `started_at` otherwise. */
   /** AI-generated summary of the call. Only set on archived `call_records`
 once summarization has run; active calls always return `None`. */
   summary?: CallRecordSummary;
+  /** Whether the call is shared with the creator's team. */
+  shareWithTeam: boolean;
   /** Transcript segments ordered by `sequence_num`. */
   transcript: CallRecordTranscriptSegment[];
 }

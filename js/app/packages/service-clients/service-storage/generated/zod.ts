@@ -977,6 +977,9 @@ export const getCallRecordResponse = zod
       .describe(
         'AI-generated summary of the call. Only set on archived `call_records`\nonce summarization has run; active calls always return `None`.'
       ),
+    shareWithTeam: zod
+      .boolean()
+      .describe("Whether the call is shared with the creator's team."),
     transcript: zod
       .array(
         zod
