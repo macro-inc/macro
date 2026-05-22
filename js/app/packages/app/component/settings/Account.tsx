@@ -17,7 +17,7 @@ import {
   ENABLE_AUTO_UPDATE_UI,
   ENABLE_EMAIL,
   ENABLE_PROFILE_PICTURES,
-  ENABLE_SIMPLIFIED_PRICING_OVERRIDE,
+  ENABLE_NEW_PRICING_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { useUserTeamsQuery } from '@queries/team';
 import { usePaywallState } from '@core/constant/PaywallState';
@@ -200,8 +200,8 @@ export function Account() {
             <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
               <div class="px-4 py-2 w-full">
                 <ShowFeatureFlag
-                  key="enable-simplified-pricing"
-                  enabledOverride={ENABLE_SIMPLIFIED_PRICING_OVERRIDE}
+                  key="enable-new-pricing"
+                  enabledOverride={ENABLE_NEW_PRICING_OVERRIDE}
                   fallback={
                     <PaywallComponent
                       hideCloseButton

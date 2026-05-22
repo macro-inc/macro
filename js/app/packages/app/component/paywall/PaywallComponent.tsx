@@ -1,5 +1,5 @@
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
-import { ENABLE_SIMPLIFIED_PRICING_OVERRIDE } from '@core/constant/featureFlags';
+import { ENABLE_NEW_PRICING_OVERRIDE } from '@core/constant/featureFlags';
 import type { PaywallKey } from '@core/constant/PaywallState';
 import PaywallComponentLegacy from './PaywallComponentLegacy';
 import PaywallComponentSimplified from './PaywallComponentSimplified';
@@ -15,8 +15,8 @@ export interface PaywallProps {
 
 const PaywallComponent = (props: PaywallProps) => (
   <ShowFeatureFlag
-    key="enable-simplified-pricing"
-    enabledOverride={ENABLE_SIMPLIFIED_PRICING_OVERRIDE}
+    key="enable-new-pricing"
+    enabledOverride={ENABLE_NEW_PRICING_OVERRIDE}
     fallback={<PaywallComponentLegacy {...props} />}
   >
     <PaywallComponentSimplified {...props} />
