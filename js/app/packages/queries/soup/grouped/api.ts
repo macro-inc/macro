@@ -1,7 +1,13 @@
 import type { ApiGroupMeta } from '@service-storage/generated/schemas/apiGroupMeta';
 import type { GroupedSoupPage as WireGroupedSoupPage } from '@service-storage/generated/schemas/groupedSoupPage';
+import type { SoupApiItem } from '@service-storage/generated/schemas/soupApiItem';
 import { GROUPED_SUBQUERY_MARKER } from '../keys';
-import type { GroupByField, GroupedSoupPage, GroupMeta } from './types';
+import {
+  type GroupByField,
+  type GroupedSoupPage,
+  type GroupMeta,
+  NOT_SET_GROUP_KEY,
+} from './types';
 
 export function serializeGroupByField(field: GroupByField): unknown {
   switch (field.type) {
@@ -69,4 +75,64 @@ export function extractPerGroupKeyFromQueryKey(
   if (queryKey[len - 2] !== GROUPED_SUBQUERY_MARKER) return;
   const key = queryKey[len - 1];
   return typeof key === 'string' ? key : undefined;
+}
+
+/**
+ * Compute the group keys an item belongs to under the given grouping.
+ * Returns `undefined` when the grouping can't be reproduced client-side
+ * (date buckets, non-categorical properties) — caller should invalidate.
+ */
+export function computeGroupKeysForItem(
+  item: SoupApiItem,
+  groupBy: GroupByField | undefined,
+): string[] | undefined {
+  if (!groupBy) return;
+
+  switch (groupBy.type) {
+    case 'entity_type':
+      return [item.tag];
+
+    case 'project': {
+      if (item.tag === 'channel' || item.tag === 'call') return;
+
+      const projectId = (item.data as { projectId?: string | null }).projectId;
+      return [projectId ?? NOT_SET_GROUP_KEY];
+    }
+
+    case 'property': {
+      if (item.tag === 'channel' || item.tag === 'call') return;
+
+      const properties = (
+        item.data as unknown as {
+          properties?: Array<Record<string, unknown>>;
+        }
+      ).properties;
+      if (!properties) return [NOT_SET_GROUP_KEY];
+
+      const prop = properties.find(
+        (p) =>
+          (p.definition as Record<string, unknown> | undefined)?.id ===
+          groupBy.propertyDefinitionId,
+      );
+      if (!prop) return [NOT_SET_GROUP_KEY];
+
+      const value = prop.value as
+        | { type: string; value: unknown }
+        | null
+        | undefined;
+      if (value == null) return [NOT_SET_GROUP_KEY];
+
+      if (value.type === 'SelectOption' && Array.isArray(value.value)) {
+        return value.value as string[];
+      }
+      if (value.type === 'EntityReference' && Array.isArray(value.value)) {
+        return (value.value as Array<{ id: string }>).map((r) => r.id);
+      }
+
+      return; // Non-categorical: backend bucketing is opaque.
+    }
+
+    case 'date':
+      return; // Server-side date bucketing is opaque.
+  }
 }
