@@ -3,6 +3,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+#[cfg(test)]
+mod test;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatSearchBackfill {
     pub chat_id: String,
@@ -202,8 +205,7 @@ pub struct ChatMessageInfo {
 }
 
 /// Gets the chat title, message content and role used for search.
-/// Returns `None` when the message does not exist or the owning chat is
-/// persistent (persistent chats are not indexed). Soft-deleted chats are
+/// Returns `None` when the message does not exist. Soft-deleted chats are
 /// returned with `deleted_at` populated so the caller can prune the search
 /// index entry.
 #[tracing::instrument(skip(db))]
@@ -224,7 +226,7 @@ pub async fn get_chat_message_info(
         JOIN
             "Chat" c on c."id" = m."chatId"
         WHERE
-            m.id = $1 AND m."chatId" = $2 AND c."isPersistent" = false
+            m.id = $1 AND m."chatId" = $2
         "#,
         chat_message_id,
         chat_id

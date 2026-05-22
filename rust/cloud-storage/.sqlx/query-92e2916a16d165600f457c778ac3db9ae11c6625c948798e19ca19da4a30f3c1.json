@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            m.content as \"content\",\n            c.name as \"name\",\n            m.role as \"role\",\n            c.\"deletedAt\"::timestamptz as \"deleted_at\"\n        FROM\n            \"ChatMessage\" m\n        JOIN\n            \"Chat\" c on c.\"id\" = m.\"chatId\"\n        WHERE\n            m.id = $1 AND m.\"chatId\" = $2 AND c.\"isPersistent\" = false\n        ",
+  "query": "\n        SELECT\n            m.content as \"content\",\n            c.name as \"name\",\n            m.role as \"role\",\n            c.\"deletedAt\"::timestamptz as \"deleted_at\"\n        FROM\n            \"ChatMessage\" m\n        JOIN\n            \"Chat\" c on c.\"id\" = m.\"chatId\"\n        WHERE\n            m.id = $1 AND m.\"chatId\" = $2\n        ",
   "describe": {
     "columns": [
       {
@@ -37,5 +37,5 @@
       null
     ]
   },
-  "hash": "7e30c2f23eec4e4131e6463f0b05722b1dd8b220025c72ec4c70772251b03656"
+  "hash": "92e2916a16d165600f457c778ac3db9ae11c6625c948798e19ca19da4a30f3c1"
 }
