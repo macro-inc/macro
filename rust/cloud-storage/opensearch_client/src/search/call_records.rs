@@ -166,22 +166,29 @@ impl CallRecordQueryBuilder {
             bool_query.filter(QueryType::terms("channel_id", self.channel_ids.clone()));
         }
 
-        // speaker_id is a child field — has_child filter without inner_hits;
-        // the term-clauses below handle highlights.
-        if !self.speaker_ids.is_empty() {
-            let speaker_query = QueryType::terms("speaker_id", self.speaker_ids.clone());
-            let speaker_has_child = HasChildQuery::new(CHILD_RELATION, speaker_query);
-            bool_query.filter(speaker_has_child.into());
-        }
-
         // One has_child clause per term, ANDed via bool.must. Each
         // carries its own inner_hits; the shared highlight_query tags
         // every search term on a returned segment regardless of which
         // clause produced it.
+        //
+        // speaker_id is a child-side field — it lives inside each
+        // has_child clause alongside the term query so the same segment
+        // that matches the term must also be from one of the requested
+        // speakers. Filtering speaker_id at the bool level instead
+        // would only require *some* segment in the call to have the
+        // speaker, not necessarily the segment matching the term.
         let highlight_query =
             build_all_terms_highlight_query(&self.inner.terms, &self.inner.match_type);
         for (idx, term) in self.inner.terms.iter().enumerate() {
-            let inner_query = build_child_content_query(term, &self.inner.match_type);
+            let term_query = build_child_content_query(term, &self.inner.match_type);
+            let inner_query = if self.speaker_ids.is_empty() {
+                term_query
+            } else {
+                let mut combined = BoolQueryBuilder::new();
+                combined.must(term_query);
+                combined.must(QueryType::terms("speaker_id", self.speaker_ids.clone()));
+                combined.build().into()
+            };
             let inner_hits = InnerHits::new()
                 .name(format!("term_{idx}"))
                 .size(INNER_HITS_PER_TERM)
