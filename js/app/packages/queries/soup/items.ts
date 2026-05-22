@@ -112,10 +112,10 @@ export const useSoupAstItemsQuery = (
   const instructionsIdQuery = useInstructionsMdIdQuery();
 
   return useInfiniteQuery(() => {
-    const { params, body, groupBy, groupKey } = args();
+    const { params, body, groupBy } = args();
 
     return {
-      queryKey: soupKeys.astItems({ params, body, groupBy, groupKey }).queryKey,
+      queryKey: soupKeys.astItems({ params, body, groupBy }).queryKey,
       queryFn: async (ctx): Promise<SoupAstItemsPage> => {
         if (groupBy) {
           const response = await throwOnErr(
@@ -124,7 +124,6 @@ export const useSoupAstItemsQuery = (
                 params: {
                   cursor: ctx.pageParam,
                   group_by: serializeGroupByField(groupBy),
-                  group_key: groupKey,
                 },
                 body: {
                   ...body,

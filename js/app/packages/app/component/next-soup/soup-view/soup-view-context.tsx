@@ -35,7 +35,7 @@ import type {
   GroupedSoupPage,
 } from '@queries/soup/grouped/types';
 import { type SoupParams, useSoupAstItemsQuery } from '@queries/soup/items';
-import { soupKeys } from '@queries/soup/keys';
+import { GROUPED_SUBQUERY_MARKER, soupKeys } from '@queries/soup/keys';
 import { mapSoupPageToEntityList } from '@queries/soup/transform-utils';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
@@ -352,7 +352,6 @@ export const SoupViewContextProvider: FlowComponent<
       const field = groupByField();
       const groups = itemsQuery.data?.groups;
       const items = itemsQuery.data?.items;
-      const dataVersion = itemsQuery.dataUpdatedAt;
 
       if (!field || !groups || !items) {
         return [];
@@ -367,13 +366,13 @@ export const SoupViewContextProvider: FlowComponent<
         return {
           key: group.key,
           queryKey: [
-            ...soupKeys.groupedGroup({
+            ...soupKeys.astItems({
               params: soupParams(),
               body: soupBody(),
               groupBy: field,
-              groupKey: group.key,
             }).queryKey,
-            dataVersion,
+            GROUPED_SUBQUERY_MARKER,
+            group.key,
           ] as readonly unknown[],
           queryFn: async (ctx: { pageParam: string | null }) => {
             const response = await throwOnErr(async () =>
@@ -414,6 +413,7 @@ export const SoupViewContextProvider: FlowComponent<
           },
           enabled: true,
           staleTime: Infinity,
+          meta: { normalize: true },
         };
       });
     }

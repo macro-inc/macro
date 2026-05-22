@@ -14,6 +14,7 @@ type InfiniteQueryConfig<TData, TSelect = TData[]> = {
   select?: (pages: TData[]) => TSelect;
   enabled?: boolean;
   staleTime?: number;
+  meta?: Record<string, unknown>;
 };
 
 type InfiniteQueryResult<TData, TSelect> = {
@@ -65,6 +66,7 @@ export function createInfiniteQueries<TData, TSelect = TData[]>(
             TData | null,
             string | null
           >,
+          meta: config?.meta,
         };
       });
 
