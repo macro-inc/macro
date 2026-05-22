@@ -1,7 +1,10 @@
 use std::time::Duration;
 
 use anyhow::{Context, ensure};
-use futures::{SinkExt, StreamExt};
+use futures::{
+    SinkExt, StreamExt,
+    stream::{SplitSink, SplitStream},
+};
 use local_e2e_test_support::{
     LocalE2eConfig, LocalE2eSeed, LocalE2eServices, LocalJwtOptions, SeedUser,
     encode_local_jwt_with,
@@ -9,248 +12,831 @@ use local_e2e_test_support::{
 use reqwest::{Client, Method, Response};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{PgPool, postgres::PgPoolOptions};
+use tokio::net::TcpStream;
 use tokio::time::{Instant, timeout};
-use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::{Error as WebsocketError, Message as WebsocketMessage};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 use uuid::Uuid;
 
 const WEBSOCKET_TIMEOUT: Duration = Duration::from_secs(10);
 const NOTIFICATION_TIMEOUT: Duration = Duration::from_secs(30);
+const CONTACTS_TIMEOUT: Duration = Duration::from_secs(30);
+const DEFAULT_LOCAL_DATABASE_URL: &str = "postgres://user:password@localhost:5432/macrodb";
+
+#[derive(Clone, Debug)]
+struct ChannelApiClient {
+    label: String,
+    mutation_base_url: String,
+    read_base_url: String,
+}
+
+impl ChannelApiClient {
+    /// Channels API under test.
+    /// Override mutations with `LOCAL_E2E_CHANNELS_BASE_URL=http://.../channels`.
+    /// Override the read-model API with `LOCAL_E2E_CHANNELS_READ_BASE_URL=http://.../comms/channels`.
+    fn from_config(config: &LocalE2eConfig, services: &LocalE2eServices) -> Self {
+        let mutation_base_url = config
+            .get("LOCAL_E2E_CHANNELS_BASE_URL")
+            .or_else(|| config.get("LOCAL_E2E_NEW_CHANNELS_BASE_URL"))
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("{}/channels", services.document_storage_url()));
+        let read_base_url = config
+            .get("LOCAL_E2E_CHANNELS_READ_BASE_URL")
+            .or_else(|| config.get("LOCAL_E2E_NEW_CHANNELS_READ_BASE_URL"))
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("{}/comms/channels", services.document_storage_url()));
+        Self {
+            label: "channels".to_string(),
+            mutation_base_url: trim_trailing_slash(&mutation_base_url),
+            read_base_url: trim_trailing_slash(&read_base_url),
+        }
+    }
+
+    fn label(&self) -> &str {
+        &self.label
+    }
+
+    fn create_channel_url(&self) -> String {
+        self.mutation_base_url.clone()
+    }
+
+    fn get_or_create_dm_url(&self) -> String {
+        format!("{}/get_or_create_dm", self.mutation_base_url)
+    }
+
+    fn get_or_create_private_url(&self) -> String {
+        format!("{}/get_or_create_private", self.mutation_base_url)
+    }
+
+    fn channel_url(&self, channel_id: &str) -> String {
+        format!("{}/{channel_id}", self.mutation_base_url)
+    }
+
+    fn read_channel_url(&self, channel_id: &str) -> String {
+        format!("{}/{channel_id}", self.read_base_url)
+    }
+
+    fn channel_message_url(&self, channel_id: &str, message_id: &str) -> String {
+        format!(
+            "{}/{channel_id}/message/{message_id}",
+            self.mutation_base_url
+        )
+    }
+
+    fn post_channel_message_url(&self, channel_id: &str) -> String {
+        format!("{}/{channel_id}/message", self.mutation_base_url)
+    }
+
+    fn post_channel_reaction_url(&self, channel_id: &str) -> String {
+        format!("{}/{channel_id}/reaction", self.mutation_base_url)
+    }
+
+    fn post_channel_typing_url(&self, channel_id: &str) -> String {
+        format!("{}/{channel_id}/typing", self.mutation_base_url)
+    }
+
+    fn channel_participants_url(&self, channel_id: &str) -> String {
+        format!("{}/{channel_id}/participants", self.mutation_base_url)
+    }
+
+    fn join_channel_url(&self, channel_id: &str) -> String {
+        format!("{}/{channel_id}/join", self.mutation_base_url)
+    }
+
+    fn leave_channel_url(&self, channel_id: &str) -> String {
+        format!("{}/{channel_id}/leave", self.mutation_base_url)
+    }
+}
+
+fn trim_trailing_slash(url: &str) -> String {
+    url.trim_end_matches('/').to_string()
+}
+
+struct ChannelContractContext {
+    world: TestWorld,
+    api: ChannelApiClient,
+    http: Client,
+    pool: PgPool,
+    users: ContractUsers,
+}
+
+struct ContractUsers {
+    actor: SeedUser,
+    actor_token: String,
+    bob: SeedUser,
+    bob_token: String,
+    charlie: SeedUser,
+    charlie_token: String,
+    dana: SeedUser,
+    dana_token: String,
+    eve: SeedUser,
+    eve_token: String,
+}
+
+impl ChannelContractContext {
+    async fn load() -> anyhow::Result<Self> {
+        let world = TestWorld::load()?;
+        let api = ChannelApiClient::from_config(&world.config, &world.services);
+        let http = Client::new();
+        let pool = connect_db(&world.config).await?;
+        let actor = world.seed.smoke_user()?.clone();
+        let actor_token = world.token_for(&actor)?;
+        let bob = world
+            .seed
+            .user_by_email("bob@example.com")
+            .context("missing bob fixture")?
+            .clone();
+        let bob_token = world.token_for(&bob)?;
+        let charlie = world
+            .seed
+            .user_by_email("charlie@example.com")
+            .context("missing charlie fixture")?
+            .clone();
+        let charlie_token = world.token_for(&charlie)?;
+        let dana = world
+            .seed
+            .user_by_email("dana@example.com")
+            .context("missing dana fixture")?
+            .clone();
+        let dana_token = world.token_for(&dana)?;
+        let eve = world
+            .seed
+            .user_by_email("eve@example.com")
+            .context("missing eve fixture")?
+            .clone();
+        let eve_token = world.token_for(&eve)?;
+
+        Ok(Self {
+            world,
+            api,
+            http,
+            pool,
+            users: ContractUsers {
+                actor,
+                actor_token,
+                bob,
+                bob_token,
+                charlie,
+                charlie_token,
+                dana,
+                dana_token,
+                eve,
+                eve_token,
+            },
+        })
+    }
+
+    fn suffix(&self, prefix: &str) -> String {
+        format!("{prefix}-{}-{}", self.api.label(), unique_suffix())
+    }
+}
+
+type GatewaySocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
+type GatewayWrite = SplitSink<GatewaySocket, WebsocketMessage>;
+type GatewayRead = SplitStream<GatewaySocket>;
+
+struct GatewayEvent {
+    label: &'static str,
+    data: Value,
+}
+
+struct ContractGatewayListeners {
+    actor_write: GatewayWrite,
+    actor_read: GatewayRead,
+    bob_write: GatewayWrite,
+    bob_read: GatewayRead,
+    charlie_write: GatewayWrite,
+    charlie_read: GatewayRead,
+}
+
+impl ContractGatewayListeners {
+    async fn connect(ctx: &ChannelContractContext) -> anyhow::Result<Self> {
+        let actor_ws = ctx
+            .world
+            .services
+            .connection_gateway_ws_url_with_token(&ctx.users.actor_token)?;
+        let bob_ws = ctx
+            .world
+            .services
+            .connection_gateway_ws_url_with_token(&ctx.users.bob_token)?;
+        let charlie_ws = ctx
+            .world
+            .services
+            .connection_gateway_ws_url_with_token(&ctx.users.charlie_token)?;
+        let (actor_socket, _) = connect_async(&actor_ws)
+            .await
+            .context("connect actor websocket")?;
+        let (bob_socket, _) = connect_async(&bob_ws)
+            .await
+            .context("connect bob websocket")?;
+        let (charlie_socket, _) = connect_async(&charlie_ws)
+            .await
+            .context("connect charlie websocket")?;
+        let (mut actor_write, mut actor_read) = actor_socket.split();
+        let (mut bob_write, mut bob_read) = bob_socket.split();
+        let (mut charlie_write, mut charlie_read) = charlie_socket.split();
+        ping_and_wait(&mut actor_write, &mut actor_read).await?;
+        ping_and_wait(&mut bob_write, &mut bob_read).await?;
+        ping_and_wait(&mut charlie_write, &mut charlie_read).await?;
+
+        Ok(Self {
+            actor_write,
+            actor_read,
+            bob_write,
+            bob_read,
+            charlie_write,
+            charlie_read,
+        })
+    }
+
+    async fn wait_for_all<F>(
+        &mut self,
+        expected_type: &str,
+        matches: F,
+        detail: &str,
+    ) -> anyhow::Result<Vec<GatewayEvent>>
+    where
+        F: Fn(&Value) -> bool,
+    {
+        let actor =
+            wait_for_gateway_event(&mut self.actor_read, expected_type, |data| matches(data))
+                .await
+                .with_context(|| format!("actor did not receive {detail}"))?;
+        let bob = wait_for_gateway_event(&mut self.bob_read, expected_type, |data| matches(data))
+            .await
+            .with_context(|| format!("bob did not receive {detail}"))?;
+        let charlie =
+            wait_for_gateway_event(&mut self.charlie_read, expected_type, |data| matches(data))
+                .await
+                .with_context(|| format!("charlie did not receive {detail}"))?;
+
+        Ok(vec![
+            GatewayEvent {
+                label: "actor",
+                data: actor,
+            },
+            GatewayEvent {
+                label: "bob",
+                data: bob,
+            },
+            GatewayEvent {
+                label: "charlie",
+                data: charlie,
+            },
+        ])
+    }
+
+    async fn close(mut self) {
+        self.actor_write
+            .send(WebsocketMessage::Close(None))
+            .await
+            .ok();
+        self.bob_write
+            .send(WebsocketMessage::Close(None))
+            .await
+            .ok();
+        self.charlie_write
+            .send(WebsocketMessage::Close(None))
+            .await
+            .ok();
+    }
+}
+
+struct ContractChannel {
+    id: String,
+    name: String,
+}
+
+async fn create_private_contract_channel(
+    ctx: &ChannelContractContext,
+    prefix: &str,
+) -> anyhow::Result<ContractChannel> {
+    let name = ctx.suffix(prefix);
+    let created = create_channel_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        name.clone(),
+        "private",
+        &[&ctx.users.bob.user_id, &ctx.users.charlie.user_id],
+    )
+    .await
+    .with_context(|| format!("{} create private contract channel", ctx.api.label()))?;
+    Ok(ContractChannel {
+        id: created.id,
+        name,
+    })
+}
+
+async fn create_public_contract_channel(
+    ctx: &ChannelContractContext,
+    prefix: &str,
+) -> anyhow::Result<ContractChannel> {
+    let name = ctx.suffix(prefix);
+    let created = create_channel_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        name.clone(),
+        "public",
+        &[&ctx.users.bob.user_id],
+    )
+    .await
+    .with_context(|| format!("{} create public contract channel", ctx.api.label()))?;
+    Ok(ContractChannel {
+        id: created.id,
+        name,
+    })
+}
 
 #[tokio::test]
 #[ignore = "requires `just local-e2e-seed` plus document_storage_service"]
-async fn channel_create_patch_and_participant_mutations_update_state() -> anyhow::Result<()> {
-    let world = TestWorld::load()?;
-    let http = Client::new();
-    let actor = world.seed.smoke_user()?;
-    let actor_token = world.token_for(actor)?;
-    let bob = world
-        .seed
-        .user_by_email("bob@example.com")
-        .context("missing bob fixture")?;
-    let charlie = world
-        .seed
-        .user_by_email("charlie@example.com")
-        .context("missing charlie fixture")?;
-    let dana = world
-        .seed
-        .user_by_email("dana@example.com")
-        .context("missing dana fixture")?;
-    let suffix = unique_suffix();
+async fn get_or_create_dm_returns_existing_dm_and_rejects_self_dm() -> anyhow::Result<()> {
+    let ctx = ChannelContractContext::load().await?;
+    assert_get_or_create_dm_access_control_contract(&ctx).await
+}
 
-    let created = create_channel(
-        &http,
-        &world.services,
-        &actor_token,
-        format!("state-{suffix}"),
-        "public",
-        &[&bob.user_id, &charlie.user_id],
+async fn assert_get_or_create_dm_access_control_contract(
+    ctx: &ChannelContractContext,
+) -> anyhow::Result<()> {
+    let dm = get_or_create_dm_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        &ctx.users.bob.user_id,
     )
-    .await?;
-
-    let initial = get_channel(&http, &world.services, &actor_token, &created.id).await?;
+    .await
+    .with_context(|| format!("{} get existing DM", ctx.api.label()))?;
     ensure!(
-        initial
-            .pointer("/channel/channel_type")
-            .and_then(Value::as_str)
-            == Some("public"),
-        "channel type mismatch: {initial}"
-    );
-    assert_participant(&initial, &actor.user_id)?;
-    assert_participant(&initial, &bob.user_id)?;
-    assert_participant(&initial, &charlie.user_id)?;
-
-    let renamed = format!("state-renamed-{suffix}");
-    patch_channel_name(&http, &world.services, &actor_token, &created.id, &renamed).await?;
-    let persisted_name = get_persisted_channel_name(&world.config, &created.id).await?;
-    ensure!(
-        persisted_name.as_deref() == Some(renamed.as_str()),
-        "persisted channel name mismatch: expected {renamed}, got {persisted_name:?}"
+        dm.action == "get",
+        "{} expected existing seeded DM, got {dm:?}",
+        ctx.api.label()
     );
 
-    add_participants(
-        &http,
-        &world.services,
-        &actor_token,
-        &created.id,
-        &[&dana.user_id],
-    )
-    .await?;
-    let after_add = get_channel(&http, &world.services, &actor_token, &created.id).await?;
-    assert_participant(&after_add, &dana.user_id)?;
+    let invalid_dm = ctx
+        .http
+        .post(ctx.api.get_or_create_dm_url())
+        .bearer_auth(&ctx.users.actor_token)
+        .json(&json!({ "recipient_id": ctx.users.actor.user_id }))
+        .send()
+        .await
+        .with_context(|| format!("{} failed to call invalid self-DM", ctx.api.label()))?;
+    ensure!(
+        invalid_dm.status() == reqwest::StatusCode::BAD_REQUEST,
+        "{} self-DM should be rejected with 400, got {}: {}",
+        ctx.api.label(),
+        invalid_dm.status(),
+        invalid_dm.text().await.unwrap_or_default()
+    );
 
-    remove_participants(
-        &http,
-        &world.services,
-        &actor_token,
-        &created.id,
-        &[&dana.user_id],
-    )
-    .await?;
-    let after_remove = get_channel(&http, &world.services, &actor_token, &created.id).await?;
-    assert_not_participant(&after_remove, &dana.user_id)?;
-
-    delete_channel(&http, &world.services, &actor_token, &created.id).await?;
     Ok(())
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus connection_gateway and document_storage_service and notification_service workers"]
-async fn first_message_fans_out_to_all_listeners_and_emits_channel_invites() -> anyhow::Result<()> {
-    let world = TestWorld::load()?;
-    let http = Client::new();
-    let actor = world.seed.smoke_user()?;
-    let actor_token = world.token_for(actor)?;
-    let bob = world
-        .seed
-        .user_by_email("bob@example.com")
-        .context("missing bob fixture")?;
-    let bob_token = world.token_for(bob)?;
-    let charlie = world
-        .seed
-        .user_by_email("charlie@example.com")
-        .context("missing charlie fixture")?;
-    let charlie_token = world.token_for(charlie)?;
-    let suffix = unique_suffix();
+#[ignore = "requires `just local-e2e-seed` plus document_storage_service"]
+async fn get_or_create_private_persists_expected_participants() -> anyhow::Result<()> {
+    let ctx = ChannelContractContext::load().await?;
+    assert_get_or_create_private_access_control_contract(&ctx).await
+}
 
-    let created = create_channel(
-        &http,
-        &world.services,
-        &actor_token,
-        format!("invite-{suffix}"),
-        "private",
-        &[&bob.user_id, &charlie.user_id],
+async fn assert_get_or_create_private_access_control_contract(
+    ctx: &ChannelContractContext,
+) -> anyhow::Result<()> {
+    let private = get_or_create_private_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        &[&ctx.users.bob.user_id, &ctx.users.eve.user_id],
+    )
+    .await
+    .with_context(|| format!("{} get/create private channel", ctx.api.label()))?;
+    ensure!(
+        !private.channel_id.is_empty(),
+        "{} private channel id was empty",
+        ctx.api.label()
+    );
+    assert_db_participants_include(
+        &ctx.pool,
+        &private.channel_id,
+        &[
+            &ctx.users.actor.user_id,
+            &ctx.users.bob.user_id,
+            &ctx.users.eve.user_id,
+        ],
     )
     .await?;
 
-    let actor_ws = world
-        .services
-        .connection_gateway_ws_url_with_token(&actor_token)?;
-    let bob_ws = world
-        .services
-        .connection_gateway_ws_url_with_token(&bob_token)?;
-    let charlie_ws = world
-        .services
-        .connection_gateway_ws_url_with_token(&charlie_token)?;
-    let (actor_socket, _) = connect_async(&actor_ws)
-        .await
-        .context("connect actor websocket")?;
-    let (bob_socket, _) = connect_async(&bob_ws)
-        .await
-        .context("connect bob websocket")?;
-    let (charlie_socket, _) = connect_async(&charlie_ws)
-        .await
-        .context("connect charlie websocket")?;
-    let (mut actor_write, mut actor_read) = actor_socket.split();
-    let (mut bob_write, mut bob_read) = bob_socket.split();
-    let (mut charlie_write, mut charlie_read) = charlie_socket.split();
-    ping_and_wait(&mut actor_write, &mut actor_read).await?;
-    ping_and_wait(&mut bob_write, &mut bob_read).await?;
-    ping_and_wait(&mut charlie_write, &mut charlie_read).await?;
+    Ok(())
+}
 
-    let content = format!("invite message {suffix}");
-    let nonce = format!("invite-nonce-{suffix}");
-    let posted = post_message(
-        &http,
-        &world.services,
-        &actor_token,
-        &created.id,
+#[tokio::test]
+#[ignore = "requires `just local-e2e-seed` plus document_storage_service"]
+async fn public_channel_allows_join_and_leave_for_non_participant() -> anyhow::Result<()> {
+    let ctx = ChannelContractContext::load().await?;
+    assert_public_join_leave_access_control_contract(&ctx).await
+}
+
+async fn assert_public_join_leave_access_control_contract(
+    ctx: &ChannelContractContext,
+) -> anyhow::Result<()> {
+    let public = create_public_contract_channel(ctx, "access-public").await?;
+
+    require_success(
+        ctx.http
+            .post(ctx.api.join_channel_url(&public.id))
+            .bearer_auth(&ctx.users.eve_token)
+            .send()
+            .await
+            .with_context(|| format!("{} failed to join public channel", ctx.api.label()))?,
+        "join public channel as non-participant",
+    )
+    .await?;
+    let joined = get_channel_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.eve_token,
+        &public.id,
+    )
+    .await?;
+    assert_participant(&joined, &ctx.users.eve.user_id)?;
+    assert_db_participants_include(&ctx.pool, &public.id, &[&ctx.users.eve.user_id]).await?;
+
+    require_success(
+        ctx.http
+            .post(ctx.api.leave_channel_url(&public.id))
+            .bearer_auth(&ctx.users.eve_token)
+            .send()
+            .await
+            .with_context(|| format!("{} failed to leave public channel", ctx.api.label()))?,
+        "leave public channel",
+    )
+    .await?;
+    assert_db_participants_absent(&ctx.pool, &public.id, &[&ctx.users.eve.user_id]).await?;
+    delete_channel_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        &public.id,
+    )
+    .await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "requires `just local-e2e-seed` plus document_storage_service and contacts_service workers"]
+async fn create_private_channel_persists_channel_participants_and_contacts() -> anyhow::Result<()> {
+    let ctx = ChannelContractContext::load().await?;
+    assert_private_channel_create_side_effect_contract(&ctx).await
+}
+
+async fn assert_private_channel_create_side_effect_contract(
+    ctx: &ChannelContractContext,
+) -> anyhow::Result<()> {
+    let contacts_since = db_now(&ctx.pool).await?;
+    let private = create_private_contract_channel(ctx, "membership-private").await?;
+
+    assert_db_channel(&ctx.pool, &private.id, Some(&private.name), "private").await?;
+    assert_db_participants_include(
+        &ctx.pool,
+        &private.id,
+        &[
+            &ctx.users.actor.user_id,
+            &ctx.users.bob.user_id,
+            &ctx.users.charlie.user_id,
+        ],
+    )
+    .await?;
+    wait_for_contacts_connections(
+        &ctx.pool,
+        &[
+            (&ctx.users.actor.user_id, &ctx.users.bob.user_id),
+            (&ctx.users.actor.user_id, &ctx.users.charlie.user_id),
+            (&ctx.users.bob.user_id, &ctx.users.charlie.user_id),
+        ],
+        &contacts_since,
+    )
+    .await
+    .with_context(|| format!("{} create private contacts", ctx.api.label()))?;
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "requires `just local-e2e-seed` plus document_storage_service, contacts_service, and notification_service workers"]
+async fn adding_and_removing_participant_updates_membership_notifications_and_contacts()
+-> anyhow::Result<()> {
+    let ctx = ChannelContractContext::load().await?;
+    assert_participant_invite_remove_side_effect_contract(&ctx).await
+}
+
+async fn assert_participant_invite_remove_side_effect_contract(
+    ctx: &ChannelContractContext,
+) -> anyhow::Result<()> {
+    let private = create_private_contract_channel(ctx, "membership-invite").await?;
+    let contacts_since = db_now(&ctx.pool).await?;
+
+    add_participants_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        &private.id,
+        &[&ctx.users.dana.user_id],
+    )
+    .await
+    .with_context(|| format!("{} add participant", ctx.api.label()))?;
+    assert_db_participants_include(&ctx.pool, &private.id, &[&ctx.users.dana.user_id]).await?;
+
+    let invite = wait_for_notification(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.users.dana_token,
+        |notification| notification_matches(notification, "channel_invite", &private.id),
+    )
+    .await
+    .with_context(|| format!("{} invite notification", ctx.api.label()))?;
+    assert_sender(&invite, &ctx.users.actor.user_id)?;
+    wait_for_contacts_connections(
+        &ctx.pool,
+        &[
+            (&ctx.users.actor.user_id, &ctx.users.dana.user_id),
+            (&ctx.users.bob.user_id, &ctx.users.dana.user_id),
+            (&ctx.users.charlie.user_id, &ctx.users.dana.user_id),
+        ],
+        &contacts_since,
+    )
+    .await
+    .with_context(|| format!("{} invite contacts", ctx.api.label()))?;
+
+    remove_participants_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        &private.id,
+        &[&ctx.users.dana.user_id],
+    )
+    .await
+    .with_context(|| format!("{} remove participant", ctx.api.label()))?;
+    assert_db_participants_absent(&ctx.pool, &private.id, &[&ctx.users.dana.user_id]).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "requires `just local-e2e-seed` plus document_storage_service and contacts_service workers"]
+async fn public_join_and_leave_updates_membership_and_contacts() -> anyhow::Result<()> {
+    let ctx = ChannelContractContext::load().await?;
+    assert_public_join_leave_side_effect_contract(&ctx).await
+}
+
+async fn assert_public_join_leave_side_effect_contract(
+    ctx: &ChannelContractContext,
+) -> anyhow::Result<()> {
+    let public = create_public_contract_channel(ctx, "membership-public").await?;
+    assert_db_channel(&ctx.pool, &public.id, Some(&public.name), "public").await?;
+
+    let contacts_since = db_now(&ctx.pool).await?;
+    require_success(
+        ctx.http
+            .post(ctx.api.join_channel_url(&public.id))
+            .bearer_auth(&ctx.users.charlie_token)
+            .send()
+            .await
+            .context("failed to join public channel")?,
+        "join public channel",
+    )
+    .await?;
+    assert_db_participants_include(&ctx.pool, &public.id, &[&ctx.users.charlie.user_id]).await?;
+    wait_for_contacts_connections(
+        &ctx.pool,
+        &[
+            (&ctx.users.actor.user_id, &ctx.users.charlie.user_id),
+            (&ctx.users.bob.user_id, &ctx.users.charlie.user_id),
+        ],
+        &contacts_since,
+    )
+    .await
+    .with_context(|| format!("{} join contacts", ctx.api.label()))?;
+
+    require_success(
+        ctx.http
+            .post(ctx.api.leave_channel_url(&public.id))
+            .bearer_auth(&ctx.users.charlie_token)
+            .send()
+            .await
+            .context("failed to leave public channel")?,
+        "leave public channel",
+    )
+    .await?;
+    assert_db_participants_absent(&ctx.pool, &public.id, &[&ctx.users.charlie.user_id]).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "requires `just local-e2e-seed` plus document_storage_service"]
+async fn delete_channel_removes_channel() -> anyhow::Result<()> {
+    let ctx = ChannelContractContext::load().await?;
+    assert_channel_delete_side_effect_contract(&ctx).await
+}
+
+async fn assert_channel_delete_side_effect_contract(
+    ctx: &ChannelContractContext,
+) -> anyhow::Result<()> {
+    let private = create_private_contract_channel(ctx, "membership-delete").await?;
+    delete_channel_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        &private.id,
+    )
+    .await?;
+    assert_db_channel_absent(&ctx.pool, &private.id).await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "requires `just local-e2e-seed` plus document_storage_service"]
+async fn channel_rename_persists_name() -> anyhow::Result<()> {
+    let ctx = ChannelContractContext::load().await?;
+    assert_channel_rename_side_effect_contract(&ctx).await
+}
+
+async fn assert_channel_rename_side_effect_contract(
+    ctx: &ChannelContractContext,
+) -> anyhow::Result<()> {
+    let channel = create_public_contract_channel(ctx, "rename-channel").await?;
+    let renamed = ctx.suffix("renamed-channel");
+    patch_channel_name_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        &channel.id,
+        &renamed,
+    )
+    .await?;
+    assert_db_channel(&ctx.pool, &channel.id, Some(&renamed), "public").await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "requires `just local-e2e-seed` plus connection_gateway, document_storage_service, and notification_service workers"]
+async fn first_message_persists_message_attachment_emits_realtime_and_invites() -> anyhow::Result<()>
+{
+    let ctx = ChannelContractContext::load().await?;
+    assert_first_message_side_effect_contract(&ctx).await
+}
+
+async fn assert_first_message_side_effect_contract(
+    ctx: &ChannelContractContext,
+) -> anyhow::Result<()> {
+    let document = ctx.world.seed.project_roadmap_document()?;
+    let channel = create_private_contract_channel(ctx, "message-first").await?;
+    let mut listeners = ContractGatewayListeners::connect(ctx).await?;
+    let suffix = ctx.suffix("first-message");
+    let content = format!("root {suffix}");
+    let nonce = format!("root-nonce-{suffix}");
+
+    let root = post_message_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        &channel.id,
         &PostMessageBody {
             content: &content,
             mentions: Vec::new(),
             thread_id: None,
-            attachments: Vec::new(),
+            attachments: vec![json!({
+                "entity_type": "document",
+                "entity_id": document.document_id,
+                "width": 320,
+                "height": 240,
+            })],
             nonce: &nonce,
         },
     )
+    .await
+    .with_context(|| format!("{} post root message", ctx.api.label()))?;
+    assert_db_message(
+        &ctx.pool,
+        &root.id,
+        &channel.id,
+        &ctx.users.actor.user_id,
+        &content,
+        None,
+    )
     .await?;
+    assert_db_attachment_count(&ctx.pool, &root.id, 1).await?;
 
-    for (label, reader) in [
-        ("actor", &mut actor_read),
-        ("bob", &mut bob_read),
-        ("charlie", &mut charlie_read),
-    ] {
-        let event = wait_for_gateway_event(reader, "comms_message", |data| {
-            data.get("id").and_then(Value::as_str) == Some(posted.id.as_str())
-                && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
-        })
-        .await
-        .with_context(|| format!("{label} did not receive posted message"))?;
+    for event in listeners
+        .wait_for_all(
+            "comms_message",
+            |data| {
+                data.get("id").and_then(Value::as_str) == Some(root.id.as_str())
+                    && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
+            },
+            "root realtime message",
+        )
+        .await?
+    {
         ensure!(
-            event.get("content").and_then(Value::as_str) == Some(content.as_str()),
-            "{label} websocket content mismatch: {event}"
+            event.data.get("content").and_then(Value::as_str) == Some(content.as_str()),
+            "{} {} root content mismatch: {}",
+            ctx.api.label(),
+            event.label,
+            event.data
         );
     }
 
-    let actor_notifications = list_notifications(&http, &world.services, &actor_token).await?;
+    listeners
+        .wait_for_all(
+            "comms_attachment",
+            |data| {
+                data.get("message_id").and_then(Value::as_str) == Some(root.id.as_str())
+                    && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
+            },
+            "root attachment realtime event",
+        )
+        .await?;
+
+    let bob_invite = wait_for_notification(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.users.bob_token,
+        |notification| {
+            notification_matches(notification, "channel_invite", &channel.id)
+                && notification_content(notification, "messageContent") == Some(content.as_str())
+        },
+    )
+    .await
+    .with_context(|| format!("{} first message bob invite notification", ctx.api.label()))?;
+    assert_sender(&bob_invite, &ctx.users.actor.user_id)?;
+
+    let charlie_invite = wait_for_notification(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.users.charlie_token,
+        |notification| {
+            notification_matches(notification, "channel_invite", &channel.id)
+                && notification_content(notification, "messageContent") == Some(content.as_str())
+        },
+    )
+    .await
+    .with_context(|| {
+        format!(
+            "{} first message charlie invite notification",
+            ctx.api.label()
+        )
+    })?;
+    assert_sender(&charlie_invite, &ctx.users.actor.user_id)?;
+
+    let actor_notifications =
+        list_notifications(&ctx.http, &ctx.world.services, &ctx.users.actor_token).await?;
     ensure!(
         find_notification(&actor_notifications, |notification| {
-            notification_matches(notification, "channel_invite", &created.id)
+            notification_matches(notification, "channel_invite", &channel.id)
         })
         .is_none(),
-        "sender should not receive their own channel invite"
+        "{} sender should not receive channel_invite for {}",
+        ctx.api.label(),
+        channel.id
     );
 
-    let bob_invite = wait_for_notification(&http, &world.services, &bob_token, |notification| {
-        notification_matches(notification, "channel_invite", &created.id)
-            && notification_content(notification, "messageContent") == Some(content.as_str())
-    })
-    .await
-    .context("bob did not receive channel invite")?;
-    assert_sender(&bob_invite, &actor.user_id)?;
-
-    let charlie_invite =
-        wait_for_notification(&http, &world.services, &charlie_token, |notification| {
-            notification_matches(notification, "channel_invite", &created.id)
-                && notification_content(notification, "messageContent") == Some(content.as_str())
-        })
-        .await
-        .context("charlie did not receive channel invite")?;
-    assert_sender(&charlie_invite, &actor.user_id)?;
-
-    actor_write.send(WebsocketMessage::Close(None)).await.ok();
-    bob_write.send(WebsocketMessage::Close(None)).await.ok();
-    charlie_write.send(WebsocketMessage::Close(None)).await.ok();
+    listeners.close().await;
     Ok(())
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus document_storage_service and notification_service workers"]
-async fn follow_up_messages_emit_expected_notification_shapes_without_duplicates()
+#[ignore = "requires `just local-e2e-seed` plus connection_gateway, document_storage_service, and notification_service workers"]
+async fn follow_up_message_persists_message_emits_realtime_and_sends_notifications()
 -> anyhow::Result<()> {
-    let world = TestWorld::load()?;
-    let http = Client::new();
-    let actor = world.seed.smoke_user()?;
-    let actor_token = world.token_for(actor)?;
-    let bob = world
-        .seed
-        .user_by_email("bob@example.com")
-        .context("missing bob fixture")?;
-    let bob_token = world.token_for(bob)?;
-    let charlie = world
-        .seed
-        .user_by_email("charlie@example.com")
-        .context("missing charlie fixture")?;
-    let charlie_token = world.token_for(charlie)?;
-    let document = world.seed.project_roadmap_document()?;
-    let suffix = unique_suffix();
+    let ctx = ChannelContractContext::load().await?;
+    assert_follow_up_message_side_effect_contract(&ctx).await
+}
 
-    let created = create_channel(
-        &http,
-        &world.services,
-        &actor_token,
-        format!("notif-{suffix}"),
-        "private",
-        &[&bob.user_id, &charlie.user_id],
-    )
-    .await?;
-
-    let invite = post_message(
-        &http,
-        &world.services,
-        &actor_token,
-        &created.id,
+async fn assert_follow_up_message_side_effect_contract(
+    ctx: &ChannelContractContext,
+) -> anyhow::Result<()> {
+    let channel = create_private_contract_channel(ctx, "message-follow-up").await?;
+    let suffix = ctx.suffix("follow-up-message");
+    post_message_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        &channel.id,
         &PostMessageBody {
             content: &format!("invite {suffix}"),
             mentions: Vec::new(),
@@ -260,647 +846,428 @@ async fn follow_up_messages_emit_expected_notification_shapes_without_duplicates
         },
     )
     .await?;
-    let _ = invite;
 
-    let broadcast_content = format!("broadcast {suffix}");
-    let broadcast = post_message(
-        &http,
-        &world.services,
-        &actor_token,
-        &created.id,
+    let mut listeners = ContractGatewayListeners::connect(ctx).await?;
+    let content = format!("follow-up {suffix}");
+    let nonce = format!("follow-up-{suffix}");
+    let follow_up = post_message_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        &channel.id,
         &PostMessageBody {
-            content: &broadcast_content,
+            content: &content,
             mentions: Vec::new(),
             thread_id: None,
             attachments: Vec::new(),
-            nonce: &format!("broadcast-{suffix}"),
+            nonce: &nonce,
         },
+    )
+    .await
+    .with_context(|| format!("{} follow-up message", ctx.api.label()))?;
+    assert_db_message(
+        &ctx.pool,
+        &follow_up.id,
+        &channel.id,
+        &ctx.users.actor.user_id,
+        &content,
+        None,
     )
     .await?;
 
-    wait_for_notification(&http, &world.services, &bob_token, |notification| {
-        notification_matches(notification, "channel_message_send", &created.id)
-            && notification_content(notification, "messageId") == Some(broadcast.id.as_str())
-            && notification_content(notification, "messageContent")
-                == Some(broadcast_content.as_str())
-    })
-    .await
-    .context("bob did not receive message-send notification")?;
-    wait_for_notification(&http, &world.services, &charlie_token, |notification| {
-        notification_matches(notification, "channel_message_send", &created.id)
-            && notification_content(notification, "messageId") == Some(broadcast.id.as_str())
-    })
-    .await
-    .context("charlie did not receive message-send notification")?;
+    listeners
+        .wait_for_all(
+            "comms_message",
+            |data| {
+                data.get("id").and_then(Value::as_str) == Some(follow_up.id.as_str())
+                    && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
+            },
+            "follow-up realtime message",
+        )
+        .await?;
 
-    let mention_content = format!("mention {suffix}");
-    let mention = post_message(
-        &http,
-        &world.services,
-        &actor_token,
-        &created.id,
-        &PostMessageBody {
-            content: &mention_content,
-            mentions: vec![json!({ "entity_type": "user", "entity_id": bob.user_id })],
-            thread_id: None,
-            attachments: Vec::new(),
-            nonce: &format!("mention-{suffix}"),
+    wait_for_notification(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.users.bob_token,
+        |notification| {
+            notification_matches(notification, "channel_message_send", &channel.id)
+                && notification_content(notification, "messageId") == Some(follow_up.id.as_str())
+                && notification_content(notification, "messageContent") == Some(content.as_str())
         },
     )
-    .await?;
-
-    wait_for_notification(&http, &world.services, &bob_token, |notification| {
-        notification_matches(notification, "channel_mention", &created.id)
-            && notification_content(notification, "messageId") == Some(mention.id.as_str())
-            && notification_content(notification, "messageContent")
-                == Some(mention_content.as_str())
-    })
     .await
-    .context("bob did not receive mention notification")?;
-
-    let bob_notifications = list_notifications(&http, &world.services, &bob_token).await?;
-    ensure!(
-        find_notification(&bob_notifications, |notification| {
-            notification_matches(notification, "channel_message_send", &created.id)
-                && notification_content(notification, "messageId") == Some(mention.id.as_str())
-        })
-        .is_none(),
-        "mentioned recipient should not also receive channel_message_send for the same message"
-    );
-
-    wait_for_notification(&http, &world.services, &charlie_token, |notification| {
-        notification_matches(notification, "channel_message_send", &created.id)
-            && notification_content(notification, "messageId") == Some(mention.id.as_str())
-    })
-    .await
-    .context("charlie did not receive fallback message-send notification")?;
-
-    let document_content = format!("document {suffix}");
-    let document_message = post_message(
-        &http,
-        &world.services,
-        &actor_token,
-        &created.id,
-        &PostMessageBody {
-            content: &document_content,
-            mentions: vec![json!({
-                "entity_type": "document",
-                "entity_id": document.document_id,
-            })],
-            thread_id: None,
-            attachments: Vec::new(),
-            nonce: &format!("document-{suffix}"),
+    .with_context(|| format!("{} follow-up bob notification", ctx.api.label()))?;
+    wait_for_notification(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.users.charlie_token,
+        |notification| {
+            notification_matches(notification, "channel_message_send", &channel.id)
+                && notification_content(notification, "messageId") == Some(follow_up.id.as_str())
         },
     )
-    .await?;
-
-    wait_for_notification(&http, &world.services, &bob_token, |notification| {
-        notification_matches(notification, "document_mention", &created.id)
-            && notification_content(notification, "messageId") == Some(document_message.id.as_str())
-            && notification_content(notification, "messageContent")
-                == Some(document_content.as_str())
-            && notification_content(notification, "documentName")
-                == Some(document.document_name.as_str())
-    })
     .await
-    .context("bob did not receive document mention notification")?;
+    .with_context(|| format!("{} follow-up charlie notification", ctx.api.label()))?;
 
+    listeners.close().await;
     Ok(())
 }
 
 #[tokio::test]
 #[ignore = "requires `just local-e2e-seed` plus connection_gateway and document_storage_service"]
-async fn message_edits_update_read_model_and_realtime_delivery() -> anyhow::Result<()> {
-    let world = TestWorld::load()?;
-    let http = Client::new();
-    let actor = world.seed.smoke_user()?;
-    let actor_token = world.token_for(actor)?;
-    let bob = world
-        .seed
-        .user_by_email("bob@example.com")
-        .context("missing bob fixture")?;
-    let bob_token = world.token_for(bob)?;
-    let charlie = world
-        .seed
-        .user_by_email("charlie@example.com")
-        .context("missing charlie fixture")?;
-    let charlie_token = world.token_for(charlie)?;
-    let document = world.seed.project_roadmap_document()?;
-    let suffix = unique_suffix();
+async fn typing_emits_realtime() -> anyhow::Result<()> {
+    let ctx = ChannelContractContext::load().await?;
+    assert_typing_side_effect_contract(&ctx).await
+}
 
-    let created = create_channel(
-        &http,
-        &world.services,
-        &actor_token,
-        format!("edit-{suffix}"),
-        "public",
-        &[&bob.user_id, &charlie.user_id],
+async fn assert_typing_side_effect_contract(ctx: &ChannelContractContext) -> anyhow::Result<()> {
+    let channel = create_private_contract_channel(ctx, "message-typing").await?;
+    let mut listeners = ContractGatewayListeners::connect(ctx).await?;
+    let nonce = ctx.suffix("typing");
+
+    post_typing_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.bob_token,
+        &channel.id,
+        "start",
+        None,
+        &nonce,
     )
-    .await?;
+    .await
+    .with_context(|| format!("{} typing", ctx.api.label()))?;
 
-    let actor_ws = world
-        .services
-        .connection_gateway_ws_url_with_token(&actor_token)?;
-    let bob_ws = world
-        .services
-        .connection_gateway_ws_url_with_token(&bob_token)?;
-    let charlie_ws = world
-        .services
-        .connection_gateway_ws_url_with_token(&charlie_token)?;
-    let (actor_socket, _) = connect_async(&actor_ws).await?;
-    let (bob_socket, _) = connect_async(&bob_ws).await?;
-    let (charlie_socket, _) = connect_async(&charlie_ws).await?;
-    let (mut actor_write, mut actor_read) = actor_socket.split();
-    let (mut bob_write, mut bob_read) = bob_socket.split();
-    let (mut charlie_write, mut charlie_read) = charlie_socket.split();
-    ping_and_wait(&mut actor_write, &mut actor_read).await?;
-    ping_and_wait(&mut bob_write, &mut bob_read).await?;
-    ping_and_wait(&mut charlie_write, &mut charlie_read).await?;
-
-    let initial_content = format!("edit source {suffix}");
-    let posted = post_message(
-        &http,
-        &world.services,
-        &actor_token,
-        &created.id,
-        &PostMessageBody {
-            content: &initial_content,
-            mentions: Vec::new(),
-            thread_id: None,
-            attachments: vec![json!({
-                "entity_type": "document",
-                "entity_id": document.document_id,
-                "width": 640,
-                "height": 480,
-            })],
-            nonce: &format!("edit-post-{suffix}"),
-        },
-    )
-    .await?;
-    let after_post = get_channel(&http, &world.services, &actor_token, &created.id).await?;
-    let attachment_id = find_attachment_for_message(&after_post, &posted.id)?
-        .get("id")
-        .and_then(Value::as_str)
-        .context("missing initial attachment id")?
-        .to_owned();
-
-    let edited_content = format!("edited content {suffix}");
-    let patch_nonce = format!("edit-patch-{suffix}");
-    patch_message(
-        &http,
-        &world.services,
-        &actor_token,
-        &created.id,
-        &posted.id,
-        &json!({
-            "content": edited_content,
-            "mentions": [{ "entity_type": "user", "entity_id": bob.user_id }],
-            "attachment_ids_to_delete": [attachment_id],
-            "attachments_to_add": [],
-            "nonce": patch_nonce,
-        }),
-    )
-    .await?;
-
-    let after_patch = get_channel(&http, &world.services, &actor_token, &created.id).await?;
-    let patched_message = find_message(&after_patch, &posted.id)?;
-    ensure!(
-        patched_message.get("content").and_then(Value::as_str) == Some(edited_content.as_str()),
-        "patched content mismatch: {patched_message}"
-    );
-    ensure!(
-        !patched_message
-            .get("edited_at")
-            .unwrap_or(&Value::Null)
-            .is_null(),
-        "patched message did not set edited_at: {patched_message}"
-    );
-    ensure!(
-        find_attachment_for_message(&after_patch, &posted.id).is_err(),
-        "patched message still has deleted attachment: {after_patch}"
-    );
-
-    for (label, reader) in [
-        ("actor", &mut actor_read),
-        ("bob", &mut bob_read),
-        ("charlie", &mut charlie_read),
-    ] {
-        let event = wait_for_gateway_event(reader, "comms_message", |data| {
-            data.get("id").and_then(Value::as_str) == Some(posted.id.as_str())
-                && data.get("nonce").and_then(Value::as_str) == Some(patch_nonce.as_str())
-        })
-        .await
-        .with_context(|| format!("{label} did not receive message edit"))?;
+    for event in listeners
+        .wait_for_all(
+            "comms_typing",
+            |data| {
+                data.get("user_id").and_then(Value::as_str) == Some(ctx.users.bob.user_id.as_str())
+                    && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
+            },
+            "typing realtime event",
+        )
+        .await?
+    {
         ensure!(
-            event.get("content").and_then(Value::as_str) == Some(edited_content.as_str()),
-            "{label} patch websocket content mismatch: {event}"
+            event.data.get("action").and_then(Value::as_str) == Some("start"),
+            "{} {} typing action mismatch: {}",
+            ctx.api.label(),
+            event.label,
+            event.data
         );
     }
 
-    actor_write.send(WebsocketMessage::Close(None)).await.ok();
-    bob_write.send(WebsocketMessage::Close(None)).await.ok();
-    charlie_write.send(WebsocketMessage::Close(None)).await.ok();
+    listeners.close().await;
     Ok(())
 }
 
 #[tokio::test]
 #[ignore = "requires `just local-e2e-seed` plus connection_gateway and document_storage_service"]
-async fn message_reactions_update_read_model_and_realtime_delivery() -> anyhow::Result<()> {
-    let world = TestWorld::load()?;
-    let http = Client::new();
-    let actor = world.seed.smoke_user()?;
-    let actor_token = world.token_for(actor)?;
-    let bob = world
-        .seed
-        .user_by_email("bob@example.com")
-        .context("missing bob fixture")?;
-    let bob_token = world.token_for(bob)?;
-    let charlie = world
-        .seed
-        .user_by_email("charlie@example.com")
-        .context("missing charlie fixture")?;
-    let charlie_token = world.token_for(charlie)?;
-    let suffix = unique_suffix();
+async fn reaction_persists_reaction_and_emits_realtime() -> anyhow::Result<()> {
+    let ctx = ChannelContractContext::load().await?;
+    assert_reaction_side_effect_contract(&ctx).await
+}
 
-    let created = create_channel(
-        &http,
-        &world.services,
-        &actor_token,
-        format!("reaction-{suffix}"),
-        "public",
-        &[&bob.user_id, &charlie.user_id],
-    )
-    .await?;
-    let posted = post_message(
-        &http,
-        &world.services,
-        &actor_token,
-        &created.id,
+async fn assert_reaction_side_effect_contract(ctx: &ChannelContractContext) -> anyhow::Result<()> {
+    let channel = create_private_contract_channel(ctx, "message-reaction").await?;
+    let suffix = ctx.suffix("reaction-message");
+    let root = post_message_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        &channel.id,
         &PostMessageBody {
-            content: &format!("reaction source {suffix}"),
+            content: &format!("reaction root {suffix}"),
             mentions: Vec::new(),
             thread_id: None,
             attachments: Vec::new(),
-            nonce: &format!("reaction-post-{suffix}"),
+            nonce: &format!("reaction-root-{suffix}"),
         },
     )
     .await?;
 
-    let actor_ws = world
-        .services
-        .connection_gateway_ws_url_with_token(&actor_token)?;
-    let bob_ws = world
-        .services
-        .connection_gateway_ws_url_with_token(&bob_token)?;
-    let charlie_ws = world
-        .services
-        .connection_gateway_ws_url_with_token(&charlie_token)?;
-    let (actor_socket, _) = connect_async(&actor_ws).await?;
-    let (bob_socket, _) = connect_async(&bob_ws).await?;
-    let (charlie_socket, _) = connect_async(&charlie_ws).await?;
-    let (mut actor_write, mut actor_read) = actor_socket.split();
-    let (mut bob_write, mut bob_read) = bob_socket.split();
-    let (mut charlie_write, mut charlie_read) = charlie_socket.split();
-    ping_and_wait(&mut actor_write, &mut actor_read).await?;
-    ping_and_wait(&mut bob_write, &mut bob_read).await?;
-    ping_and_wait(&mut charlie_write, &mut charlie_read).await?;
-
-    let reaction_nonce = format!("reaction-{suffix}");
-    post_reaction(
-        &http,
-        &world.services,
-        &actor_token,
-        &created.id,
-        &posted.id,
-        "✅",
+    let mut listeners = ContractGatewayListeners::connect(ctx).await?;
+    let nonce = format!("reaction-{suffix}");
+    post_reaction_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.bob_token,
+        &channel.id,
+        &root.id,
+        "👍",
         "Add",
-        &reaction_nonce,
+        &nonce,
     )
-    .await?;
+    .await
+    .with_context(|| format!("{} reaction", ctx.api.label()))?;
+    assert_db_reaction(&ctx.pool, &root.id, "👍", &ctx.users.bob.user_id).await?;
 
-    let after_reaction = get_channel(&http, &world.services, &actor_token, &created.id).await?;
-    assert_reaction(&after_reaction, &posted.id, "✅", &actor.user_id)?;
-
-    for (label, reader) in [
-        ("actor", &mut actor_read),
-        ("bob", &mut bob_read),
-        ("charlie", &mut charlie_read),
-    ] {
-        let event = wait_for_gateway_event(reader, "comms_reaction", |data| {
-            data.get("message_id").and_then(Value::as_str) == Some(posted.id.as_str())
-                && data.get("nonce").and_then(Value::as_str) == Some(reaction_nonce.as_str())
-        })
-        .await
-        .with_context(|| format!("{label} did not receive reaction event"))?;
+    for event in listeners
+        .wait_for_all(
+            "comms_reaction",
+            |data| {
+                data.get("message_id").and_then(Value::as_str) == Some(root.id.as_str())
+                    && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
+            },
+            "reaction realtime event",
+        )
+        .await?
+    {
         ensure!(
-            reaction_payload_contains_user(&event, "✅", &actor.user_id),
-            "{label} reaction payload missing actor user id: {event}"
+            reaction_payload_contains_user(&event.data, "👍", &ctx.users.bob.user_id),
+            "{} {} reaction payload missing bob: {}",
+            ctx.api.label(),
+            event.label,
+            event.data
         );
     }
 
-    actor_write.send(WebsocketMessage::Close(None)).await.ok();
-    bob_write.send(WebsocketMessage::Close(None)).await.ok();
-    charlie_write.send(WebsocketMessage::Close(None)).await.ok();
+    listeners.close().await;
     Ok(())
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus connection_gateway and document_storage_service and notification_service workers"]
-async fn thread_replies_persist_and_emit_reply_notifications() -> anyhow::Result<()> {
-    let world = TestWorld::load()?;
-    let http = Client::new();
-    let actor = world.seed.smoke_user()?;
-    let actor_token = world.token_for(actor)?;
-    let bob = world
-        .seed
-        .user_by_email("bob@example.com")
-        .context("missing bob fixture")?;
-    let bob_token = world.token_for(bob)?;
-    let charlie = world
-        .seed
-        .user_by_email("charlie@example.com")
-        .context("missing charlie fixture")?;
-    let charlie_token = world.token_for(charlie)?;
-    let suffix = unique_suffix();
+#[ignore = "requires `just local-e2e-seed` plus connection_gateway, document_storage_service, and notification_service workers"]
+async fn thread_reply_persists_thread_id_emits_realtime_and_notifies_parent_author()
+-> anyhow::Result<()> {
+    let ctx = ChannelContractContext::load().await?;
+    assert_thread_reply_side_effect_contract(&ctx).await
+}
 
-    let created = create_channel(
-        &http,
-        &world.services,
-        &actor_token,
-        format!("reply-{suffix}"),
-        "private",
-        &[&bob.user_id, &charlie.user_id],
-    )
-    .await?;
-
-    let root = post_message(
-        &http,
-        &world.services,
-        &actor_token,
-        &created.id,
+async fn assert_thread_reply_side_effect_contract(
+    ctx: &ChannelContractContext,
+) -> anyhow::Result<()> {
+    let channel = create_private_contract_channel(ctx, "message-reply").await?;
+    let suffix = ctx.suffix("reply-message");
+    let root = post_message_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        &channel.id,
         &PostMessageBody {
-            content: &format!("thread root {suffix}"),
+            content: &format!("reply root {suffix}"),
             mentions: Vec::new(),
             thread_id: None,
             attachments: Vec::new(),
-            nonce: &format!("thread-root-{suffix}"),
+            nonce: &format!("reply-root-{suffix}"),
         },
     )
     .await?;
 
-    let actor_ws = world
-        .services
-        .connection_gateway_ws_url_with_token(&actor_token)?;
-    let bob_ws = world
-        .services
-        .connection_gateway_ws_url_with_token(&bob_token)?;
-    let charlie_ws = world
-        .services
-        .connection_gateway_ws_url_with_token(&charlie_token)?;
-    let (actor_socket, _) = connect_async(&actor_ws).await?;
-    let (bob_socket, _) = connect_async(&bob_ws).await?;
-    let (charlie_socket, _) = connect_async(&charlie_ws).await?;
-    let (mut actor_write, mut actor_read) = actor_socket.split();
-    let (mut bob_write, mut bob_read) = bob_socket.split();
-    let (mut charlie_write, mut charlie_read) = charlie_socket.split();
-    ping_and_wait(&mut actor_write, &mut actor_read).await?;
-    ping_and_wait(&mut bob_write, &mut bob_read).await?;
-    ping_and_wait(&mut charlie_write, &mut charlie_read).await?;
-
-    let reply_content = format!("thread reply {suffix}");
-    let reply_nonce = format!("thread-reply-{suffix}");
-    let reply = post_message(
-        &http,
-        &world.services,
-        &bob_token,
-        &created.id,
+    let mut listeners = ContractGatewayListeners::connect(ctx).await?;
+    let content = format!("reply {suffix}");
+    let nonce = format!("reply-{suffix}");
+    let reply = post_message_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.bob_token,
+        &channel.id,
         &PostMessageBody {
-            content: &reply_content,
+            content: &content,
             mentions: Vec::new(),
             thread_id: Some(root.id.as_str()),
             attachments: Vec::new(),
-            nonce: &reply_nonce,
+            nonce: &nonce,
         },
+    )
+    .await
+    .with_context(|| format!("{} reply", ctx.api.label()))?;
+    assert_db_message(
+        &ctx.pool,
+        &reply.id,
+        &channel.id,
+        &ctx.users.bob.user_id,
+        &content,
+        Some(&root.id),
     )
     .await?;
 
-    let after_reply = get_channel(&http, &world.services, &actor_token, &created.id).await?;
-    let reply_message = find_message(&after_reply, &reply.id)?;
-    ensure!(
-        reply_message.get("thread_id").and_then(Value::as_str) == Some(root.id.as_str()),
-        "reply did not persist thread_id: {reply_message}"
-    );
-
-    for (label, reader) in [
-        ("actor", &mut actor_read),
-        ("bob", &mut bob_read),
-        ("charlie", &mut charlie_read),
-    ] {
-        let event = wait_for_gateway_event(reader, "comms_message", |data| {
-            data.get("id").and_then(Value::as_str) == Some(reply.id.as_str())
-                && data.get("nonce").and_then(Value::as_str) == Some(reply_nonce.as_str())
-        })
-        .await
-        .with_context(|| format!("{label} did not receive reply event"))?;
+    for event in listeners
+        .wait_for_all(
+            "comms_message",
+            |data| {
+                data.get("id").and_then(Value::as_str) == Some(reply.id.as_str())
+                    && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
+            },
+            "reply realtime message",
+        )
+        .await?
+    {
         ensure!(
-            event.get("thread_id").and_then(Value::as_str) == Some(root.id.as_str()),
-            "{label} reply websocket thread_id mismatch: {event}"
+            event.data.get("thread_id").and_then(Value::as_str) == Some(root.id.as_str()),
+            "{} {} reply thread mismatch: {}",
+            ctx.api.label(),
+            event.label,
+            event.data
         );
     }
-
-    wait_for_notification(&http, &world.services, &actor_token, |notification| {
-        notification_matches(notification, "channel_message_reply", &created.id)
-            && notification_content(notification, "messageId") == Some(reply.id.as_str())
-            && notification_content(notification, "threadId") == Some(root.id.as_str())
-            && notification_content(notification, "messageContent") == Some(reply_content.as_str())
-    })
+    wait_for_notification(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.users.actor_token,
+        |notification| {
+            notification_matches(notification, "channel_message_reply", &channel.id)
+                && notification_content(notification, "messageId") == Some(reply.id.as_str())
+                && notification_content(notification, "threadId") == Some(root.id.as_str())
+                && notification_content(notification, "messageContent") == Some(content.as_str())
+        },
+    )
     .await
-    .context("thread parent sender did not receive reply notification")?;
+    .with_context(|| format!("{} reply notification", ctx.api.label()))?;
 
-    actor_write.send(WebsocketMessage::Close(None)).await.ok();
-    bob_write.send(WebsocketMessage::Close(None)).await.ok();
-    charlie_write.send(WebsocketMessage::Close(None)).await.ok();
+    listeners.close().await;
     Ok(())
 }
 
 #[tokio::test]
 #[ignore = "requires `just local-e2e-seed` plus connection_gateway and document_storage_service"]
-async fn message_deletes_tombstone_read_model_and_realtime_delivery() -> anyhow::Result<()> {
-    let world = TestWorld::load()?;
-    let http = Client::new();
-    let actor = world.seed.smoke_user()?;
-    let actor_token = world.token_for(actor)?;
-    let bob = world
-        .seed
-        .user_by_email("bob@example.com")
-        .context("missing bob fixture")?;
-    let bob_token = world.token_for(bob)?;
-    let charlie = world
-        .seed
-        .user_by_email("charlie@example.com")
-        .context("missing charlie fixture")?;
-    let charlie_token = world.token_for(charlie)?;
-    let suffix = unique_suffix();
+async fn message_edit_persists_content_and_emits_realtime() -> anyhow::Result<()> {
+    let ctx = ChannelContractContext::load().await?;
+    assert_message_edit_side_effect_contract(&ctx).await
+}
 
-    let created = create_channel(
-        &http,
-        &world.services,
-        &actor_token,
-        format!("delete-{suffix}"),
-        "public",
-        &[&bob.user_id, &charlie.user_id],
-    )
-    .await?;
-    let posted = post_message(
-        &http,
-        &world.services,
-        &actor_token,
-        &created.id,
+async fn assert_message_edit_side_effect_contract(
+    ctx: &ChannelContractContext,
+) -> anyhow::Result<()> {
+    let channel = create_private_contract_channel(ctx, "message-edit").await?;
+    let suffix = ctx.suffix("edit-message");
+    let root = post_message_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        &channel.id,
         &PostMessageBody {
-            content: &format!("delete source {suffix}"),
+            content: &format!("edit root {suffix}"),
             mentions: Vec::new(),
             thread_id: None,
             attachments: Vec::new(),
-            nonce: &format!("delete-post-{suffix}"),
+            nonce: &format!("edit-root-{suffix}"),
         },
     )
     .await?;
 
-    let actor_ws = world
-        .services
-        .connection_gateway_ws_url_with_token(&actor_token)?;
-    let bob_ws = world
-        .services
-        .connection_gateway_ws_url_with_token(&bob_token)?;
-    let charlie_ws = world
-        .services
-        .connection_gateway_ws_url_with_token(&charlie_token)?;
-    let (actor_socket, _) = connect_async(&actor_ws).await?;
-    let (bob_socket, _) = connect_async(&bob_ws).await?;
-    let (charlie_socket, _) = connect_async(&charlie_ws).await?;
-    let (mut actor_write, mut actor_read) = actor_socket.split();
-    let (mut bob_write, mut bob_read) = bob_socket.split();
-    let (mut charlie_write, mut charlie_read) = charlie_socket.split();
-    ping_and_wait(&mut actor_write, &mut actor_read).await?;
-    ping_and_wait(&mut bob_write, &mut bob_read).await?;
-    ping_and_wait(&mut charlie_write, &mut charlie_read).await?;
-
-    let delete_nonce = format!("delete-{suffix}");
-    delete_message(
-        &http,
-        &world.services,
-        &actor_token,
-        &created.id,
-        &posted.id,
-        &delete_nonce,
+    let mut listeners = ContractGatewayListeners::connect(ctx).await?;
+    let content = format!("edited {suffix}");
+    let nonce = format!("edit-{suffix}");
+    patch_message_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        &channel.id,
+        &root.id,
+        &json!({
+            "content": content,
+            "mentions": [],
+            "attachment_ids_to_delete": [],
+            "attachments_to_add": [],
+            "nonce": nonce,
+        }),
     )
-    .await?;
+    .await
+    .with_context(|| format!("{} edit", ctx.api.label()))?;
+    assert_db_message_content(&ctx.pool, &root.id, &content).await?;
 
-    let after_delete = get_channel(&http, &world.services, &actor_token, &created.id).await?;
-    let deleted_message = find_message(&after_delete, &posted.id)?;
-    ensure!(
-        !deleted_message
-            .get("deleted_at")
-            .unwrap_or(&Value::Null)
-            .is_null(),
-        "deleted message did not persist tombstone: {deleted_message}"
-    );
-
-    for (label, reader) in [
-        ("actor", &mut actor_read),
-        ("bob", &mut bob_read),
-        ("charlie", &mut charlie_read),
-    ] {
-        let event = wait_for_gateway_event(reader, "comms_message", |data| {
-            data.get("id").and_then(Value::as_str) == Some(posted.id.as_str())
-                && data.get("nonce").and_then(Value::as_str) == Some(delete_nonce.as_str())
-        })
-        .await
-        .with_context(|| format!("{label} did not receive delete event"))?;
+    for event in listeners
+        .wait_for_all(
+            "comms_message",
+            |data| {
+                data.get("id").and_then(Value::as_str) == Some(root.id.as_str())
+                    && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
+            },
+            "edit realtime message",
+        )
+        .await?
+    {
         ensure!(
-            !event.get("deleted_at").unwrap_or(&Value::Null).is_null(),
-            "{label} delete websocket payload did not include deleted_at: {event}"
+            event.data.get("content").and_then(Value::as_str) == Some(content.as_str()),
+            "{} {} edit content mismatch: {}",
+            ctx.api.label(),
+            event.label,
+            event.data
         );
     }
 
-    actor_write.send(WebsocketMessage::Close(None)).await.ok();
-    bob_write.send(WebsocketMessage::Close(None)).await.ok();
-    charlie_write.send(WebsocketMessage::Close(None)).await.ok();
+    listeners.close().await;
     Ok(())
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus document_storage_service"]
-async fn get_or_create_and_join_preserve_legacy_access_behavior() -> anyhow::Result<()> {
-    let world = TestWorld::load()?;
-    let http = Client::new();
-    let smoke = world.seed.smoke_user()?;
-    let smoke_token = world.token_for(smoke)?;
-    let bob = world
-        .seed
-        .user_by_email("bob@example.com")
-        .context("missing bob fixture")?;
-    let eve = world
-        .seed
-        .user_by_email("eve@example.com")
-        .context("missing eve fixture")?;
-    let eve_token = world.token_for(eve)?;
-    let general = world.seed.general_channel()?;
+#[ignore = "requires `just local-e2e-seed` plus connection_gateway and document_storage_service"]
+async fn message_delete_persists_tombstone_and_emits_realtime() -> anyhow::Result<()> {
+    let ctx = ChannelContractContext::load().await?;
+    assert_message_delete_side_effect_contract(&ctx).await
+}
 
-    let dm = get_or_create_dm(&http, &world.services, &smoke_token, &bob.user_id).await?;
-    ensure!(
-        dm.action == "get",
-        "expected existing seeded DM, got {dm:?}"
-    );
-
-    let invalid_dm = http
-        .post(world.services.get_or_create_dm_url())
-        .bearer_auth(&smoke_token)
-        .json(&json!({ "recipient_id": smoke.user_id }))
-        .send()
-        .await
-        .context("failed to call invalid self-DM")?;
-    ensure!(
-        invalid_dm.status() == reqwest::StatusCode::BAD_REQUEST,
-        "self-DM should be rejected with 400, got {}: {}",
-        invalid_dm.status(),
-        invalid_dm.text().await.unwrap_or_default()
-    );
-
-    let private = get_or_create_private(
-        &http,
-        &world.services,
-        &smoke_token,
-        &[&bob.user_id, &eve.user_id],
-    )
-    .await?;
-    ensure!(
-        !private.channel_id.is_empty(),
-        "private channel id was empty"
-    );
-
-    require_success(
-        http.post(world.services.join_channel_url(&general.channel_id))
-            .bearer_auth(&eve_token)
-            .send()
-            .await
-            .context("failed to join public channel as non-participant")?,
-        "join public channel as non-participant",
-    )
-    .await?;
-    let joined = get_channel(&http, &world.services, &eve_token, &general.channel_id).await?;
-    assert_participant(&joined, &eve.user_id)?;
-
-    require_success(
-        http.post(world.services.leave_channel_url(&general.channel_id))
-            .bearer_auth(&eve_token)
-            .send()
-            .await
-            .context("failed to leave public channel")?,
-        "leave public channel",
+async fn assert_message_delete_side_effect_contract(
+    ctx: &ChannelContractContext,
+) -> anyhow::Result<()> {
+    let channel = create_private_contract_channel(ctx, "message-delete").await?;
+    let suffix = ctx.suffix("delete-message");
+    let root = post_message_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        &channel.id,
+        &PostMessageBody {
+            content: &format!("delete root {suffix}"),
+            mentions: Vec::new(),
+            thread_id: None,
+            attachments: Vec::new(),
+            nonce: &format!("delete-root-{suffix}"),
+        },
     )
     .await?;
 
+    let mut listeners = ContractGatewayListeners::connect(ctx).await?;
+    let nonce = format!("delete-{suffix}");
+    delete_message_via(
+        &ctx.http,
+        &ctx.world.services,
+        &ctx.api,
+        &ctx.users.actor_token,
+        &channel.id,
+        &root.id,
+        &nonce,
+    )
+    .await
+    .with_context(|| format!("{} delete", ctx.api.label()))?;
+    assert_db_message_deleted(&ctx.pool, &root.id).await?;
+
+    for event in listeners
+        .wait_for_all(
+            "comms_message",
+            |data| {
+                data.get("id").and_then(Value::as_str) == Some(root.id.as_str())
+                    && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
+            },
+            "delete realtime message",
+        )
+        .await?
+    {
+        ensure!(
+            !event
+                .data
+                .get("deleted_at")
+                .unwrap_or(&Value::Null)
+                .is_null(),
+            "{} {} delete payload missing deleted_at: {}",
+            ctx.api.label(),
+            event.label,
+            event.data
+        );
+    }
+
+    listeners.close().await;
     Ok(())
 }
 
@@ -958,16 +1325,17 @@ struct PostMessageBody<'a> {
     nonce: &'a str,
 }
 
-async fn create_channel(
+async fn create_channel_via(
     http: &Client,
-    services: &LocalE2eServices,
+    _services: &LocalE2eServices,
+    api: &ChannelApiClient,
     token: &str,
     name: String,
     channel_type: &str,
     participants: &[&str],
 ) -> anyhow::Result<CreateChannelResponse> {
     let response = http
-        .post(services.create_channel_url())
+        .post(api.create_channel_url())
         .bearer_auth(token)
         .json(&json!({
             "name": name,
@@ -985,15 +1353,16 @@ async fn create_channel(
         .context("failed to decode create channel response")
 }
 
-async fn patch_channel_name(
+async fn patch_channel_name_via(
     http: &Client,
-    services: &LocalE2eServices,
+    _services: &LocalE2eServices,
+    api: &ChannelApiClient,
     token: &str,
     channel_id: &str,
     channel_name: &str,
 ) -> anyhow::Result<()> {
     require_success(
-        http.patch(services.channel_url(channel_id))
+        http.patch(api.channel_url(channel_id))
             .bearer_auth(token)
             .json(&json!({ "channel_name": channel_name }))
             .send()
@@ -1005,15 +1374,16 @@ async fn patch_channel_name(
     Ok(())
 }
 
-async fn add_participants(
+async fn add_participants_via(
     http: &Client,
-    services: &LocalE2eServices,
+    _services: &LocalE2eServices,
+    api: &ChannelApiClient,
     token: &str,
     channel_id: &str,
     participants: &[&str],
 ) -> anyhow::Result<()> {
     require_success(
-        http.post(services.channel_participants_url(channel_id))
+        http.post(api.channel_participants_url(channel_id))
             .bearer_auth(token)
             .json(&json!({ "participants": participants }))
             .send()
@@ -1025,37 +1395,36 @@ async fn add_participants(
     Ok(())
 }
 
-async fn remove_participants(
+async fn remove_participants_via(
     http: &Client,
-    services: &LocalE2eServices,
+    _services: &LocalE2eServices,
+    api: &ChannelApiClient,
     token: &str,
     channel_id: &str,
     participants: &[&str],
 ) -> anyhow::Result<()> {
     require_success(
-        http.request(
-            Method::DELETE,
-            services.channel_participants_url(channel_id),
-        )
-        .bearer_auth(token)
-        .json(&json!({ "participants": participants }))
-        .send()
-        .await
-        .context("failed to remove participants")?,
+        http.request(Method::DELETE, api.channel_participants_url(channel_id))
+            .bearer_auth(token)
+            .json(&json!({ "participants": participants }))
+            .send()
+            .await
+            .context("failed to remove participants")?,
         "remove participants",
     )
     .await?;
     Ok(())
 }
 
-async fn delete_channel(
+async fn delete_channel_via(
     http: &Client,
-    services: &LocalE2eServices,
+    _services: &LocalE2eServices,
+    api: &ChannelApiClient,
     token: &str,
     channel_id: &str,
 ) -> anyhow::Result<()> {
     require_success(
-        http.delete(services.channel_url(channel_id))
+        http.delete(api.channel_url(channel_id))
             .bearer_auth(token)
             .send()
             .await
@@ -1066,15 +1435,16 @@ async fn delete_channel(
     Ok(())
 }
 
-async fn post_message(
+async fn post_message_via(
     http: &Client,
-    services: &LocalE2eServices,
+    _services: &LocalE2eServices,
+    api: &ChannelApiClient,
     token: &str,
     channel_id: &str,
     body: &PostMessageBody<'_>,
 ) -> anyhow::Result<MessageMutationResponse> {
     let response = http
-        .post(services.post_channel_message_url(channel_id))
+        .post(api.post_channel_message_url(channel_id))
         .bearer_auth(token)
         .json(&json!({
             "content": body.content,
@@ -1093,16 +1463,17 @@ async fn post_message(
         .context("failed to decode post message response")
 }
 
-async fn patch_message(
+async fn patch_message_via(
     http: &Client,
-    services: &LocalE2eServices,
+    _services: &LocalE2eServices,
+    api: &ChannelApiClient,
     token: &str,
     channel_id: &str,
     message_id: &str,
     body: &Value,
 ) -> anyhow::Result<()> {
     require_success(
-        http.patch(services.channel_message_url(channel_id, message_id))
+        http.patch(api.channel_message_url(channel_id, message_id))
             .bearer_auth(token)
             .json(body)
             .send()
@@ -1114,9 +1485,10 @@ async fn patch_message(
     Ok(())
 }
 
-async fn post_reaction(
+async fn post_reaction_via(
     http: &Client,
-    services: &LocalE2eServices,
+    _services: &LocalE2eServices,
+    api: &ChannelApiClient,
     token: &str,
     channel_id: &str,
     message_id: &str,
@@ -1125,7 +1497,7 @@ async fn post_reaction(
     nonce: &str,
 ) -> anyhow::Result<()> {
     require_success(
-        http.post(services.post_channel_reaction_url(channel_id))
+        http.post(api.post_channel_reaction_url(channel_id))
             .bearer_auth(token)
             .json(&json!({
                 "emoji": emoji,
@@ -1142,9 +1514,37 @@ async fn post_reaction(
     Ok(())
 }
 
-async fn delete_message(
+async fn post_typing_via(
     http: &Client,
-    services: &LocalE2eServices,
+    _services: &LocalE2eServices,
+    api: &ChannelApiClient,
+    token: &str,
+    channel_id: &str,
+    action: &str,
+    thread_id: Option<&str>,
+    nonce: &str,
+) -> anyhow::Result<()> {
+    require_success(
+        http.post(api.post_channel_typing_url(channel_id))
+            .bearer_auth(token)
+            .json(&json!({
+                "action": action,
+                "thread_id": thread_id,
+                "nonce": nonce,
+            }))
+            .send()
+            .await
+            .context("failed to post typing")?,
+        "post typing",
+    )
+    .await?;
+    Ok(())
+}
+
+async fn delete_message_via(
+    http: &Client,
+    _services: &LocalE2eServices,
+    api: &ChannelApiClient,
     token: &str,
     channel_id: &str,
     message_id: &str,
@@ -1153,7 +1553,7 @@ async fn delete_message(
     require_success(
         http.delete(format!(
             "{}?nonce={nonce}",
-            services.channel_message_url(channel_id, message_id)
+            api.channel_message_url(channel_id, message_id)
         ))
         .bearer_auth(token)
         .send()
@@ -1165,14 +1565,15 @@ async fn delete_message(
     Ok(())
 }
 
-async fn get_or_create_dm(
+async fn get_or_create_dm_via(
     http: &Client,
-    services: &LocalE2eServices,
+    _services: &LocalE2eServices,
+    api: &ChannelApiClient,
     token: &str,
     recipient_id: &str,
 ) -> anyhow::Result<GetOrCreateResponse> {
     let response = http
-        .post(services.get_or_create_dm_url())
+        .post(api.get_or_create_dm_url())
         .bearer_auth(token)
         .json(&json!({ "recipient_id": recipient_id }))
         .send()
@@ -1185,14 +1586,15 @@ async fn get_or_create_dm(
         .context("failed to decode DM response")
 }
 
-async fn get_or_create_private(
+async fn get_or_create_private_via(
     http: &Client,
-    services: &LocalE2eServices,
+    _services: &LocalE2eServices,
+    api: &ChannelApiClient,
     token: &str,
     recipients: &[&str],
 ) -> anyhow::Result<GetOrCreateResponse> {
     let response = http
-        .post(services.get_or_create_private_url())
+        .post(api.get_or_create_private_url())
         .bearer_auth(token)
         .json(&json!({ "recipients": recipients }))
         .send()
@@ -1205,14 +1607,15 @@ async fn get_or_create_private(
         .context("failed to decode private-channel response")
 }
 
-async fn get_channel(
+async fn get_channel_via(
     http: &Client,
-    services: &LocalE2eServices,
+    _services: &LocalE2eServices,
+    api: &ChannelApiClient,
     token: &str,
     channel_id: &str,
 ) -> anyhow::Result<Value> {
     let response = http
-        .get(format!("{}?limit=50", services.get_channel_url(channel_id)))
+        .get(format!("{}?limit=50", api.read_channel_url(channel_id)))
         .bearer_auth(token)
         .send()
         .await
@@ -1224,26 +1627,306 @@ async fn get_channel(
         .with_context(|| format!("failed to decode channel {channel_id}"))
 }
 
-async fn get_persisted_channel_name(
-    config: &LocalE2eConfig,
-    channel_id: &str,
-) -> anyhow::Result<Option<String>> {
+async fn connect_db(config: &LocalE2eConfig) -> anyhow::Result<PgPool> {
     let database_url = config
-        .required("DATABASE_URL")?
+        .get("LOCAL_E2E_DATABASE_URL")
+        .unwrap_or(DEFAULT_LOCAL_DATABASE_URL)
         .replace("@postgres:", "@localhost:");
-    let pool = PgPoolOptions::new()
-        .max_connections(1)
+    PgPoolOptions::new()
+        .max_connections(2)
         .connect(&database_url)
         .await
-        .context("failed to connect to postgres for channel verification")?;
+        .context("failed to connect to postgres for verification")
+}
+
+async fn db_now(pool: &PgPool) -> anyhow::Result<String> {
+    sqlx::query_scalar::<_, String>("SELECT now()::text")
+        .fetch_one(pool)
+        .await
+        .context("failed to read database clock")
+}
+
+async fn assert_db_channel(
+    pool: &PgPool,
+    channel_id: &str,
+    expected_name: Option<&str>,
+    expected_type: &str,
+) -> anyhow::Result<()> {
     let channel_id = Uuid::parse_str(channel_id).context("failed to parse channel id")?;
-    let name =
-        sqlx::query_scalar::<_, Option<String>>("SELECT name FROM comms_channels WHERE id = $1")
+    let row = sqlx::query_as::<_, (Option<String>, String)>(
+        r#"
+        SELECT name, channel_type::text
+        FROM comms_channels
+        WHERE id = $1
+        "#,
+    )
+    .bind(channel_id)
+    .fetch_optional(pool)
+    .await
+    .context("failed to query channel row")?;
+    let Some((actual_name, actual_type)) = row else {
+        anyhow::bail!("channel {channel_id} was not found in db");
+    };
+    ensure!(
+        actual_name.as_deref() == expected_name && actual_type == expected_type,
+        "channel {channel_id} persisted as name {actual_name:?}, type {actual_type}; expected name {expected_name:?}, type {expected_type}"
+    );
+    Ok(())
+}
+
+async fn assert_db_channel_absent(pool: &PgPool, channel_id: &str) -> anyhow::Result<()> {
+    let channel_id = Uuid::parse_str(channel_id).context("failed to parse channel id")?;
+    let exists =
+        sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM comms_channels WHERE id = $1)")
             .bind(channel_id)
-            .fetch_one(&pool)
+            .fetch_one(pool)
             .await
-            .context("failed to query persisted channel name")?;
-    Ok(name)
+            .context("failed to query deleted channel row")?;
+    ensure!(!exists, "channel {channel_id} still exists in db");
+    Ok(())
+}
+
+async fn assert_db_participants_include(
+    pool: &PgPool,
+    channel_id: &str,
+    user_ids: &[&str],
+) -> anyhow::Result<()> {
+    for user_id in user_ids {
+        assert_db_participant(pool, channel_id, user_id, true).await?;
+    }
+    Ok(())
+}
+
+async fn assert_db_participants_absent(
+    pool: &PgPool,
+    channel_id: &str,
+    user_ids: &[&str],
+) -> anyhow::Result<()> {
+    for user_id in user_ids {
+        assert_db_participant(pool, channel_id, user_id, false).await?;
+    }
+    Ok(())
+}
+
+async fn assert_db_participant(
+    pool: &PgPool,
+    channel_id: &str,
+    user_id: &str,
+    expected_present: bool,
+) -> anyhow::Result<()> {
+    let channel_id = Uuid::parse_str(channel_id).context("failed to parse channel id")?;
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1 FROM comms_channel_participants
+            WHERE channel_id = $1 AND user_id = $2
+        )
+        "#,
+    )
+    .bind(channel_id)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await
+    .context("failed to query channel participant")?;
+    ensure!(
+        exists == expected_present,
+        "participant {user_id} presence for channel {channel_id} was {exists}, expected {expected_present}"
+    );
+    Ok(())
+}
+
+async fn assert_db_message(
+    pool: &PgPool,
+    message_id: &str,
+    channel_id: &str,
+    sender_id: &str,
+    content: &str,
+    thread_id: Option<&str>,
+) -> anyhow::Result<()> {
+    let message_id = Uuid::parse_str(message_id).context("failed to parse message id")?;
+    let channel_id = Uuid::parse_str(channel_id).context("failed to parse channel id")?;
+    let thread_id = thread_id
+        .map(Uuid::parse_str)
+        .transpose()
+        .context("failed to parse thread id")?;
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM comms_messages
+            WHERE id = $1
+              AND channel_id = $2
+              AND sender_id = $3
+              AND content = $4
+              AND thread_id IS NOT DISTINCT FROM $5
+              AND deleted_at IS NULL
+        )
+        "#,
+    )
+    .bind(message_id)
+    .bind(channel_id)
+    .bind(sender_id)
+    .bind(content)
+    .bind(thread_id)
+    .fetch_one(pool)
+    .await
+    .context("failed to query message row")?;
+    ensure!(
+        exists,
+        "message {message_id} did not match expected persisted state"
+    );
+    Ok(())
+}
+
+async fn assert_db_message_content(
+    pool: &PgPool,
+    message_id: &str,
+    content: &str,
+) -> anyhow::Result<()> {
+    let message_id = Uuid::parse_str(message_id).context("failed to parse message id")?;
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM comms_messages
+            WHERE id = $1 AND content = $2 AND edited_at IS NOT NULL AND deleted_at IS NULL
+        )
+        "#,
+    )
+    .bind(message_id)
+    .bind(content)
+    .fetch_one(pool)
+    .await
+    .context("failed to query edited message row")?;
+    ensure!(
+        exists,
+        "message {message_id} did not persist edited content"
+    );
+    Ok(())
+}
+
+async fn assert_db_message_deleted(pool: &PgPool, message_id: &str) -> anyhow::Result<()> {
+    let message_id = Uuid::parse_str(message_id).context("failed to parse message id")?;
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM comms_messages
+            WHERE id = $1 AND content = '' AND deleted_at IS NOT NULL
+        )
+        "#,
+    )
+    .bind(message_id)
+    .fetch_one(pool)
+    .await
+    .context("failed to query deleted message row")?;
+    ensure!(
+        exists,
+        "message {message_id} did not persist tombstone state"
+    );
+    Ok(())
+}
+
+async fn assert_db_attachment_count(
+    pool: &PgPool,
+    message_id: &str,
+    expected_count: i64,
+) -> anyhow::Result<()> {
+    let message_id = Uuid::parse_str(message_id).context("failed to parse message id")?;
+    let count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM comms_attachments WHERE message_id = $1",
+    )
+    .bind(message_id)
+    .fetch_one(pool)
+    .await
+    .context("failed to query attachment count")?;
+    ensure!(
+        count == expected_count,
+        "message {message_id} attachment count was {count}, expected {expected_count}"
+    );
+    Ok(())
+}
+
+async fn assert_db_reaction(
+    pool: &PgPool,
+    message_id: &str,
+    emoji: &str,
+    user_id: &str,
+) -> anyhow::Result<()> {
+    let message_id = Uuid::parse_str(message_id).context("failed to parse message id")?;
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM comms_reactions
+            WHERE message_id = $1 AND emoji = $2 AND user_id = $3
+        )
+        "#,
+    )
+    .bind(message_id)
+    .bind(emoji)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await
+    .context("failed to query reaction row")?;
+    ensure!(
+        exists,
+        "reaction {emoji} by {user_id} missing for message {message_id}"
+    );
+    Ok(())
+}
+
+async fn wait_for_contacts_connections(
+    pool: &PgPool,
+    pairs: &[(&str, &str)],
+    updated_after: &str,
+) -> anyhow::Result<()> {
+    let deadline = Instant::now() + CONTACTS_TIMEOUT;
+    loop {
+        let mut missing = Vec::new();
+        for (a, b) in pairs {
+            if !contact_connection_updated_after(pool, a, b, updated_after).await? {
+                missing.push(format!("{a}<->{b}"));
+            }
+        }
+        if missing.is_empty() {
+            return Ok(());
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        ensure!(
+            !remaining.is_zero(),
+            "timed out waiting for contacts connections updated after {updated_after}; missing {}",
+            missing.join(", ")
+        );
+        tokio::time::sleep(remaining.min(Duration::from_millis(500))).await;
+    }
+}
+
+async fn contact_connection_updated_after(
+    pool: &PgPool,
+    a: &str,
+    b: &str,
+    updated_after: &str,
+) -> anyhow::Result<bool> {
+    sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM contacts_connections
+            WHERE (
+                    (user1 = $1 AND user2 = $2)
+                 OR (user1 = $2 AND user2 = $1)
+            )
+              AND updated_at >= $3::timestamptz
+        )
+        "#,
+    )
+    .bind(a)
+    .bind(b)
+    .bind(updated_after)
+    .fetch_one(pool)
+    .await
+    .context("failed to query contacts connection")
 }
 
 async fn require_success(response: Response, context: &str) -> anyhow::Result<Response> {
@@ -1264,14 +1947,6 @@ fn assert_participant(channel: &Value, user_id: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn assert_not_participant(channel: &Value, user_id: &str) -> anyhow::Result<()> {
-    ensure!(
-        participant_ids(channel)?.all(|id| id != user_id),
-        "did not expect participant {user_id} in channel response: {channel}"
-    );
-    Ok(())
-}
-
 fn participant_ids(channel: &Value) -> anyhow::Result<impl Iterator<Item = &str>> {
     let participants = channel
         .get("participants")
@@ -1280,59 +1955,6 @@ fn participant_ids(channel: &Value) -> anyhow::Result<impl Iterator<Item = &str>
     Ok(participants
         .iter()
         .filter_map(|participant| participant.get("user_id").and_then(Value::as_str)))
-}
-
-fn find_message<'a>(channel: &'a Value, message_id: &str) -> anyhow::Result<&'a Value> {
-    channel
-        .get("messages")
-        .and_then(Value::as_array)
-        .and_then(|messages| {
-            messages
-                .iter()
-                .find(|message| message.get("id").and_then(Value::as_str) == Some(message_id))
-        })
-        .with_context(|| format!("message {message_id} was not returned in channel response"))
-}
-
-fn find_attachment_for_message<'a>(
-    channel: &'a Value,
-    message_id: &str,
-) -> anyhow::Result<&'a Value> {
-    channel
-        .get("attachments")
-        .and_then(Value::as_array)
-        .and_then(|attachments| {
-            attachments.iter().find(|attachment| {
-                attachment.get("message_id").and_then(Value::as_str) == Some(message_id)
-            })
-        })
-        .with_context(|| format!("attachment for message {message_id} was not returned"))
-}
-
-fn assert_reaction(
-    channel: &Value,
-    message_id: &str,
-    emoji: &str,
-    user_id: &str,
-) -> anyhow::Result<()> {
-    let reactions = channel
-        .get("reactions")
-        .and_then(|reactions| reactions.get(message_id))
-        .and_then(Value::as_array)
-        .with_context(|| format!("no reactions returned for message {message_id}: {channel}"))?;
-    let reaction = reactions
-        .iter()
-        .find(|reaction| reaction.get("emoji").and_then(Value::as_str) == Some(emoji))
-        .with_context(|| format!("reaction {emoji} missing for message {message_id}: {channel}"))?;
-    let users = reaction
-        .get("users")
-        .and_then(Value::as_array)
-        .context("reaction did not include users array")?;
-    ensure!(
-        users.iter().any(|user| user.as_str() == Some(user_id)),
-        "reaction {emoji} did not include user {user_id}: {reaction}"
-    );
-    Ok(())
 }
 
 fn reaction_payload_contains_user(payload: &Value, emoji: &str, user_id: &str) -> bool {
