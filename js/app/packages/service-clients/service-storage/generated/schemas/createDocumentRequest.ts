@@ -14,6 +14,7 @@ import type { CreateDocumentRequestId } from './createDocumentRequestId';
 import type { CreateDocumentRequestJobId } from './createDocumentRequestJobId';
 import type { CreateDocumentRequestMimeType } from './createDocumentRequestMimeType';
 import type { CreateDocumentRequestProjectId } from './createDocumentRequestProjectId';
+import type { CreateDocumentRequestTeamId } from './createDocumentRequestTeamId';
 
 export interface CreateDocumentRequest {
   /** The document id if the document is being branched. */
@@ -47,4 +48,7 @@ Will need to have a corresponding job initiated for the file beforehand. */
   sha: string;
   /** Whether to add a viewed_at record for this document upon creation. */
   skipHistory?: boolean;
+  /** Team to assign the task number within when creating a task document. If omitted,
+the service may infer it only when the creator belongs to exactly one team. */
+  teamId?: CreateDocumentRequestTeamId;
 }

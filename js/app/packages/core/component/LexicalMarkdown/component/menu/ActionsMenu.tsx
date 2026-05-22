@@ -85,7 +85,7 @@ function ActionsMenuItem(props: {
       }}
       on:mouseover={() => props.setIndex(props.index)}
       class={cn('group flex items-center p-1.5 mx-1.5 rounded-md', {
-        'bg-hover': props.selected,
+        'bg-ink/5': props.selected,
       })}
     >
       <div class="flex flex-row gap-2 items-center w-full">
@@ -322,7 +322,7 @@ export function ActionMenu(props: {
         >
           <Surface
             depth={2}
-            class="py-1.5 shadow-lg shadow-drop-shadow rounded-lg"
+            class="py-1.5 shadow-lg shadow-drop-shadow rounded-xl"
           >
             <div
               class="overflow-y-auto scrollbar-hidden"

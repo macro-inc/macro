@@ -1804,6 +1804,144 @@
               }
             }
           },
+          "409": {
+            "description": "Company is hidden; un-hide before enabling email sync",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/companies/{company_id}/hidden": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::set_company_hidden"],
+        "summary": "Toggle `hidden` on a CRM company. Hiding also disables `email_sync`\nand cascades to clearing the company's contacts and contact sources.",
+        "operationId": "set_company_hidden",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The CRM company to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCompanyHiddenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/contacts/{contact_id}/hidden": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::set_contact_hidden"],
+        "summary": "Toggle `hidden` on a CRM contact. Hiding is a display-only opt-out\nscoped to the team that owns the contact's company.",
+        "operationId": "set_contact_hidden",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The CRM contact to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetContactHiddenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -2105,6 +2243,16 @@
                     "documentId": {
                       "type": "string",
                       "description": "The document ID of the created task."
+                    },
+                    "teamId": {
+                      "type": ["string", "null"],
+                      "format": "uuid",
+                      "description": "The team this task number is scoped to."
+                    },
+                    "teamTaskId": {
+                      "type": ["integer", "null"],
+                      "format": "int32",
+                      "description": "The task number assigned within the team."
                     }
                   }
                 }
@@ -6719,6 +6867,7 @@
           "roomName",
           "createdBy",
           "startedAt",
+          "shareWithTeam",
           "isActive",
           "participants",
           "transcript"
@@ -6783,6 +6932,10 @@
           "roomName": {
             "type": "string",
             "description": "The RTC room name."
+          },
+          "shareWithTeam": {
+            "type": "boolean",
+            "description": "Whether the call is shared with the creator's team."
           },
           "startedAt": {
             "type": "string",
@@ -7592,6 +7745,11 @@
           "skipHistory": {
             "type": "boolean",
             "description": "Whether to add a viewed_at record for this document upon creation."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team to assign the task number within when creating a task document. If omitted,\nthe service may infer it only when the creator belongs to exactly one team."
           }
         }
       },
@@ -7717,6 +7875,11 @@
           "taskName": {
             "type": "string",
             "description": "The name of the task."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team to assign the task number within. If omitted, it is inferred only\nwhen the creator belongs to exactly one team."
           }
         }
       },
@@ -7728,6 +7891,16 @@
           "documentId": {
             "type": "string",
             "description": "The document ID of the created task."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The team this task number is scoped to."
+          },
+          "teamTaskId": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "The task number assigned within the team."
           }
         }
       },
@@ -8200,6 +8373,16 @@
               "content": {
                 "$ref": "#/components/schemas/DocumentContent",
                 "description": "Content lifecycle and location metadata."
+              },
+              "teamId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The team this task number is scoped to, for task documents."
+              },
+              "teamTaskId": {
+                "type": ["integer", "null"],
+                "format": "int32",
+                "description": "The task number assigned within the team, for task documents."
               }
             }
           }
@@ -8475,6 +8658,16 @@
               "content": {
                 "$ref": "#/components/schemas/DocumentContent",
                 "description": "Content lifecycle and location metadata."
+              },
+              "teamId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The team this task number is scoped to, for task documents."
+              },
+              "teamTaskId": {
+                "type": ["integer", "null"],
+                "format": "int32",
+                "description": "The task number assigned within the team, for task documents."
               }
             }
           }
@@ -11511,6 +11704,28 @@
           "presignedUrl": {
             "type": ["string", "null"],
             "description": "If the document is an editable file, we provide a presigned url to save the updated file to."
+          }
+        }
+      },
+      "SetCompanyHiddenRequest": {
+        "type": "object",
+        "description": "Request body for `PUT /companies/{company_id}/hidden`.",
+        "required": ["hidden"],
+        "properties": {
+          "hidden": {
+            "type": "boolean",
+            "description": "New value for `crm_companies.hidden`. Setting to `true` hides\nthe company from CRM listings AND disables `email_sync` (which\npermanently deletes the company's contacts and contact sources).\nSetting to `false` un-hides the company; `email_sync` is left\nuntouched and the team must re-enable it explicitly."
+          }
+        }
+      },
+      "SetContactHiddenRequest": {
+        "type": "object",
+        "description": "Request body for `PUT /contacts/{contact_id}/hidden`.",
+        "required": ["hidden"],
+        "properties": {
+          "hidden": {
+            "type": "boolean",
+            "description": "New value for `crm_contacts.hidden`. `true` hides the contact\nfrom CRM listings for the team; `false` un-hides it. Display-only\n— does not affect populate/depopulate."
           }
         }
       },

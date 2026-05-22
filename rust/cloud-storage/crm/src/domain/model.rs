@@ -17,6 +17,11 @@ pub struct CrmCompany {
     pub team_id: uuid::Uuid,
     /// Whether email sync is enabled for this company
     pub email_sync: bool,
+    /// Whether the company is hidden from CRM listings for the owning
+    /// team. Display-only opt-out; setting it to `true` also forces
+    /// `email_sync = false` (see
+    /// [`crate::domain::service::CrmService::set_company_hidden`]).
+    pub hidden: bool,
     /// When the company was created
     pub created_at: DateTime<Utc>,
     /// All domains associated with this company
@@ -66,6 +71,14 @@ pub enum CrmError {
     /// Company id is not owned by the requesting team.
     #[error("crm company not found for team")]
     CompanyNotFoundForTeam,
+    /// Contact id is not owned by the requesting team.
+    #[error("crm contact not found for team")]
+    ContactNotFoundForTeam,
+    /// Tried to mutate a CRM company in a way that contradicts its
+    /// `hidden = true` state — currently raised when attempting to
+    /// re-enable `email_sync` on a hidden company.
+    #[error("crm company is hidden")]
+    CompanyHidden,
     /// Entity access receipt did not contain a valid team UUID.
     #[error("invalid team id in entity access receipt")]
     InvalidTeamId,

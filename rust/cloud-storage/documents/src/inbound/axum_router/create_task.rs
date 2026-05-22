@@ -1,8 +1,11 @@
 //! Handler for `POST /documents/create_task`.
 
 use axum::{Json, extract::State};
+use entity_access::domain::models::MemberTeamRole;
 use entity_access::domain::ports::EntityAccessService;
-use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
+use entity_access::inbound::axum_extractors::{
+    OptionalMacroUserTeamExtractor, ProjectBodyAccessLevelExtractor,
+};
 use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
@@ -26,13 +29,14 @@ use crate::domain::ports::create::DocumentCreationService;
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user_context, project), fields(user_id=?user_context.macro_user_id))]
+#[tracing::instrument(skip(state, user_context, optional_team, project), fields(user_id=?user_context.macro_user_id))]
 pub async fn create_task_handler<
     T: DocumentService + DocumentCreationService,
     Svc: EntityAccessService,
 >(
     State(state): State<DocumentRouterState<T, Svc>>,
     user_context: MacroUserExtractor,
+    optional_team: OptionalMacroUserTeamExtractor<MemberTeamRole, Svc>,
     project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateTaskRequest, Svc>,
 ) -> Result<Json<CreateTaskResponse>, DocumentError> {
     let req = project.into_inner();
@@ -41,6 +45,14 @@ pub async fn create_task_handler<
     if let Some(project_id) = req.project_id {
         metadata = metadata.project_id(project_id);
     }
+
+    let team_id = if req.share_with_team {
+        optional_team
+            .entity_access_receipt
+            .map(|team| macro_uuid::string_to_uuid(&team.entity().entity_id).unwrap())
+    } else {
+        None
+    };
 
     let created = state
         .creator
@@ -51,13 +63,18 @@ pub async fn create_task_handler<
                 markdown: req.markdown.unwrap_or_default(),
                 subtype: MarkdownSubtype::Task {
                     property_values: req.property_values,
-                    share_with_team: req.share_with_team,
+                    share_with_team: req.share_with_team && team_id.is_some(), // we should only try and share if the user is in a team and they have share_with_team set
+                    team_id,
                 },
             },
         )
         .await?;
 
+    let task_metadata = &created.response().document_response.document_metadata;
+
     Ok(Json(CreateTaskResponse {
         document_id: created.document_id().to_string(),
+        team_id: task_metadata.team_id,
+        team_task_id: task_metadata.team_task_id,
     }))
 }

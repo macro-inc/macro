@@ -766,6 +766,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     projectEntity?: ProjectEntity;
     event: MouseEvent | PointerEvent;
     location?: SearchLocation;
+    rowIndex?: number;
   };
 
   const onEntityClick = async (args: EntityClickArgs) => {
@@ -782,7 +783,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
 
     if (soup.previewEntity() && type === 'entity') {
-      soup.focus.set(entity.id);
+      if (args.rowIndex !== undefined) soup.focus.setIndex(args.rowIndex);
+      else soup.focus.set(entity.id);
       return;
     }
 
@@ -1287,7 +1289,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                         onMouseMove={() => {
                                           if (isKeypressActive()) return;
                                           if (soup.previewEntity()) return;
-                                          soup.focus.set(row.id);
+                                          soup.focus.setIndex(row.index);
                                         }}
                                         showUnrollNotifications={
                                           soup.predicates.isActive('inbox') &&
@@ -1311,6 +1313,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                             entity: row.original,
                                             event,
                                             location: undefined,
+                                            rowIndex: row.index,
                                           });
                                         }}
                                         onProjectClick={(
@@ -1323,6 +1326,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                             entity: row.original,
                                             event,
                                             location: undefined,
+                                            rowIndex: row.index,
                                           });
                                         }}
                                         onContentHitClick={(
@@ -1334,6 +1338,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                             entity: row.original,
                                             event: e,
                                             location,
+                                            rowIndex: row.index,
                                           });
                                         }}
                                         entityRowConfig={{

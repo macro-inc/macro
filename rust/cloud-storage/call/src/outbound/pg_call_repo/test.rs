@@ -561,6 +561,27 @@ async fn give_user_a_team(
     Ok(())
 }
 
+async fn stored_call_record_share_with_team(
+    pool: &Pool<Postgres>,
+    call_id: Uuid,
+) -> anyhow::Result<bool> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT share_with_team FROM call_records WHERE id = $1"#,
+        call_id,
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
+async fn team_entity_access_count(pool: &Pool<Postgres>, call_id: Uuid) -> anyhow::Result<i64> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM entity_access WHERE entity_id = $1 AND source_type = 'team'"#,
+        call_id,
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
 // -- archive_call grants team view access when share_with_team is true -------
 
 #[sqlx::test(
@@ -595,6 +616,7 @@ async fn archive_call_grants_team_view_access_when_share_with_team_true(
     assert_eq!(row.get::<String, _>("entity_type"), "call");
     assert_eq!(row.get::<String, _>("source_id"), team_id.to_string());
     assert_eq!(row.get::<AccessLevel, _>("access_level"), AccessLevel::View);
+    assert!(stored_call_record_share_with_team(&pool, CALL1).await?);
 
     Ok(())
 }
@@ -633,6 +655,7 @@ async fn archive_call_skips_team_grant_when_share_with_team_false(
     .await?;
 
     assert_eq!(count, 0);
+    assert!(!stored_call_record_share_with_team(&pool, CALL1).await?);
 
     Ok(())
 }
@@ -1180,8 +1203,15 @@ async fn get_stable_speaker_voices_for_call_record_returns_all_voices_for_consis
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = repo(pool);
+    let repo = repo(pool.clone());
     let now = Utc::now();
+
+    sqlx::query!(
+        r#"UPDATE calls SET share_with_team = false WHERE id = $1"#,
+        CALL1,
+    )
+    .execute(&pool)
+    .await?;
 
     // Ingest two transcript segments into the active call.
     repo.create_transcript_segment(
@@ -1225,6 +1255,7 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
     assert_eq!(record.call_id, CALL1);
     assert_eq!(record.channel_id, CH1);
     assert!(record.is_active);
+    assert!(!record.share_with_team);
     assert!(record.ended_at.is_none());
     assert!(record.duration_ms.is_none());
 
@@ -1259,7 +1290,15 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = repo(pool);
+    let repo = repo(pool.clone());
+
+    sqlx::query!(
+        r#"UPDATE call_records SET share_with_team = false WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .execute(&pool)
+    .await?;
+
     let record = repo
         .get_call_record_by_call_id(&CALL_ARCHIVED)
         .await?
@@ -1268,6 +1307,7 @@ async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::
     assert_eq!(record.call_id, CALL_ARCHIVED);
     assert_eq!(record.channel_id, CH1);
     assert!(!record.is_active);
+    assert!(!record.share_with_team);
     assert!(record.ended_at.is_some());
     assert_eq!(record.duration_ms, Some(300_000));
     assert_eq!(record.egress_id.as_deref(), Some("egress-arch-1"));
@@ -1594,6 +1634,43 @@ async fn get_call_records_by_user_returns_archived_summary(
         .expect("archived call missing");
     assert!(!archived.is_active);
     assert_eq!(archived.summary.as_deref(), Some(summary));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_returns_share_with_team(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    sqlx::query!(
+        r#"UPDATE call_records SET share_with_team = false WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .execute(&pool)
+    .await?;
+
+    let records = repo
+        .get_call_records_by_user(USER_A.deref().copied(), 10, &None)
+        .await?;
+
+    let active = records
+        .iter()
+        .find(|r| r.call_id == CALL1)
+        .expect("active call missing");
+    assert!(active.is_active);
+    assert!(active.share_with_team);
+
+    let archived = records
+        .iter()
+        .find(|r| r.call_id == CALL_ARCHIVED)
+        .expect("archived call missing");
+    assert!(!archived.is_active);
+    assert!(!archived.share_with_team);
 
     Ok(())
 }
@@ -2239,6 +2316,44 @@ async fn patch_call_record_share_with_team_works_on_archived_record(
 
     assert_eq!(row.source_id, team_id.to_string());
     assert_eq!(row.access_level.as_deref(), Some("view"));
+    assert!(stored_call_record_share_with_team(&pool, CALL_ARCHIVED).await?);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_record_share_with_team_false_updates_archived_record_and_removes_team_access(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let team_id: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaa013);
+
+    give_user_a_team(&pool, USER_A.as_ref(), &team_id).await?;
+
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+           VALUES ($1, 'call', $2, 'team', 'view')"#,
+        CALL_ARCHIVED,
+        team_id.to_string(),
+    )
+    .execute(&pool)
+    .await?;
+
+    repo.patch_call_record(
+        &CALL_ARCHIVED,
+        &EditCallRecordRequest {
+            share_permission: None,
+            share_with_team: Some(false),
+            custom_name: None,
+        },
+    )
+    .await?;
+
+    assert_eq!(team_entity_access_count(&pool, CALL_ARCHIVED).await?, 0);
+    assert!(!stored_call_record_share_with_team(&pool, CALL_ARCHIVED).await?);
 
     Ok(())
 }

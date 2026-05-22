@@ -20,7 +20,9 @@ use roles_and_permissions::domain::{
     port::UserRolesAndPermissionsService,
 };
 
-use crate::domain::crm_enqueuer::NoOpCrmEnqueuer;
+use crate::domain::{
+    crm_enqueuer::NoOpCrmEnqueuer, team_crm_settings_repo::NoOpTeamCrmSettingsRepository,
+};
 
 fn test_team_receipt<T: RequiredPermission>(
     team_id: uuid::Uuid,
@@ -706,6 +708,7 @@ fn build_service(
         MockUserRolesAndPermissionsService::default(),
         notification_ingress.clone(),
         NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
     );
     (service, notification_ingress)
 }
@@ -865,6 +868,7 @@ fn build_service_with_team(
         MockUserRolesAndPermissionsService::default(),
         notification_ingress,
         NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
     );
     (service, role_calls, name_calls)
 }
@@ -1064,6 +1068,7 @@ async fn test_join_team_increments_customer_seat_count() {
         roles_service,
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
     );
 
     service.join_team(&invite_id, &user_id).await.unwrap();
@@ -1112,6 +1117,7 @@ async fn test_join_team_rolls_back_accept_when_customer_increment_fails() {
         roles_service,
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
     );
 
     let err = service.join_team(&invite_id, &user_id).await.err().unwrap();
@@ -1162,6 +1168,7 @@ async fn test_remove_user_from_team_decrements_customer_seat_count() {
         roles_service,
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
     );
 
     service
@@ -1220,6 +1227,7 @@ async fn test_remove_user_from_team_rolls_back_remove_when_customer_decrement_fa
         roles_service,
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
     );
 
     let err = service
@@ -1275,6 +1283,7 @@ async fn test_join_team_rolls_back_customer_roles_and_accept_when_channel_add_fa
         roles_service,
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
     );
 
     let err = service.join_team(&invite_id, &user_id).await.err().unwrap();
@@ -1330,6 +1339,7 @@ async fn test_remove_user_from_team_rolls_back_customer_and_remove_when_channel_
         roles_service,
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
     );
 
     let err = service

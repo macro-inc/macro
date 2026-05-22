@@ -4,7 +4,7 @@
 //! - `POST /` — create a new document
 //! - `GET /{document_id}` — get document metadata
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
-//! - `GET /{document_id}/branch_name` — get short ID + git branch name (when the document is a task)
+//! - `GET /{document_id}/branch_name` — get short ID + task-aware git branch name (when the document is a task)
 //! - `GET /{document_id}/short_id` — get document short ID
 //! - `POST /create_markdown` — create and initialize a markdown document
 //! - `DELETE /{document_id}` — soft-delete a document

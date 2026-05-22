@@ -20,10 +20,18 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// Performs the company/domain/contact/contact_source upserts in a single
     /// transaction:
     ///
+    /// 0. Read `team_crm_settings.crm_enabled` for `team_id`. If missing
+    ///    or `false`, the team has CRM turned off team-wide: no rows
+    ///    are written and the method returns `Ok(())` so the caller
+    ///    can ack the job. The read happens inside this tx (after the
+    ///    advisory lock) so a concurrent `PATCH /team/crm`
+    ///    disable — which flips the flag and purges `crm_companies` in
+    ///    one tx — can't race past us and leave an orphan row.
     /// 1. Look up the company for `(team_id, domain)`.
     ///    - If a row exists with `email_sync = false` the team has opted
-    ///      this domain out (the killswitch): no rows are written and the
-    ///      method returns `Ok(())` so the caller can ack the job.
+    ///      this domain out (the per-domain killswitch): no rows are
+    ///      written and the method returns `Ok(())` so the caller can
+    ///      ack the job.
     ///    - If a row exists with `email_sync = true` it is reused.
     ///    - Otherwise a new `crm_companies` row and a matching
     ///      `crm_domains` row are inserted. The company name itself
@@ -166,10 +174,42 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// On disable, the same tx also deletes the company's
     /// `crm_contacts` and `crm_contact_sources`. Returns
     /// [`CrmError::CompanyNotFoundForTeam`] on a non-matching pair.
+    /// Refuses to set `email_sync = true` when the company has
+    /// `hidden = true` (returns [`CrmError::CompanyHidden`]) — a hidden
+    /// company would otherwise have populate re-create contacts under
+    /// it. Un-hide first if you really want sync back on.
     fn set_email_sync(
         &self,
         team_id: &uuid::Uuid,
         company_id: &uuid::Uuid,
         email_sync: bool,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Toggle `crm_companies.hidden` for `(company_id, team_id)`. When
+    /// `hidden = true` this also sets `email_sync = false` and tears
+    /// down the company's `crm_contacts` and `crm_contact_sources` in
+    /// the **same transaction**, holding the same per-`(team, domain)`
+    /// advisory locks [`set_email_sync`] takes. Un-hide (`hidden =
+    /// false`) only flips the flag; `email_sync` is left as-is.
+    /// Returns [`CrmError::CompanyNotFoundForTeam`] on a non-matching
+    /// pair.
+    ///
+    /// [`set_email_sync`]: CompaniesRepository::set_email_sync
+    fn set_company_hidden(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        hidden: bool,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Toggle `crm_contacts.hidden` for `contact_id`, scoped to
+    /// `team_id` via the contact's company. Returns
+    /// [`CrmError::ContactNotFoundForTeam`] when the contact does not
+    /// exist or belongs to another team.
+    fn set_contact_hidden(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        hidden: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 }

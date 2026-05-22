@@ -255,6 +255,8 @@ use utoipa::OpenApi;
 
         // /crm
         crm::inbound::axum_router::set_email_sync::handler,
+        crm::inbound::axum_router::set_company_hidden::handler,
+        crm::inbound::axum_router::set_contact_hidden::handler,
     ),
     components(
         schemas(
@@ -439,6 +441,8 @@ use utoipa::OpenApi;
 
             // CRM
             crm::inbound::axum_router::set_email_sync::SetEmailSyncRequest,
+            crm::inbound::axum_router::set_company_hidden::SetCompanyHiddenRequest,
+            crm::inbound::axum_router::set_contact_hidden::SetContactHiddenRequest,
         ),
     ),
     tags(

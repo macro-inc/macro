@@ -85,7 +85,10 @@ export const createSoupState = <TId extends string = FilterID>(
 
   const sort = createSortState(SORT_CONFIGS, ['updated_at']);
 
-  const [focusedId, setFocusedId] = createSignal<string | undefined>();
+  // Tracked by index (not id) so a row id duplicated across groups highlights
+  // only one occurrence. lastFocusedRowId follows that row across setRows.
+  const [focusedIndex, setFocusedIndex] = createSignal(-1);
+  let lastFocusedRowId: string | undefined;
 
   const [activeGroupId, setActiveGroupId] = createSignal<string | undefined>();
 
@@ -130,7 +133,7 @@ export const createSoupState = <TId extends string = FilterID>(
       group,
       getIsGrouped: () => isGrouped,
       getIsLoadMore: () => isLoadMore,
-      isFocused: () => focusedId() === id,
+      isFocused: () => focusedIndex() === index,
       isSelected: () =>
         !isGrouped && !isLoadMore && selection.isSelected(original.id),
     };
@@ -143,6 +146,10 @@ export const createSoupState = <TId extends string = FilterID>(
 
   const setRows = (newRows: SoupRow[]) => {
     setRowsInternal(newRows);
+    if (!lastFocusedRowId) return;
+    const nextIndex = newRows.findIndex((r) => r.id === lastFocusedRowId);
+    setFocusedIndex(nextIndex);
+    if (nextIndex < 0) lastFocusedRowId = undefined;
   };
 
   const [previewEntity, setPreviewEntity] = createSignal<string | undefined>();
@@ -153,22 +160,15 @@ export const createSoupState = <TId extends string = FilterID>(
 
   const indexOf = (id: string): number => rows().findIndex((r) => r.id === id);
 
-  const focusedIndex = createMemo(() => {
-    const id = focusedId();
-    if (!id) return -1;
-    return indexOf(id);
-  });
-
   const focusedRow = createMemo(() => {
     const index = focusedIndex();
     if (index === -1) return undefined;
     return rows()[index];
   });
 
-  const focusedItem = createMemo(() => {
-    const row = focusedRow();
-    return row?.original;
-  });
+  const focusedId = createMemo(() => focusedRow()?.id);
+
+  const focusedItem = createMemo(() => focusedRow()?.original);
 
   const getRow = (id: string): SoupRow | undefined =>
     rows().find((r) => r.id === id);
@@ -198,7 +198,8 @@ export const createSoupState = <TId extends string = FilterID>(
     const result = calculateFocusRow(index);
 
     if (result) {
-      setFocusedId(result.row.id);
+      setFocusedIndex(result.index);
+      lastFocusedRowId = result.row.id;
     }
 
     return result;
@@ -269,7 +270,8 @@ export const createSoupState = <TId extends string = FilterID>(
   };
 
   const clearFocus = () => {
-    setFocusedId(undefined);
+    setFocusedIndex(-1);
+    lastFocusedRowId = undefined;
   };
 
   return {
@@ -295,7 +297,22 @@ export const createSoupState = <TId extends string = FilterID>(
       id: focusedId,
       index: focusedIndex,
       clear: clearFocus,
-      set: (id: string | undefined) => setFocusedId(id),
+      set: (id: string | undefined) => {
+        if (id === undefined) {
+          clearFocus();
+          return;
+        }
+        const idx = indexOf(id);
+        if (idx < 0) return;
+        setFocusedIndex(idx);
+        lastFocusedRowId = id;
+      },
+      setIndex: (index: number) => {
+        const row = rows()[index];
+        if (!row) return;
+        setFocusedIndex(index);
+        lastFocusedRowId = row.id;
+      },
     },
 
     navigate: {

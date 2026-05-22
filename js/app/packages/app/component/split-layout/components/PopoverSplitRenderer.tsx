@@ -1,7 +1,7 @@
 import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { Dialog, Surface } from '@ui';
+import { Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { SplitPanelContext, type SplitPanelContextType } from '../context';
@@ -130,17 +130,17 @@ function PopoverSplitModal(props: {
         bindHotKeyDom(r);
       }}
     >
-      <Surface depth={2} active class="rounded-xl">
-        <div class="*:max-h-[75vh]">
-          <SplitPanelContext.Provider value={stubPanelContext}>
-            <SoupContextProvider>
-              <Show when={props.popover.mount}>
+      <Panel depth={2} active class="rounded-xl">
+        <SplitPanelContext.Provider value={stubPanelContext}>
+          <SoupContextProvider>
+            <Show when={props.popover.mount}>
+              <Panel.Body>
                 <Dynamic component={props.popover.mount.element} />
-              </Show>
-            </SoupContextProvider>
-          </SplitPanelContext.Provider>
-        </div>
-      </Surface>
+              </Panel.Body>
+            </Show>
+          </SoupContextProvider>
+        </SplitPanelContext.Provider>
+      </Panel>
     </Dialog>
   );
 }

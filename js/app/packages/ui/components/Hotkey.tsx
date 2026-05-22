@@ -48,7 +48,7 @@ const hotkeyStyles: Record<Theme, { label: string; hotkey: string }> = {
     label: 'bg-accent border border-accent/30 text-surface',
   },
   current: {
-    hotkey: 'bg-surface border border-current text-current',
+    hotkey: 'border border-current/30 text-current',
     label: 'bg-current border border-current text-surface',
   },
   accentFill: {

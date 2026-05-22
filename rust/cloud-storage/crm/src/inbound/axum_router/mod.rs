@@ -3,6 +3,12 @@
 /// Toggle the `email_sync` flag on a `crm_companies` row.
 pub mod set_email_sync;
 
+/// Toggle the `hidden` flag on a `crm_companies` row.
+pub mod set_company_hidden;
+
+/// Toggle the `hidden` flag on a `crm_contacts` row.
+pub mod set_contact_hidden;
+
 use std::sync::Arc;
 
 use axum::{
@@ -53,6 +59,14 @@ where
             "/companies/{company_id}/email-sync",
             put(set_email_sync::handler::<C, Eas>),
         )
+        .route(
+            "/companies/{company_id}/hidden",
+            put(set_company_hidden::handler::<C, Eas>),
+        )
+        .route(
+            "/contacts/{contact_id}/hidden",
+            put(set_contact_hidden::handler::<C, Eas>),
+        )
         .with_state(state)
 }
 
@@ -63,6 +77,18 @@ impl IntoResponse for CrmError {
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     message: "crm company not found for team".into(),
+                }),
+            ),
+            CrmError::ContactNotFoundForTeam => (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    message: "crm contact not found for team".into(),
+                }),
+            ),
+            CrmError::CompanyHidden => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "crm company is hidden; un-hide before enabling email sync".into(),
                 }),
             ),
             CrmError::InvalidTeamId | CrmError::StorageLayerError(_) => (

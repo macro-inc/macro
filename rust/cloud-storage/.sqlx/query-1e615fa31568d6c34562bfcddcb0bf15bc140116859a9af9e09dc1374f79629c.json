@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM crm_contact_sources\n            WHERE contact_id IN (\n                SELECT id FROM crm_contacts WHERE company_id = $1\n            )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1e615fa31568d6c34562bfcddcb0bf15bc140116859a9af9e09dc1374f79629c"
+}

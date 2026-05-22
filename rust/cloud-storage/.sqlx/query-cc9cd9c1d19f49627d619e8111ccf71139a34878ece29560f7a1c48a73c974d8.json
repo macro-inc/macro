@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(\n                (SELECT crm_enabled FROM team_crm_settings WHERE team_id = $1),\n                FALSE\n            ) AS \"crm_enabled!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "crm_enabled!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "cc9cd9c1d19f49627d619e8111ccf71139a34878ece29560f7a1c48a73c974d8"
+}

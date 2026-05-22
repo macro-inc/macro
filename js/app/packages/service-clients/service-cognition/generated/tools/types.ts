@@ -2121,6 +2121,14 @@ export interface ReadDocumentMetadata {
    */
   subType?: DocumentSubType | null;
   /**
+   * The team this task number is scoped to, for task documents.
+   */
+  teamId?: string | null;
+  /**
+   * The task number assigned within the team, for task documents.
+   */
+  teamTaskId?: number | null;
+  /**
    * The time the document instance / document BOM was updated
    */
   updatedAt?: string | null;

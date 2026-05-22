@@ -1,4 +1,6 @@
 use super::*;
+use crate::domain::service::{CrmService, CrmServiceImpl};
+use crate::outbound::no_op_resolver::NoOpCompanyMetadataResolver;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -124,6 +126,22 @@ async fn fetch_email_sync(pool: &PgPool, company_id: Uuid) -> sqlx::Result<Optio
             .fetch_optional(pool)
             .await?;
     Ok(row.map(|(s,)| s))
+}
+
+async fn fetch_company_hidden(pool: &PgPool, company_id: Uuid) -> sqlx::Result<Option<bool>> {
+    let row: Option<(bool,)> = sqlx::query_as(r#"SELECT hidden FROM crm_companies WHERE id = $1"#)
+        .bind(company_id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row.map(|(h,)| h))
+}
+
+async fn fetch_contact_hidden(pool: &PgPool, contact_id: Uuid) -> sqlx::Result<Option<bool>> {
+    let row: Option<(bool,)> = sqlx::query_as(r#"SELECT hidden FROM crm_contacts WHERE id = $1"#)
+        .bind(contact_id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row.map(|(h,)| h))
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -318,5 +336,224 @@ async fn set_email_sync_disable_handles_multi_domain_company(pool: PgPool) -> an
             .fetch_one(&pool)
             .await?;
     assert_eq!(domain_count, 3);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_company_hidden_toggles_flag(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+
+    assert_eq!(fetch_company_hidden(&pool, company_id).await?, Some(false));
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    repo.set_company_hidden(&team_id, &company_id, true).await?;
+    assert_eq!(fetch_company_hidden(&pool, company_id).await?, Some(true));
+
+    repo.set_company_hidden(&team_id, &company_id, false)
+        .await?;
+    assert_eq!(fetch_company_hidden(&pool, company_id).await?, Some(false));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_company_hidden_returns_not_found_for_unknown_company(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let result = repo
+        .set_company_hidden(&team_id, &Uuid::now_v7(), true)
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(crate::domain::model::CrmError::CompanyNotFoundForTeam)
+    ));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_company_hidden_isolates_companies_across_teams(pool: PgPool) -> anyhow::Result<()> {
+    let team_a = Uuid::now_v7();
+    let team_b = Uuid::now_v7();
+    seed_team(&pool, team_a, "macro|owner_a@test.com").await?;
+    seed_team(&pool, team_b, "macro|owner_b@test.com").await?;
+    let company_a = insert_company(&pool, team_a, true, &["acme.com"]).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let result = repo.set_company_hidden(&team_b, &company_a, true).await;
+    assert!(matches!(
+        result,
+        Err(crate::domain::model::CrmError::CompanyNotFoundForTeam)
+    ));
+    assert_eq!(fetch_company_hidden(&pool, company_a).await?, Some(false));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_contact_hidden_toggles_flag(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+    let contact_id =
+        insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+
+    assert_eq!(fetch_contact_hidden(&pool, contact_id).await?, Some(false));
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    repo.set_contact_hidden(&team_id, &contact_id, true).await?;
+    assert_eq!(fetch_contact_hidden(&pool, contact_id).await?, Some(true));
+
+    repo.set_contact_hidden(&team_id, &contact_id, false)
+        .await?;
+    assert_eq!(fetch_contact_hidden(&pool, contact_id).await?, Some(false));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_contact_hidden_returns_not_found_for_unknown_contact(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let result = repo
+        .set_contact_hidden(&team_id, &Uuid::now_v7(), true)
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(crate::domain::model::CrmError::ContactNotFoundForTeam)
+    ));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_email_sync_enable_refuses_hidden_company(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id = insert_company(&pool, team_id, false, &["acme.com"]).await?;
+    sqlx::query(r#"UPDATE crm_companies SET hidden = TRUE WHERE id = $1"#)
+        .bind(company_id)
+        .execute(&pool)
+        .await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let result = repo.set_email_sync(&team_id, &company_id, true).await;
+
+    assert!(matches!(
+        result,
+        Err(crate::domain::model::CrmError::CompanyHidden)
+    ));
+    // State must be unchanged.
+    assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(false));
+    assert_eq!(fetch_company_hidden(&pool, company_id).await?, Some(true));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_email_sync_disable_allowed_on_hidden_company(pool: PgPool) -> anyhow::Result<()> {
+    // Disabling sync on an already-hidden, already-disabled company is
+    // a no-op-shaped call but must not error — the hidden check only
+    // fires on the enable path.
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    let company_id = insert_company(&pool, team_id, false, &["acme.com"]).await?;
+    sqlx::query(r#"UPDATE crm_companies SET hidden = TRUE WHERE id = $1"#)
+        .bind(company_id)
+        .execute(&pool)
+        .await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    repo.set_email_sync(&team_id, &company_id, false).await?;
+
+    assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(false));
+    assert_eq!(fetch_company_hidden(&pool, company_id).await?, Some(true));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn service_set_company_hidden_true_also_disables_email_sync(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+    insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+    insert_contact_with_source(&pool, company_id, "bob@acme.com", link_id).await?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+    service
+        .set_company_hidden(&team_id, &company_id, true)
+        .await?;
+
+    assert_eq!(fetch_company_hidden(&pool, company_id).await?, Some(true));
+    assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(false));
+    assert_eq!(count_contacts(&pool, company_id).await?, 0);
+    assert_eq!(count_sources_for_company(&pool, company_id).await?, 0);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn service_set_company_hidden_false_does_not_re_enable_email_sync(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    // Start with hidden=true (via service, which also flipped sync off) then un-hide.
+    let company_id = insert_company(&pool, team_id, false, &["acme.com"]).await?;
+    sqlx::query(r#"UPDATE crm_companies SET hidden = TRUE WHERE id = $1"#)
+        .bind(company_id)
+        .execute(&pool)
+        .await?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+    service
+        .set_company_hidden(&team_id, &company_id, false)
+        .await?;
+
+    assert_eq!(fetch_company_hidden(&pool, company_id).await?, Some(false));
+    // Un-hiding leaves email_sync alone — caller must re-enable it explicitly.
+    assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(false));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_contact_hidden_isolates_contacts_across_teams(pool: PgPool) -> anyhow::Result<()> {
+    let team_a = Uuid::now_v7();
+    let team_b = Uuid::now_v7();
+    let owner_a = "macro|owner_a@test.com";
+    let owner_b = "macro|owner_b@test.com";
+    seed_team(&pool, team_a, owner_a).await?;
+    seed_team(&pool, team_b, owner_b).await?;
+    let company_a = insert_company(&pool, team_a, true, &["acme.com"]).await?;
+    let link_a = insert_email_link(&pool, owner_a, "a@macro.test").await?;
+    let contact_a = insert_contact_with_source(&pool, company_a, "alice@acme.com", link_a).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    // team_b mutating team_a's contact must fail without touching the row.
+    let result = repo.set_contact_hidden(&team_b, &contact_a, true).await;
+    assert!(matches!(
+        result,
+        Err(crate::domain::model::CrmError::ContactNotFoundForTeam)
+    ));
+
+    assert_eq!(fetch_contact_hidden(&pool, contact_a).await?, Some(false));
     Ok(())
 }

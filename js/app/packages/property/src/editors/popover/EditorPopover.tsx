@@ -30,7 +30,7 @@ export function EditorPopover(props: EditorPopoverProps) {
   return (
     <Dropdown.Content
       class={cn(
-        'max-h-96 overflow-hidden flex flex-col w-full max-w-60 p-0',
+        'max-h-96 overflow-hidden flex flex-col w-full max-w-70 p-0 text-xs',
         props.class
       )}
       onInteractOutside={close}

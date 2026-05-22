@@ -9,9 +9,11 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 /// Fanned out one-per-recipient from `backfill_message` when the message was
 /// sent by the user. Resolves the user's team (no-op if the user has no
 /// team), then upserts `crm_companies`/`crm_domains`/`crm_contacts`/
-/// `crm_contact_sources` atomically. A killswitch row
-/// (`crm_companies.email_sync = false` for the contact's domain) is also a
-/// no-op — see [`crm::domain::companies_repo::CompaniesRepository::populate_contact`].
+/// `crm_contact_sources` atomically. The call is a no-op when either
+/// killswitch is engaged: the team-level `team_crm_settings.crm_enabled
+/// = false` (toggled via `PATCH /team/crm`), or the per-domain
+/// `crm_companies.email_sync = false` for the contact's domain. See
+/// [`crm::domain::companies_repo::CompaniesRepository::populate_contact`].
 ///
 /// Company metadata (name, description, icon) is resolved and cached
 /// inside `crm_service.populate_contact` via the

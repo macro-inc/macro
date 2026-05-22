@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE crm_contacts ct\n            SET hidden = $3\n            FROM crm_companies co\n            WHERE ct.id = $1\n              AND ct.company_id = co.id\n              AND co.team_id = $2\n            RETURNING ct.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9728f991ee1e5bff78e52700ce2c4d2d8e8113701d39452faa3147bb18974926"
+}

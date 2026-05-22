@@ -1,6 +1,8 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import { ENABLE_NEW_LOGIN_OVERRIDE } from '@core/constant/featureFlags';
 import { useEmailLinks } from '@core/email-link';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
@@ -24,9 +26,22 @@ import {
   Switch,
 } from 'solid-js';
 import { EmailForm } from './EmailForm';
+import { LoginNew } from './LoginNew';
 import { LoginOptions } from './LoginOptions';
 import { Stage } from './Shared';
 import { VerifyForm } from './VerifyForm';
+
+export function Login() {
+  return (
+    <ShowFeatureFlag
+      key="enable-new-login"
+      enabledOverride={ENABLE_NEW_LOGIN_OVERRIDE}
+      fallback={<LoginOld />}
+    >
+      <LoginNew />
+    </ShowFeatureFlag>
+  );
+}
 
 function PostLoginRedirect() {
   const navigate = useNavigate();
@@ -47,7 +62,7 @@ function PostLoginRedirect() {
   return <LoadingBlock />;
 }
 
-export function Login() {
+function LoginOld() {
   const [stage, setStage] = createSignal(Stage.None);
   const userInfo = useUserInfo();
   const [searchParams] = useSearchParams();

@@ -1,16 +1,14 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { CircleSpinner } from '@core/component/CircleSpinner';
-import { EntityIcon } from '@core/component/EntityIcon';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
 import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
 import {
   propertyApiValuesToNormalized,
   propertyValueToApi,
 } from '@core/component/Properties/api/converters';
 import { Modals } from '@core/component/Properties/component/modal';
-import { PropertyGrid } from '@core/component/Properties/component/panel';
 import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
@@ -29,11 +27,11 @@ import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createTask } from '@core/util/create';
 import { filterMap } from '@core/util/list';
-
 import { buildSimpleEntityUrl } from '@core/util/url';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
+import ArrowsOutIcon from '@phosphor/arrows-out.svg';
+import PaperclipIcon from '@phosphor/paperclip.svg';
 import SplitIcon from '@phosphor/square-half.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import XIcon from '@phosphor/x.svg';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { refetchSoupEntity } from '@queries/soup/cache';
@@ -41,9 +39,16 @@ import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { debounce } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
-import { Button, Hotkey, ToggleSwitch } from '@ui';
+import { Button, Hotkey, Scroll, ToggleSwitch } from '@ui';
 import type { LexicalEditor } from 'lexical';
-import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  For,
+  onMount,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
 import {
@@ -52,13 +57,14 @@ import {
   saveTaskComposerDraft,
   updateDraftTimestamp,
 } from '../util/taskComposerStorage';
+import { InlinePropertyValue } from './InlinePropertyValue';
 
-// Show these props in the composer.
+// Show these props in the composer (Linear-style left-to-right order).
 const COMPOSER_PROPERTIES = [
-  SYSTEM_PROPERTY_IDS.ASSIGNEES,
   SYSTEM_PROPERTY_IDS.STATUS,
-  SYSTEM_PROPERTY_IDS.DUE_DATE,
   SYSTEM_PROPERTY_IDS.PRIORITY,
+  SYSTEM_PROPERTY_IDS.ASSIGNEES,
+  SYSTEM_PROPERTY_IDS.DUE_DATE,
 ];
 
 /**
@@ -247,6 +253,19 @@ export function ComposeTask(props: ComposeTaskProps) {
   const [createMore, setCreateMore] = createSignal(false);
   const [errorMessage, setErrorMessage] = createSignal<string>('');
   const [isCreating, setIsCreating] = createSignal(false);
+  let attachInputRef: HTMLInputElement | undefined;
+
+  const handleAttachFiles = async (event: Event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    const editor = bodyEditor();
+    if (!editor || files.length === 0) return;
+    for (const file of files) {
+      const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
+      await addMediaFromFile(editor, file, mediaType);
+    }
+  };
 
   const [propertyValues, setPropertyValues] = createStore<
     Record<string, PropertyApiValues>
@@ -262,7 +281,11 @@ export function ComposeTask(props: ComposeTaskProps) {
   createEffect(() => {
     const currentTitle = title();
     const currentContent = content();
-    const currentProperties = { ...unwrap(propertyValues) };
+    // Deeply read propertyValues so this effect subscribes to any property
+    // change (e.g. setting a due date). unwrap()'d access doesn't subscribe,
+    // so without this the draft only saved when title/content changed.
+    JSON.stringify(propertyValues);
+    const currentProperties = structuredClone(unwrap(propertyValues));
 
     if (hasInitializedFromDraft) {
       hasInitializedFromDraft = false;
@@ -486,6 +509,64 @@ export function ComposeTask(props: ComposeTaskProps) {
     }
   };
 
+  const handleContinueInSplit = async () => {
+    if (isCreating()) return;
+
+    const taskTitle = title().trim();
+    const taskContent = content().trim();
+
+    setErrorMessage('');
+    setIsCreating(true);
+
+    const properties = structuredClone(Object.entries(unwrap(propertyValues)));
+    const draftSnapshot = {
+      title: taskTitle,
+      content: taskContent,
+      propertyValues: structuredClone(unwrap(propertyValues)),
+    };
+    clearTaskComposerDraft();
+
+    splitPanel.handle.close();
+    props.onClose?.();
+
+    const split = openWithSplit(
+      { type: 'component', id: 'loading' },
+      { referredFrom: 'launcher', preferNewSplit: true }
+    );
+
+    const documentId = await createTaskWithProperties(
+      taskTitle,
+      taskContent,
+      properties,
+      definitions(),
+      (params) => upsertToHistoryMutation.mutate(params)
+    );
+
+    setIsCreating(false);
+
+    if (!documentId) {
+      split?.goBack();
+      saveTaskComposerDraft(draftSnapshot);
+      popoverSplit({ type: 'component', id: 'task-compose' });
+      return;
+    }
+
+    if (split) {
+      split.replace({
+        next: { type: 'task', id: documentId },
+        mergeHistory: true,
+        referredFrom: 'launcher',
+      });
+    } else {
+      openWithSplit(
+        { type: 'task', id: documentId },
+        { referredFrom: 'launcher', preferNewSplit: true }
+      );
+    }
+
+    props.onCreateTask?.(taskTitle, taskContent);
+  };
+
   const handleClose = () => {
     const currentTitle = title();
     const currentContent = content();
@@ -563,38 +644,53 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   return (
     <div
-      class="flex flex-col relative h-full max-h-full min-h-0"
+      class="flex flex-col relative h-full max-h-full min-h-0 p-4 gap-4"
       tabIndex={-1}
       ref={setContainerRef}
     >
-      <div class="flex items-center gap-1 p-2">
+      <div class="flex items-center gap-1">
+        <div class="flex-1 flex items-center">
+          <Show when={splitPanel?.handle.isPopover()}>
+            <Button
+              onMouseDown={handleContinueInSplit}
+              disabled={isCreating()}
+              tabIndex={-1}
+              tooltip="Continue editing in split"
+              size="icon-sm"
+            >
+              <ArrowsOutIcon />
+            </Button>
+          </Show>
+        </div>
+        <Show when={content().trim() || title()}>
+          <Button
+            onMouseDown={handleClearDraft}
+            tabIndex={-1}
+            tooltip="Clear Draft"
+            size="sm"
+            variant="base"
+            depth={3}
+            class="bg-surface px-3"
+          >
+            Clear Draft
+          </Button>
+        </Show>
         <Show when={splitPanel?.handle.isPopover()}>
-          <Button onMouseDown={handleClose} tabIndex={-1} size="icon-sm">
+          <Button
+            onMouseDown={handleClose}
+            tabIndex={-1}
+            tooltip="Close"
+            size="icon-sm"
+          >
             <XIcon />
           </Button>
         </Show>
-        <div class="flex items-center gap-2 flex-1">
-          <span class="text-sm font-medium text-ink-disabled/50">
-            Create Task
-          </span>
-        </div>
-        <Button
-          onMouseDown={handleClearDraft}
-          tabIndex={-1}
-          tooltip="Clear Draft"
-          size="icon-sm"
-          disabled={!(content().trim() || title())}
-        >
-          <TrashIcon />
-        </Button>
       </div>
-      <div class="border-b border-edge-muted" />
-      <div class="p-2 flex-1 min-h-0 flex flex-col">
-        <div class="shrink-0 flex p-2 gap-2 items-center">
-          <EntityIcon targetType="task" size="sm" />
+      <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div class="shrink-0 flex gap-2 items-center px-2">
           <input
             type="text"
-            placeholder="Task Title"
+            placeholder="New task"
             value={title()}
             onInput={(e) => {
               setTitle(e.currentTarget.value);
@@ -603,7 +699,7 @@ export function ComposeTask(props: ComposeTaskProps) {
               }
             }}
             disabled={isCreating()}
-            class="w-full py-2 text-xl font-medium placeholder-ink-placeholder disabled:opacity-50"
+            class="w-full py-2 text-xl font-medium placeholder-ink-placeholder disabled:opacity-50 truncate focus:overflow-visible"
             on:keydown={(e) => {
               if (e.key === 'Escape') {
                 const container = containerRef();
@@ -625,20 +721,23 @@ export function ComposeTask(props: ComposeTaskProps) {
           />
         </div>
 
-        <MarkdownShell
-          config={editorConfig}
-          initialState={initialState.editorState}
-          initialValue={
-            initialState.editorState
-              ? undefined
-              : initialState.content || undefined
-          }
-          placeholder={props.placeholder ?? 'Add description...'}
-          portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
-          class="shrink min-h-0 h-[unset] text-base px-2 overflow-y-auto"
-        />
+        <div class="overflow-auto scrollbar-hidden mb-6 min-h-24 grow px-2">
+          <Scroll>
+            <MarkdownShell
+              config={editorConfig}
+              initialState={initialState.editorState}
+              initialValue={
+                initialState.editorState
+                  ? undefined
+                  : initialState.content || undefined
+              }
+              placeholder={props.placeholder ?? 'Add description...'}
+              portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
+            />
+          </Scroll>
+        </div>
 
-        <Suspense>
+        <Suspense fallback={<div class="h-7" />}>
           <PropertiesProvider
             entityType="TASK"
             canEdit={true}
@@ -648,15 +747,17 @@ export function ComposeTask(props: ComposeTaskProps) {
             onPropertyDeleted={() => {}}
             saveHandler={saveHandler}
           >
-            <div class="text-sm">
-              <PropertyGrid
-                properties={properties()}
-                columns={2}
-                withDelete={false}
-                withPin={false}
-              ></PropertyGrid>
-              <Modals />
+            <div class="flex min-h-7 flex-row flex-wrap items-center gap-2 text-sm m-px">
+              <For each={properties()}>
+                {(property) => (
+                  <InlinePropertyValue
+                    property={property}
+                    emptyLabel={property.displayName}
+                  />
+                )}
+              </For>
             </div>
+            <Modals />
           </PropertiesProvider>
         </Suspense>
       </div>
@@ -668,31 +769,43 @@ export function ComposeTask(props: ComposeTaskProps) {
         </div>
       </Show>
 
-      <div class="w-full border-b border-edge-muted" />
-      <div class="shrink-0 flex justify-between items-center p-2 gap-2">
-        <ToggleSwitch
-          labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
-          onChange={setCreateMore}
-          checked={createMore()}
-          label="Create More"
+      <div class="shrink-0 flex justify-between items-end gap-2">
+        <input
+          ref={(el) => {
+            attachInputRef = el;
+          }}
+          type="file"
+          class="hidden"
+          multiple
+          accept="image/*,video/*"
+          onChange={handleAttachFiles}
         />
         <Button
-          onClick={handleCreateTask}
-          class="px-3 pr-2"
-          disabled={title().trim().length === 0 || isCreating()}
-          variant="base"
+          onMouseDown={() => attachInputRef?.click()}
+          tabIndex={-1}
+          tooltip="Attach image or video"
+          size="icon-sm"
         >
-          <Show
-            when={isCreating()}
-            fallback={<EntityIcon targetType="task" theme="monochrome" />}
-          >
-            <CircleSpinner width={16} height={16} />
-          </Show>
-          Create Task
-          <div class="text-xxs text-ink-extra-muted ml-auto border border-edge-muted px-1.5 py-1 font-sans rounded-xs">
-            <Hotkey shortcut="cmd+enter" />
-          </div>
+          <PaperclipIcon />
         </Button>
+        <div class="flex items-center gap-3">
+          <ToggleSwitch
+            labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
+            onChange={setCreateMore}
+            checked={createMore()}
+            label="Create More"
+          />
+          <Button
+            onClick={handleCreateTask}
+            disabled={title().trim().length === 0 || isCreating()}
+            variant={title().trim().length === 0 ? 'ghost' : 'active'}
+            depth={3}
+            class="gap-3 rounded-lg border-0"
+          >
+            Create Task
+            <Hotkey shortcut="cmd+enter" theme="current" />
+          </Button>
+        </div>
       </div>
     </div>
   );
