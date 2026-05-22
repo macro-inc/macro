@@ -30,6 +30,8 @@ import {
   getNormalizationObjectKey,
   getSoupNormalizer,
   type NormalizerData,
+  soupNormKey,
+  stripSoupNormPrefix,
 } from './normalizer';
 import type {
   SoupEntityPartial,
@@ -69,7 +71,7 @@ export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
   normalizer.setNormalizedData(partial as NormalizerData);
 
   if (normKey) {
-    reconcileGroupMembership(normKey.slice('soup:'.length));
+    reconcileGroupMembership(stripSoupNormPrefix(normKey));
   }
 
   return {
@@ -171,7 +173,7 @@ function reconcileGroupedPage<
 }
 
 export function getSoupEntityById(entityId: string): SoupApiItem | undefined {
-  return (getSoupNormalizer().getObjectById(`soup:${entityId}`) ?? undefined) as
+  return (getSoupNormalizer().getObjectById(soupNormKey(entityId)) ?? undefined) as
     | SoupApiItem
     | undefined;
 }
@@ -182,7 +184,7 @@ export function getSoupEntityById(entityId: string): SoupApiItem | undefined {
  */
 export function invalidateSoupEntity(entityId: string): void {
   const normalizer = getSoupNormalizer();
-  const keys = normalizer.getDependentQueriesByIds([`soup:${entityId}`]);
+  const keys = normalizer.getDependentQueriesByIds([soupNormKey(entityId)]);
   for (const queryKey of keys) {
     queryClient.invalidateQueries({ queryKey });
   }
@@ -199,7 +201,7 @@ export function invalidateAllSoup(): void {
 }
 
 export function hasSoupEntity(entityId: string): boolean {
-  return getSoupNormalizer().getObjectById(`soup:${entityId}`) != null;
+  return getSoupNormalizer().getObjectById(soupNormKey(entityId)) != null;
 }
 
 /** Channels nest the id under `data.channel.id`; call records under `data.callId`. */
@@ -221,15 +223,15 @@ function addToGroupedPage<P extends { items: Record<string, SoupApiItem>; groups
 ): P {
   const id = getSoupItemId(item);
   const items = { ...page.items, [id]: item };
-  const groups = page.groups.map((g) =>
-    g.key === targetKey
-      ? {
-          ...g,
-          itemIds: [id, ...g.itemIds.filter((x) => x !== id)],
-          totalCount: g.totalCount + 1,
-        }
-      : g,
-  );
+  const groups = page.groups.map((g) => {
+    if (g.key !== targetKey) return g;
+    const alreadyPresent = g.itemIds.includes(id);
+    return {
+      ...g,
+      itemIds: alreadyPresent ? [id, ...g.itemIds.filter((x) => x !== id)] : [id, ...g.itemIds],
+      totalCount: alreadyPresent ? g.totalCount : g.totalCount + 1,
+    };
+  });
   return { ...page, items, groups };
 }
 

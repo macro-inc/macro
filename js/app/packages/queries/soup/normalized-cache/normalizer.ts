@@ -5,6 +5,16 @@ export type NormalizerData = Parameters<
   ReturnType<typeof createQueryNormalizer>['setNormalizedData']
 >[0];
 
+export const SOUP_NORM_PREFIX = 'soup:';
+
+export function soupNormKey(id: string): string {
+  return `${SOUP_NORM_PREFIX}${id}`;
+}
+
+export function stripSoupNormPrefix(normKey: string): string {
+  return normKey.slice(SOUP_NORM_PREFIX.length);
+}
+
 /**
  * Extracts a normalization key from SoupApiItem wrappers.
  * Only objects with `tag + data + frecency_score` are normalized.
@@ -16,9 +26,9 @@ export const getNormalizationObjectKey = (
     const data = obj.data as Record<string, unknown>;
     if (obj.tag === 'channel') {
       const channel = data?.channel as Record<string, unknown> | undefined;
-      return channel?.id ? `soup:${channel.id}` : undefined;
+      return channel?.id ? soupNormKey(channel.id as string) : undefined;
     }
-    return data?.id ? `soup:${data.id}` : undefined;
+    return data?.id ? soupNormKey(data.id as string) : undefined;
   }
   return undefined;
 };

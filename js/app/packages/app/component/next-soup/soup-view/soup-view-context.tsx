@@ -361,8 +361,6 @@ export const SoupViewContextProvider: FlowComponent<
       }
 
       return groups.map((group) => {
-        // Seed initial per-group page from the parent's items pool, restricted
-        // to this group's itemIds (in order).
         const initialItems: Record<string, SoupApiItem> = {};
         for (const id of group.itemIds) {
           const it = itemsById[id];

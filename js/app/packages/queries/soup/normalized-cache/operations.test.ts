@@ -36,6 +36,9 @@ vi.mock('./normalizer', () => ({
     }
     return undefined;
   },
+  SOUP_NORM_PREFIX: 'soup:',
+  soupNormKey: (id: string) => `soup:${id}`,
+  stripSoupNormPrefix: (normKey: string) => normKey.slice('soup:'.length),
 }));
 
 import { soupKeys } from '../keys';
@@ -666,11 +669,17 @@ describe('optimisticUpdateSoupEntity — cross-group move', () => {
     // (status now `done`) is what reconcile reads from normy's store.
     const merged = mockTaskItem('a-1', 'done');
     mockNormalizer.getObjectById.mockReturnValue(merged);
-    // The cache itself also reflects the merge in-place (normy mutates).
+    // The cache itself also reflects the merge — apply via setQueryData so
+    // TanStack Query sees the new reference rather than mutating in place.
     const cached = testQueryClient.getQueryData<
       InfiniteData<SoupAstItemsGroupedPage, unknown>
     >(key)!;
-    cached.pages[0].items['a-1'] = merged;
+    testQueryClient.setQueryData<InfiniteData<SoupAstItemsGroupedPage, unknown>>(key, {
+      ...cached,
+      pages: cached.pages.map((p, i) =>
+        i === 0 ? { ...p, items: { ...p.items, 'a-1': merged } } : p,
+      ),
+    });
 
     optimisticUpdateSoupEntity({
       tag: 'document',
