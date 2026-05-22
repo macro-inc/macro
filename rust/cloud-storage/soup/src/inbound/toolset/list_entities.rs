@@ -34,8 +34,8 @@ const MAX_RESULT_LIMIT: u16 = 500;
 #[derive(Debug, Clone, Copy, Default, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SortBy {
-    #[default]
     RecentlyViewed,
+    #[default]
     RecentlyUpdated,
     RecentlyCreated,
 }
@@ -211,8 +211,8 @@ pub struct ListEntities {
 Which mailbox view to hydrate previews from for email results. Valid values: inbox \
 (default), sent, drafts, starred, all, important, other, or user:<label>.\n\
 \n\
-When the user asks about signal/noise emails, use emailView=\"inbox\" together with \
-emailPreset=\"signal\"/\"noise\" — do not set emailView=\"important\" in that case. Only \
+When the user asks about signal or important emails, use emailView=\"inbox\" together \
+with emailPreset=\"signal\" — do not set emailView=\"important\" in that case. Only \
 override the default when the user explicitly asks for a specific mailbox or label view \
 (e.g. \"sent\", \"drafts\", \"my Foo label\").")]
     #[serde(default, rename = "emailView")]

@@ -1197,7 +1197,7 @@ export interface ListEntities {
   /**
    * Which mailbox view to hydrate previews from for email results. Valid values: inbox (default), sent, drafts, starred, all, important, other, or user:<label>.
    *
-   * When the user asks about signal/noise emails, use emailView="inbox" together with emailPreset="signal"/"noise" — do not set emailView="important" in that case. Only override the default when the user explicitly asks for a specific mailbox or label view (e.g. "sent", "drafts", "my Foo label").
+   * When the user asks about signal or important emails, use emailView="inbox" together with emailPreset="signal" — do not set emailView="important" in that case. Only override the default when the user explicitly asks for a specific mailbox or label view (e.g. "sent", "drafts", "my Foo label").
    */
   emailView?: string | null;
   /**
@@ -1242,7 +1242,7 @@ export interface ListEntitiesResponse {
  *
  * Match label names case-insensitively when searching the response. You can also use this to understand how the user's mail is organized before filtering or searching by label.
  */
-export type ListLabels = {};
+export interface ListLabels {}
 /**
  * Response from the ListLabels tool.
  */
@@ -1367,7 +1367,7 @@ export interface NotificationItem {
 /**
  * List the current members and pending invites for the authenticated user's team. Requires the caller to be a team member.
  */
-export type ListTeamMembers = {};
+export interface ListTeamMembers {}
 /**
  * Response from [`ListTeamMembers`].
  */

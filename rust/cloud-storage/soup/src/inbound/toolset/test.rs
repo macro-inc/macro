@@ -28,7 +28,7 @@ fn test_list_entities_schema_validation() {
 fn test_default_values() {
     let list = ListEntities::default();
     assert!(list.include_types.is_none());
-    assert!(matches!(list.sort_by, SortBy::RecentlyViewed));
+    assert!(matches!(list.sort_by, SortBy::RecentlyUpdated));
 }
 
 #[test]
