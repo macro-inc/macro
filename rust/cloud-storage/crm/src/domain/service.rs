@@ -33,6 +33,11 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// `crm_contacts` row; later populates from other team members can't
     /// overwrite it. Pass `None` when no display name is available.
     ///
+    /// `user_email` is the email address registered against `link_id`
+    /// (i.e. the user's own mailbox). When the contact's domain matches
+    /// the user's, the call is a no-op: intra-company correspondence
+    /// would just fill the team's CRM with the team itself.
+    ///
     /// Before the populate transaction, this method ensures
     /// `crm_domain_directory` has an entry for the email's domain — if
     /// not, it invokes the
@@ -45,6 +50,7 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
         link_id: &uuid::Uuid,
+        user_email: &str,
         email: &str,
         name: Option<&str>,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
@@ -200,6 +206,7 @@ where
         &self,
         team_id: &uuid::Uuid,
         link_id: &uuid::Uuid,
+        user_email: &str,
         email: &str,
         name: Option<&str>,
     ) -> Result<(), CrmError> {
@@ -218,6 +225,23 @@ where
             return Err(CrmError::StorageLayerError(anyhow::anyhow!(
                 "email {email} has an empty domain"
             )));
+        }
+
+        // Skip when the contact lives on the user's own domain —
+        // colleagues at the user's company shouldn't show up in their
+        // team's CRM. Malformed user emails fall through to the regular
+        // populate path; the link's email is treated as the source of
+        // truth elsewhere, so we don't want a bad value here to error
+        // out an otherwise valid contact populate.
+        if let Some((_, user_domain)) = user_email.trim().split_once('@')
+            && !user_domain.is_empty()
+            && user_domain.eq_ignore_ascii_case(domain)
+        {
+            tracing::debug!(
+                domain,
+                "Skipping CRM populate for contact on the user's own domain"
+            );
+            return Ok(());
         }
 
         // Skip personal / free-mail-provider domains (gmail, yahoo,

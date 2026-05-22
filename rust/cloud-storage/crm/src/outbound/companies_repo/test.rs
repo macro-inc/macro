@@ -557,3 +557,120 @@ async fn set_contact_hidden_isolates_contacts_across_teams(pool: PgPool) -> anyh
     assert_eq!(fetch_contact_hidden(&pool, contact_a).await?, Some(false));
     Ok(())
 }
+
+async fn enable_crm_for_team(pool: &PgPool, team_id: Uuid) -> sqlx::Result<()> {
+    sqlx::query(
+        r#"INSERT INTO team_crm_settings (team_id, crm_enabled) VALUES ($1, TRUE)
+           ON CONFLICT (team_id) DO UPDATE SET crm_enabled = TRUE"#,
+    )
+    .bind(team_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+async fn count_companies_for_domain(
+    pool: &PgPool,
+    team_id: Uuid,
+    domain: &str,
+) -> sqlx::Result<i64> {
+    let (count,): (i64,) = sqlx::query_as(
+        r#"SELECT COUNT(*) FROM crm_companies c
+           JOIN crm_domains d ON d.company_id = c.id
+           WHERE c.team_id = $1 AND LOWER(d.domain) = LOWER($2)"#,
+    )
+    .bind(team_id)
+    .bind(domain)
+    .fetch_one(pool)
+    .await?;
+    Ok(count)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn service_populate_contact_skips_when_domain_matches_user_domain(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "colleague@macro.com",
+            None,
+        )
+        .await?;
+
+    assert_eq!(
+        count_companies_for_domain(&pool, team_id, "macro.com").await?,
+        0,
+        "contact on the user's own domain must not create a CRM row"
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn service_populate_contact_same_domain_check_is_case_insensitive(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let link_id = insert_email_link(&pool, owner_id, "User@MACRO.com").await?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "User@MACRO.com",
+            "colleague@macro.com",
+            None,
+        )
+        .await?;
+
+    assert_eq!(
+        count_companies_for_domain(&pool, team_id, "macro.com").await?,
+        0
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn service_populate_contact_writes_when_domain_differs(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+
+    service
+        .populate_contact(&team_id, &link_id, "user@macro.com", "alice@acme.com", None)
+        .await?;
+
+    assert_eq!(
+        count_companies_for_domain(&pool, team_id, "acme.com").await?,
+        1
+    );
+    Ok(())
+}
