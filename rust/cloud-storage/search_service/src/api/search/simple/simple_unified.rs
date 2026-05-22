@@ -199,12 +199,10 @@ pub(in crate::api::search) async fn perform_unified_search(
     //
     // Emails and channels both get whitespace-split terms — emails match
     // each term independently across many fields ANDed inside OpenSearch;
-    // channel messages are flat single-doc-per-message so each token must
+    // channel messages are single-doc-per-message so each token must
     // appear in the same message via bool.must. Documents get split terms
-    // only once the alias points at a join-shape index, where each term
-    // becomes a separate has_child clause ANDed via bool.must. While the
-    // alias still points at the flat-shape index, the documents branch
-    // keeps the single adjacent phrase-prefix behavior.
+    // once the alias points at a join-shape index, where each term becomes
+    // a separate has_child clause ANDed via bool.must.
     let document_terms = if opensearch_client::documents_shape::alias_uses_join_shape() {
         split_search_terms(&terms)
     } else {
