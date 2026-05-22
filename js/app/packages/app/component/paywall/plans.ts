@@ -27,7 +27,7 @@ export const LEGACY_PLANS = [
   },
 ] as const;
 
-export const SIMPLIFIED_PLANS = [
+export const NEW_PLANS = [
   {
     tier: 'free' as const,
     name: 'Free',
@@ -54,7 +54,7 @@ export type PaidPlanTier = Exclude<PlanTier, 'free'>;
 
 /**
  * Default plan list used for tier lookups in onboarding flows. The paywall
- * components import {LEGACY_PLANS, SIMPLIFIED_PLANS} directly based on the
+ * components import {LEGACY_PLANS, NEW_PLANS} directly based on the
  * runtime feature flag; everywhere else, PLANS provides a stable catalog
  * for `.find(p => p.tier === ...)` lookups.
  */

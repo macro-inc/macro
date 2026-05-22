@@ -7,10 +7,10 @@ import { stripeServiceClient } from '@service-stripe/client';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import type { PaywallProps } from './PaywallComponent';
-import { type PlanTier, PLAN_FEATURES, SIMPLIFIED_PLANS } from './plans';
+import { type PlanTier, PLAN_FEATURES, NEW_PLANS } from './plans';
 import SubscriptionTier from './SubscriptionTier';
 
-const PaywallComponentSimplified = (props: PaywallProps) => {
+const PaywallComponentNew = (props: PaywallProps) => {
   const analytics = useAnalytics();
   const hasPaid = useHasPaidAccess();
 
@@ -109,7 +109,7 @@ const PaywallComponentSimplified = (props: PaywallProps) => {
 
       <div class="w-full @container">
         <div class="gap-2 grid grid-cols-1 @[400px]:grid-cols-2">
-          <For each={SIMPLIFIED_PLANS}>
+          <For each={NEW_PLANS}>
             {(plan) => (
               <button
                 onClick={() => setUserSelectedTier(plan.tier)}
@@ -178,4 +178,4 @@ const PaywallComponentSimplified = (props: PaywallProps) => {
   );
 };
 
-export default PaywallComponentSimplified;
+export default PaywallComponentNew;

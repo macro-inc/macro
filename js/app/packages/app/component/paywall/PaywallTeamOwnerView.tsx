@@ -3,14 +3,14 @@ import type { Team } from '@service-auth/generated/schemas/team';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button } from '@ui';
 import { createMemo } from 'solid-js';
-import { SIMPLIFIED_PLANS } from './plans';
+import { NEW_PLANS } from './plans';
 import SubscriptionTier from './SubscriptionTier';
 
 interface PaywallTeamOwnerViewProps {
   team: Team;
 }
 
-const PREMIUM_PRICE = SIMPLIFIED_PLANS.find((p) => p.tier === 'premium')!.price;
+const PREMIUM_PRICE = NEW_PLANS.find((p) => p.tier === 'premium')!.price;
 
 const PaywallTeamOwnerView = (props: PaywallTeamOwnerViewProps) => {
   const teamQuery = useTeamQuery(() => props.team.id);
