@@ -135,7 +135,7 @@ fn truncate_branch_at_limit(branch: String) -> String {
 
     // All components passed to this function have been sanitized to ASCII.
     branch[..MAX_BRANCH_LENGTH]
-        .trim_end_matches(|c| matches!(c, '-' | '.' | '/'))
+        .trim_end_matches(['-', '.', '/'])
         .to_string()
 }
 
