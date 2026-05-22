@@ -36,12 +36,15 @@ import {
   createResource,
   createSignal,
   type JSX,
+  Match,
   Show,
+  Switch,
 } from 'solid-js';
 import { usePermissions } from '@core/context/user';
 import { useSettingsState } from '@core/constant/SettingsState';
 import PaywallComponent from '../paywall/PaywallComponent';
 import PaywallTeamMemberView from '../paywall/PaywallTeamMemberView';
+import PaywallTeamOwnerView from '../paywall/PaywallTeamOwnerView';
 import {
     useEmailLinks,
   useEmailLinksStatus,
@@ -125,6 +128,12 @@ export function Account() {
   const { disconnect: disconnectEmail } = useEmailLinks();
 
   const userTeamsQuery = useUserTeamsQuery();
+  const ownedTeam = createMemo(() => {
+    const teams = userTeamsQuery.data;
+    const uid = userId();
+    if (!teams || !uid) return undefined;
+    return teams.find((t) => t.owner_id === uid);
+  });
   const isNonOwnerTeamMember = createMemo(() => {
     const teams = userTeamsQuery.data;
     const uid = userId();
@@ -210,8 +219,7 @@ export function Account() {
                     />
                   }
                 >
-                  <Show
-                    when={isNonOwnerTeamMember()}
+                  <Switch
                     fallback={
                       <PaywallComponent
                         hideCloseButton
@@ -220,8 +228,13 @@ export function Account() {
                       />
                     }
                   >
-                    <PaywallTeamMemberView />
-                  </Show>
+                    <Match when={ownedTeam()}>
+                      {(team) => <PaywallTeamOwnerView team={team()} />}
+                    </Match>
+                    <Match when={isNonOwnerTeamMember()}>
+                      <PaywallTeamMemberView />
+                    </Match>
+                  </Switch>
                 </ShowFeatureFlag>
               </div>
             </Show>
