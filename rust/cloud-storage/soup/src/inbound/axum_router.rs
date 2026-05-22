@@ -57,6 +57,7 @@ use non_empty::IsEmpty;
 use recursion::CollapsibleExt;
 use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
 use utoipa::{IntoParams, ToSchema};
@@ -214,6 +215,9 @@ impl From<ApiGroupByField> for GroupByField {
 }
 
 /// API representation of group metadata.
+///
+/// Items belonging to this group are referenced by `item_ids`, each of which
+/// looks up an entry in `GroupedSoupPage.items` (a normalized pool).
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ApiGroupMeta {
     /// Group key - format depends on group_by field
@@ -225,10 +229,9 @@ pub struct ApiGroupMeta {
     pub display_order: Option<i32>,
     /// Total count of items in this group across all pages
     pub total_count: u32,
-    /// Number of items from this group in the current page
-    pub page_count: u32,
-    /// Index in the items array where this group starts (current page)
-    pub start_index: u32,
+    /// Ordered ids of items in this group for the current page.
+    /// Each id keys into `GroupedSoupPage.items`.
+    pub item_ids: Vec<Uuid>,
     /// Cursor to load more items specifically from this group
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
@@ -241,8 +244,7 @@ impl From<GroupMeta> for ApiGroupMeta {
             label: meta.label,
             display_order: meta.display_order,
             total_count: meta.total_count,
-            page_count: meta.page_count,
-            start_index: meta.start_index,
+            item_ids: meta.item_ids,
             next_cursor: meta.next_cursor,
         }
     }
@@ -255,10 +257,13 @@ pub struct SoupPage {
 }
 
 /// Response for grouped soup queries.
+///
+/// Items are returned as a pool keyed by id; each `ApiGroupMeta.item_ids`
+/// describes the ordered membership of one group.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct GroupedSoupPage {
-    /// Items in this page (flat list, ordered by group then sort)
-    pub items: Vec<SoupApiItem>,
+    /// Items in this page, keyed by id. Ordering lives in `groups[].item_ids`.
+    pub items: HashMap<Uuid, SoupApiItem>,
     /// Cursor to load the next page (global pagination)
     pub next_cursor: Option<String>,
     /// Group metadata - present when group_by is specified in the request
@@ -424,7 +429,7 @@ where
             items: response
                 .items
                 .into_iter()
-                .map(SoupApiItem::from_frecency_soup_item)
+                .map(|(id, item)| (id, SoupApiItem::from_frecency_soup_item(item)))
                 .collect(),
             next_cursor: response.page_cursor,
             groups: Some(

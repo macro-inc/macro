@@ -116,7 +116,10 @@ use models_soup::email_thread::{
 };
 use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
-use soup::inbound::axum_router::{PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage};
+use soup::inbound::axum_router::{
+    ApiGroupByField, ApiGroupMeta, GroupedSoupPage, PostGroupedSoupAstRequest,
+    PostSoupAstRequest, PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage,
+};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -190,6 +193,7 @@ use utoipa::OpenApi;
         soup::inbound::axum_router::get_soup_handler,
         soup::inbound::axum_router::post_soup_handler,
         soup::inbound::axum_router::post_soup_ast_handler,
+        soup::inbound::axum_router::post_grouped_soup_ast_handler,
 
         // channels
         channels::inbound::axum_router::get_channel_messages_handler,
@@ -346,6 +350,11 @@ use utoipa::OpenApi;
             SoupMessageListVisibility,
             SoupLabelType,
             PostSoupRequest,
+            PostSoupAstRequest,
+            PostGroupedSoupAstRequest,
+            ApiGroupByField,
+            ApiGroupMeta,
+            GroupedSoupPage,
 
             // Channels
             ApiChannelMessagesPage,
