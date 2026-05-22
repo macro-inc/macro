@@ -1,24 +1,12 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth';
-import { toast } from '@core/component/Toast/Toast';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
-import { usePermissions } from '@core/context/user';
 import IconX from '@phosphor/x.svg';
-import { invalidateUserInfo } from '@queries/auth/user-info';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import { match } from 'ts-pattern';
-import { type PaidPlanTier, PLAN_FEATURES, PLANS } from './plans';
+import { type PlanTier, PLAN_FEATURES, PLANS } from './plans';
 import SubscriptionTier from './SubscriptionTier';
-
-// Paid-only plans for the billing paywall — Stripe has no product for the
-// 'free' tier, so it must be excluded here. Filtered once at module scope so
-// the component doesn't re-filter on every render.
-const PAID_PLANS = PLANS.filter(
-  (p): p is Extract<(typeof PLANS)[number], { tier: PaidPlanTier }> =>
-    p.tier !== 'free'
-);
 
 interface PaywallComponent {
   cb: () => Promise<void> | void;
@@ -31,44 +19,33 @@ interface PaywallComponent {
 
 const PaywallComponent = (props: PaywallComponent) => {
   const analytics = useAnalytics();
-  const permissions = usePermissions();
   const hasPaid = useHasPaidAccess();
 
-  // Tier a paying user is currently subscribed to, derived from RBAC permissions
-  // (sub_opus grants write:opus; sub_sonnet grants write:sonnet + write:haiku;
-  // sub_haiku grants write:haiku — so check highest-to-lowest).
-  const currentTier = createMemo((): PaidPlanTier | undefined => {
-    if (!hasPaid()) return undefined;
-    const perms = permissions();
-    if (perms.includes('write:opus')) return 'opus';
-    if (perms.includes('write:sonnet')) return 'sonnet';
-    if (perms.includes('write:haiku')) return 'haiku';
-    return undefined;
-  });
-
-  // `userSelectedTier` is only set when the user explicitly clicks a plan card. Until
-  // then the UI derives its selection from `currentTier` (falling back to 'sonnet' for
-  // non-paying users). This avoids mirroring derived state into a signal via `createEffect`
-  // and also sidesteps the briefly-wrong-card window before permissions resolve.
-  const [userSelectedTier, setUserSelectedTier] =
-    createSignal<PaidPlanTier | null>(null);
-  const selectedTier = createMemo<PaidPlanTier>(
-    () => userSelectedTier() ?? currentTier() ?? 'sonnet'
+  const currentTier = createMemo<PlanTier>(() =>
+    hasPaid() ? 'premium' : 'free'
   );
 
-  const [updating, setUpdating] = createSignal(false);
+  // `userSelectedTier` is only set when the user explicitly clicks a plan card. Until
+  // then the UI reflects `currentTier`. This avoids mirroring derived state into a signal
+  // via `createEffect` and sidesteps the briefly-wrong-card window before permissions resolve.
+  const [userSelectedTier, setUserSelectedTier] = createSignal<PlanTier | null>(
+    null
+  );
+  const selectedTier = createMemo<PlanTier>(
+    () => userSelectedTier() ?? currentTier()
+  );
 
-  const handleCheckout = async (tier: PaidPlanTier) => {
+  const handleCheckout = async () => {
     try {
       await props.cb();
       const url = await stripeServiceClient.createCheckoutSession({
         type: props.customType
           ? props.customType
           : (props.errorKey ?? undefined),
-        tier,
+        tier: 'premium',
       });
       analytics.track('subscription_start', {
-        type: tier,
+        type: 'premium',
         customType: props.customType,
         errorKey: props.errorKey,
       });
@@ -88,52 +65,26 @@ const PaywallComponent = (props: PaywallComponent) => {
   };
 
   const handleContinue = () => {
+    const tier = selectedTier();
+    // Paid users go to the Stripe portal regardless of selection — that's where
+    // they cancel (downgrade to free) or manage billing on premium.
     if (hasPaid()) {
       manageSubscription();
       return;
     }
-    handleCheckout(selectedTier());
+    if (tier === 'free') {
+      props.handleGuest?.();
+      return;
+    }
+    handleCheckout();
   };
 
-  const handleUpdateTier = async () => {
-    const next = selectedTier();
-    const prev = currentTier();
-    if (!prev || next === prev) return;
-    setUpdating(true);
-    try {
-      const result = await stripeServiceClient.updateSubscriptionTier(next);
-      if (!result.ok) {
-        // Messages mirror the backend's StripeOperationError `Display` impls, adapted
-        // to second-person for UI. `.exhaustive()` fails the build if the code union
-        // grows a new variant without a toast case.
-        const message = match(result.code)
-          .with('USER_IN_TEAM', () => 'Contact your team owner to update.')
-          .with(
-            'UPDATE_IN_PROGRESS',
-            () =>
-              'Another subscription update is already in progress. Please try again in a moment.'
-          )
-          .with(
-            'NO_SUBSCRIPTION',
-            () => "You don't have an active subscription to update."
-          )
-          .with(
-            'TIER_UNCHANGED',
-            () => 'Subscription is already on the requested tier.'
-          )
-          .with('UNKNOWN', () => 'Failed to update subscription.')
-          .exhaustive();
-        toast.failure(message);
-        return;
-      }
-      analytics.track('subscription_tier_updated', { from: prev, to: next });
-      // Refetches permissions so `currentTier` reflects the new tier and this button
-      // auto-hides (selectedTier === currentTier).
-      await invalidateUserInfo();
-      toast.success('Subscription updated!');
-    } finally {
-      setUpdating(false);
+  const ctaLabel = () => {
+    if (hasPaid()) {
+      return selectedTier() === 'free' ? 'Downgrade' : 'Manage Subscription';
     }
+    if (selectedTier() === 'free') return 'Continue with Free';
+    return 'Get Premium';
   };
 
   return (
@@ -164,8 +115,8 @@ const PaywallComponent = (props: PaywallComponent) => {
       </Show>
 
       <div class="w-full @container">
-        <div class="gap-2 grid grid-cols-1 @[530px]:grid-cols-3">
-          <For each={PAID_PLANS}>
+        <div class="gap-2 grid grid-cols-1 @[400px]:grid-cols-2">
+          <For each={PLANS}>
             {(plan) => (
               <button
                 onClick={() => setUserSelectedTier(plan.tier)}
@@ -178,16 +129,19 @@ const PaywallComponent = (props: PaywallComponent) => {
               >
                 <div class="flex flex-col gap-3 w-full">
                   <div class="flex justify-between items-start">
-                    <div>
+                    <div class="flex items-center gap-2">
                       <div class="font-semibold text-ink text-base sm:text-lg">
                         {plan.name}
                       </div>
+                      <Show when={currentTier() === plan.tier}>
+                        <span class="text-xs text-ink/60 px-1.5 py-0.5 border border-edge-muted rounded">
+                          Current
+                        </span>
+                      </Show>
                     </div>
                     <SubscriptionTier
                       class="w-7 shrink-0"
-                      tier={
-                        selectedTier() === plan.tier ? plan.tier : undefined
-                      }
+                      tier={plan.tier === 'premium' ? 'premium' : undefined}
                     />
                   </div>
                   <div class="flex items-baseline gap-0.5">
@@ -213,43 +167,18 @@ const PaywallComponent = (props: PaywallComponent) => {
       </div>
 
       <div class="w-full">
-        <Show
-          when={hasPaid() && currentTier() && selectedTier() !== currentTier()}
-          fallback={
-            <Button
-              onClick={handleContinue}
-              variant="base"
-              size="lg"
-              depth={3}
-              class="w-full"
-            >
-              <Show when={!hasPaid()} fallback={'Manage Subscription'}>
-                Get {PLANS.find((p) => p.tier === selectedTier())?.name}
-              </Show>
-            </Button>
+        <Button
+          onClick={handleContinue}
+          variant="base"
+          size="lg"
+          depth={3}
+          class="w-full"
+          disabled={
+            !hasPaid() && selectedTier() === 'free' && !props.handleGuest
           }
         >
-          <Button
-            onClick={handleUpdateTier}
-            disabled={updating()}
-            variant="active"
-            size="lg"
-            depth={3}
-            class="w-full"
-          >
-            {updating() ? 'Updating…' : 'Update Subscription'}
-          </Button>
-        </Show>
-        <Show when={!hasPaid() && props.handleGuest}>
-          <Button
-            onClick={() => props.handleGuest?.()}
-            variant="base"
-            size="sm"
-            class="mt-3 text-ink/40 hover:text-ink/60"
-          >
-            Continue with free plan
-          </Button>
-        </Show>
+          {ctaLabel()}
+        </Button>
       </div>
     </div>
   );

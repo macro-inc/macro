@@ -1,26 +1,14 @@
 export const PLANS = [
   {
     tier: 'free' as const,
-    name: 'Level 0',
+    name: 'Free',
     price: 0,
     highlighted: false,
   },
   {
-    tier: 'haiku' as const,
-    name: 'Level 1',
-    price: 20,
-    highlighted: false,
-  },
-  {
-    tier: 'sonnet' as const,
-    name: 'Level 2',
-    price: 60,
-    highlighted: false,
-  },
-  {
-    tier: 'opus' as const,
-    name: 'Level 3',
-    price: 120,
+    tier: 'premium' as const,
+    name: 'Premium',
+    price: 40,
     highlighted: true,
   },
 ] as const;
@@ -40,27 +28,21 @@ export const PLAN_FEATURES: PlanFeature[] = [
     label: 'AI Tool Calls',
     values: {
       free: '—',
-      haiku: '1,000',
-      sonnet: '5,000',
-      opus: 'Unlimited',
+      premium: 'Unlimited',
     },
   },
   {
     label: 'AI Agent',
     values: {
       free: '—',
-      haiku: 'Haiku',
-      sonnet: 'Sonnet',
-      opus: 'Opus',
+      premium: 'All models',
     },
   },
   {
     label: 'Storage',
     values: {
       free: '5 GB',
-      haiku: '25 GB',
-      sonnet: '100 GB',
-      opus: '1 TB',
+      premium: '1 TB',
     },
   },
 ];
