@@ -122,7 +122,9 @@ export function computeGroupKeysForItem(
         return value.value as string[];
       }
       if (value.type === 'EntityReference' && Array.isArray(value.value)) {
-        return (value.value as Array<{ id: string }>).map((r) => r.id);
+        return (value.value as Array<{ entity_id: string }>).map(
+          (r) => r.entity_id,
+        );
       }
       return;
     }
