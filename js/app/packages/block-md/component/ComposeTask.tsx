@@ -594,10 +594,20 @@ export function ComposeTask(props: ComposeTaskProps) {
     if (!(root && container)) return;
     const tabbables = tabbable(container);
     const ndx = tabbables.indexOf(root);
-    const next = (ndx + dir + tabbables.length) % tabbables.length;
-    const elem = tabbables.at(next);
+
+    let elem: Element | undefined;
+    if (ndx >= 0) {
+      // Editor is in tabbable list, navigate relative to it
+      const next = (ndx + dir + tabbables.length) % tabbables.length;
+      elem = tabbables.at(next);
+    } else {
+      // Editor not in tabbable list (contenteditable edge case)
+      // Go to first element when moving forward, last when moving backward
+      elem = dir === 1 ? tabbables.at(0) : tabbables.at(-1);
+    }
+
     if (elem) {
-      elem.focus();
+      (elem as HTMLElement).focus();
       e.preventDefault();
       e.stopPropagation();
     }
@@ -747,7 +757,39 @@ export function ComposeTask(props: ComposeTaskProps) {
             onPropertyDeleted={() => {}}
             saveHandler={saveHandler}
           >
-            <div class="flex min-h-7 flex-row flex-wrap items-center gap-2 text-sm m-px">
+            <div
+              class="flex min-h-7 flex-row flex-wrap items-center gap-2 text-sm m-px"
+              on:keydown={(e) => {
+                const target = e.target as HTMLElement;
+                const container = e.currentTarget;
+                const tabbables = tabbable(container);
+                const isFirst = tabbables.indexOf(target) === 0;
+                const isLast =
+                  tabbables.indexOf(target) === tabbables.length - 1;
+
+                // Shift+Tab or ArrowUp on first property -> focus editor
+                if (
+                  isFirst &&
+                  ((e.key === 'Tab' && e.shiftKey) || e.key === 'ArrowUp')
+                ) {
+                  const editor = bodyEditor();
+                  if (editor) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    editor.focus(undefined, { defaultSelection: 'rootEnd' });
+                  }
+                }
+
+                // Tab or ArrowDown on last property -> let tabbable handle or wrap
+                if (
+                  isLast &&
+                  ((e.key === 'Tab' && !e.shiftKey) || e.key === 'ArrowDown')
+                ) {
+                  // Allow default Tab behavior to continue to next focusable
+                  // element outside this container
+                }
+              }}
+            >
               <For each={properties()}>
                 {(property) => (
                   <InlinePropertyValue

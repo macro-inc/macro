@@ -21,8 +21,8 @@ use sqlx::Row;
 
 use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
-    Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs,
-    TeamTaskMetadata, Thread,
+    BranchNameContext, Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
+    EditDocumentRepoArgs, TeamTaskMetadata, Thread,
 };
 use crate::domain::ports::DocumentRepo;
 
@@ -695,6 +695,52 @@ impl DocumentRepo for PgDocumentRepo {
             team_id: row.team_id,
             task_num: row.task_num,
         }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_branch_name_context(
+        &self,
+        document_id: &str,
+        user_id: &str,
+    ) -> Result<BranchNameContext, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                COALESCE(u.email, NULLIF(split_part(request_user.user_id, '|', 2), ''), request_user.user_id) AS "user_email!",
+                gl.github_username AS "github_username?",
+                t.slug AS "team_slug?",
+                tt.task_num AS "team_task_id?"
+            FROM (SELECT $1::text AS user_id) request_user
+            LEFT JOIN "User" u ON u.id = request_user.user_id
+            LEFT JOIN LATERAL (
+                SELECT github_username
+                FROM github_links
+                WHERE macro_id = request_user.user_id
+                ORDER BY updated_at DESC
+                LIMIT 1
+            ) gl ON true
+            LEFT JOIN LATERAL (
+                SELECT team_id
+                FROM team_user
+                WHERE user_id = request_user.user_id
+                ORDER BY team_id
+                LIMIT 1
+            ) tu ON true
+            LEFT JOIN team t ON t.id = tu.team_id
+            LEFT JOIN team_task tt ON tt.team_id = tu.team_id AND tt.document_id = $2
+            "#,
+            user_id,
+            document_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(BranchNameContext {
+            user_email: row.user_email,
+            github_username: row.github_username,
+            team_slug: row.team_slug,
+            team_task_id: row.team_task_id,
+        })
     }
 
     #[tracing::instrument(err, skip(self))]

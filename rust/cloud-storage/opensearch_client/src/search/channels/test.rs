@@ -50,3 +50,55 @@ fn test_build_bool_query() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_build_bool_query_multi_term_ands_inside_opensearch() -> anyhow::Result<()> {
+    // Two terms — each becomes its own `match_phrase` clause and they
+    // combine with `must` so both must appear in the same message.
+    // Quoted phrases like "foo bar" arrive here as a single token and use
+    // the same `match_phrase` path.
+    let builder = ChannelMessageQueryBuilder::new(vec!["foo".to_string(), "bar baz".to_string()])
+        .match_type("exact")
+        .user_id("user123")
+        .ids(vec!["id1".to_string()]);
+
+    let result = builder.build_bool_query()?;
+
+    let expected = serde_json::json!({
+        "bool": {
+            "must": [
+                {
+                    "bool": {
+                        "minimum_should_match": 1,
+                        "should": [
+                            {
+                                "bool": {
+                                    "must": [
+                                        { "match_phrase": { "content": "foo" } },
+                                        { "match_phrase": { "content": "bar baz" } }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                }
+            ],
+            "filter": [
+                {
+                    "bool": {
+                        "minimum_should_match": 1,
+                        "should": [
+                            { "terms": { "entity_id": ["id1"] } },
+                            { "term": { "sender_id": "user123" } }
+                        ]
+                    }
+                },
+                { "term": { "_index": "channels" } }
+            ]
+        }
+    });
+
+    assert_eq!(result.build().to_json(), expected);
+
+    Ok(())
+}

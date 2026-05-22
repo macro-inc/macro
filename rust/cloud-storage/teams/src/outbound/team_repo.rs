@@ -174,6 +174,20 @@ impl TeamRepositoryImpl {
         .execute(&mut *transaction)
         .await?;
 
+        // Seed the team's CRM settings row. `crm_enabled` defaults to
+        // FALSE — toggled on later via `PATCH /team/crm`. Created in
+        // the same tx as the team itself so the row always exists for
+        // any team that exists.
+        sqlx::query!(
+            r#"
+            INSERT INTO team_crm_settings (team_id)
+            VALUES ($1)
+            "#,
+            &team.id,
+        )
+        .execute(&mut *transaction)
+        .await?;
+
         transaction.commit().await?;
 
         Ok(team)

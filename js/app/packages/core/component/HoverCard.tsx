@@ -49,6 +49,8 @@ type HoverCardComponentProps = {
   triggerAs?: 'span' | 'div';
   /** Class applied to the underlying trigger element. */
   triggerClass?: string;
+  /** Tab index for the trigger element. Use -1 to remove from tab order. */
+  triggerTabIndex?: number;
   /** Whether to disable the hover card */
   disabled?: boolean;
   /** Callback when open state changes */
@@ -168,6 +170,7 @@ export function HoverCard(props: HoverCardComponentProps) {
         as={props.triggerAs ?? 'span'}
         class={props.triggerClass}
         disabled={isDisabled()}
+        tabIndex={props.triggerTabIndex}
       >
         {props.trigger}
       </KobalteHoverCard.Trigger>

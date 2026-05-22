@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH prev AS (\n                SELECT crm_enabled FROM team_crm_settings WHERE team_id = $1\n            ),\n            upsert AS (\n                INSERT INTO team_crm_settings (team_id, crm_enabled)\n                VALUES ($1, TRUE)\n                ON CONFLICT (team_id) DO UPDATE\n                SET crm_enabled = TRUE,\n                    updated_at  = now()\n                RETURNING crm_enabled\n            )\n            SELECT COALESCE((SELECT crm_enabled FROM prev), FALSE) AS \"prev_enabled!\"\n            FROM upsert\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "prev_enabled!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5fe0b9eb83e39b8cb89be6aab89099b157418c1e52132b6940fee9bc8c2da4e2"
+}

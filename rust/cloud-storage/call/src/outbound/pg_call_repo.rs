@@ -577,8 +577,8 @@ impl CallRepository for PgCallRepo {
         // The record keeps the same id as the original call.
         sqlx::query!(
             r#"
-            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, recording_started_at, share_permission_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, recording_started_at, share_permission_id, share_with_team)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             "#,
             call_id,
             call.channel_id,
@@ -591,6 +591,7 @@ impl CallRepository for PgCallRepo {
             call.recording_key,
             call.recording_started_at,
             &call.share_permission_id,
+            call.share_with_team,
         )
         .execute(tx.as_mut())
         .await?;
@@ -924,7 +925,7 @@ impl CallRepository for PgCallRepo {
         // Try active `calls` first.
         if let Some(active) = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, recording_started_at
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, recording_started_at, share_with_team
             FROM calls
             WHERE id = $1
             "#,
@@ -992,6 +993,7 @@ impl CallRepository for PgCallRepo {
                 channel_name: None,
                 custom_name: None,
                 summary: None,
+                share_with_team: active.share_with_team,
                 is_active: true,
                 participants,
                 transcript,
@@ -1001,7 +1003,7 @@ impl CallRepository for PgCallRepo {
         // Fall back to archived `call_records`.
         let Some(archived) = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, recording_started_at, custom_name, summary
+            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, recording_started_at, custom_name, summary, share_with_team
             FROM call_records
             WHERE id = $1
             "#,
@@ -1073,6 +1075,7 @@ impl CallRepository for PgCallRepo {
             channel_name: None,
             custom_name: archived.custom_name,
             summary: archived.summary,
+            share_with_team: archived.share_with_team,
             is_active: false,
             participants,
             transcript,
@@ -1220,6 +1223,7 @@ impl CallRepository for PgCallRepo {
                 recording_started_at,
                 NULL::text as "custom_name",
                 NULL::text as "summary",
+                share_with_team as "share_with_team!",
                 true as "is_active!"
             FROM calls c
             WHERE EXISTS (
@@ -1248,6 +1252,7 @@ impl CallRepository for PgCallRepo {
                 recording_started_at,
                 custom_name,
                 summary,
+                share_with_team as "share_with_team!",
                 false as "is_active!"
             FROM call_records cr
             WHERE EXISTS (
@@ -1334,6 +1339,7 @@ impl CallRepository for PgCallRepo {
                 channel_name: None,
                 custom_name: row.custom_name,
                 summary: row.summary,
+                share_with_team: row.share_with_team,
                 is_active: row.is_active,
                 participants,
                 transcript: Vec::new(),

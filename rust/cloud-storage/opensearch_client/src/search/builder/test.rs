@@ -253,8 +253,7 @@ fn test_build_must_term_query_multiple_terms() -> anyhow::Result<()> {
 
     let expected = serde_json::json!({
         "bool": {
-            "minimum_should_match": 1,
-            "should": [
+            "must": [
                 {
                     "match_phrase": {
                         "content": "test1"

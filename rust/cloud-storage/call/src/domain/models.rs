@@ -333,6 +333,8 @@ pub struct CallRecord {
     /// AI-generated summary of the call. Only set on archived `call_records`
     /// once summarization has run; active calls always return `None`.
     pub summary: Option<String>,
+    /// Whether the call is shared with the creator's team.
+    pub share_with_team: bool,
     /// Whether the call is currently active (from `calls` table).
     pub is_active: bool,
     /// Participants (both active and historic).

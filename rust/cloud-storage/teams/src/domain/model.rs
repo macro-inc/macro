@@ -121,6 +121,34 @@ pub struct TeamMembers {
     pub invited: Vec<TeamInviteDetails>,
 }
 
+/// Request body for `PATCH /team/crm`.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct PatchTeamCrmSettingsRequest {
+    /// The desired CRM state for the team.
+    pub enabled: bool,
+}
+
+/// Response for `PATCH /team/crm`. Reports both the resulting state
+/// and whether this call changed it; for the enable-flip case it also
+/// reports the backfill fan-out tallies.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct PatchTeamCrmSettingsResponse {
+    /// The resulting `crm_enabled` value after the call.
+    pub enabled: bool,
+    /// True if this call flipped the value (false → true or true →
+    /// false). False if the team was already at the requested state.
+    pub changed: bool,
+    /// Number of members for whom a `PopulateCrmForUser` message was
+    /// enqueued. Non-zero only on a disabled → enabled transition;
+    /// per-user enqueue failures are logged and swallowed.
+    pub backfill_enqueued: usize,
+    /// Number of members whose enqueue failed (and was swallowed).
+    /// Non-zero only on a disabled → enabled transition.
+    pub backfill_failed: usize,
+}
+
 /// Detailed information about a team invite
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]

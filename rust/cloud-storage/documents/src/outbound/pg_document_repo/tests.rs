@@ -854,6 +854,69 @@ async fn test_copying_task_allocates_new_team_task_number(pool: Pool<Postgres>) 
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
+async fn test_get_branch_name_context_prefers_github_and_team_task(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    sqlx::query!(
+        r#"
+        UPDATE team
+        SET slug = 'ENG'
+        WHERE id = $1
+        "#,
+        TEST_TEAM_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query!(
+        r#"
+        INSERT INTO github_links (id, macro_id, fusionauth_user_id, github_username, github_user_id)
+        VALUES ($1, 'macro|user@user.com', $2, 'octocat', '12345')
+        "#,
+        uuid::uuid!("b0000000-0000-0000-0000-000000000001"),
+        uuid::uuid!("b0000000-0000-0000-0000-000000000002"),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let task = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+    let context = repo
+        .get_branch_name_context(&task.document_id, "macro|user@user.com")
+        .await
+        .unwrap();
+
+    assert_eq!(context.user_email, "user@user.com");
+    assert_eq!(context.github_username, Some("octocat".to_string()));
+    assert_eq!(context.team_slug, Some("ENG".to_string()));
+    assert_eq!(context.team_task_id, Some(1));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_get_branch_name_context_falls_back_for_unknown_user(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool);
+
+    let context = repo
+        .get_branch_name_context(
+            "d0000000-0000-0000-0000-000000000001",
+            "macro|no-team@user.com",
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(context.user_email, "no-team@user.com");
+    assert_eq!(context.github_username, None);
+    assert_eq!(context.team_slug, None);
+    assert_eq!(context.team_task_id, None);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
 async fn test_edit_document_channel_share_creates_user_item_access(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
     let channel_id = "c0000000-0000-0000-0000-000000000001";

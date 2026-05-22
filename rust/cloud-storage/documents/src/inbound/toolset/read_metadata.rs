@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::DocumentToolContext;
-use crate::domain::branch_name::build_task_branch_name;
 
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -86,19 +85,19 @@ where
         let branch_name = if let Some(sub_type) = result.document_metadata.metadata.sub_type {
             match sub_type {
                 document_sub_type::DocumentSubType::Task => {
-                    let short_id = service_context
+                    let task_branch_name = service_context
                         .service
-                        .get_short_id(entity_access_receipt)
+                        .get_task_branch_name(
+                            entity_access_receipt,
+                            result.document_metadata.metadata.document_name.clone(),
+                        )
                         .await
                         .map_err(|e| ToolCallError {
-                            description: "unable to get the short id".to_string(),
+                            description: "unable to get the branch name".to_string(),
                             internal_error: e.into(),
                         })?;
 
-                    Some(build_task_branch_name(
-                        &short_id,
-                        &result.document_metadata.metadata.document_name,
-                    ))
+                    Some(task_branch_name.branch_name)
                 }
             }
         } else {

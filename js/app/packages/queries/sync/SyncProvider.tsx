@@ -21,6 +21,31 @@ type SyncProviderProps = ParentProps<{
   userId: Accessor<string | undefined>;
 }>;
 
+function parseWebsocketPayload<T>(
+  type: string,
+  payload: unknown
+): T | undefined {
+  if (typeof payload !== 'string') return payload as T;
+
+  try {
+    return JSON.parse(payload) as T;
+  } catch (error) {
+    console.warn('Malformed websocket payload', { type, payload, error });
+    return undefined;
+  }
+}
+
+function withParsedWebsocketPayload<T>(
+  type: string,
+  payload: unknown,
+  handle: (payload: T) => void
+): void {
+  const parsedPayload = parseWebsocketPayload<T>(type, payload);
+  if (parsedPayload === undefined) return;
+
+  handle(parsedPayload);
+}
+
 export function QuerySyncProvider(props: SyncProviderProps) {
   createConnectionWebsocketEffect((data) => {
     match(data)
@@ -28,18 +53,24 @@ export function QuerySyncProvider(props: SyncProviderProps) {
         invalidateContacts();
       })
       .with({ type: 'comms_message' }, () => {
-        handleCommsMessage(data.data);
+        withParsedWebsocketPayload(data.type, data.data, handleCommsMessage);
       })
       .with({ type: 'comms_reaction' }, () => {
-        handleCommsReaction(data.data);
+        withParsedWebsocketPayload(data.type, data.data, handleCommsReaction);
       })
       .with({ type: 'comms_attachment' }, () => {
-        handleCommsAttachment(data.data);
+        withParsedWebsocketPayload(data.type, data.data, handleCommsAttachment);
       })
       .with({ type: 'comms_typing' }, () => {
         const userId = props.userId();
         if (!userId) return;
-        handleCommsTyping(data.data, userId);
+        withParsedWebsocketPayload<Parameters<typeof handleCommsTyping>[0]>(
+          data.type,
+          data.data,
+          (payload) => {
+            handleCommsTyping(payload, userId);
+          }
+        );
       })
       .with({ type: 'notification_status_updated' }, () => {
         const result = notificationStatusUpdatePayloadSchema.safeParse(

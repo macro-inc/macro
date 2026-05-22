@@ -10,6 +10,7 @@ pub(in crate::api) mod email;
 pub(in crate::api::search) mod enrich;
 pub(in crate::api) mod project;
 pub mod simple;
+pub(in crate::api::search) mod terms;
 pub mod unified;
 
 pub fn router() -> Router<SearchHandlerState> {

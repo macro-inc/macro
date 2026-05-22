@@ -7019,6 +7019,7 @@
           "roomName",
           "createdBy",
           "startedAt",
+          "shareWithTeam",
           "isActive",
           "participants",
           "transcript"
@@ -7083,6 +7084,10 @@
           "roomName": {
             "type": "string",
             "description": "The RTC room name."
+          },
+          "shareWithTeam": {
+            "type": "boolean",
+            "description": "Whether the call is shared with the creator's team."
           },
           "startedAt": {
             "type": "string",

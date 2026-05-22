@@ -187,9 +187,36 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // Look up the company for this (team, domain). The killswitch lives
-        // here: a pre-existing row with email_sync=false means the team has
-        // opted this domain out and we must not write anything.
+        // Team-level CRM killswitch. Disable flips
+        // `team_crm_settings.crm_enabled` and purges `crm_companies` in
+        // the same transaction, so reading the flag here — inside our
+        // tx, after the advisory lock — guarantees we see the disable's
+        // commit and don't strand an orphan row it already raced past.
+        // Missing row = default false = treat as disabled.
+        let team_crm_enabled = sqlx::query_scalar!(
+            r#"
+            SELECT COALESCE(
+                (SELECT crm_enabled FROM team_crm_settings WHERE team_id = $1),
+                FALSE
+            ) AS "crm_enabled!"
+            "#,
+            team_id,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        if !team_crm_enabled {
+            tx.commit()
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            return Ok(());
+        }
+
+        // Look up the company for this (team, domain). The per-domain
+        // killswitch lives here: a pre-existing row with
+        // email_sync=false means the team has opted this domain out and
+        // we must not write anything.
         let existing = sqlx::query!(
             r#"
             SELECT c.id, c.email_sync

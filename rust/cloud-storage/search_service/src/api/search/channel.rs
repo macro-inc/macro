@@ -1,4 +1,5 @@
 use crate::api::search::simple::SearchError;
+use crate::api::search::terms::split_search_terms;
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use std::collections::HashMap;
@@ -206,11 +207,18 @@ pub async fn handler(
         return Err(SearchError::InvalidPageSize);
     }
 
-    let terms = match (req.query, req.terms) {
+    let raw_terms = match (req.query, req.terms) {
         (Some(q), _) if !q.trim().is_empty() => vec![q.trim().to_string()],
         (_, Some(t)) if !t.is_empty() => t,
         _ => return Err(SearchError::NoQueryOrTermsProvided),
     };
+    // Whitespace-split outside double quotes so `foo bar` matches messages
+    // containing both words (ANDed inside OpenSearch) while `"foo bar"`
+    // stays an exact-phrase term.
+    let terms = split_search_terms(&raw_terms);
+    if terms.is_empty() {
+        return Err(SearchError::NoQueryOrTermsProvided);
+    }
     if terms.iter().any(|t| t.len() < 3) {
         return Err(SearchError::InvalidQuerySize);
     }

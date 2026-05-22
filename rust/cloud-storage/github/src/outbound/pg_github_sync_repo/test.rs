@@ -170,6 +170,53 @@ async fn test_filter_duplicate_tasks_empty_input(pool: Pool<Postgres>) {
     assert!(new_only.is_empty());
 }
 
+// ---------------------------------------------------------------------------
+// resolve_team_task_references
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("github_team_task_test_data"))
+)]
+async fn test_resolve_team_task_references(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    let refs = vec![
+        crate::domain::models::TeamTaskReference::new("eng", 123).unwrap(),
+        crate::domain::models::TeamTaskReference::new("platform_api", 7).unwrap(),
+    ];
+
+    let task_ids = repo
+        .resolve_team_task_references("12345", &refs)
+        .await
+        .unwrap();
+
+    let expected_known =
+        MacroTaskId::from_uuid(&Uuid::parse_str("0d0dc589-f301-43f1-8b11-4ab448ca4bb4").unwrap());
+    let expected_platform =
+        MacroTaskId::from_uuid(&Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap());
+
+    assert_eq!(task_ids.len(), 2);
+    assert!(task_ids.contains(&expected_known));
+    assert!(task_ids.contains(&expected_platform));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("github_team_task_test_data"))
+)]
+async fn test_resolve_team_task_references_requires_installation_team(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+    let refs = vec![crate::domain::models::TeamTaskReference::new("eng", 123).unwrap()];
+
+    let task_ids = repo
+        .resolve_team_task_references("99999", &refs)
+        .await
+        .unwrap();
+
+    assert!(task_ids.is_empty());
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("github_sync_test_data"))

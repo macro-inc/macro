@@ -22,9 +22,10 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// Idempotently records that `email` was seen from the mailbox
     /// identified by `link_id`, for the team `team_id`. Upserts
     /// `crm_companies` (+ `crm_domains`), `crm_contacts`, and
-    /// `crm_contact_sources` in a single transaction. If the team has
-    /// opted the contact's domain out (`crm_companies.email_sync = false`)
-    /// the call is a no-op.
+    /// `crm_contact_sources` in a single transaction. The call is a
+    /// no-op when either killswitch is engaged: the team-level
+    /// `team_crm_settings.crm_enabled = false`, or the per-domain
+    /// `crm_companies.email_sync = false` for the contact's domain.
     ///
     /// `name` is the display name observed for `email` on this user's
     /// link — typically `email_contacts.name`, which the caller looks up

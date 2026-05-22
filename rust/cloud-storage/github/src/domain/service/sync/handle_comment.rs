@@ -22,7 +22,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
         // Extract task IDs from the new comment/review text only
         let searchable_texts = event.extract_searchable_text();
         let combined = searchable_texts.join(" ");
-        let comment_task_ids: Vec<MacroTaskId> = MacroTaskId::extract_from_text(&combined);
+        let comment_task_ids = self.extract_task_ids_from_text(event, &combined).await;
 
         tracing::trace!(
             new_task_id_count = comment_task_ids.len(),
@@ -50,7 +50,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
         if let Some(ref key) = github_key {
             let pr_context_tasks = {
                 let pr_context = event.extract_pr_context_text().join(" ");
-                let extracted = MacroTaskId::extract_from_text(&pr_context);
+                let extracted = self.extract_task_ids_from_text(event, &pr_context).await;
                 // Validate PR context task IDs too
                 self.resolve_tasks(&extracted).await.validated_task_ids
             };

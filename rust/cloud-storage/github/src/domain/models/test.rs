@@ -120,6 +120,30 @@ fn extract_multiple_in_sentence() {
 }
 
 // ---------------------------------------------------------------------------
+// TeamTaskReference::extract_from_text
+// ---------------------------------------------------------------------------
+
+#[test]
+fn extract_team_task_reference_from_branch_name() {
+    let refs = TeamTaskReference::extract_from_text("whutch/eng-123-fix-the-thing");
+    assert_eq!(refs, vec![TeamTaskReference::new("eng", 123).unwrap()]);
+}
+
+#[test]
+fn extract_team_task_reference_case_insensitive_and_dedupes() {
+    let refs = TeamTaskReference::extract_from_text("ENG-123 eng-123 platform_api-7");
+    assert_eq!(refs.len(), 2);
+    assert_eq!(refs[0], TeamTaskReference::new("eng", 123).unwrap());
+    assert_eq!(refs[1], TeamTaskReference::new("platform_api", 7).unwrap());
+}
+
+#[test]
+fn extract_team_task_reference_rejects_invalid_numbers() {
+    let refs = TeamTaskReference::extract_from_text("eng-0 eng-abc eng-999999999999999999999");
+    assert!(refs.is_empty());
+}
+
+// ---------------------------------------------------------------------------
 // ValidatedGithubWebhookEvent::pull_number / repo_owner / repo_name / installation_id
 // ---------------------------------------------------------------------------
 

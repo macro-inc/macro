@@ -244,6 +244,8 @@ async fn main() -> anyhow::Result<()> {
     let customer_repo_impl =
         CustomerRepositoryImpl::new(stripe_client.clone(), config.stripe_price_id.clone());
     let team_channels_repo_impl = TeamChannelsRepositoryImpl::new(db.clone());
+    let team_crm_settings_repo_impl =
+        teams::outbound::team_crm_settings_repo::TeamCrmSettingsRepositoryImpl::new(db.clone());
 
     let notification_ingress_service = Arc::new(notification_ingress_service);
 
@@ -256,6 +258,7 @@ async fn main() -> anyhow::Result<()> {
         user_roles_and_permissions_service.clone(),
         notification_ingress_service.clone(),
         crm_enqueuer,
+        team_crm_settings_repo_impl,
     );
 
     let github_link_service_impl = GithubLinkServiceImpl::new(

@@ -40,6 +40,29 @@ export function Root(props: PropertyRootProps) {
     if (scoped) setPortalMount(scoped);
   });
 
+  // Focus restoration helper - used by both closeEditor and onOpenChange
+  // When a value is saved, the component may remount (due to reactive updates),
+  // so we fall back to finding the trigger by property ID if the anchor is stale.
+  const restoreFocusToAnchor = () => {
+    const propertyId = local.property.propertyId;
+    const anchor = editorAnchor();
+
+    setTimeout(() => {
+      // First try the stored anchor if it's still in the DOM
+      if (anchor?.isConnected) {
+        anchor.focus();
+        return;
+      }
+
+      // Fallback: find the trigger by property ID (handles remount case)
+      const root = document.querySelector(`[data-property-id="${propertyId}"]`);
+      const trigger = root?.querySelector('button');
+      if (trigger) {
+        trigger.focus();
+      }
+    }, 0);
+  };
+
   const value: PropertyRootContextValue = {
     property: () => local.property,
     canEdit: () => local.canEdit ?? false,
@@ -59,15 +82,23 @@ export function Root(props: PropertyRootProps) {
     },
     closeEditor: () => {
       setEditorOpen(false);
+      restoreFocusToAnchor();
     },
     portalMount,
+  };
+
+  const handleOpenChange = (open: boolean) => {
+    setEditorOpen(open);
+    if (!open) {
+      restoreFocusToAnchor();
+    }
   };
 
   return (
     <PropertyRootContext.Provider value={value}>
       <Dropdown
         open={editorOpen()}
-        onOpenChange={setEditorOpen}
+        onOpenChange={handleOpenChange}
         getAnchorRect={() => editorAnchor()?.getBoundingClientRect()}
         placement="bottom-start"
       >

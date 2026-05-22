@@ -20,10 +20,18 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// Performs the company/domain/contact/contact_source upserts in a single
     /// transaction:
     ///
+    /// 0. Read `team_crm_settings.crm_enabled` for `team_id`. If missing
+    ///    or `false`, the team has CRM turned off team-wide: no rows
+    ///    are written and the method returns `Ok(())` so the caller
+    ///    can ack the job. The read happens inside this tx (after the
+    ///    advisory lock) so a concurrent `PATCH /team/crm`
+    ///    disable — which flips the flag and purges `crm_companies` in
+    ///    one tx — can't race past us and leave an orphan row.
     /// 1. Look up the company for `(team_id, domain)`.
     ///    - If a row exists with `email_sync = false` the team has opted
-    ///      this domain out (the killswitch): no rows are written and the
-    ///      method returns `Ok(())` so the caller can ack the job.
+    ///      this domain out (the per-domain killswitch): no rows are
+    ///      written and the method returns `Ok(())` so the caller can
+    ///      ack the job.
     ///    - If a row exists with `email_sync = true` it is reused.
     ///    - Otherwise a new `crm_companies` row and a matching
     ///      `crm_domains` row are inserted. The company name itself
