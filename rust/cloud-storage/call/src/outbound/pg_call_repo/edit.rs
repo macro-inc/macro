@@ -56,8 +56,8 @@ pub(super) async fn update_share_permission(
 /// The team is resolved from the call's `created_by` in either the active
 /// `calls` table or the archived `call_records` table — not from the acting
 /// user. If the creator has no team, this is a no-op. Also keeps the
-/// `calls.share_with_team` flag in sync when the call is still active so
-/// `archive_call` reflects the latest choice.
+/// `calls.share_with_team` and `call_records.share_with_team` flags in sync so
+/// reads and future archiving reflect the latest choice.
 pub(super) async fn set_share_with_team(
     transaction: &mut Transaction<'_, Postgres>,
     call_id: &Uuid,
@@ -80,6 +80,14 @@ pub(super) async fn set_share_with_team(
 
     sqlx::query!(
         r#"UPDATE calls SET share_with_team = $2 WHERE id = $1"#,
+        call_id,
+        share,
+    )
+    .execute(transaction.as_mut())
+    .await?;
+
+    sqlx::query!(
+        r#"UPDATE call_records SET share_with_team = $2 WHERE id = $1"#,
         call_id,
         share,
     )
