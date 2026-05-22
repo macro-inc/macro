@@ -57,6 +57,8 @@ interface EntityKeyPropertiesProps {
   onRefresh?: () => void;
   /** Max visible user avatars in the assignees stack before collapsing to +N. */
   maxUserStackUsers?: number;
+  /** Whether to show the edit affordance caret. */
+  showCaret?: boolean;
 }
 
 /**
@@ -108,6 +110,7 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
           properties={keyProperties}
           onRefresh={props.onRefresh}
           maxUserStackUsers={props.maxUserStackUsers}
+          showCaret={props.showCaret}
         />
         <ScopedPortal scope="split">
           <Suspense>
@@ -123,6 +126,7 @@ function KeyPropertiesRow(props: {
   properties: Accessor<PropertyT[]>;
   onRefresh?: () => void;
   maxUserStackUsers?: number;
+  showCaret?: boolean;
 }) {
   const ctx = usePropertiesContext();
 
@@ -189,6 +193,9 @@ function KeyPropertiesRow(props: {
                         </>
                       }
                     />
+                    <Show when={props.showCaret ?? true}>
+                      <Property.Caret />
+                    </Show>
                   </Property.EditTrigger>
                 </Layer>
               </Property.Tooltip>

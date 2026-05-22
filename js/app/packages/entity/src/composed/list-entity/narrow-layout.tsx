@@ -97,7 +97,11 @@ export function NarrowLayout(props: LayoutProps) {
           <Show
             when={!isTaskEntity(props.entity)}
             fallback={
-              <Entity.Properties entity={props.entity} maxUserStackUsers={0} />
+              <Entity.Properties
+                entity={props.entity}
+                maxUserStackUsers={0}
+                showCaret={false}
+              />
             }
           >
             <Entity.Timestamp entity={props.entity} />
