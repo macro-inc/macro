@@ -181,7 +181,7 @@ pub(crate) async fn populate_properties(
     }
 
     let property_ids = SystemPropertyKey::all_system_property_keys();
-    let mut properties_map =
+    let properties_map =
         properties_db_client::entity_properties::get::get_bulk_entity_properties_values_filtered(
             db,
             &entity_refs,
@@ -190,16 +190,19 @@ pub(crate) async fn populate_properties(
         .await
         .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
 
+    // `items` may repeat an id (one row per group it belongs to), so use
+    // `.get()` not `.remove()` — every occurrence needs the props.
     for item in items {
         let props = match item {
-            SoupItem::Document(x) => properties_map.remove(&x.id.to_string()),
-            SoupItem::Project(x) => properties_map.remove(&x.id.to_string()),
-            SoupItem::EmailThread(x) => properties_map.remove(&x.thread.id.to_string()),
-            SoupItem::Chat(x) => properties_map.remove(&x.id.to_string()),
+            SoupItem::Document(x) => properties_map.get(&x.id.to_string()),
+            SoupItem::Project(x) => properties_map.get(&x.id.to_string()),
+            SoupItem::EmailThread(x) => properties_map.get(&x.thread.id.to_string()),
+            SoupItem::Chat(x) => properties_map.get(&x.id.to_string()),
             SoupItem::Channel(_) | SoupItem::Call(_) => None,
         };
         if let Some(props) = props {
-            let soup_props: Vec<SoupProperty> = props.into_iter().map(SoupProperty::from).collect();
+            let soup_props: Vec<SoupProperty> =
+                props.iter().cloned().map(SoupProperty::from).collect();
             match item {
                 SoupItem::Document(x) => x.properties = soup_props,
                 SoupItem::Project(x) => x.properties = soup_props,
