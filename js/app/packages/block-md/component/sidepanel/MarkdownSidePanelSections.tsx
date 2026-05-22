@@ -11,7 +11,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { Notifications } from '@core/component/Notifications';
 import { Modals } from '@core/component/Properties/component/modal';
-import { PanelContainer } from '@core/component/Properties/component/panel';
+import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { getDefaultPinnedProperties } from '@core/component/Properties/constants';
 import {
   PropertiesProvider,
@@ -23,30 +23,36 @@ import type {
   Property,
   PropertyApiValues,
 } from '@core/component/Properties/types';
+import { hasValue } from '@core/component/Properties/utils';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
 import type { Entity, EntityType } from '@core/types';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
-
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { useNotificationsForEntity } from '@notifications';
 import Plus from '@phosphor/plus.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
+import { Property as PropertyNS } from '@property';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { commsServiceClient } from '@service-comms/client';
 import type { EntityType as PropertiesEntityType } from '@service-properties/generated/schemas/entityType';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
+import { Layer } from '@ui';
+import { cn } from '@ui/utils/classname';
 import {
   createEffect,
   createMemo,
   createResource,
   createSignal,
+  For,
+  Match,
   onCleanup,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
 import { mdStore } from '../../signal/markdownBlockData';
 
@@ -391,11 +397,11 @@ function PropertiesSectionContent(props: {
             </Show>
 
             <Show when={filteredPinnedProperties().length > 0}>
-              <PanelContainer
-                properties={filteredPinnedProperties}
-                isLoading={isLoading}
-                error={error}
-              />
+              <div class="flex flex-col items-start gap-2 py-2">
+                <For each={filteredPinnedProperties()}>
+                  {(property) => <SidePanelPropertyRow property={property} />}
+                </For>
+              </div>
             </Show>
 
             <Show when={props.canEdit}>
@@ -415,12 +421,144 @@ function AddPinnedPropertyButton() {
   const { openPropertySelector } = usePropertiesContext();
   return (
     <button
-      class="flex items-center gap-1 opacity-75 hover:opacity-50 transition-opacity"
       onClick={openPropertySelector}
+      class={cn(
+        'inline-flex items-center gap-1.5 ring ring-edge-muted bg-surface',
+        'px-2 py-1 leading-tight rounded-full text-ink-muted',
+        'hover:bg-hover hover:text-ink transition-colors'
+      )}
     >
-      <Plus class="w-3 h-3 mr-2" />
-      <span class="text-ink-muted">Add property</span>
+      <Plus class="size-3" />
+      <span>Add property</span>
     </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pinned property pills — sidepanel-specific. Each property is a pill row;
+// select/date/entity single show label-as-empty or icon+value; multi shows
+// label + per-value chips; inputs show label + inline editor.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PILL_CLASS = cn(
+  'inline-flex items-center gap-1.5 min-w-0 max-w-full ring ring-edge-muted',
+  'px-2 py-1 leading-tight text-left rounded-full bg-surface'
+);
+
+function SidePanelPropertyRow(props: { property: Property }) {
+  const ctx = usePropertiesContext();
+  const blockId = useBlockId();
+  const t = () => props.property.valueType;
+  const isMulti = () => !!props.property.isMultiSelect;
+
+  const isMultiValueRow = () =>
+    isMulti() &&
+    (t() === 'SELECT_STRING' || t() === 'SELECT_NUMBER' || t() === 'ENTITY');
+  const isInputType = () =>
+    t() === 'STRING' || t() === 'NUMBER' || t() === 'LINK' || t() === 'BOOLEAN';
+
+  return (
+    <PropertyNS.Root
+      property={props.property}
+      canEdit={ctx.canEdit}
+      onSave={ctx.saveHandler.saveProperty}
+      onRefresh={ctx.onRefresh}
+    >
+      <Switch fallback={<SinglePill property={props.property} />}>
+        <Match when={isInputType()}>
+          <InputRow property={props.property} />
+        </Match>
+        <Match when={isMultiValueRow()}>
+          <MultiValueRow property={props.property} />
+        </Match>
+      </Switch>
+      <PropertyNS.PopoverEditor
+        entitySelfFilter={{ entityType: ctx.entityType, blockId }}
+      />
+    </PropertyNS.Root>
+  );
+}
+
+function SinglePill(props: { property: Property }) {
+  const ctx = usePropertiesContext();
+  const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
+  const empty = () => !hasValue(props.property);
+
+  return (
+    <PropertyNS.Tooltip property={props.property}>
+      <Layer depth={2}>
+        <PropertyNS.EditTrigger
+          class={cn(PILL_CLASS, 'w-fit', {
+            'hover:bg-hover': !isReadOnly(),
+            'text-ink-extra-muted/70': empty(),
+          })}
+        >
+          <Show
+            when={!empty()}
+            fallback={<span>{props.property.displayName}</span>}
+          >
+            <PropertyNS.Icon
+              property={props.property}
+              class="size-3 shrink-0"
+            />
+            <PropertyNS.Text property={props.property} />
+          </Show>
+        </PropertyNS.EditTrigger>
+      </Layer>
+    </PropertyNS.Tooltip>
+  );
+}
+
+function MultiValueRow(props: { property: Property }) {
+  const ctx = usePropertiesContext();
+  const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
+  const isEntity = () => props.property.valueType === 'ENTITY';
+
+  return (
+    <PropertyNS.Tooltip property={props.property}>
+      <div class="flex flex-wrap items-center gap-1.5">
+        <span class="text-ink-muted shrink-0">
+          {props.property.displayName}
+        </span>
+        <Show when={!isEntity()} fallback={<PropertyNS.Display />}>
+          <PropertyNS.Chips
+            property={props.property}
+            renderChip={(chip) => (
+              <span class={cn(PILL_CLASS, 'text-xs max-w-35')}>
+                <PropertyValueIcon
+                  optionId={chip.key}
+                  class="size-3 shrink-0"
+                />
+                <span class="truncate">{chip.label}</span>
+              </span>
+            )}
+          />
+          <Show when={!isReadOnly()}>
+            <PropertyNS.EditTrigger
+              class={cn(
+                'inline-flex items-center justify-center size-6 rounded-full',
+                'ring ring-edge-muted bg-surface text-ink-muted',
+                'hover:bg-hover hover:text-ink transition-colors'
+              )}
+              aria-label={`Add ${props.property.displayName}`}
+            >
+              <Plus class="size-3" />
+            </PropertyNS.EditTrigger>
+          </Show>
+        </Show>
+      </div>
+    </PropertyNS.Tooltip>
+  );
+}
+
+function InputRow(props: { property: Property }) {
+  return (
+    <div class="flex items-center gap-2 min-w-0 w-full">
+      <span class="text-ink-muted shrink-0">{props.property.displayName}</span>
+      <div class="flex-1 min-w-0">
+        <PropertyNS.Display />
+      </div>
+    </div>
   );
 }
 
