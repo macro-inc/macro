@@ -11,10 +11,6 @@ import {
   type UploadInput,
   uploadFiles,
 } from '@core/util/upload';
-import {
-  ensureUploadFile,
-  type UploadFile,
-} from '@core/util/uploadFile';
 import { logger } from '@observability';
 import { fileExtension } from '@service-storage/util/filename';
 import type { LexicalEditor } from 'lexical';
@@ -33,7 +29,7 @@ const getVideoExtensions = () => blockNameToFileExtensions.video;
 
 async function processInlineMediaFiles(
   editor: LexicalEditor,
-  files: UploadFile[],
+  files: File[],
   constrainedMediaDimensions?: { width: number; height: number }
 ) {
   const IMAGE_EXTENSIONS_HEIC = getImageExtensionsHeic();
@@ -89,16 +85,14 @@ async function onFilesReady(
 ): Promise<void> {
   const IMAGE_EXTENSIONS_HEIC = getImageExtensionsHeic();
   const VIDEO_EXTENSIONS = getVideoExtensions();
-  const mediaFiles: UploadFile[] = [];
+  const mediaFiles: File[] = [];
   const filesToUpload: UploadInput[] = [];
 
   for (const entry of uploadEntries) {
     if (isFileUploadEntry(entry) && entry.isFolder) {
       filesToUpload.push(entry);
     } else {
-      const file = isFileUploadEntry(entry)
-        ? entry.file
-        : ensureUploadFile(entry);
+      const file = isFileUploadEntry(entry) ? entry.file : entry;
       const ext = fileExtension(file.name);
       if (
         ext != null &&

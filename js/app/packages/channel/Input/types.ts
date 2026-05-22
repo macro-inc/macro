@@ -1,6 +1,5 @@
 import type { EntityIconSelector } from '@core/component/EntityIcon';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
-import type { UploadFileInput } from '@core/util/uploadFile';
 import type { PersistenceKey } from '@queries/persistence';
 import type { InputAttachmentTracker as Tracker } from './attachment-tracker';
 
@@ -64,7 +63,7 @@ export type InputCallbacks = {
 
 export type InputCommands = {
   send: () => Promise<boolean>;
-  attachFiles: (files: UploadFileInput[]) => Promise<void>;
+  attachFiles: (files: File[]) => Promise<void>;
   toggleFormatRibbon: () => void;
   close: () => void;
   removeAttachment: (attachment: InputAttachmentData) => void;
@@ -73,7 +72,7 @@ export type InputCommands = {
 export type InputHandle = {
   clear: () => void;
   focus: () => void;
-  attachFiles: (files: UploadFileInput[]) => Promise<void>;
+  attachFiles: (files: File[]) => Promise<void>;
   restoreSnapshot: (snapshot: InputSnapshot) => void;
 };
 

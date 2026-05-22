@@ -5,7 +5,6 @@ import {
   ensureUploadFile,
   getUploadFilePreviewSource,
   type UploadFile,
-  type UploadFileInput,
 } from '@core/util/uploadFile';
 import type { InputAttachmentData, InputAttachmentTracker } from './types';
 import {
@@ -73,15 +72,15 @@ async function resolveMediaDimensions(
 }
 
 export async function uploadInputAttachments(options: {
-  files: UploadFileInput[];
+  files: File[];
   tracker: InputAttachmentTracker;
-  uploadFile: (file: UploadFile) => Promise<UploadResult>;
+  uploadFile: (file: File) => Promise<UploadResult>;
 }): Promise<void> {
-  for (const input of options.files) {
-    const file = ensureUploadFile(input);
+  for (const file of options.files) {
+    const uploadSource = ensureUploadFile(file);
     const pendingId = crypto.randomUUID();
-    const pendingKind = getAttachmentKindFromFile(file);
-    const previewSrc = createAttachmentPreviewSrc(file, pendingKind);
+    const pendingKind = getAttachmentKindFromFile(uploadSource);
+    const previewSrc = createAttachmentPreviewSrc(uploadSource, pendingKind);
 
     options.tracker.addAttachment({
       id: pendingId,
@@ -117,7 +116,7 @@ export async function uploadInputAttachments(options: {
 
       replacePendingAttachment(options.tracker, pendingId, uploaded);
 
-      void resolveMediaDimensions(file, pendingKind).then((dims) => {
+      void resolveMediaDimensions(uploadSource, pendingKind).then((dims) => {
         if (!dims) return;
         options.tracker.setAttachments(
           options.tracker.attachments().map((attachment) =>

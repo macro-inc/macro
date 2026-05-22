@@ -1,4 +1,3 @@
-import type { UploadFileInput } from '@core/util/uploadFile';
 import { type Accessor, createSignal } from 'solid-js';
 import type { InputAttachmentTracker } from '../Input';
 import { createInputAttachmentTracker } from '../Input';
@@ -15,12 +14,8 @@ export type ChannelDragState = {
   isValidChannelDrag: Accessor<boolean>;
   setIsDraggingOverChannel: (value: boolean) => void;
   setIsValidChannelDrag: (value: boolean) => void;
-  attachFilesToChannel:
-    | ((files: UploadFileInput[]) => Promise<void>)
-    | undefined;
-  setAttachFilesToChannel: (
-    fn: (files: UploadFileInput[]) => Promise<void>
-  ) => void;
+  attachFilesToChannel: ((files: File[]) => Promise<void>) | undefined;
+  setAttachFilesToChannel: (fn: (files: File[]) => Promise<void>) => void;
 };
 
 export function createChannelDragState(
@@ -35,9 +30,7 @@ export function createChannelDragState(
     tracker,
   });
 
-  let attachFilesToChannel:
-    | ((files: UploadFileInput[]) => Promise<void>)
-    | undefined;
+  let attachFilesToChannel: ((files: File[]) => Promise<void>) | undefined;
 
   return {
     entityDropZone,

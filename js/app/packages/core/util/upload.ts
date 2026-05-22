@@ -3,11 +3,8 @@
  *
  * Centralizes all upload operations to DSS and Static File Service
  * with standardized validation, conversion, and error handling. Browser `File`s
- * are normalized into `UploadFile`s at the module boundary. Native staged
- * uploads are not in-flight uploads; they are files already written to native
- * app storage and represented in JS by a token. The actual Rust-side network
- * upload starts only when the static-file destination path obtains a presigned
- * URL.
+ * stay as the public API; upload internals normalize them into `UploadFile`s
+ * where native staged files need special handling.
  */
 
 import { analytics } from '@app/lib/analytics';
@@ -29,7 +26,6 @@ import {
   ensureUploadFile,
   isNativeStagedUpload,
   type UploadFile,
-  type UploadFileInput,
 } from '@core/util/uploadFile';
 import {
   fileExtension,
@@ -200,13 +196,13 @@ type DssUploadFilesOptions = Omit<DssUploadFileOptions, 'unzipFolder'>;
 
 /** regular file or a directory that was zipped */
 type UploadFileEntry = {
-  file: UploadFile;
+  file: File;
   isFolder: boolean;
 };
 
-export type UploadInput = UploadFileInput | UploadFileEntry;
+export type UploadInput = File | UploadFileEntry;
 
-const getFileName = (file: Pick<UploadFile, 'name'>) =>
+const getFileName = (file: { name: string }) =>
   filenameWithoutExtension(file.name) ?? file.name;
 
 export const isFileUploadEntry = (
@@ -289,7 +285,7 @@ class UnsupportedFileTypeError extends Error {
 
 class UploadError extends Error {
   constructor(
-    file: Pick<UploadFile, 'name'>,
+    file: { name: string },
     destination?: UploadDestination,
     originalError?: Error | string
   ) {
@@ -387,21 +383,21 @@ async function uploadToStatic(file: UploadFile): Promise<StaticUploadSuccessResu
 }
 
 export function uploadFile<D extends UploadDestination = UploadDestination>(
-  file: UploadFileInput,
+  file: File,
   destinationRuleset: DestinationRuleset<D>,
   options?: DssUploadFileOptions
 ): Promise<UploadFileResult<ExtractDestination<D>>>;
 
 export async function uploadFile(
-  file: UploadFileInput,
+  file: File,
   destinationRuleset: DestinationRuleset,
   dssOptions: DssUploadFileOptions = {}
 ): Promise<MaybeUploadResult> {
-  const uploadFile = ensureUploadFile(file);
+  const uploadSource = ensureUploadFile(file);
   try {
-    validateFileSize(uploadFile);
+    validateFileSize(uploadSource);
 
-    const processedFile = await processFile(uploadFile);
+    const processedFile = await processFile(uploadSource);
 
     const destination = destinationRuleset
       ? getDestination(processedFile, destinationRuleset)
@@ -426,13 +422,13 @@ export async function uploadFile(
 
     return { failed: false, pending, ...result };
   } catch (error) {
-    const name = getFileName(uploadFile);
+    const name = getFileName(uploadSource);
     return {
       failed: true,
       error:
         error instanceof Error
           ? error
-          : new UploadError(uploadFile, 'dss', error),
+          : new UploadError(uploadSource, 'dss', error),
       name,
     };
   }
@@ -454,15 +450,14 @@ export async function uploadFiles(
     return [];
   }
 
-  const entries = fileList.map((file) => {
-    return isFileUploadEntry(file)
-      ? file
-      : { file: ensureUploadFile(file), isFolder: false };
-  });
+  const entries = fileList.map((file) =>
+    isFileUploadEntry(file) ? file : { file, isFolder: false }
+  );
   const files = entries.map((entry) => entry.file);
+  const uploadSources = files.map(ensureUploadFile);
 
   // validate all files before uploading
-  for (const file of files) {
+  for (const file of uploadSources) {
     try {
       validateFileSize(file);
     } catch (error) {
@@ -535,16 +530,16 @@ function handleUploadError(error: Error): void {
 
 function mapFileEntriesToFiles(
   entries: FileSystemFileEntry[]
-): Promise<UploadFile>[] {
+): Promise<File>[] {
   if (entries.length === 0) {
     return [];
   }
 
   return entries.map(
     (entry) =>
-      new Promise<UploadFile>((resolve, reject) => {
+      new Promise<File>((resolve, reject) => {
         entry.file(
-          (file) => resolve(createUploadFile(file)),
+          (file) => resolve(file),
           (error) => reject(error)
         );
       })
@@ -571,7 +566,7 @@ export async function handleFileFolderDrop(
       const file = await filePromise;
       if (!file) return;
       return {
-        file: createUploadFile(file),
+        file,
         isFolder: true,
       };
     }
@@ -630,7 +625,7 @@ export async function handleFolderSelect(
   const zipEntryPromises = Array.from(groups.entries()).map(
     ([folderName, group]) =>
       zipFiles(folderName, group.files, group.details).then((zip) => ({
-        file: createUploadFile(zip),
+        file: zip,
         isFolder: true,
       }))
   );

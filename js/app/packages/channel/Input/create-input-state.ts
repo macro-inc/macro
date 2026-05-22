@@ -1,5 +1,4 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
-import type { UploadFileInput } from '@core/util/uploadFile';
 import type { Accessor } from 'solid-js';
 import { createInputCommands } from './create-input-commands';
 import { createInputView } from './create-input-view';
@@ -17,7 +16,7 @@ type CreateInputStateOptions = {
   mentions: Accessor<ItemMention[]>;
   attachmentTracker: InputAttachmentTracker;
   clearComposer?: () => void;
-  attachFiles?: (files: UploadFileInput[]) => Promise<void> | void;
+  attachFiles?: (files: File[]) => Promise<void> | void;
   clearInput?: () => void;
   callbacks?: InputCallbacks;
   persistenceKey?: InputPersistenceKey;

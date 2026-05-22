@@ -8,7 +8,6 @@ import {
   ensureUploadFile,
   getUploadFileCacheKey,
   type UploadFile,
-  type UploadFileInput,
 } from '@core/util/uploadFile';
 import type { ResultError } from '@core/util/result';
 
@@ -58,7 +57,7 @@ type SFSMedia = {
 type LocalMedia = {
   type: 'local';
   url: string;
-  file: UploadFile;
+  file: File;
 };
 
 type URLMedia = {
@@ -107,7 +106,7 @@ function validateMediaFile(file: UploadFile, mediaType: MediaType): boolean {
 
 export async function addMediaFromFile(
   editor: LexicalEditor,
-  file: UploadFileInput,
+  file: File,
   mediaType: MediaType,
   constrainedMediaDimensions?: { width: number; height: number }
 ) {
@@ -116,7 +115,7 @@ export async function addMediaFromFile(
   editor.dispatchCommand(INSERT_MEDIA_COMMAND, {
     type: 'local',
     url: createUploadFilePreviewUrl(processedFile),
-    file: processedFile,
+    file: processedFile.file,
     mediaType,
     constrainedMediaDimensions,
   });
@@ -161,13 +160,13 @@ async function processFile(file: UploadFile): Promise<UploadFile> {
  * Upload files to the static file service.
  */
 async function uploadStaticFiles(
-  files: UploadFile[],
+  files: File[],
   onUpload: (id: string) => void,
   onError?: () => void
 ) {
   for (const file of files) {
     try {
-      const processedFile = await processFile(file);
+      const processedFile = await processFile(ensureUploadFile(file));
       const id = await createStaticUploadFile(processedFile);
       onUpload(id);
     } catch (_error) {
@@ -310,12 +309,12 @@ function registerMediaPlugin(editor: LexicalEditor) {
   };
 
   const handleUpload = async (
-    file: UploadFile,
+    file: File,
     key: NodeKey,
     localUrl: string,
     mediaType: MediaType
   ) => {
-    const uploadKey = await getFileKey(file);
+    const uploadKey = await getFileKey(ensureUploadFile(file));
 
     if (cachedUploads.has(uploadKey)) {
       const id = cachedUploads.get(uploadKey)!;

@@ -10,11 +10,6 @@ import type {
   UploadResult,
 } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ensureUploadFile,
-  type UploadFile,
-  type UploadFileInput,
-} from '@core/util/uploadFile';
 import { chatRuleset, uploadFile } from '@core/util/upload';
 import {
   fileExtension,
@@ -24,7 +19,7 @@ import { createSignal, untrack } from 'solid-js';
 import { asFileType } from './attachment';
 
 async function uploadFileForChat(
-  file: UploadFile,
+  file: File,
   preview: AttachmentPreview
 ): Promise<UploadResult> {
   try {
@@ -76,7 +71,7 @@ async function uploadFileForChat(
   }
 }
 
-function previewFile(file: UploadFile): AttachmentPreview | undefined {
+function previewFile(file: File): AttachmentPreview | undefined {
   const ext = fileExtension(file.name);
   const name = filenameWithoutExtension(file.name);
   if (!ext || !name) return;
@@ -106,12 +101,12 @@ function previewFile(file: UploadFile): AttachmentPreview | undefined {
   };
 }
 
-function isFileSupported(file: UploadFile): boolean {
+function isFileSupported(file: File): boolean {
   return !!previewFile(file);
 }
 
 function uploadFileForChatQueue(
-  file: UploadFile
+  file: File
 ): [SupportedResult, Promise<UploadResult> | null] {
   const preview = previewFile(file);
   if (!preview) return [{ file: file, type: 'unsupported' }, null];
@@ -197,15 +192,14 @@ export function useUploadAttachment(): UploadQueue {
     }
   };
 
-  const upload = (files: UploadFileInput[]) => {
-    const uploadFiles = files.map(ensureUploadFile);
-    const allValid = uploadFiles.every(isFileSupported);
-    if (uploadFiles.length === 0 || !allValid) {
+  const upload = (files: File[]) => {
+    const allValid = files.every(isFileSupported);
+    if (files.length === 0 || !allValid) {
       toast.failure('Invalid attachment file(s)');
       return [];
     }
 
-    const results = uploadFiles.map(uploadFileForChatQueue);
+    const results = files.map(uploadFileForChatQueue);
 
     const supported: SupportedResult[] = results.map((r) => r[0]);
 
