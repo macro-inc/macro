@@ -956,7 +956,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
               emailView: persistedFilterData.emailView,
             });
           }
-          if (isListViewID(contentId)) {
+          if (!skipFiltersOnMount && isListViewID(contentId)) {
             const tab =
               initialPersistedState.activeTab ??
               VIEW_TAB_PRESETS[contentId].default;
@@ -980,7 +980,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
         soup.grouping.setActiveGroupId(props.initialGroupBy);
       }
       // Set default tab for list views when no persisted state exists
-      if (isListViewID(contentId)) {
+      if (!skipFiltersOnMount && isListViewID(contentId)) {
         const defaultTab = VIEW_TAB_PRESETS[contentId].default;
         if (defaultTab) {
           setActiveTab(defaultTab);

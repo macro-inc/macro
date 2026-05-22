@@ -219,7 +219,10 @@ export const SoupViewContextProvider: FlowComponent<
 
   const [searchPaused, setSearchPaused] = createSignal(false);
   const [assigneeFilter, setAssigneeFilter] = createSignal<string[]>([]);
-  const [activeTab, setActiveTab] = createSignal<string | undefined>(undefined);
+  const [activeTab, setActiveTab] = useEntryState<string | undefined>(
+    'soup.tab',
+    { default: undefined }
+  );
 
   const groupByField = createMemo((): GroupByField | undefined => {
     const id = soup.grouping.activeGroupId();
