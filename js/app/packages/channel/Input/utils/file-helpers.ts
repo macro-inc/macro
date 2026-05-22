@@ -54,10 +54,11 @@ export function iconTypeFromFilename(filename: string) {
 }
 
 export function getAttachmentKindFromFile(
-  file: Pick<File, 'name' | 'type'>
+  file: { name: string; mimeType?: string; type?: string }
 ): InputAttachmentKind {
-  if (file.type.startsWith('image/')) return 'image';
-  if (file.type.startsWith('video/')) return 'video';
+  const mimeType = file.mimeType ?? file.type ?? '';
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
 
   const extension = fileExtension(file.name);
   if (!extension) return 'document';
@@ -68,7 +69,7 @@ export function getAttachmentKindFromFile(
 }
 
 export function buildUploadedAttachment(
-  file: File,
+  file: { name: string },
   pendingKind: InputAttachmentKind,
   result: UploadSuccess
 ): InputAttachmentData | undefined {

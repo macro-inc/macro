@@ -2,7 +2,12 @@
  * Unified Upload Module
  *
  * Centralizes all upload operations to DSS and Static File Service
- * with standardized validation, conversion, and error handling.
+ * with standardized validation, conversion, and error handling. Browser `File`s
+ * are normalized into `UploadFile`s at the module boundary. Native staged
+ * uploads are not in-flight uploads; they are files already written to native
+ * app storage and represented in JS by a token. The actual Rust-side network
+ * upload starts only when the static-file destination path obtains a presigned
+ * URL.
  */
 
 import { analytics } from '@app/lib/analytics';
@@ -18,7 +23,14 @@ import {
   blockAcceptsFileExtension,
 } from '@core/constant/allBlocks';
 import { heicConversionService } from '@core/heic/service';
-import { createStaticFile } from '@core/util/create';
+import {
+  createStaticUploadFile,
+  createUploadFile,
+  ensureUploadFile,
+  isNativeStagedUpload,
+  type UploadFile,
+  type UploadFileInput,
+} from '@core/util/uploadFile';
 import {
   fileExtension,
   filenameWithoutExtension,
@@ -172,7 +184,7 @@ type MaybeUploadResult = Success<DestinationUploadResult> | UploadFailure;
 
 type DestinationRuleset<D extends UploadDestination = UploadDestination> =
   | D
-  | ((file: File) => UploadDestination);
+  | ((file: UploadFile) => UploadDestination);
 
 type ExtractDestination<T> = T extends UploadDestination
   ? T
@@ -188,34 +200,34 @@ type DssUploadFilesOptions = Omit<DssUploadFileOptions, 'unzipFolder'>;
 
 /** regular file or a directory that was zipped */
 type UploadFileEntry = {
-  file: File;
+  file: UploadFile;
   isFolder: boolean;
 };
 
-export type UploadInput = File | UploadFileEntry;
+export type UploadInput = UploadFileInput | UploadFileEntry;
 
-const getFileName = (file: File) =>
+const getFileName = (file: Pick<UploadFile, 'name'>) =>
   filenameWithoutExtension(file.name) ?? file.name;
 
 export const isFileUploadEntry = (
-  file: File | UploadFileEntry
+  file: UploadInput
 ): file is UploadFileEntry => 'isFolder' in file;
 
-const getDestination = (file: File, ruleset: DestinationRuleset) => {
+const getDestination = (file: UploadFile, ruleset: DestinationRuleset) => {
   return ruleset instanceof Function ? ruleset(file) : ruleset;
 };
 
 const DEFAULT_DESTINATION_RULESET: DestinationRuleset = 'dss';
 
 // Shared ruleset for chat input -> images/videos are static for inline display, everything else to DSS
-export const chatRuleset: DestinationRuleset = (file: File) => {
-  const fileType = blockAcceptedMimetypeToFileExtension[file.type];
+export const chatRuleset: DestinationRuleset = (file: UploadFile) => {
+  const fileType = blockAcceptedMimetypeToFileExtension[file.mimeType];
   const ext = fileExtension(file.name);
 
   // Images go to static for inline display
   if (
-    file.type.startsWith('image/') ||
-    file.type.startsWith('video/') ||
+    file.mimeType.startsWith('image/') ||
+    file.mimeType.startsWith('video/') ||
     blockAcceptsFileExtension('image', fileType) ||
     blockAcceptsFileExtension('video', fileType) ||
     (ext && blockAcceptsFileExtension('image', ext)) ||
@@ -228,7 +240,7 @@ export const chatRuleset: DestinationRuleset = (file: File) => {
 };
 
 // Ruleset that forces an upload to dss.
-export const forceDssRuleset: DestinationRuleset = (_: File) => 'dss';
+export const forceDssRuleset: DestinationRuleset = (_: UploadFile) => 'dss';
 
 class FileSizeExceededError extends Error {
   public limit: number;
@@ -277,7 +289,7 @@ class UnsupportedFileTypeError extends Error {
 
 class UploadError extends Error {
   constructor(
-    file: File,
+    file: Pick<UploadFile, 'name'>,
     destination?: UploadDestination,
     originalError?: Error | string
   ) {
@@ -327,35 +339,44 @@ function humanFileSize(bytes: number, si = true, dp = 1): string {
   return `${parseFloat(bytes.toFixed(dp))} ${units[u]}`;
 }
 
-function validateFileSize(file: File): void {
+function validateFileSize(file: UploadFile): void {
   if (file.size > MAX_FILE_BYTE_SIZE) {
     throw new FileSizeExceededError(getFileName(file));
   }
 }
 
-// pre-upload processing (if needed). Currently only used for HEIC conversion
-async function processFile(file: File): Promise<File> {
-  if (heicConversionService.canConvert(file)) {
-    return await heicConversionService.convertFile(file);
+// Pre-upload processing for browser-backed files. Native staged uploads have
+// already been encoded/staged by native code, and their JS `File` is only a
+// placeholder, so browser-side conversions must not run on them.
+async function processFile(file: UploadFile): Promise<UploadFile> {
+  if (file.kind === 'browser' && heicConversionService.canConvert(file.file)) {
+    return createUploadFile(await heicConversionService.convertFile(file.file));
   }
   return file;
 }
 
 async function uploadToDSS(
-  file: File,
+  file: UploadFile,
   options: DssUploadFileOptions
 ): Promise<DssUploadSuccessResult> {
+  if (isNativeStagedUpload(file)) {
+    throw new UploadError(file, 'dss', 'Native staged uploads require static upload');
+  }
+
   try {
-    return dssUpload(file, options);
+    return dssUpload(file.file, options);
   } catch (error) {
     throw new UploadError(file, 'dss', error);
   }
 }
 
-async function uploadToStatic(file: File): Promise<StaticUploadSuccessResult> {
+async function uploadToStatic(file: UploadFile): Promise<StaticUploadSuccessResult> {
   const name = getFileName(file);
   try {
-    const id = await createStaticFile(file);
+    // `createStaticUploadFile` is the single static-file path for UploadFile:
+    // browser files are PUT from JS; native staged files are PUT from Rust using
+    // the staged token and the presigned URL requested inside that helper.
+    const id = await createStaticUploadFile(file);
     return {
       name,
       id,
@@ -366,20 +387,21 @@ async function uploadToStatic(file: File): Promise<StaticUploadSuccessResult> {
 }
 
 export function uploadFile<D extends UploadDestination = UploadDestination>(
-  file: File,
+  file: UploadFileInput,
   destinationRuleset: DestinationRuleset<D>,
   options?: DssUploadFileOptions
 ): Promise<UploadFileResult<ExtractDestination<D>>>;
 
 export async function uploadFile(
-  file: File,
+  file: UploadFileInput,
   destinationRuleset: DestinationRuleset,
   dssOptions: DssUploadFileOptions = {}
 ): Promise<MaybeUploadResult> {
+  const uploadFile = ensureUploadFile(file);
   try {
-    validateFileSize(file);
+    validateFileSize(uploadFile);
 
-    const processedFile = await processFile(file);
+    const processedFile = await processFile(uploadFile);
 
     const destination = destinationRuleset
       ? getDestination(processedFile, destinationRuleset)
@@ -404,11 +426,13 @@ export async function uploadFile(
 
     return { failed: false, pending, ...result };
   } catch (error) {
-    const name = getFileName(file);
+    const name = getFileName(uploadFile);
     return {
       failed: true,
       error:
-        error instanceof Error ? error : new UploadError(file, 'dss', error),
+        error instanceof Error
+          ? error
+          : new UploadError(uploadFile, 'dss', error),
       name,
     };
   }
@@ -430,9 +454,12 @@ export async function uploadFiles(
     return [];
   }
 
-  const files = fileList.map((file) => {
-    return isFileUploadEntry(file) ? file.file : file;
+  const entries = fileList.map((file) => {
+    return isFileUploadEntry(file)
+      ? file
+      : { file: ensureUploadFile(file), isFolder: false };
   });
+  const files = entries.map((entry) => entry.file);
 
   // validate all files before uploading
   for (const file of files) {
@@ -447,8 +474,7 @@ export async function uploadFiles(
   }
 
   const uploadPromises = files.map((file, index) => {
-    const isFolder =
-      isFileUploadEntry(fileList[index]) && fileList[index].isFolder;
+    const isFolder = entries[index].isFolder;
     const uploadOptions: DssUploadFileOptions = isFolder
       ? {
           ...dssOptions,
@@ -509,16 +535,16 @@ function handleUploadError(error: Error): void {
 
 function mapFileEntriesToFiles(
   entries: FileSystemFileEntry[]
-): Promise<File>[] {
+): Promise<UploadFile>[] {
   if (entries.length === 0) {
     return [];
   }
 
   return entries.map(
     (entry) =>
-      new Promise<File>((resolve, reject) => {
+      new Promise<UploadFile>((resolve, reject) => {
         entry.file(
-          (file) => resolve(file),
+          (file) => resolve(createUploadFile(file)),
           (error) => reject(error)
         );
       })
@@ -545,7 +571,7 @@ export async function handleFileFolderDrop(
       const file = await filePromise;
       if (!file) return;
       return {
-        file,
+        file: createUploadFile(file),
         isFolder: true,
       };
     }
@@ -604,7 +630,7 @@ export async function handleFolderSelect(
   const zipEntryPromises = Array.from(groups.entries()).map(
     ([folderName, group]) =>
       zipFiles(folderName, group.files, group.details).then((zip) => ({
-        file: zip,
+        file: createUploadFile(zip),
         isFolder: true,
       }))
   );

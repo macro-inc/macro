@@ -1,5 +1,6 @@
 import type { AttachmentMetadata as GeneratedAttachmentMetadata } from '@service-cognition/generated/schemas/attachmentMetadata';
 import type { Entity } from '@service-cognition/generated/schemas/entity';
+import type { UploadFile, UploadFileInput } from '@core/util/uploadFile';
 import type { Accessor, Setter } from 'solid-js';
 
 export type {
@@ -40,12 +41,12 @@ export type UploadResult =
     };
 
 export type SupportedResult = {
-  file: File;
+  file: UploadFile;
   type: 'ok' | 'unsupported';
 };
 
 export type UploadQueue = {
-  upload: (files: File[]) => SupportedResult[];
+  upload: (files: UploadFileInput[]) => SupportedResult[];
   uploading: Accessor<UploadingAttachment[]>;
   popComplete: Accessor<UploadResult[]>;
 };

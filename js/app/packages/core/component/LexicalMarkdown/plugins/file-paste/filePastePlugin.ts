@@ -1,10 +1,9 @@
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
-  extractFileSystemEntries,
-  readImageEntriesFromAsyncClipboard,
-} from '@core/util/dataTransfer';
+  recoverMobileClipboardImageEntries,
+  shouldUseMobileClipboardImageRecovery,
+} from '@core/util/mobileClipboardImageRecovery';
+import { extractFileSystemEntries } from '@core/util/dataTransfer';
 import { mergeRegister } from '@lexical/utils';
-import { isAndroid, isIOS } from '@solid-primitives/platform';
 import {
   COMMAND_PRIORITY_NORMAL,
   type LexicalEditor,
@@ -17,10 +16,6 @@ type FilePastePluginProps = {
     directories: FileSystemDirectoryEntry[]
   ) => void;
 };
-
-function isMobilePasteContext(): boolean {
-  return isIOS || isAndroid || isNativeMobilePlatform();
-}
 
 function registerFilePastePlugin(
   editor: LexicalEditor,
@@ -38,18 +33,22 @@ function registerFilePastePlugin(
         const { fileEntries, directoryEntries } =
           extractFileSystemEntries(data);
 
+        if (
+          directoryEntries.length === 0 &&
+          shouldUseMobileClipboardImageRecovery(data)
+        ) {
+          event.preventDefault();
+          void recoverMobileClipboardImageEntries().then((entries) => {
+            if (entries.length > 0) {
+              props.onPasteFilesAndDirs(entries, []);
+            } else if (fileEntries.length > 0) {
+              props.onPasteFilesAndDirs(fileEntries, []);
+            }
+          });
+          return true;
+        }
+
         if (fileEntries.length === 0 && directoryEntries.length === 0) {
-          // On mobile (notably iOS Safari) clipboard image data is often
-          // unreachable through the synchronous ClipboardEvent — recover it
-          // via the async Clipboard API. Kick off without awaiting so the
-          // paste event's user-activation propagates to navigator.clipboard.
-          if (isMobilePasteContext()) {
-            void readImageEntriesFromAsyncClipboard().then((entries) => {
-              if (entries.length > 0) {
-                props.onPasteFilesAndDirs(entries, []);
-              }
-            });
-          }
           return false;
         }
 

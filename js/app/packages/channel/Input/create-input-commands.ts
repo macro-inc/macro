@@ -1,3 +1,4 @@
+import type { UploadFileInput } from '@core/util/uploadFile';
 import type { Accessor } from 'solid-js';
 import type {
   InputAttachmentData,
@@ -16,7 +17,7 @@ type CreateInputCommandsDeps = {
   reset: () => void;
   clearComposer?: () => void;
   removeTrackedAttachment: (id: string) => void;
-  attachFiles?: (files: File[]) => Promise<void> | void;
+  attachFiles?: (files: UploadFileInput[]) => Promise<void> | void;
   callbacks?: InputCallbacks;
 };
 
@@ -46,7 +47,7 @@ export function createInputCommands(
         deps.setIsSending(false);
       }
     },
-    attachFiles: async (files: File[]) => {
+    attachFiles: async (files: UploadFileInput[]) => {
       if (files.length === 0) return;
       await deps.attachFiles?.(files);
     },

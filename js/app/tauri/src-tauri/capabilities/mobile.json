@@ -15,6 +15,7 @@
     "log:default",
     "auth:allow-authenticate",
     "device-info:default",
+    "pasteboard:allow-stage-pasteboard-image",
     "call-kit:allow-get-voip-token",
     "call-kit:allow-end-active-call"
   ]

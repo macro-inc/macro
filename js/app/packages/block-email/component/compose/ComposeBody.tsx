@@ -149,7 +149,7 @@ export function ComposeBody(props: {
             onDragEnd: () => setIsDragging(false),
             onDrop: (files, dirs) => {
               handleFileFolderDrop(files, dirs, (u) =>
-                props.onAddFiles?.(u.map((f) => f.file))
+                props.onAddFiles?.(u.map((f) => f.file.file))
               );
             },
           }}

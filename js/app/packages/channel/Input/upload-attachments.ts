@@ -1,6 +1,13 @@
 import { toast } from '@core/component/Toast/Toast';
 import { getImageDimensions, getVideoDimensions } from '@core/util/media';
-import type { InputAttachmentTracker } from './types';
+import {
+  createUploadFilePreviewUrl,
+  ensureUploadFile,
+  getUploadFilePreviewSource,
+  type UploadFile,
+  type UploadFileInput,
+} from '@core/util/uploadFile';
+import type { InputAttachmentData, InputAttachmentTracker } from './types';
 import {
   buildUploadedAttachment,
   getAttachmentKindFromFile,
@@ -10,21 +17,55 @@ import {
 
 export { getAttachmentKindFromFile } from './utils/file-helpers';
 
+function createAttachmentPreviewSrc(
+  file: UploadFile,
+  kind: 'image' | 'video' | 'document'
+): string | undefined {
+  if (kind === 'document') return undefined;
+
+  try {
+    return createUploadFilePreviewUrl(file);
+  } catch {
+    return undefined;
+  }
+}
+
+function replacePendingAttachment(
+  tracker: InputAttachmentTracker,
+  pendingId: string,
+  uploaded: InputAttachmentData
+) {
+  const current = tracker.attachments();
+  const pendingIndex = current.findIndex(
+    (attachment) => attachment.id === pendingId
+  );
+
+  if (pendingIndex === -1) {
+    tracker.addAttachment(uploaded);
+    return;
+  }
+
+  const next = [...current];
+  next[pendingIndex] = uploaded;
+  tracker.setAttachments(next);
+}
+
 /**
  * Resolve media dimensions from a File for image/video attachments.
  * Returns undefined for documents or on failure.
  */
 async function resolveMediaDimensions(
-  file: File,
+  file: UploadFile,
   kind: 'image' | 'video' | 'document'
 ): Promise<{ width: number; height: number } | undefined> {
   if (kind === 'document') return undefined;
   try {
+    const source = getUploadFilePreviewSource(file);
     const dims =
       kind === 'image'
-        ? await getImageDimensions(file)
-        : await getVideoDimensions(file);
-    if (dims.width > 0 && dims.height > 0) return dims;
+        ? await getImageDimensions(source)
+        : await getVideoDimensions(source);
+    if (dims && dims.width > 0 && dims.height > 0) return dims;
   } catch {
     // Dimension extraction is best-effort
   }
@@ -32,13 +73,15 @@ async function resolveMediaDimensions(
 }
 
 export async function uploadInputAttachments(options: {
-  files: File[];
+  files: UploadFileInput[];
   tracker: InputAttachmentTracker;
-  uploadFile: (file: File) => Promise<UploadResult>;
+  uploadFile: (file: UploadFile) => Promise<UploadResult>;
 }): Promise<void> {
-  for (const file of options.files) {
+  for (const input of options.files) {
+    const file = ensureUploadFile(input);
     const pendingId = crypto.randomUUID();
     const pendingKind = getAttachmentKindFromFile(file);
+    const previewSrc = createAttachmentPreviewSrc(file, pendingKind);
 
     options.tracker.addAttachment({
       id: pendingId,
@@ -49,13 +92,11 @@ export async function uploadInputAttachments(options: {
           ? iconTypeFromFilename(file.name)
           : undefined,
       pending: true,
+      previewSrc,
     });
 
     try {
-      const [result, dims] = await Promise.all([
-        options.uploadFile(file),
-        resolveMediaDimensions(file, pendingKind),
-      ]);
+      const result = await options.uploadFile(file);
 
       if (result.failed) {
         options.tracker.removeAttachment(pendingId);
@@ -70,13 +111,22 @@ export async function uploadInputAttachments(options: {
         continue;
       }
 
-      if (dims) {
-        uploaded.width = dims.width;
-        uploaded.height = dims.height;
+      if (previewSrc && uploaded.kind !== 'document') {
+        uploaded.previewSrc = previewSrc;
       }
 
-      options.tracker.removeAttachment(pendingId);
-      options.tracker.addAttachment(uploaded);
+      replacePendingAttachment(options.tracker, pendingId, uploaded);
+
+      void resolveMediaDimensions(file, pendingKind).then((dims) => {
+        if (!dims) return;
+        options.tracker.setAttachments(
+          options.tracker.attachments().map((attachment) =>
+            attachment.id === uploaded.id
+              ? { ...attachment, width: dims.width, height: dims.height }
+              : attachment
+          )
+        );
+      });
     } catch (error) {
       console.error('failed to upload attachment', error);
       options.tracker.removeAttachment(pendingId);

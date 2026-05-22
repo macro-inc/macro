@@ -23,15 +23,6 @@ impl ShareTargetPlatform for ShareTargetPlatformImpl {
         Ok(())
     }
 
-    async fn upload_shared_file_to_presigned_url(
-        _app: AppHandle,
-        _token: String,
-        _upload_url: String,
-        _mime_type: String,
-    ) -> Result<(), String> {
-        Ok(())
-    }
-
     async fn read_shared_file_text(_app: AppHandle, _token: String) -> Result<String, String> {
         Ok(String::new())
     }
