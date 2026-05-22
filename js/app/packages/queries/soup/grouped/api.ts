@@ -3,6 +3,7 @@ import type { GroupedSoupPage as WireGroupedSoupPage } from '@service-storage/ge
 import type { SoupApiItem } from '@service-storage/generated/schemas/soupApiItem';
 import { GROUPED_SUBQUERY_MARKER } from '../keys';
 import {
+  GROUP_BY_TYPES,
   type GroupByField,
   type GroupedSoupPage,
   type GroupMeta,
@@ -39,7 +40,7 @@ export function parseGroupMeta(raw: ApiGroupMeta): GroupMeta {
 }
 
 export function parseGroupedSoupPage(
-  response: WireGroupedSoupPage,
+  response: WireGroupedSoupPage
 ): GroupedSoupPage {
   return {
     items: response.items,
@@ -48,44 +49,40 @@ export function parseGroupedSoupPage(
   };
 }
 
-/**
- * Read the `GroupByField` slot from a soup astItems-prefixed queryKey.
- * Returns undefined when the slot isn't present or isn't a GroupByField.
- */
 export function extractGroupByFromKey(
-  queryKey: readonly unknown[],
+  queryKey: readonly unknown[]
 ): GroupByField | undefined {
-  // soupKeys.astItems builds: ['soup', 'astItems', params, body, groupBy]
-  const candidate = queryKey[4];
-  if (!candidate || typeof candidate !== 'object') return;
-  const obj = candidate as { type?: unknown };
-  if (typeof obj.type !== 'string') return;
-  return candidate as GroupByField;
+  for (const v of queryKey) {
+    if (!v || typeof v !== 'object') continue;
+    const t = (v as { type?: unknown }).type;
+    if (
+      typeof t === 'string' &&
+      GROUP_BY_TYPES.includes(t as GroupByField['type'])
+    ) {
+      return v as GroupByField;
+    }
+  }
+  return;
 }
 
-/**
- * Read the per-group key from a queryKey marked as a per-group subquery
- * (last element follows GROUPED_SUBQUERY_MARKER).
- */
 export function extractPerGroupKeyFromQueryKey(
-  queryKey: readonly unknown[],
+  queryKey: readonly unknown[]
 ): string | undefined {
-  const len = queryKey.length;
-  if (len < 2) return;
-  if (queryKey[len - 2] !== GROUPED_SUBQUERY_MARKER) return;
-  const key = queryKey[len - 1];
+  const markerIdx = queryKey.indexOf(GROUPED_SUBQUERY_MARKER);
+  if (markerIdx === -1) return;
+  const key = queryKey[markerIdx + 1];
   return typeof key === 'string' ? key : undefined;
 }
 
 /**
  * Compute the group keys an item belongs to under the given grouping.
- * Returns `undefined` when the grouping can't be reproduced client-side
- * (date buckets, non-categorical properties) — caller should invalidate.
+ * Returns `undefined` when bucketing can't be reproduced client-side
+ * (date, non-categorical property) — caller should invalidate.
  */
 export function computeGroupKeysForItem(
   item: SoupApiItem,
-  groupBy: GroupByField | undefined,
-): string[] | undefined {
+  groupBy: GroupByField | undefined
+) {
   if (!groupBy) return;
 
   switch (groupBy.type) {
@@ -94,7 +91,6 @@ export function computeGroupKeysForItem(
 
     case 'project': {
       if (item.tag === 'channel' || item.tag === 'call') return;
-
       const projectId = (item.data as { projectId?: string | null }).projectId;
       return [projectId ?? NOT_SET_GROUP_KEY];
     }
@@ -112,7 +108,7 @@ export function computeGroupKeysForItem(
       const prop = properties.find(
         (p) =>
           (p.definition as Record<string, unknown> | undefined)?.id ===
-          groupBy.propertyDefinitionId,
+          groupBy.propertyDefinitionId
       );
       if (!prop) return [NOT_SET_GROUP_KEY];
 
@@ -128,11 +124,10 @@ export function computeGroupKeysForItem(
       if (value.type === 'EntityReference' && Array.isArray(value.value)) {
         return (value.value as Array<{ id: string }>).map((r) => r.id);
       }
-
-      return; // Non-categorical: backend bucketing is opaque.
+      return;
     }
 
     case 'date':
-      return; // Server-side date bucketing is opaque.
+      return;
   }
 }

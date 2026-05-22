@@ -662,13 +662,15 @@ describe('optimisticUpdateSoupEntity — cross-group move', () => {
     ];
     const key = seedGroupedAstQuery(mockGroupedParentCache(items, groups));
 
-    // Pre-populate cache with the merged item state so the reconciliation
-    // pass sees the new property value (normy's setNormalizedData is mocked).
-    const moved = mockTaskItem('a-1', 'done');
+    // Simulate what normy would do during the merge: the canonical entity
+    // (status now `done`) is what reconcile reads from normy's store.
+    const merged = mockTaskItem('a-1', 'done');
+    mockNormalizer.getObjectById.mockReturnValue(merged);
+    // The cache itself also reflects the merge in-place (normy mutates).
     const cached = testQueryClient.getQueryData<
       InfiniteData<SoupAstItemsGroupedPage, unknown>
     >(key)!;
-    cached.pages[0].items['a-1'] = moved;
+    cached.pages[0].items['a-1'] = merged;
 
     optimisticUpdateSoupEntity({
       tag: 'document',
@@ -681,10 +683,8 @@ describe('optimisticUpdateSoupEntity — cross-group move', () => {
     >(key)!;
     const page = after.pages[0];
 
-    // Items pool untouched in identity (still contains a-1, a-2, b-1).
     expect(page.items['a-1']).toBeDefined();
 
-    // a-1 moved from in_progress to top of done.
     const inProgress = page.groups.find((g) => g.key === 'in_progress')!;
     const done = page.groups.find((g) => g.key === 'done')!;
     expect(inProgress.itemIds).toEqual(['a-2']);
@@ -697,6 +697,10 @@ describe('optimisticUpdateSoupEntity — cross-group move', () => {
     const items = [mockTaskItem('a-1', 'in_progress')];
     const groups = [buildGroup('in_progress', ['a-1'], 1, 0)];
     const key = seedGroupedAstQuery(mockGroupedParentCache(items, groups));
+
+    mockNormalizer.getObjectById.mockReturnValue(
+      mockTaskItem('a-1', 'in_progress'),
+    );
 
     optimisticUpdateSoupEntity({
       tag: 'document',

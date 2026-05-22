@@ -17,6 +17,13 @@ export type GroupByField =
       entityType?: PropertyEntityType;
     };
 
+export const GROUP_BY_TYPES: readonly GroupByField['type'][] = [
+  'date',
+  'entity_type',
+  'project',
+  'property',
+];
+
 export type PropertyEntityType =
   | 'CHANNEL'
   | 'CHAT'

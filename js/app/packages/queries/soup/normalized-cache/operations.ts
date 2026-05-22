@@ -39,13 +39,9 @@ import type {
 
 /**
  * Optimistically update a single soup entity across all queries that
- * reference it. Returns a transaction whose `rollback()` restores affected
- * queries.
- *
- * After normy's field merge, reconciles group membership in every grouped
- * cache containing this entity. If the merged item's bucket changed (e.g.
- * status while grouped by status), it's moved between groups by mutating
- * `itemIds` arrays — the items pool itself stays untouched. Date and
+ * reference it. After normy's field merge, reconciles group membership in
+ * every grouped cache containing this entity (`itemIds`-only mutations;
+ * the items pool itself isn't moved between groups). Date and
  * non-categorical groupings fall back to invalidation.
  *
  * Partial shape:
@@ -58,8 +54,6 @@ export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
   const normalizer = getSoupNormalizer();
   const normKey = getNormalizationObjectKey(partial);
 
-  // Snapshot dependent caches for the field-merge rollback, plus all astItems
-  // caches for the reconcile-pass rollback (moves may touch non-dependents).
   const dependentKeys = normKey
     ? normalizer.getDependentQueriesByIds([normKey])
     : [];
@@ -88,65 +82,19 @@ export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
   };
 }
 
-/** Walk every grouped cache containing the entity; move it if its new group
- * keys differ from current membership. Pure `itemIds` mutations. */
 function reconcileGroupMembership(entityId: string): void {
-  reconcileParentAstItems(entityId);
-  reconcilePerGroupCaches(entityId);
-}
+  const entity = getSoupEntityById(entityId);
+  if (!entity) return;
 
-function reconcileParentAstItems(entityId: string): void {
-  const parents = queryClient.getQueriesData<
-    InfiniteData<SoupAstItemsPage, unknown>
-  >({
-    predicate: (q) =>
-      partialMatchKey(q.queryKey, soupKeys.astItems._def) &&
-      !isGroupedSubqueryKey(q.queryKey),
-  });
+  const caches = queryClient.getQueriesData<
+    InfiniteData<{ pages: unknown[] }, unknown> | undefined
+  >({ queryKey: soupKeys.astItems._def });
 
-  for (const [key, prev] of parents) {
-    if (!prev?.pages?.length) continue;
-
-    const firstPage = prev.pages[0];
-    if (firstPage?.kind !== 'grouped') continue;
-    if (!(entityId in firstPage.items)) continue;
-
-    const item = firstPage.items[entityId];
-    const newKeys = computeGroupKeysForItem(item, extractGroupByFromKey(key));
-    if (newKeys === undefined) {
-      queryClient.invalidateQueries({ queryKey: key });
-      continue;
-    }
-
-    const oldKeys = firstPage.groups
-      .filter((g) => g.itemIds.includes(entityId))
-      .map((g) => g.key);
-    if (sameKeys(oldKeys, newKeys)) continue;
-
-    const moved = moveItemBetweenGroups(firstPage, entityId, newKeys);
-    queryClient.setQueryData<InfiniteData<SoupAstItemsPage, unknown>>(key, {
-      ...prev,
-      pages: [moved, ...prev.pages.slice(1)],
-    });
-  }
-}
-
-function reconcilePerGroupCaches(entityId: string): void {
-  const subs = queryClient.getQueriesData<
-    InfiniteData<GroupedSoupPage, unknown>
-  >({ predicate: (q) => isGroupedSubqueryKey(q.queryKey) });
-
-  for (const [key, prev] of subs) {
-    if (!prev?.pages?.length) continue;
-
-    const myGroupKey = extractPerGroupKeyFromQueryKey(key);
-    if (myGroupKey === undefined) continue;
-
-    const canonical = getSoupEntityById(entityId);
-    if (!canonical) continue;
+  for (const [key, prev] of caches) {
+    if (!prev || !Array.isArray(prev.pages) || prev.pages.length === 0) continue;
 
     const newKeys = computeGroupKeysForItem(
-      canonical,
+      entity,
       extractGroupByFromKey(key),
     );
     if (newKeys === undefined) {
@@ -154,52 +102,52 @@ function reconcilePerGroupCaches(entityId: string): void {
       continue;
     }
 
-    const isHere = prev.pages.some((p) => entityId in p.items);
-    const belongsHere = newKeys.includes(myGroupKey);
-    if (isHere === belongsHere) continue;
-
-    if (isHere) {
-      queryClient.setQueryData<InfiniteData<GroupedSoupPage, unknown>>(key, {
-        ...prev,
-        pages: prev.pages.map((p) =>
-          removeFromGroupedPage(p, new Set([entityId])),
-        ),
-      });
-      continue;
-    }
-
-    queryClient.setQueryData<InfiniteData<GroupedSoupPage, unknown>>(key, {
-      ...prev,
-      pages: prev.pages.map((p, i) =>
-        i === 0 ? addToGroupedPage(p, canonical, myGroupKey) : p,
-      ),
+    let anyChanged = false;
+    const pages = prev.pages.map((page) => {
+      if (!isGroupedPage(page)) return page;
+      const next = reconcileGroupedPage(page, entityId, newKeys, entity);
+      if (next !== page) anyChanged = true;
+      return next;
     });
+    if (!anyChanged) continue;
+
+    queryClient.setQueryData(key, { ...prev, pages });
   }
 }
 
-function sameKeys(a: readonly string[], b: readonly string[]): boolean {
-  if (a.length !== b.length) return false;
-  const setA = new Set(a);
-  for (const k of b) if (!setA.has(k)) return false;
-  return true;
+/** Runtime guard for the normalized grouped page shape — matches both the
+ * parent's `kind: 'grouped'` page and per-group `GroupedSoupPage`. */
+function isGroupedPage(
+  page: unknown,
+): page is { items: Record<string, SoupApiItem>; groups: GroupMeta[] } {
+  if (!page || typeof page !== 'object') return false;
+  const p = page as Record<string, unknown>;
+  if (!Array.isArray(p.groups) || p.groups.length === 0) return false;
+  return (
+    p.items !== null &&
+    typeof p.items === 'object' &&
+    !Array.isArray(p.items)
+  );
 }
 
-/** Move an entity between groups by mutating `itemIds` arrays. The item is
- * prepended to each new group it joins, removed from each old group it left,
- * and totalCount is adjusted. The items pool is untouched. */
-function moveItemBetweenGroups(
-  page: SoupAstItemsGroupedPage,
-  entityId: string,
-  newKeys: string[],
-): SoupAstItemsGroupedPage {
-  const newSet = new Set(newKeys);
+/** Add/remove the entity in each group based on `newKeys`, then drop it
+ * from the items pool if no group in the page references it anymore.
+ * Returns the same page reference when nothing changed. */
+function reconcileGroupedPage<
+  P extends { items: Record<string, SoupApiItem>; groups: GroupMeta[] },
+>(page: P, entityId: string, newKeys: readonly string[], entity: SoupApiItem): P {
+  const newKeySet = new Set(newKeys);
+  const items = { ...page.items };
+  let touched = false;
 
   const groups = page.groups.map((g) => {
-    const wasIn = g.itemIds.includes(entityId);
-    const goesIn = newSet.has(g.key);
-    if (wasIn === goesIn) return g;
+    const inItemIds = g.itemIds.includes(entityId);
+    const inNewKeys = newKeySet.has(g.key);
+    if (inItemIds === inNewKeys) return g;
+    touched = true;
 
-    if (goesIn) {
+    if (inNewKeys) {
+      items[entityId] = entity;
       return {
         ...g,
         itemIds: [entityId, ...g.itemIds],
@@ -213,10 +161,15 @@ function moveItemBetweenGroups(
     };
   });
 
-  return { ...page, groups };
+  if (!touched) return page;
+
+  if (!groups.some((g) => g.itemIds.includes(entityId))) {
+    delete items[entityId];
+  }
+
+  return { ...page, items, groups };
 }
 
-/** Read an entity from normy's normalized store by ID. Returns `undefined` if not cached. */
 export function getSoupEntityById(entityId: string): SoupApiItem | undefined {
   return (getSoupNormalizer().getObjectById(`soup:${entityId}`) ?? undefined) as
     | SoupApiItem
@@ -245,12 +198,11 @@ export function invalidateAllSoup(): void {
   });
 }
 
-/** O(1) check whether an entity exists in normy's normalized store. */
 export function hasSoupEntity(entityId: string): boolean {
   return getSoupNormalizer().getObjectById(`soup:${entityId}`) != null;
 }
 
-/** Extract the canonical entity ID from a SoupApiItem (handles channel's nested `data.channel.id` and callRecord's `data.callId`). */
+/** Channels nest the id under `data.channel.id`; call records under `data.callId`. */
 export function getSoupItemId(item: SoupApiItem): string {
   switch (item.tag) {
     case 'channel':
@@ -262,8 +214,6 @@ export function getSoupItemId(item: SoupApiItem): string {
   }
 }
 
-/** Add an item to a grouped page's normalized pool and prepend its id to the
- * target groups' `itemIds`. Untargeted groups are unchanged. */
 function addToGroupedPage<P extends { items: Record<string, SoupApiItem>; groups: GroupMeta[] }>(
   page: P,
   item: SoupApiItem,
@@ -283,8 +233,6 @@ function addToGroupedPage<P extends { items: Record<string, SoupApiItem>; groups
   return { ...page, items, groups };
 }
 
-/** Remove a set of ids from a grouped page: drop them from the pool and
- * filter each group's `itemIds`, decrementing `totalCount` per group. */
 function removeFromGroupedPage<P extends { items: Record<string, SoupApiItem>; groups: GroupMeta[] }>(
   page: P,
   ids: Set<string>,
@@ -311,18 +259,14 @@ function removeFromGroupedPage<P extends { items: Record<string, SoupApiItem>; g
 
 /**
  * Insert a new entity into the first page of every active soup list query.
- * For non-grouped pages, prepends to the items array. For grouped pages,
- * derives the item's target group keys, adds it to the items pool, and
- * prepends its id to each matching group's `itemIds`. If the grouping can't
- * be derived client-side (date / non-categorical property), falls back to
- * invalidating grouped caches.
+ * Grouped pages: derive the item's target groups via `computeGroupKeysForItem`
+ * and splice into each. Date / non-categorical groupings invalidate.
  */
 export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
   const previous = snapshotSoup();
   const id = getSoupItemId(item);
   let needGroupedInvalidation = false;
 
-  // Legacy `items` queries (always flat).
   queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
     {
       predicate: (query) => {
@@ -387,7 +331,6 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
     });
   }
 
-  // Per-group caches: add to those whose group is in the item's keys.
   const subs = queryClient.getQueriesData<
     InfiniteData<GroupedSoupPage, unknown>
   >({ predicate: (q) => isGroupedSubqueryKey(q.queryKey) });
@@ -402,7 +345,7 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
       continue;
     }
     if (!newKeys.includes(myGroupKey)) continue;
-    if (prev.pages.some((p) => id in p.items)) continue; // already present
+    if (prev.pages.some((p) => id in p.items)) continue;
 
     queryClient.setQueryData<InfiniteData<GroupedSoupPage, unknown>>(key, {
       ...prev,
@@ -421,18 +364,12 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
   return { rollback: () => restoreSnapshot(previous) };
 }
 
-/**
- * Optimistically remove entities from all soup list queries.
- * For grouped pages, removes from the items pool and filters each group's
- * `itemIds`, decrementing `totalCount` per affected group.
- */
 export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
   queryClient.cancelQueries({ queryKey: soupKeys.items._def });
   queryClient.cancelQueries({ queryKey: soupKeys.astItems._def });
 
   const previous = snapshotSoup();
 
-  // Legacy `items` queries.
   queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
     {
       predicate: (q) => partialMatchKey(q.queryKey, soupKeys.items._def),
@@ -452,7 +389,6 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
     },
   );
 
-  // Parent astItems queries.
   queryClient.setQueriesData<InfiniteData<SoupAstItemsPage, unknown>>(
     {
       predicate: (q) =>
@@ -477,7 +413,6 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
     },
   );
 
-  // Per-group caches.
   queryClient.setQueriesData<InfiniteData<GroupedSoupPage, unknown>>(
     { predicate: (q) => isGroupedSubqueryKey(q.queryKey) },
     (prev) => {
@@ -492,10 +427,6 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
   return { rollback: () => restoreSnapshot(previous) };
 }
 
-/**
- * Optimistically remove entities from all search result queries.
- * Same cancel-snapshot-mutate pattern as `removeSoupEntities` but targets search queries.
- */
 export function removeSearchEntities(entityIds: Set<string>): SoupTransaction {
   queryClient.cancelQueries({ queryKey: soupKeys.search._def });
 
