@@ -2,7 +2,6 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
 import IconX from '@phosphor/x.svg';
-import type { StripeProductTier } from '@service-auth/generated/schemas/stripeProductTier';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -31,11 +30,10 @@ const PaywallComponentNew = (props: PaywallProps) => {
   const handleCheckout = async () => {
     try {
       await props.cb();
-      const url = await stripeServiceClient.createCheckoutSession({
+      const url = await stripeServiceClient.createCheckoutSessionV2({
         type: props.customType
           ? props.customType
           : (props.errorKey ?? undefined),
-        tier: 'premium' as StripeProductTier,
       });
       analytics.track('subscription_start', {
         type: 'premium',

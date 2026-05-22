@@ -28,7 +28,7 @@ const PaywallTeamOwnerView = (props: PaywallTeamOwnerViewProps) => {
 
   return (
     <div class="relative space-y-2 w-full">
-      <div class="p-4 sm:p-5 border border-accent bg-active flex flex-col gap-3 text-left rounded-sm">
+      <div class="p-4 sm:p-5 bg-active flex flex-col gap-3 text-left rounded-sm">
         <div class="flex justify-between items-start">
           <div class="font-semibold text-ink text-base sm:text-lg">
             {props.team.name}

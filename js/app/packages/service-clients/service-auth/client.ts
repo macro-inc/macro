@@ -434,6 +434,32 @@ export const authServiceClient = {
     ).map((result) => result.url);
   },
 
+  async createCheckoutSessionV2(args: {
+    successUrl: string;
+    cancelUrl: string;
+    discount?: string | null;
+    metadata?: {
+      gaClientId?: string | null;
+      fbp?: string | null;
+      fbc?: string | null;
+    };
+  }) {
+    return (
+      await fetchWithAuth<{ url: string }>(
+        `${authHost}/user/stripe/checkoutv2`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            successUrl: args.successUrl,
+            cancelUrl: args.cancelUrl,
+            discount: args.discount ?? undefined,
+            metadata: args.metadata,
+          }),
+        }
+      )
+    ).map((result) => result.url);
+  },
+
   async createPortalSession(args: { returnUrl: string }) {
     return (
       await fetchWithAuth<{ url: string }>(`${authHost}/user/stripe/portal`, {
