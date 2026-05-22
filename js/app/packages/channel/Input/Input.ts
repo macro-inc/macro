@@ -8,6 +8,7 @@ import { Footer } from './Footer';
 import { FormatRibbon } from './FormatRibbon';
 import {
   AttachFilesAction,
+  AttachNativePhotosAction,
   CloseReplyAction,
   DiscardDraftAction,
   ToggleFormatAction,
@@ -28,6 +29,7 @@ export const Input = {
   Footer,
   Actions,
   AttachFilesAction,
+  AttachNativePhotosAction: AttachNativePhotosAction,
   ToggleFormatAction,
   CloseReplyAction,
   DiscardDraftAction,

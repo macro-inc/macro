@@ -1,5 +1,7 @@
 import FormatIcon from '@phosphor/text-aa.svg';
 import TrashIcon from '@phosphor/trash.svg';
+import { pickNativePhotoLibraryImages } from '@core/util/nativePhotoLibrary';
+import ImageIcon from '@phosphor-icons/core/regular/image.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import type { JSX } from 'solid-js';
 import { InputActionButton } from './ActionButton';
@@ -39,6 +41,26 @@ export function AttachFilesAction() {
         <PaperclipIcon />
       </InputActionButton>
     </>
+  );
+}
+
+export function AttachNativePhotosAction() {
+  const commands = useInputCommands();
+
+  const onAttachPhotos = async () => {
+    const files = await pickNativePhotoLibraryImages();
+    if (files.length > 0) {
+      await commands.attachFiles(files);
+    }
+  };
+
+  return (
+    <InputActionButton
+      label="Attach photos"
+      onClick={() => void onAttachPhotos()}
+    >
+      <ImageIcon />
+    </InputActionButton>
   );
 }
 

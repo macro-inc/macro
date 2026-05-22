@@ -26,7 +26,8 @@
         "scope": {
           "allow": [
             "$APPCACHE/ios-share-staging/**",
-            "$APPCACHE/ios-pasteboard-staging/**"
+            "$APPCACHE/ios-pasteboard-staging/**",
+            "$APPCACHE/ios-photo-library-staging/**"
           ],
           "deny": []
         }

@@ -1,13 +1,14 @@
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 
 /**
- * Native pasteboard staging bridge.
+ * Native staged upload bridge.
  *
- * iOS pasteboard images are staged on disk and represented briefly as
- * placeholder `File`s so they can cross existing browser paste boundaries.
- * Staging does not start a network upload; the Rust upload starts later, after
- * JS obtains a presigned URL.
+ * Some iOS sources, like pasteboard images and photo-library picks, stage bytes
+ * on disk and hand JS a placeholder `File`. Staging does not start a network
+ * upload; the Rust upload starts later, after JS obtains a presigned URL.
  */
+
+export type NativeStagedUploadSource = 'pasteboard' | 'photo-library';
 
 export type NativeStagedUploadData = {
   token: string | null;
@@ -18,7 +19,7 @@ export type NativeStagedUploadData = {
 };
 
 export type NativeStagedUpload = {
-  source: 'pasteboard';
+  source: NativeStagedUploadSource;
   token: string;
   name: string;
   mimeType: string;
@@ -29,6 +30,7 @@ export type NativeStagedUpload = {
 const nativeStagedUploads = new WeakMap<File, NativeStagedUpload>();
 
 export function createNativeStagedUploadFile(
+  source: NativeStagedUploadSource,
   image: NativeStagedUploadData
 ): File | null {
   if (!image.token || !image.name || !image.mimeType || image.size == null) {
@@ -37,7 +39,7 @@ export function createNativeStagedUploadFile(
 
   const file = new File([], image.name, { type: image.mimeType });
   nativeStagedUploads.set(file, {
-    source: 'pasteboard',
+    source,
     token: image.token,
     name: image.name,
     mimeType: image.mimeType,

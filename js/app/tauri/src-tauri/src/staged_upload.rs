@@ -8,10 +8,11 @@ use url::Url;
 use uuid::Uuid;
 
 #[derive(Clone, Copy, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub(crate) enum StagedUploadSource {
     Share,
     Pasteboard,
+    PhotoLibrary,
 }
 
 impl StagedUploadSource {
@@ -19,6 +20,7 @@ impl StagedUploadSource {
         match self {
             Self::Share => "ios-share-staging",
             Self::Pasteboard => "ios-pasteboard-staging",
+            Self::PhotoLibrary => "ios-photo-library-staging",
         }
     }
 
@@ -26,6 +28,7 @@ impl StagedUploadSource {
         match self {
             Self::Share => "share-stage-",
             Self::Pasteboard => "paste-stage-",
+            Self::PhotoLibrary => "photo-stage-",
         }
     }
 
@@ -33,6 +36,7 @@ impl StagedUploadSource {
         match self {
             Self::Share => "staged shared file",
             Self::Pasteboard => "staged pasteboard image",
+            Self::PhotoLibrary => "staged photo library image",
         }
     }
 
@@ -40,6 +44,7 @@ impl StagedUploadSource {
         match self {
             Self::Share => "staged shared file not found",
             Self::Pasteboard => "staged pasteboard image not found",
+            Self::PhotoLibrary => "staged photo library image not found",
         }
     }
 }

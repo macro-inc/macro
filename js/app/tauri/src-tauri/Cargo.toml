@@ -72,6 +72,7 @@ tauri-plugin-haptics = "2"
 tauri-plugin-call-kit = { path = "../callkit_plugin" }
 tauri-plugin-input-accessory = { path = "../input_accessory_plugin" }
 tauri-plugin-pasteboard = { path = "../pasteboard_plugin" }
+tauri-plugin-photo-library = { path = "../photo_library_plugin" }
 # Used to call NSFileManager from Rust to get the App Group container path.
 # This version is already in the dependency tree via wry/tao.
 objc2 = "0.5"

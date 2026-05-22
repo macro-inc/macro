@@ -16,6 +16,7 @@ export { FormatRibbon } from './FormatRibbon';
 export { Input } from './Input';
 export {
   AttachFilesAction,
+  AttachNativePhotosAction as AttachPhotosAction,
   CloseReplyAction,
   DiscardDraftAction,
   ToggleFormatAction,

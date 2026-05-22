@@ -3,6 +3,7 @@ import { staticFileClient } from '@service-static-files/client';
 import { contentHash } from './hash';
 import {
   getNativeStagedUpload,
+  type NativeStagedUploadSource,
   uploadNativeStagedFileToPresignedUrl,
 } from './nativeStagedUpload';
 
@@ -25,7 +26,7 @@ export type BrowserUploadFile = {
 export type NativeStagedUploadFile = {
   kind: 'native-staged';
   file: File;
-  source: 'pasteboard';
+  source: NativeStagedUploadSource;
   token: string;
   name: string;
   mimeType: string;

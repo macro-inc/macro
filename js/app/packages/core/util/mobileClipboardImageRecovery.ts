@@ -58,7 +58,7 @@ async function readImageEntryFromNativePasteboard(): Promise<FileSystemFileEntry
     const image = await invoke<NativeStagedUploadData>(
       'plugin:pasteboard|stage_pasteboard_image'
     );
-    const file = createNativeStagedUploadFile(image);
+    const file = createNativeStagedUploadFile('pasteboard', image);
     return file ? createSyntheticFileEntry(file) : null;
   } catch {
     return null;
