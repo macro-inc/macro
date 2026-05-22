@@ -86,9 +86,12 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             calendar_only,
         } = input;
 
-        if !crm_domains.is_empty() && !crm_addresses.is_empty() {
-            return Err(ExpandErr::CrmDomainsAndAddressesMutuallyExclusive);
-        }
+        // Expand crm_domains / crm_addresses via the shared helper so the
+        // raw AST endpoint and the typed POST stay byte-identical. We
+        // discard the scope tag here — the tag is stamped onto
+        // [`crate::ast::EmailFilterAst`] by the caller
+        // ([`crate::ast::EntityFilterAst::new_from_filters`]).
+        let crm_node = expand_crm_scope(crm_domains, crm_addresses)?.map(|(tree, _)| tree);
 
         fn map_email(s: String) -> Email {
             if let Ok(e) = EmailStr::parse_from_str(&s) {
@@ -139,30 +142,6 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             .filter(|v| *v)
             .map(|v| Expr::Literal(EmailLiteral::CalendarOnly(v)));
 
-        let crm_domain_node = crm_domains
-            .into_iter()
-            .map(|d| -> Result<Expr<EmailLiteral>, ExpandErr> {
-                if !looks_like_domain(&d) {
-                    return Err(ExpandErr::InvalidCrmDomain(d));
-                }
-                Ok(any_direction(Email::Domain(d.to_lowercase())))
-            })
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .reduce(Expr::or);
-
-        let crm_address_node = crm_addresses
-            .into_iter()
-            .map(|s| -> Result<Expr<EmailLiteral>, ExpandErr> {
-                let parsed = EmailStr::parse_from_str(&s)
-                    .map_err(|_| ExpandErr::InvalidCrmAddress(s.clone()))?
-                    .into_owned();
-                Ok(any_direction(Email::Complete(parsed)))
-            })
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .reduce(Expr::or);
-
         Ok([
             sender_nodes,
             cc_nodes,
@@ -174,8 +153,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             notification_done_node,
             notification_seen_node,
             shared_node,
-            crm_domain_node,
-            crm_address_node,
+            crm_node,
             calendar_only_node,
         ]
         .into_iter()
@@ -197,4 +175,67 @@ fn any_direction(e: Email) -> Expr<EmailLiteral> {
             Expr::Literal(EmailLiteral::Recipient(e)),
         ),
     )
+}
+
+/// Expand the typed `crm_domains` / `crm_addresses` lists into:
+///   1. an AST subtree of any-direction OR literals to AND into the
+///      email filter, and
+///   2. the [`crate::ast::CrmScope`] tag that downstream consumers
+///      ([`crate::ast::EmailFilterAst::crm_scope`]) use for
+///      authorization + candidate-set widening.
+///
+/// Returns `Ok(None)` when both lists are empty. Returns
+/// [`ExpandErr::CrmDomainsAndAddressesMutuallyExclusive`] when both are
+/// non-empty. Each value is validated:
+///   * domains — must pass [`looks_like_domain`].
+///   * addresses — must parse as a fully-qualified [`EmailStr`].
+///
+/// Used by both [`EmailFilters::expand_ast`] (typed POST path, scope
+/// discarded — see [`crate::ast::EntityFilterAst::new_from_filters`])
+/// and the raw AST endpoint's `into_entity_ast` (typed fields alongside
+/// the freeform AST).
+pub fn expand_crm_scope(
+    crm_domains: Vec<String>,
+    crm_addresses: Vec<String>,
+) -> Result<Option<(Expr<EmailLiteral>, crate::ast::CrmScope)>, ExpandErr> {
+    if !crm_domains.is_empty() && !crm_addresses.is_empty() {
+        return Err(ExpandErr::CrmDomainsAndAddressesMutuallyExclusive);
+    }
+
+    if !crm_domains.is_empty() {
+        let lowercased: Vec<String> = crm_domains.into_iter().map(|s| s.to_lowercase()).collect();
+        let tree = lowercased
+            .iter()
+            .map(|d| -> Result<Expr<EmailLiteral>, ExpandErr> {
+                if !looks_like_domain(d) {
+                    return Err(ExpandErr::InvalidCrmDomain(d.clone()));
+                }
+                Ok(any_direction(Email::Domain(d.clone())))
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .reduce(Expr::or)
+            .expect("non-empty list yields some node");
+        Ok(Some((tree, crate::ast::CrmScope::Domains(lowercased))))
+    } else if !crm_addresses.is_empty() {
+        let lowercased: Vec<String> = crm_addresses
+            .into_iter()
+            .map(|s| s.to_lowercase())
+            .collect();
+        let tree = lowercased
+            .iter()
+            .map(|s| -> Result<Expr<EmailLiteral>, ExpandErr> {
+                let parsed = EmailStr::parse_from_str(s)
+                    .map_err(|_| ExpandErr::InvalidCrmAddress(s.clone()))?
+                    .into_owned();
+                Ok(any_direction(Email::Complete(parsed)))
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .reduce(Expr::or)
+            .expect("non-empty list yields some node");
+        Ok(Some((tree, crate::ast::CrmScope::Addresses(lowercased))))
+    } else {
+        Ok(None)
+    }
 }

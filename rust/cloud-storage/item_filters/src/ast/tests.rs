@@ -214,6 +214,7 @@ fn it_expands_email_thread_ids() {
             .unwrap()
             .unwrap()
             .email_filter
+            .tree
             .unwrap(),
     )
     .unwrap();
@@ -245,6 +246,7 @@ fn it_expands_email_thread_ids_with_sender() {
             .unwrap()
             .unwrap()
             .email_filter
+            .tree
             .unwrap(),
     )
     .unwrap();
@@ -875,11 +877,11 @@ fn crm_domains_expand_to_any_direction_or() {
     };
 
     let ast = EntityFilterAst::new_from_filters(f).unwrap().unwrap();
-    let scope = ast.email_crm_scope.expect("crm scope should be set");
+    let scope = ast.email_filter.crm_scope.expect("crm scope should be set");
     assert_matches!(scope, CrmScope::Domains(ref ds) if ds == &vec!["acme.com".to_string()]);
 
-    let email_filter = Arc::into_inner(ast.email_filter.expect("email filter set")).unwrap();
-    let json = serde_json::to_value(email_filter).unwrap();
+    let tree = Arc::into_inner(ast.email_filter.tree.expect("email filter tree set")).unwrap();
+    let json = serde_json::to_value(tree).unwrap();
     // OR of Sender/Cc/Bcc/Recipient Domain literals — exact tree shape isn't
     // load-bearing; we just want to confirm any-direction expansion happened.
     let s = json.to_string();
@@ -901,11 +903,11 @@ fn crm_addresses_expand_to_any_direction_or() {
     };
 
     let ast = EntityFilterAst::new_from_filters(f).unwrap().unwrap();
-    let scope = ast.email_crm_scope.expect("crm scope should be set");
+    let scope = ast.email_filter.crm_scope.expect("crm scope should be set");
     assert_matches!(scope, CrmScope::Addresses(ref a) if a == &vec!["alice@acme.com".to_string()]);
 
-    let email_filter = Arc::into_inner(ast.email_filter.expect("email filter set")).unwrap();
-    let json = serde_json::to_value(email_filter).unwrap();
+    let tree = Arc::into_inner(ast.email_filter.tree.expect("email filter tree set")).unwrap();
+    let json = serde_json::to_value(tree).unwrap();
     let s = json.to_string();
     assert!(s.contains("Sender"));
     assert!(s.contains("Recipient"));
@@ -962,5 +964,138 @@ fn empty_crm_lists_produce_no_scope_tag() {
         ..Default::default()
     };
     let ast = EntityFilterAst::new_from_filters(f).unwrap().unwrap();
-    assert!(ast.email_crm_scope.is_none());
+    assert!(ast.email_filter.crm_scope.is_none());
+}
+
+#[test]
+fn crm_domains_are_lowercased_in_scope_tag() {
+    // Mixed-case input must land in the scope as lowercase, otherwise the
+    // CRM pre-check (which uses LOWER(domain) on the SQL side) could miss
+    // matches and reject valid requests.
+    let f = EntityFilters {
+        email_filters: crate::EmailFilters {
+            crm_domains: vec!["ACME.com".to_string(), "Widgets.IO".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let ast = EntityFilterAst::new_from_filters(f).unwrap().unwrap();
+    let scope = ast.email_filter.crm_scope.expect("scope");
+    match scope {
+        CrmScope::Domains(d) => {
+            assert_eq!(d, vec!["acme.com".to_string(), "widgets.io".to_string()])
+        }
+        CrmScope::Addresses(_) => panic!("expected Domains variant"),
+    }
+}
+
+#[test]
+fn crm_addresses_are_lowercased_in_scope_tag() {
+    let f = EntityFilters {
+        email_filters: crate::EmailFilters {
+            crm_addresses: vec!["Alice@ACME.com".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let ast = EntityFilterAst::new_from_filters(f).unwrap().unwrap();
+    let scope = ast.email_filter.crm_scope.expect("scope");
+    match scope {
+        CrmScope::Addresses(a) => assert_eq!(a, vec!["alice@acme.com".to_string()]),
+        CrmScope::Domains(_) => panic!("expected Addresses variant"),
+    }
+}
+
+#[test]
+fn multiple_crm_domains_or_together_in_tree() {
+    // Each domain expands to an any-direction OR of 4 literals. Multiple
+    // domains OR with each other at the top of the CRM sub-tree, so the
+    // final shape is OR-of-(OR-of-4) for each domain. We don't pin the
+    // exact tree shape — just confirm both domains appear in all 4
+    // direction literals.
+    let f = EntityFilters {
+        email_filters: crate::EmailFilters {
+            crm_domains: vec!["acme.com".to_string(), "widgets.io".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let ast = EntityFilterAst::new_from_filters(f).unwrap().unwrap();
+    let tree = ast
+        .email_filter
+        .tree
+        .as_ref()
+        .expect("tree set")
+        .as_ref()
+        .clone();
+    let mut literals: Vec<String> = Vec::new();
+    collect_literals(&tree, &mut literals);
+    // We expect 4 directions × 2 domains = 8 literal occurrences.
+    let acme_count = literals.iter().filter(|s| s.contains("acme.com")).count();
+    let widgets_count = literals.iter().filter(|s| s.contains("widgets.io")).count();
+    assert_eq!(
+        acme_count, 4,
+        "acme.com should appear in all 4 direction literals"
+    );
+    assert_eq!(
+        widgets_count, 4,
+        "widgets.io should appear in all 4 direction literals"
+    );
+    // And each direction must appear for both:
+    for direction in ["Sender", "Cc", "Bcc", "Recipient"] {
+        let count = literals.iter().filter(|s| s.contains(direction)).count();
+        assert_eq!(
+            count, 2,
+            "{} should appear once per domain (acme + widgets) = 2",
+            direction
+        );
+    }
+}
+
+#[test]
+fn crm_scope_ands_with_per_direction_senders() {
+    // When a request carries BOTH crm_domains (CRM scope) AND a regular
+    // per-direction sender filter, both must appear in the final AST
+    // ANDed together. The CRM scope widens visibility; the per-direction
+    // filter narrows within that widened scope.
+    let f = EntityFilters {
+        email_filters: crate::EmailFilters {
+            crm_domains: vec!["acme.com".to_string()],
+            senders: vec!["bob@elsewhere.com".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let ast = EntityFilterAst::new_from_filters(f).unwrap().unwrap();
+    let tree = ast
+        .email_filter
+        .tree
+        .as_ref()
+        .expect("tree set")
+        .as_ref()
+        .clone();
+    let mut literals: Vec<String> = Vec::new();
+    collect_literals(&tree, &mut literals);
+    // The per-direction sender must be in the tree.
+    assert!(
+        literals.iter().any(|s| s.contains("bob@elsewhere.com")),
+        "explicit sender filter must survive into the tree"
+    );
+    // The CRM domain must also be in the tree, on all four directions.
+    let acme_count = literals.iter().filter(|s| s.contains("acme.com")).count();
+    assert_eq!(acme_count, 4, "CRM domain expanded in all 4 directions");
+}
+
+/// Walks the Expr tree and pushes each Literal's JSON string into `out`.
+fn collect_literals(expr: &filter_ast::Expr<EmailLiteral>, out: &mut Vec<String>) {
+    match expr {
+        filter_ast::Expr::And(a, b) | filter_ast::Expr::Or(a, b) => {
+            collect_literals(a, out);
+            collect_literals(b, out);
+        }
+        filter_ast::Expr::Not(a) => collect_literals(a, out),
+        filter_ast::Expr::Literal(lit) => {
+            out.push(serde_json::to_string(lit).unwrap());
+        }
+    }
 }

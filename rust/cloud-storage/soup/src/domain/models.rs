@@ -275,7 +275,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
     ///
     /// `team_receipt` is forwarded onto the email request so the query
     /// layer can verify and use it when the email filter carries a CRM
-    /// scope tag (`EntityFilterAst::email_crm_scope`).
+    /// scope tag (`EntityFilterAst::email_filter::crm_scope`).
     pub(crate) fn build_email_request(
         &self,
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
@@ -288,7 +288,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
             }))) => filter.as_ref(),
             SoupQuery::Frecency(_) => None,
         };
-        let crm_scope = entity_ast.and_then(|a| a.email_crm_scope.clone());
+        let crm_scope = entity_ast.and_then(|a| a.email_filter.crm_scope.clone());
 
         Some(GetEmailsRequest {
             view: self.email_preview_view.clone(),
@@ -298,7 +298,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
             query: match &self.cursor {
                 SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
                     *t,
-                    f.as_ref().and_then(|f| f.email_filter.clone()),
+                    f.as_ref().and_then(|f| f.email_filter.tree.clone()),
                 )),
                 SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
                     id,
@@ -309,7 +309,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
                     id: *id,
                     limit: *limit,
                     val: val.clone(),
-                    filter: filter.as_ref().and_then(|f| f.email_filter.clone()),
+                    filter: filter.as_ref().and_then(|f| f.email_filter.tree.clone()),
                 })),
                 // we don't yet have sort by frecency implemented for emails yet
                 SoupQuery::Frecency(_) => None,

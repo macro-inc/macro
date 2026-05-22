@@ -66,7 +66,7 @@ fn test_email_preset_defaults_to_email_results() {
     .unwrap();
 
     let ast = list.entity_filter_ast();
-    assert!(ast.email_filter.is_some());
+    assert!(ast.email_filter.tree.is_some());
     assert!(ast.document_filter.is_some());
     assert!(ast.project_filter.is_some());
     assert!(ast.chat_filter.is_some());

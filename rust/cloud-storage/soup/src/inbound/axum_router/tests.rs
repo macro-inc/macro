@@ -1431,3 +1431,201 @@ async fn it_can_expand_assoc_ast() {
         .expect("SoupService::handle should have been called with next cursor");
     assert!(matches!(req.cursor_kind, MockCursorKind::SimpleCursor));
 }
+
+// ============================================================================
+// /soup/ast CRM scope extension
+// ============================================================================
+
+use item_filters::ast::CrmScope;
+
+#[test]
+fn ast_endpoint_email_crm_domains_stamps_scope_and_ands_into_tree() {
+    let js = json!({
+        "ecd": ["acme.com"],
+    });
+    let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
+    let req = SoupRequest {
+        soup_type: SoupType::Expanded,
+        limit: 20,
+        cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+            SimpleSortMethod::ViewedAt,
+            api,
+        ))),
+        user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
+        email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        link_id: None,
+    };
+    let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
+    let ast = match &req.cursor {
+        SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => f.as_ref().unwrap(),
+        _ => panic!("expected simple sort"),
+    };
+    let scope = ast.email_filter.crm_scope.as_ref().expect("scope set");
+    assert!(matches!(scope, CrmScope::Domains(d) if d == &vec!["acme.com".to_string()]));
+    // Sub-tree of any-direction OR literals stamped on the email AST.
+    assert!(ast.email_filter.tree.is_some());
+}
+
+#[test]
+fn ast_endpoint_email_crm_addresses_stamps_scope() {
+    let js = json!({
+        "eca": ["alice@acme.com"],
+    });
+    let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
+    let req = SoupRequest {
+        soup_type: SoupType::Expanded,
+        limit: 20,
+        cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+            SimpleSortMethod::ViewedAt,
+            api,
+        ))),
+        user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
+        email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        link_id: None,
+    };
+    let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
+    let ast = match &req.cursor {
+        SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => f.as_ref().unwrap(),
+        _ => panic!("expected simple sort"),
+    };
+    let scope = ast.email_filter.crm_scope.as_ref().expect("scope set");
+    assert!(matches!(scope, CrmScope::Addresses(a) if a == &vec!["alice@acme.com".to_string()]));
+    assert!(ast.email_filter.tree.is_some());
+}
+
+#[test]
+fn ast_endpoint_email_crm_both_lists_rejected() {
+    let js = json!({
+        "ecd": ["acme.com"],
+        "eca": ["alice@acme.com"],
+    });
+    let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
+    let req = SoupRequest {
+        soup_type: SoupType::Expanded,
+        limit: 20,
+        cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+            SimpleSortMethod::ViewedAt,
+            api,
+        ))),
+        user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
+        email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        link_id: None,
+    };
+    let res = req.into_ast();
+    assert!(res.is_err(), "mutual exclusivity must reject both lists");
+}
+
+#[test]
+fn ast_endpoint_empty_crm_lists_leaves_scope_none() {
+    let js = json!({
+        "ef": null,
+    });
+    let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
+    let req = SoupRequest {
+        soup_type: SoupType::Expanded,
+        limit: 20,
+        cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+            SimpleSortMethod::ViewedAt,
+            api,
+        ))),
+        user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
+        email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        link_id: None,
+    };
+    let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
+    // ast.is_none() because the whole filter is empty.
+    let ast = match &req.cursor {
+        SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => f.as_ref(),
+        _ => panic!("expected simple sort"),
+    };
+    assert!(ast.is_none(), "fully-empty filter should collapse to None");
+}
+
+#[test]
+fn ast_endpoint_crm_ands_with_existing_freeform_ef() {
+    // The AND-merge between the freeform `ef` AST and the CRM-expanded
+    // sub-tree is the most consequential bit of `into_entity_ast`. This
+    // test pins the root shape:
+    //   Expr::And(
+    //       <original ef literal>,            // unchanged
+    //       <any-direction OR over the CRM domain>
+    //   )
+    let js = json!({
+        "ef": { "l": { "Sender": { "Complete": "bob@elsewhere.com" } } },
+        "ecd": ["acme.com"],
+    });
+    let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
+    let req = SoupRequest {
+        soup_type: SoupType::Expanded,
+        limit: 20,
+        cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+            SimpleSortMethod::ViewedAt,
+            api,
+        ))),
+        user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
+        email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        link_id: None,
+    };
+    let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
+    let ast = match &req.cursor {
+        SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => f.as_ref().unwrap(),
+        _ => panic!("expected simple sort"),
+    };
+
+    let tree = ast.email_filter.tree.as_ref().expect("tree set");
+    match tree.as_ref() {
+        filter_ast::Expr::And(left, right) => {
+            // Left = the original ef literal, untouched.
+            let left_json = serde_json::to_value(left.as_ref()).unwrap();
+            assert_eq!(
+                left_json,
+                serde_json::json!({ "l": { "Sender": { "Complete": "bob@elsewhere.com" } } }),
+                "left side of AND must be the original ef literal verbatim"
+            );
+            // Right = the any-direction CRM sub-tree. All four direction
+            // literals must appear in the right subtree carrying acme.com.
+            let right_json = serde_json::to_string(right.as_ref()).unwrap();
+            for direction in ["Sender", "Cc", "Bcc", "Recipient"] {
+                assert!(
+                    right_json.contains(direction),
+                    "right side must contain {} direction literal",
+                    direction
+                );
+            }
+            assert!(right_json.contains("acme.com"));
+        }
+        other => panic!(
+            "expected And at root after CRM AND-merge, got: {}",
+            serde_json::to_string(other).unwrap()
+        ),
+    }
+}
+
+#[test]
+fn ast_endpoint_crm_domains_are_lowercased_in_scope() {
+    // Mixed-case input must land in the scope as lowercase — the CRM
+    // pre-check uses LOWER(domain) on the SQL side and would otherwise
+    // miss legitimate matches.
+    let js = json!({
+        "ecd": ["ACME.com"],
+    });
+    let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
+    let req = SoupRequest {
+        soup_type: SoupType::Expanded,
+        limit: 20,
+        cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+            SimpleSortMethod::ViewedAt,
+            api,
+        ))),
+        user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
+        email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        link_id: None,
+    };
+    let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
+    let ast = match &req.cursor {
+        SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => f.as_ref().unwrap(),
+        _ => panic!("expected simple sort"),
+    };
+    let scope = ast.email_filter.crm_scope.as_ref().expect("scope set");
+    assert!(matches!(scope, CrmScope::Domains(d) if d == &vec!["acme.com".to_string()]));
+}

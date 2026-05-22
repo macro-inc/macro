@@ -458,10 +458,7 @@ impl RequestsCrmScope for EntityFilters {
 
 impl RequestsCrmScope for ApiEntityFilterAst {
     fn requests_crm_scope(&self) -> bool {
-        // CRM scope cannot be requested via the raw AST endpoint — the
-        // tag lives on `EntityFilterAst::email_crm_scope`, which is only
-        // populated by the typed-filters expansion path.
-        false
+        !self.email_crm_domains.is_empty() || !self.email_crm_addresses.is_empty()
     }
 }
 
@@ -845,6 +842,18 @@ pub struct ApiEntityFilterAst {
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
     pub properties_filter: LiteralTree<PropertiesLiteral>,
+    /// CRM-scoped domain filter. Parallel to the freeform `email_filter`
+    /// AST. Expanded by the router into an any-direction OR sub-tree
+    /// AND-merged into `email_filter`, plus a `CrmScope` tag stamped on
+    /// the resulting [`item_filters::ast::EmailFilterAst::crm_scope`].
+    /// Drives the per-team CRM authorization pre-check and candidate-set
+    /// widening downstream. Mutually exclusive with `email_crm_addresses`.
+    #[serde(default, rename = "ecd", skip_serializing_if = "Vec::is_empty")]
+    pub email_crm_domains: Vec<String>,
+    /// CRM-scoped address filter. Symmetric counterpart to
+    /// [`Self::email_crm_domains`] for fully-qualified email addresses.
+    #[serde(default, rename = "eca", skip_serializing_if = "Vec::is_empty")]
+    pub email_crm_addresses: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -911,6 +920,8 @@ impl ApiEntityFilterAst {
             channel_filter,
             call_filter,
             properties_filter,
+            email_crm_domains,
+            email_crm_addresses,
         } = self;
 
         let document_filter = document_filter
@@ -937,16 +948,42 @@ impl ApiEntityFilterAst {
             .transpose()?
             .map(Arc::new);
 
+        // Build the CRM sub-tree and tag from the typed lists. Mutual
+        // exclusivity and per-value validation happen here. We then
+        // AND-merge the sub-tree into the freeform `email_filter` AST so
+        // the matching SQL works identically to the typed POST path.
+        let crm =
+            item_filters::ast::email::expand_crm_scope(email_crm_domains, email_crm_addresses)
+                .map_err(|e| report!("{e}"))?;
+
+        let (email_tree, crm_scope) = match (email_filter, crm) {
+            (Some(existing), Some((crm_tree, scope))) => {
+                // The Arc was freshly constructed by serde when this
+                // request body deserialized, and has not been cloned
+                // since — refcount is 1, so `try_unwrap` always succeeds.
+                let existing_owned = Arc::try_unwrap(existing)
+                    .map_err(|_| report!("internal: email_filter Arc was unexpectedly shared"))?;
+                (
+                    Some(Arc::new(Expr::and(existing_owned, crm_tree))),
+                    Some(scope),
+                )
+            }
+            (Some(existing), None) => (Some(existing), None),
+            (None, Some((crm_tree, scope))) => (Some(Arc::new(crm_tree)), Some(scope)),
+            (None, None) => (None, None),
+        };
+
         Ok(EntityFilterAst {
             document_filter,
             project_filter,
             chat_filter,
-            email_filter,
+            email_filter: item_filters::ast::EmailFilterAst {
+                tree: email_tree,
+                crm_scope,
+            },
             channel_filter,
             call_filter,
             properties_filter,
-            // AST endpoint does not expose CRM scope — only the typed POST does.
-            email_crm_scope: None,
         })
     }
 }

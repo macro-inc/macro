@@ -956,11 +956,10 @@ async fn test_dynamic_filter_document_date_created_at_gt(pool: PgPool) {
         )))),
         project_filter: None,
         chat_filter: None,
-        email_filter: None,
+        email_filter: item_filters::ast::EmailFilterAst::default(),
         channel_filter: None,
         call_filter: None,
         properties_filter: None,
-        email_crm_scope: None,
     };
 
     let results = storage
@@ -1048,11 +1047,10 @@ async fn test_dynamic_filter_document_date_created_at_lt(pool: PgPool) {
         )))),
         project_filter: None,
         chat_filter: None,
-        email_filter: None,
+        email_filter: item_filters::ast::EmailFilterAst::default(),
         channel_filter: None,
         call_filter: None,
         properties_filter: None,
-        email_crm_scope: None,
     };
 
     let results = storage
@@ -1136,11 +1134,10 @@ async fn test_dynamic_filter_document_date_updated_at_gt(pool: PgPool) {
         )))),
         project_filter: None,
         chat_filter: None,
-        email_filter: None,
+        email_filter: item_filters::ast::EmailFilterAst::default(),
         channel_filter: None,
         call_filter: None,
         properties_filter: None,
-        email_crm_scope: None,
     };
 
     let results = storage
@@ -1229,11 +1226,10 @@ async fn test_dynamic_filter_document_date_updated_at_lt(pool: PgPool) {
         )))),
         project_filter: None,
         chat_filter: None,
-        email_filter: None,
+        email_filter: item_filters::ast::EmailFilterAst::default(),
         channel_filter: None,
         call_filter: None,
         properties_filter: None,
-        email_crm_scope: None,
     };
 
     let results = storage
