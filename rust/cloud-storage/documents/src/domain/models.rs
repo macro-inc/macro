@@ -81,6 +81,28 @@ pub struct TeamTaskMetadata {
     pub task_num: i32,
 }
 
+/// User/team information needed to build a task branch name.
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct BranchNameContext {
+    /// The user's email address, used when no GitHub username is linked.
+    pub user_email: String,
+    /// Linked GitHub username for the user, when present.
+    pub github_username: Option<String>,
+    /// Slug for the user's team, when the user belongs to a team.
+    pub team_slug: Option<String>,
+    /// Task number for the document within the user's team, when present.
+    pub team_task_id: Option<i32>,
+}
+
+/// A fully generated task branch name plus its short document id.
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct TaskBranchName {
+    /// The short id of the document.
+    pub short_id: String,
+    /// The generated branch name.
+    pub branch_name: String,
+}
+
 /// Request body for copying a document.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]

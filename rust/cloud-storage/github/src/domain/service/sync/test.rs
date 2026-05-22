@@ -120,6 +120,13 @@ impl DocumentService for StubDocumentService {
     ) -> Result<String, DocumentError> {
         unimplemented!()
     }
+    async fn get_task_branch_name(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _document_name: String,
+    ) -> Result<documents::domain::models::TaskBranchName, DocumentError> {
+        unimplemented!()
+    }
     async fn get_project_children(
         &self,
         _project_id: &str,

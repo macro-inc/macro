@@ -24,8 +24,9 @@ use model::sync_service::SyncServiceVersionID;
 use model_entity::Entity;
 
 use super::models::{
-    CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
-    EditDocumentRepoArgs, EditDocumentServiceArgs, LocationQueryParams, TeamTaskMetadata,
+    BranchNameContext, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
+    CreateTaskRequest, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
+    LocationQueryParams, TaskBranchName, TeamTaskMetadata,
 };
 
 /// Repository for accessing document data from the database.
@@ -170,6 +171,13 @@ pub trait DocumentRepo: Send + Sync + 'static {
         &self,
         document_id: &str,
     ) -> impl Future<Output = Result<Option<TeamTaskMetadata>, Self::Err>> + Send;
+
+    /// Get user/team data needed to build a branch name for this user and task.
+    fn get_branch_name_context(
+        &self,
+        document_id: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<BranchNameContext, Self::Err>> + Send;
 
     /// Share a document with the given team.
     fn share_with_team(
@@ -341,6 +349,13 @@ pub trait DocumentService: Send + Sync + 'static {
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<String, DocumentError>> + Send;
+
+    /// Build the branch name for a task document for the authenticated user.
+    fn get_task_branch_name(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_name: String,
+    ) -> impl Future<Output = Result<TaskBranchName, DocumentError>> + Send;
 
     /// Edit a document's metadata and share permissions.
     ///

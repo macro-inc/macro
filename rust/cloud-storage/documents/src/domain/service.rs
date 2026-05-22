@@ -34,11 +34,12 @@ use crate::domain::models::{
     ASSIGNEES_PROPERTY_ID, NOT_STARTED_STATUS_OPTION_ID, PropertyInput, STATUS_PROPERTY_ID,
 };
 
+use super::branch_name::{build_task_branch_name, user_branch_prefix};
 use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
     CreateTaskRequest, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
-    FileTypeUpdate, LocationQueryParams, TeamTaskMetadata,
+    FileTypeUpdate, LocationQueryParams, TaskBranchName, TeamTaskMetadata,
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
@@ -103,6 +104,12 @@ fn pending_content_for_file_type(file_type: Option<FileType>) -> DocumentContent
         Some(FileType::Docx) => DocumentContent::pending_at(DocumentContentLocation::ConvertedPdf),
         _ => DocumentContent::pending_at(DocumentContentLocation::ObjectStorage),
     }
+}
+
+fn short_id_for_entity_id(entity_id: &str) -> Result<String, DocumentError> {
+    let uuid = macro_uuid::string_to_uuid(entity_id)
+        .map_err(|e| DocumentError::BadRequest(format!("invalid entity_id: {e}")))?;
+    Ok(macro_uuid::ShortUuidConverter::default().from_uuid(&uuid))
 }
 
 impl<
@@ -674,11 +681,46 @@ impl<
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<String, DocumentError> {
-        let entity_id = &entity_access_receipt.entity().entity_id;
-        let uuid = macro_uuid::string_to_uuid(entity_id)
-            .map_err(|e| DocumentError::BadRequest(format!("invalid entity_id: {e}")))?;
-        let short_id = macro_uuid::ShortUuidConverter::default().from_uuid(&uuid);
-        Ok(short_id)
+        short_id_for_entity_id(&entity_access_receipt.entity().entity_id)
+    }
+
+    async fn get_task_branch_name(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_name: String,
+    ) -> Result<TaskBranchName, DocumentError> {
+        let document_id = &entity_access_receipt.entity().entity_id;
+        let short_id = short_id_for_entity_id(document_id)?;
+        let (user_prefix, team_slug, team_task_id) = match entity_access_receipt.auth() {
+            EntityAccessAuth::Authenticated(user_id) => {
+                let context = self
+                    .repo
+                    .get_branch_name_context(document_id, user_id.as_ref())
+                    .await
+                    .map_err(|e| DocumentError::Internal(e.into()))?;
+                (
+                    user_branch_prefix(context.github_username.as_deref(), &context.user_email),
+                    context.team_slug,
+                    context.team_task_id,
+                )
+            }
+            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => {
+                ("macro".to_string(), None, None)
+            }
+        };
+
+        let branch_name = build_task_branch_name(
+            &user_prefix,
+            team_slug.as_deref(),
+            team_task_id,
+            &short_id,
+            &document_name,
+        );
+
+        Ok(TaskBranchName {
+            short_id,
+            branch_name,
+        })
     }
 
     #[tracing::instrument(err, skip(self, document_context))]
