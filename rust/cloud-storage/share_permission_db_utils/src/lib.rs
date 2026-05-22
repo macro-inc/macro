@@ -25,58 +25,58 @@ where
 {
     let share_permission_id = match item_type {
         "document" => {
-            sqlx::query_scalar::<_, String>(
+            sqlx::query_scalar!(
                 r#"
-                SELECT dp."sharePermissionId"
+                SELECT dp."sharePermissionId" as "share_permission_id!"
                 FROM "DocumentPermission" dp
                 WHERE dp."documentId" = $1
                 "#,
+                item_id,
             )
-            .bind(item_id)
             .fetch_one(executor)
             .await?
         }
         "chat" => {
-            sqlx::query_scalar::<_, String>(
+            sqlx::query_scalar!(
                 r#"
-                SELECT cp."sharePermissionId"
+                SELECT cp."sharePermissionId" as "share_permission_id!"
                 FROM "ChatPermission" cp
                 WHERE cp."chatId" = $1
                 "#,
+                item_id,
             )
-            .bind(item_id)
             .fetch_one(executor)
             .await?
         }
         "thread" => {
-            sqlx::query_scalar::<_, String>(
+            sqlx::query_scalar!(
                 r#"
-                SELECT tp."sharePermissionId"
+                SELECT tp."sharePermissionId" as "share_permission_id!"
                 FROM "EmailThreadPermission" tp
                 WHERE tp."threadId" = $1
                 "#,
+                item_id,
             )
-            .bind(item_id)
             .fetch_one(executor)
             .await?
         }
         "project" => {
-            sqlx::query_scalar::<_, String>(
+            sqlx::query_scalar!(
                 r#"
-                SELECT pp."sharePermissionId"
+                SELECT pp."sharePermissionId" as "share_permission_id!"
                 FROM "ProjectPermission" pp
                 WHERE pp."projectId" = $1
                 "#,
+                item_id,
             )
-            .bind(item_id)
             .fetch_one(executor)
             .await?
         }
         "call" => {
             let item_id = macro_uuid::string_to_uuid(item_id)?;
-            sqlx::query_scalar::<_, String>(
+            sqlx::query_scalar!(
                 r#"
-                SELECT share_permission_id
+                SELECT share_permission_id as "share_permission_id!"
                 FROM (
                     SELECT share_permission_id FROM calls WHERE id = $1
                     UNION ALL
@@ -84,8 +84,8 @@ where
                 ) t
                 LIMIT 1
                 "#,
+                item_id,
             )
-            .bind(item_id)
             .fetch_one(executor)
             .await?
         }
@@ -105,16 +105,16 @@ pub async fn insert_channel_share_permission<'e, E>(
 where
     E: Executor<'e, Database = Postgres>,
 {
-    let result = sqlx::query(
+    let result = sqlx::query!(
         r#"
         INSERT INTO "ChannelSharePermission" ("share_permission_id", "channel_id", "access_level")
         VALUES ($1, $2, $3)
         ON CONFLICT ("share_permission_id", "channel_id") DO NOTHING
         "#,
+        share_permission_id,
+        channel_id,
+        access_level as _,
     )
-    .bind(share_permission_id)
-    .bind(channel_id)
-    .bind(access_level)
     .execute(executor)
     .await?;
 
@@ -127,14 +127,14 @@ where
 
 /// Ensure a thread has a share permission and owner entity-access row.
 pub async fn ensure_thread_share_permission(pool: &PgPool, thread_id: &str) -> anyhow::Result<()> {
-    let existing_share_permission_id = sqlx::query_scalar::<_, String>(
+    let existing_share_permission_id = sqlx::query_scalar!(
         r#"
-        SELECT "sharePermissionId"
+        SELECT "sharePermissionId" as "share_permission_id!"
         FROM "EmailThreadPermission"
         WHERE "threadId" = $1
         "#,
+        thread_id,
     )
-    .bind(thread_id)
     .fetch_optional(pool)
     .await
     .context("failed to get email thread permission")?;
@@ -144,15 +144,15 @@ pub async fn ensure_thread_share_permission(pool: &PgPool, thread_id: &str) -> a
     }
 
     let thread_uuid = macro_uuid::string_to_uuid(thread_id).context("invalid thread id")?;
-    let owner_id = sqlx::query_scalar::<_, String>(
+    let owner_id = sqlx::query_scalar!(
         r#"
-        SELECT l.macro_id
+        SELECT l.macro_id as "macro_id!"
         FROM email_threads t
         JOIN email_links l ON t.link_id = l.id
         WHERE t.id = $1
         "#,
+        thread_uuid,
     )
-    .bind(thread_uuid)
     .fetch_optional(pool)
     .await
     .with_context(|| format!("failed to fetch macro_id for thread ID {thread_id}"))?
@@ -162,26 +162,26 @@ pub async fn ensure_thread_share_permission(pool: &PgPool, thread_id: &str) -> a
         .into_owned();
 
     let mut transaction = pool.begin().await.context("failed to start transaction")?;
-    let share_permission_id = sqlx::query_scalar::<_, String>(
+    let share_permission_id = sqlx::query_scalar!(
         r#"
         INSERT INTO "SharePermission" ("isPublic", "publicAccessLevel", "createdAt", "updatedAt")
         VALUES (false, NULL, NOW(), NOW())
-        RETURNING id
+        RETURNING id as "id!"
         "#,
     )
     .fetch_one(transaction.as_mut())
     .await
     .context("failed to create thread share permission")?;
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO "EmailThreadPermission" ("threadId", "sharePermissionId", "userId")
         VALUES ($1, $2, $3)
         "#,
+        thread_id,
+        share_permission_id,
+        owner_id.as_ref(),
     )
-    .bind(thread_id)
-    .bind(&share_permission_id)
-    .bind(owner_id.as_ref())
     .execute(transaction.as_mut())
     .await
     .context("failed to create email thread permission")?;

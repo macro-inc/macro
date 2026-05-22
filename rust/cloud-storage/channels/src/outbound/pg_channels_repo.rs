@@ -1300,17 +1300,17 @@ impl ChannelRepo for PgChannelsRepo {
     }
 
     async fn user_has_team(&self, user_id: String, team_id: Uuid) -> Result<bool, Self::Err> {
-        let has_team = sqlx::query_scalar::<_, bool>(
+        let has_team = sqlx::query_scalar!(
             r#"
             SELECT EXISTS (
                 SELECT 1
                 FROM team_user
                 WHERE user_id = $1 AND team_id = $2
-            )
+            ) AS "has_team!"
             "#,
+            user_id,
+            team_id,
         )
-        .bind(user_id)
-        .bind(team_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(has_team)

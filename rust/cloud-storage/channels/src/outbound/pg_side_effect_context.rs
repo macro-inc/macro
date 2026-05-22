@@ -10,22 +10,14 @@ use sqlx::PgPool;
 use std::collections::HashSet;
 use uuid::Uuid;
 
-#[derive(sqlx::FromRow)]
 struct SenderIdRow {
     sender_id: MacroUserIdStr<'static>,
 }
 
-#[derive(sqlx::FromRow)]
-struct CountRow {
-    count: i64,
-}
-
-#[derive(sqlx::FromRow)]
 struct UserIdRow {
     user_id: MacroUserIdStr<'static>,
 }
 
-#[derive(sqlx::FromRow)]
 struct DocumentMentionRow {
     document_name: String,
     owner: MacroUserIdStr<'static>,
@@ -65,14 +57,14 @@ impl ChannelSideEffectContext for PgChannelSideEffectContext {
             .into_iter()
             .map(|user_id| user_id.as_ref().to_string())
             .collect();
-        let existing = sqlx::query_scalar::<_, String>(
+        let existing = sqlx::query_scalar!(
             r#"
             SELECT u.id
             FROM "User" u
             WHERE u.id = ANY($1)
             "#,
+            &user_ids,
         )
-        .bind(&user_ids)
         .fetch_all(&self.pool)
         .await?;
 
@@ -87,19 +79,20 @@ impl ChannelSideEffectContext for PgChannelSideEffectContext {
             return Ok(Vec::new());
         }
 
-        let mentions = sqlx::query_as::<_, DocumentMentionRow>(
+        let mentions = sqlx::query_as!(
+            DocumentMentionRow,
             r#"
             SELECT
                 d.name AS document_name,
-                d.owner,
+                d.owner AS "owner: MacroUserIdStr",
                 d."fileType" AS file_type,
                 dst.sub_type::text AS sub_type
             FROM "Document" d
             LEFT JOIN document_sub_type dst ON dst.document_id = d.id
             WHERE d.id = ANY($1)
             "#,
+            &document_ids,
         )
-        .bind(&document_ids)
         .fetch_all(&self.pool)
         .await?;
 
@@ -146,9 +139,9 @@ async fn get_sender_profile_picture_url(
     db: &PgPool,
     sender_id: &MacroUserIdStr<'_>,
 ) -> Option<String> {
-    sqlx::query_scalar::<_, String>(
+    sqlx::query_scalar!(
         r#"
-        SELECT mui.profile_picture
+        SELECT mui.profile_picture as "profile_picture!"
         FROM "User" u
         JOIN macro_user mu ON mu.id = u.macro_user_id
         JOIN macro_user_info mui ON mui.macro_user_id = mu.id
@@ -156,8 +149,8 @@ async fn get_sender_profile_picture_url(
           AND mui.profile_picture IS NOT NULL
         LIMIT 1
         "#,
+        sender_id.as_ref(),
     )
-    .bind(sender_id.as_ref())
     .fetch_optional(db)
     .await
     .ok()
@@ -165,15 +158,16 @@ async fn get_sender_profile_picture_url(
 }
 
 async fn get_message_owner(pool: &PgPool, message_id: Uuid) -> anyhow::Result<String> {
-    let row = sqlx::query_as::<_, SenderIdRow>(
+    let row = sqlx::query_as!(
+        SenderIdRow,
         r#"
-        SELECT sender_id
+        SELECT sender_id AS "sender_id: MacroUserIdStr"
         FROM comms_messages
         WHERE id = $1
         ORDER BY created_at ASC
         "#,
+        message_id,
     )
-    .bind(message_id)
     .fetch_one(pool)
     .await
     .context("unable to get message owner")?;
@@ -181,26 +175,27 @@ async fn get_message_owner(pool: &PgPool, message_id: Uuid) -> anyhow::Result<St
 }
 
 async fn get_channel_message_count(pool: &PgPool, channel_id: Uuid) -> anyhow::Result<i64> {
-    let row = sqlx::query_as::<_, CountRow>(
+    let count = sqlx::query_scalar!(
         r#"
-        SELECT COUNT(id) AS count
+        SELECT COUNT(id) AS "count!"
         FROM comms_messages
         WHERE channel_id = $1
         "#,
+        channel_id,
     )
-    .bind(channel_id)
     .fetch_one(pool)
     .await?;
-    Ok(row.count)
+    Ok(count)
 }
 
 async fn get_channel_participants_for_thread_id(
     pool: &PgPool,
     thread_id: Uuid,
 ) -> anyhow::Result<Vec<MacroUserIdStr<'static>>> {
-    let rows = sqlx::query_as::<_, UserIdRow>(
+    let rows = sqlx::query_as!(
+        UserIdRow,
         r#"
-        SELECT DISTINCT id AS user_id FROM (
+        SELECT DISTINCT id AS "user_id!: MacroUserIdStr" FROM (
             SELECT m.sender_id AS id
             FROM comms_channel_participants cp
             JOIN comms_channels c ON c.id = cp.channel_id
@@ -218,8 +213,8 @@ async fn get_channel_participants_for_thread_id(
               AND cp.left_at IS NULL
         ) AS combined
         "#,
+        thread_id,
     )
-    .bind(thread_id)
     .fetch_all(pool)
     .await?;
     Ok(rows.into_iter().map(|row| row.user_id).collect())
