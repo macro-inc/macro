@@ -471,6 +471,13 @@ const cloudStorageService = new CloudStorageService(
         value: config.get('chats_index_uses_join') ?? 'false',
       },
       {
+        // Same as DOCUMENTS_INDEX_USES_JOIN, but for the call_records
+        // alias (`call_records_v1` flat -> `call_records_v2`
+        // parent/child).
+        name: 'CALL_RECORDS_INDEX_USES_JOIN',
+        value: config.get('call_records_index_uses_join') ?? 'false',
+      },
+      {
         name: 'DATABASE_URL',
         value: pulumi.interpolate`${DATABASE_URL}`,
       },

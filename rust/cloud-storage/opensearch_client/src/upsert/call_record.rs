@@ -4,9 +4,7 @@ use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
 use crate::{
-    Result,
-    call_records_shape::destination_uses_join_shape,
-    date_format::EpochSeconds,
+    Result, call_records_shape::destination_uses_join_shape, date_format::EpochSeconds,
     error::OpensearchClientError,
 };
 
@@ -45,9 +43,13 @@ pub(crate) async fn upsert_call_record_segment(
 ) -> Result<()> {
     let destination = resolve_destination(index_override);
     if destination_uses_join_shape(destination) {
-        return bulk_upsert_call_record_segments_join(client, std::slice::from_ref(args), destination)
-            .await
-            .map(|_| ());
+        return bulk_upsert_call_record_segments_join(
+            client,
+            std::slice::from_ref(args),
+            destination,
+        )
+        .await
+        .map(|_| ());
     }
     upsert_call_record_segment_flat(client, args, destination).await
 }
@@ -74,13 +76,14 @@ async fn upsert_call_record_segment_flat(
         return Ok(());
     }
 
-    let body = response
-        .text()
-        .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("upsert_call_record_segment".to_string()),
-        })?;
+    let body =
+        response
+            .text()
+            .await
+            .map_err(|err| OpensearchClientError::DeserializationFailed {
+                details: err.to_string(),
+                method: Some("upsert_call_record_segment".to_string()),
+            })?;
 
     tracing::error!(status_code=%status_code, body=%body, "error upserting call record segment");
 
