@@ -260,6 +260,7 @@ function UserAvatarWithTooltip(props: {
       onOpenChange={setOpen}
       triggerAs="div"
       triggerClass={props.triggerClass}
+      triggerTabIndex={-1}
       trigger={props.avatar}
       content={props.renderContent(() => setOpen(false))}
     />

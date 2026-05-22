@@ -54,7 +54,6 @@ function $findAwaitNodeByAwaitId(awaitId: string): AwaitNode | null {
 }
 
 export function awaitPlugin() {
-  console.log('using await plugin');
   return (editor: LexicalEditor) => {
     return mergeRegister(
       editor.registerCommand(
