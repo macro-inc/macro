@@ -29,6 +29,7 @@ import { err, ok, type Result } from 'neverthrow';
 import type {
   AccessLevel,
   CallRecordPreview,
+  GroupedSoupPage,
   PostSoupAstRequest,
   PostSoupRequest,
   SoupPage,
@@ -276,22 +277,13 @@ export const storageServiceClient = {
     if (args.params.group_by) body.group_by = args.params.group_by;
     if (args.params.group_key != null) body.group_key = args.params.group_key;
 
-    return await dssFetch<
-      SoupPage & {
-        groups?: {
-          key: string;
-          label: string;
-          display_order: number | null;
-          total_count: number;
-          page_count: number;
-          start_index: number;
-          next_cursor: string | null;
-        }[];
-      }
-    >(`/items/soup/ast/grouped${searchParams}`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
+    return await dssFetch<GroupedSoupPage>(
+      `/items/soup/ast/grouped${searchParams}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      },
+    );
   },
 
   permissionsTokens: {

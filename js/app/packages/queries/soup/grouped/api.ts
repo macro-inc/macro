@@ -1,8 +1,8 @@
+import type { ApiGroupMeta } from '@service-storage/generated/schemas/apiGroupMeta';
+import type { GroupedSoupPage as WireGroupedSoupPage } from '@service-storage/generated/schemas/groupedSoupPage';
+import { GROUPED_SUBQUERY_MARKER } from '../keys';
 import type { GroupByField, GroupedSoupPage, GroupMeta } from './types';
 
-/**
- * Serialize GroupByField to the API's expected JSON format.
- */
 export function serializeGroupByField(field: GroupByField): unknown {
   switch (field.type) {
     case 'date':
@@ -21,34 +21,52 @@ export function serializeGroupByField(field: GroupByField): unknown {
   }
 }
 
-/**
- * Parse raw API group metadata to typed GroupMeta.
- */
-export function parseGroupMeta(raw: Record<string, unknown>): GroupMeta {
+export function parseGroupMeta(raw: ApiGroupMeta): GroupMeta {
   return {
-    key: raw.key as string,
-    label: raw.label as string,
-    displayOrder: (raw.display_order as number) ?? null,
-    totalCount: raw.total_count as number,
-    pageCount: raw.page_count as number,
-    startIndex: raw.start_index as number,
-    nextCursor: (raw.next_cursor as string) ?? null,
+    key: raw.key,
+    label: raw.label,
+    displayOrder: raw.display_order ?? null,
+    totalCount: raw.total_count,
+    itemIds: raw.item_ids,
+    nextCursor: raw.next_cursor ?? null,
+  };
+}
+
+export function parseGroupedSoupPage(
+  response: WireGroupedSoupPage,
+): GroupedSoupPage {
+  return {
+    items: response.items,
+    nextCursor: response.next_cursor ?? null,
+    groups: (response.groups ?? []).map(parseGroupMeta),
   };
 }
 
 /**
- * Parse the API response into our typed GroupedSoupPage.
- * Handles snake_case to camelCase conversion.
+ * Read the `GroupByField` slot from a soup astItems-prefixed queryKey.
+ * Returns undefined when the slot isn't present or isn't a GroupByField.
  */
-export function parseGroupedSoupPage(response: unknown): GroupedSoupPage {
-  const data = response as Record<string, unknown>;
-  const items = (data.items ?? []) as GroupedSoupPage['items'];
-  const nextCursor = (data.next_cursor as string) ?? null;
-  const rawGroups = (data.groups ?? []) as Array<Record<string, unknown>>;
+export function extractGroupByFromKey(
+  queryKey: readonly unknown[],
+): GroupByField | undefined {
+  // soupKeys.astItems builds: ['soup', 'astItems', params, body, groupBy]
+  const candidate = queryKey[4];
+  if (!candidate || typeof candidate !== 'object') return;
+  const obj = candidate as { type?: unknown };
+  if (typeof obj.type !== 'string') return;
+  return candidate as GroupByField;
+}
 
-  return {
-    items,
-    nextCursor,
-    groups: rawGroups.map(parseGroupMeta),
-  };
+/**
+ * Read the per-group key from a queryKey marked as a per-group subquery
+ * (last element follows GROUPED_SUBQUERY_MARKER).
+ */
+export function extractPerGroupKeyFromQueryKey(
+  queryKey: readonly unknown[],
+): string | undefined {
+  const len = queryKey.length;
+  if (len < 2) return;
+  if (queryKey[len - 2] !== GROUPED_SUBQUERY_MARKER) return;
+  const key = queryKey[len - 1];
+  return typeof key === 'string' ? key : undefined;
 }

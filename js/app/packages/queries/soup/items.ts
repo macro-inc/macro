@@ -3,10 +3,14 @@ import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import {
-  parseGroupMeta,
+  parseGroupedSoupPage,
   serializeGroupByField,
 } from '@queries/soup/grouped/api';
-import type { GroupByField, GroupMeta } from '@queries/soup/grouped/types';
+import {
+  type GroupByField,
+  type GroupMeta,
+  NOT_SET_GROUP_KEY,
+} from '@queries/soup/grouped/types';
 import { soupKeys } from '@queries/soup/keys';
 import { mapSoupPageToEntityList } from '@queries/soup/transform-utils';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
@@ -39,7 +43,6 @@ export type SoupAstItemsQueryArgs = {
   params: SoupAstParams;
   body: SoupAstBody;
   groupBy?: GroupByField;
-  groupKey?: string;
 };
 
 export type SoupApiItemFilter = (item: SoupApiItem) => boolean;
@@ -49,16 +52,34 @@ interface SoupItemsQueryOptions {
   staleTime?: StaleTime;
 }
 
-type SoupAstItemsPage = {
-  items: SoupApiItem[];
-  nextCursor: string | null;
-  groups?: GroupMeta[];
+/**
+ * Cached page for `useSoupAstItemsQuery`. Discriminated by `kind`:
+ * - `grouped`: items pool keyed by id, `groups[].itemIds` describes order.
+ *   Parent never paginates when grouped — per-group queries handle load-more.
+ * - `flat`: items array; standard infinite-query pagination.
+ */
+export type SoupAstItemsPage =
+  | SoupAstItemsGroupedPage
+  | SoupAstItemsFlatPage;
+
+export type SoupAstItemsGroupedPage = {
+  kind: 'grouped';
+  items: Record<string, SoupApiItem>;
+  groups: GroupMeta[];
+  nextCursor: null;
 };
 
-type SoupAstItemsData = {
+export type SoupAstItemsFlatPage = {
+  kind: 'flat';
+  items: SoupApiItem[];
+  nextCursor: string | null;
+};
+
+export type SoupAstItemsData = {
   entities: EntityData[];
   groups: GroupMeta[] | undefined;
-  items: SoupApiItem[];
+  /** Only present when query is grouped. */
+  itemsById?: Record<string, SoupApiItem>;
 };
 
 export const useSoupItemsQuery = (
@@ -132,16 +153,12 @@ export const useSoupAstItemsQuery = (
               })
           );
 
-          const groups = response.groups
-            ? (response.groups as Array<Record<string, unknown>>).map(
-                parseGroupMeta
-              )
-            : undefined;
-
+          const parsed = parseGroupedSoupPage(response);
           return {
-            items: response.items,
-            nextCursor: response.next_cursor ?? null,
-            groups,
+            kind: 'grouped',
+            items: parsed.items,
+            groups: parsed.groups,
+            nextCursor: null,
           };
         }
 
@@ -159,25 +176,46 @@ export const useSoupAstItemsQuery = (
         );
 
         return {
+          kind: 'flat',
           items: response.items,
           nextCursor: response.next_cursor ?? null,
-          groups: [],
         };
       },
       initialPageParam: null as string | null,
       getNextPageParam: (lastPage): string | null => {
-        if (groupBy) return null;
+        if (lastPage.kind === 'grouped') return null;
         return lastPage.nextCursor;
       },
       select: (data): SoupAstItemsData => {
-        const items = data.pages.flatMap((page) => page.items);
-        const entities = data.pages.flatMap((page) => {
-          return mapSoupPageToEntityList(page, { instructionsIdQuery });
-        });
-        const rawGroups = data.pages[0]?.groups;
-        const groups = rawGroups?.slice().sort(makeGroupComparator(groupBy));
+        const firstPage = data.pages[0];
 
-        return { entities, groups, items };
+        if (firstPage?.kind === 'grouped') {
+          const groups = firstPage.groups
+            .slice()
+            .sort(makeGroupComparator(groupBy));
+          const itemsById = firstPage.items;
+          const orderedItems: SoupApiItem[] = [];
+          for (const g of groups) {
+            for (const id of g.itemIds) {
+              const it = itemsById[id];
+              if (it) orderedItems.push(it);
+            }
+          }
+          const entities = mapSoupPageToEntityList(
+            { items: orderedItems, next_cursor: null },
+            { instructionsIdQuery }
+          );
+          return { entities, groups, itemsById };
+        }
+
+        const entities = data.pages.flatMap((page) => {
+          if (page.kind !== 'flat') return [];
+          return mapSoupPageToEntityList(
+            { items: page.items, next_cursor: null },
+            { instructionsIdQuery }
+          );
+        });
+        return { entities, groups: undefined };
       },
       enabled: options?.().enabled,
       staleTime: options?.().staleTime,
@@ -186,10 +224,6 @@ export const useSoupAstItemsQuery = (
     };
   });
 };
-
-// Empty group key from backend (rust/cloud-storage/soup/src/domain/models/grouping.rs)
-// for items missing a value for the grouped property.
-const NOT_SET_GROUP_KEY = '';
 
 // Stable UUIDs from migrations/20251128000001_seed_system_properties.sql.
 // Custom (user-created) options fall through to displayOrder.

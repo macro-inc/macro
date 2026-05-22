@@ -39,7 +39,10 @@ import { GROUPED_SUBQUERY_MARKER, soupKeys } from '@queries/soup/keys';
 import { mapSoupPageToEntityList } from '@queries/soup/transform-utils';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
-import type { SoupPage } from '@service-storage/generated/schemas';
+import type {
+  SoupApiItem,
+  SoupPage,
+} from '@service-storage/generated/schemas';
 import type { InfiniteData } from '@tanstack/solid-query';
 import {
   type Accessor,
@@ -351,17 +354,20 @@ export const SoupViewContextProvider: FlowComponent<
     () => {
       const field = groupByField();
       const groups = itemsQuery.data?.groups;
-      const items = itemsQuery.data?.items;
+      const itemsById = itemsQuery.data?.itemsById;
 
-      if (!field || !groups || !items) {
+      if (!field || !groups || !itemsById) {
         return [];
       }
 
       return groups.map((group) => {
-        const initialGroupItems = items.slice(
-          group.startIndex,
-          group.startIndex + group.pageCount
-        );
+        // Seed initial per-group page from the parent's items pool, restricted
+        // to this group's itemIds (in order).
+        const initialItems: Record<string, SoupApiItem> = {};
+        for (const id of group.itemIds) {
+          const it = itemsById[id];
+          if (it) initialItems[id] = it;
+        }
 
         return {
           key: group.key,
@@ -397,7 +403,7 @@ export const SoupViewContextProvider: FlowComponent<
           initialData: {
             pages: [
               {
-                items: initialGroupItems,
+                items: initialItems,
                 nextCursor: group.nextCursor,
                 groups: [group],
               },
@@ -405,7 +411,16 @@ export const SoupViewContextProvider: FlowComponent<
             pageParams: [null],
           },
           select: (pages: GroupedSoupPage[]): SoupEntity[] => {
-            const allItems = pages.flatMap((p) => p.items);
+            const allItems: SoupApiItem[] = [];
+            for (const p of pages) {
+              // Each page's `groups` typically has one entry (this group);
+              // walk its itemIds and pull from the page's pool.
+              const ids = p.groups[0]?.itemIds ?? [];
+              for (const id of ids) {
+                const it = p.items[id];
+                if (it) allItems.push(it);
+              }
+            }
             return mapSoupPageToEntityList(
               { items: allItems, next_cursor: null },
               { instructionsIdQuery }
