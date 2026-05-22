@@ -365,3 +365,6 @@ export const ENABLE_CREATE_PROPERTY = resolveFeatureFlag(
   'ENABLE_CREATE_PROPERTY',
   false
 );
+
+export const ENABLE_SIMPLIFIED_PRICING_OVERRIDE =
+  resolveFeatureFlag('ENABLE_SIMPLIFIED_PRICING', DEV_MODE_ENV) || undefined;
