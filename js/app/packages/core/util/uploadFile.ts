@@ -1,11 +1,11 @@
-import { invalidateUserQuota } from '@queries/auth';
-import { staticFileClient } from '@service-static-files/client';
-import { contentHash } from './hash';
 import {
   getNativeStagedUpload,
   type NativeStagedUploadSource,
   uploadNativeStagedFileToPresignedUrl,
 } from '@core/mobile/nativeStagedUpload';
+import { invalidateUserQuota } from '@queries/auth';
+import { staticFileClient } from '@service-static-files/client';
+import { contentHash } from './hash';
 
 /**
  * App-level upload file model.
