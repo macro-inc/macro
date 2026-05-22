@@ -9,8 +9,9 @@ use sqs_client::search::{
 
 use crate::config::BackfillPageSizes;
 use crate::domain::models::{
-    BackfillError, CallBackfillRequest, ChannelBackfillRequest, ChatBackfillRequest,
-    DocumentBackfillCursor, DocumentBackfillRequest, EmailBackfillRequest, SourcePage,
+    BackfillError, CallBackfillRequest, ChannelBackfillRequest, ChatBackfillCursor,
+    ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest, EmailBackfillRequest,
+    SourcePage,
 };
 use crate::domain::ports::BackfillSource;
 
@@ -91,22 +92,29 @@ impl BackfillSource for PgBackfillSource {
     async fn fetch_chats(
         &self,
         req: &ChatBackfillRequest,
-        offset: usize,
-    ) -> Result<SourcePage, BackfillError> {
+        cursor: Option<ChatBackfillCursor>,
+    ) -> Result<(SourcePage, Option<ChatBackfillCursor>), BackfillError> {
         let chat_ids = (!req.chat_ids.is_empty()).then_some(&req.chat_ids);
         let user_ids = (!req.user_ids.is_empty()).then_some(&req.user_ids);
+        let db_cursor = cursor.map(|c| (c.updated_at, c.message_id));
 
         let batch = macro_db_client::chat::get::get_chat_messages_for_search_backfill(
             &self.db,
             self.page_sizes.chats as i64,
-            offset as i64,
+            db_cursor,
             chat_ids,
             user_ids,
+            req.updated_after,
+            req.updated_before,
             req.deletion_filter.as_only_deleted(),
         )
         .await
         .map_err(BackfillError::Source)?;
 
+        let next_cursor = batch.last().map(|row| ChatBackfillCursor {
+            updated_at: row.updated_at,
+            message_id: row.message_id.clone(),
+        });
         let rows_consumed = batch.len();
         let messages: Vec<SearchQueueMessage> = batch
             .into_iter()
@@ -122,10 +130,13 @@ impl BackfillSource for PgBackfillSource {
             })
             .collect();
 
-        Ok(SourcePage {
-            messages,
-            rows_consumed,
-        })
+        Ok((
+            SourcePage {
+                messages,
+                rows_consumed,
+            },
+            next_cursor,
+        ))
     }
 
     async fn fetch_channels(

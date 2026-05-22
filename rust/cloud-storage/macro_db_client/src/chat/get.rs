@@ -15,14 +15,23 @@ pub struct ChatSearchBackfill {
     pub updated_at: DateTime<Utc>,
 }
 
-/// Gets the chat messages for search backfill
+/// Gets the chat messages for search backfill.
+///
+/// Pagination is **keyset (seek-method)**: pass `cursor` as the last
+/// row's `(updated_at, message_id)` pair from the previous page (or
+/// `None` for the first page). Sorting and filtering use `updatedAt`
+/// rather than `createdAt` so incremental backfills (e.g. "anything
+/// changed since X") catch messages that were edited after the cutoff.
+#[allow(clippy::too_many_arguments)]
 #[tracing::instrument(skip(db))]
 pub async fn get_chat_messages_for_search_backfill(
     db: &sqlx::Pool<sqlx::Postgres>,
     limit: i64,
-    offset: i64,
+    cursor: Option<(DateTime<Utc>, String)>,
     chat_ids: Option<&Vec<String>>,
     user_ids: Option<&Vec<String>>,
+    updated_after: Option<DateTime<Utc>>,
+    updated_before: Option<DateTime<Utc>>,
     only_deleted: Option<bool>,
 ) -> anyhow::Result<Vec<ChatSearchBackfill>> {
     if let Some(chat_ids) = chat_ids {
@@ -33,8 +42,10 @@ pub async fn get_chat_messages_for_search_backfill(
         return get_chat_messages_for_search_backfill_chat_ids(
             db,
             limit,
-            offset,
+            cursor,
             chat_ids,
+            updated_after,
+            updated_before,
             only_deleted,
         )
         .await;
@@ -48,12 +59,19 @@ pub async fn get_chat_messages_for_search_backfill(
         return get_chat_messages_for_search_backfill_user_ids(
             db,
             limit,
-            offset,
+            cursor,
             user_ids,
+            updated_after,
+            updated_before,
             only_deleted,
         )
         .await;
     }
+
+    let (cursor_updated_at, cursor_id) = match cursor {
+        Some((t, id)) => (Some(t), Some(id)),
+        None => (None, None),
+    };
 
     let result = sqlx::query!(
         r#"
@@ -61,24 +79,33 @@ pub async fn get_chat_messages_for_search_backfill(
             c."id" as "chat_id",
             m.id as "message_id",
             c."userId" as "user_id",
-            c."createdAt" as "created_at",
-            c."updatedAt" as "updated_at"
+            m."createdAt" as "created_at",
+            m."updatedAt" as "updated_at"
         FROM
             "ChatMessage" m
         JOIN
             "Chat" c on c."id" = m."chatId"
         WHERE
-            $3::bool IS NULL
-            OR ($3 AND c."deletedAt" IS NOT NULL)
-            OR (NOT $3 AND c."deletedAt" IS NULL)
-        ORDER BY
-            m."createdAt" DESC
+            (
+                $2::bool IS NULL
+                OR ($2 AND c."deletedAt" IS NOT NULL)
+                OR (NOT $2 AND c."deletedAt" IS NULL)
+            )
+            AND ($3::timestamptz IS NULL OR m."updatedAt" >= $3)
+            AND ($4::timestamptz IS NULL OR m."updatedAt" < $4)
+            AND (
+                $5::timestamptz IS NULL
+                OR (m."updatedAt", m.id) > ($5, $6::text)
+            )
+        ORDER BY m."updatedAt" ASC, m.id ASC
         LIMIT $1
-        OFFSET $2
         "#,
         limit,
-        offset,
-        only_deleted,
+        only_deleted as Option<bool>,
+        updated_after as Option<DateTime<Utc>>,
+        updated_before as Option<DateTime<Utc>>,
+        cursor_updated_at as Option<DateTime<Utc>>,
+        cursor_id as Option<String>,
     )
     .map(|row| ChatSearchBackfill {
         chat_id: row.chat_id,
@@ -94,21 +121,29 @@ pub async fn get_chat_messages_for_search_backfill(
 }
 
 /// Gets the chat messages for search backfill for specific chat ids
+#[allow(clippy::too_many_arguments)]
 async fn get_chat_messages_for_search_backfill_chat_ids(
     db: &sqlx::Pool<sqlx::Postgres>,
     limit: i64,
-    offset: i64,
+    cursor: Option<(DateTime<Utc>, String)>,
     chat_ids: &[String],
+    updated_after: Option<DateTime<Utc>>,
+    updated_before: Option<DateTime<Utc>>,
     only_deleted: Option<bool>,
 ) -> anyhow::Result<Vec<ChatSearchBackfill>> {
+    let (cursor_updated_at, cursor_id) = match cursor {
+        Some((t, id)) => (Some(t), Some(id)),
+        None => (None, None),
+    };
+
     let result = sqlx::query!(
         r#"
         SELECT
             c."id" as "chat_id",
             m.id as "message_id",
             c."userId" as "user_id",
-            c."createdAt" as "created_at",
-            c."updatedAt" as "updated_at"
+            m."createdAt" as "created_at",
+            m."updatedAt" as "updated_at"
         FROM
             "ChatMessage" m
         JOIN
@@ -116,19 +151,26 @@ async fn get_chat_messages_for_search_backfill_chat_ids(
         WHERE
             m."chatId" = ANY($1)
             AND (
-                $4::bool IS NULL
-                OR ($4 AND c."deletedAt" IS NOT NULL)
-                OR (NOT $4 AND c."deletedAt" IS NULL)
+                $3::bool IS NULL
+                OR ($3 AND c."deletedAt" IS NOT NULL)
+                OR (NOT $3 AND c."deletedAt" IS NULL)
             )
-        ORDER BY
-            m."createdAt" DESC
+            AND ($4::timestamptz IS NULL OR m."updatedAt" >= $4)
+            AND ($5::timestamptz IS NULL OR m."updatedAt" < $5)
+            AND (
+                $6::timestamptz IS NULL
+                OR (m."updatedAt", m.id) > ($6, $7::text)
+            )
+        ORDER BY m."updatedAt" ASC, m.id ASC
         LIMIT $2
-        OFFSET $3
         "#,
         chat_ids,
         limit,
-        offset,
-        only_deleted,
+        only_deleted as Option<bool>,
+        updated_after as Option<DateTime<Utc>>,
+        updated_before as Option<DateTime<Utc>>,
+        cursor_updated_at as Option<DateTime<Utc>>,
+        cursor_id as Option<String>,
     )
     .map(|row| ChatSearchBackfill {
         chat_id: row.chat_id,
@@ -144,21 +186,29 @@ async fn get_chat_messages_for_search_backfill_chat_ids(
 }
 
 /// Gets the chat messages for search backfill for specific user ids
+#[allow(clippy::too_many_arguments)]
 async fn get_chat_messages_for_search_backfill_user_ids(
     db: &sqlx::Pool<sqlx::Postgres>,
     limit: i64,
-    offset: i64,
+    cursor: Option<(DateTime<Utc>, String)>,
     user_ids: &[String],
+    updated_after: Option<DateTime<Utc>>,
+    updated_before: Option<DateTime<Utc>>,
     only_deleted: Option<bool>,
 ) -> anyhow::Result<Vec<ChatSearchBackfill>> {
+    let (cursor_updated_at, cursor_id) = match cursor {
+        Some((t, id)) => (Some(t), Some(id)),
+        None => (None, None),
+    };
+
     let result = sqlx::query!(
         r#"
         SELECT
             c."id" as "chat_id",
             m.id as "message_id",
             c."userId" as "user_id",
-            c."createdAt" as "created_at",
-            c."updatedAt" as "updated_at"
+            m."createdAt" as "created_at",
+            m."updatedAt" as "updated_at"
         FROM
             "ChatMessage" m
         JOIN
@@ -166,19 +216,26 @@ async fn get_chat_messages_for_search_backfill_user_ids(
         WHERE
             c."userId" = ANY($1)
             AND (
-                $4::bool IS NULL
-                OR ($4 AND c."deletedAt" IS NOT NULL)
-                OR (NOT $4 AND c."deletedAt" IS NULL)
+                $3::bool IS NULL
+                OR ($3 AND c."deletedAt" IS NOT NULL)
+                OR (NOT $3 AND c."deletedAt" IS NULL)
             )
-        ORDER BY
-            m."createdAt" DESC
+            AND ($4::timestamptz IS NULL OR m."updatedAt" >= $4)
+            AND ($5::timestamptz IS NULL OR m."updatedAt" < $5)
+            AND (
+                $6::timestamptz IS NULL
+                OR (m."updatedAt", m.id) > ($6, $7::text)
+            )
+        ORDER BY m."updatedAt" ASC, m.id ASC
         LIMIT $2
-        OFFSET $3
         "#,
         user_ids,
         limit,
-        offset,
-        only_deleted,
+        only_deleted as Option<bool>,
+        updated_after as Option<DateTime<Utc>>,
+        updated_before as Option<DateTime<Utc>>,
+        cursor_updated_at as Option<DateTime<Utc>>,
+        cursor_id as Option<String>,
     )
     .map(|row| ChatSearchBackfill {
         chat_id: row.chat_id,

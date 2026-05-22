@@ -17,8 +17,9 @@ use std::future::Future;
 use sqs_client::search::SearchQueueMessage;
 
 use super::models::{
-    BackfillError, CallBackfillRequest, ChannelBackfillRequest, ChatBackfillRequest,
-    DocumentBackfillCursor, DocumentBackfillRequest, EmailBackfillRequest, SourcePage,
+    BackfillError, CallBackfillRequest, ChannelBackfillRequest, ChatBackfillCursor,
+    ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest, EmailBackfillRequest,
+    SourcePage,
 };
 
 /// Publishes batches of search-event messages.
@@ -44,11 +45,16 @@ pub trait BackfillSource: Send + Sync + 'static {
         offset: usize,
     ) -> impl Future<Output = Result<SourcePage, BackfillError>> + Send;
 
+    /// Chats paginate by keyset cursor (mirroring documents): each call
+    /// passes the cursor of the last row from the previous page (or
+    /// `None` for the first page), and the implementation returns the
+    /// page plus the cursor to feed back into the next call. An empty
+    /// page signals end-of-source.
     fn fetch_chats(
         &self,
         req: &ChatBackfillRequest,
-        offset: usize,
-    ) -> impl Future<Output = Result<SourcePage, BackfillError>> + Send;
+        cursor: Option<ChatBackfillCursor>,
+    ) -> impl Future<Output = Result<(SourcePage, Option<ChatBackfillCursor>), BackfillError>> + Send;
 
     fn fetch_channels(
         &self,

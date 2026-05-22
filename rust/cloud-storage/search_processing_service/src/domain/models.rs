@@ -69,14 +69,32 @@ pub struct CallBackfillRequest {
 
 /// Chat-message backfill filter. Empty vectors mean "all messages for every
 /// chat / every user".
+///
+/// `updated_after` / `updated_before` filter on `updatedAt`, not `createdAt`,
+/// so incremental runs (e.g. "anything changed since X") catch messages that
+/// existed before the cutoff but were edited after it.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct ChatBackfillRequest {
     pub chat_ids: Vec<String>,
     pub user_ids: Vec<String>,
+    pub updated_after: Option<DateTime<Utc>>,
+    pub updated_before: Option<DateTime<Utc>>,
     pub deletion_filter: DeletionFilter,
     /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
     pub index_override: Option<String>,
+}
+
+/// Keyset (seek-method) pagination cursor for chat backfills.
+///
+/// `get_chat_messages_for_search_backfill` walks `"ChatMessage"` in
+/// `(updatedAt ASC, id ASC)` order; the cursor carries the last row's
+/// pair so the next page resumes with `WHERE (updatedAt, id) > cursor`.
+/// `None` starts at the beginning.
+#[derive(Debug, Clone)]
+pub struct ChatBackfillCursor {
+    pub updated_at: DateTime<Utc>,
+    pub message_id: String,
 }
 
 /// Channel-message backfill filter. No scoping knobs yet — reserved so adding
