@@ -31,3 +31,4 @@ config:
   cloud-storage-service:apple_bundle_id: apple-bundle-id-prod
   cloud-storage-service:documents_index_uses_join: "true"
   cloud-storage-service:call_records_index_uses_join: "true"
+  cloud-storage-service:chats_index_uses_join: "true"

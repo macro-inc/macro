@@ -6,3 +6,4 @@ config:
   search-processing-service:internal_auth_key: document-storage-service-auth-key-prod
   search-processing-service:documents_index_uses_join: "true"
   search-processing-service:call_records_index_uses_join: "true"
+  search-processing-service:chats_index_uses_join: "true"
