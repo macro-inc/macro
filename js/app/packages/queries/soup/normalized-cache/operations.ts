@@ -705,20 +705,17 @@ function getSearchResultId(result: UnifiedSearchResponseItem): string {
     .exhaustive();
 }
 
-/** @private */
-function snapshotSoup(): [
-  QueryKey,
-  InfiniteData<SoupPage, unknown> | undefined,
-][] {
-  return queryClient.getQueriesData<InfiniteData<SoupPage, unknown>>({
-    queryKey: soupKeys.astItems._def,
-  });
+/** @private Captures every soup-list-shaped query (legacy items, parent
+ * astItems, per-group caches) for full-range rollback. */
+function snapshotSoup(): [QueryKey, unknown][] {
+  return [
+    ...queryClient.getQueriesData<unknown>({ queryKey: soupKeys.items._def }),
+    ...queryClient.getQueriesData<unknown>({ queryKey: soupKeys.astItems._def }),
+  ];
 }
 
 /** @private */
-function restoreSnapshot(
-  snapshot: [QueryKey, InfiniteData<SoupPage, unknown> | undefined][]
-): void {
+function restoreSnapshot(snapshot: [QueryKey, unknown][]): void {
   for (const [key, data] of snapshot) {
     queryClient.setQueryData(key, data);
   }
