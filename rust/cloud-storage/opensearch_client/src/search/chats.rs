@@ -140,25 +140,30 @@ impl ChatQueryBuilder {
         // Access control on parent fields (user_id and/or entity_id).
         bool_query.filter(self.build_parent_filter()?);
 
-        // Role is a child-side field, so it has to live inside a
-        // `has_child` clause rather than on the outer bool. Use a
-        // dedicated clause that doesn't carry inner_hits — the
-        // term-clauses below handle highlights.
-        if !self.role.is_empty() {
-            let role_query = should_wildcard_field_query_builder("role", &self.role);
-            let role_has_child = HasChildQuery::new(CHILD_RELATION, role_query);
-            bool_query.filter(role_has_child.into());
-        }
-
         // One has_child clause per term, ANDed via bool.must. Each
         // carries its own inner_hits so highlights + message-nav data
         // come back alongside the parent. Shared `highlight_query`
         // tags every search term on a returned message regardless of
         // which has_child clause produced it.
+        //
+        // role is a child-side field — it lives inside each has_child
+        // clause alongside the term query so the same message that
+        // matches the term must also be from one of the requested
+        // roles. Filtering role at the bool level instead would only
+        // require *some* message in the chat to have the role, not
+        // necessarily the message matching the term.
         let highlight_query =
             build_all_terms_highlight_query(&self.inner.terms, &self.inner.match_type);
         for (idx, term) in self.inner.terms.iter().enumerate() {
-            let inner_query = build_child_content_query(term, &self.inner.match_type);
+            let term_query = build_child_content_query(term, &self.inner.match_type);
+            let inner_query = if self.role.is_empty() {
+                term_query
+            } else {
+                let mut combined = BoolQueryBuilder::new();
+                combined.must(term_query);
+                combined.must(should_wildcard_field_query_builder("role", &self.role));
+                combined.build().into()
+            };
             let inner_hits = InnerHits::new()
                 .name(format!("term_{idx}"))
                 .size(INNER_HITS_PER_TERM)
