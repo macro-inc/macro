@@ -9,10 +9,13 @@ use crate::domain::models::{
     PostTypingRequest, RemoveParticipantsRequest, ResolvedChannelMessage, SimpleMention,
     ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
 };
+use crate::domain::side_effects::{
+    ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
+    ThreadNotificationContext,
+};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
-use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
@@ -588,24 +591,70 @@ pub enum ChannelMessagesErr {
     MessageNotFound(Uuid),
 }
 
-/// Gateway for realtime channel updates.
-pub trait ChannelRealtimeGateway: Send + Sync + 'static {
-    /// Error type for gateway operations.
+/// Publisher for realtime channel side-effect commands.
+pub trait ChannelRealtimePublisher: Send + Sync + 'static {
+    /// Error type for publishing operations.
     type Err: Into<anyhow::Error> + Send;
 
-    /// Send an update to channel participants.
-    fn send_update<T: Serialize + Send>(
+    /// Publish an explicit realtime effect.
+    fn publish(
         &self,
-        message_type: &'static str,
-        payload: T,
-        participants: Vec<MacroUserIdStr<'static>>,
+        effect: ChannelRealtimeEffect,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
-/// Dispatcher for notification-related channel side effects.
-pub trait ChannelNotificationDispatcher: Send + Sync + 'static {
-    /// Fire-and-forget dispatch of a channel event to the notification adapter.
-    fn dispatch(&self, event: ChannelEvent);
+/// Sender for notification side-effect commands.
+pub trait ChannelNotificationSender: Send + Sync + 'static {
+    /// Error type for notification operations.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// Send an explicit notification effect.
+    fn send(
+        &self,
+        notification: ChannelNotificationEffect,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Read model for data needed while deriving side effects.
+pub trait ChannelSideEffectContext: Send + Sync + 'static {
+    /// Error type for context lookups.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// Count persisted channel messages.
+    fn get_channel_message_count(
+        &self,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<i64, Self::Err>> + Send;
+
+    /// Return user ids that exist in the application.
+    fn get_existing_user_ids(
+        &self,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<HashSet<String>, Self::Err>> + Send;
+
+    /// Load display metadata for mentioned documents.
+    fn get_document_mentions(
+        &self,
+        document_ids: Vec<String>,
+    ) -> impl Future<Output = Result<Vec<ChannelDocumentMention>, Self::Err>> + Send;
+
+    /// Load notification context for a thread reply.
+    fn get_thread_notification_context(
+        &self,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<ThreadNotificationContext, Self::Err>> + Send;
+
+    /// Load a user's profile picture URL for notification copy.
+    fn get_sender_profile_picture_url(
+        &self,
+        sender_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Option<String>> + Send;
+}
+
+/// Handler for durable channel events.
+pub trait ChannelEventHandler: Clone + Send + Sync + 'static {
+    /// Handle a durable channel event.
+    fn handle(&self, event: ChannelEvent) -> impl Future<Output = ()> + Send;
 }
 
 /// Dispatcher for channel side effects emitted after durable state changes.

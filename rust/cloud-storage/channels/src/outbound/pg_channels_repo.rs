@@ -1300,8 +1300,20 @@ impl ChannelRepo for PgChannelsRepo {
     }
 
     async fn user_has_team(&self, user_id: String, team_id: Uuid) -> Result<bool, Self::Err> {
-        let teams = macro_db_client::team::get::get_user_teams(&self.pool, &user_id).await?;
-        Ok(teams.into_iter().any(|team| team.id == team_id))
+        let has_team = sqlx::query_scalar::<_, bool>(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM team_user
+                WHERE user_id = $1 AND team_id = $2
+            )
+            "#,
+        )
+        .bind(user_id)
+        .bind(team_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(has_team)
     }
 
     async fn create_channel(

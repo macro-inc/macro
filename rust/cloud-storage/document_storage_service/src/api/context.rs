@@ -13,15 +13,18 @@ use call::{
     outbound::{livekit_rtc_client::LivekitRtcClient, pg_call_repo::PgCallRepo},
 };
 use channels::{
-    domain::service::ChannelServiceImpl,
+    domain::{
+        service::ChannelServiceImpl,
+        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
+    },
     inbound::axum_router::ChannelsRouterState,
     outbound::{
-        channel_mutations::{
-            ChannelSideEffectsDispatcher, ConnectionGatewayChannelRealtimeGateway,
-            ContactsChannelDispatcher, EntityAccessChannelSharePermissions,
-            NotificationChannelDispatcher, SqsChannelSearchIndexer,
-        },
-        pg_channels_repo::PgChannelsRepo,
+        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
+        contacts_dispatcher::ContactsChannelDispatcher,
+        entity_access_share_permissions::EntityAccessChannelSharePermissions,
+        notification_sender::NotificationChannelSender, pg_channels_repo::PgChannelsRepo,
+        pg_side_effect_context::PgChannelSideEffectContext,
+        sqs_search_indexer::SqsChannelSearchIndexer,
     },
 };
 use comms::{
@@ -198,11 +201,14 @@ pub(crate) type CommsState = CommsRouterState<CommsChannelService>;
 /// Type alias for the channels service wired into DSS.
 pub(crate) type DssChannelService = ChannelServiceImpl<
     PgChannelsRepo,
-    ChannelSideEffectsDispatcher<
-        ConnectionGatewayChannelRealtimeGateway,
-        NotificationChannelDispatcher<NotificationIngressType>,
-        SqsChannelSearchIndexer,
-        ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
+    SpawnedChannelEventDispatcher<
+        ChannelSideEffectService<
+            PgChannelSideEffectContext,
+            ConnectionGatewayChannelRealtimePublisher,
+            NotificationChannelSender<NotificationIngressType>,
+            SqsChannelSearchIndexer,
+            ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
+        >,
     >,
     EntityAccessChannelSharePermissions<EntityAccessService>,
 >;

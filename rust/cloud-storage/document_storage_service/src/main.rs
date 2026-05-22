@@ -24,15 +24,18 @@ use call::{
     },
 };
 use channels::{
-    domain::service::ChannelServiceImpl,
+    domain::{
+        service::ChannelServiceImpl,
+        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
+    },
     inbound::axum_router::ChannelsRouterState,
     outbound::{
-        channel_mutations::{
-            ChannelSideEffectsDispatcher, ConnectionGatewayChannelRealtimeGateway,
-            ContactsChannelDispatcher, EntityAccessChannelSharePermissions,
-            NotificationChannelDispatcher, SqsChannelSearchIndexer,
-        },
-        pg_channels_repo::PgChannelsRepo,
+        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
+        contacts_dispatcher::ContactsChannelDispatcher,
+        entity_access_share_permissions::EntityAccessChannelSharePermissions,
+        notification_sender::NotificationChannelSender, pg_channels_repo::PgChannelsRepo,
+        pg_side_effect_context::PgChannelSideEffectContext,
+        sqs_search_indexer::SqsChannelSearchIndexer,
     },
 };
 use comms::{
@@ -553,12 +556,13 @@ async fn main() -> anyhow::Result<()> {
 
     let channels_service = ChannelServiceImpl::with_dependencies(
         channels_repo,
-        ChannelSideEffectsDispatcher::new(
-            ConnectionGatewayChannelRealtimeGateway::new(conn_gateway_client.clone()),
-            NotificationChannelDispatcher::new(db.clone(), notification_ingress_service.clone()),
+        SpawnedChannelEventDispatcher::new(ChannelSideEffectService::new(
+            PgChannelSideEffectContext::new(db.clone()),
+            ConnectionGatewayChannelRealtimePublisher::new(conn_gateway_client.clone()),
+            NotificationChannelSender::new(notification_ingress_service.clone()),
             SqsChannelSearchIndexer::new(sqs_client.clone()),
             ContactsChannelDispatcher::new(contacts_ingress.clone()),
-        ),
+        )),
         EntityAccessChannelSharePermissions::new(db.clone(), entity_access_service.clone()),
     );
 

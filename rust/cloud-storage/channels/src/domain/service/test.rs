@@ -10,14 +10,12 @@ use crate::domain::{
         ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{
-        ChannelEventDispatcher, ChannelNotificationDispatcher, ChannelRealtimeGateway, ChannelRepo,
-        ChannelSearchIndexer, ChannelSharePermissionService, MockChannelRepo,
+        ChannelEventDispatcher, ChannelRepo, ChannelSharePermissionService, MockChannelRepo,
         TopLevelMessagesQueryResult,
     },
 };
 use chrono::Utc;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use serde::Serialize;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -565,313 +563,13 @@ impl ChannelRepo for FakeMutationRepo {
 }
 
 #[derive(Clone, Default)]
-struct FakeGateway {
-    events: Arc<Mutex<Vec<FakeGatewayEvent>>>,
-}
-
-struct FakeGatewayEvent {
-    message_type: &'static str,
-    payload: serde_json::Value,
-    recipients: Vec<String>,
-}
-
-impl ChannelRealtimeGateway for FakeGateway {
-    type Err = anyhow::Error;
-
-    async fn send_update<T: Serialize + Send>(
-        &self,
-        message_type: &'static str,
-        payload: T,
-        participants: Vec<MacroUserIdStr<'static>>,
-    ) -> Result<(), Self::Err> {
-        self.events.lock().unwrap().push(FakeGatewayEvent {
-            message_type,
-            payload: serde_json::to_value(payload)?,
-            recipients: participants
-                .into_iter()
-                .map(|p| p.as_ref().to_string())
-                .collect(),
-        });
-        Ok(())
-    }
-}
-
-#[derive(Clone, Default)]
-struct FakeNotifications {
-    messages: Arc<Mutex<Vec<FakeMessageNotification>>>,
-    invites: Arc<Mutex<usize>>,
-}
-
-struct FakeMessageNotification {
-    metadata: ChannelMetadata,
-    participants: Vec<String>,
-    message_id: Uuid,
-    has_attachments: bool,
-}
-
-impl ChannelNotificationDispatcher for FakeNotifications {
-    fn dispatch(&self, event: ChannelEvent) {
-        match event {
-            ChannelEvent::MessagePosted {
-                metadata,
-                participants,
-                message,
-                has_attachments,
-                ..
-            } => {
-                self.messages.lock().unwrap().push(FakeMessageNotification {
-                    metadata,
-                    participants: participants.into_iter().map(|p| p.user_id).collect(),
-                    message_id: message.id,
-                    has_attachments,
-                });
-            }
-            ChannelEvent::ParticipantsAdded { .. } => {
-                *self.invites.lock().unwrap() += 1;
-            }
-            _ => {}
-        }
-    }
-}
-
-#[derive(Clone, Default)]
-struct FakeSearch {
-    indexed: Arc<Mutex<Vec<(Uuid, Uuid)>>>,
-    removed: Arc<Mutex<Vec<(Uuid, Option<Uuid>)>>>,
-}
-
-impl ChannelSearchIndexer for FakeSearch {
-    async fn index_message(&self, channel_id: Uuid, message_id: Uuid) {
-        self.indexed.lock().unwrap().push((channel_id, message_id));
-    }
-
-    async fn remove_message(&self, channel_id: Uuid, message_id: Option<Uuid>) {
-        self.removed.lock().unwrap().push((channel_id, message_id));
-    }
-}
-
-#[derive(Clone)]
 struct FakeEvents {
-    gateway: FakeGateway,
-    notifications: FakeNotifications,
-    search: FakeSearch,
-}
-
-#[derive(Serialize)]
-struct FakeWithNonce<T: Serialize> {
-    #[serde(flatten)]
-    data: T,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    nonce: Option<String>,
-}
-
-#[derive(Serialize)]
-struct FakeAttachmentRealtimeData {
-    channel_id: Uuid,
-    message_id: Uuid,
-    attachments: Vec<MutatedAttachment>,
-}
-
-#[derive(Serialize)]
-struct FakeReactionRealtimeData {
-    channel_id: Uuid,
-    message_id: Uuid,
-    reactions: Vec<CountedReaction>,
-}
-
-fn fake_recipient_strings(recipients: Vec<MacroUserIdStr<'static>>) -> Vec<String> {
-    recipients
-        .into_iter()
-        .map(|recipient| recipient.as_ref().to_string())
-        .collect()
-}
-
-fn fake_participant_ids(participants: &[ChannelParticipant]) -> Vec<MacroUserIdStr<'static>> {
-    participants
-        .iter()
-        .filter_map(|participant| MacroUserIdStr::parse_from_str(&participant.user_id).ok())
-        .map(|id| id.into_owned())
-        .collect()
-}
-
-impl FakeEvents {
-    fn push_gateway<T: Serialize>(
-        &self,
-        message_type: &'static str,
-        payload: T,
-        recipients: Vec<MacroUserIdStr<'static>>,
-    ) {
-        self.gateway.events.lock().unwrap().push(FakeGatewayEvent {
-            message_type,
-            payload: serde_json::to_value(payload).unwrap(),
-            recipients: fake_recipient_strings(recipients),
-        });
-    }
+    events: Arc<Mutex<Vec<ChannelEvent>>>,
 }
 
 impl ChannelEventDispatcher for FakeEvents {
     fn dispatch(&self, event: ChannelEvent) {
-        match event {
-            ChannelEvent::ChannelCreated { .. } => {}
-            ChannelEvent::ChannelDeleted { channel_id } => {
-                self.search.removed.lock().unwrap().push((channel_id, None));
-            }
-            ChannelEvent::MessagePosted {
-                channel_id,
-                metadata,
-                participants,
-                message,
-                mentions,
-                has_attachments,
-                attachments,
-                nonce,
-            } => {
-                self.push_gateway(
-                    "comms_message",
-                    FakeWithNonce {
-                        data: message.clone(),
-                        nonce: nonce.clone(),
-                    },
-                    fake_participant_ids(&participants),
-                );
-                if !attachments.is_empty() {
-                    self.push_gateway(
-                        "comms_attachment",
-                        FakeWithNonce {
-                            data: FakeAttachmentRealtimeData {
-                                channel_id,
-                                message_id: message.id,
-                                attachments,
-                            },
-                            nonce: nonce.clone(),
-                        },
-                        fake_participant_ids(&participants),
-                    );
-                }
-                self.notifications.dispatch(ChannelEvent::MessagePosted {
-                    channel_id,
-                    metadata,
-                    participants,
-                    message: message.clone(),
-                    mentions,
-                    has_attachments,
-                    attachments: Vec::new(),
-                    nonce: None,
-                });
-                self.search
-                    .indexed
-                    .lock()
-                    .unwrap()
-                    .push((channel_id, message.id));
-            }
-            ChannelEvent::AttachmentsChanged {
-                channel_id,
-                message_id,
-                attachments,
-                recipients,
-                nonce,
-            } => {
-                self.push_gateway(
-                    "comms_attachment",
-                    FakeWithNonce {
-                        data: FakeAttachmentRealtimeData {
-                            channel_id,
-                            message_id,
-                            attachments,
-                        },
-                        nonce,
-                    },
-                    recipients,
-                );
-                self.search
-                    .indexed
-                    .lock()
-                    .unwrap()
-                    .push((channel_id, message_id));
-            }
-            ChannelEvent::MessageChanged {
-                channel_id,
-                message,
-                recipients,
-                nonce,
-            } => {
-                self.push_gateway(
-                    "comms_message",
-                    FakeWithNonce {
-                        data: message.clone(),
-                        nonce,
-                    },
-                    recipients,
-                );
-                self.search
-                    .indexed
-                    .lock()
-                    .unwrap()
-                    .push((channel_id, message.id));
-            }
-            ChannelEvent::MessageDeleted {
-                channel_id,
-                message,
-                recipients,
-                nonce,
-            } => {
-                let message_id = message.id;
-                self.push_gateway(
-                    "comms_message",
-                    FakeWithNonce {
-                        data: message,
-                        nonce,
-                    },
-                    recipients,
-                );
-                self.search
-                    .removed
-                    .lock()
-                    .unwrap()
-                    .push((channel_id, Some(message_id)));
-            }
-            ChannelEvent::ReactionChanged {
-                channel_id,
-                message_id,
-                reactions,
-                recipients,
-                nonce,
-            } => {
-                self.push_gateway(
-                    "comms_reaction",
-                    FakeWithNonce {
-                        data: FakeReactionRealtimeData {
-                            channel_id,
-                            message_id,
-                            reactions,
-                        },
-                        nonce,
-                    },
-                    recipients,
-                );
-            }
-            ChannelEvent::TypingChanged { .. } => {}
-            ChannelEvent::ParticipantsAdded {
-                channel_id,
-                invited_by_user_id,
-                recipient_user_ids,
-                metadata,
-                message_content,
-                ..
-            } => {
-                self.notifications
-                    .dispatch(ChannelEvent::ParticipantsAdded {
-                        channel_id,
-                        channel_type: metadata.channel_type,
-                        active_participant_user_ids: Vec::new(),
-                        invited_by_user_id,
-                        recipient_user_ids,
-                        metadata,
-                        message_content,
-                    });
-            }
-            ChannelEvent::ParticipantJoined { .. } => {}
-        }
+        self.events.lock().unwrap().push(event);
     }
 }
 
@@ -896,16 +594,9 @@ impl ChannelSharePermissionService for FakeSharePermissions {
 
 fn mutation_service(
     repo: FakeMutationRepo,
-    gateway: FakeGateway,
-    notifications: FakeNotifications,
-    search: FakeSearch,
+    events: FakeEvents,
     share: FakeSharePermissions,
 ) -> ChannelServiceImpl<FakeMutationRepo, FakeEvents, FakeSharePermissions> {
-    let events = FakeEvents {
-        gateway,
-        notifications,
-        search,
-    };
     ChannelServiceImpl::with_dependencies(repo, events, share)
 }
 
@@ -914,20 +605,12 @@ fn macro_id(user_id: &str) -> MacroUserIdStr<'static> {
 }
 
 #[tokio::test]
-async fn post_message_sends_realtime_notifications_search_and_share_updates() {
+async fn post_message_emits_message_posted_event_and_updates_share_permissions() {
     let channel_id = Uuid::new_v4();
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
-    let gateway = FakeGateway::default();
-    let notifications = FakeNotifications::default();
-    let search = FakeSearch::default();
+    let events = FakeEvents::default();
     let share = FakeSharePermissions::default();
-    let svc = mutation_service(
-        repo.clone(),
-        gateway.clone(),
-        notifications.clone(),
-        search.clone(),
-        share.clone(),
-    );
+    let svc = mutation_service(repo.clone(), events.clone(), share.clone());
 
     let res = svc
         .post_message(
@@ -952,54 +635,49 @@ async fn post_message_sends_realtime_notifications_search_and_share_updates() {
         .await
         .unwrap();
 
-    let events = gateway.events.lock().unwrap();
-    assert_eq!(events.len(), 2);
-    assert_eq!(events[0].message_type, "comms_message");
-    assert_eq!(events[0].payload["nonce"], "nonce-1");
-    assert_eq!(events[1].message_type, "comms_attachment");
-    assert_eq!(events[1].payload["message_id"], res.id);
+    let emitted = events.events.lock().unwrap();
+    assert_eq!(emitted.len(), 1);
+    let ChannelEvent::MessagePosted {
+        metadata,
+        participants,
+        message,
+        has_attachments,
+        attachments,
+        nonce,
+        ..
+    } = &emitted[0]
+    else {
+        panic!("expected MessagePosted event, got {:?}", emitted[0]);
+    };
+    assert_eq!(metadata.channel_name, "Project");
+    assert_eq!(message.id.to_string(), res.id);
+    assert_eq!(nonce.as_deref(), Some("nonce-1"));
+    assert!(*has_attachments);
+    assert_eq!(attachments.len(), 1);
     assert!(
-        events[0]
-            .recipients
-            .contains(&"macro|recipient@test.com".to_string())
+        participants
+            .iter()
+            .any(|participant| participant.user_id == "macro|recipient@test.com")
     );
-    drop(events);
+    drop(emitted);
 
-    let sent_notifications = notifications.messages.lock().unwrap();
-    assert_eq!(sent_notifications.len(), 1);
-    assert_eq!(sent_notifications[0].metadata.channel_name, "Project");
-    assert_eq!(sent_notifications[0].message_id.to_string(), res.id);
-    assert!(sent_notifications[0].has_attachments);
-    assert!(
-        sent_notifications[0]
-            .participants
-            .contains(&"macro|recipient@test.com".to_string())
-    );
-    drop(sent_notifications);
-
-    assert_eq!(search.indexed.lock().unwrap().len(), 1);
     let shared = share.items.lock().unwrap();
     assert!(shared.contains(&("chat-1".to_string(), "chat".to_string())));
     assert!(shared.contains(&("doc-1".to_string(), "document".to_string())));
 }
 
 #[tokio::test]
-async fn patch_message_content_sends_realtime_update_to_thread_participants_and_indexes() {
+async fn patch_message_content_emits_message_changed_event_to_thread_participants() {
     let channel_id = Uuid::new_v4();
     let thread_id = Uuid::new_v4();
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
     repo.state.lock().unwrap().message.thread_id = Some(thread_id);
     let message_id = repo.state.lock().unwrap().message.id;
-    let gateway = FakeGateway::default();
-    let notifications = FakeNotifications::default();
-    let search = FakeSearch::default();
-    let share = FakeSharePermissions::default();
+    let events = FakeEvents::default();
     let svc = mutation_service(
         repo.clone(),
-        gateway.clone(),
-        notifications.clone(),
-        search.clone(),
-        share,
+        events.clone(),
+        FakeSharePermissions::default(),
     );
 
     svc.patch_message(
@@ -1018,32 +696,32 @@ async fn patch_message_content_sends_realtime_update_to_thread_participants_and_
     .await
     .unwrap();
 
-    let events = gateway.events.lock().unwrap();
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].message_type, "comms_message");
-    assert_eq!(events[0].payload["content"], "edited");
-    assert_eq!(events[0].payload["nonce"], "edit-nonce");
-    assert_eq!(events[0].recipients, vec!["macro|thread@test.com"]);
-    assert_eq!(notifications.messages.lock().unwrap().len(), 0);
-    assert_eq!(
-        *search.indexed.lock().unwrap(),
-        vec![(channel_id, message_id)]
-    );
+    let emitted = events.events.lock().unwrap();
+    assert_eq!(emitted.len(), 1);
+    let ChannelEvent::MessageChanged {
+        channel_id: emitted_channel_id,
+        message,
+        recipients,
+        nonce,
+    } = &emitted[0]
+    else {
+        panic!("expected MessageChanged event, got {:?}", emitted[0]);
+    };
+    assert_eq!(*emitted_channel_id, channel_id);
+    assert_eq!(message.id, message_id);
+    assert_eq!(message.content, "edited");
+    assert_eq!(nonce.as_deref(), Some("edit-nonce"));
+    assert_eq!(recipients.len(), 1);
+    assert_eq!(recipients[0].as_ref(), "macro|thread@test.com");
 }
 
 #[tokio::test]
-async fn reaction_mutation_sends_grouped_reaction_gateway_message() {
+async fn reaction_mutation_emits_grouped_reaction_event() {
     let channel_id = Uuid::new_v4();
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
     let message_id = repo.state.lock().unwrap().message.id;
-    let gateway = FakeGateway::default();
-    let svc = mutation_service(
-        repo,
-        gateway.clone(),
-        FakeNotifications::default(),
-        FakeSearch::default(),
-        FakeSharePermissions::default(),
-    );
+    let events = FakeEvents::default();
+    let svc = mutation_service(repo, events.clone(), FakeSharePermissions::default());
 
     svc.post_reaction(
         macro_id("macro|sender@test.com"),
@@ -1058,11 +736,20 @@ async fn reaction_mutation_sends_grouped_reaction_gateway_message() {
     .await
     .unwrap();
 
-    let events = gateway.events.lock().unwrap();
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].message_type, "comms_reaction");
-    assert_eq!(events[0].payload["message_id"], message_id.to_string());
-    assert_eq!(events[0].payload["reactions"][0]["emoji"], "👍");
+    let emitted = events.events.lock().unwrap();
+    assert_eq!(emitted.len(), 1);
+    let ChannelEvent::ReactionChanged {
+        channel_id: emitted_channel_id,
+        message_id: emitted_message_id,
+        reactions,
+        ..
+    } = &emitted[0]
+    else {
+        panic!("expected ReactionChanged event, got {:?}", emitted[0]);
+    };
+    assert_eq!(*emitted_channel_id, channel_id);
+    assert_eq!(*emitted_message_id, message_id);
+    assert_eq!(reactions[0].emoji, "👍");
 }
 
 #[tokio::test]

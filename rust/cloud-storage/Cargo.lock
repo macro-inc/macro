@@ -1947,9 +1947,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "http-body-util",
- "macro_db_client",
  "macro_db_migrator",
- "macro_middleware",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -1964,6 +1962,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "share_permission_db_utils",
  "sqlx",
  "sqs_client",
  "thiserror 2.0.17",
@@ -10457,6 +10456,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "share_permission_db_utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "entity_access_db_utils",
+ "macro_user_id",
+ "macro_uuid",
+ "models_permissions",
+ "sqlx",
 ]
 
 [[package]]
