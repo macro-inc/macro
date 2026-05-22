@@ -317,23 +317,23 @@ function RemoteCursorsOverlay(props: RemoteCursorsOverlayProps) {
                   }}
                 </For>
               </Portal>
-                <div
-                  class={cn(
-                    'hidden m-0 text-transparent absolute pointer-events-none px-2 rounded-xs items-center',
-                    shouldShow() && 'flex',
-                  )}
-                  style={{
-                    transform: startStyle?.transform,
-                    top: `-${userTagHeight + 2}px`,
-                    left: startStyle.width,
-                    'background-color': tagName,
-                    color: textColor,
-                    height: `${userTagHeight}px`,
-                    width: 'fit-content',
-                  }}
-                >
-                  <p class="text-xs">{userName}</p>
-                </div>
+              <div
+                class={cn(
+                  'hidden m-0 text-transparent absolute pointer-events-none px-2 rounded-xs items-center',
+                  shouldShow() && 'flex'
+                )}
+                style={{
+                  transform: startStyle?.transform,
+                  top: `-${userTagHeight + 2}px`,
+                  left: startStyle.width,
+                  'background-color': tagName,
+                  color: textColor,
+                  height: `${userTagHeight}px`,
+                  width: 'fit-content',
+                }}
+              >
+                <p class="text-xs">{userName}</p>
+              </div>
             </>
           );
         }}
