@@ -37,7 +37,8 @@ function CallRecordingShareWithTeam(props: { record: Accessor<CallRecord> }) {
 
   const isShared = createMemo(() => record().shareWithTeam);
   const isDisabled = createMemo(
-    () => !canEdit() || toggleActiveShare.isPending || setArchivedShare.isPending
+    () =>
+      !canEdit() || toggleActiveShare.isPending || setArchivedShare.isPending
   );
 
   const handleChange = async (checked: boolean) => {
