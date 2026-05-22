@@ -290,6 +290,62 @@ static MACRO_TASK_ID_RE: LazyLock<Regex> = LazyLock::new(|| {
         .expect("valid regex")
 });
 
+/// Regex matching `{team_slug}-{team_task_id}` references.
+///
+/// The slug follows the team slug format used in generated branch names
+/// (letters/numbers/underscores, matched case-insensitively). The numeric
+/// portion is the per-team task number.
+static TEAM_TASK_REFERENCE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)(?:^|[^a-z0-9_])([a-z][a-z0-9_]{0,19})-([1-9][0-9]*)(?:$|[^a-z0-9_])")
+        .expect("valid regex")
+});
+
+/// A team-scoped task reference in the form `{team_slug}-{team_task_id}`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TeamTaskReference {
+    /// Team slug as it appears in the reference, normalized to lowercase.
+    pub team_slug: String,
+    /// Positive per-team task number.
+    pub team_task_id: i32,
+}
+
+impl TeamTaskReference {
+    /// Create a normalized team task reference.
+    pub fn new(team_slug: &str, team_task_id: i32) -> Option<Self> {
+        let team_slug = team_slug.trim().to_ascii_lowercase();
+        if team_slug.is_empty() || team_task_id <= 0 {
+            return None;
+        }
+
+        Some(Self {
+            team_slug,
+            team_task_id,
+        })
+    }
+
+    /// Extract all unique `{team_slug}-{team_task_id}` references from text.
+    pub fn extract_from_text(text: &str) -> Vec<Self> {
+        let mut seen = HashSet::new();
+        let mut results = Vec::new();
+
+        for caps in TEAM_TASK_REFERENCE_RE.captures_iter(text) {
+            let Some(task_num) = caps[2].parse::<i32>().ok() else {
+                continue;
+            };
+
+            let Some(reference) = Self::new(&caps[1], task_num) else {
+                continue;
+            };
+
+            if seen.insert((reference.team_slug.clone(), reference.team_task_id)) {
+                results.push(reference);
+            }
+        }
+
+        results
+    }
+}
+
 /// A Macro task ID in the form `MACRO-{short_uuid}`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MacroTaskId {

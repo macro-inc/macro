@@ -9,7 +9,7 @@ mod sync;
 pub use link::{GithubAccessToken, GithubExchangeTokenResponse, GithubLink, GithubUserInfo};
 pub use sync::{
     GithubInstallationAccessToken, GithubKey, GithubWebhookEventType, MacroTaskId,
-    ValidatedGithubWebhookEvent,
+    TeamTaskReference, ValidatedGithubWebhookEvent,
 };
 /// Errors that can occur during github operations.
 #[derive(Debug, thiserror::Error)]

@@ -18,7 +18,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
     ) -> Result<(), GithubError> {
         let searchable_texts = event.extract_searchable_text();
         let combined = searchable_texts.join(" ");
-        let task_ids = MacroTaskId::extract_from_text(&combined);
+        let task_ids = self.extract_task_ids_from_text(event, &combined).await;
 
         tracing::trace!(
             task_id_count = task_ids.len(),
@@ -99,7 +99,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
     ) -> Result<(), GithubError> {
         let searchable_texts = event.extract_searchable_text();
         let combined = searchable_texts.join(" ");
-        let task_ids: Vec<MacroTaskId> = MacroTaskId::extract_from_text(&combined);
+        let task_ids = self.extract_task_ids_from_text(event, &combined).await;
 
         tracing::trace!(
             task_id_count = task_ids.len(),
@@ -187,7 +187,9 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
         // Gather task IDs from PR title/body/branch
         let searchable_texts = event.extract_searchable_text();
         let combined = searchable_texts.join(" ");
-        let mut task_id_set: HashSet<MacroTaskId> = MacroTaskId::extract_from_text(&combined)
+        let mut task_id_set: HashSet<MacroTaskId> = self
+            .extract_task_ids_from_text(event, &combined)
+            .await
             .into_iter()
             .collect();
 
