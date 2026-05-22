@@ -213,12 +213,17 @@ pub(in crate::api::search) async fn perform_unified_search(
     } else {
         terms.clone()
     };
+    let call_record_terms = if opensearch_client::call_records_shape::alias_uses_join_shape() {
+        split_search_terms(&terms)
+    } else {
+        terms.clone()
+    };
     let channel_terms = split_search_terms(&terms);
     filter_document_response.terms = document_terms;
     filter_channel_response.terms = channel_terms;
     filter_chat_response.terms = chat_terms;
     filter_email_response.terms = email_terms.clone();
-    filter_call_record_response.terms = terms.clone();
+    filter_call_record_response.terms = call_record_terms;
 
     // Clone terms for use in name searches
     let name_search_term = terms[0].clone();
