@@ -321,6 +321,17 @@ fn expand_hit_into_search_hits(hit: Hit<UnifiedSearchIndex>) -> Vec<SearchHit> {
             }
             expanded
         }
+        UnifiedSearchIndex::CallRecord(parent) => {
+            let Some(inner) = hit.inner_hits.as_ref() else {
+                return vec![hit.into()];
+            };
+            let expanded =
+                crate::search::call_records::expand_inner_hits_to_search_hits(parent, inner);
+            if expanded.is_empty() {
+                return vec![hit.into()];
+            }
+            expanded
+        }
         _ => vec![hit.into()],
     }
 }
@@ -465,9 +476,13 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     .unwrap_or_default(),
                 goto: Some(SearchGotoContent::CallRecords(SearchGotoCallRecord {
                     channel_id: a.channel_id,
-                    transcript_id: a.transcript_id,
-                    speaker_id: a.speaker_id,
-                    sequence_num: a.sequence_num,
+                    // Flat-shape docs always carry transcript/speaker/sequence;
+                    // the join-shape parent fallback path only arrives here
+                    // when inner_hits was empty, in which case we have no
+                    // segment-level identifier to navigate to.
+                    transcript_id: a.transcript_id.unwrap_or_default(),
+                    speaker_id: a.speaker_id.unwrap_or_default(),
+                    sequence_num: a.sequence_num.unwrap_or_default(),
                     started_at: DateTime::from_timestamp(a.started_at_seconds, 0)
                         .unwrap_or_default(),
                     ended_at: a
@@ -606,15 +621,19 @@ pub(crate) async fn search_unified(
 
     tracing::trace!("search request {:?}", search_request);
 
-    // Documents and chats reads can be redirected to a side alias via
-    // DOCUMENTS_INDEX_NAME / CHATS_INDEX_NAME for local end-to-end
-    // testing; every other entity type keeps its default alias.
+    // Documents, chats, and call records reads can be redirected to a
+    // side alias via DOCUMENTS_INDEX_NAME / CHATS_INDEX_NAME /
+    // CALL_RECORDS_INDEX_NAME for local end-to-end testing; every other
+    // entity type keeps its default alias.
     let search_indices: Vec<&str> = args
         .search_indices
         .iter()
         .map(|i| match i {
             OpenSearchEntityType::Documents => crate::documents_shape::documents_search_alias(),
             OpenSearchEntityType::Chats => crate::chats_shape::chats_search_alias(),
+            OpenSearchEntityType::CallRecords => {
+                crate::call_records_shape::call_records_search_alias()
+            }
             other => other.index_name(),
         })
         .collect();
