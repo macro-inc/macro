@@ -739,6 +739,8 @@ async fn assert_first_message_side_effect_contract(
     )
     .await?;
     assert_db_attachment_count(&ctx.pool, &root.id, 1).await?;
+    assert_db_document_channel_share_permission(&ctx.pool, &document.document_id, &channel.id)
+        .await?;
 
     for event in listeners
         .wait_for_all(
@@ -1844,6 +1846,74 @@ async fn assert_db_attachment_count(
         count == expected_count,
         "message {message_id} attachment count was {count}, expected {expected_count}"
     );
+    Ok(())
+}
+
+async fn assert_db_document_channel_share_permission(
+    pool: &PgPool,
+    document_id: &str,
+    channel_id: &str,
+) -> anyhow::Result<()> {
+    let share_permission_id = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT dp."sharePermissionId"
+        FROM "DocumentPermission" dp
+        WHERE dp."documentId" = $1
+        "#,
+    )
+    .bind(document_id)
+    .fetch_one(pool)
+    .await
+    .with_context(|| {
+        format!("failed to query document share permission for document {document_id}")
+    })?;
+
+    let channel_share_permission_exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM "ChannelSharePermission"
+            WHERE "share_permission_id" = $1
+              AND "channel_id" = $2
+              AND "access_level"::text = 'view'
+        )
+        "#,
+    )
+    .bind(&share_permission_id)
+    .bind(channel_id)
+    .fetch_one(pool)
+    .await
+    .context("failed to query channel share permission row")?;
+    ensure!(
+        channel_share_permission_exists,
+        "document {document_id} share permission {share_permission_id} was not granted to channel {channel_id}"
+    );
+
+    let document_uuid = Uuid::parse_str(document_id).context("failed to parse document id")?;
+    let entity_access_exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM entity_access
+            WHERE entity_id = $1
+              AND entity_type = 'document'
+              AND source_id = $2
+              AND source_type::text = 'channel'
+              AND access_level::text = 'view'
+              AND granted_from_project_id IS NULL
+        )
+        "#,
+    )
+    .bind(document_uuid)
+    .bind(channel_id)
+    .fetch_one(pool)
+    .await
+    .context("failed to query document channel entity access row")?;
+    ensure!(
+        entity_access_exists,
+        "document {document_id} did not receive view entity_access from channel {channel_id}"
+    );
+
     Ok(())
 }
 

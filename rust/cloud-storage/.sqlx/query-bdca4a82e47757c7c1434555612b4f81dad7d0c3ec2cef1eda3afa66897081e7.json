@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT dp.\"sharePermissionId\" as \"share_permission_id!\"\n                FROM \"DocumentPermission\" dp\n                WHERE dp.\"documentId\" = $1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "share_permission_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bdca4a82e47757c7c1434555612b4f81dad7d0c3ec2cef1eda3afa66897081e7"
+}
