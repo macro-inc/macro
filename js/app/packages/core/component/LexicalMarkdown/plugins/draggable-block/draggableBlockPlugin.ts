@@ -311,7 +311,6 @@ function registerDraggableBlock(
       }
     }
 
-    currentHoveredElement = blockElem;
     setState({ hoveredElement: blockElem });
   }
 
@@ -335,7 +334,6 @@ function registerDraggableBlock(
 
   function clearHover() {
     if (isDraggingBlock) return;
-    currentHoveredElement = null;
     setState({ hoveredElement: null });
   }
 
@@ -551,7 +549,6 @@ function registerDraggableBlock(
   }
 
   function resetState() {
-    currentHoveredElement = null;
     setState({
       isDragging: false,
       targetElement: null,
