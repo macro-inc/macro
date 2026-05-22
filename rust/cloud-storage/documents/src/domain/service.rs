@@ -1236,13 +1236,9 @@ impl<
         document_id: &str,
         request: &CreateTaskRequest,
     ) -> Result<(), DocumentError> {
-        if request.share_with_team {
-            let Some(team_id) = request.team_id else {
-                return Err(DocumentError::BadRequest(
-                    "teamId is required to share a task with a team".to_string(),
-                ));
-            };
-
+        if request.share_with_team
+            && let Some(team_id) = request.team_id
+        {
             let _ = self
                 .repo
                 .share_with_team(&team_id, document_id)
