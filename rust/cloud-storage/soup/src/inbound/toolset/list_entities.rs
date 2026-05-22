@@ -147,7 +147,7 @@ pub struct ListEntities {
     pub include_types: Option<Vec<ItemType>>,
 
     #[schemars(
-        description = "How to sort results: recently_viewed, recently_updated (default to this), or recently_created. Use recently_updated for updated_at-style soup results. If it's an email-only request, default to recently_updated."
+        description = "How to sort results: recently_viewed, recently_updated (default to this), or recently_created. Use recently_updated for updated_at-style soup results."
     )]
     #[serde(default)]
     pub sort_by: SortBy,
