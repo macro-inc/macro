@@ -54,8 +54,7 @@ impl ChannelMessageQueryBuilder {
     pub fn new(terms: Vec<String>) -> Self {
         Self {
             // Channel messages are single-doc-per-message, so every term
-            // must match the same document — AND combine instead of the
-            // default OR-with-app-layer-AND used by flat-shape documents.
+            // must match the same document.
             inner: SearchQueryBuilder::new(terms).term_combine(TermCombine::And),
             ..Default::default()
         }

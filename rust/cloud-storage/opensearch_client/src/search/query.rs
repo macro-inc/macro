@@ -72,13 +72,9 @@ impl QueryKey {
     }
 }
 
-/// How multi-term content queries combine. Only `And` exists today so
-/// every term must match the same document; the enum is kept so future
-/// shapes can opt into different combiners without rewriting call sites.
+/// How multi-term content queries combine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TermCombine {
-    /// Each term becomes its own `match_*` clause and the clauses are
-    /// ANDed via `bool.must`.
     #[default]
     And,
 }
