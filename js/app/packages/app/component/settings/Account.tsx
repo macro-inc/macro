@@ -11,12 +11,15 @@ import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
 } from '@core/constant/allBlocks';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   DEV_MODE_ENV,
   ENABLE_AUTO_UPDATE_UI,
   ENABLE_EMAIL,
   ENABLE_PROFILE_PICTURES,
+  ENABLE_SIMPLIFIED_PRICING_OVERRIDE,
 } from '@core/constant/featureFlags';
+import { useUserTeamsQuery } from '@queries/team';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { fileSelector } from '@core/directive/fileSelector';
 import {
@@ -38,6 +41,7 @@ import {
 import { usePermissions } from '@core/context/user';
 import { useSettingsState } from '@core/constant/SettingsState';
 import PaywallComponent from '../paywall/PaywallComponent';
+import PaywallTeamMemberView from '../paywall/PaywallTeamMemberView';
 import {
     useEmailLinks,
   useEmailLinksStatus,
@@ -120,6 +124,14 @@ export function Account() {
 
   const { disconnect: disconnectEmail } = useEmailLinks();
 
+  const userTeamsQuery = useUserTeamsQuery();
+  const isNonOwnerTeamMember = createMemo(() => {
+    const teams = userTeamsQuery.data;
+    const uid = userId();
+    if (!teams || !uid) return false;
+    return teams.some((t) => t.owner_id !== uid);
+  });
+
   const userName = useUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<
     string | undefined
@@ -187,11 +199,30 @@ export function Account() {
           <Panel.Toolbar class="h-full w-full">
             <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
               <div class="px-4 py-2 w-full">
-                <PaywallComponent
-                  hideCloseButton
-                  cb={() => {}}
-                  handleGuest={() => toggleSettings()}
-                />
+                <ShowFeatureFlag
+                  key="enable-simplified-pricing"
+                  enabledOverride={ENABLE_SIMPLIFIED_PRICING_OVERRIDE}
+                  fallback={
+                    <PaywallComponent
+                      hideCloseButton
+                      cb={() => {}}
+                      handleGuest={() => toggleSettings()}
+                    />
+                  }
+                >
+                  <Show
+                    when={isNonOwnerTeamMember()}
+                    fallback={
+                      <PaywallComponent
+                        hideCloseButton
+                        cb={() => {}}
+                        handleGuest={() => toggleSettings()}
+                      />
+                    }
+                  >
+                    <PaywallTeamMemberView />
+                  </Show>
+                </ShowFeatureFlag>
               </div>
             </Show>
           </Panel.Toolbar>
