@@ -147,7 +147,7 @@ pub struct ListEntities {
     pub include_types: Option<Vec<ItemType>>,
 
     #[schemars(
-        description = "How to sort results: recently_viewed (default), recently_updated, or recently_created. Use recently_updated for updated_at-style soup results."
+        description = "How to sort results: recently_viewed, recently_updated (default to this), or recently_created. Use recently_updated for updated_at-style soup results. If it's an email-only request, default to recently_updated."
     )]
     #[serde(default)]
     pub sort_by: SortBy,
@@ -207,9 +207,14 @@ pub struct ListEntities {
     #[serde(default, rename = "propf")]
     pub properties_filter: LiteralTree<PropertiesLiteral>,
 
-    #[schemars(
-        description = "Email view to use for email results: inbox (default), sent, drafts, starred, all, important, other, or user:<label>."
-    )]
+    #[schemars(description = "\
+Which mailbox view to hydrate previews from for email results. Valid values: inbox \
+(default), sent, drafts, starred, all, important, other, or user:<label>.\n\
+\n\
+When the user asks about signal/noise emails, use emailView=\"inbox\" together with \
+emailPreset=\"signal\"/\"noise\" — do not set emailView=\"important\" in that case. Only \
+override the default when the user explicitly asks for a specific mailbox or label view \
+(e.g. \"sent\", \"drafts\", \"my Foo label\").")]
     #[serde(default, rename = "emailView")]
     pub email_view: Option<String>,
 

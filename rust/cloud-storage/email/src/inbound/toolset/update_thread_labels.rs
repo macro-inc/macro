@@ -15,14 +15,37 @@ use super::EmailToolContext;
 #[derive(Debug, Deserialize, JsonSchema, Clone)]
 #[schemars(
     title = "UpdateThreadLabels",
-    description = "Add or remove a label from all messages in an email thread. Use ListLabels first to get valid label IDs. Set `add` to true to apply the label, or false to remove it."
+    description = "\
+Add or remove a single label from every message in a Gmail thread. In Gmail, nearly all \
+inbox operations are just label add/remove operations, so this tool is the primitive for \
+archiving, marking read/unread, starring, trashing, marking important/spam, and applying \
+or removing custom labels.\n\
+\n\
+Workflow: call ListLabels first to discover the UUID `id` for the label name you need, \
+then call this tool with that `label_id` plus the thread's `thread_id` and `add=true` \
+(apply) or `add=false` (remove). Each call modifies one label — to do multiple changes \
+on the same thread (e.g. archive AND mark read), call this tool once per label.\n\
+\n\
+Common operations (look up each system label's id via ListLabels first):\n\
+- Archive: remove `INBOX` (add=false)\n\
+- Move back to inbox: add `INBOX` (add=true)\n\
+- Mark as read: remove `UNREAD` (add=false)\n\
+- Mark as unread: add `UNREAD` (add=true)\n\
+- Star: add `STARRED` (add=true) / Unstar: remove (add=false)\n\
+- Move to trash: add `TRASH` (add=true) / Restore: remove (add=false)\n\
+- Mark important: add `IMPORTANT` (add=true) / Mark unimportant: remove (add=false)\n\
+- Report spam: add `SPAM` (add=true) / Not spam: remove (add=false)\n\
+- Apply custom user label: add the label with that display name (add=true) / Remove: (add=false)\n\
+\n\
+`thread_id` is the email thread UUID (the same id returned by ListEntities, search results, \
+or GetThread). `label_id` is the UUID returned by ListLabels — NOT the label name."
 )]
 pub struct UpdateThreadLabels {
-    /// The ID of the email thread to modify.
+    /// The ID of the email thread to modify. Same UUID returned by ListEntities, search, or GetThread.
     pub thread_id: Uuid,
-    /// The ID of the label to add or remove. Use ListLabels to get valid label IDs.
+    /// The UUID of the label to add or remove. Obtain this by calling ListLabels and looking up the label by name — do not pass the label name here.
     pub label_id: Uuid,
-    /// Whether to add (true) or remove (false) the label.
+    /// Whether to add (true) or remove (false) the label from every message in the thread.
     pub add: bool,
 }
 

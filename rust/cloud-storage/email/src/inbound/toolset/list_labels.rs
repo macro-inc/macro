@@ -55,7 +55,28 @@ pub struct ListLabelsResponse {
 #[derive(Debug, Deserialize, JsonSchema, Clone, Default)]
 #[schemars(
     title = "ListLabels",
-    description = "List the user's email labels including system labels (INBOX, SENT, DRAFTS, etc.) and any custom user-created labels. Use this to understand how the user's email is organized before filtering or searching by label."
+    description = "\
+List the user's Gmail labels. Returns both system labels (INBOX, SENT, DRAFTS, UNREAD, \
+STARRED, TRASH, SPAM, IMPORTANT, CATEGORY_PERSONAL, CATEGORY_SOCIAL, CATEGORY_PROMOTIONS, \
+CATEGORY_UPDATES, CATEGORY_FORUMS, etc.) and any custom user-created labels. Each label \
+has a UUID `id` and a `name`.\n\
+\n\
+Gmail represents nearly every inbox operation as a label add/remove, so this tool is the \
+first step for almost any thread-management action: call ListLabels once to find the label \
+`id` by `name`, then pass that `id` to UpdateThreadLabels. Common pairings (look up the \
+named system label here, then call UpdateThreadLabels with that id):\n\
+- Archive a thread → remove `INBOX` (add=false)\n\
+- Move back to inbox → add `INBOX` (add=true)\n\
+- Mark as read → remove `UNREAD` (add=false)\n\
+- Mark as unread → add `UNREAD` (add=true)\n\
+- Star → add `STARRED`; Unstar → remove `STARRED`\n\
+- Move to trash → add `TRASH`; Restore from trash → remove `TRASH`\n\
+- Mark important → add `IMPORTANT`; Mark unimportant → remove `IMPORTANT`\n\
+- Report spam → add `SPAM`; Not spam → remove `SPAM`\n\
+- Apply or remove a custom user label → look up the label by its display name and add/remove it\n\
+\n\
+Match label names case-insensitively when searching the response. You can also use this to \
+understand how the user's mail is organized before filtering or searching by label."
 )]
 #[allow(unused)]
 // empty structs can't be deserialized;

@@ -79,6 +79,7 @@ utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+crm = { path = "../crm", features = ["outbound"] }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }
