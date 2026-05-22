@@ -151,6 +151,12 @@ const searchProcessingService = new SearchProcessingService(
         value: config.get('documents_index_uses_join') ?? 'false',
       },
       {
+        // Same as DOCUMENTS_INDEX_USES_JOIN, but for the chats alias
+        // (`chats_v1` flat -> `chats_v2` parent/child).
+        name: 'CHATS_INDEX_USES_JOIN',
+        value: config.get('chats_index_uses_join') ?? 'false',
+      },
+      {
         name: 'DOCUMENT_STORAGE_BUCKET',
         value: pulumi.interpolate`${documentStorageBucketId}`,
       },
