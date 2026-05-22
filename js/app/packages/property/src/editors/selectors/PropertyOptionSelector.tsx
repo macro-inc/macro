@@ -342,7 +342,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
       }
     >
       <Show when={!props.error}>
-        <div onClick={(e) => e.stopPropagation()}>
+        <div>
           <div class="relative">
             <DropdownSearchInput
               value={dropdown.searchQuery()}
