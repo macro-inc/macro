@@ -104,13 +104,14 @@ pub fn build_grouped_response(
         entry.last_item_id = Some(item_id);
         entry.last_cursor_val = Some(cursor_val);
 
-        items_pool.insert(
-            item_id,
-            FrecencySoupItem {
+        // First occurrence wins; later duplicates are dropped instead of
+        // overwriting an already-populated entry.
+        items_pool
+            .entry(item_id)
+            .or_insert_with(|| FrecencySoupItem {
                 item: grouped_item.item,
                 frecency_score: grouped_item.frecency_score,
-            },
-        );
+            });
     }
 
     let mut groups: Vec<GroupMeta> = group_stats
