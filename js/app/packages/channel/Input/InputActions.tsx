@@ -64,8 +64,6 @@ export function AttachNativeMediaAction() {
   );
 }
 
-export const AttachNativePhotosAction = AttachNativeMediaAction;
-
 export function ToggleFormatAction() {
   const input = useInput();
   const commands = useInputCommands();

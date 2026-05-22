@@ -5,8 +5,6 @@ use url::Url;
 pub(super) struct ShareTargetPlatformImpl;
 
 impl ShareTargetPlatform for ShareTargetPlatformImpl {
-    fn cleanup_stale_staged_shared_files(_app: &AppHandle) {}
-
     fn get_pending_share_filenames(_app: AppHandle, state: &PendingShareFilesState) -> Vec<String> {
         state.with_data(|d| d.clone())
     }

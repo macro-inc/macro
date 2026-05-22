@@ -7,10 +7,10 @@ use reqwest::header::{COOKIE, ORIGIN};
 use rootcause::{Report, report};
 use serde::Serialize;
 use share_target::{
-    PendingShareFilesState, cleanup_stale_staged_shared_files, clear_shared_files,
-    get_pending_share_filenames, maybe_handle_share_deep_link, pop_shared_files,
-    read_shared_file_text,
+    PendingShareFilesState, clear_shared_files, get_pending_share_filenames,
+    maybe_handle_share_deep_link, pop_shared_files, read_shared_file_text,
 };
+use staged_upload::cleanup_stale_staged_files;
 use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime};
 
@@ -222,7 +222,7 @@ pub fn run() {
             }
 
             app.chain(attach_deep_link_handler);
-            cleanup_stale_staged_shared_files(&app.handle());
+            cleanup_stale_staged_files(&app.handle());
 
             Ok(())
         })

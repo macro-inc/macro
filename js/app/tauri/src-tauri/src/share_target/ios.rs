@@ -7,7 +7,6 @@ use crate::{
     APP_SCHEME,
     staged_upload::{
         StagedUploadSource, next_stage_token, staged_file_path, staged_file_path_for_name,
-        staging_dir_path,
     },
 };
 use serde::Serialize;
@@ -22,7 +21,6 @@ struct ShareFilesReadyPayload {
     filenames: Vec<String>,
 }
 
-const STALE_SHARED_FILE_TTL_SECS: u64 = 60 * 60 * 24;
 /// Returns the filesystem path of the shared App Group container used to
 /// exchange files between the Share Extension and the main app.
 /// Calls NSFileManager directly via the objc2 runtime — no FFI to main.mm needed.
@@ -103,39 +101,6 @@ fn stage_shared_file(
     })
 }
 
-fn cleanup_stale_staged_shared_files(app: &AppHandle) {
-    let Ok(staging_dir) = staging_dir_path(app, StagedUploadSource::Share) else {
-        return;
-    };
-
-    let Ok(entries) = std::fs::read_dir(&staging_dir) else {
-        return;
-    };
-
-    let cutoff = std::time::SystemTime::now()
-        .checked_sub(std::time::Duration::from_secs(STALE_SHARED_FILE_TTL_SECS))
-        .unwrap_or(std::time::UNIX_EPOCH);
-
-    for entry in entries.flatten() {
-        let Ok(metadata) = entry.metadata() else {
-            continue;
-        };
-
-        if !metadata.is_file() {
-            continue;
-        }
-
-        let modified = metadata.modified().or_else(|_| metadata.created());
-        let should_remove = modified.map(|time| time < cutoff).unwrap_or(false);
-
-        if should_remove {
-            let _ = std::fs::remove_file(entry.path());
-        }
-    }
-
-    let _ = std::fs::remove_dir(staging_dir);
-}
-
 fn consume_pending_share_filenames(
     container_path: &std::path::Path,
     state: &PendingShareFilesState,
@@ -184,10 +149,6 @@ fn mime_type_from_path(path: &std::path::Path) -> &'static str {
 }
 
 impl ShareTargetPlatform for ShareTargetPlatformImpl {
-    fn cleanup_stale_staged_shared_files(app: &AppHandle) {
-        cleanup_stale_staged_shared_files(app);
-    }
-
     fn get_pending_share_filenames(app: AppHandle, state: &PendingShareFilesState) -> Vec<String> {
         let pending = state.with_data(|f| f.clone());
 

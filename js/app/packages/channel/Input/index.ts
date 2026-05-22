@@ -17,7 +17,6 @@ export { Input } from './Input';
 export {
   AttachFilesAction,
   AttachNativeMediaAction,
-  AttachNativePhotosAction as AttachPhotosAction,
   CloseReplyAction,
   DiscardDraftAction,
   ToggleFormatAction,

@@ -43,8 +43,6 @@ pub(crate) struct StagedSharedFile {
 }
 
 pub(crate) trait ShareTargetPlatform {
-    fn cleanup_stale_staged_shared_files(app: &AppHandle);
-
     fn get_pending_share_filenames(app: AppHandle, state: &PendingShareFilesState) -> Vec<String>;
 
     fn pop_shared_files(
@@ -70,10 +68,6 @@ fn remaining_pending_share_filenames(
         .filter(|name| !consumed_filenames.contains(name))
         .cloned()
         .collect()
-}
-
-pub(crate) fn cleanup_stale_staged_shared_files(app: &AppHandle) {
-    ShareTargetPlatformImpl::cleanup_stale_staged_shared_files(app);
 }
 
 #[tauri::command]

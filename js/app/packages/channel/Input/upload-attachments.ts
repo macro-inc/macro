@@ -1,8 +1,8 @@
 import { toast } from '@core/component/Toast/Toast';
 import { getImageDimensions, getVideoDimensions } from '@core/util/media';
 import {
+  createUploadFile,
   createUploadFilePreviewUrl,
-  ensureUploadFile,
   getUploadFilePreviewSource,
   type UploadFile,
 } from '@core/util/uploadFile';
@@ -77,7 +77,7 @@ export async function uploadInputAttachments(options: {
   uploadFile: (file: File) => Promise<UploadResult>;
 }): Promise<void> {
   for (const file of options.files) {
-    const uploadSource = ensureUploadFile(file);
+    const uploadSource = createUploadFile(file);
     const pendingId = crypto.randomUUID();
     const pendingKind = getAttachmentKindFromFile(uploadSource);
     const previewSrc = createAttachmentPreviewSrc(uploadSource, pendingKind);

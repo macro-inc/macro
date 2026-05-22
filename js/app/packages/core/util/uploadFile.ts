@@ -12,7 +12,7 @@ import {
  *
  * In Tauri app file uploads are handled on the Rust-side. Paste/drop boundaries thus need to briefly carry native staged uploads as placeholder `Files`s.
  *
- * Immediately normalize those placeholders with `createUploadFile`/`ensureUploadFile`.
+ * Immediately normalize those placeholders with `createUploadFile`.
  */
 
 export type BrowserUploadFile = {
@@ -53,10 +53,6 @@ export function createUploadFile(file: File): UploadFile {
     mimeType: file.type,
     size: file.size,
   };
-}
-
-export function ensureUploadFile(file: File): UploadFile {
-  return createUploadFile(file);
 }
 
 export function isNativeStagedUpload(

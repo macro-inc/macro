@@ -5,8 +5,8 @@ import type { FetchError } from '@core/service';
 import type { ResultError } from '@core/util/result';
 import {
   createStaticUploadFile,
+  createUploadFile,
   createUploadFilePreviewUrl,
-  ensureUploadFile,
   getUploadFileCacheKey,
   type UploadFile,
 } from '@core/util/uploadFile';
@@ -110,7 +110,7 @@ export async function addMediaFromFile(
   mediaType: MediaType,
   constrainedMediaDimensions?: { width: number; height: number }
 ) {
-  const processedFile = await processFile(ensureUploadFile(file));
+  const processedFile = await processFile(createUploadFile(file));
   if (!validateMediaFile(processedFile, mediaType)) return { success: false };
   editor.dispatchCommand(INSERT_MEDIA_COMMAND, {
     type: 'local',
@@ -151,7 +151,7 @@ async function getFileKey(file: UploadFile, chunks = 8) {
 
 async function processFile(file: UploadFile): Promise<UploadFile> {
   if (file.kind === 'browser' && heicConversionService.canConvert(file.file)) {
-    return ensureUploadFile(await heicConversionService.convertFile(file.file));
+    return createUploadFile(await heicConversionService.convertFile(file.file));
   }
   return file;
 }
@@ -166,7 +166,7 @@ async function uploadStaticFiles(
 ) {
   for (const file of files) {
     try {
-      const processedFile = await processFile(ensureUploadFile(file));
+      const processedFile = await processFile(createUploadFile(file));
       const id = await createStaticUploadFile(processedFile);
       onUpload(id);
     } catch (_error) {
@@ -314,7 +314,7 @@ function registerMediaPlugin(editor: LexicalEditor) {
     localUrl: string,
     mediaType: MediaType
   ) => {
-    const uploadKey = await getFileKey(ensureUploadFile(file));
+    const uploadKey = await getFileKey(createUploadFile(file));
 
     if (cachedUploads.has(uploadKey)) {
       const id = cachedUploads.get(uploadKey)!;

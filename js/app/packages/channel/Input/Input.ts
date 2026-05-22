@@ -9,7 +9,6 @@ import { FormatRibbon } from './FormatRibbon';
 import {
   AttachFilesAction,
   AttachNativeMediaAction,
-  AttachNativePhotosAction,
   CloseReplyAction,
   DiscardDraftAction,
   ToggleFormatAction,
@@ -31,7 +30,6 @@ export const Input = {
   Actions,
   AttachFilesAction,
   AttachNativeMediaAction,
-  AttachNativePhotosAction: AttachNativePhotosAction,
   ToggleFormatAction,
   CloseReplyAction,
   DiscardDraftAction,

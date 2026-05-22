@@ -7,6 +7,8 @@ use url::Url;
 #[cfg(target_os = "ios")]
 use uuid::Uuid;
 
+const STAGED_FILE_TTL_SECS: u64 = 60 * 60 * 24;
+
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum StagedUploadSource {
@@ -16,6 +18,8 @@ pub(crate) enum StagedUploadSource {
 }
 
 impl StagedUploadSource {
+    const ALL: [Self; 3] = [Self::Share, Self::Pasteboard, Self::PhotoLibrary];
+
     fn directory_name(self) -> &'static str {
         match self {
             Self::Share => "ios-share-staging",
@@ -74,6 +78,45 @@ pub(crate) fn staging_dir_path(
         .app_cache_dir()
         .map_err(|error| format!("failed to resolve app cache directory: {error}"))?
         .join(source.directory_name()))
+}
+
+pub(crate) fn cleanup_stale_staged_files(app: &AppHandle) {
+    for source in StagedUploadSource::ALL {
+        cleanup_stale_staged_files_for(app, source);
+    }
+}
+
+fn cleanup_stale_staged_files_for(app: &AppHandle, source: StagedUploadSource) {
+    let Ok(staging_dir) = staging_dir_path(app, source) else {
+        return;
+    };
+
+    let Ok(entries) = std::fs::read_dir(&staging_dir) else {
+        return;
+    };
+
+    let cutoff = std::time::SystemTime::now()
+        .checked_sub(std::time::Duration::from_secs(STAGED_FILE_TTL_SECS))
+        .unwrap_or(std::time::UNIX_EPOCH);
+
+    for entry in entries.flatten() {
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+
+        if !metadata.is_file() {
+            continue;
+        }
+
+        let modified = metadata.modified().or_else(|_| metadata.created());
+        let should_remove = modified.map(|time| time < cutoff).unwrap_or(false);
+
+        if should_remove {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+
+    let _ = std::fs::remove_dir(staging_dir);
 }
 
 fn ensure_staging_dir(app: &AppHandle, source: StagedUploadSource) -> Result<PathBuf, String> {

@@ -23,7 +23,6 @@ import { heicConversionService } from '@core/heic/service';
 import {
   createStaticUploadFile,
   createUploadFile,
-  ensureUploadFile,
   isNativeStagedUpload,
   type UploadFile,
 } from '@core/util/uploadFile';
@@ -398,7 +397,7 @@ export async function uploadFile(
   destinationRuleset: DestinationRuleset,
   dssOptions: DssUploadFileOptions = {}
 ): Promise<MaybeUploadResult> {
-  const uploadSource = ensureUploadFile(file);
+  const uploadSource = createUploadFile(file);
   try {
     validateFileSize(uploadSource);
 
@@ -459,7 +458,7 @@ export async function uploadFiles(
     isFileUploadEntry(file) ? file : { file, isFolder: false }
   );
   const files = entries.map((entry) => entry.file);
-  const uploadSources = files.map(ensureUploadFile);
+  const uploadSources = files.map(createUploadFile);
 
   // validate all files before uploading
   for (const file of uploadSources) {
