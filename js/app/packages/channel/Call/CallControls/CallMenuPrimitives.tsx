@@ -29,7 +29,7 @@ export const InlineCheckbox: Component<{ checked: boolean }> = (props) => (
   <span
     aria-hidden
     class={cn(
-      'inline-flex items-center justify-center size-3.5 shrink-0 rounded-sm transition-colors',
+      'inline-flex items-center justify-center size-3.5 shrink-0 rounded-sm',
       props.checked
         ? 'bg-accent text-surface'
         : 'bg-transparent border border-edge-muted text-transparent'

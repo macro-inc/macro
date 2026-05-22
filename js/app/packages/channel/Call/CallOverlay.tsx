@@ -342,7 +342,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
               role="checkbox"
               aria-checked={callCtx.isSharedWithTeam()}
               class={cn(
-                'inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs transition-colors select-none',
+                'inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none',
                 'border border-ink-muted/[0.08] bg-ink-muted/[0.025]',
                 'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
                 callCtx.isSharedWithTeam() && 'text-ink',
