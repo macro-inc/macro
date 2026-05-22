@@ -482,6 +482,76 @@
         }
       }
     },
+    "/link/gmail": {
+      "post": {
+        "tags": ["link::gmail"],
+        "summary": "Initiates a Gmail link for a user",
+        "operationId": "init_gmail_link",
+        "parameters": [
+          {
+            "name": "original_url",
+            "in": "query",
+            "description": "**OPTIONAL**. The original url to redirect to.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitGmailLinkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/login/apple": {
       "post": {
         "tags": ["login::apple"],
@@ -3394,6 +3464,21 @@
         }
       },
       "InitGithubLinkResponse": {
+        "type": "object",
+        "required": ["authorization_url", "link_id"],
+        "properties": {
+          "authorization_url": {
+            "type": "string",
+            "description": "The OAuth authorization URL to redirect the user to"
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The link ID for tracking the OAuth flow"
+          }
+        }
+      },
+      "InitGmailLinkResponse": {
         "type": "object",
         "required": ["authorization_url", "link_id"],
         "properties": {

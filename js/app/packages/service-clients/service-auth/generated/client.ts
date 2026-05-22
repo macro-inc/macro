@@ -24,6 +24,8 @@ import type {
   GetUserLinkExistsParams,
   InitGithubLinkParams,
   InitGithubLinkResponse,
+  InitGmailLinkParams,
+  InitGmailLinkResponse,
   InviteToTeamRequest,
   MacroApiTokenParams,
   MacroApiTokenResponse,
@@ -644,6 +646,85 @@ export const deleteGithubLink = async (
     status: res.status,
     headers: res.headers,
   } as deleteGithubLinkResponse;
+};
+
+/**
+ * @summary Initiates a Gmail link for a user
+ */
+export type initGmailLinkResponse200 = {
+  data: InitGmailLinkResponse;
+  status: 200;
+};
+
+export type initGmailLinkResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type initGmailLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type initGmailLinkResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
+export type initGmailLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type initGmailLinkResponseSuccess = initGmailLinkResponse200 & {
+  headers: Headers;
+};
+export type initGmailLinkResponseError = (
+  | initGmailLinkResponse400
+  | initGmailLinkResponse401
+  | initGmailLinkResponse429
+  | initGmailLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type initGmailLinkResponse =
+  | initGmailLinkResponseSuccess
+  | initGmailLinkResponseError;
+
+export const getInitGmailLinkUrl = (params: InitGmailLinkParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/link/gmail?${stringifiedParams}`
+    : `/link/gmail`;
+};
+
+export const initGmailLink = async (
+  params: InitGmailLinkParams,
+  options?: RequestInit
+): Promise<initGmailLinkResponse> => {
+  const res = await fetch(getInitGmailLinkUrl(params), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: initGmailLinkResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as initGmailLinkResponse;
 };
 
 /**
