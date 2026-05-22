@@ -973,7 +973,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
         soup.grouping.collapseAll(initialPersistedState.collapsedGroups ?? []);
       });
     } else {
-      if (props.initialClientFilters) {
+      if (!skipFiltersOnMount && props.initialClientFilters) {
         soup.predicates.set(props.initialClientFilters);
       }
       if (props.initialGroupBy) {

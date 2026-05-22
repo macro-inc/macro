@@ -7,6 +7,7 @@ import {
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
 import type { FilterContext } from '@app/component/next-soup/filters/configs/';
+import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import {
   createQueryStore,
   type Query,
@@ -160,6 +161,24 @@ export const SoupViewContextProvider: FlowComponent<
     () => structuredClone(unwrap(store.state)) as Query
   );
   onCleanup(filterCaptorTeardown);
+
+  // Client-side predicate state (drives the "Type: X" chips and other
+  // toggleable filters) also needs to round-trip per entry, since the chip UI
+  // reads predicates directly and would otherwise show empty after back-nav.
+  const persistedPredicates = panel.handle.currentEntryState()?.[
+    'search.predicates'
+  ] as SetPredicatesInput<string> | undefined;
+  if (persistedPredicates) {
+    soup.predicates.set(persistedPredicates);
+  }
+  const predicatesCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    'search.predicates',
+    (): SetPredicatesInput<string> => ({
+      and: [...soup.predicates.andIds()],
+      or: [...soup.predicates.orIds()],
+    })
+  );
+  onCleanup(predicatesCaptorTeardown);
 
   const invalidateCache = () => {
     queryClient.setQueryData(
