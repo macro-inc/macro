@@ -5,7 +5,7 @@ import {
   getNativeStagedUpload,
   type NativeStagedUploadSource,
   uploadNativeStagedFileToPresignedUrl,
-} from './nativeStagedUpload';
+} from '@core/mobile/nativeStagedUpload';
 
 /**
  * App-level upload file model.

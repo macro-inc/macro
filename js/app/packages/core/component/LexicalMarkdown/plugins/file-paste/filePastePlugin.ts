@@ -2,7 +2,7 @@ import { extractFileSystemEntries } from '@core/util/dataTransfer';
 import {
   recoverMobileClipboardImageEntries,
   shouldUseMobileClipboardImageRecovery,
-} from '@core/util/mobileClipboardImageRecovery';
+} from '@core/mobile/mobileClipboardImageRecovery';
 import { mergeRegister } from '@lexical/utils';
 import {
   COMMAND_PRIORITY_NORMAL,

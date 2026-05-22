@@ -1,4 +1,4 @@
-import { pickNativePhotoLibraryMedia } from '@core/util/nativePhotoLibrary';
+import { pickNativePhotoLibraryMedia } from '@core/mobile/nativePhotoLibrary';
 import FormatIcon from '@phosphor/text-aa.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import ImageIcon from '@phosphor-icons/core/regular/image.svg?component-solid';

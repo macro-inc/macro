@@ -1,7 +1,7 @@
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isAndroid, isIOS } from '@solid-primitives/platform';
 import { invoke, isTauri } from '@tauri-apps/api/core';
-import { createSyntheticFileEntry } from './dataTransfer';
+import { createSyntheticFileEntry } from '@core/util/dataTransfer';
 import {
   createNativeStagedUploadFile,
   type NativeStagedUploadData,
