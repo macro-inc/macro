@@ -5,8 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentContent } from './documentContent';
+import type { DocumentResponseMetadataWithContentAllOfTeamId } from './documentResponseMetadataWithContentAllOfTeamId';
+import type { DocumentResponseMetadataWithContentAllOfTeamTaskId } from './documentResponseMetadataWithContentAllOfTeamTaskId';
 
 export type DocumentResponseMetadataWithContentAllOf = {
   /** Content lifecycle and location metadata. */
   content: DocumentContent;
+  /** The team this task number is scoped to, for task documents. */
+  teamId?: DocumentResponseMetadataWithContentAllOfTeamId;
+  /** The task number assigned within the team, for task documents. */
+  teamTaskId?: DocumentResponseMetadataWithContentAllOfTeamTaskId;
 };

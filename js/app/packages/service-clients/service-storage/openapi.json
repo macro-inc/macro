@@ -2105,6 +2105,16 @@
                     "documentId": {
                       "type": "string",
                       "description": "The document ID of the created task."
+                    },
+                    "teamId": {
+                      "type": ["string", "null"],
+                      "format": "uuid",
+                      "description": "The team this task number is scoped to."
+                    },
+                    "teamTaskId": {
+                      "type": ["integer", "null"],
+                      "format": "int32",
+                      "description": "The task number assigned within the team."
                     }
                   }
                 }
@@ -7592,6 +7602,11 @@
           "skipHistory": {
             "type": "boolean",
             "description": "Whether to add a viewed_at record for this document upon creation."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team to assign the task number within when creating a task document. If omitted,\nthe service may infer it only when the creator belongs to exactly one team."
           }
         }
       },
@@ -7717,6 +7732,11 @@
           "taskName": {
             "type": "string",
             "description": "The name of the task."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team to assign the task number within. If omitted, it is inferred only\nwhen the creator belongs to exactly one team."
           }
         }
       },
@@ -7728,6 +7748,16 @@
           "documentId": {
             "type": "string",
             "description": "The document ID of the created task."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The team this task number is scoped to."
+          },
+          "teamTaskId": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "The task number assigned within the team."
           }
         }
       },
@@ -8200,6 +8230,16 @@
               "content": {
                 "$ref": "#/components/schemas/DocumentContent",
                 "description": "Content lifecycle and location metadata."
+              },
+              "teamId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The team this task number is scoped to, for task documents."
+              },
+              "teamTaskId": {
+                "type": ["integer", "null"],
+                "format": "int32",
+                "description": "The task number assigned within the team, for task documents."
               }
             }
           }
@@ -8475,6 +8515,16 @@
               "content": {
                 "$ref": "#/components/schemas/DocumentContent",
                 "description": "Content lifecycle and location metadata."
+              },
+              "teamId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The team this task number is scoped to, for task documents."
+              },
+              "teamTaskId": {
+                "type": ["integer", "null"],
+                "format": "int32",
+                "description": "The task number assigned within the team, for task documents."
               }
             }
           }

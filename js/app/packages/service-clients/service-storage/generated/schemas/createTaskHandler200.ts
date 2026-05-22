@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateTaskHandler200TeamId } from './createTaskHandler200TeamId';
+import type { CreateTaskHandler200TeamTaskId } from './createTaskHandler200TeamTaskId';
 
 /**
  * Response for creating a task.
@@ -11,4 +13,8 @@
 export type CreateTaskHandler200 = {
   /** The document ID of the created task. */
   documentId: string;
+  /** The team this task number is scoped to. */
+  teamId?: CreateTaskHandler200TeamId;
+  /** The task number assigned within the team. */
+  teamTaskId?: CreateTaskHandler200TeamTaskId;
 };

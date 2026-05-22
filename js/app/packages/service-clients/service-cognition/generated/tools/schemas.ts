@@ -1615,6 +1615,8 @@ export const ReadMetadataResponse = z.object({
     projectName: z.union([z.string(), z.null()]).optional(),
     sha: z.union([z.string(), z.null()]).optional(),
     subType: z.union([z.literal('task'), z.null()]).optional(),
+    teamId: z.union([z.string(), z.null()]).optional(),
+    teamTaskId: z.union([z.number().int(), z.null()]).optional(),
     updatedAt: z
       .union([z.string().datetime({ offset: true }), z.null()])
       .optional(),

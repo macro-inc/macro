@@ -2006,6 +2006,12 @@ export const createDocumentBody = zod.object({
     .describe(
       'Whether to add a viewed_at record for this document upon creation.'
     ),
+  teamId: zod
+    .uuid()
+    .nullish()
+    .describe(
+      'Team to assign the task number within when creating a task document. If omitted,\nthe service may infer it only when the creator belongs to exactly one team.'
+    ),
 });
 
 export const createDocumentResponse = zod.object({
@@ -2117,6 +2123,18 @@ export const createDocumentResponse = zod.object({
                   ),
               })
               .describe('API-visible content lifecycle and location metadata.'),
+            teamId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'The team this task number is scoped to, for task documents.'
+              ),
+            teamTaskId: zod
+              .number()
+              .nullish()
+              .describe(
+                'The task number assigned within the team, for task documents.'
+              ),
           })
         )
         .describe(
@@ -2336,12 +2354,26 @@ export const createTaskHandlerBody = zod
         'Whether to share the task with your team or not\nDefaults to true'
       ),
     taskName: zod.string().describe('The name of the task.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Team to assign the task number within. If omitted, it is inferred only\nwhen the creator belongs to exactly one team.'
+      ),
   })
   .describe('Request body for creating a task.');
 
 export const createTaskHandlerResponse = zod
   .object({
     documentId: zod.string().describe('The document ID of the created task.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('The team this task number is scoped to.'),
+    teamTaskId: zod
+      .number()
+      .nullish()
+      .describe('The task number assigned within the team.'),
   })
   .describe('Response for creating a task.');
 
@@ -3502,6 +3534,18 @@ export const copyDocumentResponse = zod
                 })
                 .describe(
                   'API-visible content lifecycle and location metadata.'
+                ),
+              teamId: zod
+                .uuid()
+                .nullish()
+                .describe(
+                  'The team this task number is scoped to, for task documents.'
+                ),
+              teamTaskId: zod
+                .number()
+                .nullish()
+                .describe(
+                  'The task number assigned within the team, for task documents.'
                 ),
             })
           )
