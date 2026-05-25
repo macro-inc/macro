@@ -109,6 +109,13 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         subscription_id: &stripe::SubscriptionId,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
+    /// Updates the teams payment status
+    fn update_team_payment_status(
+        &self,
+        team_id: &uuid::Uuid,
+        paying: bool,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
     /// Deletes a team
     fn delete_team(
         &self,
@@ -320,6 +327,22 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<(), RestorePermissionsForTeamMembersError>> + Send;
+
+    /// Patches the team subscription id
+    /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.
+    fn patch_team_subscription_id(
+        &self,
+        team_id: &uuid::Uuid,
+        subscription_id: &stripe::SubscriptionId,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Patches the teams payment status
+    /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.
+    fn patch_team_payment_status(
+        &self,
+        team_id: &uuid::Uuid,
+        paying: bool,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
     /// Gets a team by id with all its members
     fn get_team(

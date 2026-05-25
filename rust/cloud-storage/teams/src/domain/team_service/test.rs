@@ -199,6 +199,14 @@ impl TeamRepository for MockTeamRepository {
         async { Ok(()) }
     }
 
+    fn update_team_payment_status(
+        &self,
+        _: &uuid::Uuid,
+        _: bool,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send {
+        async { Ok(()) }
+    }
+
     fn delete_team(&self, _: &uuid::Uuid) -> impl Future<Output = Result<(), TeamError>> + Send {
         async { unimplemented!() }
     }

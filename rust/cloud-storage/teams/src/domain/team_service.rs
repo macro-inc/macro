@@ -792,6 +792,32 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn patch_team_subscription_id(
+        &self,
+        team_id: &uuid::Uuid,
+        subscription_id: &stripe::SubscriptionId,
+    ) -> Result<(), TeamError> {
+        self.team_repository
+            .update_team_subscription(team_id, subscription_id)
+            .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn patch_team_payment_status(
+        &self,
+        team_id: &uuid::Uuid,
+        paying: bool,
+    ) -> Result<(), TeamError> {
+        self.team_repository
+            .update_team_payment_status(team_id, paying)
+            .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_team(
         &self,
         entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
