@@ -144,6 +144,30 @@ async fn fetch_contact_hidden(pool: &PgPool, contact_id: Uuid) -> sqlx::Result<O
     Ok(row.map(|(h,)| h))
 }
 
+async fn fetch_company_updated_at(
+    pool: &PgPool,
+    company_id: Uuid,
+) -> sqlx::Result<Option<chrono::DateTime<chrono::Utc>>> {
+    let row: Option<(chrono::DateTime<chrono::Utc>,)> =
+        sqlx::query_as(r#"SELECT updated_at FROM crm_companies WHERE id = $1"#)
+            .bind(company_id)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.map(|(updated_at,)| updated_at))
+}
+
+async fn fetch_contact_updated_at(
+    pool: &PgPool,
+    contact_id: Uuid,
+) -> sqlx::Result<Option<chrono::DateTime<chrono::Utc>>> {
+    let row: Option<(chrono::DateTime<chrono::Utc>,)> =
+        sqlx::query_as(r#"SELECT updated_at FROM crm_contacts WHERE id = $1"#)
+            .bind(contact_id)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.map(|(updated_at,)| updated_at))
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn returns_none_when_no_company_for_domain(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
@@ -648,6 +672,84 @@ async fn service_populate_contact_same_domain_check_is_case_insensitive(
         count_companies_for_domain(&pool, team_id, "macro.com").await?,
         0
     );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn service_populate_contact_refreshes_existing_company_and_contact_updated_at(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
+
+    let old_updated_at: chrono::DateTime<chrono::Utc> =
+        sqlx::query_scalar(r#"SELECT now() - INTERVAL '1 hour'"#)
+            .fetch_one(&pool)
+            .await?;
+
+    let company_id = Uuid::now_v7();
+    sqlx::query(
+        r#"INSERT INTO crm_companies (id, team_id, email_sync, updated_at)
+           VALUES ($1, $2, TRUE, $3)"#,
+    )
+    .bind(company_id)
+    .bind(team_id)
+    .bind(old_updated_at)
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(r#"INSERT INTO crm_domains (company_id, team_id, domain) VALUES ($1, $2, $3)"#)
+        .bind(company_id)
+        .bind(team_id)
+        .bind("acme.com")
+        .execute(&pool)
+        .await?;
+
+    let contact_id = Uuid::now_v7();
+    sqlx::query(
+        r#"INSERT INTO crm_contacts (id, company_id, email, updated_at)
+           VALUES ($1, $2, $3, $4)"#,
+    )
+    .bind(contact_id)
+    .bind(company_id)
+    .bind("alice@acme.com")
+    .bind(old_updated_at)
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(r#"INSERT INTO crm_contact_sources (contact_id, link_id) VALUES ($1, $2)"#)
+        .bind(contact_id)
+        .bind(link_id)
+        .execute(&pool)
+        .await?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            Some("Alice"),
+        )
+        .await?;
+
+    let company_updated_at = fetch_company_updated_at(&pool, company_id)
+        .await?
+        .expect("company should still exist");
+    let contact_updated_at = fetch_contact_updated_at(&pool, contact_id)
+        .await?
+        .expect("contact should still exist");
+
+    assert!(company_updated_at > old_updated_at);
+    assert!(contact_updated_at > old_updated_at);
     Ok(())
 }
 

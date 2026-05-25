@@ -103,7 +103,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
 
         let company = sqlx::query!(
             r#"
-            SELECT c.id, c.team_id, c.email_sync, c.hidden, c.created_at
+            SELECT c.id, c.team_id, c.email_sync, c.hidden, c.created_at, c.updated_at
             FROM crm_companies c
             JOIN crm_domains d ON d.company_id = c.id
             WHERE c.team_id = $1
@@ -148,6 +148,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             email_sync: company.email_sync,
             hidden: company.hidden,
             created_at: company.created_at,
+            updated_at: company.updated_at,
             domains,
         }))
     }
@@ -242,7 +243,17 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                     .map_err(|e| CrmError::StorageLayerError(e.into()))?;
                 return Ok(());
             }
-            Some(row) => row.id,
+            Some(row) => {
+                sqlx::query!(
+                    r#"UPDATE crm_companies SET updated_at = now() WHERE id = $1"#,
+                    row.id,
+                )
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+                row.id
+            }
             None => {
                 let new_company = sqlx::query!(
                     r#"
@@ -295,6 +306,14 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                     .await
                     .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
+                    sqlx::query!(
+                        r#"UPDATE crm_companies SET updated_at = now() WHERE id = $1"#,
+                        existing_company_id,
+                    )
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
                     sqlx::query!(r#"DELETE FROM crm_companies WHERE id = $1"#, new_company.id,)
                         .execute(&mut *tx)
                         .await
@@ -312,15 +331,16 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // populate). On conflict, COALESCE preserves the existing
         // crm_contacts.name when it's non-NULL, so the first non-empty
         // name wins and a subsequent populate from a different team
-        // member can't overwrite it. If the existing name is NULL
-        // (previous populate ran before email_contacts had a name), the
-        // conflict path still gets a chance to fill it.
+        // member can't overwrite it. The conflict path still performs
+        // an UPDATE for existing contacts so `updated_at` reflects the
+        // latest populate even when the stored name is unchanged.
         let contact_id = sqlx::query_scalar!(
             r#"
             INSERT INTO crm_contacts (company_id, email, name)
             VALUES ($1, $2, $3)
             ON CONFLICT (company_id, email) DO UPDATE
-                SET name = COALESCE(crm_contacts.name, EXCLUDED.name)
+                SET name = COALESCE(crm_contacts.name, EXCLUDED.name),
+                    updated_at = now()
             RETURNING id
             "#,
             company_id,

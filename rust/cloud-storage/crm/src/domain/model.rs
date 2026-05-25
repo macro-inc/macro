@@ -24,6 +24,8 @@ pub struct CrmCompany {
     pub hidden: bool,
     /// When the company was created
     pub created_at: DateTime<Utc>,
+    /// When the company was last updated
+    pub updated_at: DateTime<Utc>,
     /// All domains associated with this company
     pub domains: Vec<CrmDomain>,
 }
