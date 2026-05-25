@@ -56,6 +56,7 @@ struct MockTeamRepository {
     team_for_get_by_id: Option<Team>,
     team_subscription_id: Option<stripe::SubscriptionId>,
     stripe_customer_id: Option<stripe::CustomerId>,
+    team_payment_status: bool,
     accepted_invite: Option<AcceptedTeamInvite<'static>>,
     removed_member: Option<TeamMember<'static>>,
     rollback_accept_calls: Arc<Mutex<usize>>,
@@ -79,6 +80,7 @@ impl MockTeamRepository {
             team_for_get_by_id: None,
             team_subscription_id: None,
             stripe_customer_id: None,
+            team_payment_status: true,
             accepted_invite: None,
             removed_member: None,
             rollback_accept_calls: Arc::new(Mutex::new(0)),
@@ -117,7 +119,8 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send {
-        async { Ok(false) }
+        let team_payment_status = self.team_payment_status;
+        async move { Ok(team_payment_status) }
     }
 
     fn has_user_trialed(
