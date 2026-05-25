@@ -1021,12 +1021,7 @@ fn multiple_crm_domains_or_together_in_tree() {
         ..Default::default()
     };
     let ast = EntityFilterAst::new_from_filters(f).unwrap().unwrap();
-    let tree = ast
-        .email_filter
-        .tree
-        .as_ref()
-        .expect("tree set")
-        .as_ref();
+    let tree = ast.email_filter.tree.as_ref().expect("tree set").as_ref();
     let mut literals: Vec<String> = Vec::new();
     collect_literals(tree, &mut literals);
     // We expect 4 directions × 2 domains = 8 literal occurrences.
@@ -1066,12 +1061,7 @@ fn crm_scope_ands_with_per_direction_senders() {
         ..Default::default()
     };
     let ast = EntityFilterAst::new_from_filters(f).unwrap().unwrap();
-    let tree = ast
-        .email_filter
-        .tree
-        .as_ref()
-        .expect("tree set")
-        .as_ref();
+    let tree = ast.email_filter.tree.as_ref().expect("tree set").as_ref();
     let mut literals: Vec<String> = Vec::new();
     collect_literals(tree, &mut literals);
     // The per-direction sender must be in the tree.
