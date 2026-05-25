@@ -32,6 +32,14 @@ export default defineConfig({
         },
       },
       {
+        // App package tests
+        extends: './packages/app/vitest.config.ts',
+        test: {
+          include: ['packages/app/**/*.{test,spec}.{ts,tsx}'],
+          name: 'app',
+        },
+      },
+      {
         test: {
           include: ['scripts/**/*.{test,spec}.{ts,tsx}'],
           name: 'scripts',

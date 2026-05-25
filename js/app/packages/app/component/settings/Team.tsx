@@ -54,6 +54,8 @@ import { useHasPaidAccess } from '@core/auth/license';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { z } from 'zod';
 
+import { getTeamSlugError, normalizeTeamSlugInput } from './teamSlug';
+
 const roleOrder: Record<string, number> = {
   [TeamRole.owner]: 0,
   [TeamRole.admin]: 1,
@@ -733,6 +735,7 @@ function EmptyTeamState() {
 function TeamManagement(props: {
   teamId: string;
   teamName: string;
+  teamSlug: string;
   ownerId: string;
 }) {
   const userId = useUserId();
@@ -761,6 +764,12 @@ function TeamManagement(props: {
   const [editingTeamName, setEditingTeamName] = createSignal<
     string | undefined
   >(undefined);
+  const [editingTeamSlug, setEditingTeamSlug] = createSignal<
+    string | undefined
+  >(undefined);
+  const [teamSlugError, setTeamSlugError] = createSignal<string | undefined>(
+    undefined
+  );
 
   const [memberListWrapperRef, setMemberListWrapperRef] =
     createSignal<HTMLDivElement>();
@@ -797,6 +806,36 @@ function TeamManagement(props: {
     return editing !== undefined && editing.trim() !== props.teamName;
   };
 
+  const teamSlugValue = () => editingTeamSlug() ?? props.teamSlug;
+  const hasTeamSlugInputChanged = () => {
+    const editing = editingTeamSlug();
+    return editing !== undefined && editing !== props.teamSlug;
+  };
+  const hasTeamSlugChanged = () => {
+    const editing = editingTeamSlug();
+    return (
+      editing !== undefined &&
+      normalizeTeamSlugInput(editing) !== props.teamSlug
+    );
+  };
+  const normalizedTeamSlugPreview = () => {
+    const editing = editingTeamSlug();
+    if (editing === undefined || !hasTeamSlugChanged()) return undefined;
+    if (getTeamSlugError(editing)) return undefined;
+
+    const normalized = normalizeTeamSlugInput(editing);
+    return normalized === editing ? undefined : normalized;
+  };
+  const canSaveTeamSlug = () => {
+    const editing = editingTeamSlug();
+    return (
+      editing !== undefined &&
+      hasTeamSlugChanged() &&
+      !patchTeamMutation.isPending &&
+      getTeamSlugError(editing) === undefined
+    );
+  };
+
   const members = createMemo(() => {
     const unsorted = teamQuery.data?.members ?? [];
     return [...unsorted].sort((a, b) => {
@@ -824,6 +863,38 @@ function TeamManagement(props: {
 
   const handleCancelTeamNameEdit = () => {
     setEditingTeamName(undefined);
+  };
+
+  const validateTeamSlug = (slug: string) => {
+    const error = getTeamSlugError(slug);
+    setTeamSlugError(error);
+    return error === undefined;
+  };
+
+  const handleTeamSlugChange = (slug: string) => {
+    setEditingTeamSlug(slug);
+    validateTeamSlug(slug);
+  };
+
+  const handleSaveTeamSlug = () => {
+    const editedSlug = editingTeamSlug();
+    if (!props.teamId || editedSlug === undefined) return;
+    if (!validateTeamSlug(editedSlug) || !hasTeamSlugChanged()) return;
+
+    patchTeamMutation.mutate(
+      { teamId: props.teamId, request: { slug: editedSlug } },
+      {
+        onSuccess: () => {
+          setEditingTeamSlug(undefined);
+          setTeamSlugError(undefined);
+        },
+      }
+    );
+  };
+
+  const handleCancelTeamSlugEdit = () => {
+    setEditingTeamSlug(undefined);
+    setTeamSlugError(undefined);
   };
 
   const handleDeleteTeam = () => {
@@ -929,7 +1000,7 @@ function TeamManagement(props: {
 
         <Panel.Body>
          <div class="flex h-full flex-col">
-          <div class="flex items-center px-2 h-15.25 border-b border-edge-muted shrink-0">
+          <div class="flex flex-col gap-2 px-2 py-2 border-b border-edge-muted shrink-0">
             <div class="flex items-center justify-between w-full border border-edge rounded-sm px-4 py-2">
               <span class="text-sm text-ink-muted">Name</span>
               <Show
@@ -972,6 +1043,76 @@ function TeamManagement(props: {
                           class="rounded-xs"
                           disabled={patchTeamMutation.isPending}
                           onClick={handleCancelTeamNameEdit}
+                        >
+                          <XIcon class="size-4" />
+                        </Button>
+                      </Tooltip>
+                    </div>
+                  </Show>
+                </div>
+              </Show>
+            </div>
+            <div class="flex items-center justify-between w-full border border-edge rounded-sm px-4 py-2 gap-3">
+              <span class="text-sm text-ink-muted">Slug</span>
+              <Show
+                when={isOwner()}
+                fallback={
+                  <span class="text-sm text-ink">{props.teamSlug}</span>
+                }
+              >
+                <div class="flex items-center gap-2 min-w-0">
+                  <div class="flex flex-col items-end gap-1 min-w-0">
+                    <input
+                      type="text"
+                      value={teamSlugValue()}
+                      onInput={(e) =>
+                        handleTeamSlugChange(e.currentTarget.value)
+                      }
+                      onBlur={() => {
+                        const editing = editingTeamSlug();
+                        if (editing !== undefined) {
+                          validateTeamSlug(editing);
+                        }
+                      }}
+                      placeholder="Enter team slug"
+                      class="text-sm bg-surface border-none outline-none text-ink text-right w-48"
+                    />
+                    <Show when={teamSlugError()}>
+                      <p class="text-xs text-failure-ink text-right">
+                        {teamSlugError()}
+                      </p>
+                    </Show>
+                    <Show when={normalizedTeamSlugPreview()}>
+                      <p class="text-xs text-ink-muted text-right">
+                        Will save as {normalizedTeamSlugPreview()}
+                      </p>
+                    </Show>
+                  </div>
+                  <Show when={hasTeamSlugInputChanged()}>
+                    <div class="flex items-center gap-1 shrink-0">
+                      <Tooltip label="Save">
+                        <Button
+                          variant="active"
+                          size="icon-sm"
+                          class="rounded-xs"
+                          disabled={!canSaveTeamSlug()}
+                          onClick={handleSaveTeamSlug}
+                        >
+                          <Show
+                            when={patchTeamMutation.isPending}
+                            fallback={<CheckIcon class="size-4" />}
+                          >
+                            <SpinnerIcon class="size-4 animate-spin" />
+                          </Show>
+                        </Button>
+                      </Tooltip>
+                      <Tooltip label="Cancel">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          class="rounded-xs"
+                          disabled={patchTeamMutation.isPending}
+                          onClick={handleCancelTeamSlugEdit}
                         >
                           <XIcon class="size-4" />
                         </Button>
@@ -1294,6 +1435,7 @@ function TeamContent() {
           <TeamManagement
             teamId={t.id}
             teamName={t.name}
+            teamSlug={t.slug}
             ownerId={t.owner_id}
           />
         )}
