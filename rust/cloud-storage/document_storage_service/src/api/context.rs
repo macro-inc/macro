@@ -1,7 +1,10 @@
 use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
 
-use crate::{config::Config, service::s3::S3};
+use crate::{
+    config::Config,
+    service::{github_pull_request_enricher::GithubPullRequestEnricherAdapter, s3::S3},
+};
 use axum::extract::FromRef;
 use cal::{
     domain::service::CalWebhookServiceImpl, inbound::cal_webhook_router::CalWebhookRouterState,
@@ -182,6 +185,7 @@ pub(crate) type DocumentService = DocumentServiceImpl<
     TaskPropertiesAdapter,
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
     EntityAccessManagementService,
+    GithubPullRequestEnricherAdapter,
 >;
 
 /// Type alias for the documents router state.

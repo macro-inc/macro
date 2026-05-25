@@ -6,10 +6,11 @@ use crate::{
         DocumentStorageServiceCloudfrontSignerPrivateKeySecretName, GithubSyncAppPemSecretKey,
         GithubWebhookSecretKey, MetaAccessToken, MetaPixelId, MetaTestEventCode,
     },
-    service::s3::S3,
+    service::{github_pull_request_enricher::GithubPullRequestEnricherAdapter, s3::S3},
 };
 use analytics_client::{AnalyticsClient, AnalyticsClientConfig, MetaConfig};
 use anyhow::Context;
+use authentication_service_client::AuthServiceClient;
 use cal::{
     domain::service::{CalConfig, CalEventMeta, CalWebhookServiceImpl},
     inbound::cal_webhook_router::CalWebhookRouterState,
@@ -213,6 +214,24 @@ async fn main() -> anyhow::Result<()> {
         config.vars.sync_service_url.as_ref().to_string(),
     ));
 
+    let auth_service_secret_key = match config.environment {
+        Environment::Local => config
+            .vars
+            .authentication_service_secret_key
+            .as_ref()
+            .to_string(),
+        _ => secretsmanager_client
+            .get_secret_value(&config.vars.authentication_service_secret_key)
+            .await
+            .context("unable to get authentication service secret")?
+            .to_string(),
+    };
+
+    let auth_service_client = AuthServiceClient::new(
+        auth_service_secret_key,
+        config.vars.authentication_service_url.as_ref().to_string(),
+    );
+
     let lexical_client = Arc::new(LexicalClient::new(
         internal_api_secret.as_ref().to_string(),
         config.vars.lexical_service_url.as_ref().to_string(),
@@ -358,7 +377,9 @@ async fn main() -> anyhow::Result<()> {
             entity_access_management::outbound::PgRepository::new(db.clone()),
         );
 
-    let document_service = Arc::new(DocumentServiceImpl::new(
+    let github_pull_request_enricher = GithubPullRequestEnricherAdapter::new(auth_service_client);
+
+    let document_service = Arc::new(DocumentServiceImpl::new_with_github_pull_request_enricher(
         document_repo,
         cloudfront_config,
         sync_service_client.as_ref().clone(),
@@ -369,6 +390,7 @@ async fn main() -> anyhow::Result<()> {
         },
         connection_service,
         entity_access_management_service.clone(),
+        github_pull_request_enricher,
     ));
 
     let github_webhook_secret = secretsmanager_client

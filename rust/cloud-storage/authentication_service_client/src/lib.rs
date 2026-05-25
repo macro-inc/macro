@@ -1,4 +1,5 @@
 pub mod error;
+pub mod github_pull_requests;
 pub mod google_access_token;
 pub mod unlink;
 pub mod users;

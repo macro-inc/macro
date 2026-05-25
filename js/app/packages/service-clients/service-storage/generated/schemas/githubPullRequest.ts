@@ -4,15 +4,31 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { GithubPullRequestAdditions } from './githubPullRequestAdditions';
+import type { GithubPullRequestDeletions } from './githubPullRequestDeletions';
+import type { GithubPullRequestName } from './githubPullRequestName';
+import type { GithubPullRequestStatus } from './githubPullRequestStatus';
 
 /**
  * Display-ready data for a GitHub pull request associated with a task.
  */
 export interface GithubPullRequest {
+  /**
+   * The number of added lines in the pull request, when enrichment data is available.
+   * @minimum 0
+   */
+  additions?: GithubPullRequestAdditions;
+  /**
+   * The number of deleted lines in the pull request, when enrichment data is available.
+   * @minimum 0
+   */
+  deletions?: GithubPullRequestDeletions;
   /** A compact label suitable for display in the UI. */
   displayName: string;
   /** The stored GitHub association key, in `owner/repo/pull/number` format. */
   githubKey: string;
+  /** The GitHub pull request title, when enrichment data is available. */
+  name?: GithubPullRequestName;
   /**
    * The GitHub pull request number.
    * @minimum 0
@@ -22,6 +38,8 @@ export interface GithubPullRequest {
   owner: string;
   /** The GitHub repository name. */
   repo: string;
+  /** The GitHub pull request status, when enrichment data is available. */
+  status?: GithubPullRequestStatus;
   /** The public GitHub URL for the pull request. */
   url: string;
 }

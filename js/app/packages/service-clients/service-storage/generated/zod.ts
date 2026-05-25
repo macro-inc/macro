@@ -3626,6 +3626,10 @@ export const getDocumentGithubPullRequestsParams = zod.object({
   document_id: zod.string().describe('Document ID'),
 });
 
+export const getDocumentGithubPullRequestsResponsePullRequestsItemAdditionsMin = 0;
+
+export const getDocumentGithubPullRequestsResponsePullRequestsItemDeletionsMin = 0;
+
 export const getDocumentGithubPullRequestsResponsePullRequestsItemNumberMin = 0;
 
 export const getDocumentGithubPullRequestsResponse = zod
@@ -3634,6 +3638,24 @@ export const getDocumentGithubPullRequestsResponse = zod
       .array(
         zod
           .object({
+            additions: zod
+              .number()
+              .min(
+                getDocumentGithubPullRequestsResponsePullRequestsItemAdditionsMin
+              )
+              .nullish()
+              .describe(
+                'The number of added lines in the pull request, when enrichment data is available.'
+              ),
+            deletions: zod
+              .number()
+              .min(
+                getDocumentGithubPullRequestsResponsePullRequestsItemDeletionsMin
+              )
+              .nullish()
+              .describe(
+                'The number of deleted lines in the pull request, when enrichment data is available.'
+              ),
             displayName: zod
               .string()
               .describe('A compact label suitable for display in the UI.'),
@@ -3641,6 +3663,12 @@ export const getDocumentGithubPullRequestsResponse = zod
               .string()
               .describe(
                 'The stored GitHub association key, in `owner\/repo\/pull\/number` format.'
+              ),
+            name: zod
+              .string()
+              .nullish()
+              .describe(
+                'The GitHub pull request title, when enrichment data is available.'
               ),
             number: zod
               .number()
@@ -3652,6 +3680,12 @@ export const getDocumentGithubPullRequestsResponse = zod
               .string()
               .describe('The GitHub repository owner or organization.'),
             repo: zod.string().describe('The GitHub repository name.'),
+            status: zod
+              .string()
+              .nullish()
+              .describe(
+                'The GitHub pull request status, when enrichment data is available.'
+              ),
             url: zod
               .string()
               .describe('The public GitHub URL for the pull request.'),

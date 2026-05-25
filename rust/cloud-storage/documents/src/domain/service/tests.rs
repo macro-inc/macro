@@ -1,7 +1,11 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use macro_user_id::cowlike::CowLike;
 use model::document::DocumentMetadata;
 
-use crate::domain::ports::MockDocumentRepo;
+use crate::domain::models::GithubPullRequest;
+use crate::domain::ports::{GithubPullRequestEnricher, MockDocumentRepo};
 
 use super::*;
 
@@ -31,6 +35,207 @@ fn make_test_metadata() -> DocumentMetadata {
 
 fn make_mock_repo() -> MockDocumentRepo {
     MockDocumentRepo::new()
+}
+
+fn test_cloudfront_config() -> CloudFrontConfig {
+    CloudFrontConfig {
+        distribution_url: "https://cdn.example.test".to_string(),
+        signer_public_key_id: "test-key-id".to_string(),
+        signer_private_key: "test-private-key".to_string(),
+        presigned_url_expiry_seconds: 60,
+        browser_cache_expiry_seconds: 60,
+    }
+}
+
+fn task_document_context(document_id: &str) -> DocumentBasic {
+    DocumentBasic {
+        document_id: document_id.to_string(),
+        document_name: "Test task".to_string(),
+        owner: macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|owner@user.com")
+            .unwrap()
+            .into_owned(),
+        file_type: Some("md".to_string()),
+        sub_type: Some(DocumentSubType::Task),
+        branched_from_id: None,
+        branched_from_version_id: None,
+        document_family_id: None,
+        project_id: None,
+        deleted_at: None,
+    }
+}
+
+fn authenticated_receipt(document_id: &str) -> EntityAccessReceipt<ViewAccessLevel> {
+    let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
+        .unwrap()
+        .into_owned();
+
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        user_id,
+        document_id,
+        EntityType::Document,
+    )
+}
+
+fn internal_receipt(document_id: &str) -> EntityAccessReceipt<ViewAccessLevel> {
+    EntityAccessReceipt::dangerously_assert_internal_user(document_id, EntityType::Document)
+}
+
+struct TestUploadUrlPort;
+
+impl PresignedUploadUrlPort for TestUploadUrlPort {
+    async fn put_document_storage_presigned_url(
+        &self,
+        _key: &str,
+        _sha: &str,
+        _content_type: ContentType,
+    ) -> anyhow::Result<String> {
+        Ok(String::new())
+    }
+
+    async fn put_docx_upload_presigned_url(
+        &self,
+        _key: &str,
+        _sha: &str,
+        _content_type: ContentType,
+    ) -> anyhow::Result<String> {
+        Ok(String::new())
+    }
+
+    async fn copy_object(&self, _source_key: &str, _destination_key: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+struct TestTaskPropertiesPort;
+
+impl TaskPropertiesPort for TestTaskPropertiesPort {
+    async fn attach_task_properties(&self, _entity_ids: Vec<String>) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn update_task_status(&self, _entity_id: &str, _status: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn set_entity_property(
+        &self,
+        _user_id: &str,
+        _entity_id: &str,
+        _property_definition_id: uuid::Uuid,
+        _value: Option<models_properties::api::requests::SetPropertyValue>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn copy_task_properties(
+        &self,
+        _from_task_id: &str,
+        _to_task_id: &str,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+struct TestConnectionService;
+
+impl ConnectionService for TestConnectionService {
+    async fn send_invalidation_event<'a, T: std::fmt::Debug + serde::Serialize + Send>(
+        &self,
+        _invalidation_event: InvalidationEvent<'a, T>,
+    ) -> Result<(), connection::domain::models::ConnectionError> {
+        Ok(())
+    }
+
+    async fn send_channel_message<'a>(
+        &self,
+        _users: &[macro_user_id::user_id::MacroUserIdStr<'a>],
+        _message_type: &str,
+        _message: serde_json::Value,
+    ) -> Result<(), connection::domain::models::ConnectionError> {
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+struct TestEntityAccessManagementService;
+
+impl EntityAccessManagementService for TestEntityAccessManagementService {
+    async fn add_entity_to_project(
+        &self,
+        _entity_id: &uuid::Uuid,
+        _entity_type: EntityType,
+        _project_id: &uuid::Uuid,
+    ) -> Result<(), entity_access_management::domain::models::EntityAccessManagementError> {
+        Ok(())
+    }
+
+    async fn remove_entity_from_project(
+        &self,
+        _entity_id: &uuid::Uuid,
+        _entity_type: EntityType,
+        _old_project_id: &uuid::Uuid,
+    ) -> Result<(), entity_access_management::domain::models::EntityAccessManagementError> {
+        Ok(())
+    }
+
+    async fn move_project(
+        &self,
+        _project_id: &uuid::Uuid,
+        _old_project_id: Option<&uuid::Uuid>,
+        _new_project_id: Option<&uuid::Uuid>,
+    ) -> Result<(), entity_access_management::domain::models::EntityAccessManagementError> {
+        Ok(())
+    }
+}
+
+struct TestGithubPullRequestEnricher {
+    calls: Arc<AtomicUsize>,
+}
+
+impl GithubPullRequestEnricher for TestGithubPullRequestEnricher {
+    fn enrich_pull_requests(
+        &self,
+        user_id: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        mut pull_requests: Vec<GithubPullRequest>,
+    ) -> impl Future<Output = Vec<GithubPullRequest>> + Send {
+        assert_eq!(user_id.as_ref(), "macro|user@user.com");
+        self.calls.fetch_add(1, Ordering::SeqCst);
+
+        for pull_request in &mut pull_requests {
+            pull_request.name = Some("Enriched pull request".to_string());
+            pull_request.status = Some("open".to_string());
+            pull_request.additions = Some(12);
+            pull_request.deletions = Some(3);
+        }
+
+        std::future::ready(pull_requests)
+    }
+}
+
+fn make_test_service<G: GithubPullRequestEnricher>(
+    repo: MockDocumentRepo,
+    github_pull_request_enricher: G,
+) -> DocumentServiceImpl<
+    MockDocumentRepo,
+    TestUploadUrlPort,
+    TestTaskPropertiesPort,
+    TestConnectionService,
+    TestEntityAccessManagementService,
+    G,
+> {
+    DocumentServiceImpl::new_with_github_pull_request_enricher(
+        repo,
+        test_cloudfront_config(),
+        sync_service_client::SyncServiceClient::new(
+            "test-sync-key".to_string(),
+            "http://sync-service.test".to_string(),
+        ),
+        TestUploadUrlPort,
+        TestTaskPropertiesPort,
+        TestConnectionService,
+        TestEntityAccessManagementService,
+        github_pull_request_enricher,
+    )
 }
 
 #[tokio::test]
@@ -87,4 +292,83 @@ async fn test_soft_delete_document() {
 
     let result = repo.soft_delete_document("doc-1").await;
     assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_get_task_github_pull_requests_enriches_for_authenticated_user() {
+    let document_id = "00000000-0000-0000-0000-000000000001";
+    let expected_short_id = short_id_for_entity_id(document_id).unwrap();
+    let mut repo = make_mock_repo();
+
+    repo.expect_get_task_github_pull_request_keys()
+        .withf(move |task_short_id| task_short_id == expected_short_id)
+        .return_once(|_| {
+            Box::pin(std::future::ready(Ok(vec![
+                "macro/repo/pull/7".to_string(),
+            ])))
+        });
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let service = make_test_service(
+        repo,
+        TestGithubPullRequestEnricher {
+            calls: calls.clone(),
+        },
+    );
+
+    let response = service
+        .get_task_github_pull_requests(
+            authenticated_receipt(document_id),
+            &task_document_context(document_id),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(response.pull_requests.len(), 1);
+    assert_eq!(
+        response.pull_requests[0].name,
+        Some("Enriched pull request".to_string())
+    );
+    assert_eq!(response.pull_requests[0].status, Some("open".to_string()));
+    assert_eq!(response.pull_requests[0].additions, Some(12));
+    assert_eq!(response.pull_requests[0].deletions, Some(3));
+}
+
+#[tokio::test]
+async fn test_get_task_github_pull_requests_skips_enrichment_for_internal_access() {
+    let document_id = "00000000-0000-0000-0000-000000000002";
+    let expected_short_id = short_id_for_entity_id(document_id).unwrap();
+    let mut repo = make_mock_repo();
+
+    repo.expect_get_task_github_pull_request_keys()
+        .withf(move |task_short_id| task_short_id == expected_short_id)
+        .return_once(|_| {
+            Box::pin(std::future::ready(Ok(vec![
+                "macro/repo/pull/8".to_string(),
+            ])))
+        });
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let service = make_test_service(
+        repo,
+        TestGithubPullRequestEnricher {
+            calls: calls.clone(),
+        },
+    );
+
+    let response = service
+        .get_task_github_pull_requests(
+            internal_receipt(document_id),
+            &task_document_context(document_id),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    assert_eq!(response.pull_requests.len(), 1);
+    assert_eq!(response.pull_requests[0].name, None);
+    assert_eq!(response.pull_requests[0].status, None);
+    assert_eq!(response.pull_requests[0].additions, None);
+    assert_eq!(response.pull_requests[0].deletions, None);
 }

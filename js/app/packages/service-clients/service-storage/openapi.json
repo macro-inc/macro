@@ -10304,6 +10304,18 @@
           "displayName"
         ],
         "properties": {
+          "additions": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The number of added lines in the pull request, when enrichment data is available.",
+            "minimum": 0
+          },
+          "deletions": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The number of deleted lines in the pull request, when enrichment data is available.",
+            "minimum": 0
+          },
           "displayName": {
             "type": "string",
             "description": "A compact label suitable for display in the UI."
@@ -10311,6 +10323,10 @@
           "githubKey": {
             "type": "string",
             "description": "The stored GitHub association key, in `owner/repo/pull/number` format."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The GitHub pull request title, when enrichment data is available."
           },
           "number": {
             "type": "integer",
@@ -10325,6 +10341,10 @@
           "repo": {
             "type": "string",
             "description": "The GitHub repository name."
+          },
+          "status": {
+            "type": ["string", "null"],
+            "description": "The GitHub pull request status, when enrichment data is available."
           },
           "url": {
             "type": "string",

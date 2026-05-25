@@ -120,6 +120,18 @@ pub struct GithubPullRequest {
     pub url: String,
     /// A compact label suitable for display in the UI.
     pub display_name: String,
+    /// The GitHub pull request title, when enrichment data is available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The GitHub pull request status, when enrichment data is available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// The number of added lines in the pull request, when enrichment data is available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub additions: Option<u64>,
+    /// The number of deleted lines in the pull request, when enrichment data is available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deletions: Option<u64>,
 }
 
 impl GithubPullRequest {
@@ -151,6 +163,10 @@ impl GithubPullRequest {
             number,
             url,
             display_name,
+            name: None,
+            status: None,
+            additions: None,
+            deletions: None,
         })
     }
 }

@@ -44,7 +44,10 @@ use super::models::{
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
-use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
+use super::ports::{
+    DocumentRepo, DocumentService, GithubPullRequestEnricher, NoopGithubPullRequestEnricher,
+    PresignedUploadUrlPort, TaskPropertiesPort,
+};
 use super::response::{
     CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
     DocumentResponseMetadataWithContent, GetDocumentResponseData, LocationResponseV3,
@@ -57,6 +60,7 @@ pub struct DocumentServiceImpl<
     T: TaskPropertiesPort,
     C: ConnectionService,
     Eam: EntityAccessManagementService,
+    G: GithubPullRequestEnricher = NoopGithubPullRequestEnricher,
 > {
     repo: R,
     cloudfront_config: CloudFrontConfig,
@@ -64,6 +68,7 @@ pub struct DocumentServiceImpl<
     upload_url_service: U,
     task_properties_service: T,
     connection_service: C,
+    github_pull_request_enricher: G,
     #[allow(dead_code)]
     entity_access_management_service: Eam,
 }
@@ -119,7 +124,7 @@ impl<
     T: TaskPropertiesPort,
     C: ConnectionService,
     Eam: EntityAccessManagementService,
-> DocumentServiceImpl<R, U, T, C, Eam>
+> DocumentServiceImpl<R, U, T, C, Eam, NoopGithubPullRequestEnricher>
 {
     /// Create a new document service.
     pub fn new(
@@ -131,6 +136,39 @@ impl<
         connection_service: C,
         entity_access_management_service: Eam,
     ) -> Self {
+        Self::new_with_github_pull_request_enricher(
+            repo,
+            cloudfront_config,
+            sync_service_client,
+            upload_url_service,
+            task_properties_service,
+            connection_service,
+            entity_access_management_service,
+            NoopGithubPullRequestEnricher,
+        )
+    }
+}
+
+impl<
+    R: DocumentRepo,
+    U: PresignedUploadUrlPort,
+    T: TaskPropertiesPort,
+    C: ConnectionService,
+    Eam: EntityAccessManagementService,
+    G: GithubPullRequestEnricher,
+> DocumentServiceImpl<R, U, T, C, Eam, G>
+{
+    /// Create a document service with a custom GitHub pull request enricher.
+    pub fn new_with_github_pull_request_enricher(
+        repo: R,
+        cloudfront_config: CloudFrontConfig,
+        sync_service_client: sync_service_client::SyncServiceClient,
+        upload_url_service: U,
+        task_properties_service: T,
+        connection_service: C,
+        entity_access_management_service: Eam,
+        github_pull_request_enricher: G,
+    ) -> Self {
         Self {
             repo,
             cloudfront_config,
@@ -138,6 +176,7 @@ impl<
             upload_url_service,
             task_properties_service,
             connection_service,
+            github_pull_request_enricher,
             entity_access_management_service,
         }
     }
@@ -403,7 +442,8 @@ impl<
     T: TaskPropertiesPort,
     C: ConnectionService,
     Eam: EntityAccessManagementService,
-> DocumentCreationService for DocumentServiceImpl<R, U, T, C, Eam>
+    G: GithubPullRequestEnricher,
+> DocumentCreationService for DocumentServiceImpl<R, U, T, C, Eam, G>
 {
     async fn create_document(
         &self,
@@ -455,7 +495,8 @@ impl<
     T: TaskPropertiesPort,
     C: ConnectionService,
     Eam: EntityAccessManagementService,
-> DocumentService for DocumentServiceImpl<R, U, T, C, Eam>
+    G: GithubPullRequestEnricher,
+> DocumentService for DocumentServiceImpl<R, U, T, C, Eam, G>
 {
     #[tracing::instrument(err, skip(self))]
     async fn get_document(
@@ -744,7 +785,21 @@ impl<
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
 
-        Ok(GithubPullRequestsResponse::from_github_keys(github_keys))
+        let mut response = GithubPullRequestsResponse::from_github_keys(github_keys);
+        let Ok(user_id) = entity_access_receipt.get_authenticated_user() else {
+            return Ok(response);
+        };
+
+        if response.pull_requests.is_empty() {
+            return Ok(response);
+        }
+
+        response.pull_requests = self
+            .github_pull_request_enricher
+            .enrich_pull_requests(user_id, response.pull_requests)
+            .await;
+
+        Ok(response)
     }
 
     #[tracing::instrument(err, skip(self, document_context))]

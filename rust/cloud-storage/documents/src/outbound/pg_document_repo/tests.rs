@@ -1003,6 +1003,10 @@ async fn test_get_github_pull_request_keys_orders_and_parses(pool: Pool<Postgres
                 number: 5,
                 url: "https://github.com/macro/api/pull/5".to_string(),
                 display_name: "macro/api#5".to_string(),
+                name: None,
+                status: None,
+                additions: None,
+                deletions: None,
             },
             GithubPullRequest {
                 github_key: "macro/macro/pull/10".to_string(),
@@ -1011,6 +1015,10 @@ async fn test_get_github_pull_request_keys_orders_and_parses(pool: Pool<Postgres
                 number: 10,
                 url: "https://github.com/macro/macro/pull/10".to_string(),
                 display_name: "macro/macro#10".to_string(),
+                name: None,
+                status: None,
+                additions: None,
+                deletions: None,
             },
             GithubPullRequest {
                 github_key: "macro/macro/pull/20".to_string(),
@@ -1019,6 +1027,10 @@ async fn test_get_github_pull_request_keys_orders_and_parses(pool: Pool<Postgres
                 number: 20,
                 url: "https://github.com/macro/macro/pull/20".to_string(),
                 display_name: "macro/macro#20".to_string(),
+                name: None,
+                status: None,
+                additions: None,
+                deletions: None,
             },
         ]
     );
