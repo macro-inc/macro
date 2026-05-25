@@ -39,7 +39,8 @@ use super::content::{DocumentContent, DocumentContentLocation, DocumentContentSt
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
     CreateTaskRequest, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
-    FileTypeUpdate, LocationQueryParams, TaskBranchName, TeamTaskMetadata,
+    FileTypeUpdate, GithubPullRequestsResponse, LocationQueryParams, TaskBranchName,
+    TeamTaskMetadata,
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
@@ -721,6 +722,29 @@ impl<
             short_id,
             branch_name,
         })
+    }
+
+    #[tracing::instrument(err, skip(self, document_context))]
+    async fn get_task_github_pull_requests(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_context: &DocumentBasic,
+    ) -> Result<GithubPullRequestsResponse, DocumentError> {
+        if document_context.sub_type != Some(DocumentSubType::Task) {
+            return Err(DocumentError::BadRequest(
+                "document is not a task".to_string(),
+            ));
+        }
+
+        let document_id = &entity_access_receipt.entity().entity_id;
+        let short_id = short_id_for_entity_id(document_id)?;
+        let github_keys = self
+            .repo
+            .get_task_github_pull_request_keys(&short_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+
+        Ok(GithubPullRequestsResponse::from_github_keys(github_keys))
     }
 
     #[tracing::instrument(err, skip(self, document_context))]

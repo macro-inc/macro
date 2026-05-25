@@ -744,6 +744,24 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_task_github_pull_request_keys(
+        &self,
+        task_short_id: &str,
+    ) -> Result<Vec<String>, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT github_key
+            FROM github_pr_tasks
+            WHERE task_id = $1
+            ORDER BY created_at ASC, github_key ASC
+            "#,
+            task_short_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn share_with_team(
         &self,
         team_id: &uuid::Uuid,

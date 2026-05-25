@@ -103,6 +103,86 @@ pub struct TaskBranchName {
     pub branch_name: String,
 }
 
+/// Display-ready data for a GitHub pull request associated with a task.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequest {
+    /// The stored GitHub association key, in `owner/repo/pull/number` format.
+    pub github_key: String,
+    /// The GitHub repository owner or organization.
+    pub owner: String,
+    /// The GitHub repository name.
+    pub repo: String,
+    /// The GitHub pull request number.
+    pub number: u64,
+    /// The public GitHub URL for the pull request.
+    pub url: String,
+    /// A compact label suitable for display in the UI.
+    pub display_name: String,
+}
+
+impl GithubPullRequest {
+    /// Parse a stored GitHub PR key in `owner/repo/pull/number` format.
+    pub fn from_github_key(github_key: &str) -> Option<Self> {
+        let mut parts = github_key.split('/');
+        let (Some(owner), Some(repo), Some("pull"), Some(number), None) = (
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+        ) else {
+            return None;
+        };
+
+        if owner.is_empty() || repo.is_empty() {
+            return None;
+        }
+
+        let number = number.parse::<u64>().ok()?;
+        let url = format!("https://github.com/{owner}/{repo}/pull/{number}");
+        let display_name = format!("{owner}/{repo}#{number}");
+
+        Some(Self {
+            github_key: github_key.to_string(),
+            owner: owner.to_string(),
+            repo: repo.to_string(),
+            number,
+            url,
+            display_name,
+        })
+    }
+}
+
+/// Response containing all GitHub pull requests associated with a task.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestsResponse {
+    /// Parsed pull requests, in repository query order.
+    pub pull_requests: Vec<GithubPullRequest>,
+}
+
+impl GithubPullRequestsResponse {
+    /// Build a response from stored GitHub PR keys, skipping malformed rows.
+    pub fn from_github_keys(github_keys: Vec<String>) -> Self {
+        let mut pull_requests = Vec::new();
+
+        for github_key in github_keys {
+            match GithubPullRequest::from_github_key(&github_key) {
+                Some(pull_request) => pull_requests.push(pull_request),
+                None => tracing::warn!(
+                    github_key = %github_key,
+                    "skipping malformed GitHub pull request key"
+                ),
+            }
+        }
+
+        Self { pull_requests }
+    }
+}
+
 /// Request body for copying a document.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]

@@ -10,6 +10,7 @@ use sqlx::{Pool, Postgres, Row};
 
 use crate::domain::models::{
     CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs, FileTypeUpdate,
+    GithubPullRequest, GithubPullRequestsResponse,
 };
 use crate::domain::ports::DocumentRepo;
 use crate::outbound::pg_document_repo::PgDocumentRepo;
@@ -69,6 +70,32 @@ async fn team_task_numbers(pool: &Pool<Postgres>, team_id: uuid::Uuid) -> Vec<i3
     .into_iter()
     .map(|row| row.try_get("task_num").unwrap())
     .collect()
+}
+
+fn short_id_for_document_id(document_id: &str) -> String {
+    let uuid = macro_uuid::string_to_uuid(document_id).unwrap();
+    macro_uuid::ShortUuidConverter::default().from_uuid(&uuid)
+}
+
+async fn insert_github_pr_task(
+    pool: &Pool<Postgres>,
+    github_key: &str,
+    task_short_id: &str,
+    created_at: chrono::DateTime<chrono::Utc>,
+) {
+    sqlx::query(
+        r#"
+        INSERT INTO github_pr_tasks (id, github_key, task_id, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $4)
+        "#,
+    )
+    .bind(uuid::Uuid::new_v4())
+    .bind(github_key)
+    .bind(task_short_id)
+    .bind(created_at)
+    .execute(pool)
+    .await
+    .unwrap();
 }
 
 async fn insert_second_team(pool: &Pool<Postgres>) {
@@ -911,6 +938,90 @@ async fn test_get_branch_name_context_falls_back_for_unknown_user(pool: Pool<Pos
     assert_eq!(context.github_username, None);
     assert_eq!(context.team_slug, None);
     assert_eq!(context.team_task_id, None);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_get_github_pull_request_keys_orders_and_parses(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let task = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+    let other_task = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+    let task_short_id = short_id_for_document_id(&task.document_id);
+    let other_task_short_id = short_id_for_document_id(&other_task.document_id);
+    let created_at = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+
+    insert_github_pr_task(&pool, "not-a-github-pr-key", &task_short_id, created_at).await;
+    insert_github_pr_task(
+        &pool,
+        "macro/macro/pull/10",
+        &task_short_id,
+        created_at + chrono::Duration::seconds(1),
+    )
+    .await;
+    insert_github_pr_task(
+        &pool,
+        "macro/api/pull/5",
+        &task_short_id,
+        created_at + chrono::Duration::seconds(1),
+    )
+    .await;
+    insert_github_pr_task(
+        &pool,
+        "macro/macro/pull/20",
+        &task_short_id,
+        created_at + chrono::Duration::seconds(2),
+    )
+    .await;
+    insert_github_pr_task(&pool, "other/repo/pull/1", &other_task_short_id, created_at).await;
+
+    let github_keys = repo
+        .get_task_github_pull_request_keys(&task_short_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        github_keys,
+        vec![
+            "not-a-github-pr-key".to_string(),
+            "macro/api/pull/5".to_string(),
+            "macro/macro/pull/10".to_string(),
+            "macro/macro/pull/20".to_string(),
+        ]
+    );
+
+    let response = GithubPullRequestsResponse::from_github_keys(github_keys);
+    assert_eq!(
+        response.pull_requests,
+        vec![
+            GithubPullRequest {
+                github_key: "macro/api/pull/5".to_string(),
+                owner: "macro".to_string(),
+                repo: "api".to_string(),
+                number: 5,
+                url: "https://github.com/macro/api/pull/5".to_string(),
+                display_name: "macro/api#5".to_string(),
+            },
+            GithubPullRequest {
+                github_key: "macro/macro/pull/10".to_string(),
+                owner: "macro".to_string(),
+                repo: "macro".to_string(),
+                number: 10,
+                url: "https://github.com/macro/macro/pull/10".to_string(),
+                display_name: "macro/macro#10".to_string(),
+            },
+            GithubPullRequest {
+                github_key: "macro/macro/pull/20".to_string(),
+                owner: "macro".to_string(),
+                repo: "macro".to_string(),
+                number: 20,
+                url: "https://github.com/macro/macro/pull/20".to_string(),
+                display_name: "macro/macro#20".to_string(),
+            },
+        ]
+    );
 }
 
 #[sqlx::test(

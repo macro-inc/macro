@@ -158,6 +158,7 @@ use utoipa::OpenApi;
         documents::location::get_location_handler,
         documents_hex::inbound::axum_router::get_location::get_location_v3_handler,
         documents_hex::inbound::axum_router::get_branch_name::get_branch_name_handler,
+        documents_hex::inbound::axum_router::get_github_pull_requests::get_github_pull_requests_handler,
         documents_hex::inbound::axum_router::get_short_id::get_short_id_handler,
         documents::simple_save::handler,
         documents::initialize_user_documents::handler,
@@ -434,6 +435,8 @@ use utoipa::OpenApi;
             ExcludeDefaultViewRequest,
             BranchNameResponse,
             ShortIdResponse,
+            documents_hex::domain::models::GithubPullRequest,
+            documents_hex::domain::models::GithubPullRequestsResponse,
 
             // Sync service
             sync_service_hex::domain::models::BulkWakeupRequest,

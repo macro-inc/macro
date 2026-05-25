@@ -3618,6 +3618,55 @@ export const exportDocumentResponse = zod.object({
 });
 
 /**
+ * Returns GitHub pull requests associated with a task document.
+Returns 400 if the document is not a task.
+ * @summary Handler for `GET /documents/{document_id}/github_prs`.
+ */
+export const getDocumentGithubPullRequestsParams = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+export const getDocumentGithubPullRequestsResponsePullRequestsItemNumberMin = 0;
+
+export const getDocumentGithubPullRequestsResponse = zod
+  .object({
+    pullRequests: zod
+      .array(
+        zod
+          .object({
+            displayName: zod
+              .string()
+              .describe('A compact label suitable for display in the UI.'),
+            githubKey: zod
+              .string()
+              .describe(
+                'The stored GitHub association key, in `owner\/repo\/pull\/number` format.'
+              ),
+            number: zod
+              .number()
+              .min(
+                getDocumentGithubPullRequestsResponsePullRequestsItemNumberMin
+              )
+              .describe('The GitHub pull request number.'),
+            owner: zod
+              .string()
+              .describe('The GitHub repository owner or organization.'),
+            repo: zod.string().describe('The GitHub repository name.'),
+            url: zod
+              .string()
+              .describe('The public GitHub URL for the pull request.'),
+          })
+          .describe(
+            'Display-ready data for a GitHub pull request associated with a task.'
+          )
+      )
+      .describe('Parsed pull requests, in repository query order.'),
+  })
+  .describe(
+    'Response containing all GitHub pull requests associated with a task.'
+  );
+
+/**
  * @summary Gets the presigned url(s) for the document. aka location
  */
 export const getLocationHandlerParams = zod.object({

@@ -31,6 +31,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
 import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
@@ -266,6 +267,7 @@ export function Notebook() {
         <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
         <div class="spacer h-3" />
         <InlineTaskProperties />
+        <InlineTaskGithubPullRequests />
         <ParamsProvider>
           <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
           <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>

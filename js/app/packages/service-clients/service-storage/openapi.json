@@ -3146,6 +3146,77 @@
         }
       }
     },
+    "/documents/{document_id}/github_prs": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Handler for `GET /documents/{document_id}/github_prs`.",
+        "description": "Returns GitHub pull requests associated with a task document.\nReturns 400 if the document is not a task.",
+        "operationId": "get_document_github_pull_requests",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GithubPullRequestsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}/location": {
       "get": {
         "tags": ["document"],
@@ -10218,6 +10289,60 @@
           "error": {
             "type": "boolean",
             "description": "Indicates if an error occurred"
+          }
+        }
+      },
+      "GithubPullRequest": {
+        "type": "object",
+        "description": "Display-ready data for a GitHub pull request associated with a task.",
+        "required": [
+          "githubKey",
+          "owner",
+          "repo",
+          "number",
+          "url",
+          "displayName"
+        ],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "A compact label suitable for display in the UI."
+          },
+          "githubKey": {
+            "type": "string",
+            "description": "The stored GitHub association key, in `owner/repo/pull/number` format."
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The GitHub pull request number.",
+            "minimum": 0
+          },
+          "owner": {
+            "type": "string",
+            "description": "The GitHub repository owner or organization."
+          },
+          "repo": {
+            "type": "string",
+            "description": "The GitHub repository name."
+          },
+          "url": {
+            "type": "string",
+            "description": "The public GitHub URL for the pull request."
+          }
+        }
+      },
+      "GithubPullRequestsResponse": {
+        "type": "object",
+        "description": "Response containing all GitHub pull requests associated with a task.",
+        "required": ["pullRequests"],
+        "properties": {
+          "pullRequests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequest"
+            },
+            "description": "Parsed pull requests, in repository query order."
           }
         }
       },

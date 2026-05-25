@@ -437,6 +437,8 @@ export * from './getProjectsResponse';
 export * from './getRecentActivityHandlerParams';
 export * from './getUserDocumentsHandlerParams';
 export * from './getUserHistoryResponse';
+export * from './githubPullRequest';
+export * from './githubPullRequestsResponse';
 export * from './hashMap';
 export * from './hashMapOneOf';
 export * from './hashMapOneOfAllOf';
