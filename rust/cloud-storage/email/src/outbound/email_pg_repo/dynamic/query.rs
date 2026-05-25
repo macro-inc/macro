@@ -122,19 +122,13 @@ fn push_thread_candidate_select(
             }
             // CRM-scoped query: expand to every email_link owned by any
             // member of the team. The receipt has already been validated
-            // upstream, so the team_id is trusted here. The JOIN to
-            // team_crm_settings enforces the team-level killswitch a
-            // second time as belt-and-suspenders against a race where
-            // `crm_enabled` flips between the pre-check and this query:
-            // if it goes false, the candidate set collapses to empty.
+            // upstream, so the team_id is trusted here.
             Some(team_id) => {
                 builder.push(
                     r#"t.link_id IN (
                         SELECT el.id
                         FROM email_links el
                         JOIN team_user tu ON tu.user_id = el.macro_id
-                        JOIN team_crm_settings tcs
-                            ON tcs.team_id = tu.team_id AND tcs.crm_enabled
                         WHERE tu.team_id = "#,
                 );
                 builder.push_bind(team_id);
@@ -144,6 +138,22 @@ fn push_thread_candidate_select(
         ThreadCandidateSource::Shared => {
             builder.push("t.id IN (SELECT thread_id FROM SharedEmailThreads)");
         }
+    }
+
+    // Belt-and-suspenders killswitch check that covers both the Owned and
+    // Shared branches. Without this, a CRM-scoped request with
+    // `SharedEmailFilter::Include`/`Only` could still return rows after
+    // `team_crm_settings.crm_enabled` flips false between the pre-check
+    // and query execution. EXISTS short-circuits and Postgres planner
+    // treats it as a constant once evaluated per query.
+    if let Some(team_id) = params.team_id {
+        builder.push(
+            r#" AND EXISTS (
+                SELECT 1 FROM team_crm_settings tcs
+                WHERE tcs.team_id = "#,
+        );
+        builder.push_bind(team_id);
+        builder.push(" AND tcs.crm_enabled)");
     }
 
     let view_thread_filter = build_view_thread_filter(view);

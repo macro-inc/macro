@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    input.address                          AS \"address!\",\n                    (m.email IS NOT NULL)                  AS \"exists!\",\n                    COALESCE(m.contact_hidden, FALSE)      AS \"contact_hidden!\",\n                    COALESCE(m.company_hidden, FALSE)      AS \"company_hidden!\",\n                    COALESCE(m.email_sync,     FALSE)      AS \"email_sync!\"\n                FROM UNNEST($2::text[]) WITH ORDINALITY AS input(address, ord)\n                LEFT JOIN (\n                    SELECT\n                        ct.email     AS email,\n                        ct.hidden    AS contact_hidden,\n                        c.hidden     AS company_hidden,\n                        c.email_sync AS email_sync\n                    FROM crm_contacts ct\n                    JOIN crm_companies c ON c.id = ct.company_id\n                    WHERE c.team_id = $1\n                ) m ON m.email = input.address\n                ORDER BY input.ord\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "address!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "exists!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "contact_hidden!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "company_hidden!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "email_sync!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "b845e01904b9e9f8d1f322e788b7cf6555ee13b3de24bbe50bbc801a2730e446"
+}

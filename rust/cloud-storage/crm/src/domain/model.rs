@@ -72,9 +72,15 @@ pub struct CrmScopePrecheck {
     /// when the team's row exists with `crm_enabled = false`, *or* when no
     /// row exists at all (older teams predating `team_crm_settings`).
     pub crm_enabled: bool,
-    /// One row per requested domain. Order matches the input list.
+    /// One row per requested domain, in the same order as the input list.
+    /// **Exception:** when `crm_enabled = false`, this vec is empty —
+    /// the email service short-circuits on the killswitch before
+    /// consulting per-input rows, so the per-domain probes are skipped
+    /// and callers must not assume length parity with the input list
+    /// without first checking `crm_enabled`.
     pub domains: Vec<CrmDomainStatus>,
-    /// One row per requested address. Order matches the input list.
+    /// One row per requested address, in the same order as the input
+    /// list. Same `crm_enabled = false` exception as [`Self::domains`].
     pub addresses: Vec<CrmAddressStatus>,
 }
 

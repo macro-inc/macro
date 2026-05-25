@@ -98,14 +98,40 @@ pub enum ExpandErr {
 ///   2. candidate-set widening (the dynamic query expands from the caller's
 ///      single `link_id` to every team member's `link_id`).
 ///
-/// Mutually exclusive: at most one of `domains` / `addresses` is non-empty.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Mutually exclusive: at most one variant carries values, and the inner
+/// `Vec<String>` is guaranteed non-empty. The custom [`Deserialize`] impl
+/// below rejects forged payloads with empty vectors, since an empty
+/// scope tag would desynchronize downstream auth/widening behavior from
+/// AST intent.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum CrmScope {
     /// caller is asking for team-visible threads involving any of these domains
     Domains(Vec<String>),
     /// caller is asking for team-visible threads involving any of these addresses
     Addresses(Vec<String>),
+}
+
+impl<'de> Deserialize<'de> for CrmScope {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        // Mirror the auto-derived shape, then validate non-empty.
+        #[derive(Deserialize)]
+        enum Raw {
+            Domains(Vec<String>),
+            Addresses(Vec<String>),
+        }
+        let raw = Raw::deserialize(d)?;
+        match raw {
+            Raw::Domains(v) if v.is_empty() => Err(serde::de::Error::custom(
+                "CrmScope::Domains requires at least one domain",
+            )),
+            Raw::Addresses(v) if v.is_empty() => Err(serde::de::Error::custom(
+                "CrmScope::Addresses requires at least one address",
+            )),
+            Raw::Domains(v) => Ok(CrmScope::Domains(v)),
+            Raw::Addresses(v) => Ok(CrmScope::Addresses(v)),
+        }
+    }
 }
 
 /// type alias for a maybe empty, cheaply cloneable ast literal tree

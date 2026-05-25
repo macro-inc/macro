@@ -1087,3 +1087,31 @@ fn collect_literals(expr: &filter_ast::Expr<EmailLiteral>, out: &mut Vec<String>
         }
     }
 }
+
+#[test]
+fn crm_scope_rejects_empty_domains_on_deserialize() {
+    // Forged payload — an "empty CRM scope" would bypass downstream auth /
+    // widening intent. CrmScope's custom Deserialize impl must reject it.
+    let err = serde_json::from_str::<CrmScope>(r#"{"Domains":[]}"#).unwrap_err();
+    assert!(
+        err.to_string().contains("at least one domain"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn crm_scope_rejects_empty_addresses_on_deserialize() {
+    let err = serde_json::from_str::<CrmScope>(r#"{"Addresses":[]}"#).unwrap_err();
+    assert!(
+        err.to_string().contains("at least one address"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn crm_scope_accepts_non_empty_variants_on_deserialize() {
+    let domains: CrmScope = serde_json::from_str(r#"{"Domains":["acme.com"]}"#).unwrap();
+    assert!(matches!(domains, CrmScope::Domains(d) if d == vec!["acme.com".to_string()]));
+    let addresses: CrmScope = serde_json::from_str(r#"{"Addresses":["a@acme.com"]}"#).unwrap();
+    assert!(matches!(addresses, CrmScope::Addresses(a) if a == vec!["a@acme.com".to_string()]));
+}

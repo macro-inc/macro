@@ -871,6 +871,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         let domain_statuses: Vec<CrmDomainStatus> = if domains.is_empty() {
             Vec::new()
         } else {
+            // `WITH ORDINALITY` + `ORDER BY input.ord` guarantees output
+            // row order matches the input list — `CrmScopePrecheck.domains`
+            // documents that contract.
             sqlx::query!(
                 r#"
                 SELECT
@@ -878,11 +881,12 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                     (d.id IS NOT NULL)                 AS "exists!",
                     COALESCE(c.hidden, FALSE)          AS "company_hidden!",
                     COALESCE(c.email_sync, FALSE)      AS "email_sync!"
-                FROM UNNEST($2::text[]) AS input(domain)
+                FROM UNNEST($2::text[]) WITH ORDINALITY AS input(domain, ord)
                 LEFT JOIN crm_domains d
                     ON d.team_id = $1 AND LOWER(d.domain) = input.domain
                 LEFT JOIN crm_companies c
                     ON c.id = d.company_id
+                ORDER BY input.ord
                 "#,
                 team_id,
                 domains,
@@ -910,6 +914,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             // UNIQUE (company_id, email) plus the populate-path invariant
             // that an email's domain uniquely identifies its company
             // within a team (via crm_domains_team_id_lower_domain_unique).
+            // `WITH ORDINALITY` + `ORDER BY input.ord` guarantees output
+            // row order matches the input list — `CrmScopePrecheck.addresses`
+            // documents that contract.
             sqlx::query!(
                 r#"
                 SELECT
@@ -918,7 +925,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                     COALESCE(m.contact_hidden, FALSE)      AS "contact_hidden!",
                     COALESCE(m.company_hidden, FALSE)      AS "company_hidden!",
                     COALESCE(m.email_sync,     FALSE)      AS "email_sync!"
-                FROM UNNEST($2::text[]) AS input(address)
+                FROM UNNEST($2::text[]) WITH ORDINALITY AS input(address, ord)
                 LEFT JOIN (
                     SELECT
                         ct.email     AS email,
@@ -929,6 +936,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                     JOIN crm_companies c ON c.id = ct.company_id
                     WHERE c.team_id = $1
                 ) m ON m.email = input.address
+                ORDER BY input.ord
                 "#,
                 team_id,
                 addresses,

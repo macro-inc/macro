@@ -60,14 +60,14 @@ pub enum EmailErr {
     CrmDomainNotFound(String),
     /// A CRM-scoped query referenced a domain whose company is hidden or
     /// has `email_sync = false`.
-    #[error("CRM domain {0} is not permitted for team-scoped queries")]
+    #[error("CRM domain {0} is not permitted for CRM-scoped queries")]
     CrmDomainNotPermitted(String),
     /// A CRM-scoped query referenced an address with no matching
     /// `crm_contacts` row for the caller's team.
-    #[error("CRM address {0} not found for this team")]
+    #[error("CRM address {0} not found for this CRM scope")]
     CrmAddressNotFound(String),
     /// A CRM-scoped query referenced an address whose contact or company
     /// is hidden, or whose company has `email_sync = false`.
-    #[error("CRM address {0} is not permitted for team-scoped queries")]
+    #[error("CRM address {0} is not permitted for CRM-scoped queries")]
     CrmAddressNotPermitted(String),
 }
