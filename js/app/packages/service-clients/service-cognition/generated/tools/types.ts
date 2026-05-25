@@ -1242,7 +1242,7 @@ export interface ListEntitiesResponse {
  *
  * Match label names case-insensitively when searching the response. You can also use this to understand how the user's mail is organized before filtering or searching by label.
  */
-export interface ListLabels {}
+export type ListLabels = {};
 /**
  * Response from the ListLabels tool.
  */
@@ -1367,7 +1367,7 @@ export interface NotificationItem {
 /**
  * List the current members and pending invites for the authenticated user's team. Requires the caller to be a team member.
  */
-export interface ListTeamMembers {}
+export type ListTeamMembers = {};
 /**
  * Response from [`ListTeamMembers`].
  */
