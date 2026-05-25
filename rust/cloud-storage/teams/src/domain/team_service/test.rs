@@ -113,6 +113,13 @@ impl TeamRepository for MockTeamRepository {
         async move { Ok(subscription_id) }
     }
 
+    fn get_team_payment_status(
+        &self,
+        _: &uuid::Uuid,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send {
+        async { Ok(false) }
+    }
+
     fn has_user_trialed(
         &self,
         _: &MacroUserIdStr<'_>,

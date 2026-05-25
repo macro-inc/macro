@@ -323,6 +323,22 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_team_payment_status(&self, team_id: &uuid::Uuid) -> Result<bool, TeamError> {
+        let paying = sqlx::query_scalar!(
+            r#"
+            SELECT paying
+            FROM team
+            WHERE id = $1
+            "#,
+            team_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(paying)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
