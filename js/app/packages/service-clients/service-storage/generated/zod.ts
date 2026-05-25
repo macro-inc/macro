@@ -7389,13 +7389,13 @@ export const postItemsSoupAstBody = zod
       .array(zod.string())
       .optional()
       .describe(
-        'CRM-scoped address filter. Symmetric counterpart to\n[`Self::email_crm_domains`] for fully-qualified email addresses.'
+        'CRM-scoped address filter (wire key: `eca`). Symmetric counterpart\nto `ecd` for fully-qualified email addresses.'
       ),
     ecd: zod
       .array(zod.string())
       .optional()
       .describe(
-        'CRM-scoped domain filter. Parallel to the freeform `email_filter`\nAST. Expanded by the router into an any-direction OR sub-tree\nAND-merged into `email_filter`, plus a `CrmScope` tag stamped on\nthe resulting [`item_filters::ast::EmailFilterAst::crm_scope`].\nDrives the per-team CRM authorization pre-check and candidate-set\nwidening downstream. Mutually exclusive with `email_crm_addresses`.'
+        'CRM-scoped domain filter (wire key: `ecd`). Parallel to the\nfreeform `ef` AST. Expanded by the router into an any-direction\nOR sub-tree AND-merged into `ef`, plus a `CrmScope` tag stamped\non the resulting [`item_filters::ast::EmailFilterAst::crm_scope`].\nDrives the per-team CRM authorization pre-check and candidate-set\nwidening downstream. Mutually exclusive with `eca`.'
       ),
     ef: zod
       .unknown()

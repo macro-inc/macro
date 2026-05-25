@@ -14,15 +14,15 @@ export interface ApiEntityFilterAst {
   chanf?: unknown;
   /** the filters that should be applied to the document entity */
   df?: unknown;
-  /** CRM-scoped address filter. Symmetric counterpart to
-[`Self::email_crm_domains`] for fully-qualified email addresses. */
+  /** CRM-scoped address filter (wire key: `eca`). Symmetric counterpart
+to `ecd` for fully-qualified email addresses. */
   eca?: string[];
-  /** CRM-scoped domain filter. Parallel to the freeform `email_filter`
-AST. Expanded by the router into an any-direction OR sub-tree
-AND-merged into `email_filter`, plus a `CrmScope` tag stamped on
-the resulting [`item_filters::ast::EmailFilterAst::crm_scope`].
+  /** CRM-scoped domain filter (wire key: `ecd`). Parallel to the
+freeform `ef` AST. Expanded by the router into an any-direction
+OR sub-tree AND-merged into `ef`, plus a `CrmScope` tag stamped
+on the resulting [`item_filters::ast::EmailFilterAst::crm_scope`].
 Drives the per-team CRM authorization pre-check and candidate-set
-widening downstream. Mutually exclusive with `email_crm_addresses`. */
+widening downstream. Mutually exclusive with `eca`. */
   ecd?: string[];
   /** the filters that should be applied to the email entity (raw AST
 tree only; CRM scope is carried by the `ecd` / `eca` sibling

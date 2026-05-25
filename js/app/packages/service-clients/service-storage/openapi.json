@@ -6513,14 +6513,14 @@
             "items": {
               "type": "string"
             },
-            "description": "CRM-scoped address filter. Symmetric counterpart to\n[`Self::email_crm_domains`] for fully-qualified email addresses."
+            "description": "CRM-scoped address filter (wire key: `eca`). Symmetric counterpart\nto `ecd` for fully-qualified email addresses."
           },
           "ecd": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "CRM-scoped domain filter. Parallel to the freeform `email_filter`\nAST. Expanded by the router into an any-direction OR sub-tree\nAND-merged into `email_filter`, plus a `CrmScope` tag stamped on\nthe resulting [`item_filters::ast::EmailFilterAst::crm_scope`].\nDrives the per-team CRM authorization pre-check and candidate-set\nwidening downstream. Mutually exclusive with `email_crm_addresses`."
+            "description": "CRM-scoped domain filter (wire key: `ecd`). Parallel to the\nfreeform `ef` AST. Expanded by the router into an any-direction\nOR sub-tree AND-merged into `ef`, plus a `CrmScope` tag stamped\non the resulting [`item_filters::ast::EmailFilterAst::crm_scope`].\nDrives the per-team CRM authorization pre-check and candidate-set\nwidening downstream. Mutually exclusive with `eca`."
           },
           "ef": {
             "description": "the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` / `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors."
