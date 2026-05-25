@@ -14,7 +14,9 @@ type DocumentIdInput =
   | Accessor<string | null | undefined>;
 type EnabledInput = boolean | Accessor<boolean>;
 
-function readDocumentId(documentId: DocumentIdInput): string | null | undefined {
+function readDocumentId(
+  documentId: DocumentIdInput
+): string | null | undefined {
   return typeof documentId === 'function' ? documentId() : documentId;
 }
 
