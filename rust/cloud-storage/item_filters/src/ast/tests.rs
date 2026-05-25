@@ -1026,10 +1026,9 @@ fn multiple_crm_domains_or_together_in_tree() {
         .tree
         .as_ref()
         .expect("tree set")
-        .as_ref()
-        .clone();
+        .as_ref();
     let mut literals: Vec<String> = Vec::new();
-    collect_literals(&tree, &mut literals);
+    collect_literals(tree, &mut literals);
     // We expect 4 directions × 2 domains = 8 literal occurrences.
     let acme_count = literals.iter().filter(|s| s.contains("acme.com")).count();
     let widgets_count = literals.iter().filter(|s| s.contains("widgets.io")).count();
@@ -1072,10 +1071,9 @@ fn crm_scope_ands_with_per_direction_senders() {
         .tree
         .as_ref()
         .expect("tree set")
-        .as_ref()
-        .clone();
+        .as_ref();
     let mut literals: Vec<String> = Vec::new();
-    collect_literals(&tree, &mut literals);
+    collect_literals(tree, &mut literals);
     // The per-direction sender must be in the tree.
     assert!(
         literals.iter().any(|s| s.contains("bob@elsewhere.com")),
