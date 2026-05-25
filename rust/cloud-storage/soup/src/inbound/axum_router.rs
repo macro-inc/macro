@@ -671,7 +671,6 @@ where
 #[serde(rename_all = "camelCase")]
 pub struct PostSoupAstRequest {
     #[serde(default, flatten)]
-    #[schema(value_type = EntityFilterAst)]
     filters: ApiEntityFilterAst,
     #[serde(default, flatten)]
     params: Params,
@@ -742,7 +741,6 @@ where
 pub struct PostGroupedSoupAstRequest {
     /// Filters to apply (AST format)
     #[serde(default, flatten)]
-    #[schema(value_type = EntityFilterAst)]
     filters: ApiEntityFilterAst,
     /// Grouping parameters (required)
     #[serde(flatten)]
@@ -819,28 +817,38 @@ fn resolve_crm_team_receipt(
     Ok(receipt)
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone, ToSchema)]
 pub struct ApiEntityFilterAst {
     /// the filters that should be applied to the document entity
     #[serde(default, rename = "df")]
+    #[schema(value_type = serde_json::Value)]
     pub document_filter: LiteralTree<ApiDocumentLiteral>,
     /// the filters that should be applied to the project entity
     #[serde(default, rename = "pf")]
+    #[schema(value_type = serde_json::Value)]
     pub project_filter: LiteralTree<ProjectLiteral>,
     /// the filters that should be applied to the chat entity
     #[serde(default, rename = "cf")]
+    #[schema(value_type = serde_json::Value)]
     pub chat_filter: LiteralTree<ChatLiteral>,
-    /// the filters that should be applied to the email entity
+    /// the filters that should be applied to the email entity (raw AST
+    /// tree only; CRM scope is carried by the `ecd` / `eca` sibling
+    /// fields). On this endpoint the email filter stays a bare tree,
+    /// unlike the materialized [`EntityFilterAst`] used for cursors.
     #[serde(default, rename = "ef")]
+    #[schema(value_type = serde_json::Value)]
     pub email_filter: LiteralTree<EmailLiteral>,
     /// the filters that should be applied to the channel entity
     #[serde(default, rename = "chanf")]
+    #[schema(value_type = serde_json::Value)]
     pub channel_filter: LiteralTree<ChannelLiteral>,
     /// the filters that should be applied to the call entity
     #[serde(default, rename = "callf")]
+    #[schema(value_type = serde_json::Value)]
     pub call_filter: LiteralTree<CallLiteral>,
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
+    #[schema(value_type = serde_json::Value)]
     pub properties_filter: LiteralTree<PropertiesLiteral>,
     /// CRM-scoped domain filter. Parallel to the freeform `email_filter`
     /// AST. Expanded by the router into an any-direction OR sub-tree

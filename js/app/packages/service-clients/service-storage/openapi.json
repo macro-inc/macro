@@ -6493,6 +6493,46 @@
           }
         }
       },
+      "ApiEntityFilterAst": {
+        "type": "object",
+        "properties": {
+          "callf": {
+            "description": "the filters that should be applied to the call entity"
+          },
+          "cf": {
+            "description": "the filters that should be applied to the chat entity"
+          },
+          "chanf": {
+            "description": "the filters that should be applied to the channel entity"
+          },
+          "df": {
+            "description": "the filters that should be applied to the document entity"
+          },
+          "eca": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM-scoped address filter. Symmetric counterpart to\n[`Self::email_crm_domains`] for fully-qualified email addresses."
+          },
+          "ecd": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM-scoped domain filter. Parallel to the freeform `email_filter`\nAST. Expanded by the router into an any-direction OR sub-tree\nAND-merged into `email_filter`, plus a `CrmScope` tag stamped on\nthe resulting [`item_filters::ast::EmailFilterAst::crm_scope`].\nDrives the per-team CRM authorization pre-check and candidate-set\nwidening downstream. Mutually exclusive with `email_crm_addresses`."
+          },
+          "ef": {
+            "description": "the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` / `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors."
+          },
+          "pf": {
+            "description": "the filters that should be applied to the project entity"
+          },
+          "propf": {
+            "description": "the filters that should be applied based on entity properties"
+          }
+        }
+      },
       "ApiMessageAttachment": {
         "type": "object",
         "description": "An attachment on a message.",
@@ -8964,6 +9004,20 @@
             },
             "description": "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
           },
+          "crm_addresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM-scoped address filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\nfully-qualified addresses. Each address is authorized against\n`crm_contacts` + `crm_companies` (contact must not be hidden, company\nmust not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_domains`."
+          },
+          "crm_domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM-scoped domain filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\ndomains (in any of sender/cc/bcc/recipient). Each domain is authorized\nagainst `crm_domains` + `crm_companies` (must exist for the caller's\nteam, company must not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_addresses`."
+          },
           "email_thread_ids": {
             "type": "array",
             "items": {
@@ -9017,43 +9071,12 @@
           "shared": {
             "$ref": "#/components/schemas/SharedEmailFilter",
             "description": "Controls whether shared email threads are included in results.\nDefaults to \"exclude\" (only the user's own threads)."
-          },
-          "team_scope": {
-            "type": "boolean",
-            "description": "When true, expand visibility to every teammate's mailbox: results may\ninclude emails the requesting user is not a participant on, as long as\nat least one of their teammates is. Requires every sender/cc/bcc/recipient\nvalue to be a fully-qualified email address or a domain (no partial\nsubstring matches)."
           }
         }
       },
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
-      },
-      "EntityFilterAst": {
-        "type": "object",
-        "description": "Describes a bundle of filters that should be applied across different entity types",
-        "properties": {
-          "callf": {
-            "description": "the filters that should be applied to the call entity"
-          },
-          "cf": {
-            "description": "the filters that should be applied to the chat entity"
-          },
-          "chanf": {
-            "description": "the filters that should be applied to the channel entity"
-          },
-          "df": {
-            "description": "the filters that should be applied to the document entity"
-          },
-          "ef": {
-            "description": "the filters that should be applied to the email entity"
-          },
-          "pf": {
-            "description": "the filters that should be applied to the project entity"
-          },
-          "propf": {
-            "description": "the filters that should be applied based on entity properties"
-          }
-        }
       },
       "EntityFilters": {
         "type": "object",
@@ -11038,7 +11061,7 @@
       "PostSoupAstRequest": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/EntityFilterAst"
+            "$ref": "#/components/schemas/ApiEntityFilterAst"
           },
           {
             "$ref": "#/components/schemas/Params"

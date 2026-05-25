@@ -5918,6 +5918,18 @@ export const postItemsSoupBody = zod
           .describe(
             "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
           ),
+        crm_addresses: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            "CRM-scoped address filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\nfully-qualified addresses. Each address is authorized against\n`crm_contacts` + `crm_companies` (contact must not be hidden, company\nmust not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_domains`."
+          ),
+        crm_domains: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            "CRM-scoped domain filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\ndomains (in any of sender\/cc\/bcc\/recipient). Each domain is authorized\nagainst `crm_domains` + `crm_companies` (must exist for the caller's\nteam, company must not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_addresses`."
+          ),
         email_thread_ids: zod
           .array(zod.string())
           .optional()
@@ -5982,12 +5994,6 @@ export const postItemsSoupBody = zod
           .optional()
           .describe(
             'Controls whether shared email threads are included in results.'
-          ),
-        team_scope: zod
-          .boolean()
-          .optional()
-          .describe(
-            "When true, expand visibility to every teammate's mailbox: results may\ninclude emails the requesting user is not a participant on, as long as\nat least one of their teammates is. Requires every sender\/cc\/bcc\/recipient\nvalue to be a fully-qualified email address or a domain (no partial\nsubstring matches)."
           ),
       })
       .optional()
@@ -7379,10 +7385,24 @@ export const postItemsSoupAstBody = zod
       .unknown()
       .optional()
       .describe('the filters that should be applied to the document entity'),
+    eca: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'CRM-scoped address filter. Symmetric counterpart to\n[`Self::email_crm_domains`] for fully-qualified email addresses.'
+      ),
+    ecd: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'CRM-scoped domain filter. Parallel to the freeform `email_filter`\nAST. Expanded by the router into an any-direction OR sub-tree\nAND-merged into `email_filter`, plus a `CrmScope` tag stamped on\nthe resulting [`item_filters::ast::EmailFilterAst::crm_scope`].\nDrives the per-team CRM authorization pre-check and candidate-set\nwidening downstream. Mutually exclusive with `email_crm_addresses`.'
+      ),
     ef: zod
       .unknown()
       .optional()
-      .describe('the filters that should be applied to the email entity'),
+      .describe(
+        'the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` \/ `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors.'
+      ),
     pf: zod
       .unknown()
       .optional()
@@ -7394,9 +7414,6 @@ export const postItemsSoupAstBody = zod
         'the filters that should be applied based on entity properties'
       ),
   })
-  .describe(
-    'Describes a bundle of filters that should be applied across different entity types'
-  )
   .and(
     zod.object({
       expand: zod
