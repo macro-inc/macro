@@ -35,7 +35,7 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
       <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
         <DetailsSectionContent record={props.record} />
       </SidePanel.Section>
-      <SidePanel.Section id="sharing" title="Sharing" defaultOpen order={20}>
+      <SidePanel.Section id="sharing" title="Sharing" order={20}>
         <SharingSectionContent record={props.record} />
       </SidePanel.Section>
       <ReferencesSectionConditional callId={blockId} />
