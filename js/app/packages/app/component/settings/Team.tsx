@@ -142,10 +142,10 @@ function InviteEntryRow(props: {
           onBlur={() => props.onBlur()}
           placeholder="Enter email address"
           class={cn(
-            'flex-1 min-w-0 px-3 py-2 text-sm border rounded-xs bg-surface text-ink placeholder:text-ink/30 outline-none',
+            'flex-1 min-w-0 px-3 py-2 text-sm border rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none',
             props.error
               ? 'border-failure focus:border-failure'
-              : 'border-edge-muted focus:border-accent/50'
+              : 'border-edge-muted focus:border-accent'
           )}
         />
         <Show when={props.showRemove}>
@@ -153,7 +153,7 @@ function InviteEntryRow(props: {
             <Button
               variant="base"
               size="icon-sm"
-              class="rounded-xs shrink-0 focus:border-accent/50"
+              class="rounded-xs shrink-0 focus:border-accent"
               tabIndex={0}
               onClick={props.onRemove}
             >
@@ -268,7 +268,7 @@ function InviteEmailsInput(props: {
       </Show>
       <Button
         variant="base"
-        class="rounded-xs w-full justify-center focus:border-accent/50"
+        class="rounded-xs w-full justify-center focus:border-accent"
         tabIndex={0}
         disabled={!canAddRow()}
         onClick={addRow}
@@ -619,10 +619,10 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
             onBlur={() => validateTeamName()}
             placeholder="My Team"
             class={cn(
-              'w-full px-3 py-2 text-sm border rounded-xs bg-surface text-ink placeholder:text-ink/30 outline-none',
+              'w-full px-3 py-2 text-sm border rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none',
               teamNameError()
               ? 'border-failure focus:border-failure'
-              : 'border-edge-muted focus:border-accent/50'
+              : 'border-edge-muted focus:border-accent'
             )}
             />
             <Show when={teamNameError()}>
@@ -1225,7 +1225,7 @@ function TeamManagement(props: {
               value={deleteConfirmation()}
               onInput={(e) => setDeleteConfirmation(e.currentTarget.value)}
               placeholder={deleteConfirmationPhrase()}
-              class="w-full px-3 py-2 text-sm border border-edge-muted rounded-xs bg-surface text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
+              class="w-full px-3 py-2 text-sm border border-edge-muted rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none focus:border-accent"
             />
             <div class="flex justify-end gap-1 pt-2">
               <Button

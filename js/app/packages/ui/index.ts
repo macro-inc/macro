@@ -6,7 +6,6 @@ export { LogoProgress } from './components/LogoProgress';
 export { ToggleSwitch } from './components/ToggleSwitch';
 export { ButtonGroup } from './components/ButtonGroup';
 export { SendButton } from './components/SendButton';
-export { TextField } from './components/TextField';
 export { HoverCard } from './components/HoverCard';
 export { Dropdown } from './components/Dropdown';
 export { Surface } from './components/Surface';
