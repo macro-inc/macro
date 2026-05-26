@@ -64,8 +64,23 @@ export const AnimatedCommandKIcon = (props: {
       />
 
       {/* Prompt chevron + input line */}
-      <polyline class="ck-caret" points="0.75 0.75 6.75 6.75 0.75 12.75" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
-      <line class="ck-input" x1="6" y1="13.49" x2="15" y2="13.49" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
+      <polyline
+        class="ck-caret"
+        points="0.75 0.75 6.75 6.75 0.75 12.75"
+        stroke-width="1.5"
+        stroke-linejoin="round"
+        stroke-linecap="round"
+      />
+      <line
+        class="ck-input"
+        x1="6"
+        y1="13.49"
+        x2="15"
+        y2="13.49"
+        stroke-width="1.5"
+        stroke-linejoin="round"
+        stroke-linecap="round"
+      />
     </svg>
   );
 };

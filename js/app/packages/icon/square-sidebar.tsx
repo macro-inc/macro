@@ -57,7 +57,13 @@ export const AnimatedSquareSidebarIcon = (props: {
       />
 
       {/* Vertical divider — slides left to the frame's interior edge, then back */}
-      <rect class="sidebar-divider" x="4.5" y="0.75" width="1.5" height="13.5" />
+      <rect
+        class="sidebar-divider"
+        x="4.5"
+        y="0.75"
+        width="1.5"
+        height="13.5"
+      />
     </svg>
   );
 };
