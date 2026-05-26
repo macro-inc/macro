@@ -6,11 +6,11 @@ use crate::domain::{
         ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction, MessageAttachment,
         MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
         ParticipantRole, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
-        PostReactionRequest, ReactionAction, ResolvedChannelMessage, SimpleMention, ThreadData,
-        ThreadReplyRow, TopLevelMessageRow,
+        PostReactionRequest, ReactionAction, ReferencedShareItem, ReferencedShareItemType,
+        ResolvedChannelMessage, SimpleMention, ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{
-        ChannelEventDispatcher, ChannelRepo, ChannelSharePermissionService, MockChannelRepo,
+        ChannelEventDispatcher, ChannelReferenceSharePermissions, ChannelRepo, MockChannelRepo,
         TopLevelMessagesQueryResult,
     },
 };
@@ -574,18 +574,18 @@ impl ChannelEventDispatcher for FakeEvents {
 }
 
 #[derive(Clone, Default)]
-struct FakeSharePermissions {
-    items: Arc<Mutex<Vec<(String, String)>>>,
+struct FakeReferenceSharing {
+    items: Arc<Mutex<Vec<ReferencedShareItem>>>,
 }
 
-impl ChannelSharePermissionService for FakeSharePermissions {
+impl ChannelReferenceSharePermissions for FakeReferenceSharing {
     type Err = anyhow::Error;
 
-    async fn update_channel_share_permissions(
+    async fn update_channel_share_permissions_for_referenced_items(
         &self,
-        _user_id: String,
+        _actor: MacroUserIdStr<'static>,
         _channel_id: Uuid,
-        items: Vec<(String, String)>,
+        items: Vec<ReferencedShareItem>,
     ) -> Result<(), Self::Err> {
         self.items.lock().unwrap().extend(items);
         Ok(())
@@ -595,8 +595,8 @@ impl ChannelSharePermissionService for FakeSharePermissions {
 fn mutation_service(
     repo: FakeMutationRepo,
     events: FakeEvents,
-    share: FakeSharePermissions,
-) -> ChannelServiceImpl<FakeMutationRepo, FakeEvents, FakeSharePermissions> {
+    share: FakeReferenceSharing,
+) -> ChannelServiceImpl<FakeMutationRepo, FakeEvents, FakeReferenceSharing> {
     ChannelServiceImpl::with_dependencies(repo, events, share)
 }
 
@@ -609,7 +609,7 @@ async fn post_message_emits_message_posted_event_and_updates_share_permissions()
     let channel_id = Uuid::new_v4();
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
     let events = FakeEvents::default();
-    let share = FakeSharePermissions::default();
+    let share = FakeReferenceSharing::default();
     let svc = mutation_service(repo.clone(), events.clone(), share.clone());
 
     let res = svc
@@ -662,8 +662,14 @@ async fn post_message_emits_message_posted_event_and_updates_share_permissions()
     drop(emitted);
 
     let shared = share.items.lock().unwrap();
-    assert!(shared.contains(&("chat-1".to_string(), "chat".to_string())));
-    assert!(shared.contains(&("doc-1".to_string(), "document".to_string())));
+    assert!(shared.contains(&ReferencedShareItem::new(
+        "chat-1",
+        ReferencedShareItemType::Chat
+    )));
+    assert!(shared.contains(&ReferencedShareItem::new(
+        "doc-1",
+        ReferencedShareItemType::Document
+    )));
 }
 
 #[tokio::test]
@@ -677,7 +683,7 @@ async fn patch_message_content_emits_message_changed_event_to_thread_participant
     let svc = mutation_service(
         repo.clone(),
         events.clone(),
-        FakeSharePermissions::default(),
+        FakeReferenceSharing::default(),
     );
 
     svc.patch_message(
@@ -721,7 +727,7 @@ async fn reaction_mutation_emits_grouped_reaction_event() {
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
     let message_id = repo.state.lock().unwrap().message.id;
     let events = FakeEvents::default();
-    let svc = mutation_service(repo, events.clone(), FakeSharePermissions::default());
+    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
 
     svc.post_reaction(
         macro_id("macro|sender@test.com"),

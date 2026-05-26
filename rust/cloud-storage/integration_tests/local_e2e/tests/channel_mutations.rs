@@ -692,13 +692,13 @@ async fn assert_channel_rename_side_effect_contract(
 
 #[tokio::test]
 #[ignore = "requires `just local-e2e-seed` plus connection_gateway, document_storage_service, and notification_service workers"]
-async fn first_message_persists_message_attachment_emits_realtime_and_invites() -> anyhow::Result<()>
-{
+async fn message_with_document_attachment_updates_channel_share_permissions_and_side_effects()
+-> anyhow::Result<()> {
     let ctx = ChannelContractContext::load().await?;
-    assert_first_message_side_effect_contract(&ctx).await
+    assert_document_attachment_share_permission_side_effect_contract(&ctx).await
 }
 
-async fn assert_first_message_side_effect_contract(
+async fn assert_document_attachment_share_permission_side_effect_contract(
     ctx: &ChannelContractContext,
 ) -> anyhow::Result<()> {
     let document = ctx.world.seed.project_roadmap_document()?;

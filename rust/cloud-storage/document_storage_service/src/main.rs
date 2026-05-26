@@ -32,9 +32,9 @@ use channels::{
     outbound::{
         connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
-        entity_access_share_permissions::EntityAccessChannelSharePermissions,
-        notification_sender::NotificationChannelSender, pg_channels_repo::PgChannelsRepo,
-        pg_side_effect_context::PgChannelSideEffectContext,
+        notification_sender::NotificationChannelSender,
+        pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
+        pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
         sqs_search_indexer::SqsChannelSearchIndexer,
     },
 };
@@ -563,7 +563,7 @@ async fn main() -> anyhow::Result<()> {
             SqsChannelSearchIndexer::new(sqs_client.clone()),
             ContactsChannelDispatcher::new(contacts_ingress.clone()),
         )),
-        EntityAccessChannelSharePermissions::new(db.clone(), entity_access_service.clone()),
+        PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
     );
 
     let api_context = ApiContext {

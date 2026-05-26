@@ -21,9 +21,9 @@ use channels::{
     outbound::{
         connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
-        entity_access_share_permissions::EntityAccessChannelSharePermissions,
-        notification_sender::NotificationChannelSender, pg_channels_repo::PgChannelsRepo,
-        pg_side_effect_context::PgChannelSideEffectContext,
+        notification_sender::NotificationChannelSender,
+        pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
+        pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
         sqs_search_indexer::SqsChannelSearchIndexer,
     },
 };
@@ -210,7 +210,7 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
             ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
         >,
     >,
-    EntityAccessChannelSharePermissions<EntityAccessService>,
+    PgChannelReferenceSharePermissions<EntityAccessService>,
 >;
 
 /// Type alias for the channels router state.

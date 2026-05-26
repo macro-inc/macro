@@ -6,13 +6,13 @@ use crate::domain::{
         GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest,
         MessagePageDirection, NewChannelAttachment, ParticipantRole, PatchChannelRequest,
         PatchMessageRequest, PostMessageRequest, PostMessageResponse, PostReactionRequest,
-        PostTypingRequest, ReactionAction, RemoveParticipantsRequest, ResolvedChannelMessage,
-        SimpleMention, ThreadInfo, ThreadReply, TopLevelMessageRow,
+        PostTypingRequest, ReactionAction, ReferencedShareItem, RemoveParticipantsRequest,
+        ResolvedChannelMessage, SimpleMention, ThreadInfo, ThreadReply, TopLevelMessageRow,
     },
     ports::{
         ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr,
-        ChannelMessagesQueryResult, ChannelMutationErr, ChannelRepo, ChannelService,
-        ChannelSharePermissionService,
+        ChannelMessagesQueryResult, ChannelMutationErr, ChannelReferenceSharePermissions,
+        ChannelRepo, ChannelService,
     },
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -30,11 +30,11 @@ const THREAD_PREVIEW_COUNT: u16 = 3;
 pub struct ChannelServiceImpl<
     R,
     E = NoopChannelEventDispatcher,
-    P = NoopChannelSharePermissionService,
+    P = NoopChannelReferenceSharePermissions,
 > {
     repo: R,
     events: E,
-    share_permissions: P,
+    reference_share_permissions: P,
 }
 
 /// No-op event dispatcher used by read-only contexts.
@@ -45,24 +45,24 @@ impl ChannelEventDispatcher for NoopChannelEventDispatcher {
     fn dispatch(&self, _event: ChannelEvent) {}
 }
 
-/// No-op share-permission service used by read-only contexts.
+/// No-op reference-sharing service used by read-only contexts.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct NoopChannelSharePermissionService;
+pub struct NoopChannelReferenceSharePermissions;
 
-impl ChannelSharePermissionService for NoopChannelSharePermissionService {
+impl ChannelReferenceSharePermissions for NoopChannelReferenceSharePermissions {
     type Err = anyhow::Error;
 
-    async fn update_channel_share_permissions(
+    async fn update_channel_share_permissions_for_referenced_items(
         &self,
-        _user_id: String,
+        _actor: MacroUserIdStr<'static>,
         _channel_id: Uuid,
-        _items: Vec<(String, String)>,
+        _items: Vec<ReferencedShareItem>,
     ) -> Result<(), Self::Err> {
         Ok(())
     }
 }
 
-impl<R> ChannelServiceImpl<R, NoopChannelEventDispatcher, NoopChannelSharePermissionService>
+impl<R> ChannelServiceImpl<R, NoopChannelEventDispatcher, NoopChannelReferenceSharePermissions>
 where
     R: ChannelRepo,
 {
@@ -71,18 +71,18 @@ where
         Self {
             repo,
             events: NoopChannelEventDispatcher,
-            share_permissions: NoopChannelSharePermissionService,
+            reference_share_permissions: NoopChannelReferenceSharePermissions,
         }
     }
 }
 
 impl<R, E, P> ChannelServiceImpl<R, E, P> {
     /// Create a new service with outbound dependencies wired.
-    pub fn with_dependencies(repo: R, events: E, share_permissions: P) -> Self {
+    pub fn with_dependencies(repo: R, events: E, reference_share_permissions: P) -> Self {
         Self {
             repo,
             events,
-            share_permissions,
+            reference_share_permissions,
         }
     }
 }
@@ -191,16 +191,14 @@ fn participant_ids(participants: &[ChannelParticipant]) -> Vec<MacroUserIdStr<'s
 fn extract_share_items(
     attachments: &[NewChannelAttachment],
     mentions: &[SimpleMention],
-) -> Vec<(String, String)> {
+) -> Vec<ReferencedShareItem> {
     attachments
         .iter()
-        .filter(|a| a.entity_type != "user")
-        .map(|a| (a.entity_id.clone(), a.entity_type.clone()))
+        .filter_map(|a| ReferencedShareItem::from_raw(a.entity_id.clone(), &a.entity_type))
         .chain(
             mentions
                 .iter()
-                .filter(|m| m.entity_type != "user")
-                .map(|m| (m.entity_id.clone(), m.entity_type.clone())),
+                .filter_map(|m| ReferencedShareItem::from_raw(m.entity_id.clone(), &m.entity_type)),
         )
         .collect()
 }
@@ -233,7 +231,7 @@ impl<R, E, P> ChannelServiceImpl<R, E, P>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
-    P: ChannelSharePermissionService,
+    P: ChannelReferenceSharePermissions,
 {
     #[tracing::instrument(err, skip(self, req))]
     async fn create_channel(
@@ -446,8 +444,12 @@ where
         let items = extract_share_items(&req.attachments, &req.mentions);
         if !items.is_empty()
             && let Err(err) = self
-                .share_permissions
-                .update_channel_share_permissions(actor.as_ref().to_string(), channel_id, items)
+                .reference_share_permissions
+                .update_channel_share_permissions_for_referenced_items(
+                    actor.clone(),
+                    channel_id,
+                    items,
+                )
                 .await
         {
             let err: anyhow::Error = err.into();
@@ -525,7 +527,7 @@ where
 
         if attachments_changed {
             self.patch_message_attachments(
-                actor.as_ref().to_string(),
+                actor.clone(),
                 channel_id,
                 message_id,
                 attachments_to_delete,
@@ -551,9 +553,9 @@ where
                 let items = extract_share_items(&[], &mentions);
                 if !items.is_empty()
                     && let Err(err) = self
-                        .share_permissions
-                        .update_channel_share_permissions(
-                            actor.as_ref().to_string(),
+                        .reference_share_permissions
+                        .update_channel_share_permissions_for_referenced_items(
+                            actor.clone(),
                             channel_id,
                             items,
                         )
@@ -901,7 +903,7 @@ impl<R, E, P> ChannelServiceImpl<R, E, P>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
-    P: ChannelSharePermissionService,
+    P: ChannelReferenceSharePermissions,
 {
     async fn create_channel_record(
         &self,
@@ -948,7 +950,7 @@ where
 
     async fn patch_message_attachments(
         &self,
-        user_id: String,
+        actor: MacroUserIdStr<'static>,
         channel_id: Uuid,
         message_id: Uuid,
         attachment_ids_to_delete: Vec<String>,
@@ -1005,8 +1007,8 @@ where
         let items = extract_share_items(&attachments_to_add, &[]);
         if !items.is_empty()
             && let Err(err) = self
-                .share_permissions
-                .update_channel_share_permissions(user_id, channel_id, items)
+                .reference_share_permissions
+                .update_channel_share_permissions_for_referenced_items(actor, channel_id, items)
                 .await
         {
             let err: anyhow::Error = err.into();
@@ -1110,7 +1112,7 @@ impl<R, E, P> ChannelService for ChannelServiceImpl<R, E, P>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
-    P: ChannelSharePermissionService,
+    P: ChannelReferenceSharePermissions,
     anyhow::Error: From<R::Err>,
 {
     #[tracing::instrument(err, skip(self))]

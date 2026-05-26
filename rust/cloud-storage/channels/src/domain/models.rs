@@ -481,6 +481,81 @@ pub struct SimpleMention {
     pub entity_id: String,
 }
 
+/// Shareable entity type referenced by a channel message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ReferencedShareItemType {
+    /// Document entity.
+    Document,
+    /// Chat entity.
+    Chat,
+    /// Project entity.
+    Project,
+    /// Email thread entity.
+    EmailThread,
+    /// Call entity.
+    Call,
+}
+
+impl ReferencedShareItemType {
+    /// Parse a raw entity type from the transport/storage representation.
+    pub fn from_raw(raw: &str) -> Option<Self> {
+        match raw {
+            "document" => Some(Self::Document),
+            "chat" => Some(Self::Chat),
+            "project" => Some(Self::Project),
+            "thread" => Some(Self::EmailThread),
+            "call" => Some(Self::Call),
+            _ => None,
+        }
+    }
+
+    /// Return the storage representation of this item type.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Document => "document",
+            Self::Chat => "chat",
+            Self::Project => "project",
+            Self::EmailThread => "thread",
+            Self::Call => "call",
+        }
+    }
+}
+
+/// Shareable item referenced by a channel message.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ReferencedShareItem {
+    entity_id: String,
+    entity_type: ReferencedShareItemType,
+}
+
+impl ReferencedShareItem {
+    /// Build a typed referenced share item.
+    pub fn new(entity_id: impl Into<String>, entity_type: ReferencedShareItemType) -> Self {
+        Self {
+            entity_id: entity_id.into(),
+            entity_type,
+        }
+    }
+
+    /// Build a typed referenced share item from raw entity data.
+    pub fn from_raw(entity_id: impl Into<String>, entity_type: &str) -> Option<Self> {
+        Some(Self::new(
+            entity_id,
+            ReferencedShareItemType::from_raw(entity_type)?,
+        ))
+    }
+
+    /// Referenced entity id.
+    pub fn entity_id(&self) -> &str {
+        &self.entity_id
+    }
+
+    /// Referenced entity type.
+    pub fn entity_type(&self) -> ReferencedShareItemType {
+        self.entity_type
+    }
+}
+
 /// Request to send a channel message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]

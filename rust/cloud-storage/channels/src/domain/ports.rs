@@ -6,8 +6,8 @@ use crate::domain::models::{
     GetOrCreateDmRequest, GetOrCreatePrivateRequest, MessageAttachment, MessagePageDirection,
     MutatedAttachment, MutatedMessage, NewChannelAttachment, PatchChannelRequest,
     PatchMessageRequest, PostMessageRequest, PostMessageResponse, PostReactionRequest,
-    PostTypingRequest, RemoveParticipantsRequest, ResolvedChannelMessage, SimpleMention,
-    ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+    PostTypingRequest, ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage,
+    SimpleMention, ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
 };
 use crate::domain::side_effects::{
     ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
@@ -688,17 +688,19 @@ pub trait ChannelSearchIndexer: Send + Sync + 'static {
     ) -> impl Future<Output = ()> + Send;
 }
 
-/// Service for channel share permissions caused by message references.
-pub trait ChannelSharePermissionService: Send + Sync + 'static {
-    /// Error type for share-permission operations.
+/// Share-permission updater for items referenced by channel messages.
+pub trait ChannelReferenceSharePermissions: Send + Sync + 'static {
+    /// Error type for reference share-permission operations.
     type Err: Into<anyhow::Error> + Send;
 
-    /// Ensure channel participants can view referenced items.
-    fn update_channel_share_permissions(
+    /// Update channel share permissions for referenced items that `actor` can view.
+    ///
+    /// Implementations must not grant access for an item the actor cannot already view.
+    fn update_channel_share_permissions_for_referenced_items(
         &self,
-        user_id: String,
+        actor: MacroUserIdStr<'static>,
         channel_id: Uuid,
-        items: Vec<(String, String)>,
+        items: Vec<ReferencedShareItem>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
