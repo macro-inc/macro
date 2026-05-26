@@ -12,7 +12,7 @@ export type UsePreferenceOptions<T> = {
  * Use for sticky, view-kind-scoped settings the user has chosen once and
  * expects to apply on every visit (e.g. how a view is sorted or grouped).
  * For state that should travel with a specific history entry instead, use
- * `useEntryState` from `@app/component/split-layout/entry-state`.
+ * `useEntryState`.
  */
 export function usePreference<T>(
   key: string,
