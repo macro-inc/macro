@@ -68,10 +68,12 @@ export function CallBlockAdapter(props: CallBlockProps) {
             {(data) => (
               <SidePanel.Layout>
                 <CallSidePanelSections record={data} />
-                <CallRecordingBody
-                  data={data}
-                  transcriptTarget={transcriptTarget}
-                />
+                <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
+                  <CallRecordingBody
+                    data={data}
+                    transcriptTarget={transcriptTarget}
+                  />
+                </div>
               </SidePanel.Layout>
             )}
           </Match>

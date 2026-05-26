@@ -365,7 +365,7 @@ export function CallTranscript(props: {
 
   return (
     <div class="relative flex h-full min-h-0 flex-col overflow-hidden">
-      <div class="relative flex flex-1 min-h-0 flex-col">
+      <div class="relative flex flex-1 min-h-0 flex-col overflow-hidden">
         <div
           ref={setScrollRef}
           class="h-full min-h-0 flex-1 overflow-y-auto scrollbar-hidden"
@@ -423,6 +423,7 @@ export function CallTranscript(props: {
             </For>
           </div>
         </div>
+        <CustomScrollbar scrollContainer={scrollRef} />
       </div>
       <Show
         when={
@@ -452,7 +453,6 @@ export function CallTranscript(props: {
           </button>
         </div>
       </Show>
-      <CustomScrollbar scrollContainer={scrollRef} />
     </div>
   );
 }
