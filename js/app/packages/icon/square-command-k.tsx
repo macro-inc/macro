@@ -1,4 +1,4 @@
-export const AnimatedCommandKIcon = (props: {
+export const AnimatedSquareCommandKIcon = (props: {
   triggerAnimation?: boolean;
   class?: string;
 }) => {

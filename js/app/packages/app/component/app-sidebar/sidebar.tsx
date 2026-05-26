@@ -51,10 +51,10 @@ import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import LogoIcon from '@icon/macro-logo.svg';
+import { AnimatedSquareCommandKIcon } from '@icon/square-command-k';
 import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
-import { AnimatedCommandKIcon } from '@icon/wide-command-k';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedFolderIcon } from '@icon/wide-folder';
@@ -911,7 +911,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                 label="Command"
                 hotkey={TOKENS.global.commandMenu}
                 onClick={handleCommandPaletteClick}
-                icon={AnimatedCommandKIcon}
+                icon={AnimatedSquareCommandKIcon}
               />
               <SidebarHeaderIconButton
                 label="New Split"
