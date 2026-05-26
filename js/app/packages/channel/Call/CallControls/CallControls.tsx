@@ -29,7 +29,7 @@ export function CallControls(props: CallControlsProps) {
         when={props.variant === 'panel-small'}
         fallback={<CallControlsDefaultAndPanelRow onLeave={props.onLeave} />}
       >
-        <CallControlsPanelSmallRow onLeave={props.onLeave} />
+        <CallControlsPanelSmallRow />
       </Show>
     </Show>
   );

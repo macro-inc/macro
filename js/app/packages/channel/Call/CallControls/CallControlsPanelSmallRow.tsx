@@ -1,30 +1,21 @@
-import PhoneDisconnect from '@icon/wide-call-disconnect.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import Gear from '@phosphor/gear.svg';
-import Info from '@phosphor/info.svg';
 import Microphone from '@phosphor/microphone.svg';
 import MicrophoneSlash from '@phosphor/microphone-slash.svg';
 import Screencast from '@phosphor/screencast.svg';
-import ShareNetwork from '@phosphor/share-network.svg';
 import VideoCamera from '@phosphor/video-camera.svg';
 import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
-import { cn, Dropdown, ToggleSwitch, Tooltip } from '@ui';
+import { cn, Dropdown } from '@ui';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { useCallContext } from '../CallContext';
 import { CallDeviceList } from '../CallDeviceList';
 import { useToggleShareWithTeam } from '../use-toggle-share-with-team';
-import { MenuDivider, MenuLabel } from './CallMenuPrimitives';
+import { InlineCheckbox, MenuDivider, MenuLabel } from './CallMenuPrimitives';
 
 const ITEM_ICON_CLASS = 'size-3.5 shrink-0 text-ink-muted';
 
-export type CallControlsPanelSmallRowProps = {
-  onLeave: () => void | Promise<void>;
-};
-
-export function CallControlsPanelSmallRow(
-  props: CallControlsPanelSmallRowProps
-) {
+export function CallControlsPanelSmallRow() {
   const callCtx = useCallContext();
   const isConnecting = () => callCtx.isConnecting();
   const handleToggleShareWithTeam = useToggleShareWithTeam();
@@ -155,32 +146,8 @@ export function CallControlsPanelSmallRow(
               closeOnSelect={false}
               onSelect={() => void handleToggleShareWithTeam()}
             >
-              <ShareNetwork class={ITEM_ICON_CLASS} />
-              <span class="flex-1 truncate">
-                {callCtx.isSharedWithTeam()
-                  ? 'Shared with team'
-                  : 'Share with team'}
-              </span>
-              <ToggleSwitch
-                checked={callCtx.isSharedWithTeam()}
-                class="pointer-events-none"
-              />
-              <Tooltip
-                placement="left"
-                label="When on, all team members can view and search this call's transcript and AI summary."
-              >
-                <Info class="size-3 text-ink-subtle" />
-              </Tooltip>
-            </Dropdown.Item>
-
-            <MenuDivider />
-
-            <Dropdown.Item
-              class="text-failure hover:bg-failure/10 data-highlighted:bg-failure/10"
-              onSelect={() => void props.onLeave()}
-            >
-              <PhoneDisconnect class="size-3.5 shrink-0" />
-              <span class="flex-1 truncate">Leave call</span>
+              <InlineCheckbox checked={callCtx.isSharedWithTeam()} />
+              <span class="flex-1 truncate">Share with team</span>
             </Dropdown.Item>
           </Dropdown.Group>
         </Dropdown.Content>
