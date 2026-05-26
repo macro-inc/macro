@@ -76,10 +76,7 @@ export function longPressHighlight(
 
   touchHandler(element, () => ({
     onTouchStart: () => {
-      enterTimer = window.setTimeout(
-        startAnimation,
-        LONG_PRESS_ENTER_DELAY_MS
-      );
+      enterTimer = window.setTimeout(startAnimation, LONG_PRESS_ENTER_DELAY_MS);
     },
     onLongPress: () => {
       options().onLongPress?.();

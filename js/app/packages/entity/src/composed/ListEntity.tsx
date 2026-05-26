@@ -201,8 +201,7 @@ export function ListEntity(props: ListEntityProps) {
         {
           'min-h-10 mx-1': !isMobile(),
           'bg-accent/8': props.checked,
-          'ring ring-accent/16 ring-inset':
-            props.checked && props.highlighted  ,
+          'ring ring-accent/16 ring-inset': props.checked && props.highlighted,
           'ring ring-edge bg-active/60 ring-inset':
             props.highlighted && !props.checked && !isTouchDevice(),
           'hover:bg-active/30':
