@@ -11,4 +11,5 @@ run-local.fish
 **/node_modules
 **/result
 **/result-*
-.pi/
+.pi/plan/
+.pi/plans/

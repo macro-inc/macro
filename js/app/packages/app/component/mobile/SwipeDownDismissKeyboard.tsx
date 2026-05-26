@@ -8,6 +8,24 @@ import { onCleanup, onMount } from 'solid-js';
 const SWIPE_DOWN_THRESHOLD = 5; // px of downward movement to register as a swipe down
 const ZONE_HEIGHT = 20; // px above keyboard that activates blur
 
+function hasTextSelection(active: Element | null): boolean {
+  if (
+    active instanceof HTMLInputElement ||
+    active instanceof HTMLTextAreaElement
+  ) {
+    const { selectionStart, selectionEnd } = active;
+    if (
+      selectionStart != null &&
+      selectionEnd != null &&
+      selectionStart !== selectionEnd
+    ) {
+      return true;
+    }
+  }
+  const selection = window.getSelection();
+  return !!selection && !selection.isCollapsed && selection.toString() !== '';
+}
+
 export function SwipeDownDismissKeyboard() {
   if (!isPlatform('ios')) return;
 
@@ -32,6 +50,9 @@ export function SwipeDownDismissKeyboard() {
     if (inZone && swipingDown) {
       const active = document.activeElement as HTMLElement | null;
       if (!active) return;
+      // Preserve text selection — dismissing the keyboard would collapse it and
+      // close any selection-anchored toolbars before the user can act on them.
+      if (hasTextSelection(active)) return;
       // If the active element is inside a dialog, focus the dialog root instead of
       // blurring — Kobalte's focus trap would immediately re-focus the input after blur().
       // Focusing a non-input element that's still inside the trap satisfies the trap

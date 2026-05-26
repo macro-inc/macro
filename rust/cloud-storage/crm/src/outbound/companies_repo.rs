@@ -5,7 +5,10 @@ mod test;
 
 use crate::domain::{
     companies_repo::CompaniesRepository,
-    model::{CrmCompany, CrmDomain, CrmError, DomainMetadata},
+    model::{
+        CrmAddressStatus, CrmCompany, CrmDomain, CrmDomainStatus, CrmError, CrmScopePrecheck,
+        DomainMetadata,
+    },
 };
 use sqlx::PgPool;
 
@@ -103,7 +106,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
 
         let company = sqlx::query!(
             r#"
-            SELECT c.id, c.team_id, c.email_sync, c.hidden, c.created_at
+            SELECT c.id, c.team_id, c.email_sync, c.hidden, c.created_at, c.updated_at
             FROM crm_companies c
             JOIN crm_domains d ON d.company_id = c.id
             WHERE c.team_id = $1
@@ -148,6 +151,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             email_sync: company.email_sync,
             hidden: company.hidden,
             created_at: company.created_at,
+            updated_at: company.updated_at,
             domains,
         }))
     }
@@ -242,7 +246,17 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                     .map_err(|e| CrmError::StorageLayerError(e.into()))?;
                 return Ok(());
             }
-            Some(row) => row.id,
+            Some(row) => {
+                sqlx::query!(
+                    r#"UPDATE crm_companies SET updated_at = now() WHERE id = $1"#,
+                    row.id,
+                )
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+                row.id
+            }
             None => {
                 let new_company = sqlx::query!(
                     r#"
@@ -295,6 +309,14 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                     .await
                     .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
+                    sqlx::query!(
+                        r#"UPDATE crm_companies SET updated_at = now() WHERE id = $1"#,
+                        existing_company_id,
+                    )
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
                     sqlx::query!(r#"DELETE FROM crm_companies WHERE id = $1"#, new_company.id,)
                         .execute(&mut *tx)
                         .await
@@ -312,15 +334,16 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // populate). On conflict, COALESCE preserves the existing
         // crm_contacts.name when it's non-NULL, so the first non-empty
         // name wins and a subsequent populate from a different team
-        // member can't overwrite it. If the existing name is NULL
-        // (previous populate ran before email_contacts had a name), the
-        // conflict path still gets a chance to fill it.
+        // member can't overwrite it. The conflict path still performs
+        // an UPDATE for existing contacts so `updated_at` reflects the
+        // latest populate even when the stored name is unchanged.
         let contact_id = sqlx::query_scalar!(
             r#"
             INSERT INTO crm_contacts (company_id, email, name)
             VALUES ($1, $2, $3)
             ON CONFLICT (company_id, email) DO UPDATE
-                SET name = COALESCE(crm_contacts.name, EXCLUDED.name)
+                SET name = COALESCE(crm_contacts.name, EXCLUDED.name),
+                    updated_at = now()
             RETURNING id
             "#,
             company_id,
@@ -835,5 +858,127 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .fetch_optional(&self.pool)
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn crm_scope_precheck(
+        &self,
+        team_id: &uuid::Uuid,
+        domains: &[String],
+        addresses: &[String],
+    ) -> Result<CrmScopePrecheck, CrmError> {
+        // Killswitch read: a missing row is treated as `crm_enabled = false`.
+        let crm_enabled: bool = sqlx::query_scalar!(
+            r#"SELECT crm_enabled FROM team_crm_settings WHERE team_id = $1"#,
+            team_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?
+        .unwrap_or(false);
+
+        // When the team killswitch is off, the email service will reject the
+        // request with `CrmDisabledForTeam` before looking at per-input
+        // statuses — so skip the probes entirely.
+        if !crm_enabled {
+            return Ok(CrmScopePrecheck {
+                crm_enabled: false,
+                domains: Vec::new(),
+                addresses: Vec::new(),
+            });
+        }
+
+        let domain_statuses: Vec<CrmDomainStatus> = if domains.is_empty() {
+            Vec::new()
+        } else {
+            // `WITH ORDINALITY` + `ORDER BY input.ord` guarantees output
+            // row order matches the input list — `CrmScopePrecheck.domains`
+            // documents that contract.
+            sqlx::query!(
+                r#"
+                SELECT
+                    input.domain                       AS "domain!",
+                    (d.id IS NOT NULL)                 AS "exists!",
+                    COALESCE(c.hidden, FALSE)          AS "company_hidden!",
+                    COALESCE(c.email_sync, FALSE)      AS "email_sync!"
+                FROM UNNEST($2::text[]) WITH ORDINALITY AS input(domain, ord)
+                LEFT JOIN crm_domains d
+                    ON d.team_id = $1 AND LOWER(d.domain) = input.domain
+                LEFT JOIN crm_companies c
+                    ON c.id = d.company_id
+                ORDER BY input.ord
+                "#,
+                team_id,
+                domains,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?
+            .into_iter()
+            .map(|r| CrmDomainStatus {
+                domain: r.domain,
+                exists: r.exists,
+                company_hidden: r.company_hidden,
+                email_sync: r.email_sync,
+            })
+            .collect()
+        };
+
+        let address_statuses: Vec<CrmAddressStatus> = if addresses.is_empty() {
+            Vec::new()
+        } else {
+            // Pre-materialize the team's contact rows in a derived table,
+            // then hash-join against the input array. Avoids LATERAL's
+            // per-outer-row execution. Safe to assume at most one row per
+            // (team, email) thanks to crm_contacts_company_id_email_key
+            // UNIQUE (company_id, email) plus the populate-path invariant
+            // that an email's domain uniquely identifies its company
+            // within a team (via crm_domains_team_id_lower_domain_unique).
+            // `WITH ORDINALITY` + `ORDER BY input.ord` guarantees output
+            // row order matches the input list — `CrmScopePrecheck.addresses`
+            // documents that contract.
+            sqlx::query!(
+                r#"
+                SELECT
+                    input.address                          AS "address!",
+                    (m.email IS NOT NULL)                  AS "exists!",
+                    COALESCE(m.contact_hidden, FALSE)      AS "contact_hidden!",
+                    COALESCE(m.company_hidden, FALSE)      AS "company_hidden!",
+                    COALESCE(m.email_sync,     FALSE)      AS "email_sync!"
+                FROM UNNEST($2::text[]) WITH ORDINALITY AS input(address, ord)
+                LEFT JOIN (
+                    SELECT
+                        ct.email     AS email,
+                        ct.hidden    AS contact_hidden,
+                        c.hidden     AS company_hidden,
+                        c.email_sync AS email_sync
+                    FROM crm_contacts ct
+                    JOIN crm_companies c ON c.id = ct.company_id
+                    WHERE c.team_id = $1
+                ) m ON m.email = input.address
+                ORDER BY input.ord
+                "#,
+                team_id,
+                addresses,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?
+            .into_iter()
+            .map(|r| CrmAddressStatus {
+                address: r.address,
+                exists: r.exists,
+                contact_hidden: r.contact_hidden,
+                company_hidden: r.company_hidden,
+                email_sync: r.email_sync,
+            })
+            .collect()
+        };
+
+        Ok(CrmScopePrecheck {
+            crm_enabled,
+            domains: domain_statuses,
+            addresses: address_statuses,
+        })
     }
 }

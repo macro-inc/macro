@@ -224,9 +224,14 @@ impl ListEntities {
             document_filter: self.document_filter.clone(),
             project_filter: self.project_filter.clone(),
             chat_filter: self.chat_filter.clone(),
-            email_filter: match self.email_preset {
-                Some(preset) => Some(Arc::new(preset.filter())),
-                None => self.email_filter.clone(),
+            // Toolset doesn't (yet) expose CRM scope; the tool surface stays
+            // per-link unless we add explicit fields for it.
+            email_filter: item_filters::ast::EmailFilterAst {
+                tree: match self.email_preset {
+                    Some(preset) => Some(Arc::new(preset.filter())),
+                    None => self.email_filter.clone(),
+                },
+                crm_scope: None,
             },
             channel_filter: self.channel_filter.clone(),
             call_filter: self.call_filter.clone(),
@@ -263,7 +268,10 @@ impl ListEntities {
             email_filter: if include_types.contains(&ItemType::Email) {
                 ast.email_filter
             } else {
-                Some(Arc::new(Expr::val(EmailLiteral::ThreadId(Uuid::nil()))))
+                item_filters::ast::EmailFilterAst {
+                    tree: Some(Arc::new(Expr::val(EmailLiteral::ThreadId(Uuid::nil())))),
+                    crm_scope: None,
+                }
             },
             channel_filter: if include_types.contains(&ItemType::Channel) {
                 ast.channel_filter

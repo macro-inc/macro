@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT c.id, c.team_id, c.email_sync, c.hidden, c.created_at\n            FROM crm_companies c\n            JOIN crm_domains d ON d.company_id = c.id\n            WHERE c.team_id = $1\n              AND LOWER(d.domain) = $2\n            LIMIT 1\n            ",
+  "query": "\n            SELECT c.id, c.team_id, c.email_sync, c.hidden, c.created_at, c.updated_at\n            FROM crm_companies c\n            JOIN crm_domains d ON d.company_id = c.id\n            WHERE c.team_id = $1\n              AND LOWER(d.domain) = $2\n            LIMIT 1\n            ",
   "describe": {
     "columns": [
       {
@@ -27,6 +27,11 @@
         "ordinal": 4,
         "name": "created_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
@@ -40,8 +45,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "98bb8b9d6b4503d0999adb71e7199b1722bd75592887848fa07373e79af717dd"
+  "hash": "3f084390f0f997762642796059a56b37dc19270a95b8e12e9e86d53824562037"
 }

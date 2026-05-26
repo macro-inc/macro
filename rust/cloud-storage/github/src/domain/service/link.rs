@@ -7,7 +7,7 @@ use macro_user_id::{
 };
 
 use crate::domain::{
-    models::{GithubError, GithubLink},
+    models::{EnrichedGithubPullRequest, GithubError, GithubLink, GithubPullRequestRef},
     ports::{Auth, GithubLinkService, GithubOauth, GithubRepo},
 };
 
@@ -63,6 +63,74 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubLinkService for GithubLinkSer
             .get_github_link_by_user_id(macro_user_id)
             .await
             .map_err(|e| GithubError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(skip(self, pull_requests), err)]
+    async fn enrich_pull_requests(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+        pull_requests: Vec<GithubPullRequestRef>,
+    ) -> Result<Vec<EnrichedGithubPullRequest>, GithubError> {
+        if pull_requests.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let link = match self.repo.get_github_link_by_user_id(macro_user_id).await {
+            Ok(link) => link,
+            Err(e) => {
+                let e: anyhow::Error = e.into();
+                if let Some(db_err) = e.downcast_ref::<sqlx::Error>()
+                    && matches!(db_err, sqlx::Error::RowNotFound)
+                {
+                    return Err(GithubError::NoLinkFound);
+                }
+
+                if e.to_string().contains("no rows returned") {
+                    return Err(GithubError::NoLinkFound);
+                }
+
+                return Err(GithubError::Internal(e));
+            }
+        };
+
+        let access_token = self
+            .auth
+            .retreive_access_token(&link.fusionauth_user_id, &self.config.idp_id)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        let mut enriched_pull_requests = Vec::with_capacity(pull_requests.len());
+
+        for pull_request in pull_requests {
+            let details = self
+                .oauth
+                .get_pull_request_details(
+                    access_token.as_str(),
+                    pull_request.owner.as_str(),
+                    pull_request.repo.as_str(),
+                    pull_request.number,
+                )
+                .await;
+
+            let enriched_pull_request = match details {
+                Ok(details) => EnrichedGithubPullRequest::from_details(pull_request, details),
+                Err(e) => {
+                    tracing::warn!(
+                        error=?e,
+                        owner=%pull_request.owner,
+                        repo=%pull_request.repo,
+                        number=pull_request.number,
+                        "failed to enrich GitHub pull request"
+                    );
+
+                    EnrichedGithubPullRequest::from_reference(pull_request)
+                }
+            };
+
+            enriched_pull_requests.push(enriched_pull_request);
+        }
+
+        Ok(enriched_pull_requests)
     }
 
     #[tracing::instrument(skip(self), err)]

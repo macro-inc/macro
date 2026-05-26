@@ -38,7 +38,10 @@ export function EditorPopover(props: EditorPopoverProps) {
       mount={ctx.portalMount()}
       depth={3}
     >
-      <Dropdown.Group class="p-0 gap-0 flex-1 min-h-0">
+      <Dropdown.Group
+        class="p-0 gap-0 flex-1 min-h-0"
+        onClick={(e: MouseEvent) => e.stopPropagation()}
+      >
         {props.children}
       </Dropdown.Group>
     </Dropdown.Content>

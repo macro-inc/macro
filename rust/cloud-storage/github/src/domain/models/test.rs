@@ -7,6 +7,147 @@ fn test_github_key() {
     assert_eq!(key.to_string(), "rust-lang/rust/pull/12345");
 }
 
+fn pull_request_reference() -> GithubPullRequestRef {
+    GithubPullRequestRef {
+        github_key: "macro/app/pull/7".to_string(),
+        owner: "macro".to_string(),
+        repo: "app".to_string(),
+        number: 7,
+        url: "https://github.com/macro/app/pull/7".to_string(),
+        display_name: "macro/app#7".to_string(),
+    }
+}
+
+fn pull_request_details(
+    state: &str,
+    merged_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> GithubPullRequestDetails {
+    GithubPullRequestDetails {
+        title: "Add pull request enrichment".to_string(),
+        state: state.to_string(),
+        merged_at,
+        additions: 42,
+        deletions: 12,
+    }
+}
+
+#[test]
+fn pull_request_status_maps_open_pr() {
+    let details = pull_request_details("open", None);
+
+    assert_eq!(details.status(), GithubPullRequestStatus::Open);
+}
+
+#[test]
+fn pull_request_status_maps_closed_unmerged_pr() {
+    let details = pull_request_details("closed", None);
+
+    assert_eq!(details.status(), GithubPullRequestStatus::Closed);
+}
+
+#[test]
+fn pull_request_status_maps_closed_merged_pr() {
+    let merged_at = chrono::DateTime::parse_from_rfc3339("2026-05-25T18:54:21Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let details = pull_request_details("closed", Some(merged_at));
+
+    assert_eq!(details.status(), GithubPullRequestStatus::Merged);
+}
+
+#[test]
+fn pull_request_proxy_request_serializes_with_only_pull_requests() {
+    let reference = pull_request_reference();
+    let request = EnrichGithubPullRequestsProxyRequest {
+        pull_requests: vec![reference],
+    };
+
+    let request_json = serde_json::to_value(&request).unwrap();
+
+    assert_eq!(
+        request_json,
+        serde_json::json!({
+            "pullRequests": [
+                {
+                    "githubKey": "macro/app/pull/7",
+                    "owner": "macro",
+                    "repo": "app",
+                    "number": 7,
+                    "url": "https://github.com/macro/app/pull/7",
+                    "displayName": "macro/app#7"
+                }
+            ]
+        })
+    );
+    assert!(request_json.get("macroUserId").is_none());
+
+    let decoded_request: EnrichGithubPullRequestsProxyRequest =
+        serde_json::from_value(request_json).unwrap();
+    assert_eq!(decoded_request, request);
+}
+
+#[test]
+fn pull_request_response_serializes_with_camel_case_fields() {
+    let reference = pull_request_reference();
+    let response = EnrichGithubPullRequestsResponse {
+        pull_requests: vec![EnrichedGithubPullRequest {
+            github_key: reference.github_key,
+            owner: reference.owner,
+            repo: reference.repo,
+            number: reference.number,
+            url: reference.url,
+            display_name: reference.display_name,
+            name: Some("Add pull request enrichment".to_string()),
+            status: Some(GithubPullRequestStatus::Merged),
+            additions: Some(42),
+            deletions: Some(12),
+        }],
+    };
+
+    let response_json = serde_json::to_value(&response).unwrap();
+
+    assert_eq!(
+        response_json,
+        serde_json::json!({
+            "pullRequests": [
+                {
+                    "githubKey": "macro/app/pull/7",
+                    "owner": "macro",
+                    "repo": "app",
+                    "number": 7,
+                    "url": "https://github.com/macro/app/pull/7",
+                    "displayName": "macro/app#7",
+                    "name": "Add pull request enrichment",
+                    "status": "merged",
+                    "additions": 42,
+                    "deletions": 12
+                }
+            ]
+        })
+    );
+
+    let decoded_response: EnrichGithubPullRequestsResponse =
+        serde_json::from_value(response_json).unwrap();
+    assert_eq!(decoded_response, response);
+}
+
+#[test]
+fn pull_request_enrichment_preserves_reference_fields() {
+    let reference = pull_request_reference();
+    let enriched = EnrichedGithubPullRequest::from_reference(reference.clone());
+
+    assert_eq!(enriched.github_key, reference.github_key);
+    assert_eq!(enriched.owner, reference.owner);
+    assert_eq!(enriched.repo, reference.repo);
+    assert_eq!(enriched.number, reference.number);
+    assert_eq!(enriched.url, reference.url);
+    assert_eq!(enriched.display_name, reference.display_name);
+    assert_eq!(enriched.name, None);
+    assert_eq!(enriched.status, None);
+    assert_eq!(enriched.additions, None);
+    assert_eq!(enriched.deletions, None);
+}
+
 // ---------------------------------------------------------------------------
 // MacroTaskId::from_short_uuid
 // ---------------------------------------------------------------------------

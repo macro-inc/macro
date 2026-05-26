@@ -178,6 +178,65 @@
         }
       }
     },
+    "/github_pull_requests/enrich": {
+      "post": {
+        "tags": ["github_pull_requests"],
+        "summary": "Enriches GitHub pull request references with live GitHub data for the authenticated user.",
+        "operationId": "enrich_github_pull_requests",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrichGithubPullRequestsProxyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrichGithubPullRequestsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["health"],
@@ -3395,6 +3454,101 @@
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
       },
+      "EnrichGithubPullRequestsProxyRequest": {
+        "type": "object",
+        "description": "Request body for the authenticated pull request enrichment proxy.",
+        "required": ["pullRequests"],
+        "properties": {
+          "pullRequests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestRef"
+            },
+            "description": "The pull requests to enrich for the authenticated user."
+          }
+        }
+      },
+      "EnrichGithubPullRequestsResponse": {
+        "type": "object",
+        "description": "Response body for pull request enrichment.",
+        "required": ["pullRequests"],
+        "properties": {
+          "pullRequests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnrichedGithubPullRequest"
+            },
+            "description": "Pull requests with enrichment fields populated when GitHub data was available."
+          }
+        }
+      },
+      "EnrichedGithubPullRequest": {
+        "type": "object",
+        "description": "A pull request reference enriched with live GitHub details when available.",
+        "required": [
+          "githubKey",
+          "owner",
+          "repo",
+          "number",
+          "url",
+          "displayName"
+        ],
+        "properties": {
+          "additions": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The number of added lines reported by GitHub, when enrichment succeeds.",
+            "minimum": 0
+          },
+          "deletions": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The number of deleted lines reported by GitHub, when enrichment succeeds.",
+            "minimum": 0
+          },
+          "displayName": {
+            "type": "string",
+            "description": "A compact label suitable for display in the UI."
+          },
+          "githubKey": {
+            "type": "string",
+            "description": "The stored GitHub association key, in `owner/repo/pull/number` format."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The GitHub pull request title, when enrichment succeeds."
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The GitHub pull request number.",
+            "minimum": 0
+          },
+          "owner": {
+            "type": "string",
+            "description": "The GitHub repository owner or organization."
+          },
+          "repo": {
+            "type": "string",
+            "description": "The GitHub repository name."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GithubPullRequestStatus",
+                "description": "The normalized GitHub pull request status, when enrichment succeeds."
+              }
+            ]
+          },
+          "url": {
+            "type": "string",
+            "description": "The public GitHub URL for the pull request."
+          }
+        }
+      },
       "ErrorResponse": {
         "type": "object",
         "description": "A plain old json error response for use with axum.\nyup, thats it.",
@@ -3541,6 +3695,51 @@
             "description": "The user id"
           }
         }
+      },
+      "GithubPullRequestRef": {
+        "type": "object",
+        "description": "A pull request reference that can be enriched with live GitHub data.",
+        "required": [
+          "githubKey",
+          "owner",
+          "repo",
+          "number",
+          "url",
+          "displayName"
+        ],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "A compact label suitable for display in the UI."
+          },
+          "githubKey": {
+            "type": "string",
+            "description": "The stored GitHub association key, in `owner/repo/pull/number` format."
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The GitHub pull request number.",
+            "minimum": 0
+          },
+          "owner": {
+            "type": "string",
+            "description": "The GitHub repository owner or organization."
+          },
+          "repo": {
+            "type": "string",
+            "description": "The GitHub repository name."
+          },
+          "url": {
+            "type": "string",
+            "description": "The public GitHub URL for the pull request."
+          }
+        }
+      },
+      "GithubPullRequestStatus": {
+        "type": "string",
+        "description": "The normalized lifecycle status for a GitHub pull request.",
+        "enum": ["open", "closed", "merged"]
       },
       "InitGithubLinkResponse": {
         "type": "object",

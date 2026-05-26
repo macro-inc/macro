@@ -12,7 +12,7 @@ import { mapSoupPageToEntityList } from '@queries/soup/transform-utils';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
-import type { EntityFilterAst } from '@service-storage/generated/schemas/entityFilterAst';
+import type { ApiEntityFilterAst } from '@service-storage/generated/schemas/apiEntityFilterAst';
 import type { EntityFilters } from '@service-storage/generated/schemas/entityFilters';
 import type { Params } from '@service-storage/generated/schemas/params';
 import type { PostSoupAstRequestAllOf } from '@service-storage/generated/schemas/postSoupAstRequestAllOf';
@@ -33,7 +33,7 @@ export type SoupItemsQueryArgs = {
 
 export type SoupAstParams = Params;
 
-export type SoupAstBody = EntityFilterAst & PostSoupAstRequestAllOf;
+export type SoupAstBody = ApiEntityFilterAst & PostSoupAstRequestAllOf;
 
 export type SoupAstItemsQueryArgs = {
   params: SoupAstParams;

@@ -322,7 +322,7 @@ where
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
     where
         SoupRequest<R>: IntoSoupReqAst,
-        R: Clone + Serialize + Send + RequestsTeamScope,
+        R: Clone + Serialize + Send + RequestsCrmScope,
     {
         let create_fallback = move || -> SoupQuery<R> {
             let params_sort = params
@@ -346,13 +346,13 @@ where
                 .unwrap_or_else(create_fallback),
         };
 
-        // Derive team_scope authorization from the *effective* filter (the
+        // Derive CRM-scope authorization from the *effective* filter (the
         // one embedded in the resolved SoupQuery), not the raw request body.
         // For cursor-paginated requests the body's filters may be empty and
         // the real filter lives inside the cursor — checking the body would
-        // miss team_scope on follow-up pages.
+        // miss CRM scope on follow-up pages.
         let team_receipt =
-            resolve_team_receipt(cursor.filter().requests_team_scope(), team_receipt_option)?;
+            resolve_crm_team_receipt(cursor.filter().requests_crm_scope(), team_receipt_option)?;
 
         let res = self
             .service
@@ -442,22 +442,23 @@ where
 /// (`EntityFilters` for the typed POST, `ApiEntityFilterAst` for the AST
 /// endpoint). Lets `handle` inspect the *materialized* SoupQuery's filter
 /// — which may have come from the request body or from the cursor — and
-/// decide whether team_scope is in play.
-pub trait RequestsTeamScope {
+/// decide whether CRM scope is in play.
+pub trait RequestsCrmScope {
     /// True when this filter asks the query to expand visibility across
-    /// the requesting user's team.
-    fn requests_team_scope(&self) -> bool;
+    /// the requesting user's team via a CRM-scoped attribute
+    /// (`crm_domains` or `crm_addresses`).
+    fn requests_crm_scope(&self) -> bool;
 }
 
-impl RequestsTeamScope for EntityFilters {
-    fn requests_team_scope(&self) -> bool {
-        self.email_filters.team_scope
+impl RequestsCrmScope for EntityFilters {
+    fn requests_crm_scope(&self) -> bool {
+        !self.email_filters.crm_domains.is_empty() || !self.email_filters.crm_addresses.is_empty()
     }
 }
 
-impl RequestsTeamScope for ApiEntityFilterAst {
-    fn requests_team_scope(&self) -> bool {
-        email_filter_contains_team_scope(&self.email_filter)
+impl RequestsCrmScope for ApiEntityFilterAst {
+    fn requests_crm_scope(&self) -> bool {
+        !self.email_crm_domains.is_empty() || !self.email_crm_addresses.is_empty()
     }
 }
 
@@ -508,8 +509,8 @@ pub enum SoupHandlerErr {
     ExpandErr(ExpandErr),
     #[error("Invalid compound filter could not be expanded")]
     Expand,
-    #[error("team_scope requires team membership")]
-    TeamScopeForbidden,
+    #[error("CRM-scoped queries require team membership")]
+    CrmScopeForbidden,
 }
 
 impl From<SoupErr> for SoupHandlerErr {
@@ -525,7 +526,7 @@ impl IntoResponse for SoupHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {
             SoupHandlerErr::ExpandErr(_) | SoupHandlerErr::Expand => StatusCode::BAD_REQUEST,
-            SoupHandlerErr::TeamScopeForbidden => StatusCode::FORBIDDEN,
+            SoupHandlerErr::CrmScopeForbidden => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -649,7 +650,7 @@ where
         Err(e) => Err(e)?,
     };
     // Pass the raw extractor receipt through — `handle` resolves the
-    // team_scope check against the *effective* filter (which may come from
+    // CRM-scope check against the *effective* filter (which may come from
     // the cursor on follow-up pages), not the request body.
     service
         .handle(
@@ -670,7 +671,6 @@ where
 #[serde(rename_all = "camelCase")]
 pub struct PostSoupAstRequest {
     #[serde(default, flatten)]
-    #[schema(value_type = EntityFilterAst)]
     filters: ApiEntityFilterAst,
     #[serde(default, flatten)]
     params: Params,
@@ -718,7 +718,7 @@ where
         Err(e) => Err(e)?,
     };
     // Pass the raw extractor receipt through — `handle` resolves the
-    // team_scope check against the *effective* filter (which may come from
+    // CRM-scope check against the *effective* filter (which may come from
     // the cursor on follow-up pages), not the request body.
     service
         .handle(
@@ -741,7 +741,6 @@ where
 pub struct PostGroupedSoupAstRequest {
     /// Filters to apply (AST format)
     #[serde(default, flatten)]
-    #[schema(value_type = EntityFilterAst)]
     filters: ApiEntityFilterAst,
     /// Grouping parameters (required)
     #[serde(flatten)]
@@ -803,58 +802,66 @@ where
         .await
 }
 
-/// Returns the team receipt to use when team-scoped visibility is required.
-/// `team_scope_requested` is true when the request body asks for team_scope
-/// (via the typed flag on POST or the `EmailLiteral::TeamScope` literal on
-/// the AST endpoint). Returns `Err(TeamScopeForbidden)` when team_scope was
-/// requested but the user has no qualifying team membership.
-fn resolve_team_receipt(
-    team_scope_requested: bool,
+/// Returns the team receipt to use when CRM-scoped visibility is required.
+/// `crm_scope_requested` is true when the request body carries a
+/// `crm_domains` / `crm_addresses` attribute. Returns
+/// `Err(CrmScopeForbidden)` when CRM scope was requested but the user has
+/// no qualifying team membership.
+fn resolve_crm_team_receipt(
+    crm_scope_requested: bool,
     receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
 ) -> Result<Option<EntityAccessReceipt<MemberTeamRole>>, SoupHandlerErr> {
-    if team_scope_requested && receipt.is_none() {
-        return Err(SoupHandlerErr::TeamScopeForbidden);
+    if crm_scope_requested && receipt.is_none() {
+        return Err(SoupHandlerErr::CrmScopeForbidden);
     }
     Ok(receipt)
 }
 
-/// Walks an AST email filter tree and returns true if any node is the
-/// `TeamScope` literal.
-fn email_filter_contains_team_scope(filter: &LiteralTree<EmailLiteral>) -> bool {
-    fn walk(expr: &Expr<EmailLiteral>) -> bool {
-        match expr {
-            Expr::And(a, b) | Expr::Or(a, b) => walk(a) || walk(b),
-            Expr::Not(a) => walk(a),
-            Expr::Literal(EmailLiteral::TeamScope) => true,
-            Expr::Literal(_) => false,
-        }
-    }
-    filter.as_ref().map(|e| walk(e)).unwrap_or(false)
-}
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone, ToSchema)]
 pub struct ApiEntityFilterAst {
     /// the filters that should be applied to the document entity
     #[serde(default, rename = "df")]
+    #[schema(value_type = serde_json::Value)]
     pub document_filter: LiteralTree<ApiDocumentLiteral>,
     /// the filters that should be applied to the project entity
     #[serde(default, rename = "pf")]
+    #[schema(value_type = serde_json::Value)]
     pub project_filter: LiteralTree<ProjectLiteral>,
     /// the filters that should be applied to the chat entity
     #[serde(default, rename = "cf")]
+    #[schema(value_type = serde_json::Value)]
     pub chat_filter: LiteralTree<ChatLiteral>,
-    /// the filters that should be applied to the email entity
+    /// the filters that should be applied to the email entity (raw AST
+    /// tree only; CRM scope is carried by the `ecd` / `eca` sibling
+    /// fields). On this endpoint the email filter stays a bare tree,
+    /// unlike the materialized [`EntityFilterAst`] used for cursors.
     #[serde(default, rename = "ef")]
+    #[schema(value_type = serde_json::Value)]
     pub email_filter: LiteralTree<EmailLiteral>,
     /// the filters that should be applied to the channel entity
     #[serde(default, rename = "chanf")]
+    #[schema(value_type = serde_json::Value)]
     pub channel_filter: LiteralTree<ChannelLiteral>,
     /// the filters that should be applied to the call entity
     #[serde(default, rename = "callf")]
+    #[schema(value_type = serde_json::Value)]
     pub call_filter: LiteralTree<CallLiteral>,
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
+    #[schema(value_type = serde_json::Value)]
     pub properties_filter: LiteralTree<PropertiesLiteral>,
+    /// CRM-scoped domain filter (wire key: `ecd`). Parallel to the
+    /// freeform `ef` AST. Expanded by the router into an any-direction
+    /// OR sub-tree AND-merged into `ef`, plus a `CrmScope` tag stamped
+    /// on the resulting [`item_filters::ast::EmailFilterAst::crm_scope`].
+    /// Drives the per-team CRM authorization pre-check and candidate-set
+    /// widening downstream. Mutually exclusive with `eca`.
+    #[serde(default, rename = "ecd", skip_serializing_if = "Vec::is_empty")]
+    pub email_crm_domains: Vec<String>,
+    /// CRM-scoped address filter (wire key: `eca`). Symmetric counterpart
+    /// to `ecd` for fully-qualified email addresses.
+    #[serde(default, rename = "eca", skip_serializing_if = "Vec::is_empty")]
+    pub email_crm_addresses: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -921,6 +928,8 @@ impl ApiEntityFilterAst {
             channel_filter,
             call_filter,
             properties_filter,
+            email_crm_domains,
+            email_crm_addresses,
         } = self;
 
         let document_filter = document_filter
@@ -947,11 +956,39 @@ impl ApiEntityFilterAst {
             .transpose()?
             .map(Arc::new);
 
+        // Build the CRM sub-tree and tag from the typed lists. Mutual
+        // exclusivity and per-value validation happen here. We then
+        // AND-merge the sub-tree into the freeform `email_filter` AST so
+        // the matching SQL works identically to the typed POST path.
+        let crm =
+            item_filters::ast::email::expand_crm_scope(email_crm_domains, email_crm_addresses)
+                .map_err(|e| report!("{e}"))?;
+
+        let (email_tree, crm_scope) = match (email_filter, crm) {
+            (Some(existing), Some((crm_tree, scope))) => {
+                // The Arc was freshly constructed by serde when this
+                // request body deserialized, and has not been cloned
+                // since — refcount is 1, so `try_unwrap` always succeeds.
+                let existing_owned = Arc::try_unwrap(existing)
+                    .map_err(|_| report!("internal: email_filter Arc was unexpectedly shared"))?;
+                (
+                    Some(Arc::new(Expr::and(existing_owned, crm_tree))),
+                    Some(scope),
+                )
+            }
+            (Some(existing), None) => (Some(existing), None),
+            (None, Some((crm_tree, scope))) => (Some(Arc::new(crm_tree)), Some(scope)),
+            (None, None) => (None, None),
+        };
+
         Ok(EntityFilterAst {
             document_filter,
             project_filter,
             chat_filter,
-            email_filter,
+            email_filter: item_filters::ast::EmailFilterAst {
+                tree: email_tree,
+                crm_scope,
+            },
             channel_filter,
             call_filter,
             properties_filter,

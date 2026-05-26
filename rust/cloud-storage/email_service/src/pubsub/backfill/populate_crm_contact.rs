@@ -47,6 +47,7 @@ pub async fn populate_crm_contact(
         .populate_contact(
             &team_id,
             &link.id,
+            link.email_address.0.as_ref(),
             &p.contact_email,
             p.contact_name.as_deref(),
         )
