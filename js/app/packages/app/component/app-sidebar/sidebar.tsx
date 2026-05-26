@@ -23,6 +23,7 @@ import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { InCallPanel } from '@channel/Call';
 import { useCallContextOptional } from '@channel/Call/CallContext';
+import { useHasPaidAccess } from '@core/auth';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { UserIcon } from '@core/component/UserIcon';
 import {
@@ -679,6 +680,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const notificationSettings = useNotificationSettings();
   const callCtx = useCallContextOptional();
 
+  const hasPaidAccess = useHasPaidAccess();
+
   /** Persisted dismissal for the Premium upgrade promo card. */
   const [premiumCardDismissed, setPremiumCardDismissed] = makePersisted(
     createSignal<boolean>(false),
@@ -928,7 +931,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <Show
-        when={!isSlim() && !premiumCardDismissed() && newPricingFF().enabled}
+        when={
+          !hasPaidAccess() &&
+          !isSlim() &&
+          !premiumCardDismissed() &&
+          newPricingFF().enabled
+        }
       >
         <div class="w-full px-2 mb-2">
           <SidebarPromoCard
@@ -954,6 +962,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </Show>
       <Show
         when={
+          !hasPaidAccess() &&
           !isSlim() &&
           premiumHintVisible() &&
           premiumCardDismissed() &&
