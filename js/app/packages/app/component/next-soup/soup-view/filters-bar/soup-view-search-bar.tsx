@@ -36,9 +36,9 @@ interface SoupSearchbarProps {
 
 const variantStyles: Record<SearchbarVariant, string> = {
   filled:
-    'bg-ink/5 text-ink-muted hover:bg-ink/7 hover:text-ink border-edge-muted focus-within:bg-ink/7 focus-within:text-ink',
+    'bg-ink/5 text-ink-muted hover:bg-ink/7 hover:text-ink border-edge-muted focus-within:bg-ink/7 focus-within:text-ink focus-within:border-accent',
   secondary:
-    'bg-surface text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink',
+    'bg-surface text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent',
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
