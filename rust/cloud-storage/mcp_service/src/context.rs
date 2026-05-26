@@ -70,6 +70,7 @@ pub struct McpContext {
     pub tool_context: ToolServiceContext,
     pub auth_proxy: McpAuthProxyServiceImpl<RedisInflightAuth>,
     pub mcp_public_host: String,
+    pub db: PgPool,
 }
 
 pub async fn build_context() -> anyhow::Result<McpContext> {
@@ -132,6 +133,7 @@ pub async fn build_context() -> anyhow::Result<McpContext> {
         tool_context,
         auth_proxy,
         mcp_public_host,
+        db,
     })
 }
 
