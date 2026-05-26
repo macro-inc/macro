@@ -5,15 +5,15 @@ import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
+import CheckIcon from '@phosphor/check.svg';
 import ClockIcon from '@phosphor/clock.svg';
-import ShareNetwork from '@phosphor/share-network.svg';
 import {
   useSetCallRecordShareWithTeamMutation,
   useToggleShareWithTeamMutation,
 } from '@queries/call/call';
 import { commsServiceClient } from '@service-comms/client';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
-import { cn, ToggleSwitch, Tooltip } from '@ui';
+import { cn } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -34,6 +34,9 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
     <>
       <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
         <DetailsSectionContent record={props.record} />
+      </SidePanel.Section>
+      <SidePanel.Section id="sharing" title="Sharing" defaultOpen order={20}>
+        <SharingSectionContent record={props.record} />
       </SidePanel.Section>
       <ReferencesSectionConditional callId={blockId} />
     </>
@@ -93,7 +96,6 @@ function DetailsSectionContent(props: { record: Accessor<CallRecord> }) {
           </Show>
         </span>
       </DetailsRow>
-      <ShareWithTeamRow record={record} />
     </div>
   );
 }
@@ -134,10 +136,10 @@ function DateValueDisplay(props: { value: DateValue }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Share with team row (lives in Details)
+// Sharing Section
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ShareWithTeamRow(props: { record: Accessor<CallRecord> }) {
+function SharingSectionContent(props: { record: Accessor<CallRecord> }) {
   const record = props.record;
   const callCtx = useCallContextOptional();
   const toggleActiveShare = useToggleShareWithTeamMutation();
@@ -169,24 +171,41 @@ function ShareWithTeamRow(props: { record: Accessor<CallRecord> }) {
   };
 
   return (
-    <>
-      <Tooltip
-        placement="top"
-        label="When on, all team members can view and search this call's transcript and AI summary."
-      >
-        <span class="text-ink-muted truncate inline-flex items-center gap-1.5">
-          <ShareNetwork class="size-3 shrink-0" aria-hidden />
-          Shared with team
-        </span>
-      </Tooltip>
-      <div class="flex items-center min-w-0">
-        <ToggleSwitch
+    <label
+      class={cn(
+        'flex items-start gap-3 py-1',
+        isDisabled() ? 'opacity-60' : 'hover:bg-hover/50 rounded-md'
+      )}
+    >
+      <span class="relative mt-0.5 inline-flex shrink-0">
+        <input
+          type="checkbox"
+          class="peer sr-only"
           checked={isShared()}
           disabled={isDisabled()}
-          onChange={(checked) => void handleChange(checked)}
+          onChange={(e) => void handleChange(e.currentTarget.checked)}
         />
-      </div>
-    </>
+        <span
+          class={cn(
+            'size-4 rounded-sm border border-edge',
+            'peer-checked:bg-accent peer-checked:border-accent',
+            'peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40',
+            'transition-colors'
+          )}
+        >
+          <Show when={isShared()}>
+            <CheckIcon class="size-full text-surface p-0.5" />
+          </Show>
+        </span>
+      </span>
+      <span class="min-w-0 flex-1 text-xs">
+        <span class="block font-medium text-ink">Share with team</span>
+        <span class="mt-1 block leading-5 text-ink-muted">
+          When on, all team members can view and search this call's transcript
+          and AI summary.
+        </span>
+      </span>
+    </label>
   );
 }
 
