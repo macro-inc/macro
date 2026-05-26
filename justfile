@@ -51,7 +51,7 @@ edit_environment *ARGS:
 # This is used when initializing your databases
 run_dbs *ARGS:
   just create_networks
-  docker-compose -f docker-compose-databases.yml up postgres redis --wait {{ ARGS }}
+  docker compose -f docker-compose-databases.yml up postgres redis --wait {{ ARGS }}
 
 # Spins up main docker-compose
 docker_up *ARGS:
@@ -191,7 +191,7 @@ stop-local:
   docker compose down
 
 stop-databases:
-  docker-compose -f docker-compose-databases.yml down
+  docker compose -f docker-compose-databases.yml down
 
 # Import LocalStack recipes
 import 'local_stack.just'
@@ -203,7 +203,7 @@ setup_local_dbs:
   just rust/cloud-storage/macro_db_client/create_db
   just rust/cloud-storage/macro_db_client/migrate_db
   @echo "Local databases initialized"
-  docker-compose -f docker-compose-databases.yml stop
+  docker compose -f docker-compose-databases.yml stop
 
 # Setup FusionAuth: start containers, wait for healthy, run Pulumi config
 # stop container
