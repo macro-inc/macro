@@ -172,7 +172,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
         </div>
 
         {/* Controls */}
-        <div class="px-1 py-1">
+        <div class="flex justify-center px-1 py-1">
           <CallControls
             variant={controlsVariant()}
             when={props.showCallControls}
