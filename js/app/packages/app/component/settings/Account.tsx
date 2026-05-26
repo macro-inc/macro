@@ -594,8 +594,8 @@ function NameInput(props: {
         onInput={(e) => setInputValue(e.currentTarget.value)}
         onFocus={() => setIsFocused(true)}
         onBlur={() => {
-          setIsFocused(false);
           commit();
+          setIsFocused(false);
         }}
         onKeyDown={handleKeyDown}
         placeholder={props.placeholder}
