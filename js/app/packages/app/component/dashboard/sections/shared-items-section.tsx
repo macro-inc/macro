@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { formatRelativeDate } from '@core/util/time';
-import UsersIcon from '@icon/regular/users.svg';
-import FolderIcon from '@icon/regular/folder.svg';
+import UsersIcon from '@phosphor/users.svg';
+import FolderIcon from '@phosphor/folder.svg';
 import { useProjectsQuery } from '@queries/storage/projects';
 import { useUserContext } from '@core/context/user';
 import { createMemo, For, Show } from 'solid-js';

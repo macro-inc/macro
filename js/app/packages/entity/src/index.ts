@@ -1,5 +1,6 @@
 // Export types
 
+export { DisplayName } from './components/DisplayName';
 export { MultiSelectCheckbox } from './components/MultiSelectCheckbox';
 export { ProjectBreadCrumb } from './components/ProjectBreadCrumb';
 export { UnreadIndicator } from './components/UnreadIndicator';
@@ -33,6 +34,8 @@ export {
   getPropertyOptionLabel,
   getTaskAssigneeIds,
   getTaskStatusOptionId,
+  isTaskClosed,
+  isCurrentUserAssigned,
 } from './utils/task-properties';
 export {
   formatDateAndTime,

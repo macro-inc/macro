@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { formatRelativeDate } from '@core/util/time';
-import EnvelopeIcon from '@icon/regular/envelope.svg';
-import PlusIcon from '@icon/regular/plus.svg';
+import EnvelopeIcon from '@phosphor/envelope.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import { type EmailEntity, isEmailEntity } from '@entity';
 import {
   type SoupItemsQueryArgs,

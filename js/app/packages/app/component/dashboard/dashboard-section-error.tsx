@@ -1,5 +1,5 @@
-import RefreshIcon from '@icon/regular/arrow-clockwise.svg';
-import WarningIcon from '@icon/regular/warning.svg';
+import RefreshIcon from '@phosphor/arrow-clockwise.svg';
+import WarningIcon from '@phosphor/warning.svg';
 import { Button } from '@ui';
 
 interface DashboardSectionErrorProps {

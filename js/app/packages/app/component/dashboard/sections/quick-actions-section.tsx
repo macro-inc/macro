@@ -1,12 +1,12 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { setCreateMenuOpen } from '@app/component/Launcher';
-import PlusIcon from '@icon/regular/plus.svg';
-import LightningIcon from '@icon/regular/lightning.svg';
-import DotsThreeIcon from '@icon/regular/dots-three.svg';
-import EnvelopeIcon from '@icon/regular/envelope.svg';
-import CalendarIcon from '@icon/regular/calendar.svg';
-import FolderIcon from '@icon/regular/folder.svg';
-import UsersIcon from '@icon/regular/users.svg';
+import PlusIcon from '@phosphor/plus.svg';
+import LightningIcon from '@phosphor/lightning.svg';
+import DotsThreeIcon from '@phosphor/dots-three.svg';
+import EnvelopeIcon from '@phosphor/envelope.svg';
+import CalendarIcon from '@phosphor/calendar.svg';
+import FolderIcon from '@phosphor/folder.svg';
+import UsersIcon from '@phosphor/users.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Button } from '@ui';
 
@@ -36,7 +36,7 @@ export function QuickActionsSection() {
   return (
     <div class="flex items-center gap-2">
       <Button
-        variant="primary"
+        variant="cta"
         size="md"
         onClick={() => setCreateMenuOpen(true)}
         class="gap-1.5"

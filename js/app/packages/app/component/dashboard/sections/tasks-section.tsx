@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useUserContext } from '@core/context/user';
-import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
-import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
+import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
+import { PROPERTY_OPTION_IDS } from '@property/constants';
 import { UserIcon } from '@core/component/UserIcon';
 import {
   getTaskAssigneeIds,
@@ -11,9 +11,9 @@ import {
 } from '@entity';
 import { getTaskPriorityOptionId } from '@entity/utils/task-properties';
 import { Entity, isTaskEntity, type TaskEntity } from '@entity';
-import CheckCircleIcon from '@icon/regular/check-circle.svg';
-import PlusIcon from '@icon/regular/plus.svg';
-import TaskIcon from '@macro-icons/wide/task.svg';
+import CheckCircleIcon from '@phosphor/check-circle.svg';
+import PlusIcon from '@phosphor/plus.svg';
+import TaskIcon from '@icon/wide-task.svg';
 import { Button } from '@ui';
 import {
   type SoupItemsQueryArgs,

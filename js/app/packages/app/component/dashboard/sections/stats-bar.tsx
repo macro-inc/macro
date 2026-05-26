@@ -1,11 +1,11 @@
 import { ChatWithAgentIcon } from '@app/component/ChatWithAgentButton';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useUserContext } from '@core/context/user';
-import EnvelopeIcon from '@icon/regular/envelope.svg';
-import CheckCircleIcon from '@icon/regular/check-circle.svg';
-import AtIcon from '@icon/regular/at.svg';
-import CalendarIcon from '@icon/regular/calendar.svg';
-import CommentIcon from '@icon/regular/chat-text.svg';
+import EnvelopeIcon from '@phosphor/envelope.svg';
+import CheckCircleIcon from '@phosphor/check-circle.svg';
+import AtIcon from '@phosphor/at.svg';
+import CalendarIcon from '@phosphor/calendar.svg';
+import CommentIcon from '@phosphor/chat-text.svg';
 import { useUserNotificationsQuery } from '@queries/notification/user-notifications';
 import {
   type SoupItemsQueryArgs,

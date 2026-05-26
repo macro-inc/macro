@@ -1,9 +1,9 @@
 import { ChatWithAgentIcon } from '@app/component/ChatWithAgentButton';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { formatRelativeDate } from '@core/util/time';
-import CaretRightIcon from '@icon/regular/caret-right.svg';
-import ChatIcon from '@icon/regular/chat-circle.svg';
-import PlusIcon from '@icon/regular/plus.svg';
+import CaretRightIcon from '@phosphor/caret-right.svg';
+import ChatIcon from '@phosphor/chat-circle.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import { useHistoryQuery, type HistoryItem } from '@queries/history/history';
 import { Button } from '@ui';
 import { createMemo, For, Show } from 'solid-js';

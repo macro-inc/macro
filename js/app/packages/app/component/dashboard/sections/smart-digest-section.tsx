@@ -1,10 +1,10 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { UserIcon } from '@core/component/UserIcon';
-import SparkleIcon from '@icon/fill/sparkle-fill.svg';
-import ChatIcon from '@icon/regular/chat-circle.svg';
-import CheckIcon from '@icon/regular/check.svg';
-import AtIcon from '@icon/regular/at.svg';
-import CaretRightIcon from '@icon/regular/caret-right.svg';
+import SparkleIcon from '@phosphor/sparkle.svg';
+import ChatIcon from '@phosphor/chat-circle.svg';
+import CheckIcon from '@phosphor/check.svg';
+import AtIcon from '@phosphor/at.svg';
+import CaretRightIcon from '@phosphor/caret-right.svg';
 import { useUserNotificationsQuery } from '@queries/notification/user-notifications';
 import {
   getNotificationAction,

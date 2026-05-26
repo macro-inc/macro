@@ -1,8 +1,8 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useChannelsContext } from '@core/context/channels';
 import { formatRelativeDate } from '@core/util/time';
-import ChatCircleIcon from '@icon/regular/chat-circle.svg';
-import HashIcon from '@icon/regular/hash.svg';
+import ChatCircleIcon from '@phosphor/chat-circle.svg';
+import HashIcon from '@phosphor/hash.svg';
 import { createMemo, For, Show } from 'solid-js';
 
 import {

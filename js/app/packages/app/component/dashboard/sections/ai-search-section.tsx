@@ -1,6 +1,6 @@
 import { ChatWithAgentIcon } from '@app/component/ChatWithAgentButton';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import PaperPlaneRightIcon from '@icon/fill/paper-plane-right-fill.svg';
+import PaperPlaneRightIcon from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 

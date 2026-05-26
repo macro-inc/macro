@@ -2,9 +2,9 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { StaticMarkdown, StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { UserIcon } from '@core/component/UserIcon';
 import { formatRelativeDate } from '@core/util/time';
-import BellIcon from '@icon/regular/bell.svg';
-import CheckIcon from '@icon/regular/check.svg';
-import ChecksIcon from '@icon/regular/checks.svg';
+import BellIcon from '@phosphor/bell.svg';
+import CheckIcon from '@phosphor/check.svg';
+import ChecksIcon from '@phosphor/checks.svg';
 import { getNotificationContent } from '@notifications/notification-metadata';
 import type { UnifiedNotification } from '@notifications/types';
 import {

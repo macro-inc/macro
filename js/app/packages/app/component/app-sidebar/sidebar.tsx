@@ -58,6 +58,7 @@ import { AnimatedPlusIcon } from '@icon/wide-plus';
 import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
+import { AnimatedDashboardIcon } from '@icon/dashboard';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { useNotificationSettings } from '@notifications';
 import BellIcon from '@phosphor/bell.svg';

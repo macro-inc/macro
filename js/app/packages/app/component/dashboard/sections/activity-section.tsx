@@ -2,10 +2,10 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { UserIcon } from '@core/component/UserIcon';
 import { StaticMarkdown, StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { formatRelativeDate } from '@core/util/time';
-import ClockCounterClockwiseIcon from '@icon/regular/clock-counter-clockwise.svg';
-import FileIcon from '@icon/regular/file.svg';
-import ChatIcon from '@icon/regular/chat-circle.svg';
-import CheckIcon from '@icon/regular/check.svg';
+import ClockCounterClockwiseIcon from '@phosphor/clock-counter-clockwise.svg';
+import FileIcon from '@phosphor/file.svg';
+import ChatIcon from '@phosphor/chat-circle.svg';
+import CheckIcon from '@phosphor/check.svg';
 import { DisplayName } from '@entity';
 import { useUserNotificationsQuery } from '@queries/notification/user-notifications';
 import {

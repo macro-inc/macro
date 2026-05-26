@@ -1,4 +1,4 @@
-import CaretRightIcon from '@icon/regular/caret-right.svg';
+import CaretRightIcon from '@phosphor/caret-right.svg';
 import { cn, Surface } from '@ui';
 import { ErrorBoundary, type JSX, Show, Suspense } from 'solid-js';
 

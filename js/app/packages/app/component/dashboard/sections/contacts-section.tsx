@@ -1,9 +1,9 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
-import AddressBookIcon from '@icon/regular/address-book.svg';
-import ChatIcon from '@icon/regular/chat-circle.svg';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
+import AddressBookIcon from '@phosphor/address-book.svg';
+import ChatIcon from '@phosphor/chat-circle.svg';
+import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { useContacts } from '@queries/contacts/contacts';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 

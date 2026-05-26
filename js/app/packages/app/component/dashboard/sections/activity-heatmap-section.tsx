@@ -1,14 +1,14 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useHistoryQuery } from '@queries/history/history';
 import { Popover } from '@kobalte/core/popover';
-import CheckCircleIcon from '@icon/regular/check-circle.svg';
-import ChatCircleIcon from '@icon/regular/chat-circle.svg';
-import EnvelopeIcon from '@icon/regular/envelope.svg';
-import FileIcon from '@icon/regular/file.svg';
-import FolderIcon from '@icon/regular/folder.svg';
-import HashIcon from '@icon/regular/hash.svg';
-import MagnifyingGlassIcon from '@icon/regular/magnifying-glass.svg';
-import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
+import CheckCircleIcon from '@phosphor/check-circle.svg';
+import ChatCircleIcon from '@phosphor/chat-circle.svg';
+import EnvelopeIcon from '@phosphor/envelope.svg';
+import FileIcon from '@phosphor/file.svg';
+import FolderIcon from '@phosphor/folder.svg';
+import HashIcon from '@phosphor/hash.svg';
+import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import ClockIcon from '@phosphor/clock-counter-clockwise.svg';
 import { cn, Surface } from '@ui';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 
