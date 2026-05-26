@@ -108,7 +108,7 @@ function BackgroundEffectSelector() {
 }
 
 function Cell(props: { children: JSX.Element }) {
-  return <div class="p-1">{props.children}</div>;
+  return <div class="flex items-center p-1">{props.children}</div>;
 }
 
 /**
