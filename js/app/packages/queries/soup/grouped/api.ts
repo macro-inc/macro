@@ -64,6 +64,86 @@ export function extractGroupByFromKey(
   return;
 }
 
+const ENTITY_TYPE_META: Record<
+  string,
+  { label: string; displayOrder: number }
+> = {
+  document: { label: 'Documents', displayOrder: 0 },
+  email: { label: 'Emails', displayOrder: 1 },
+  channel: { label: 'Messages', displayOrder: 2 },
+  chat: { label: 'Chats', displayOrder: 3 },
+  project: { label: 'Projects', displayOrder: 4 },
+  call: { label: 'Calls', displayOrder: 5 },
+};
+
+export type ResolvedGroupMeta = Pick<
+  GroupMeta,
+  'key' | 'label' | 'displayOrder'
+>;
+
+export function resolveGroupMetaForKey(
+  groupBy: GroupByField | undefined,
+  key: string,
+  item?: SoupApiItem
+): ResolvedGroupMeta | undefined {
+  if (!groupBy) return;
+
+  switch (groupBy.type) {
+    case 'entity_type': {
+      const meta = ENTITY_TYPE_META[key] ?? { label: 'Other', displayOrder: 6 };
+      return { key, label: meta.label, displayOrder: meta.displayOrder };
+    }
+
+    case 'project':
+      if (key === NOT_SET_GROUP_KEY) {
+        return {
+          key,
+          label: 'No Project',
+          displayOrder: Number.MAX_SAFE_INTEGER,
+        };
+      }
+      return;
+
+    case 'property': {
+      if (key === NOT_SET_GROUP_KEY) {
+        return { key, label: 'Not Set', displayOrder: Number.MAX_SAFE_INTEGER };
+      }
+
+      const propertyValueType = getGroupedPropertyValueType(item, groupBy);
+      if (propertyValueType === 'SelectOption') {
+        return {
+          key,
+          label: key,
+          displayOrder: null,
+        };
+      }
+      return;
+    }
+
+    case 'date':
+      return;
+  }
+}
+
+function getGroupedPropertyValueType(
+  item: SoupApiItem | undefined,
+  groupBy: GroupByField
+): string | undefined {
+  if (!item || groupBy.type !== 'property') return;
+  if (item.tag === 'channel' || item.tag === 'call') return;
+
+  const properties = (
+    item.data as unknown as { properties?: Array<Record<string, unknown>> }
+  ).properties;
+  const prop = properties?.find(
+    (p) =>
+      (p.definition as Record<string, unknown> | undefined)?.id ===
+      groupBy.propertyDefinitionId
+  );
+  const value = prop?.value as { type?: string } | null | undefined;
+  return value?.type;
+}
+
 /**
  * Compute the group keys an item belongs to under the given grouping.
  * Returns `undefined` when bucketing can't be reproduced client-side
@@ -109,12 +189,16 @@ export function computeGroupKeysForItem(
       if (value == null) return [NOT_SET_GROUP_KEY];
 
       if (value.type === 'SelectOption' && Array.isArray(value.value)) {
-        return value.value as string[];
+        return value.value.length > 0
+          ? (value.value as string[])
+          : [NOT_SET_GROUP_KEY];
       }
       if (value.type === 'EntityReference' && Array.isArray(value.value)) {
-        return (value.value as Array<{ entity_id: string }>).map(
-          (r) => r.entity_id,
-        );
+        return value.value.length > 0
+          ? (value.value as Array<{ entity_id: string }>).map(
+              (r) => r.entity_id
+            )
+          : [NOT_SET_GROUP_KEY];
       }
       return;
     }

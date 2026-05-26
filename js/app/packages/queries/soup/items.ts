@@ -1,4 +1,7 @@
-import { filterSoupItemByRequestBody } from '@app/component/next-soup/filters/query-filters';
+import {
+  filterSoupItemByAstBody,
+  filterSoupItemByRequestBody,
+} from '@app/component/next-soup/filters/query-filters';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
@@ -58,9 +61,7 @@ interface SoupItemsQueryOptions {
  *   Parent never paginates when grouped — per-group queries handle load-more.
  * - `flat`: items array; standard infinite-query pagination.
  */
-export type SoupAstItemsPage =
-  | SoupAstItemsGroupedPage
-  | SoupAstItemsFlatPage;
+export type SoupAstItemsPage = SoupAstItemsGroupedPage | SoupAstItemsFlatPage;
 
 export type SoupAstItemsGroupedPage = {
   kind: 'grouped';
@@ -220,7 +221,10 @@ export const useSoupAstItemsQuery = (
       enabled: options?.().enabled,
       staleTime: options?.().staleTime,
       placeholderData: (p) => p,
-      meta: { normalize: true },
+      meta: {
+        itemFilter: (item: SoupApiItem) => filterSoupItemByAstBody(item, body),
+        normalize: true,
+      },
     };
   });
 };
