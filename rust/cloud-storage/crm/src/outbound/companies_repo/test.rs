@@ -1424,9 +1424,13 @@ async fn populate_contact_per_domain_killswitch_noops_both_directions(
     enable_crm_for_team(&pool, team_id).await?;
     let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
 
-    // Seed a killswitched company for the domain.
+    // Seed a killswitched company for the domain. Baseline timestamp
+    // is parsed from a string so it has zero sub-microsecond precision
+    // — Postgres `TIMESTAMPTZ` only stores microseconds, and
+    // `chrono::Utc::now()` would carry nanos that get silently
+    // truncated and break the `assert_eq` below.
     let company_id = insert_company(&pool, team_id, false, &["acme.com"]).await?;
-    let baseline = chrono::Utc::now();
+    let baseline: chrono::DateTime<chrono::Utc> = "2024-01-01T00:00:00Z".parse()?;
     sqlx::query(
         r#"UPDATE crm_companies
            SET first_interaction = $2, last_interaction = $2
@@ -1442,7 +1446,7 @@ async fn populate_contact_per_domain_killswitch_noops_both_directions(
         NoOpCompanyMetadataResolver,
     );
 
-    let later: chrono::DateTime<chrono::Utc> = baseline + chrono::Duration::days(7);
+    let later: chrono::DateTime<chrono::Utc> = "2024-01-08T00:00:00Z".parse()?;
 
     for is_sent in [true, false] {
         service
