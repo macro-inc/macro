@@ -24,9 +24,7 @@ import { MaybeSoupEntityActionDrawerManager } from '@app/component/next-soup/sou
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { SoupEntityContextMenu } from '@app/component/next-soup/soup-view/soup-entity-context-menu';
 import { persistSoupNavigationTouchHighlight } from '@app/component/next-soup/soup-view/soup-navigation-touch-highlight';
-import {
-  activeSoupViewCounts,
-} from '@app/component/next-soup/soup-view/soup-view-cache-key';
+import { activeSoupViewCounts } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import {
   SoupViewContextProvider,
   useSoupView,
