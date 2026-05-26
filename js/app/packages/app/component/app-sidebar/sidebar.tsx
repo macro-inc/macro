@@ -367,17 +367,30 @@ const registerSidebarHotkeys = ({
         }
       }
 
-      const handle = openWithSplit(
-        {
-          type: 'component',
-          id: link.id,
-        },
-        {
-          preferNewSplit: e?.shiftKey,
-          mergeHistory: false,
-          allowDuplicate: true,
-        }
-      );
+      // Restore the prior entry for this view if one exists in the active
+      // split's history, so state like search text or filters survives.
+      // Shift bypasses this to force a fresh entry / new split.
+      const activeHandle = globalSplitManager()?.activeSplit();
+      const restored =
+        !e?.shiftKey &&
+        activeHandle?.goToEntry(
+          (entry) => entry.type === 'component' && entry.id === link.id
+        ) === true;
+
+      const handle =
+        restored && activeHandle
+          ? activeHandle
+          : openWithSplit(
+              {
+                type: 'component',
+                id: link.id,
+              },
+              {
+                preferNewSplit: e?.shiftKey,
+                mergeHistory: false,
+                allowDuplicate: true,
+              }
+            );
       if (link.id === 'search' && handle) {
         requestSearchFocus(handle.id);
       }
@@ -1123,12 +1136,24 @@ const SidebarLink = (props: SidebarLinkProps) => {
               currentContent?.id === props.id;
 
             if (!isSameContent || e.shiftKey) {
-              currentContentHandle = layout.openWithSplit(content(), {
-                preferNewSplit: e.shiftKey,
-                mergeHistory: false,
-                allowDuplicate: true,
-                referredFrom: 'sidebar',
-              });
+              // If the active split already has an entry for this view in its
+              // history, jump to it so any prior state (search text, filters,
+              // etc.) is restored. Falls back to a fresh push otherwise.
+              // Shift-click bypasses this to force a new split/entry.
+              const restored =
+                !e.shiftKey &&
+                currentContentHandle?.goToEntry(
+                  (entry) => entry.type === 'component' && entry.id === props.id
+                ) === true;
+
+              if (!restored) {
+                currentContentHandle = layout.openWithSplit(content(), {
+                  preferNewSplit: e.shiftKey,
+                  mergeHistory: false,
+                  allowDuplicate: true,
+                  referredFrom: 'sidebar',
+                });
+              }
             }
 
             if (props.id === 'search' && currentContentHandle) {

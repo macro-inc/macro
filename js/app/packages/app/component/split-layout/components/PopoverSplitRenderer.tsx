@@ -70,6 +70,7 @@ function PopoverSplitModal(props: {
     isPopover: () => true,
     replace: () => {},
     removeFromHistory: () => {},
+    goToEntry: () => false,
     registerContentChangeListener: () => {},
     unregisterContentChangeListener: () => {},
     previousContent: () => null,
