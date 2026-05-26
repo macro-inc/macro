@@ -73,7 +73,7 @@ const priorityOptions: PropertyOption[] = [
   {
     id: PROPERTY_OPTION_IDS.PRIORITY.URGENT,
     property_definition_id: SYSTEM_PROPERTY_IDS.PRIORITY,
-    value: { type: 'string', value: 'Urgent' },
+    value: { type: 'string', value: 'Critical' },
     display_order: 3,
     created_at: EPOCH,
     updated_at: EPOCH,
