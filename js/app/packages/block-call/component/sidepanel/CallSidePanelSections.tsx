@@ -171,41 +171,41 @@ function SharingSectionContent(props: { record: Accessor<CallRecord> }) {
   };
 
   return (
-    <label
-      class={cn(
-        'flex items-start gap-3 py-1',
-        isDisabled() ? 'opacity-60' : 'hover:bg-hover/50 rounded-md'
-      )}
-    >
-      <span class="relative mt-0.5 inline-flex shrink-0">
-        <input
-          type="checkbox"
-          class="peer sr-only"
-          checked={isShared()}
-          disabled={isDisabled()}
-          onChange={(e) => void handleChange(e.currentTarget.checked)}
-        />
-        <span
-          class={cn(
-            'size-4 rounded-sm border border-edge',
-            'peer-checked:bg-accent peer-checked:border-accent',
-            'peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40',
-            'transition-colors'
-          )}
-        >
-          <Show when={isShared()}>
-            <CheckIcon class="size-full text-surface p-0.5" />
-          </Show>
+    <div class="flex flex-col gap-2 text-xs">
+      <label
+        class={cn(
+          'flex items-center gap-2 -mx-1 px-1 py-1 rounded-md',
+          isDisabled() ? 'opacity-60' : 'hover:bg-hover/50'
+        )}
+      >
+        <span class="relative inline-flex shrink-0">
+          <input
+            type="checkbox"
+            class="peer sr-only"
+            checked={isShared()}
+            disabled={isDisabled()}
+            onChange={(e) => void handleChange(e.currentTarget.checked)}
+          />
+          <span
+            class={cn(
+              'size-3.5 rounded-sm border border-edge bg-surface',
+              'peer-checked:bg-accent peer-checked:border-accent',
+              'peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40',
+              'transition-colors'
+            )}
+          >
+            <Show when={isShared()}>
+              <CheckIcon class="size-full text-surface p-0.5" />
+            </Show>
+          </span>
         </span>
-      </span>
-      <span class="min-w-0 flex-1 text-xs">
-        <span class="block font-medium text-ink">Share with team</span>
-        <span class="mt-1 block leading-5 text-ink-muted">
-          When on, all team members can view and search this call's transcript
-          and AI summary.
-        </span>
-      </span>
-    </label>
+        <span class="text-ink">Share with team</span>
+      </label>
+      <p class="text-ink-muted leading-5 pl-[1.375rem]">
+        Lets everyone on your team view and search this call's transcript and AI
+        summary.
+      </p>
+    </div>
   );
 }
 
