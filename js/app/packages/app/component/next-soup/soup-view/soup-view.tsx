@@ -891,10 +891,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     `macro:pref:soup:${contentId}:groupBy`,
     { default: undefined }
   );
-  const [collapsedGroupsPref, setCollapsedGroupsPref] = usePreference<string[]>(
-    `macro:pref:soup:${contentId}:collapsedGroups`,
-    { default: [] }
-  );
 
   // Preview-pane open state is transient per history entry: captured into
   // per-entry state on nav-away and restored on back/forward. Read
@@ -910,6 +906,17 @@ export const SoupViewList = (props: SoupViewListProps) => {
   );
   onCleanup(previewCaptorTeardown);
 
+  // Which groups are collapsed is also per-entry state: captured on nav-away
+  // and restored on back/forward.
+  const persistedCollapsedGroups = panel.handle.currentEntryState()?.[
+    'soup.collapsedGroups'
+  ] as string[] | undefined;
+  const collapsedCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    'soup.collapsedGroups',
+    () => [...soup.grouping.collapsedGroups()]
+  );
+  onCleanup(collapsedCaptorTeardown);
+
   onMount(() => {
     batch(() => {
       const savedSort = sortPref();
@@ -920,7 +927,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       // same split (e.g. tasks) may have left grouping state behind. Always
       // reset to this view's saved or initial grouping, even when undefined.
       soup.grouping.setActiveGroupId(groupByPref() ?? props.initialGroupBy);
-      soup.grouping.collapseAll(collapsedGroupsPref());
+      soup.grouping.collapseAll(persistedCollapsedGroups ?? []);
 
       // Apply view-supplied client filters only when per-entry state didn't
       // already populate them in SoupViewContextProvider.
@@ -953,13 +960,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     on(
       () => soup.grouping.activeGroupId(),
       (id) => setGroupByPref(id),
-      { defer: true }
-    )
-  );
-  createEffect(
-    on(
-      () => [...soup.grouping.collapsedGroups()],
-      (groups) => setCollapsedGroupsPref(groups),
       { defer: true }
     )
   );
