@@ -62,15 +62,22 @@ pub struct DocumentServiceImpl<
     Eam: EntityAccessManagementService,
     G: GithubPullRequestEnricher = NoopGithubPullRequestEnricher,
 > {
-    repo: R,
-    cloudfront_config: CloudFrontConfig,
-    sync_service_client: sync_service_client::SyncServiceClient,
-    upload_url_service: U,
-    task_properties_service: T,
-    connection_service: C,
-    github_pull_request_enricher: G,
-    #[allow(dead_code)]
-    entity_access_management_service: Eam,
+    /// Document repository
+    pub repo: R,
+    /// Cloudfront config
+    pub cloudfront_config: CloudFrontConfig,
+    /// Sync service client
+    pub sync_service_client: sync_service_client::SyncServiceClient,
+    /// Upload service
+    pub upload_url_service: U,
+    /// Task properties service
+    pub task_properties_service: T,
+    /// Connection service
+    pub connection_service: C,
+    /// Github pr enricher
+    pub github_pull_request_enricher: G,
+    /// entity access management service
+    pub entity_access_management_service: Eam,
 }
 
 fn ready_content_for_file_type(file_type: Option<FileType>) -> DocumentContent {
@@ -124,63 +131,9 @@ impl<
     T: TaskPropertiesPort,
     C: ConnectionService,
     Eam: EntityAccessManagementService,
-> DocumentServiceImpl<R, U, T, C, Eam, NoopGithubPullRequestEnricher>
-{
-    /// Create a new document service.
-    pub fn new(
-        repo: R,
-        cloudfront_config: CloudFrontConfig,
-        sync_service_client: sync_service_client::SyncServiceClient,
-        upload_url_service: U,
-        task_properties_service: T,
-        connection_service: C,
-        entity_access_management_service: Eam,
-    ) -> Self {
-        Self::new_with_github_pull_request_enricher(
-            repo,
-            cloudfront_config,
-            sync_service_client,
-            upload_url_service,
-            task_properties_service,
-            connection_service,
-            entity_access_management_service,
-            NoopGithubPullRequestEnricher,
-        )
-    }
-}
-
-impl<
-    R: DocumentRepo,
-    U: PresignedUploadUrlPort,
-    T: TaskPropertiesPort,
-    C: ConnectionService,
-    Eam: EntityAccessManagementService,
     G: GithubPullRequestEnricher,
 > DocumentServiceImpl<R, U, T, C, Eam, G>
 {
-    /// Create a document service with a custom GitHub pull request enricher.
-    pub fn new_with_github_pull_request_enricher(
-        repo: R,
-        cloudfront_config: CloudFrontConfig,
-        sync_service_client: sync_service_client::SyncServiceClient,
-        upload_url_service: U,
-        task_properties_service: T,
-        connection_service: C,
-        entity_access_management_service: Eam,
-        github_pull_request_enricher: G,
-    ) -> Self {
-        Self {
-            repo,
-            cloudfront_config,
-            sync_service_client,
-            upload_url_service,
-            task_properties_service,
-            connection_service,
-            github_pull_request_enricher,
-            entity_access_management_service,
-        }
-    }
-
     fn get_signed_options(&self) -> SignedOptions {
         let current_unix_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)

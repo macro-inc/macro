@@ -223,19 +223,19 @@ fn make_test_service<G: GithubPullRequestEnricher>(
     TestEntityAccessManagementService,
     G,
 > {
-    DocumentServiceImpl::new_with_github_pull_request_enricher(
+    DocumentServiceImpl{
         repo,
-        test_cloudfront_config(),
-        sync_service_client::SyncServiceClient::new(
+        cloudfront_config: test_cloudfront_config(),
+        sync_service_client:sync_service_client::SyncServiceClient::new(
             "test-sync-key".to_string(),
             "http://sync-service.test".to_string(),
         ),
-        TestUploadUrlPort,
-        TestTaskPropertiesPort,
-        TestConnectionService,
-        TestEntityAccessManagementService,
+        upload_url_service: TestUploadUrlPort,
+        task_properties_service: TestTaskPropertiesPort,
+        connection_service: TestConnectionService,
+        entity_access_management_service: TestEntityAccessManagementService,
         github_pull_request_enricher,
-    )
+    }
 }
 
 #[tokio::test]

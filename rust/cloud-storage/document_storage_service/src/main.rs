@@ -379,19 +379,19 @@ async fn main() -> anyhow::Result<()> {
 
     let github_pull_request_enricher = GithubPullRequestEnricherAdapter::new(auth_service_client);
 
-    let document_service = Arc::new(DocumentServiceImpl::new_with_github_pull_request_enricher(
-        document_repo,
+    let document_service = Arc::new(DocumentServiceImpl {
+        repo: document_repo,
         cloudfront_config,
-        sync_service_client.as_ref().clone(),
-        s3_upload_adapter,
-        TaskPropertiesAdapter {
+        sync_service_client: sync_service_client.as_ref().clone(),
+        upload_url_service: s3_upload_adapter,
+        task_properties_service: TaskPropertiesAdapter {
             system_properties: system_properties_service.clone(),
             properties: properties_service.clone(),
         },
         connection_service,
-        entity_access_management_service.clone(),
+        entity_access_management_service: entity_access_management_service.clone(),
         github_pull_request_enricher,
-    ));
+    });
 
     let github_webhook_secret = secretsmanager_client
         .get_maybe_secret_value(env, GithubWebhookSecretKey::new()?)
