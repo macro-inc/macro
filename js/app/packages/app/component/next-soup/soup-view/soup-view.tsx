@@ -895,15 +895,20 @@ export const SoupViewList = (props: SoupViewListProps) => {
     `macro:pref:soup:${contentId}:collapsedGroups`,
     { default: [] }
   );
-  // The preview pane's open state is driven by truthiness of
-  // `soup.previewEntity` — the stored ID itself is symbolic. Restore
-  // synchronously so the first render sees the correct value and we avoid a
-  // transient flash where the pane is closed.
-  const [previewPref, setPreviewPref] = usePreference<string | undefined>(
-    `macro:pref:soup:${contentId}:preview`,
-    { default: undefined }
+
+  // Preview-pane open state travels with the history entry, like search text:
+  // transient, captured into per-entry state and restored on back/forward.
+  // Read synchronously in the body so the first render sees the correct
+  // value and we avoid a transient flash where the pane is closed.
+  const persistedPreview = panel.handle.currentEntryState()?.['soup.preview'] as
+    | string
+    | undefined;
+  soup.setPreviewEntity(persistedPreview);
+  const previewCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    'soup.preview',
+    () => soup.previewEntity()
   );
-  soup.setPreviewEntity(previewPref());
+  onCleanup(previewCaptorTeardown);
 
   onMount(() => {
     batch(() => {
@@ -955,13 +960,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     on(
       () => [...soup.grouping.collapsedGroups()],
       (groups) => setCollapsedGroupsPref(groups),
-      { defer: true }
-    )
-  );
-  createEffect(
-    on(
-      () => soup.previewEntity(),
-      (id) => setPreviewPref(id),
       { defer: true }
     )
   );
