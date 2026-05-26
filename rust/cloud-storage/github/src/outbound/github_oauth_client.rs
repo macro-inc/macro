@@ -212,7 +212,7 @@ impl GithubOauth for GithubOauthImpl {
 
             if status.as_u16() == 401 {
                 tracing::warn!(error_body=%error_body, "GitHub token expired or invalid");
-                anyhow::bail!("token expired")
+                anyhow::bail!("unauthorized access")
             }
 
             anyhow::bail!("failed to get pull request details {}", error_body)
