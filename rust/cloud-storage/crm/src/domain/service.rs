@@ -48,21 +48,27 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// own transaction so the populate tx never holds locks across an
     /// HTTP fetch.
     ///
-    /// `message_at` is the timestamp of the message that triggered this
-    /// populate. It stamps the CRM rows' `first_interaction` /
-    /// `last_interaction` columns with the date the relationship
-    /// actually spans rather than the row's insert time. `LEAST`/`GREATEST`
-    /// on the conflict path keep out-of-order backfill converging to
-    /// the true earliest / latest. `created_at` / `updated_at` keep
-    /// their row-lifecycle semantics (DEFAULT `now()` /
+    /// `first_at` / `last_at` are the contact's known activity range
+    /// for this populate. Per-message paths pass the message's
+    /// `internal_date_ts` as both (single message = single endpoint).
+    /// The historical seed (`populate_crm_for_user`) pre-aggregates
+    /// MIN/MAX over the contact's matching messages and passes the
+    /// real range, so a single populate per contact stamps the CRM
+    /// rows with the full span. Callers without a real timestamp pass
+    /// `Utc::now()`. `created_at` / `updated_at` keep their
+    /// row-lifecycle semantics (DEFAULT `now()` /
     /// `set_crm_updated_at` trigger).
     ///
-    /// Callers that don't have a real per-message timestamp (the
-    /// `populate_crm_for_user` historical seed, or messages where Gmail
-    /// returned no `internal_date_ts`) are expected to resolve a
-    /// fallback — typically `Utc::now()` — before invoking. Keeping
-    /// the parameter non-optional makes that resolution explicit at the
-    /// boundary instead of silently `COALESCE`ing inside the repo.
+    /// `is_sent` flags whether the populating message was sent by the
+    /// user. The write matrix:
+    ///
+    /// | `is_sent` | No `crm_companies` row | Existing `crm_companies` row (`email_sync=true`) |
+    /// |---|---|---|
+    /// | `true`  | INSERT company + contact + source; `first_interaction = $first_at`, `last_interaction = $last_at`. | UPDATE company `first=LEAST(stored, $first_at), last=GREATEST(stored, $last_at)` + upsert contact (same merge) + upsert source. |
+    /// | `false` | **No-op** — no domain-metadata resolve, no inserts. | UPDATE company `last=GREATEST(stored, $last_at)` only (do NOT touch `first_interaction`) + upsert contact (INSERT sets both endpoints; ON CONFLICT bumps `last` only) + upsert source. |
+    ///
+    /// The `email_sync=false` per-domain killswitch short-circuits in
+    /// both directions.
     fn populate_contact(
         &self,
         team_id: &uuid::Uuid,
@@ -70,7 +76,9 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         user_email: &str,
         email: &str,
         name: Option<&str>,
-        message_at: DateTime<Utc>,
+        first_at: DateTime<Utc>,
+        last_at: DateTime<Utc>,
+        is_sent: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
     /// Reverses [`populate_contact`] for one `(link_id, email)`. Drops the
@@ -236,7 +244,9 @@ where
         user_email: &str,
         email: &str,
         name: Option<&str>,
-        message_at: DateTime<Utc>,
+        first_at: DateTime<Utc>,
+        last_at: DateTime<Utc>,
+        is_sent: bool,
     ) -> Result<(), CrmError> {
         let email = email.trim();
         let Some((local_part, domain)) = email.split_once('@') else {
@@ -291,11 +301,19 @@ where
         // its own transaction, idempotent under concurrent populates
         // for the same domain (first-write-wins via the unique index
         // on `LOWER(domain)`).
-        if self
-            .companies_repository
-            .lookup_domain_metadata(domain)
-            .await?
-            .is_none()
+        //
+        // Skip the resolve when `is_sent=false`: a received-direction
+        // populate never inserts a new `crm_companies` row, so we don't
+        // need to seed metadata. If the domain is already tracked the
+        // directory entry was written when its first sent message
+        // populated; if it isn't tracked, this call will no-op in the
+        // repo anyway.
+        if is_sent
+            && self
+                .companies_repository
+                .lookup_domain_metadata(domain)
+                .await?
+                .is_none()
         {
             let metadata = self.metadata_resolver.resolve(domain).await;
             self.companies_repository
@@ -304,7 +322,9 @@ where
         }
 
         self.companies_repository
-            .populate_contact(team_id, link_id, domain, email, name, message_at)
+            .populate_contact(
+                team_id, link_id, domain, email, name, first_at, last_at, is_sent,
+            )
             .await
     }
 

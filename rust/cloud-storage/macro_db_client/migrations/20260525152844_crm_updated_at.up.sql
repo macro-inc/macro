@@ -4,18 +4,6 @@ ALTER TABLE crm_companies
 ALTER TABLE crm_contacts
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
-ALTER TABLE crm_companies
-    ADD COLUMN IF NOT EXISTS first_interaction TIMESTAMPTZ;
-
-ALTER TABLE crm_companies
-    ADD COLUMN IF NOT EXISTS last_interaction TIMESTAMPTZ;
-
-ALTER TABLE crm_contacts
-    ADD COLUMN IF NOT EXISTS first_interaction TIMESTAMPTZ;
-
-ALTER TABLE crm_contacts
-    ADD COLUMN IF NOT EXISTS last_interaction TIMESTAMPTZ;
-
 CREATE OR REPLACE FUNCTION set_crm_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN

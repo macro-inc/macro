@@ -51,22 +51,40 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// this user's link (sourced from `email_contacts.name` by the
     /// caller); pass `None` when no display name is available.
     ///
-    /// `message_at` is the timestamp the populating message was sent /
-    /// received at. It is written to the domain-specific
-    /// `first_interaction` / `last_interaction` columns (not
-    /// `created_at` / `updated_at`, which keep their row-lifecycle
-    /// semantics — DEFAULT `now()` on INSERT and the
-    /// `set_crm_updated_at` trigger on UPDATE). On INSERT, both
-    /// interaction columns seed to `$message_at`. On UPDATE,
-    /// `first_interaction = LEAST(stored, $message_at)` and
-    /// `last_interaction = GREATEST(stored, $message_at)` so the pair
-    /// converges to the true earliest / latest message date regardless
-    /// of backfill order. Callers without a real per-message timestamp
-    /// (e.g. Gmail returned no `internal_date_ts`) pass `Utc::now()`.
+    /// `first_at` / `last_at` are the contact's known interaction
+    /// range. Per-message callers set both to the message's
+    /// `internal_date_ts`; the historical seed pre-aggregates MIN/MAX
+    /// across the contact's messages. Written to `first_interaction` /
+    /// `last_interaction` (not `created_at` / `updated_at`, which keep
+    /// their row-lifecycle semantics — DEFAULT `now()` on INSERT and
+    /// the `set_crm_updated_at` trigger on UPDATE).
+    ///
+    /// `is_sent` flags whether the populating message was sent by the
+    /// user. Insert semantics:
+    ///
+    /// - **`is_sent=true`**: full populate. INSERT a new
+    ///   `crm_companies` row when none exists; on existing, refresh
+    ///   `first_interaction = LEAST(stored, $first_at)` and
+    ///   `last_interaction = GREATEST(stored, $last_at)`. Upsert
+    ///   `crm_contacts` with the same merge. Upsert
+    ///   `crm_contact_sources`.
+    /// - **`is_sent=false`**: no-op when no `crm_companies` row exists
+    ///   for `(team, domain)`. When one exists, refresh only the
+    ///   company's `last_interaction = GREATEST(stored, $last_at)`
+    ///   (do NOT touch `first_interaction`). Upsert `crm_contacts` —
+    ///   new contacts INSERT with both endpoints; existing contacts
+    ///   get `last_interaction = GREATEST(...)` only. Upsert
+    ///   `crm_contact_sources`.
+    ///
+    /// The `email_sync=false` per-domain killswitch short-circuits in
+    /// both directions. Source rows track all interactions (sent or
+    /// received), not just sent — see also
+    /// [`CompaniesRepository::depopulate_contact`].
     ///
     /// The caller is expected to have ensured a `crm_domain_directory`
     /// entry exists for `domain` (via [`upsert_domain_metadata`]) before
-    /// invoking — this method writes no metadata of its own.
+    /// invoking when `is_sent=true` — this method writes no metadata of
+    /// its own. `is_sent=false` doesn't need it.
     ///
     /// [`lookup_domain_metadata`]: CompaniesRepository::lookup_domain_metadata
     /// [`upsert_domain_metadata`]: CompaniesRepository::upsert_domain_metadata
@@ -77,7 +95,9 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         domain: &str,
         email: &str,
         name: Option<&str>,
-        message_at: DateTime<Utc>,
+        first_at: DateTime<Utc>,
+        last_at: DateTime<Utc>,
+        is_sent: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
     /// Read the cached [`DomainMetadata`] for `domain` from

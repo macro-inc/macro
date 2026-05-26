@@ -131,35 +131,33 @@ fn normalized_non_self_contact_emails(
 /// Producer-side fan-out helper: normalizes and enqueues one
 /// `PopulateCrmContact` message per distinct, non-self contact.
 ///
-/// Takes `(email, name, contact_id)` triples so the consumer can write
-/// `crm_contacts.name` without a follow-up round-trip to `email_contacts`,
-/// and so the consumer can fall back to a `MAX(internal_date_ts)`
-/// lookup keyed on `contact_id` when `message_at` is `None`. `name`
-/// comes from the gmail message's recipient header on the per-message
-/// paths (`backfill_message`, `upsert_message`) and from
-/// `email_contacts.name` on the historical path (`populate_crm_for_user`).
-/// `contact_id` is `Some` only on the historical path — the per-message
-/// paths already carry `message_at` so the consumer doesn't need to
-/// look it up.
+/// Takes `(email, name, first_at, last_at)` tuples. `name` comes from
+/// the gmail message's recipient header on per-message paths and from
+/// `email_contacts.name` on the historical path. `first_at` /
+/// `last_at` carry the contact's known activity range — per-message
+/// paths set both to `message.internal_date_ts`; the historical seed
+/// sets them to MIN/MAX from its aggregating SQL.
 ///
-/// `message_at` is the single message timestamp shared by every
-/// recipient of this fan-out (per-message paths pass
-/// `Some(message.internal_date_ts)`; the historical path passes `None`
-/// and lets the consumer derive a per-contact timestamp from
-/// `contact_id`).
+/// `is_sent` flags whether the populating message was sent by the user
+/// (true) or received (false). One fan-out batch is one direction;
+/// callers that need to enqueue both (the historical seed) call this
+/// helper twice. The consumer uses the flag to gate company INSERTs
+/// and `first_interaction` LEAST-merging (received-direction never
+/// creates a new `crm_companies` row and never moves
+/// `first_interaction` backwards).
 ///
 /// Email validation rules and dedup match
 /// [`normalized_non_self_contact_emails`]; dedup is by email only, so the
-/// first name / contact_id seen for a given address in this batch wins.
+/// first name / timestamps seen for a given address in this batch win.
 pub async fn enqueue_populate_crm_contacts(
     ctx: &PubSubContext,
     link_id: Uuid,
     self_email: &str,
-    contacts: impl IntoIterator<Item = (String, Option<String>, Option<Uuid>)>,
-    message_at: Option<DateTime<Utc>>,
+    contacts: impl IntoIterator<Item = (String, Option<String>, DateTime<Utc>, DateTime<Utc>)>,
+    is_sent: bool,
 ) -> Result<(), ProcessingError> {
     let mut seen: HashSet<String> = HashSet::new();
-    for (raw_email, contact_name, contact_id) in contacts {
+    for (raw_email, contact_name, first_at, last_at) in contacts {
         let contact_email = raw_email.trim().to_ascii_lowercase();
         let Some((local, domain)) = contact_email.split_once('@') else {
             continue;
@@ -177,8 +175,9 @@ pub async fn enqueue_populate_crm_contacts(
                 payload: PopulateCrmContactPayload {
                     contact_email,
                     contact_name,
-                    message_at,
-                    contact_id,
+                    first_at,
+                    last_at,
+                    is_sent,
                 },
             }),
         };

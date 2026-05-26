@@ -74,39 +74,35 @@ struct RecipientQueryResult {
     recipient_type: db::address::EmailRecipientType,
 }
 
-/// Returns the deduped, lowercased set of recipient email addresses that
-/// appear on any sent message (`email_messages.is_sent = true`) on the
-/// given `link_id`. Walks To/Cc/Bcc indiscriminately — the caller is
-/// responsible for any filtering (e.g. dropping the user's own address).
+/// One row per sent-message recipient on `link_id`, with the
+/// `(email, name, first_at, last_at)` shape ready to fan out to
+/// `PopulateCrmContact`. `first_at` / `last_at` are
+/// `MIN(internal_date_ts)` / `MAX(internal_date_ts)` over the contact's
+/// matching messages — so a single populate job per contact carries
+/// the full known activity range. `email` is lowercased; `name` comes
+/// from `email_contacts.name`. Messages with `internal_date_ts IS NULL`
+/// are filtered out so the MIN/MAX is always non-null for emitted rows.
 ///
-/// Returns `(lowercased_email, name, email_contacts.id)` tuples —
-/// `email_contacts` is unique per `(link_id, email_address)`, so each
-/// address appears at most once in the result with the single display
-/// name stored on its row. `name` is `None` when no display name was
-/// recorded. The `contact_id` is threaded through to the
-/// `PopulateCrmContact` consumer so it can DB-lookup the latest sent
-/// interaction for stamping `crm_companies`/`crm_contacts` timestamps
-/// (see [`fetch_latest_sent_message_at_to_contact`]).
-///
-/// Used by the `PopulateCrmForUser` backfill step to enumerate the
-/// contacts a user has previously emailed so they can be seeded into
-/// their team's CRM tables.
+/// Used by the `PopulateCrmForUser` backfill step.
 #[tracing::instrument(skip(pool), err)]
 pub async fn fetch_sent_message_recipient_contacts_by_link(
     pool: &PgPool,
     link_id: Uuid,
-) -> anyhow::Result<Vec<(String, Option<String>, Uuid)>> {
+) -> anyhow::Result<Vec<(String, Option<String>, DateTime<Utc>, DateTime<Utc>)>> {
     let rows = sqlx::query!(
         r#"
-        SELECT DISTINCT
-            LOWER(c.email_address) AS "email!",
-            c.name AS "name",
-            c.id AS "contact_id!"
+        SELECT
+            LOWER(c.email_address)   AS "email!",
+            c.name                   AS "name",
+            MIN(m.internal_date_ts)  AS "first_at!",
+            MAX(m.internal_date_ts)  AS "last_at!"
         FROM email_messages m
         JOIN email_message_recipients r ON r.message_id = m.id
         JOIN email_contacts c ON c.id = r.contact_id
         WHERE m.link_id = $1
           AND m.is_sent = true
+          AND m.internal_date_ts IS NOT NULL
+        GROUP BY LOWER(c.email_address), c.name
         "#,
         link_id,
     )
@@ -115,50 +111,64 @@ pub async fn fetch_sent_message_recipient_contacts_by_link(
 
     Ok(rows
         .into_iter()
-        .map(|r| (r.email, r.name, r.contact_id))
+        .map(|r| (r.email, r.name, r.first_at, r.last_at))
         .collect())
 }
 
-/// Returns the `MAX(internal_date_ts)` across sent messages on
-/// `link_id` to `contact_id`, or `None` when the link has never sent
-/// the contact a message (or when none of the matching messages have a
-/// non-NULL `internal_date_ts`).
+/// One row per external sender on received messages on `link_id`,
+/// with the `(email, name, first_at, last_at)` shape — mirror of
+/// [`fetch_sent_message_recipient_contacts_by_link`] for the received
+/// direction. Drafts have `from_contact_id = NULL` so they're filtered
+/// out automatically. `first_at` / `last_at` are MIN/MAX of
+/// `internal_date_ts` over the contact's received messages.
 ///
-/// Used by the `PopulateCrmContact` consumer as the fallback when the
-/// pubsub payload omits `message_at` (the `populate_crm_for_user`
-/// path): the latest interaction stamps the freshly-populated CRM rows
-/// with a timestamp that reflects when the relationship was actually
-/// most active rather than `now()`.
+/// Used by the `PopulateCrmForUser` backfill step to enumerate
+/// external parties the link has received mail from so they can bump
+/// `last_interaction` on already-tracked CRM companies (and create
+/// contacts at those companies). Received-direction populates never
+/// create new `crm_companies` rows — see
+/// [`crm::domain::companies_repo::CompaniesRepository::populate_contact`].
 #[tracing::instrument(skip(pool), err)]
-pub async fn fetch_latest_sent_message_at_to_contact(
+pub async fn fetch_received_sender_contacts_by_link(
     pool: &PgPool,
     link_id: Uuid,
-    contact_id: Uuid,
-) -> anyhow::Result<Option<DateTime<Utc>>> {
-    let row = sqlx::query_scalar!(
+) -> anyhow::Result<Vec<(String, Option<String>, DateTime<Utc>, DateTime<Utc>)>> {
+    let rows = sqlx::query!(
         r#"
-        SELECT MAX(m.internal_date_ts)
+        SELECT
+            LOWER(c.email_address)   AS "email!",
+            c.name                   AS "name",
+            MIN(m.internal_date_ts)  AS "first_at!",
+            MAX(m.internal_date_ts)  AS "last_at!"
         FROM email_messages m
-        JOIN email_message_recipients r ON r.message_id = m.id
+        JOIN email_contacts c ON c.id = m.from_contact_id
         WHERE m.link_id = $1
-          AND m.is_sent = true
-          AND r.contact_id = $2
+          AND m.is_sent = false
+          AND m.from_contact_id IS NOT NULL
+          AND m.internal_date_ts IS NOT NULL
+        GROUP BY LOWER(c.email_address), c.name
         "#,
         link_id,
-        contact_id,
     )
-    .fetch_one(pool)
+    .fetch_all(pool)
     .await?;
 
-    Ok(row)
+    Ok(rows
+        .into_iter()
+        .map(|r| (r.email, r.name, r.first_at, r.last_at))
+        .collect())
 }
 
-/// Returns true iff `link_id` still has at least one sent message whose
-/// recipients (to/cc/bcc) include `email`. Used by the depopulate-CRM-
-/// contact backfill step as the pre-check: if any sent message remains,
-/// the CRM source row must stay. `email` is matched case-insensitively.
+/// Returns true iff `link_id` still has at least one message that
+/// touches `email` in either direction: a sent message whose
+/// recipients (to/cc/bcc) include `email`, **or** a received message
+/// whose `from_contact_id` matches `email`. Used by the
+/// depopulate-CRM-contact backfill step as the pre-check — sources
+/// now track interactions in both directions, so the source row must
+/// stay until both directions are gone. `email` is matched
+/// case-insensitively.
 #[tracing::instrument(skip(pool), err)]
-pub async fn link_has_sent_message_to(
+pub async fn link_has_any_message_with(
     pool: &PgPool,
     link_id: Uuid,
     email: &str,
@@ -173,6 +183,13 @@ pub async fn link_has_sent_message_to(
             JOIN email_contacts c ON c.id = r.contact_id
             WHERE m.link_id = $1
               AND m.is_sent = true
+              AND LOWER(c.email_address) = $2
+            UNION ALL
+            SELECT 1
+            FROM email_messages m
+            JOIN email_contacts c ON c.id = m.from_contact_id
+            WHERE m.link_id = $1
+              AND m.is_sent = false
               AND LOWER(c.email_address) = $2
             LIMIT 1
         ) AS "exists!"

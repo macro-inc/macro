@@ -280,33 +280,34 @@ pub struct PopulateCrmContactPayload {
     /// no display name was associated with the address.
     #[serde(default)]
     pub contact_name: Option<String>,
-    /// Timestamp of the message that triggered this populate. Set on the
-    /// per-message paths (`backfill_message`, `upsert_message`) from the
-    /// message's `internal_date_ts` so backfilling historical mail
-    /// writes `crm_companies` / `crm_contacts` `first_interaction` /
-    /// `last_interaction` with the date range the relationship actually
-    /// spans rather than `now()`. The consumer uses `LEAST` against
-    /// `first_interaction` and `GREATEST` against `last_interaction` so
-    /// out-of-order backfill converges to the true earliest / latest.
-    /// `created_at` / `updated_at` are untouched — they keep their
-    /// row-lifecycle semantics (DEFAULT `now()` on INSERT,
-    /// `set_crm_updated_at` trigger on UPDATE).
-    ///
-    /// When `None`, the consumer falls back to a DB lookup keyed on
-    /// `contact_id` (the latest sent message's `internal_date_ts` on the
-    /// link to that contact). If `contact_id` is also `None`, the
-    /// consumer collapses to `now()`.
+    /// Earliest interaction timestamp the producer knows about for this
+    /// contact. Per-message paths set this to `message.internal_date_ts`
+    /// (or `Utc::now()` when the message has none). The historical seed
+    /// (`populate_crm_for_user`) sets it to MIN(internal_date_ts)
+    /// across the contact's matching messages. Written to
+    /// `first_interaction` on INSERT and LEAST-merged into the stored
+    /// value on UPDATE (only when `is_sent=true` — received-direction
+    /// populates don't pull the anchor backwards).
+    pub first_at: DateTime<Utc>,
+    /// Latest interaction timestamp the producer knows about for this
+    /// contact. Per-message paths set this to `message.internal_date_ts`
+    /// (or `Utc::now()` when the message has none). The historical seed
+    /// sets it to MAX(internal_date_ts) across the contact's matching
+    /// messages. Written to `last_interaction` on INSERT and
+    /// GREATEST-merged into the stored value on UPDATE regardless of
+    /// direction.
+    pub last_at: DateTime<Utc>,
+    /// `true` when the populating message was sent BY the user; `false`
+    /// when it was received. Controls the consumer's insert semantics:
+    /// `true` may INSERT a new `crm_companies` row for an unknown
+    /// domain; `false` no-ops when the company isn't already tracked
+    /// (received-direction populates only update existing rows). When
+    /// the company IS tracked, both directions insert-or-update the
+    /// `crm_contacts` row and add a `crm_contact_sources` row. See
+    /// [`crm::domain::service::CrmService::populate_contact`] for the
+    /// full matrix.
     #[serde(default)]
-    pub message_at: Option<DateTime<Utc>>,
-    /// `email_contacts.id` for `contact_email` on the producer's link.
-    /// Set on the historical path (`populate_crm_for_user`) so the
-    /// consumer can DB-lookup the latest sent-message timestamp for the
-    /// contact when `message_at` is `None`. `None` on the per-message
-    /// paths — those already carry `message_at` so the lookup is
-    /// unnecessary, and the contact row may not even exist yet when the
-    /// producer queues the job.
-    #[serde(default)]
-    pub contact_id: Option<Uuid>,
+    pub is_sent: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]

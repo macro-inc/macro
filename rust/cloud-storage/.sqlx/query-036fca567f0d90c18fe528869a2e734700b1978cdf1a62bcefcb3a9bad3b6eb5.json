@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE crm_companies\n                           SET updated_at = now(),\n                               first_interaction = CASE\n                                   WHEN $4 THEN LEAST(first_interaction, $2)\n                                   ELSE first_interaction\n                               END,\n                               last_interaction = GREATEST(last_interaction, $3)\n                           WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "036fca567f0d90c18fe528869a2e734700b1978cdf1a62bcefcb3a9bad3b6eb5"
+}
