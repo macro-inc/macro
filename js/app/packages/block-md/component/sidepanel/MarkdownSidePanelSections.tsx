@@ -10,23 +10,6 @@ import {
   REMOVE_PINNED_PROPERTY_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
 import { Notifications } from '@core/component/Notifications';
-import { Modals } from '@core/component/Properties/component/modal';
-import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
-import {
-  getDefaultPinnedProperties,
-  SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
-import {
-  PropertiesProvider,
-  type PropertySaveHandler,
-  usePropertiesContext,
-} from '@core/component/Properties/context/PropertiesContext';
-import { useEntityProperties } from '@core/component/Properties/hooks';
-import type {
-  Property,
-  PropertyApiValues,
-} from '@core/component/Properties/types';
-import { hasValue } from '@core/component/Properties/utils';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
 import type { Entity, EntityType } from '@core/types';
@@ -39,6 +22,20 @@ import ClockIcon from '@phosphor/clock.svg';
 import Plus from '@phosphor/plus.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import { Property as PropertyNS } from '@property';
+import { Modals } from '@property/component/modal';
+import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
+import {
+  getDefaultPinnedProperties,
+  SYSTEM_PROPERTY_IDS,
+} from '@property/constants';
+import {
+  PropertiesProvider,
+  type PropertySaveHandler,
+  usePropertiesContext,
+} from '@property/context/PropertiesContext';
+import { useEntityProperties } from '@property/hooks';
+import type { Property, PropertyApiValues } from '@property/types';
+import { hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { commsServiceClient } from '@service-comms/client';

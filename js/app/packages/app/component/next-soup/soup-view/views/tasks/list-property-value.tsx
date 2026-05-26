@@ -1,9 +1,9 @@
 import { useMaybeBlockId } from '@core/block';
-import { usePropertiesContext } from '@core/component/Properties/context/PropertiesContext';
-import { getEntityValues, hasValue } from '@core/component/Properties/utils';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import { Property } from '@property';
+import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyT } from '@property/types';
+import { getEntityValues, hasValue } from '@property/utils';
 import { type Component, Match, Show, Switch } from 'solid-js';
 import './list-property-value.css';
 import { Layer } from '@ui';

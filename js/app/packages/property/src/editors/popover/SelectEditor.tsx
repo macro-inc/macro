@@ -1,4 +1,4 @@
-import { usePropertyEditor } from '@core/component/Properties/hooks/usePropertyEditor';
+import { usePropertyEditor } from '@property/hooks/usePropertyEditor';
 import {
   useAddPropertyOptionMutation,
   usePropertyOptionsQuery,

@@ -1,8 +1,8 @@
 import { useMaybeBlockId } from '@core/block';
-import { usePropertiesContext } from '@core/component/Properties/context/PropertiesContext';
-import { getEntityValues, hasValue } from '@core/component/Properties/utils';
 import { Property } from '@property';
+import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyT } from '@property/types';
+import { getEntityValues, hasValue } from '@property/utils';
 import { Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { type Component, type JSX, Match, Switch } from 'solid-js';

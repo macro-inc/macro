@@ -1,4 +1,3 @@
-import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 import type { Entity } from '@core/types';
 import {
   type EntityData,
@@ -10,6 +9,7 @@ import {
 } from '@entity';
 import { getTaskPriorityOptionId } from '@entity/utils/task-properties';
 import { compositeEntity, type NotificationSource } from '@notifications';
+import { PROPERTY_OPTION_IDS } from '@property/constants';
 
 // Channel messages don't have their own notifications — they share the parent
 // channel's. Resolve to the channel entity for notification lookups.

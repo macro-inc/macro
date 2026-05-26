@@ -13,9 +13,6 @@ import {
 import { EntityIcon } from '@core/component/EntityIcon';
 import { HoverCard } from '@core/component/HoverCard';
 import { useItemPreviewData } from '@core/component/ItemPreview';
-import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import { useEntityProperties } from '@core/component/Properties/hooks';
 import { UserIcon } from '@core/component/UserIcon';
 import {
   itemToBlockName,
@@ -36,6 +33,9 @@ import {
 } from '@lexical-core';
 import EyeSlashDuo from '@phosphor/eye-slash.svg';
 import TrashSimple from '@phosphor/trash-simple.svg';
+import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { useEntityProperties } from '@property/hooks';
 import {
   type ItemEntity,
   isAccessiblePreviewItem,

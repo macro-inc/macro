@@ -1,4 +1,4 @@
-import type { PropertyApiValues } from '@core/component/Properties/types';
+import type { PropertyApiValues } from '@property/types';
 import type { SerializedEditorState } from 'lexical';
 
 const STORAGE_KEY = 'task-composer-draft';

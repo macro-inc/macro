@@ -1,16 +1,13 @@
 import { useMaybeBlockId } from '@core/block';
-import { Modals } from '@core/component/Properties/component/modal';
+import { ScopedPortal } from '@core/component/ScopedPortal';
+import { Property } from '@property';
+import { Modals } from '@property/component/modal';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
   usePropertiesContext,
-} from '@core/component/Properties/context/PropertiesContext';
-import type {
-  PropertyApiValues,
-  Property as PropertyT,
-} from '@core/component/Properties/types';
-import { ScopedPortal } from '@core/component/ScopedPortal';
-import { Property } from '@property';
+} from '@property/context/PropertiesContext';
+import type { PropertyApiValues, Property as PropertyT } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';

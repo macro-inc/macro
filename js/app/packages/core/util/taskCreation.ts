@@ -1,7 +1,4 @@
-import {
-  PROPERTY_OPTION_IDS,
-  SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
 import { createTask } from './create';
 

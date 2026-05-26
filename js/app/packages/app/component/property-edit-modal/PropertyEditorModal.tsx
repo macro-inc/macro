@@ -1,16 +1,3 @@
-import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue';
-import { usePropertySelection } from '@core/component/Properties/hooks';
-import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
-import type {
-  Property,
-  PropertyApiValues,
-  PropertyDefinitionDomain,
-} from '@core/component/Properties/types';
-import {
-  macroEntityToPropertyEntityType,
-  PropertyDataTypeIcon,
-  toPropertyApiValue,
-} from '@core/component/Properties/utils';
 import { toast } from '@core/component/Toast/Toast';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { fuzzyFilter } from '@core/util/fuzzy';
@@ -21,6 +8,19 @@ import {
 } from '@core/util/useListKeyBindings';
 import { type EntityData, InlineEntity } from '@entity';
 import { type CombinedEntity, getEntityName, getEntityType } from '@property';
+import { PropertyValueIcon } from '@property/component/propertyValue';
+import { usePropertySelection } from '@property/hooks';
+import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
+import type {
+  Property,
+  PropertyApiValues,
+  PropertyDefinitionDomain,
+} from '@property/types';
+import {
+  macroEntityToPropertyEntityType,
+  PropertyDataTypeIcon,
+  toPropertyApiValue,
+} from '@property/utils';
 import { useEntityPropertiesQuery } from '@queries/properties/entity';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { mergeRefs } from '@solid-primitives/refs';

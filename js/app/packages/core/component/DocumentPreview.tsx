@@ -13,9 +13,6 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { isBlockNameWithLocation } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import { useEntityProperties } from '@core/component/Properties/hooks';
-import { getEntityValues, hasValue } from '@core/component/Properties/utils';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
@@ -38,6 +35,9 @@ import SparkleIcon from '@phosphor/sparkle.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import TrashSimple from '@phosphor/trash-simple.svg';
 import { Property } from '@property';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { useEntityProperties } from '@property/hooks';
+import { getEntityValues, hasValue } from '@property/utils';
 import {
   isAccessiblePreviewItem,
   isChannelPreviewItem,
@@ -410,7 +410,7 @@ export function TaskPropertiesPreview(props: { taskId: string }) {
  * Visually matches the side-panel Properties pills.
  */
 function PreviewPropertyPill(props: {
-  property: import('@core/component/Properties/types').Property;
+  property: import('@property/types').Property;
 }) {
   const isMultiUser = () =>
     props.property.valueType === 'ENTITY' &&

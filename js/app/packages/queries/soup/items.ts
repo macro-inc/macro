@@ -1,7 +1,7 @@
 import { filterSoupItemByRequestBody } from '@app/component/next-soup/filters/query-filters';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   parseGroupMeta,
   serializeGroupByField,

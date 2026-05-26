@@ -13,10 +13,6 @@ import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import {
-  DocumentPropertiesButton,
-  PROPERTIES_DRAWER_ID,
-} from '@core/component/DocumentPropertiesModal';
-import {
   REFERENCES_DRAWER_ID,
   ReferencesButton,
 } from '@core/component/ReferencesModal';
@@ -37,7 +33,6 @@ import IconShared from '@icon/wide-share.svg';
 import Download from '@phosphor/download-simple.svg';
 import Info from '@phosphor/info.svg';
 import Quotes from '@phosphor/quotes.svg';
-import TagIcon from '@phosphor/tag.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { TabbedControl } from '@ui';
 import type { Component } from 'solid-js';
@@ -60,7 +55,6 @@ export const TopBar: Component<{
   const downloadName = useBlockDocumentDownloadName();
 
   const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
-  const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
   const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
@@ -101,20 +95,6 @@ export const TopBar: Component<{
           documentId={blockId}
           documentName={name()}
           buttonSize="sm"
-        />
-      ),
-    },
-    {
-      label: 'Properties',
-      icon: TagIcon,
-      action: propertiesControl.toggle,
-      buttonComponent: () => (
-        <DocumentPropertiesButton
-          buttonSize="sm"
-          onOpenChange={(open) =>
-            open &&
-            analytics.track('properties_panel_open', { blockType: 'code' })
-          }
         />
       ),
     },

@@ -2,12 +2,8 @@ import {
   NUMBER_DECIMAL_PLACES,
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
-import type {
-  Property,
-  PropertyOption,
-  ValueType,
-} from '@core/component/Properties/types';
+} from '@property/constants';
+import type { Property, PropertyOption, ValueType } from '@property/types';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { nanoid } from 'nanoid';
 import { TASK_STATUS_OPTIONS } from '../utils/task-properties';
