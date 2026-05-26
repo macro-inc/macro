@@ -14,7 +14,7 @@ export const openMacroMcpSetupModal = () => {
   setMacroMcpSetupOpen(true);
 };
 
-export const closeMacroMcpSetupModal = () => {
+const _closeMacroMcpSetupModal = () => {
   setMacroMcpSetupOpen(false);
 };
 

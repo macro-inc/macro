@@ -5,7 +5,6 @@ import {
 import { useCachedStyle } from '@block-canvas/signal/cachedStyle';
 import { useToolManager } from '@block-canvas/signal/toolManager';
 import { useIsNestedBlock } from '@core/block';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
   ENABLE_CANVAS_FILES,
@@ -17,7 +16,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { useCanEdit } from '@core/signal/permissions';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import CaretDown from '@phosphor/caret-down.svg';
 import Cursor from '@phosphor/cursor.svg';
 import Hand from '@phosphor/hand.svg';
@@ -26,7 +24,7 @@ import ZoomIn from '@phosphor/magnifying-glass-plus.svg';
 import PencilSimple from '@phosphor/pencil-simple.svg';
 import Rectangle from '@phosphor/rectangle.svg';
 import Text from '@phosphor/text-t.svg';
-import { Button, cn } from '@ui';
+import { Button, cn, Dropdown, Hotkey } from '@ui';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createSignal, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -50,48 +48,63 @@ const ConnectorTypeSubMenu = (props: {
     connectorTypeMenuTriggerSignal;
 
   return (
-    <DropdownMenu
+    <Dropdown
       placement="bottom"
       open={connectorTypeMenuTrigger()}
       onOpenChange={setConnectorTypeMenuTrigger}
     >
-      <DropdownMenu.Trigger>
-        <Button
-          variant="ghost"
-          size="icon-md"
-          style={{ width: '12px', margin: '0 -2px 0 -4px' }}
-          tabIndex={-1}
-        >
-          <SmallCaretDown />
-        </Button>
-      </DropdownMenu.Trigger>
-      <DropdownMenuContent>
-        <MenuItem
-          text="Connector"
-          icon={ConnectorStraightArrows}
-          onClick={() => {
-            props.onSelect('straight');
-          }}
-          hotkeyToken={TOKENS.canvas.line.straight}
-        />
-        <MenuItem
-          text="Flow Connector"
-          icon={ConnectorBezierArrows}
-          onClick={() => {
-            props.onSelect('smooth');
-          }}
-          hotkeyToken={TOKENS.canvas.line.flow}
-        />
-        <MenuItem
-          text="Bent Connector"
-          icon={ConnectorSteppedArrows}
-          onClick={() => {
-            props.onSelect('stepped');
-          }}
-          hotkeyToken={TOKENS.canvas.line.bent}
-        />
-      </DropdownMenuContent>
-    </DropdownMenu>
+      <Dropdown.Trigger
+        variant="ghost"
+        size="icon-md"
+        style={{ width: '12px', margin: '0 -2px 0 -4px' }}
+        tabIndex={-1}
+      >
+        <SmallCaretDown />
+      </Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.Group>
+          <Dropdown.Item
+            onSelect={() => {
+              props.onSelect('straight');
+            }}
+          >
+            <ConnectorStraightArrows class="size-4 shrink-0" />
+            <span class="flex-1 truncate">Connector</span>
+            <Hotkey
+              token={TOKENS.canvas.line.straight}
+              class="text-ink-muted"
+              showPlus
+            />
+          </Dropdown.Item>
+          <Dropdown.Item
+            onSelect={() => {
+              props.onSelect('smooth');
+            }}
+          >
+            <ConnectorBezierArrows class="size-4 shrink-0" />
+            <span class="flex-1 truncate">Flow Connector</span>
+            <Hotkey
+              token={TOKENS.canvas.line.flow}
+              class="text-ink-muted"
+              showPlus
+            />
+          </Dropdown.Item>
+          <Dropdown.Item
+            onSelect={() => {
+              props.onSelect('stepped');
+            }}
+          >
+            <ConnectorSteppedArrows class="size-4 shrink-0" />
+            <span class="flex-1 truncate">Bent Connector</span>
+            <Hotkey
+              token={TOKENS.canvas.line.bent}
+              class="text-ink-muted"
+              showPlus
+            />
+          </Dropdown.Item>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 };
 

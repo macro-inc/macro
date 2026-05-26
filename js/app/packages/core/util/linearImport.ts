@@ -1,11 +1,8 @@
-import {
-  PROPERTY_OPTION_IDS,
-  SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { EntityType } from '@service-storage/generated/schemas/entityType';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
 
-export const LINEAR_CSV_HEADERS = {
+const LINEAR_CSV_HEADERS = {
   title: 'Title',
   description: 'Description',
   status: 'Status',
@@ -105,7 +102,7 @@ function parseLinearStatusOptionId(args: {
   return PROPERTY_OPTION_IDS.STATUS.NOT_STARTED;
 }
 
-export type MacroTaskDraft = {
+type MacroTaskDraft = {
   title: string;
   content: string;
   propertyValues: PropertyInput[];

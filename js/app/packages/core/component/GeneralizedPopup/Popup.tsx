@@ -9,6 +9,7 @@ import {
   shift,
 } from '@floating-ui/dom';
 import { mergeRefs } from '@solid-primitives/refs';
+import { Layer } from '@ui';
 import {
   type Component,
   createEffect,
@@ -65,17 +66,19 @@ export function GeneralizedPopup(props: GeneralizedPopupProps) {
   });
 
   return (
-    <div
-      ref={mergeRefs(setPopupRef, props.ref)}
-      id="generalized-popup"
-      class="absolute bg-surface shadow-xl ring-1 ring-edge z-highlight-menu rounded-xs inline-flex items-start flex-col p-1"
-      style={{
-        left: `${position().x}px`,
-        top: `${position().y}px`,
-        'transform-origin': 'top',
-      }}
-    >
-      <props.PopupComponents />
-    </div>
+    <Layer depth={2}>
+      <div
+        ref={mergeRefs(setPopupRef, props.ref)}
+        id="generalized-popup"
+        class="absolute bg-surface shadow-xl ring-1 ring-edge rounded-lg z-highlight-menu inline-flex items-start flex-col p-1"
+        style={{
+          left: `${position().x}px`,
+          top: `${position().y}px`,
+          'transform-origin': 'top',
+        }}
+      >
+        <props.PopupComponents />
+      </div>
+    </Layer>
   );
 }

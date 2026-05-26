@@ -3,9 +3,10 @@ use crate::domain::{
     model::{
         AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
         RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole,
+        TeamWithMembers,
     },
-    team_repo::TeamRepository,
+    team_repo::{TeamMembersService, TeamRepository},
 };
 use macro_user_id::{
     cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
@@ -18,6 +19,54 @@ fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
     sqlx::Error::TypeNotFound {
         type_name: e.to_string(),
     }
+}
+
+const MAX_TEAM_SLUG_LEN: usize = 20;
+
+fn normalize_team_slug(slug: &str) -> Result<String, TeamError> {
+    let mut normalized = String::new();
+    let mut last_was_separator = false;
+
+    for ch in slug.chars() {
+        let normalized_char = if ch.is_ascii_alphabetic() {
+            ch.to_ascii_uppercase()
+        } else if ch == '_' || ch == '-' || ch.is_ascii_whitespace() {
+            '_'
+        } else {
+            return Err(TeamError::BadRequest(
+                "team slug may only contain ASCII letters, spaces, hyphens, and underscores"
+                    .to_string(),
+            ));
+        };
+
+        if normalized_char == '_' {
+            if !normalized.is_empty() && !last_was_separator {
+                normalized.push('_');
+            }
+            last_was_separator = true;
+        } else {
+            normalized.push(normalized_char);
+            last_was_separator = false;
+        }
+    }
+
+    while normalized.ends_with('_') {
+        normalized.pop();
+    }
+
+    if normalized.is_empty() {
+        return Err(TeamError::BadRequest(
+            "team slug cannot be empty".to_string(),
+        ));
+    }
+
+    if normalized.len() > MAX_TEAM_SLUG_LEN {
+        return Err(TeamError::BadRequest(format!(
+            "team slug cannot be longer than {MAX_TEAM_SLUG_LEN} characters"
+        )));
+    }
+
+    Ok(normalized)
 }
 
 #[cfg(test)]
@@ -95,9 +144,9 @@ impl TeamRepositoryImpl {
             r#"
             INSERT INTO team (id, name, owner_id, seat_count)
             VALUES ($1, $2, $3, 1)
-            RETURNING id, name, owner_id
+            RETURNING id, name, slug, owner_id
             "#,
-            &id,
+            id,
             team_name,
             user_id.as_ref(),
         )
@@ -105,6 +154,7 @@ impl TeamRepositoryImpl {
             Ok(Team {
                 id: row.id,
                 name: row.name,
+                slug: row.slug,
                 owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
                     .map_err(type_err)?
                     .into_owned(),
@@ -120,6 +170,20 @@ impl TeamRepositoryImpl {
             "#,
             &team.id,
             user_id.as_ref(),
+        )
+        .execute(&mut *transaction)
+        .await?;
+
+        // Seed the team's CRM settings row. `crm_enabled` defaults to
+        // FALSE — toggled on later via `PATCH /team/crm`. Created in
+        // the same tx as the team itself so the row always exists for
+        // any team that exists.
+        sqlx::query!(
+            r#"
+            INSERT INTO team_crm_settings (team_id)
+            VALUES ($1)
+            "#,
+            &team.id,
         )
         .execute(&mut *transaction)
         .await?;
@@ -163,6 +227,24 @@ impl From<sqlx::Error> for RemoveTeamInviteError {
     }
 }
 
+impl TeamMembersService for TeamRepositoryImpl {
+    #[tracing::instrument(skip(self), err)]
+    async fn list_team_members(
+        &self,
+        entity_access_receipt: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::MemberTeamRole,
+        >,
+    ) -> Result<TeamMembers, TeamError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        let members = self.get_team_by_id(&team_id).await?.members;
+        let invited = self.get_team_invites(&team_id).await?;
+
+        Ok(TeamMembers { members, invited })
+    }
+}
+
 impl TeamRepository for TeamRepositoryImpl {
     #[tracing::instrument(skip(self), err)]
     async fn get_stripe_customer_id(
@@ -195,6 +277,23 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn has_user_trialed(&self, user_id: &MacroUserIdStr<'_>) -> Result<bool, TeamError> {
+        let has_trialed = sqlx::query_scalar::<_, bool>(
+            r#"
+            SELECT mu.has_trialed
+            FROM "User" u
+            INNER JOIN macro_user mu ON mu.id = u.macro_user_id
+            WHERE u.id = $1
+            "#,
+        )
+        .bind(user_id.as_ref())
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(has_trialed)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_subscription_id(
         &self,
         team_id: &uuid::Uuid,
@@ -221,6 +320,22 @@ impl TeamRepository for TeamRepositoryImpl {
         };
 
         Ok(team_subscription_id)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_payment_status(&self, team_id: &uuid::Uuid) -> Result<bool, TeamError> {
+        let paying = sqlx::query_scalar!(
+            r#"
+            SELECT paying
+            FROM team
+            WHERE id = $1
+            "#,
+            team_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(paying)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -524,6 +639,31 @@ impl TeamRepository for TeamRepositoryImpl {
         )
         .execute(&self.pool)
         .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn update_team_payment_status(
+        &self,
+        team_id: &uuid::Uuid,
+        paying: bool,
+    ) -> Result<(), TeamError> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE team
+            SET paying = $2
+            WHERE id = $1
+            "#,
+            team_id,
+            paying,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(TeamError::TeamDoesNotExist);
+        }
 
         Ok(())
     }
@@ -863,7 +1003,7 @@ impl TeamRepository for TeamRepositoryImpl {
     async fn get_team_by_id(&self, team_id: &uuid::Uuid) -> Result<TeamWithMembers, TeamError> {
         let team = sqlx::query!(
             r#"
-            SELECT id, name, owner_id
+            SELECT id, name, slug, owner_id
             FROM team
             WHERE id = $1
             "#,
@@ -873,6 +1013,7 @@ impl TeamRepository for TeamRepositoryImpl {
             Ok(Team {
                 id: row.id,
                 name: row.name,
+                slug: row.slug,
                 owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
                     .map_err(type_err)?
                     .into_owned(),
@@ -913,7 +1054,7 @@ impl TeamRepository for TeamRepositoryImpl {
     async fn get_user_teams(&self, user_id: &MacroUserIdStr<'_>) -> Result<Vec<Team>, TeamError> {
         let teams = sqlx::query!(
             r#"
-            SELECT t.id, t.name, t.owner_id
+            SELECT t.id, t.name, t.slug, t.owner_id
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
             WHERE tu.user_id = $1
@@ -924,6 +1065,7 @@ impl TeamRepository for TeamRepositoryImpl {
             Ok(Team {
                 id: row.id,
                 name: row.name,
+                slug: row.slug,
                 owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
                     .map_err(type_err)?
                     .into_owned(),
@@ -1030,18 +1172,27 @@ impl TeamRepository for TeamRepositoryImpl {
         team_id: &uuid::Uuid,
         req: &PatchTeamRequest,
     ) -> Result<(), TeamError> {
-        if let Some(name) = req.name.as_ref() {
-            sqlx::query!(
+        let normalized_slug = req.slug.as_deref().map(normalize_team_slug).transpose()?;
+
+        if req.name.is_some() || normalized_slug.is_some() {
+            let result = sqlx::query(
                 r#"
                 UPDATE team
-                SET name = $1
-                WHERE id = $2
+                SET
+                    name = COALESCE($2, name),
+                    slug = COALESCE($3, slug)
+                WHERE id = $1
                 "#,
-                name,
-                team_id,
             )
+            .bind(team_id)
+            .bind(req.name.as_deref())
+            .bind(normalized_slug.as_deref())
             .execute(&self.pool)
             .await?;
+
+            if result.rows_affected() == 0 {
+                return Err(TeamError::TeamDoesNotExist);
+            }
         }
 
         Ok(())

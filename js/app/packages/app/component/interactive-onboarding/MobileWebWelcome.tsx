@@ -62,7 +62,7 @@ export default function MobileWebWelcome(props: MobileWebWelcomeProps) {
             placeholder="name@company.com"
             value={email()}
             onInput={(e) => setEmail(e.currentTarget.value)}
-            class="w-full px-3 py-2.5 text-base border border-edge-muted rounded-xs bg-surface text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
+            class="w-full px-3 py-2.5 text-base border border-edge-muted rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none focus:border-accent"
           />
           <button
             type="submit"

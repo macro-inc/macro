@@ -31,20 +31,40 @@ const ENABLE_DEFAULT_ALWAYS_IN_HISTORY = false;
 export type SplitId = string & { readonly SplitId: unique symbol };
 type SplitKey = `${BlockName | BlockAlias | 'component'}:${string}`;
 
+/**
+ * Per-entry runtime state, opaque at the layout-manager level.
+ * Owned by components via `useEntryState`. Survives back/forward within a
+ * split's history. Does not contribute to entry identity.
+ */
+export type EntryState = Record<string, unknown>;
+
 export type SplitContent =
   | {
       type: BlockName | BlockAlias;
       id: string;
       params?: BlockComponentProps[BlockName];
       aliasContext?: BlockAliasContext;
+      state?: EntryState;
     }
   | {
       type: 'component';
       id: string;
       params?: Record<string, unknown>;
+      state?: EntryState;
     };
 
 export type SplitContentType = SplitContent['type'];
+
+/**
+ * Why a split's mounted content changed. Read via `useNavigationCause` to
+ * adjust behavior that depends on whether the user arrived fresh vs. via
+ * back/forward (e.g. don't auto-focus the search bar on history navigation).
+ */
+export type NavigationCause =
+  | 'fresh'
+  | 'history-back'
+  | 'history-forward'
+  | 'replace';
 
 function sameContent(a: SplitContent, b: SplitContent): boolean {
   return a.type === b.type && a.id === b.id;
@@ -116,6 +136,7 @@ export type SplitState = {
   content: SplitContent; // mirror of current history entry
   mount: SplitMount; // contains pinned element
   referredFrom: ReferredFrom;
+  lastNavigationCause: NavigationCause;
 };
 
 export type CreateNewSplitOptions = {
@@ -182,6 +203,7 @@ export type SplitEventPayload = {
     splitIndex: number;
     newContent: SplitContent;
     previousContent: SplitContent;
+    cause: NavigationCause;
   };
   [SplitEvent.ReturnFocus]: void;
 };
@@ -371,6 +393,23 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   /** Update component metadata (only available for component splits) */
   updateMeta: ((data: Omit<TMeta, 'kind'>) => void) | undefined;
   referredFrom: () => ReferredFrom;
+  /**
+   * Cause of the most recent navigation event for this split. `'fresh'` on
+   * initial mount, then updated by back/forward/replace/push.
+   */
+  lastNavigationCause: () => NavigationCause;
+  /**
+   * Register a function that captures a slice of this split's current entry
+   * state. The captor is invoked just before any navigation away from the
+   * current entry; its return value is merged into the entry's `state` field
+   * keyed by `key`. Returns a teardown.
+   */
+  registerEntryStateCaptor: (key: string, getter: () => unknown) => () => void;
+  /**
+   * Read the `state` blob attached to this split's *current* history entry.
+   * Returns `undefined` if no state has been captured.
+   */
+  currentEntryState: () => EntryState | undefined;
 } & UrlCapabilities;
 
 function newSplitId(): SplitId {
@@ -488,6 +527,43 @@ export function createSplitLayout(
     Set<(payload: SplitEventPayload[SplitEvent.ContentChange]) => void>
   >();
 
+  /**
+   * Per-split, per-key captors. A captor returns the current value of a
+   * component-owned state slice. Right before navigating away from the current
+   * entry, we invoke all captors for that split and write the resulting blob
+   * to the entry's `state` field via `history.replaceCurrent`.
+   */
+  const entryStateCaptors = new Map<SplitId, Map<string, () => unknown>>();
+
+  function captureCurrentEntryState(split: SplitState): void {
+    const captors = entryStateCaptors.get(split.id);
+    if (!captors || captors.size === 0) return;
+    const items = split.history.items;
+    const idx = split.history.index;
+    if (idx < 0 || idx >= items.length) return;
+    const currentItem = items[idx];
+
+    const state: EntryState = {};
+    for (const [key, getter] of captors) {
+      try {
+        state[key] = getter();
+      } catch (err) {
+        console.error(
+          `Entry state captor for split ${split.id} key "${key}" threw`,
+          err
+        );
+      }
+    }
+    const next = { ...currentItem, state } as SplitContent;
+    split.history.replaceCurrent(next);
+    // Mirror onto SplitState.content so live reads see the captured state.
+    setState('splits', (s) => {
+      const i = s.findIndex((x) => x.id === split.id);
+      if (i < 0) return s;
+      return s.with(i, { ...s[i], content: next });
+    });
+  }
+
   const DEFAULT_SPLIT_CONTENT = defaultSplitContent ?? {
     type: 'component',
     id: LIST_VIEW_ID.inbox,
@@ -539,13 +615,15 @@ export function createSplitLayout(
       content,
       mount,
       referredFrom: referredFrom ?? null,
+      lastNavigationCause: 'fresh',
     };
   }
 
   function reattach(
     split: SplitState,
     next: SplitContent,
-    referredFrom?: ReferredFrom
+    referredFrom?: ReferredFrom,
+    cause: NavigationCause = 'fresh'
   ) {
     const otherSplits = state.splits.filter((s) => s.id !== split.id);
     const content = attachAliasContext(next);
@@ -565,6 +643,7 @@ export function createSplitLayout(
         splitIndex,
         newContent: content,
         previousContent: split.content,
+        cause,
       };
 
       dispatchEvent(SplitEvent.ContentChange, payload);
@@ -583,14 +662,23 @@ export function createSplitLayout(
         return setState('splits', (s) => {
           const i = s.findIndex((x) => x.id === split.id);
           if (i < 0) return s;
-          const target = { ...s[i], content: content, referredFrom };
+          const target = {
+            ...s[i],
+            content: content,
+            referredFrom,
+            lastNavigationCause: cause,
+          };
           return s.with(i, target);
         });
       }
       return setState('splits', (s) => {
         const i = s.findIndex((x) => x.id === split.id);
         if (i < 0) return s;
-        const target = { ...s[i], content: content };
+        const target = {
+          ...s[i],
+          content: content,
+          lastNavigationCause: cause,
+        };
         return s.with(i, target);
       });
     }
@@ -604,6 +692,7 @@ export function createSplitLayout(
         ...s[i],
         content,
         mount: newMount,
+        lastNavigationCause: cause,
         ...(referredFrom !== undefined && { referredFrom }),
       };
       return s.with(i, target);
@@ -617,10 +706,12 @@ export function createSplitLayout(
     const split = state.splits[i];
     if (!split.history.canGoBack()) return;
 
+    captureCurrentEntryState(split);
+
     const prev = split.history.back();
     if (!prev) return;
 
-    reattach(split, prev);
+    reattach(split, prev, undefined, 'history-back');
   }
 
   function forward(id: SplitId) {
@@ -630,10 +721,12 @@ export function createSplitLayout(
     const split = state.splits[i];
     if (!split.history.canGoForward()) return;
 
+    captureCurrentEntryState(split);
+
     const next = split.history.forward();
     if (!next) return;
 
-    reattach(split, next);
+    reattach(split, next, undefined, 'history-forward');
   }
 
   function removeFromHistory(
@@ -647,7 +740,7 @@ export function createSplitLayout(
     const next = split.history.remove(predicate);
     if (!next) return;
 
-    reattach(split, next);
+    reattach(split, next, undefined, 'replace');
   }
 
   /**
@@ -668,13 +761,14 @@ export function createSplitLayout(
     const content = attachAliasContext(next);
 
     const split = state.splits[i];
+    captureCurrentEntryState(split);
     if (mergeHistory) {
       split.history.merge(content);
     } else {
       split.history.push(content);
     }
 
-    reattach(split, content, referredFrom);
+    reattach(split, content, referredFrom, mergeHistory ? 'replace' : 'fresh');
   }
 
   function reset(id: SplitId) {
@@ -683,7 +777,7 @@ export function createSplitLayout(
 
     const split = state.splits[i];
     split.history = createHistory<SplitContent>();
-    reattach(split, DEFAULT_SPLIT_CONTENT);
+    reattach(split, DEFAULT_SPLIT_CONTENT, undefined, 'fresh');
   }
 
   const getUrlSegments = () => {
@@ -841,6 +935,29 @@ export function createSplitLayout(
           ? currentSplit.mount.updateMeta
           : undefined,
       referredFrom: () => s()?.referredFrom ?? null,
+      lastNavigationCause: () => s()?.lastNavigationCause ?? 'fresh',
+      registerEntryStateCaptor: (key: string, getter: () => unknown) => {
+        let perSplit = entryStateCaptors.get(currentSplit.id);
+        if (!perSplit) {
+          perSplit = new Map();
+          entryStateCaptors.set(currentSplit.id, perSplit);
+        }
+        perSplit.set(key, getter);
+        return () => {
+          const map = entryStateCaptors.get(currentSplit.id);
+          if (!map) return;
+          if (map.get(key) === getter) map.delete(key);
+          if (map.size === 0) entryStateCaptors.delete(currentSplit.id);
+        };
+      },
+      currentEntryState: () => {
+        const live = s();
+        if (!live) return undefined;
+        // Read through the store getter so callers see the latest captured
+        // state (mirrored from history into split.content on capture).
+        const c = live.content as { state?: EntryState };
+        return c.state;
+      },
     };
   };
 
@@ -892,6 +1009,7 @@ export function createSplitLayout(
     if (idx < 0) return;
 
     contentChangeListeners.delete(id);
+    entryStateCaptors.delete(id);
     setSplitNamesById(
       produce((map) => {
         delete map[id];
@@ -982,6 +1100,7 @@ export function createSplitLayout(
     for (const split of state.splits) {
       if (!usedIds.has(split.id)) {
         contentChangeListeners.delete(split.id);
+        entryStateCaptors.delete(split.id);
         setSplitNamesById(
           produce((map) => {
             delete map[split.id];

@@ -21,6 +21,20 @@ type). `Some(false)` and `None` apply no constraint. */
   calendar_only?: EmailFiltersCalendarOnly;
   /** Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC. */
   cc?: string[];
+  /** CRM-scoped address filter. When non-empty, expands visibility to every
+teammate's mailbox and restricts to threads involving any of these
+fully-qualified addresses. Each address is authorized against
+`crm_contacts` + `crm_companies` (contact must not be hidden, company
+must not be hidden, `email_sync` must be true).
+Mutually exclusive with `crm_domains`. */
+  crm_addresses?: string[];
+  /** CRM-scoped domain filter. When non-empty, expands visibility to every
+teammate's mailbox and restricts to threads involving any of these
+domains (in any of sender/cc/bcc/recipient). Each domain is authorized
+against `crm_domains` + `crm_companies` (must exist for the caller's
+team, company must not be hidden, `email_sync` must be true).
+Mutually exclusive with `crm_addresses`. */
+  crm_domains?: string[];
   /** Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads. */
   email_thread_ids?: string[];
   /** Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. "CATEGORY_PROMOTIONS") and user-created labels. Empty to not exclude any labels.

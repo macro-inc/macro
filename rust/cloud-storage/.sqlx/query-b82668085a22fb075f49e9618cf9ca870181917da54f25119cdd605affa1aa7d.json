@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO crm_domain_directory (domain, name, description, icon_url)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (LOWER(domain)) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b82668085a22fb075f49e9618cf9ca870181917da54f25119cdd605affa1aa7d"
+}

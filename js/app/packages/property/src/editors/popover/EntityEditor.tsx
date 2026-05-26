@@ -1,7 +1,7 @@
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
-} from '@core/component/Properties/utils/entityConversion';
+} from '@property/utils/entityConversion';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createSignal, Show } from 'solid-js';
@@ -11,7 +11,7 @@ import { isEntityProperty } from '../../utils';
 import { PropertyEntitySelector } from '../selectors/PropertyEntitySelector';
 import { EditorPopover } from './EditorPopover';
 
-export type EntityEditorProps = {
+type EntityEditorProps = {
   /**
    * Owning entity context for the property — used by PropertyEntitySelector
    * to filter the current entity out of the picker. Omit when no self-filter

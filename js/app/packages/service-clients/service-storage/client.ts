@@ -29,6 +29,7 @@ import { err, ok, type Result } from 'neverthrow';
 import type {
   AccessLevel,
   CallRecordPreview,
+  GithubPullRequestsResponse,
   PostSoupAstRequest,
   PostSoupRequest,
   SoupPage,
@@ -119,7 +120,7 @@ export function dssFetch<T extends Record<string, any> = never>(
   return fetchWithToken<T>(`${dssHost}${url}`, init);
 }
 
-export type Success = {
+type Success = {
   id: string | null | undefined;
   success: boolean;
 };
@@ -147,7 +148,7 @@ const itemTypeSet = new Set([
   'thread',
 ]);
 
-export function isItemType(str: string): str is ItemType {
+function _isItemType(str: string): str is ItemType {
   return itemTypeSet.has(str);
 }
 
@@ -195,14 +196,14 @@ export function isCloudStorageItem(
   return Object.values(CloudStorageItemTypeMap).includes(item as any);
 }
 
-export type ProcessingResultType = 'PREPROCESS' | 'SPLIT_TEXTS';
+type ProcessingResultType = 'PREPROCESS' | 'SPLIT_TEXTS';
 export type ProcessingResultResponseType<T extends ProcessingResultType> =
   T extends 'PREPROCESS'
     ? ICoParse
     : T extends 'SPLIT_TEXTS'
       ? TSegment[]
       : never;
-export type UserPins = UserPinsResponse;
+type UserPins = UserPinsResponse;
 
 function withVersionId(version_id?: string | undefined | null): string {
   return version_id ? `?version_id=${version_id}` : '';
@@ -618,6 +619,19 @@ export const storageServiceClient = {
       shortId: result.shortId,
       branchName: result.branchName,
     }));
+  },
+
+  async getDocumentGithubPullRequests({
+    documentId,
+  }: {
+    documentId: string;
+  }): Promise<
+    Result<GithubPullRequestsResponse, ResultError<FetchWithTokenErrorCode>[]>
+  > {
+    return await dssFetch<GithubPullRequestsResponse>(
+      `/documents/${documentId}/github_prs`,
+      { method: 'GET' }
+    );
   },
 
   async exportDocument({ documentId }) {
@@ -1355,7 +1369,7 @@ export const storageServiceClient = {
   typeof enhancements &
   Record<string, unknown>;
 
-export const uploadFileToPresignedUrl = async (
+const _uploadFileToPresignedUrl = async (
   presignedUrl: URL,
   file: IDocumentStorageServiceFile,
   signal?: AbortSignal

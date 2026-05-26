@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/solid-query';
 
-export type CachePartition<Item, Data> = {
+type CachePartition<Item, Data> = {
   readonly cached: ReadonlyMap<Item, Data>;
   readonly missing: readonly Item[];
 };

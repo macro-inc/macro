@@ -1,11 +1,6 @@
 import uFuzzy from '@leeoniya/ufuzzy';
 
-export interface FuzzyNameMatchResult {
-  nameHighlight: string;
-  score: number;
-}
-
-export interface FuzzyNameMatchResultWithItem<T> {
+interface FuzzyNameMatchResultWithItem<T> {
   item: T;
   nameHighlight: string;
   score: number;
@@ -180,7 +175,7 @@ export function fuzzyFilter<T>(
  * Tests if text matches a fuzzy query.
  * Returns true if query is empty or matches.
  */
-export function fuzzyTest(query: string, text: string): boolean {
+function fuzzyTest(query: string, text: string): boolean {
   if (!query) return true;
 
   const haystack = [text];

@@ -1,35 +1,15 @@
-// Re-export the utilities the @property primitives consume.
-// Source of truth still lives under @core/component/Properties/utils;
-// a future consolidation PR will move ownership here.
+// Export all utility functions for consistent imports
 
-export {
-  extractDomain,
-  formatBoolean,
-  formatDate,
-  formatNumber,
-  formatOptionValue,
-  formatOptionValueById,
-  formatPropertyValue,
-  getOptionValue,
-} from '@core/component/Properties/utils/formatting';
-
-export {
-  getEntityValues,
-  getLinkValues,
-  getSelectValues,
-  hasMultiValue,
-  hasSingleValue,
-  hasValue,
-  isBooleanProperty,
-  isDateProperty,
-  isEntityProperty,
-  isLinkProperty,
-  isMultiValueProperty,
-  isNumberProperty,
-  isSelectNumberProperty,
-  isSelectProperty,
-  isSelectStringProperty,
-  isSingleValueProperty,
-  isStringProperty,
-  toPropertyApiValue,
-} from '@core/component/Properties/utils/typeGuards';
+// Re-export from focused utility modules
+export * from './display';
+export * from './entityConversion';
+export * from './errorHandling';
+export * from './focus';
+export * from './formatting';
+// Export icon component
+export { PropertyDataTypeIcon } from './PropertyDataTypeIcon';
+export * from './position';
+export * from './suggestedProperties';
+export * from './transforms';
+export * from './typeGuards';
+export * from './validation';

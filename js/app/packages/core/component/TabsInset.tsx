@@ -6,12 +6,12 @@ import {
 import { cn, Layer } from '@ui';
 import { For, type JSX, splitProps } from 'solid-js';
 
-export type TabItem = {
+type TabItem = {
   value: string;
   label: string | JSX.Element;
 };
 
-export type TabsInsetProps = {
+type TabsInsetProps = {
   list: TabItem[];
   value?: string;
   defaultValue?: string;
@@ -48,7 +48,7 @@ export const TabsInset = (props: TabsInsetProps) => {
                 >
                   <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
                   <KSegmentedControl.ItemLabel
-                    class="flex items-center px-2.5 py-1 text-xs font-medium data-checked:ring data-checked:ring-edge-muted ring-inset rounded-md text-ink-extra-muted hover:text-ink data-checked:bg-surface data-checked:text-ink data-checked:shadow-sm"
+                    class="flex items-center px-2.5 py-1 text-xs font-medium data-checked:ring data-checked:ring-edge-muted ring-inset rounded-md text-ink-extra-muted hover:text-ink data-checked:bg-surface data-checked:text-ink data-checked:shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
                     onPointerDown={(e) => {
                       if (isTouchDevice()) e.preventDefault();
                     }}

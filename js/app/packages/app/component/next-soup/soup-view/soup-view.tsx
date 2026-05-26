@@ -62,23 +62,26 @@ import {
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
 import { SplitPanelContext } from '@app/component/split-layout/context';
+import { useNavigationCause } from '@app/component/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';
-import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { Resize } from '@core/component/Resize';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import {
+  soupListContainerAttribute,
+  soupListContainerSelector,
+} from '@core/dom-selectors';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { useDisplayName } from '@core/user/displayName';
-import type { MacroId } from '@core/user/macroId';
+import { type MacroId, tryMacroId } from '@core/user/macroId';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
   type EntityData,
@@ -93,6 +96,8 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import Spinner from '@phosphor/spinner.svg';
+import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -159,21 +164,6 @@ function persistNavigationTouchHighlight(event: MouseEvent | PointerEvent) {
   return true;
 }
 
-// Property values for entity-reference properties (e.g. assignees) are stored
-// as `{"entity_id": "...", "entity_type": "USER"}` and arrive in group keys as
-// the JSON-encoded text of that object.
-const parseEntityRefId = (key: string): string | null => {
-  try {
-    const parsed: unknown = JSON.parse(key);
-    if (typeof parsed === 'string') return parsed;
-    if (typeof parsed !== 'object' || parsed === null) return null;
-    const id = (parsed as Record<string, unknown>).entity_id;
-    return typeof id === 'string' ? id : null;
-  } catch {
-    return null;
-  }
-};
-
 export const SoupSectionHeader = (props: {
   children: JSX.Element;
   onClick?: () => void;
@@ -229,9 +219,9 @@ const DefaultGroupHeader = (
       field.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.ASSIGNEES ||
       props.group.key === ''
     ) {
-      return null;
+      return;
     }
-    return parseEntityRefId(props.group.key);
+    return tryMacroId(props.group.key);
   });
 
   return (
@@ -262,7 +252,7 @@ const DefaultGroupHeader = (
       >
         {(id) => (
           <AssigneeGroupContent
-            assigneeId={id() as MacroId}
+            assigneeId={id()}
             fallbackLabel={props.group.label}
           />
         )}
@@ -486,7 +476,7 @@ export const SoupView = (props: SoupViewProps) => {
         disableLocalSearch={props.disableLocalSearch}
         additionalEntities={props.additionalEntities}
       >
-        <div class="size-full flex flex-col">
+        <div class="size-full flex flex-col" data-list-view={activeListView()}>
           <div class="flex flex-col w-full">
             <SplitHeaderLeft>
               <div
@@ -512,34 +502,42 @@ export const SoupView = (props: SoupViewProps) => {
                       containerClass="h-full"
                     />
                   </Show>
-                  <Show when={!isMobile()}>
-                    <SoupViewCreateButton />
-                  </Show>
                 </Show>
               </div>
             </SplitHeaderLeft>
             <Show when={!isMobile()}>
               <SplitHeaderRight>
+                <Show
+                  when={
+                    !narrowSearchExpanded() && !isComponentListView('search')
+                  }
+                >
+                  <SoupViewCreateButton />
+                </Show>
                 <Show when={narrowSearchExpanded()}>
-                  <div class="flex-1 min-w-0">
-                    <SoupSearchbar
-                      variant="secondary"
-                      autoFocus
-                      initialValue={props.initialSearchText}
-                      onDismiss={() => setNarrowSearchExpanded(false)}
-                    />
-                  </div>
+                  <Layer depth={2}>
+                    <div class="flex-1 min-w-0">
+                      <SoupSearchbar
+                        variant="secondary"
+                        autoFocus
+                        initialValue={props.initialSearchText}
+                        onDismiss={() => setNarrowSearchExpanded(false)}
+                      />
+                    </div>
+                  </Layer>
                 </Show>
                 <Show
                   when={!isComponentListView('search')}
                   fallback={
-                    <div class="grow ml-2">
-                      <SoupSearchbar
-                        variant="secondary"
-                        placeholder="Search, @mention contacts"
-                        initialValue={props.initialSearchText}
-                      />
-                    </div>
+                    <Layer depth={2}>
+                      <div class="grow ml-2">
+                        <SoupSearchbar
+                          variant="secondary"
+                          placeholder="Search, @mention contacts"
+                          initialValue={props.initialSearchText}
+                        />
+                      </div>
+                    </Layer>
                   }
                 >
                   <CollapsibleHeaderItem
@@ -550,20 +548,23 @@ export const SoupView = (props: SoupViewProps) => {
                       if (!isCollapsed) setNarrowSearchExpanded(false);
                     }}
                     expanded={() => (
-                      <div class="w-60">
-                        <SoupSearchbar
-                          variant="secondary"
-                          initialValue={props.initialSearchText}
-                        />
-                      </div>
+                      <Layer depth={2}>
+                        <div class="w-60 ml-2">
+                          <SoupSearchbar
+                            variant="secondary"
+                            initialValue={props.initialSearchText}
+                          />
+                        </div>
+                      </Layer>
                     )}
                     collapsed={() => (
                       <Show when={!narrowSearchExpanded()}>
                         <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
                           <Button
-                            variant="ghost"
-                            class="p-1 rounded-xs"
+                            variant="base"
+                            class="p-1 size-7 rounded-lg ml-2 bg-surface"
                             onClick={() => setNarrowSearchExpanded(true)}
+                            depth={2}
                           >
                             <SearchIcon class="size-4 touch:size-6" />
                           </Button>
@@ -796,6 +797,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     projectEntity?: ProjectEntity;
     event: MouseEvent | PointerEvent;
     location?: SearchLocation;
+    rowIndex?: number;
   };
 
   const onEntityClick = async (args: EntityClickArgs) => {
@@ -812,7 +814,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
 
     if (soup.previewEntity() && type === 'entity') {
-      soup.focus.set(entity.id);
+      if (args.rowIndex !== undefined) soup.focus.setIndex(args.rowIndex);
+      else soup.focus.set(entity.id);
       return;
     }
 
@@ -936,6 +939,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const persistenceDisabled = isProjectList || isDuplicate;
 
+  // On back/forward navigation, filters were already restored from per-entry
+  // state during SoupViewContextProvider's body — don't let the cross-session
+  // localStorage hack overwrite them on this mount.
+  const navCause = useNavigationCause();
+  const skipFiltersOnMount =
+    navCause() === 'history-back' || navCause() === 'history-forward';
+
   const [persistedState, setPersistedState] = makePersisted(
     createSignal<PersistedSoupViewState>(),
     { name: soupViewCacheKey(contentId) }
@@ -963,20 +973,22 @@ export const SoupViewList = (props: SoupViewListProps) => {
         applyTabPreset(contentId, initialPersistedState.activeTab);
       if (!applied) {
         batch(() => {
-          soup.predicates.set(
-            isStale
-              ? (props.initialClientFilters ?? {})
-              : initialPersistedState.filters
-          );
-          const persistedFilterData = isStale
-            ? {}
-            : (initialPersistedState.queryFilters ?? {});
-          queryFilters.replace({
-            include: persistedFilterData.include,
-            exclude: persistedFilterData.exclude,
-            emailView: persistedFilterData.emailView,
-          });
-          if (isListViewID(contentId)) {
+          if (!skipFiltersOnMount) {
+            soup.predicates.set(
+              isStale
+                ? (props.initialClientFilters ?? {})
+                : initialPersistedState.filters
+            );
+            const persistedFilterData = isStale
+              ? {}
+              : (initialPersistedState.queryFilters ?? {});
+            queryFilters.replace({
+              include: persistedFilterData.include,
+              exclude: persistedFilterData.exclude,
+              emailView: persistedFilterData.emailView,
+            });
+          }
+          if (!skipFiltersOnMount && isListViewID(contentId)) {
             const tab =
               initialPersistedState.activeTab ??
               VIEW_TAB_PRESETS[contentId].default;
@@ -993,14 +1005,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
         soup.grouping.collapseAll(initialPersistedState.collapsedGroups ?? []);
       });
     } else {
-      if (props.initialClientFilters) {
+      if (!skipFiltersOnMount && props.initialClientFilters) {
         soup.predicates.set(props.initialClientFilters);
       }
       if (props.initialGroupBy) {
         soup.grouping.setActiveGroupId(props.initialGroupBy);
       }
       // Set default tab for list views when no persisted state exists
-      if (isListViewID(contentId)) {
+      if (!skipFiltersOnMount && isListViewID(contentId)) {
         const defaultTab = VIEW_TAB_PRESETS[contentId].default;
         if (defaultTab) {
           setActiveTab(defaultTab);
@@ -1319,7 +1331,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                         onMouseMove={() => {
                                           if (isKeypressActive()) return;
                                           if (soup.previewEntity()) return;
-                                          soup.focus.set(row.id);
+                                          soup.focus.setIndex(row.index);
                                         }}
                                         showUnrollNotifications={
                                           soup.predicates.isActive('inbox') &&
@@ -1343,6 +1355,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                             entity: row.original,
                                             event,
                                             location: undefined,
+                                            rowIndex: row.index,
                                           });
                                         }}
                                         onProjectClick={(
@@ -1355,6 +1368,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                             entity: row.original,
                                             event,
                                             location: undefined,
+                                            rowIndex: row.index,
                                           });
                                         }}
                                         onContentHitClick={(
@@ -1366,6 +1380,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                             entity: row.original,
                                             event: e,
                                             location,
+                                            rowIndex: row.index,
                                           });
                                         }}
                                         entityRowConfig={{
@@ -1406,7 +1421,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                           const listEl = localEntityListRef();
                           if (!listEl) return undefined;
                           const scrollContainer = listEl.querySelector(
-                            '[data-soup-list-container]'
+                            soupListContainerSelector
                           ) as HTMLElement;
                           return scrollContainer || undefined;
                         }}
@@ -1512,12 +1527,12 @@ const SoupList = (props: SoupListProps) => {
       <VList
         cache={props.cache}
         ref={registerVirtualizerHandler}
-        class={props.virtualizerClass}
+        class={cn('overscroll-none', props.virtualizerClass)}
         data={stableRows}
         itemSize={itemSize()}
         bufferSize={overscan() * itemSize()}
         onScroll={handleScroll}
-        data-soup-list-container
+        {...soupListContainerAttribute}
       >
         {(row, i) => props.children(row, i)}
       </VList>

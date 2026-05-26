@@ -208,7 +208,7 @@ function OnboardingInner() {
   });
 
   return (
-    <div class="flex items-center justify-center size-full relative overflow-y-auto py-8">
+    <div class="flex items-center mobile:items-stretch justify-center size-full relative overflow-y-auto py-8">
       <style>
         {`
         input:-webkit-autofill,
@@ -244,23 +244,46 @@ function OnboardingInner() {
           )}
         >
           <Show when={ctx.step() > 0}>
-            <div class="w-full flex items-center gap-3 mb-10">
-              <LogoProgress
-                level={activeStepPosition()}
-                total={activeStepCount()}
-                class="w-7"
-              />
-              <Show when={activeStepCount() > 1}>
-                <span class="text-xs font-mono text-ink-disabled">
-                  {activeStepPosition()}/{activeStepCount()}
-                </span>
-              </Show>
+            <div class="w-full flex items-center gap-3 mobile:justify-between mb-10">
+              <div
+                class={cn(
+                  'hidden mobile:block',
+                  showBack() ? 'visible' : 'invisible'
+                )}
+              >
+                <button
+                  type="button"
+                  tabIndex={0}
+                  onClick={() => ctx.back()}
+                  class="flex items-center gap-1 text-xs text-ink-disabled hover:text-ink transition-colors outline-none rounded-sm focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                >
+                  <ArrowLeftIcon class="size-3" />
+                  Back
+                </button>
+              </div>
+              <div class="flex items-center gap-3">
+                <LogoProgress
+                  level={activeStepPosition()}
+                  total={activeStepCount()}
+                  class="w-7"
+                />
+                <Show when={activeStepCount() > 1}>
+                  <span class="text-sm font-mono font-semibold text-ink mobile:text-xs mobile:font-normal mobile:text-ink-disabled">
+                    {activeStepPosition()}/{activeStepCount()}
+                  </span>
+                </Show>
+              </div>
             </div>
           </Show>
 
-          <div class="w-full flex flex-col gap-2">
+          <div class="w-full flex flex-col gap-2 mobile:flex-1 mobile:min-h-0">
             <Show when={ctx.step() > 0}>
-              <div class={showBack() ? 'visible' : 'invisible'}>
+              <div
+                class={cn(
+                  'mobile:hidden',
+                  showBack() ? 'visible' : 'invisible'
+                )}
+              >
                 <button
                   type="button"
                   tabIndex={0}
@@ -277,7 +300,7 @@ function OnboardingInner() {
               transition={Stepper.transitions.slideFull}
               appear
               class={cn(
-                'overflow-clip p-1 -m-1',
+                'overflow-clip p-1 -m-1 mobile:flex-1 mobile:min-h-0',
                 ctx.step() > 0 && 'min-h-125'
               )}
             >

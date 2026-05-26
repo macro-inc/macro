@@ -3,9 +3,11 @@ use crate::api::context::ApiContext;
 use crate::api::user_notification::BLOCKABLE_NOTIFICATIONS;
 use ::notification::domain::models::email_notification_digest::ports::DigestBatch;
 use ::notification::domain::service::NotificationEgressService;
+use ::notification::inbound::notification_events_listener::NotificationEventsListener;
 use ::notification::inbound::worker::NotificationWorker;
 use ::notification::outbound::email::EmailAdapter;
 use ::notification::outbound::mobile::MobilePushAdapter;
+use ::notification::outbound::notification_events::PgNotificationEventsReceiver;
 use ::notification::outbound::rate_limit::RedisRateLimitAdapter;
 use ::notification::outbound::websocket::{ConnectionGatewayClient, WebSocketGatewayAdapter};
 use ::rate_limit::RateLimitServiceImpl;
@@ -148,12 +150,32 @@ pub async fn main() -> anyhow::Result<()> {
         fcm_platform_arn: config.sns_fcm_platform_arn.clone(),
         apns_voip_platform_arn: config.sns_apns_voip_platform_arn.clone(),
     };
-    let reader_service = ::notification::domain::service::NotificationReaderService::new(
-        notification_repository,
-        notification_queue.clone(),
-        sns_endpoint_manager,
-        platform_config,
+    let reader_realtime_adapter = WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
+        internal_secret_key.as_ref().to_string(),
+        vars.connection_gateway_url.as_ref().to_string(),
+    ));
+    let notification_events_realtime_adapter =
+        WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
+            internal_secret_key.as_ref().to_string(),
+            vars.connection_gateway_url.as_ref().to_string(),
+        ));
+    let notification_events_receiver = PgNotificationEventsReceiver::new(db.clone());
+    let mut notification_events_listener = NotificationEventsListener::new(
+        notification_events_receiver,
+        notification_events_realtime_adapter,
     );
+    tokio::spawn(async move {
+        tracing::info!("starting notification database event listener");
+        notification_events_listener.run().await
+    });
+
+    let reader_service = ::notification::domain::service::NotificationReaderService {
+        repository: notification_repository,
+        queue: notification_queue.clone(),
+        sns_endpoint: sns_endpoint_manager,
+        platform_config,
+        realtime: reader_realtime_adapter,
+    };
     let ingress_state = ::notification::inbound::http::NotificationRouterState::new(
         reader_service,
         &BLOCKABLE_NOTIFICATIONS,

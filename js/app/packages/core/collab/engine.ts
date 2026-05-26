@@ -10,7 +10,7 @@ import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import type { SyncSource, TimeoutError } from './source';
 import { compareLoroDocVersions, loroDocFromSnapshot } from './utils';
 
-export type EngineBindings<S extends GenericRootSchema, D> = {
+type EngineBindings<S extends GenericRootSchema, D> = {
   /**
    * Callback for handling state updates from the remote
    * @param state - The serialized state
@@ -24,7 +24,7 @@ export type EngineBindings<S extends GenericRootSchema, D> = {
   syncFromAwareness?: (awareness: D) => void;
 };
 
-export type Engine<S extends GenericRootSchema, D> = {
+type Engine<S extends GenericRootSchema, D> = {
   /** Is the engine running ¯\_(ツ)_/¯  */
   readonly isRunning: Accessor<boolean>;
   /**

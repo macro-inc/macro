@@ -21,6 +21,7 @@ use notification::inbound::ai_tool::NotificationToolContext;
 use properties::inbound::toolset::PropertiesToolContext;
 use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
 use std::sync::Arc;
+use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamRepositoryImpl};
 
 pub use ai_toolset::RequestContext;
 
@@ -29,12 +30,28 @@ pub type ToolFrecencyService = frecency::domain::services::FrecencyQueryServiceI
     frecency::outbound::postgres::FrecencyPgStorage,
 >;
 
+/// Type alias for the CRM service implementation used by tools.
+///
+/// Tools only read CRM rows (e.g. `get_company_by_domain`); the populate
+/// path runs in the email-service pubsub worker. The no-op resolver
+/// keeps reqwest/scraper out of the tool binary at the cost of a silent
+/// negative cache if populate is ever invoked here.
+pub type ToolCrmService = crm::domain::service::CrmServiceImpl<
+    crm::outbound::companies_repo::CompaniesRepositoryImpl,
+    crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+>;
+
 /// Type alias for the email service implementation
-pub type ToolEmailService =
-    EmailServiceImpl<EmailPgRepo, ToolFrecencyService, email::domain::ports::NoOpEnqueuer>;
+pub type ToolEmailService = EmailServiceImpl<
+    EmailPgRepo,
+    ToolFrecencyService,
+    email::domain::ports::NoOpEnqueuer,
+    ToolCrmService,
+>;
 
 /// Type alias for the send-capable email service implementation used by user tools.
-pub type ToolUserEmailService = EmailServiceImpl<EmailPgRepo, ToolFrecencyService, sqs_client::SQS>;
+pub type ToolUserEmailService =
+    EmailServiceImpl<EmailPgRepo, ToolFrecencyService, sqs_client::SQS, ToolCrmService>;
 
 /// Type alias for the comms/channels service implementation
 pub type ToolCommsService = comms::domain::service::ChannelServiceImpl<
@@ -54,6 +71,22 @@ pub type ToolChannelToolContext =
 pub fn build_channel_tool_context(pool: sqlx::PgPool) -> ToolChannelToolContext {
     ChannelToolContext::new(
         ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(pool.clone())),
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(pool),
+        ),
+    )
+}
+
+/// Type alias for the team member listing service used by AI tools.
+pub type ToolTeamService = TeamRepositoryImpl;
+
+/// Type alias for the team AI tool context.
+pub type ToolTeamToolContext = TeamToolContext<ToolTeamService, ToolEntityAccessService>;
+
+/// Build the team AI tool context from a Postgres pool.
+pub fn build_team_tool_context(pool: sqlx::PgPool) -> ToolTeamToolContext {
+    TeamToolContext::new(
+        TeamRepositoryImpl::new(pool.clone()),
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool),
         ),
@@ -421,6 +454,7 @@ pub struct ToolServiceContext {
     pub notification_tool_context: ToolNotificationToolContext,
     pub chat_tool_context: ToolChatToolContext,
     pub channel_tool_context: ToolChannelToolContext,
+    pub team_tool_context: ToolTeamToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
 }
 

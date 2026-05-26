@@ -7,7 +7,7 @@ import type { CategoryFilter } from './types';
 /** timestamp threshold for resetting state after menu close */
 const STATE_RESET_THRESHOLD_MS = 2_000;
 
-export interface ICommandState {
+interface ICommandState {
   /** visibility */
   isOpen: Accessor<boolean>;
   setIsOpen: Setter<boolean>;

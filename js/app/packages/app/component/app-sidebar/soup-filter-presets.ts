@@ -5,13 +5,10 @@ import {
   type Query,
 } from '@app/component/next-soup/filters/filter-store';
 import type { ListView } from '@app/constants/list-views';
-import {
-  PROPERTY_OPTION_IDS,
-  SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { subWeeks } from 'date-fns';
 
-export type SoupFiltersPreset = {
+type SoupFiltersPreset = {
   /** Filter data for server query */
   filters: Query;
   /** Client filters to apply */
@@ -30,13 +27,11 @@ export type PresetContext = {
   email: string | undefined;
 };
 
-export type TabPresetResolver = (
-  ctx: PresetContext
-) => SoupFiltersPreset | undefined;
+type TabPresetResolver = (ctx: PresetContext) => SoupFiltersPreset | undefined;
 
-export type TabConfig = Record<string, TabPresetResolver>;
+type TabConfig = Record<string, TabPresetResolver>;
 
-export type ViewTabConfig = {
+type ViewTabConfig = {
   default: string;
   tabs: TabConfig;
 };

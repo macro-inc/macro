@@ -2,6 +2,7 @@ import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntit
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { ResponsiveDropdown } from '@app/component/SimpleDropdown';
 import { useBlockAliasedName, useBlockName } from '@core/block';
+import { MENU_CONTENT_CLASS } from '@core/component/ContextMenu';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { toast } from '@core/component/Toast/Toast';
 import { triggerFocusInput } from '@core/directive/focusInput';
@@ -199,7 +200,7 @@ export function SplitFileMenu(props: {
       </ResponsiveDropdown.Trigger>
       <ResponsiveDropdown.Portal>
         <Layer depth={2}>
-          <ResponsiveDropdown.Content class="bg-surface w-fit p-1 border border-edge-muted rounded shadow">
+          <ResponsiveDropdown.Content class={cn(MENU_CONTENT_CLASS, 'w-fit')}>
             <For each={ops()}>
               {(op, i) => (
                 <>

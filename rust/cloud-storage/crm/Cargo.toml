@@ -1,0 +1,44 @@
+[package]
+edition = "2024"
+name = "crm"
+publish = false
+version = "0.1.0"
+
+[features]
+axum = [
+  "dep:axum",
+  "dep:macro_uuid",
+  "dep:model-error-response",
+  "dep:utoipa",
+  "entity_access/axum",
+  "entity_access/inbound",
+  "entity_access/ports",
+]
+default = ["inbound", "outbound", "ports"]
+inbound = ["axum", "ports"]
+outbound = ["dep:sqlx", "dep:unfurl", "ports"]
+ports = []
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+entity_access = { path = "../entity_access", default-features = false }
+
+# Axum / inbound dependencies
+axum = { workspace = true, optional = true }
+macro_uuid = { path = "../macro_uuid", optional = true }
+model-error-response = { path = "../model-error-response", optional = true }
+utoipa = { workspace = true, optional = true }
+
+# Outbound dependencies
+sqlx = { workspace = true, optional = true }
+unfurl = { path = "../unfurl", features = ["ports"], optional = true }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros"] }

@@ -7,6 +7,7 @@ import {
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
 import type { FilterContext } from '@app/component/next-soup/filters/configs/';
+import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import {
   createQueryStore,
   type Query,
@@ -15,6 +16,8 @@ import {
 import { createInfiniteQueries } from '@app/component/next-soup/soup-view/create-infinite-queries';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
+import { useEntryState } from '@app/component/split-layout/entry-state';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
@@ -50,10 +53,12 @@ import {
   createSignal,
   type FlowComponent,
   on,
+  onCleanup,
   type Setter,
   Suspense,
   useContext,
 } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 
 type DataSource<T> = {
   data: Accessor<T[]>;
@@ -83,7 +88,7 @@ interface SoupViewContextValues {
   groupByField: Accessor<GroupByField | undefined>;
 }
 
-export const SoupViewContext = createContext<SoupViewContextValues>();
+const SoupViewContext = createContext<SoupViewContextValues>();
 
 export const useSoupView = () => {
   const context = useContext(SoupViewContext);
@@ -140,7 +145,40 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
-  const store = createQueryStore({ initial: props.initialQuery });
+  const panel = useSplitPanelOrThrow();
+
+  // Restore filter state from this history entry if it was captured during a
+  // previous nav-away; otherwise fall back to the caller-provided initial.
+  const persistedFilters = panel.handle.currentEntryState()?.[
+    'search.filters'
+  ] as Query | undefined;
+  const store = createQueryStore({
+    initial: persistedFilters ?? props.initialQuery,
+  });
+
+  const filterCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    'search.filters',
+    () => structuredClone(unwrap(store.state)) as Query
+  );
+  onCleanup(filterCaptorTeardown);
+
+  // Client-side predicate state (drives the "Type: X" chips and other
+  // toggleable filters) also needs to round-trip per entry, since the chip UI
+  // reads predicates directly and would otherwise show empty after back-nav.
+  const persistedPredicates = panel.handle.currentEntryState()?.[
+    'search.predicates'
+  ] as SetPredicatesInput<string> | undefined;
+  if (persistedPredicates) {
+    soup.predicates.set(persistedPredicates);
+  }
+  const predicatesCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    'search.predicates',
+    (): SetPredicatesInput<string> => ({
+      and: [...soup.predicates.andIds()],
+      or: [...soup.predicates.orIds()],
+    })
+  );
+  onCleanup(predicatesCaptorTeardown);
 
   const invalidateCache = () => {
     queryClient.setQueryData(
@@ -181,7 +219,10 @@ export const SoupViewContextProvider: FlowComponent<
 
   const [searchPaused, setSearchPaused] = createSignal(false);
   const [assigneeFilter, setAssigneeFilter] = createSignal<string[]>([]);
-  const [activeTab, setActiveTab] = createSignal<string | undefined>(undefined);
+  const [activeTab, setActiveTab] = useEntryState<string | undefined>(
+    'soup.tab',
+    { default: undefined }
+  );
 
   const groupByField = createMemo((): GroupByField | undefined => {
     const id = soup.grouping.activeGroupId();
@@ -208,13 +249,18 @@ export const SoupViewContextProvider: FlowComponent<
   // soupBody is derived from the query filter store's compiled AST
   const soupBody = createMemo(() => queryFilters.compile());
 
+  const [searchText, setSearchText] = useEntryState<string>('search.text', {
+    default: props.initialSearchText ?? '',
+  });
+
   const search = createSearchState({
     soup,
     filters: () => queryFilters.state,
     assignees: assigneeFilter,
     disableLocalSearch: props.disableLocalSearch,
     searchPaused,
-    initialText: props.initialSearchText,
+    searchText,
+    setSearchText,
   });
 
   const notificationSource = useGlobalNotificationSource();
@@ -345,75 +391,6 @@ export const SoupViewContextProvider: FlowComponent<
     return [...featured, ...rest];
   };
 
-  const rows = createMemo((): SoupRow[] => {
-    const field = groupByField();
-    const groups = itemsQuery.data?.groups;
-
-    // Not grouped - build simple entity rows
-    if (!field || !groups) {
-      return entities().map((entity, index) =>
-        soup.buildRow({ id: entity.id, index, original: entity })
-      );
-    }
-
-    // Grouped - build header + entity + loadMore rows for each group
-    const result: SoupRow[] = [];
-    let globalIndex = 0;
-
-    for (const apiGroup of groups) {
-      const groupMeta = buildGroupMeta(apiGroup);
-      const query = groupQueries().find((q) => q.key === apiGroup.key);
-      const groupEntities = query?.data() ?? [];
-
-      // Get first entity to use for header original
-      // If the group has no entities, we can skip it
-      const firstEntity = groupEntities[0];
-
-      if (!firstEntity) continue;
-
-      // Header row
-      result.push(
-        soup.buildRow({
-          id: `header:${apiGroup.key}`,
-          index: globalIndex++,
-          original: firstEntity,
-          group: groupMeta,
-          isGrouped: true,
-        })
-      );
-
-      // Entity rows
-      for (const entity of groupEntities) {
-        result.push(
-          soup.buildRow({
-            id: entity.id,
-            index: globalIndex++,
-            original: entity,
-            group: groupMeta,
-          })
-        );
-      }
-
-      // We can stop here if the group has no more data
-      // that needs to be fetched
-      if (!groupMeta.hasMore()) continue;
-
-      const lastEntity = groupEntities[groupEntities.length - 1];
-
-      result.push(
-        soup.buildRow({
-          id: `loadmore:${apiGroup.key}`,
-          index: globalIndex++,
-          original: lastEntity,
-          group: groupMeta,
-          isLoadMore: true,
-        })
-      );
-    }
-
-    return result;
-  });
-
   const instructionsIdQuery = useInstructionsMdIdQuery();
 
   const groupQueries = createInfiniteQueries<GroupedSoupPage, SoupEntity[]>(
@@ -517,6 +494,75 @@ export const SoupViewContextProvider: FlowComponent<
       isLoading: () => isGroupLoadingMore(group.key),
     };
   };
+
+  const rows = createMemo((): SoupRow[] => {
+    const field = groupByField();
+    const groups = itemsQuery.data?.groups;
+
+    // Not grouped - build simple entity rows
+    if (!field || !groups || search.isSearching()) {
+      return entities().map((entity, index) =>
+        soup.buildRow({ id: entity.id, index, original: entity })
+      );
+    }
+
+    // Grouped - build header + entity + loadMore rows for each group
+    const result: SoupRow[] = [];
+    let globalIndex = 0;
+
+    for (const apiGroup of groups) {
+      const groupMeta = buildGroupMeta(apiGroup);
+      const query = groupQueries().find((q) => q.key === apiGroup.key);
+      const groupEntities = query?.data() ?? [];
+
+      // Get first entity to use for header original
+      // If the group has no entities, we can skip it
+      const firstEntity = groupEntities[0];
+
+      if (!firstEntity) continue;
+
+      // Header row
+      result.push(
+        soup.buildRow({
+          id: `header:${apiGroup.key}`,
+          index: globalIndex++,
+          original: firstEntity,
+          group: groupMeta,
+          isGrouped: true,
+        })
+      );
+
+      // Entity rows
+      for (const entity of groupEntities) {
+        result.push(
+          soup.buildRow({
+            id: entity.id,
+            index: globalIndex++,
+            original: entity,
+            group: groupMeta,
+          })
+        );
+      }
+
+      // We can stop here if the group has no more data
+      // that needs to be fetched
+      if (!groupMeta.hasMore()) continue;
+
+      const lastEntity = groupEntities[groupEntities.length - 1];
+
+      result.push(
+        soup.buildRow({
+          id: `loadmore:${apiGroup.key}`,
+          index: globalIndex++,
+          original: lastEntity,
+          group: groupMeta,
+          isLoadMore: true,
+        })
+      );
+    }
+
+    return result;
+  });
 
   const { searchQuery } = search;
 

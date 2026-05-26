@@ -1,3 +1,6 @@
+use entity_access::domain::models::EntityAccessReceipt;
+use entity_access::domain::models::MemberTeamRole;
+
 use crate::domain::{
     models::{
         EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery, UserProvider,
@@ -16,11 +19,12 @@ use uuid::Uuid;
 
 use super::EmailServiceImpl;
 
-impl<T, U, E> EmailServiceImpl<T, U, E>
+impl<T, U, E, CS> EmailServiceImpl<T, U, E, CS>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
     E: crate::domain::ports::EmailMessageEnqueuer,
+    CS: crm::domain::service::CrmService,
     anyhow::Error: From<T::Err>,
 {
     #[tracing::instrument(err, skip(self, req))]
@@ -35,7 +39,14 @@ where
             macro_id,
             limit,
             query,
+            team_receipt,
+            crm_scope,
         } = req;
+
+        let team_id = self
+            .validate_crm_scope(team_receipt.as_ref(), crm_scope.as_ref())
+            .await?;
+
         let sort_method = *query.sort_method();
 
         const MIN_PAGE: u32 = 20;
@@ -48,6 +59,7 @@ where
             link_id,
             limit,
             query,
+            team_id,
         };
 
         let previews = self
@@ -124,5 +136,70 @@ where
             .link_by_fusionauth_and_macro_id(auth_id, macro_id, UserProvider::Gmail)
             .await
             .map_err(anyhow::Error::from)?)
+    }
+
+    /// CRM-scope validation for the new `crm_domains` / `crm_addresses`
+    /// filter attributes. Returns `Ok(Some(team_id))` when the scope is
+    /// present and every requested domain/address passes the per-team CRM
+    /// pre-check; `Ok(None)` when no scope was requested.
+    ///
+    /// Errors:
+    ///   * `Unauthorized` — caller has no qualifying team membership but
+    ///     the filter requested CRM scope.
+    ///   * `CrmDisabledForTeam` — `team_crm_settings.crm_enabled = false`.
+    ///   * `CrmDomainNotFound` / `CrmDomainNotPermitted` —
+    ///     per-domain failure (no row / hidden company / email_sync off).
+    ///   * `CrmAddressNotFound` / `CrmAddressNotPermitted` —
+    ///     per-address failure (no row / hidden contact / hidden company / email_sync off).
+    async fn validate_crm_scope(
+        &self,
+        team_receipt: Option<&EntityAccessReceipt<MemberTeamRole>>,
+        crm_scope: Option<&item_filters::ast::CrmScope>,
+    ) -> Result<Option<Uuid>, EmailErr> {
+        let Some(scope) = crm_scope else {
+            return Ok(None);
+        };
+
+        let receipt = team_receipt.ok_or(EmailErr::Unauthorized)?;
+        let team_id = Uuid::parse_str(&receipt.entity().entity_id).map_err(|e| {
+            EmailErr::RepoErr(anyhow::anyhow!(
+                "team_receipt entity_id is not a valid uuid: {e}"
+            ))
+        })?;
+
+        let (domains, addresses): (&[String], &[String]) = match scope {
+            item_filters::ast::CrmScope::Domains(d) => (d.as_slice(), &[]),
+            item_filters::ast::CrmScope::Addresses(a) => (&[], a.as_slice()),
+        };
+
+        let precheck = self
+            .crm_service
+            .crm_scope_precheck(&team_id, domains, addresses)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::anyhow!("crm precheck failed: {e}")))?;
+
+        if !precheck.crm_enabled {
+            return Err(EmailErr::CrmDisabledForTeam);
+        }
+
+        for status in &precheck.domains {
+            if !status.exists {
+                return Err(EmailErr::CrmDomainNotFound(status.domain.clone()));
+            }
+            if status.company_hidden || !status.email_sync {
+                return Err(EmailErr::CrmDomainNotPermitted(status.domain.clone()));
+            }
+        }
+
+        for status in &precheck.addresses {
+            if !status.exists {
+                return Err(EmailErr::CrmAddressNotFound(status.address.clone()));
+            }
+            if status.contact_hidden || status.company_hidden || !status.email_sync {
+                return Err(EmailErr::CrmAddressNotPermitted(status.address.clone()));
+            }
+        }
+
+        Ok(Some(team_id))
     }
 }

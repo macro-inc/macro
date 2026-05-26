@@ -1,5 +1,5 @@
-import { EntityIcon } from '@core/component/Properties/component/propertyValue/EntityIcon';
-import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
+import { EntityIcon } from '@property/component/propertyValue/EntityIcon';
+import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
@@ -19,7 +19,7 @@ import {
   hasValue,
 } from '../utils';
 
-export type PropertyDisplayProps = {
+type PropertyDisplayProps = {
   /**
    * Forwarded to PopoverEditor when the property is an ENTITY type — filters
    * the owning entity out of the picker.

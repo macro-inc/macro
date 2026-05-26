@@ -56,7 +56,7 @@ const VIRTUAL_ITEM_HEIGHT = 36;
 // Height consumed by Surface's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
 
-export type MentionsMenuProps = {
+type MentionsMenuProps = {
   editor: LexicalEditor;
   menu: MenuOperations;
   /** pass in a custom users list if necessary */
@@ -210,14 +210,15 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
 
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
+    const users = usersAndGroups() ?? [];
     const combined: MentionItem[] = [
-      ...(usersAndGroups() ?? []),
+      ...users,
       ...(docs() ?? []),
       ...(channels() ?? []),
       ...(emails() ?? []),
       ...(dates() ?? []),
     ];
-    return sortMobileMentions(combined, searchTerm());
+    return sortMobileMentions(combined, searchTerm(), users);
   });
 
   const bucketConfigs = createLazyMemo((): BucketConfig[] => {
@@ -507,7 +508,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             clickOutside(el, () => clickOutsideHandler);
           }}
         >
-          <Surface depth={2} active class="py-2">
+          <Surface
+            depth={2}
+            class="pt-2 pb-1.5 shadow-lg shadow-drop-shadow rounded-xl"
+          >
             <Show
               when={controller.viewAllMode()}
               fallback={

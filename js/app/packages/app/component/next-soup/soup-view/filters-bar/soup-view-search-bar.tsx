@@ -36,15 +36,21 @@ interface SoupSearchbarProps {
 
 const variantStyles: Record<SearchbarVariant, string> = {
   filled:
-    'bg-ink/5 text-ink-muted hover:bg-ink/7 hover:text-ink border-edge-muted focus-within:bg-ink/7 focus-within:text-ink',
+    'bg-ink/5 text-ink-muted hover:bg-ink/7 hover:text-ink border-edge-muted focus-within:bg-ink/7 focus-within:text-ink focus-within:border-accent',
   secondary:
-    'bg-transparent text-ink-muted border-edge-muted hover:bg-surface hover:text-ink focus-within:bg-surface focus-within:text-ink',
+    'bg-surface text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent',
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
-  const { setSearchText, setSearchPaused, queryFilters } = useSoupView();
+  const { searchText, setSearchText, setSearchPaused, queryFilters } =
+    useSoupView();
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
+
+  // Read the current search-text signal once at mount so the editor opens
+  // with whatever was captured into per-entry state by the last visit.
+  // Falls back to the explicit `initialValue` prop when entry state is empty.
+  const initialEditorValue = searchText() || props.initialValue;
 
   const [hasContent, setHasContent] = createSignal(false);
   const [latestMarkdown, setLatestMarkdown] = createSignal('');
@@ -142,7 +148,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
 
   return (
     <div
-      class="w-full flex items-center shrink-0 grow min-w-0 mobile:-order-2"
+      class="w-full items-center shrink-0 grow min-w-0 mobile:-order-2"
       data-search-bar-wrapper
       data-no-focus-restore
       onFocusOut={(e) => {
@@ -154,27 +160,27 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     >
       <div
         class={cn(
-          'group w-full relative flex items-center gap-1 rounded-md h-7 mobile:h-9 pl-2 pr-1 mobile:min-w-35 border text-xs',
+          'group w-full relative flex items-center gap-1 rounded-lg h-7 mobile:h-9 pl-1 pr-1 py-1 mobile:min-w-35 border text-xs',
           variantStyles[props.variant ?? 'secondary']
         )}
       >
         <SearchIcon class="size-4 shrink-0" />
         <div
           data-soup-search
-          class="flex-1 min-w-0 whitespace-nowrap overflow-hidden **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 **:[[contenteditable]]:whitespace-nowrap **:[[contenteditable]]:min-h-[1lh] [&_p]:my-0 [&_p]:whitespace-nowrap"
+          class="flex-1 min-w-0 whitespace-nowrap overflow-hidden **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 **:[[contenteditable]]:whitespace-nowrap **:[[contenteditable]]:min-h-lh [&_p]:my-0 [&_p]:whitespace-nowrap"
         >
           <MarkdownShell
             config={editor}
             placeholder={props.placeholder ?? 'Search'}
             autofocus={props.autoFocus}
-            initialValue={props.initialValue}
+            initialValue={initialEditorValue}
             class="min-h-0! overflow-visible!"
           />
         </div>
         <Show
           when={!hasContent() && !props.onDismiss && !!searchHotkey.hotkey()}
         >
-          <div class="shrink-0 text-xxs text-ink-extra-muted/50 rounded-sm border border-ink/5 px-1.5 py-px group-focus-within:hidden">
+          <div class="shrink-0 text-xxs text-ink-extra-muted rounded-sm border border-ink/5 px-1.5 py-px group-focus-within:hidden">
             <Hotkey shortcut={searchHotkey.hotkey()} class="flex gap-1" />
           </div>
         </Show>

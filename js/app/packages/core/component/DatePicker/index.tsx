@@ -5,7 +5,7 @@ import { DatePickerUI } from './DatePickerUI';
 false && floatWithElement;
 false && clickOutside;
 
-export type DatePickerProps = {
+type DatePickerProps = {
   value: Date;
   onChange: (date: Date) => void;
   onClose: () => void;

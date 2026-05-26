@@ -8,8 +8,8 @@
     "dev": "vite -c vite.config.ts",
     "build": "vite build -c vite.config.ts && bun run postbuild:semver",
     "postbuild:semver": "echo $npm_package_version+$(git rev-parse --short HEAD) > ./dist/semver.txt",
-    "preview:dev": "vite preview -c vite-ci.config.ts --outDir dist --base /app",
-    "preview:prod": "vite preview -c vite-ci.config.ts --outDir dist --base /app",
+    "preview:dev": "vite preview -c vite.config.ts --outDir dist --base /app",
+    "preview:prod": "vite preview -c vite.config.ts --outDir dist --base /app",
     "check": "tsc --noEmit --skipLibCheck",
     "ddupload:dev": "datadog-ci sourcemaps upload ./dist --service web-app --release-version $(cat ./dist/semver.txt) --minified-path-prefix https://dev.macro.com/app",
     "ddupload:prod": "datadog-ci sourcemaps upload ./dist --service web-app --release-version $(cat ./dist/semver.txt) --minified-path-prefix https://macro.com/app"

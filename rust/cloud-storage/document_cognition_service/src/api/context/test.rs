@@ -159,10 +159,15 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     // Build soup service dependencies
     let frecency_storage = FrecencyPgStorage::new(pool.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
+    let crm_service = crm::domain::service::CrmServiceImpl::new(
+        crm::outbound::companies_repo::CompaniesRepositoryImpl::new(pool.clone()),
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+    );
     let email_service = EmailServiceImpl::new(
         EmailPgRepo::new(pool.clone()),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
+        crm_service.clone(),
         0,
     );
     let user_repo = PgUserRepo::new(pool.clone());
@@ -192,16 +197,17 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         aws_sdk_sqs::Client::from_conf(sqs_config),
         "test-notification-queue".to_string(),
     );
-    let notification_reader_service = NotificationReaderService::new(
-        DbNotificationRepository::new(pool.clone()),
-        ai_tools::ToolNotificationQueue::Sqs(notification_reader_queue),
-        ai_tools::NoOpSnsEndpointManager,
-        PlatformArnConfig {
+    let notification_reader_service = NotificationReaderService {
+        repository: DbNotificationRepository::new(pool.clone()),
+        queue: ai_tools::ToolNotificationQueue::Sqs(notification_reader_queue),
+        sns_endpoint: ai_tools::NoOpSnsEndpointManager,
+        platform_config: PlatformArnConfig {
             apns_platform_arn: String::new(),
             fcm_platform_arn: String::new(),
             apns_voip_platform_arn: String::new(),
         },
-    );
+        realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
+    };
     let notification_tool_context =
         notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 
@@ -268,6 +274,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 frecency::outbound::postgres::FrecencyPgStorage::new(pool.clone()),
             ),
             sqs_client.clone(),
+            crm_service.clone(),
             0,
         )),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
@@ -316,6 +323,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         notification_tool_context: notification_tool_context.clone(),
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context(pool.clone()),
+        team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
     };
     let all_tools = ai_tools::all_tools();

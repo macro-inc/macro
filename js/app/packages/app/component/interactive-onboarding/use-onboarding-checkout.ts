@@ -5,16 +5,16 @@ import { useMutation } from '@tanstack/solid-query';
 
 const PENDING_TEAM_KEY = 'onboarding_pending_team';
 
-export interface PendingTeamInfo {
+interface PendingTeamInfo {
   name: string;
   members: Array<{ email: string; tier: PaidPlanTier }>;
 }
 
-export interface OnboardingCheckoutArgs {
+interface OnboardingCheckoutArgs {
   tier: PaidPlanTier;
 }
 
-export interface OnboardingCheckoutResult {
+interface OnboardingCheckoutResult {
   checkoutUrl: string;
 }
 

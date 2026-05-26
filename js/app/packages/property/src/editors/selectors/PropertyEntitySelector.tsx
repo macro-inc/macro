@@ -1,4 +1,3 @@
-import { useSearchInputFocus } from '@core/component/Properties/utils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useEmail, useUserId } from '@core/context/user';
 import { useAugmentUserWithDmActivity } from '@core/user';
@@ -9,6 +8,7 @@ import type { EmailEntity } from '@entity';
 import { Entity, type EntityData } from '@entity';
 import { createEmailsInfiniteQuery } from '@macro-entity';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
+import { useSearchInputFocus } from '@property/utils';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
@@ -391,7 +391,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   return (
     <div>
       <div class="relative">
-        <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
+        <div class="flex w-full items-center py-2 gap-2 px-2 border-b border-edge-muted">
           <SearchIcon class="size-4 text-ink-muted" />
           <input
             class="w-full caret-accent"
@@ -414,7 +414,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       </div>
 
       <Show when={totalCount() > 0}>
-        <div class="p-1">
+        <div class="p-1.5">
           <For each={visiblePinnedOptions()}>
             {(option, i) => {
               const isSelected = () => props.selectedOptions().has(option.id);
@@ -422,7 +422,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
               return (
                 <div
-                  class="flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8"
+                  class="flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8 rounded-md"
                   classList={{
                     'bg-hover': isKeyboardSelected(),
                     'bg-accent/10': isSelected(),
@@ -467,7 +467,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                   return (
                     <div
                       data-entity-index={index()}
-                      class="flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8"
+                      class="flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8 rounded-md"
                       classList={{
                         'bg-hover': isKeyboardSelected(),
                         'bg-accent/10': isSelected(),

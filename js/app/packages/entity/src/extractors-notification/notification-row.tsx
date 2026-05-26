@@ -1,6 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { ContextMenuContent, MenuItem } from '@core/component/Menu';
+import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { toast } from '@core/component/Toast/Toast';
 import type { NotificationType } from '@core/types';
 import { buildSimpleEntityUrl } from '@core/util/url';
@@ -106,9 +106,9 @@ function NotificationRowContent(props: {
   );
 }
 
-export type NotificationRowVariant = 'compact' | 'expanded';
+type NotificationRowVariant = 'compact' | 'expanded';
 
-export interface NotificationRowProps {
+interface NotificationRowProps {
   notification: UnifiedNotification;
   entity?: EntityData;
   onClick?: (e: PointerEvent | MouseEvent | KeyboardEvent) => void;

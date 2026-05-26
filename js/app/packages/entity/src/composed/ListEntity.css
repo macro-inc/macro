@@ -1,7 +1,7 @@
 /* Variables for x-axis alignment of mobile soup inbox Entities */
 .soup-list-entity {
   --soup-inbox-unread-indicator-diameter: 11px;
-  --soup-inbox-unread-indicator-padding-x: 8px;
+  --soup-inbox-unread-indicator-padding-x: 7px;
   --soup-inbox-unread: calc(
     var(--soup-inbox-unread-indicator-diameter) +
       var(--soup-inbox-unread-indicator-padding-x) * 2

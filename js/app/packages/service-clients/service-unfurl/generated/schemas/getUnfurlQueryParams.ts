@@ -5,6 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Query parameters for `GET /unfurl`.
+ */
 export interface GetUnfurlQueryParams {
+  /** The URL to unfurl. */
   url: string;
 }

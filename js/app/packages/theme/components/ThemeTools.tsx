@@ -7,7 +7,7 @@ import IconSave from '@phosphor-icons/core/regular/floppy-disk-back.svg?componen
 import { createMemo, Show } from 'solid-js';
 import { Button, cn } from '@ui';
 
-export function ThemeTools(props: { class?: string }) {
+function ThemeTools(props: { class?: string }) {
   let themeName!: HTMLDivElement;
 
   const defaultThemeName = 'New Theme';
@@ -80,10 +80,10 @@ export function ThemeTools(props: { class?: string }) {
           }
         }}
         class={cn(
-          'rounded-xs py-1.5 px-2 border text-xs outline-none',
+          'rounded-lg py-1.5 px-2 border text-xs outline-none',
           'bg-transparent text-ink-muted border-edge-muted',
           'hover:bg-surface hover:text-ink',
-          'focus:bg-surface focus:text-ink',
+          'focus:bg-surface focus:text-ink focus:border-accent',
           'min-w-0 overflow-hidden text-ellipsis',
         )}
         style={{

@@ -26,17 +26,19 @@ type ButtonGroupProps = {
 };
 
 const groupVariantStyles: Record<ButtonVariant, string> = {
-  danger: 'border border-failure/50  ',
-  base:   'border border-edge-muted  ',
-  active: 'border border-accent  ',
-  ghost:  '                          ',
+  danger:           'border border-failure/50  ',
+  base:             'border border-edge-muted  ',
+  active:           'border border-accent  ',
+  ghost:            '                          ',
+  'cta': 'border border-transparent ',
 };
 
 const dividerVariantStyles: Record<ButtonVariant, string> = {
-  danger: 'bg-failure/50',
-  base:   'bg-edge-muted',
-  active: 'bg-accent',
-  ghost:  'bg-edge-muted',
+  danger:           'bg-failure/50',
+  base:             'bg-edge-muted',
+  active:           'bg-accent',
+  ghost:            'bg-edge-muted',
+  'cta': 'bg-surface/50',
 };
 
 /* explicit cross-axis size so the group's outer box matches a standalone
@@ -80,19 +82,19 @@ export const ButtonGroup = (props: ButtonGroupProps) => {
       <ButtonGroupContext.Provider value={ctx}>
         <Layer depth={props.depth ?? 0}>
           <div
-            role="group"
             data-orientation={orientation()}
             class={cn(
-              'inline-flex overflow-hidden rounded-sm',
               'data-[orientation=horizontal]:flex-row items-center',
               'data-[orientation=vertical]:flex-col justify-center',
+              'inline-flex overflow-hidden rounded-sm',
               /* strip per-button rounding + borders so the group owns the frame */
-              '[&_[data-button]]:rounded-none',
-              '[&_[data-button]]:border-0',
-              sizeClass(),
+              '**:data-button:rounded-none',
+              '**:data-button:border-0',
               groupVariantStyles[variant()],
+              sizeClass(),
               props.class
             )}
+            role="group"
           >
             {props.children}
           </div>

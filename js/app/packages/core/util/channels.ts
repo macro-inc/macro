@@ -23,12 +23,12 @@ type NavigationOptions = {
   mergeHistory?: boolean;
 };
 
-export type SendToUsersArgs = SendContent & {
+type SendToUsersArgs = SendContent & {
   users: string[];
   navigate?: NavigationOptions;
 };
 
-export type SendToChannelArgs = SendContent & {
+type SendToChannelArgs = SendContent & {
   channelId: string;
   navigate?: NavigationOptions;
 };

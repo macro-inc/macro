@@ -1,7 +1,7 @@
 import { type as osType } from '@tauri-apps/plugin-os';
 
-export type MacroPlatform = 'web' | 'desktop' | 'ios' | 'android';
-export type NativeMobilePlatform = Extract<MacroPlatform, 'ios' | 'android'>;
+type MacroPlatform = 'web' | 'desktop' | 'ios' | 'android';
+type NativeMobilePlatform = Extract<MacroPlatform, 'ios' | 'android'>;
 
 let cached: MacroPlatform | undefined;
 
@@ -25,17 +25,15 @@ export function isPlatform(target: MacroPlatform | MacroPlatform[]): boolean {
     : platform === target;
 }
 
-export function isMobilePlatform(): boolean;
-export function isMobilePlatform(
+function isMobilePlatform(): boolean;
+function isMobilePlatform(
   platform: MacroPlatform
 ): platform is NativeMobilePlatform;
-export function isMobilePlatform(
-  platform: MacroPlatform = getPlatform()
-): boolean {
+function isMobilePlatform(platform: MacroPlatform = getPlatform()): boolean {
   return platform === 'ios' || platform === 'android';
 }
 
-export function isDesktopPlatform(): boolean {
+function _isDesktopPlatform(): boolean {
   return isPlatform('desktop');
 }
 

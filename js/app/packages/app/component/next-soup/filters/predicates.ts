@@ -1,4 +1,4 @@
-import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
+import type { Entity } from '@core/types';
 import {
   type EntityData,
   getTaskAssigneeIds,
@@ -9,6 +9,16 @@ import {
 } from '@entity';
 import { getTaskPriorityOptionId } from '@entity/utils/task-properties';
 import { compositeEntity, type NotificationSource } from '@notifications';
+import { PROPERTY_OPTION_IDS } from '@property/constants';
+
+// Channel messages don't have their own notifications — they share the parent
+// channel's. Resolve to the channel entity for notification lookups.
+function notificationLookupEntity(entity: EntityData): Entity {
+  if (entity.type === 'channel_message') {
+    return { type: 'channel', id: entity.channelId };
+  }
+  return entity;
+}
 
 /**
  * Unread filter - entity has unread content.
@@ -23,7 +33,9 @@ export function unreadFilter(notificationSource: NotificationSource) {
       return !entity.isRead;
     }
     const notifications =
-      notificationSource.notificationsByEntity()[compositeEntity(entity)];
+      notificationSource.notificationsByEntity()[
+        compositeEntity(notificationLookupEntity(entity))
+      ];
 
     return notifications?.some((n) => !n.viewed_at) ?? false;
   };
@@ -41,7 +53,9 @@ export function notDoneFilter(notificationSource: NotificationSource) {
     if (entity.type === 'email') return !entity.done;
 
     const notifications =
-      notificationSource.notificationsByEntity()[compositeEntity(entity)];
+      notificationSource.notificationsByEntity()[
+        compositeEntity(notificationLookupEntity(entity))
+      ];
 
     return notifications?.some(({ done }) => !done);
   };
@@ -201,7 +215,7 @@ export function sharedEntity(getUserID: () => string | undefined) {
   };
 }
 
-export function ownedAgentFilter(getUserID: () => string | undefined) {
+function _ownedAgentFilter(getUserID: () => string | undefined) {
   return function (entity: EntityData): boolean {
     if (entity.type !== 'chat') return false;
     const userID = getUserID();
@@ -211,7 +225,7 @@ export function ownedAgentFilter(getUserID: () => string | undefined) {
   };
 }
 
-export function sharedAgentFilter(getUserID: () => string | undefined) {
+function _sharedAgentFilter(getUserID: () => string | undefined) {
   return function (entity: EntityData): boolean {
     if (entity.type !== 'chat') return false;
     const userID = getUserID();
@@ -231,12 +245,12 @@ export function taskAssignedToUserFilter(getUserID: () => string | undefined) {
   };
 }
 
-export function hasAssignees(entity: EntityData): boolean {
+function _hasAssignees(entity: EntityData): boolean {
   if (!isTaskEntity(entity)) return false;
   return getTaskAssigneeIds(entity).length > 0;
 }
 
-export function isAssignedTo(entity: EntityData, userId: string): boolean {
+function _isAssignedTo(entity: EntityData, userId: string): boolean {
   if (!isTaskEntity(entity)) return false;
 
   const assigneeIds = getTaskAssigneeIds(entity);
@@ -245,12 +259,12 @@ export function isAssignedTo(entity: EntityData, userId: string): boolean {
   return assigneeIds.includes(userId);
 }
 
-export function isUnassigned(entity: EntityData): boolean {
+function _isUnassigned(entity: EntityData): boolean {
   if (!isTaskEntity(entity)) return false;
   return getTaskAssigneeIds(entity).length === 0;
 }
 
-export function hasStatus(entity: EntityData, statusOptionId: string): boolean {
+function hasStatus(entity: EntityData, statusOptionId: string): boolean {
   if (!isTaskEntity(entity)) return false;
   return getTaskStatusOptionId(entity) === statusOptionId;
 }
@@ -278,7 +292,7 @@ export function isCanceled(entity: EntityData): boolean {
   return hasStatus(entity, PROPERTY_OPTION_IDS.STATUS.CANCELED);
 }
 
-export function isClosed(entity: EntityData): boolean {
+function isClosed(entity: EntityData): boolean {
   return isCompleted(entity) || isCanceled(entity);
 }
 
@@ -287,10 +301,7 @@ export function isOpen(entity: EntityData): boolean {
   return !isClosed(entity);
 }
 
-export function hasPriority(
-  entity: EntityData,
-  priorityOptionId: string
-): boolean {
+function hasPriority(entity: EntityData, priorityOptionId: string): boolean {
   if (!isTaskEntity(entity)) return false;
 
   return getTaskPriorityOptionId(entity) === priorityOptionId;

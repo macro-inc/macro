@@ -152,7 +152,7 @@ export function VerifyStep() {
   );
 
   return (
-    <div class="flex flex-col gap-8 w-full">
+    <div class="flex flex-col gap-8 w-full mobile:h-full">
       <div class="flex flex-col gap-1">
         <h1 class="text-2xl font-semibold text-ink tracking-tight">
           Verify your email
@@ -193,25 +193,25 @@ export function VerifyStep() {
             Verifying...
           </div>
         </Show>
+      </div>
 
-        <div class="flex items-center justify-center">
-          <button
-            type="button"
-            tabIndex={0}
-            onClick={sendCode}
-            disabled={!canResend()}
-            class={cn(
-              'text-xs transition-colors outline-none rounded-sm focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
-              canResend()
-                ? 'text-accent hover:text-accent/80'
-                : 'text-ink-disabled'
-            )}
-          >
-            <Show when={resendTimer() > 0} fallback="Resend code">
-              Resend in {resendTimer()}s
-            </Show>
-          </button>
-        </div>
+      <div class="flex items-center justify-center mobile:mt-auto">
+        <button
+          type="button"
+          tabIndex={0}
+          onClick={sendCode}
+          disabled={!canResend()}
+          class={cn(
+            'text-xs transition-colors outline-none rounded-sm focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
+            canResend()
+              ? 'text-accent hover:text-accent/80'
+              : 'text-ink-disabled'
+          )}
+        >
+          <Show when={resendTimer() > 0} fallback="Resend code">
+            Resend in {resendTimer()}s
+          </Show>
+        </button>
       </div>
     </div>
   );

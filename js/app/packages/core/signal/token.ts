@@ -82,7 +82,7 @@ export async function getPermissionToken(
   return storedToken;
 }
 
-export function useBlockPermissionToken() {
+function _useBlockPermissionToken() {
   const blockId = useBlockId();
   return createCallback(
     async () => await getPermissionToken('document', blockId)

@@ -68,7 +68,7 @@ export function MobileSearchOuter() {
   );
 }
 
-export function MobileSearchInner() {
+function MobileSearchInner() {
   const { openWithSplit } = useSplitLayout();
 
   const query = debouncedDependent(SearchState.query, 60);

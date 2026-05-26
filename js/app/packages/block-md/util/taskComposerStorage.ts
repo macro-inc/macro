@@ -1,4 +1,4 @@
-import type { PropertyApiValues } from '@core/component/Properties/types';
+import type { PropertyApiValues } from '@property/types';
 import type { SerializedEditorState } from 'lexical';
 
 const STORAGE_KEY = 'task-composer-draft';
@@ -49,12 +49,34 @@ export function loadTaskComposerDraft(): TaskComposerDraft | null {
       return null;
     }
 
+    draft.propertyValues = rehydratePropertyValues(draft.propertyValues);
     return draft;
   } catch (error) {
     console.warn('Failed to load task composer draft:', error);
     clearTaskComposerDraft();
     return null;
   }
+}
+
+// JSON.stringify serializes Date as an ISO string, and JSON.parse won't turn
+// it back into a Date. propertyApiValuesToNormalized requires `value instanceof
+// Date`, so without this step DATE properties round-trip as EMPTY.
+function rehydratePropertyValues(
+  values: Record<string, PropertyApiValues>
+): Record<string, PropertyApiValues> {
+  const result: Record<string, PropertyApiValues> = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (value.valueType === 'DATE') {
+      const raw = (value as { value: unknown }).value;
+      result[key] = {
+        valueType: 'DATE',
+        value: typeof raw === 'string' ? new Date(raw) : (raw as Date | null),
+      };
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
 }
 
 /**

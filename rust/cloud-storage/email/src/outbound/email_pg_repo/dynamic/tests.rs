@@ -136,6 +136,123 @@ fn test_build_message_email_filter_sender_partial() {
     assert!(result.has_no_raw_containing("example"));
 }
 
+// ---------------------------------------------------------------------------
+// Email::Domain emits an exact-domain predicate, not an ILIKE substring
+// ---------------------------------------------------------------------------
+//
+// `Email::Domain("acme.com")` must match contacts whose address ends in
+// `@acme.com` exactly — not anything containing the substring "acme.com".
+// The SQL predicate is `LOWER(SPLIT_PART(c.email_address, '@', 2)) = $domain`,
+// backed by the expression index `idx_email_contacts_email_domain`.
+// These tests guard against three regressions:
+//   1. accidentally falling back to `ILIKE '%domain%'` (would re-introduce
+//      false positives like `macro.community` matching `macro.com`)
+//   2. forgetting to lowercase the bound value before sending it (the index
+//      is built on `LOWER(...)`, so a mixed-case bind would miss the index)
+//   3. leaking the domain into raw SQL instead of binding it (sql injection)
+
+#[test]
+fn test_build_message_email_filter_sender_domain_emits_split_part_eq() {
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".to_string())));
+    let result = build_message_email_filter(&expr, &ResolvedFilters::empty());
+    let debug = result.to_debug_sql();
+
+    assert!(
+        debug.contains("LOWER(SPLIT_PART(c.email_address, '@', 2)) ="),
+        "expected exact-domain predicate, got: {debug}"
+    );
+    assert!(!debug.contains("ILIKE"), "domain match must not use ILIKE");
+    assert!(result.has_bind_string("acme.com"));
+    // No `%domain%` wildcards — that would re-introduce the substring bug.
+    assert!(!result.has_bind_string("%acme.com%"));
+    assert!(result.has_no_raw_containing("acme.com"));
+}
+
+#[test]
+fn test_build_message_email_filter_domain_lowercases_bind_value() {
+    // The expression index is `LOWER(SPLIT_PART(email_address, '@', 2))`. If
+    // we bind a mixed-case domain, the predicate becomes
+    // `LOWER(SPLIT_PART(c.email_address, '@', 2)) = 'ACME.COM'`, which never
+    // matches anything (LHS is lowercase, RHS isn't) AND can't use the
+    // index. The fix is to lowercase the bound value.
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("AcMe.CoM".to_string())));
+    let result = build_message_email_filter(&expr, &ResolvedFilters::empty());
+
+    assert!(result.has_bind_string("acme.com"));
+    assert!(!result.has_bind_string("AcMe.CoM"));
+}
+
+#[test]
+fn test_build_message_email_filter_recipient_domain() {
+    let expr = Expr::Literal(EmailLiteral::Recipient(Email::Domain(
+        "acme.com".to_string(),
+    )));
+    let result = build_message_email_filter(&expr, &ResolvedFilters::empty());
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("email_message_recipients"));
+    assert!(debug.contains("recipient_type = 'TO'"));
+    assert!(debug.contains("LOWER(SPLIT_PART(c.email_address, '@', 2)) ="));
+    assert!(!debug.contains("ILIKE"));
+    assert!(result.has_bind_string("acme.com"));
+    assert!(result.has_no_raw_containing("acme.com"));
+}
+
+#[test]
+fn test_build_message_email_filter_cc_domain() {
+    let expr = Expr::Literal(EmailLiteral::Cc(Email::Domain("acme.com".to_string())));
+    let result = build_message_email_filter(&expr, &ResolvedFilters::empty());
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("recipient_type = 'CC'"));
+    assert!(debug.contains("LOWER(SPLIT_PART(c.email_address, '@', 2)) ="));
+    assert!(!debug.contains("ILIKE"));
+    assert!(result.has_bind_string("acme.com"));
+}
+
+#[test]
+fn test_build_message_email_filter_bcc_domain() {
+    let expr = Expr::Literal(EmailLiteral::Bcc(Email::Domain("acme.com".to_string())));
+    let result = build_message_email_filter(&expr, &ResolvedFilters::empty());
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("recipient_type = 'BCC'"));
+    assert!(debug.contains("LOWER(SPLIT_PART(c.email_address, '@', 2)) ="));
+    assert!(!debug.contains("ILIKE"));
+    assert!(result.has_bind_string("acme.com"));
+}
+
+#[test]
+fn test_partial_and_domain_emit_different_predicates_for_same_string() {
+    // A regression test: before the split, `Email::Partial("acme.com")` and
+    // `Email::Domain("acme.com")` shared the same `ILIKE '%acme.com%'`
+    // predicate. Splitting them is the whole point of the change — confirm
+    // they now produce structurally different SQL even with identical input.
+    let s = "acme.com";
+
+    let partial = build_message_email_filter(
+        &Expr::Literal(EmailLiteral::Sender(Email::Partial(s.to_string()))),
+        &ResolvedFilters::empty(),
+    );
+    let domain = build_message_email_filter(
+        &Expr::Literal(EmailLiteral::Sender(Email::Domain(s.to_string()))),
+        &ResolvedFilters::empty(),
+    );
+
+    let partial_debug = partial.to_debug_sql();
+    let domain_debug = domain.to_debug_sql();
+
+    // Partial is a substring scan against the full address.
+    assert!(partial_debug.contains("ILIKE"));
+    assert!(!partial_debug.contains("SPLIT_PART"));
+    assert!(partial.has_bind_string("%acme.com%"));
+
+    // Domain is an exact match against the domain portion only.
+    assert!(domain_debug.contains("SPLIT_PART"));
+    assert!(!domain_debug.contains("ILIKE"));
+    assert!(domain.has_bind_string("acme.com"));
+}
+
 #[test]
 fn test_build_message_email_filter_importance_true_includes_drafts() {
     let expr = Expr::Literal(EmailLiteral::Importance(true));
@@ -756,6 +873,54 @@ fn test_matching_threads_cte_body_partial_emits_ilike_branch_with_email_contacts
     assert!(debug.contains("FROM email_contacts c"));
     assert!(debug.contains("ILIKE"));
     assert!(body.has_bind_string("%acme%"));
+}
+
+#[test]
+fn test_matching_threads_cte_body_domain_emits_split_part_branch() {
+    // The union-branch path is the candidate-thread pushdown — it has its
+    // own copy of the address-match SQL builder. Domain on this path must
+    // also emit the exact-domain predicate, not ILIKE.
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".into())));
+    let body =
+        build_matching_threads_cte_body(&expr, &ResolvedFilters::empty()).expect("body present");
+    let debug = body.to_debug_sql();
+
+    assert!(debug.contains("FROM email_contacts c"));
+    assert!(
+        debug.contains("LOWER(SPLIT_PART(c.email_address, '@', 2)) ="),
+        "expected exact-domain predicate in CTE branch, got: {debug}"
+    );
+    assert!(!debug.contains("ILIKE"));
+    assert!(body.has_bind_string("acme.com"));
+    assert!(!body.has_bind_string("%acme.com%"));
+    assert!(body.has_no_raw_containing("acme.com"));
+}
+
+#[test]
+fn test_matching_threads_cte_body_domain_recipient_kind_uses_split_part() {
+    // Recipient (and CC/BCC) go through the recipient join in the
+    // union-branch builder. Verify the predicate shape is consistent across
+    // address kinds.
+    let expr = Expr::Literal(EmailLiteral::Recipient(Email::Domain("acme.com".into())));
+    let body =
+        build_matching_threads_cte_body(&expr, &ResolvedFilters::empty()).expect("body present");
+    let debug = body.to_debug_sql();
+
+    assert!(debug.contains("email_message_recipients"));
+    assert!(debug.contains("mr.recipient_type = 'TO'"));
+    assert!(debug.contains("LOWER(SPLIT_PART(c.email_address, '@', 2)) ="));
+    assert!(!debug.contains("ILIKE"));
+    assert!(body.has_bind_string("acme.com"));
+}
+
+#[test]
+fn test_matching_threads_cte_body_domain_lowercases_bind_value() {
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("AcMe.CoM".into())));
+    let body =
+        build_matching_threads_cte_body(&expr, &ResolvedFilters::empty()).expect("body present");
+
+    assert!(body.has_bind_string("acme.com"));
+    assert!(!body.has_bind_string("AcMe.CoM"));
 }
 
 #[test]

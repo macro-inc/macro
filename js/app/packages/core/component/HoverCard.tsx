@@ -1,7 +1,9 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type HoverCardRootProps,
   HoverCard as KobalteHoverCard,
 } from '@kobalte/core/hover-card';
+import { cn } from '@ui';
 import type { JSX, Setter } from 'solid-js';
 import {
   createContext,
@@ -25,7 +27,7 @@ const HoverCardPortalNestedPreviewOpenContext = createContext<
 // and a missed pointerleave (common during scroll) can leave multiple stranded.
 const openTopLevelHoverCards = new Set<() => void>();
 
-export type HoverCardComponentProps = {
+type HoverCardComponentProps = {
   /** The trigger content to hover over */
   trigger: JSX.Element;
   /** The content to show in the hover card */
@@ -47,6 +49,8 @@ export type HoverCardComponentProps = {
   triggerAs?: 'span' | 'div';
   /** Class applied to the underlying trigger element. */
   triggerClass?: string;
+  /** Tab index for the trigger element. Use -1 to remove from tab order. */
+  triggerTabIndex?: number;
   /** Whether to disable the hover card */
   disabled?: boolean;
   /** Callback when open state changes */
@@ -120,6 +124,8 @@ export function HoverCard(props: HoverCardComponentProps) {
     if (isTopLevel) openTopLevelHoverCards.delete(closeSelf);
   });
 
+  const isDisabled = () => props.disabled || isTouchDevice();
+
   const shouldForceMount = () => nestedOpenCount() > 0;
 
   // Dismiss on scroll outside the card content. Kobalte only listens for
@@ -163,7 +169,8 @@ export function HoverCard(props: HoverCardComponentProps) {
       <KobalteHoverCard.Trigger
         as={props.triggerAs ?? 'span'}
         class={props.triggerClass}
-        disabled={props.disabled}
+        disabled={isDisabled()}
+        tabIndex={props.triggerTabIndex}
       >
         {props.trigger}
       </KobalteHoverCard.Trigger>
@@ -173,7 +180,7 @@ export function HoverCard(props: HoverCardComponentProps) {
           ref={(el) => {
             contentEl = el;
           }}
-          class={props.contentClass}
+          class={cn('z-tool-tip', props.contentClass)}
         >
           <HoverCardPortalNestedPreviewOpenContext.Provider
             value={{ count: nestedOpenCount, setCount: setNestedOpenCount }}

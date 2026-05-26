@@ -9,6 +9,12 @@ export type History<T extends object> = {
   canGoForward: () => boolean;
   push: (next: T) => void;
   merge: (next: T) => void;
+  /**
+   * Replace the item at the current index in-place without changing the index
+   * or truncating forward entries. Used to update an entry's mutable state
+   * (e.g. captured per-entry state) before navigating away.
+   */
+  replaceCurrent: (next: T) => void;
   remove: (predicate: (item: T) => boolean) => T | null;
 };
 
@@ -44,6 +50,12 @@ export function createHistory<T extends object>(): History<T> {
   const merge = (next: T) => {
     items.splice(index(), items.length - index());
     items.push(next);
+  };
+
+  const replaceCurrent = (next: T) => {
+    const i = index();
+    if (i < 0 || i >= items.length) return;
+    items[i] = next;
   };
 
   const fork = (next: T) => {
@@ -106,6 +118,7 @@ export function createHistory<T extends object>(): History<T> {
     back,
     push,
     merge,
+    replaceCurrent,
     forward,
     canGoBack,
     canGoForward,

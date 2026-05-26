@@ -66,6 +66,137 @@ pub struct CopyDocumentRepoArgs {
     pub document_name: String,
     /// The file type of the document.
     pub file_type: Option<FileType>,
+    /// Team that should receive a new per-team task number when copying a task.
+    pub team_id: Option<uuid::Uuid>,
+}
+
+/// Immutable per-team task metadata assigned at task creation time.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct TeamTaskMetadata {
+    /// The team this task number is scoped to.
+    pub team_id: uuid::Uuid,
+    /// Monotonic task number within the team.
+    pub task_num: i32,
+}
+
+/// User/team information needed to build a task branch name.
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct BranchNameContext {
+    /// The user's email address, used when no GitHub username is linked.
+    pub user_email: String,
+    /// Linked GitHub username for the user, when present.
+    pub github_username: Option<String>,
+    /// Slug for the user's team, when the user belongs to a team.
+    pub team_slug: Option<String>,
+    /// Task number for the document within the user's team, when present.
+    pub team_task_id: Option<i32>,
+}
+
+/// A fully generated task branch name plus its short document id.
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct TaskBranchName {
+    /// The short id of the document.
+    pub short_id: String,
+    /// The generated branch name.
+    pub branch_name: String,
+}
+
+/// Display-ready data for a GitHub pull request associated with a task.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequest {
+    /// The stored GitHub association key, in `owner/repo/pull/number` format.
+    pub github_key: String,
+    /// The GitHub repository owner or organization.
+    pub owner: String,
+    /// The GitHub repository name.
+    pub repo: String,
+    /// The GitHub pull request number.
+    pub number: u64,
+    /// The public GitHub URL for the pull request.
+    pub url: String,
+    /// A compact label suitable for display in the UI.
+    pub display_name: String,
+    /// The GitHub pull request title, when enrichment data is available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The GitHub pull request status, when enrichment data is available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// The number of added lines in the pull request, when enrichment data is available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub additions: Option<u64>,
+    /// The number of deleted lines in the pull request, when enrichment data is available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deletions: Option<u64>,
+}
+
+impl GithubPullRequest {
+    /// Parse a stored GitHub PR key in `owner/repo/pull/number` format.
+    pub fn from_github_key(github_key: &str) -> Option<Self> {
+        let mut parts = github_key.split('/');
+        let (Some(owner), Some(repo), Some("pull"), Some(number), None) = (
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+        ) else {
+            return None;
+        };
+
+        if owner.is_empty() || repo.is_empty() {
+            return None;
+        }
+
+        let number = number.parse::<u64>().ok()?;
+        let url = format!("https://github.com/{owner}/{repo}/pull/{number}");
+        let display_name = format!("{owner}/{repo}#{number}");
+
+        Some(Self {
+            github_key: github_key.to_string(),
+            owner: owner.to_string(),
+            repo: repo.to_string(),
+            number,
+            url,
+            display_name,
+            name: None,
+            status: None,
+            additions: None,
+            deletions: None,
+        })
+    }
+}
+
+/// Response containing all GitHub pull requests associated with a task.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestsResponse {
+    /// Parsed pull requests, in repository query order.
+    pub pull_requests: Vec<GithubPullRequest>,
+}
+
+impl GithubPullRequestsResponse {
+    /// Build a response from stored GitHub PR keys, skipping malformed rows.
+    pub fn from_github_keys(github_keys: Vec<String>) -> Self {
+        let mut pull_requests = Vec::new();
+
+        for github_key in github_keys {
+            match GithubPullRequest::from_github_key(&github_key) {
+                Some(pull_request) => pull_requests.push(pull_request),
+                None => tracing::warn!(
+                    github_key = %github_key,
+                    "skipping malformed GitHub pull request key"
+                ),
+            }
+        }
+
+        Self { pull_requests }
+    }
 }
 
 /// Request body for copying a document.
@@ -101,6 +232,8 @@ pub struct CreateDocumentRepoArgs {
     pub file_type: Option<FileType>,
     /// Project to associate the document with.
     pub project_id: Option<uuid::Uuid>,
+    /// Team to use when assigning a per-team task number.
+    pub team_id: Option<uuid::Uuid>,
     /// Email attachment to link (internal only).
     pub email_attachment_id: Option<uuid::Uuid>,
     /// Custom creation timestamp.
@@ -229,6 +362,9 @@ pub struct CreateTaskRequest {
     pub markdown: Option<String>,
     /// Optional project ID to associate the task with.
     pub project_id: Option<uuid::Uuid>,
+    /// Team to assign the task number within. If omitted, it is inferred only
+    /// when the creator belongs to exactly one team.
+    pub team_id: Option<uuid::Uuid>,
     /// Optional property values to set on the task.
     pub property_values: Option<Vec<PropertyInput>>,
     /// Whether to share the task with your team or not
@@ -244,6 +380,12 @@ pub struct CreateTaskRequest {
 pub struct CreateTaskResponse {
     /// The document ID of the created task.
     pub document_id: String,
+    /// The team this task number is scoped to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<uuid::Uuid>,
+    /// The task number assigned within the team.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_task_id: Option<i32>,
 }
 
 /// A comment thread attached to a document.

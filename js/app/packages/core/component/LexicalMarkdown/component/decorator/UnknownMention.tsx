@@ -15,7 +15,7 @@ export function UnknownMention(props: UnknownMentionDecoratorProps) {
 
   return (
     <span
-      class="relative p-0.5 cursor-default text-ink-muted/50"
+      class="relative rounded-md p-0.5 cursor-default text-ink-muted/50"
       classList={{
         'bg-active': isSelectedAsNode(),
       }}

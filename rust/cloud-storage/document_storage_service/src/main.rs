@@ -247,16 +247,24 @@ async fn main() -> anyhow::Result<()> {
 
     let frecency_storage = FrecencyPgStorage::new(db.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
+    // DSS only reads CRM rows — no-op resolver keeps reqwest/scraper
+    // out of this binary.
+    let crm_service = crm::domain::service::CrmServiceImpl::new(
+        crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+    );
     let email_service = EmailServiceImpl::new(
         EmailPgRepo::new(db.clone()),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
+        crm_service.clone(),
         0,
     );
     let readonly_email_service = ReadonlyEmailPreviewAdapter(EmailServiceImpl::new(
         EmailPgRepo::new(readonly_db.clone()),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
+        crm_service.clone(),
         0,
     ));
     let system_properties_service =
@@ -542,6 +550,7 @@ async fn main() -> anyhow::Result<()> {
                 call_record_query_service,
             ),
             email_service,
+            entity_access_service.clone(),
         ),
         github_sync_service: Arc::new(github_sync_service_impl),
         db: db.clone(),
@@ -584,6 +593,10 @@ async fn main() -> anyhow::Result<()> {
         call_internal_state,
         cal_webhook_state,
         entity_access_management_service,
+        crm_state: crm::inbound::axum_router::CrmRouterState {
+            service: Arc::new(crm_service),
+            entity_access_service: entity_access_service.clone(),
+        },
     };
 
     // Spawn the delete document worker

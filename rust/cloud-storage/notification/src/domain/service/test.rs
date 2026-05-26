@@ -13,8 +13,9 @@ use crate::domain::models::queue_message::{
 use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos,
-    NotificationIdAndCollapseKey, RateLimitConfig, RateLimitExceeded, RateLimitKey,
-    RateLimitResult, SendNotificationRequestBuilder, TaggedContent, UserNotificationRow,
+    NotificationIdAndCollapseKey, NotificationStatusPatch, PatchDelete, RateLimitConfig,
+    RateLimitExceeded, RateLimitKey, RateLimitResult, SendNotificationRequestBuilder,
+    TaggedContent, UserNotificationRow,
 };
 use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
@@ -243,12 +244,12 @@ impl NotificationRepository for MockRepository {
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
         self.mark_seen_calls
             .lock()
             .unwrap()
             .push((user_id.to_string(), notification_ids.to_vec()));
-        Ok(())
+        Ok(Vec::new())
     }
 
     async fn mark_notifications_done(
@@ -256,13 +257,13 @@ impl NotificationRepository for MockRepository {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
         self.mark_done_calls.lock().unwrap().push((
             user_id.to_string(),
             notification_ids.to_vec(),
             done,
         ));
-        Ok(())
+        Ok(Vec::new())
     }
 
     async fn get_basic_notifications(
@@ -429,7 +430,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
         (**self)
             .mark_notifications_seen(user_id, notification_ids)
             .await
@@ -440,7 +441,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<PatchDelete<Uuid, NotificationStatusPatch>>, Report> {
         (**self)
             .mark_notifications_done(user_id, notification_ids, done)
             .await
@@ -1404,12 +1405,13 @@ async fn test_mark_seen_publishes_ios_clear_message() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationReaderService::new(
-        repo.clone(),
-        queue.clone(),
-        MockSnsEndpoint,
-        test_platform_config(),
-    );
+    let service = NotificationReaderService {
+        repository: repo.clone(),
+        queue: queue.clone(),
+        sns_endpoint: MockSnsEndpoint,
+        platform_config: test_platform_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    };
 
     let notification_ids = [notif_id];
     service
@@ -1482,12 +1484,13 @@ async fn test_mark_seen_skips_push_when_no_collapse_key() {
         DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob".to_string()),
     ));
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationReaderService::new(
-        repo.clone(),
-        queue.clone(),
-        MockSnsEndpoint,
-        test_platform_config(),
-    );
+    let service = NotificationReaderService {
+        repository: repo.clone(),
+        queue: queue.clone(),
+        sns_endpoint: MockSnsEndpoint,
+        platform_config: test_platform_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    };
 
     let notification_ids = [notif_id];
     service
@@ -1523,12 +1526,13 @@ async fn test_mark_seen_skips_push_when_no_device_endpoints() {
         // No device endpoints registered
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationReaderService::new(
-        repo.clone(),
-        queue.clone(),
-        MockSnsEndpoint,
-        test_platform_config(),
-    );
+    let service = NotificationReaderService {
+        repository: repo.clone(),
+        queue: queue.clone(),
+        sns_endpoint: MockSnsEndpoint,
+        platform_config: test_platform_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    };
 
     let notification_ids = [notif_id];
     service
@@ -1570,12 +1574,13 @@ async fn test_mark_done_updates_db_and_clears_push() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationReaderService::new(
-        repo.clone(),
-        queue.clone(),
-        MockSnsEndpoint,
-        test_platform_config(),
-    );
+    let service = NotificationReaderService {
+        repository: repo.clone(),
+        queue: queue.clone(),
+        sns_endpoint: MockSnsEndpoint,
+        platform_config: test_platform_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    };
 
     let notification_ids = [notif_id];
     service
@@ -1620,12 +1625,13 @@ async fn test_mark_undone_updates_db_no_push_clear() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationReaderService::new(
-        repo.clone(),
-        queue.clone(),
-        MockSnsEndpoint,
-        test_platform_config(),
-    );
+    let service = NotificationReaderService {
+        repository: repo.clone(),
+        queue: queue.clone(),
+        sns_endpoint: MockSnsEndpoint,
+        platform_config: test_platform_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    };
 
     let notification_ids = [notif_id];
     service

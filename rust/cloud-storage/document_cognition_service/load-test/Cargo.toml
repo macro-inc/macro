@@ -12,5 +12,5 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
+tokio-tungstenite = { workspace = true, default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
 tungstenite = { workspace = true }

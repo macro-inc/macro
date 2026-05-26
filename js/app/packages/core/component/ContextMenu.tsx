@@ -1,0 +1,432 @@
+import type { HotkeyToken } from '@core/hotkey/tokens';
+import { isMobile } from '@core/mobile/isMobile';
+import { ContextMenu } from '@kobalte/core/context-menu';
+import CaretRight from '@phosphor/caret-right.svg?component-solid';
+import CheckIcon from '@phosphor/check.svg?component-solid';
+import { cn, Layer } from '@ui';
+import {
+  type Component,
+  createEffect,
+  type JSX,
+  Match,
+  onCleanup,
+  type ParentProps,
+  Show,
+  Switch,
+} from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { Hotkey } from '../../ui/components/Hotkey';
+
+/*
+ * ContextMenu-only abstractions. The DropdownMenu equivalents that used to
+ * live alongside these (in the old `Menu.tsx`) have been retired in favor of
+ * `@ui` `Dropdown`. Right-click menus still use this file because they need
+ * separate behavior + positioning from the click-triggered Dropdown.
+ */
+
+type BaseMenuItemWrapperProps = {
+  children: JSX.Element;
+  disabled?: boolean;
+  onClick?: () => void;
+  closeOnSelect?: boolean;
+  selectorType?: 'checkbox' | 'radio';
+  class?: string;
+};
+
+type CheckboxMenuItemWrapperProps = BaseMenuItemWrapperProps & {
+  selectorType: 'checkbox';
+  checked?: boolean;
+  onChange?: (value: boolean) => void;
+};
+
+type RadioMenuItemWrapperProps = BaseMenuItemWrapperProps & {
+  selectorType: 'radio';
+  value: string;
+};
+
+type MenuItemWrapperProps =
+  | BaseMenuItemWrapperProps
+  | CheckboxMenuItemWrapperProps
+  | RadioMenuItemWrapperProps;
+
+function MenuItemWrapper(props: MenuItemWrapperProps) {
+  return (
+    <Switch>
+      <Match when={props.selectorType === 'checkbox'}>
+        <ContextMenu.CheckboxItem
+          class={props.class}
+          checked={(props as CheckboxMenuItemWrapperProps).checked}
+          onChange={(props as CheckboxMenuItemWrapperProps).onChange}
+          disabled={props.disabled}
+          onSelect={props.onClick}
+          closeOnSelect={props.closeOnSelect}
+        >
+          {props.children}
+        </ContextMenu.CheckboxItem>
+      </Match>
+      <Match when={props.selectorType === 'radio'}>
+        <ContextMenu.RadioItem
+          class={props.class}
+          value={(props as RadioMenuItemWrapperProps).value}
+          disabled={props.disabled}
+          onSelect={props.onClick}
+          closeOnSelect={props.closeOnSelect}
+        >
+          {props.children}
+        </ContextMenu.RadioItem>
+      </Match>
+      <Match when={!props.selectorType}>
+        <ContextMenu.Item
+          class={props.class}
+          disabled={props.disabled}
+          onSelect={props.onClick}
+          closeOnSelect={props.closeOnSelect}
+        >
+          {props.children}
+        </ContextMenu.Item>
+      </Match>
+    </Switch>
+  );
+}
+
+type BaseMenuItemProps = {
+  text?: string | JSX.Element;
+  icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | JSX.Element;
+  iconClass?: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  closeOnSelect?: boolean;
+  class?: string;
+  hotkeyToken?: HotkeyToken;
+};
+
+type CheckboxMenuItemProps = BaseMenuItemProps & {
+  selectorType: 'checkbox';
+  checked: boolean;
+  onChange?: (value: boolean) => void;
+  value?: undefined;
+};
+
+type RadioMenuItemProps = BaseMenuItemProps & {
+  selectorType: 'radio';
+  value: string;
+  groupValue: string;
+  checked?: undefined;
+  onChange?: undefined;
+};
+
+type GenericMenuItemProps = BaseMenuItemProps & {
+  selectorType?: undefined;
+  onChange?: undefined;
+  checked?: undefined;
+  value?: undefined;
+};
+
+type MenuItemProps =
+  | GenericMenuItemProps
+  | CheckboxMenuItemProps
+  | RadioMenuItemProps;
+
+export const MENU_ITEM_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1.5 text-base' : 'py-1 pl-2.5 pr-2 text-sm'} font-medium justify-between items-center rounded-md outline-none focus:bg-ink/3 data-[highlighted]:bg-ink/3`;
+
+/**
+ * A context-menu item with consistent styling.
+ *
+ * Supports three variants:
+ * - Regular menu item (with optional icon and chevron)
+ * - Checkbox menu item (with checkbox selection)
+ * - Radio menu item (with radio button selection)
+ */
+export function MenuItem(props: MenuItemProps) {
+  return (
+    <MenuItemWrapper
+      class={cn(
+        MENU_ITEM_CLASS,
+        props.disabled
+          ? 'opacity-50 cursor-not-allowed'
+          : 'hover:bg-ink/3 hover-transition-bg',
+        props.class
+      )}
+      onClick={props.onClick}
+      disabled={props.disabled}
+      closeOnSelect={props.closeOnSelect}
+      selectorType={props.selectorType}
+      value={props.value}
+      checked={props.checked}
+      onChange={props.onChange}
+    >
+      <Show when={props.selectorType === 'checkbox'}>
+        <div
+          class={cn(
+            'shrink-0 flex items-center justify-center',
+            isMobile() ? 'size-5' : 'size-4'
+          )}
+        >
+          <CheckIcon
+            class={cn(
+              'size-3.5 shrink-0 rounded-sm p-0.5',
+              (props as CheckboxMenuItemProps).checked
+                ? 'bg-accent text-[white]'
+                : 'bg-transparent text-transparent border border-edge'
+            )}
+          />
+        </div>
+      </Show>
+      <Show when={props.selectorType === 'radio'}>
+        <div
+          class={cn(
+            'flex items-center justify-center shrink-0',
+            isMobile() ? 'size-5' : 'size-4'
+          )}
+        >
+          <div
+            class={cn(
+              'size-3.5 shrink-0 rounded-full',
+              (props as RadioMenuItemProps).value ===
+                (props as RadioMenuItemProps).groupValue
+                ? 'bg-accent text-[white]'
+                : 'bg-transparent text-transparent border border-edge'
+            )}
+          />
+        </div>
+      </Show>
+      <Show when={props.icon}>
+        <Show when={typeof props.icon === 'function'}>
+          <Dynamic
+            component={
+              props.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
+            }
+            class={cn(
+              'shrink-0',
+              isMobile() ? 'size-5' : 'size-4',
+              props.iconClass
+            )}
+          />
+        </Show>
+        <Show when={typeof props.icon === 'object'}>
+          {props.icon as JSX.Element}
+        </Show>
+      </Show>
+      <Show when={props.text}>
+        <div class="flex-1 truncate">{props.text}</div>
+      </Show>
+      <Show when={props.hotkeyToken} keyed>
+        {(hotkeyToken) => (
+          <div class="ml-auto text-surface text-xs">
+            <Hotkey token={hotkeyToken} class="text-ink-muted" showPlus />
+          </div>
+        )}
+      </Show>
+    </MenuItemWrapper>
+  );
+}
+
+export function SubTrigger(props: {
+  text: string | JSX.Element;
+  icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | JSX.Element;
+  iconClass?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <ContextMenu.SubTrigger
+      class={cn(
+        MENU_ITEM_CLASS,
+        props.disabled
+          ? 'opacity-50 cursor-not-allowed text-ink'
+          : 'hover:bg-hover hover-transition-bg text-ink'
+      )}
+      disabled={props.disabled}
+    >
+      <Show when={props.icon}>
+        <Show when={typeof props.icon === 'function'}>
+          <Dynamic
+            component={
+              props.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
+            }
+            class={cn(
+              'shrink-0',
+              isMobile() ? 'size-5' : 'size-4',
+              props.iconClass
+            )}
+          />
+        </Show>
+        <Show when={typeof props.icon === 'object'}>
+          {props.icon as JSX.Element}
+        </Show>
+      </Show>
+      <div class="flex-1 truncate">{props.text}</div>
+      <CaretRight class="size-4 shrink-0" />
+    </ContextMenu.SubTrigger>
+  );
+}
+
+export function MenuGroup(props: { children: JSX.Element; class?: string }) {
+  return (
+    <ContextMenu.Group class={cn('w-full', props.class)}>
+      {props.children}
+    </ContextMenu.Group>
+  );
+}
+
+export function GroupLabel(props: { children: JSX.Element }) {
+  return (
+    <ContextMenu.GroupLabel
+      class={cn(MENU_ITEM_CLASS, 'text-xs! text-ink-extra-muted')}
+    >
+      {props.children}
+    </ContextMenu.GroupLabel>
+  );
+}
+
+export function MenuSeparator() {
+  return <ContextMenu.Separator class="my-1 border-edge border-t w-full" />;
+}
+
+function MobileConditionalOverlay(
+  props: ParentProps<{ mobileFullScreen?: boolean }>
+) {
+  return (
+    <Show when={props.mobileFullScreen && isMobile()} fallback={props.children}>
+      <div class="z-modal fixed inset-0 flex justify-center items-center bg-modal-overlay backdrop-blur-sm">
+        {props.children}
+      </div>
+    </Show>
+  );
+}
+
+type MenuWidth = 'sm' | 'md' | 'lg' | `w-${string}` | 'screen';
+const menuWidths: Record<MenuWidth, string> = {
+  sm: 'w-28',
+  md: 'w-44',
+  lg: 'w-72',
+  screen: 'w-screen',
+};
+
+export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start bg-surface shadow-[0_8px_24px_-16px_rgba(0,0,0,0.24),0_2px_8px_-6px_rgba(0,0,0,0.18)] ring-1 ring-edge rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal`;
+
+type MenuContentProps = ParentProps<{
+  class?: string;
+  submenu?: boolean;
+  width?: MenuWidth;
+  onOpenAutoFocus?: (event: Event) => void;
+  onCloseAutoFocus?: (event: Event) => void;
+  overrideStyling?: boolean;
+
+  // The following props can be used to create a mobile-friendly full-screen context menu. See Message.tsx for an example.
+  mobileFullScreen?: boolean;
+
+  navId?: string;
+}>;
+
+export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
+  let contentRef: HTMLDivElement | undefined;
+
+  const BOTTOM_OFFSET = 48;
+  const updatePosition = (
+    positioner: HTMLElement | null | undefined,
+    navItem: Element | HTMLElement | null | undefined
+  ) => {
+    if (!positioner) return;
+
+    const positionerHeight = positioner.getBoundingClientRect().height;
+
+    if (positioner.style.minWidth !== 'none') {
+      positioner.style.minWidth = '100vw';
+      positioner.style.transform = 'none';
+      positioner.style.left = '8px';
+    }
+
+    if (navItem instanceof HTMLElement) {
+      const box = navItem.getBoundingClientRect();
+
+      if (
+        box.top + box.height + positionerHeight >
+        window.innerHeight - BOTTOM_OFFSET
+      ) {
+        positioner.style.top = `${box.top - positionerHeight}px`;
+      } else {
+        positioner.style.top = `${box.top + box.height}px`;
+      }
+    } else {
+      positioner.style.left = '8px';
+      positioner.style.display = 'flex';
+      positioner.style.flexDirection = 'column';
+      positioner.style.justifyContent = 'center';
+      positioner.style.minHeight = '100%';
+      positioner.style.minWidth = '100vw';
+    }
+  };
+
+  // This createEffect is a heinous hack to prevent kobalte's default context menu positioning on mobile. Forking / patching Kobalte would be cleaner, but this works for now.
+  createEffect(() => {
+    const positioner = contentRef?.closest('[data-popper-positioner]');
+    if (!positioner || !(positioner instanceof HTMLElement)) return;
+
+    if (!isMobile()) {
+      return;
+    }
+
+    let observer: MutationObserver | undefined;
+
+    const timeoutId = setTimeout(() => {
+      const positioner = contentRef?.closest('[data-popper-positioner]');
+      const navItem = document.querySelector(`[data-nav-id="${props.navId}"]`);
+
+      if (positioner instanceof HTMLElement) {
+        observer = new MutationObserver(() => {
+          updatePosition(positioner, navItem);
+        });
+
+        observer.observe(positioner, {
+          attributes: true,
+          attributeFilter: ['style'],
+        });
+
+        updatePosition(positioner, navItem);
+      }
+    }, 0);
+
+    onCleanup(() => {
+      clearTimeout(timeoutId);
+      observer?.disconnect();
+    });
+  });
+  return (
+    <MobileConditionalOverlay mobileFullScreen={props.mobileFullScreen}>
+      <Show
+        when={props.submenu}
+        fallback={
+          <Layer depth={2}>
+            <ContextMenu.Content
+              class={cn(
+                !props.overrideStyling && MENU_CONTENT_CLASS,
+                props.class,
+                props.width && menuWidths[props.width],
+                props.mobileFullScreen &&
+                  isMobile() &&
+                  'flex flex-col justify-center px-4 max-h-[80vh] shrink w-[calc(100vw-1rem)]'
+              )}
+              onOpenAutoFocus={props.onOpenAutoFocus}
+              ref={contentRef}
+              onCloseAutoFocus={props.onCloseAutoFocus}
+            >
+              {props.children}
+            </ContextMenu.Content>
+          </Layer>
+        }
+      >
+        <Layer depth={2}>
+          <ContextMenu.SubContent
+            class={cn(
+              MENU_CONTENT_CLASS,
+              props.class,
+              props.width && menuWidths[props.width]
+            )}
+          >
+            {props.children}
+          </ContextMenu.SubContent>
+        </Layer>
+      </Show>
+    </MobileConditionalOverlay>
+  );
+}

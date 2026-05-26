@@ -1,3 +1,4 @@
-export { usePropertyClear } from './usePropertyClear';
-export { type PropertyDisplay, usePropertyDisplay } from './usePropertyDisplay';
-export { usePropertyEdit } from './usePropertyEdit';
+export { useEntityProperties } from './useEntityProperties';
+
+export { usePropertyEntityDisplay } from './usePropertyEntityDisplay';
+export { usePropertySelection } from './usePropertySelection';

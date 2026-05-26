@@ -86,7 +86,7 @@ export function mergeAdjacentMacroEmTags(highlightedContent: string): string {
 }
 
 /** Escapes regex special characters in a string. */
-export function escapeRegex(s: string): string {
+function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
@@ -94,9 +94,7 @@ export function escapeRegex(s: string): string {
  * Builds a case-insensitive global RegExp that matches any of the given
  * terms as a single capture group. Returns `undefined` if `terms` is empty.
  */
-export function buildTermsPattern(
-  terms: readonly string[]
-): RegExp | undefined {
+function buildTermsPattern(terms: readonly string[]): RegExp | undefined {
   if (terms.length === 0) return undefined;
   return new RegExp(`(${terms.map(escapeRegex).join('|')})`, 'gi');
 }

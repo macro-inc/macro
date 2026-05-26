@@ -1,21 +1,18 @@
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
-import { useMutation, useQuery } from '@tanstack/solid-query';
-import { type Accessor, batch } from 'solid-js';
 import {
   entityPropertyFromApi,
   propertyValueToApi,
-} from '../../core/component/Properties/api/converters';
+} from '@property/api/converters';
 import type {
   Property,
   PropertyApiValues,
   PropertyDefinitionDomain,
-} from '../../core/component/Properties/types';
-import { isInstantiatedProperty } from '../../core/component/Properties/utils';
-import {
-  type PropertiesEntityType,
-  propertiesServiceClient,
-} from '../../service-clients/service-properties/client';
+} from '@property/types';
+import { isInstantiatedProperty } from '@property/utils';
+import { useMutation, useQuery } from '@tanstack/solid-query';
+import { type Accessor, batch } from 'solid-js';
+import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '../../service-clients/service-storage/generated/schemas/soupProperty';
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
@@ -62,7 +59,7 @@ export function useEntityPropertiesQuery(
   );
 }
 
-export function invalidatePropertiesForEntity(
+function invalidatePropertiesForEntity(
   entityType: EntityType,
   entityId: string
 ) {
@@ -96,19 +93,35 @@ function optimisticUpdateSoupEntityProperty(
 
   const propertyDefinitionId = getPropertyDefinitionId(property);
   const existing = current.data.properties;
-  const isAlreadyAttached = existing.some(
+  const existingProp = existing.find(
     (prop) => prop.definition.id === propertyDefinitionId
   );
 
-  // If the property is already attached, swap its value. Otherwise append a
-  // fabricated SoupProperty so the row updates without waiting for the
-  // settled-refetch — necessary when editing a previously-unset property
-  // that the entity didn't ship with (e.g. via `buildStubProperty`).
-  const nextProperties: SoupProperty[] = isAlreadyAttached
-    ? existing.map((prop) =>
-        prop.definition.id === propertyDefinitionId ? { ...prop, value } : prop
-      )
-    : [...existing, fabricateSoupProperty(property, value)];
+  const nextProp: SoupProperty = existingProp
+    ? {
+        ...existingProp,
+        definition: {
+          ...existingProp.definition,
+          // HACK (seamus): we need to change something other than value in
+          // order to get normy to update the cache. Changing
+          // definition.updated_at is INCORRECT, but it's currently harmless.
+          updated_at: new Date().toISOString(),
+        },
+        value,
+      }
+    : buildSoupProperty(property, value);
+
+  const nextProperties = existing.map((prop) =>
+    prop.definition.id === nextProp.definition.id ? nextProp : prop
+  );
+
+  if (
+    nextProperties.every(
+      (prop) => prop.definition.id !== nextProp.definition.id
+    )
+  ) {
+    nextProperties.push(nextProp);
+  }
 
   return optimisticUpdateSoupEntity({
     tag: current.tag,
@@ -120,7 +133,7 @@ function optimisticUpdateSoupEntityProperty(
   });
 }
 
-function fabricateSoupProperty(
+function buildSoupProperty(
   property: Property | PropertyDefinitionDomain,
   value: SoupPropertyValue
 ): SoupProperty {
@@ -188,7 +201,7 @@ function apiValuesToSoupPropertyValue(
   }
 }
 
-export type DeleteEntityPropertyParams = {
+type DeleteEntityPropertyParams = {
   entityPropertyId: string;
   entityType: EntityType;
   entityId: string;
@@ -224,7 +237,7 @@ export function useDeleteEntityPropertyMutation(
   }));
 }
 
-export type AddEntityPropertyParams = {
+type AddEntityPropertyParams = {
   entityId: string;
   entityType: EntityType;
   propertyDefinitionId: string;
@@ -266,12 +279,7 @@ export function useAddEntityPropertyMutation(
   }));
 }
 
-export type SetPropertyStatusCompleteParams = {
-  entityType: PropertiesEntityType;
-  entityId: string;
-};
-
-export type BulkSaveEntityPropertiesParams = {
+type BulkSaveEntityPropertiesParams = {
   properties: Array<{
     entityId: string;
     entityType: EntityType;

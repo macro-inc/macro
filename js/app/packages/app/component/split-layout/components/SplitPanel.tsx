@@ -2,6 +2,7 @@ import { createSoupState } from '@app/component/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { splitContainerAttribute } from '@core/dom-selectors';
 import { isMobile } from '@core/mobile/isMobile';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, Panel } from '@ui';
@@ -26,7 +27,7 @@ import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
 
-export type SplitPanelProps = {
+type SplitPanelProps = {
   setPanelRef: (ref: HTMLDivElement) => void;
   handle: SplitHandle;
   split: SplitState;
@@ -163,7 +164,7 @@ export function SplitPanel(props: SplitPanelProps) {
               attachHotKeys(ref);
             }}
             data-split-id={props.split.id}
-            data-split-container
+            {...splitContainerAttribute}
             data-modal={props.handle.isSpotLight()}
             tabindex={-1}
           >

@@ -14,9 +14,12 @@ fn test_build_keyword_query_string_multiple_terms() {
 }
 
 #[test]
-fn test_build_keyword_query_string_multi_word_term_skips_email_pattern() {
+fn test_build_keyword_query_string_multi_word_term_uses_phrase() {
+    // Multi-word terms come from quoted phrases via `split_search_terms`
+    // and must render as a phrase so simple_query_string's AND default
+    // operator doesn't decompose them into independent tokens.
     let result = build_keyword_query_string(&["hi there".to_string()]);
-    assert_eq!(result, "(hi there)");
+    assert_eq!(result, "\"hi there\"");
 }
 
 #[test]
@@ -28,7 +31,7 @@ fn test_build_keyword_query_string_uppercase_lowercased_for_email() {
 #[test]
 fn test_build_keyword_query_string_mixed_single_and_multi_word() {
     let result = build_keyword_query_string(&["Teo".to_string(), "hello world".to_string()]);
-    assert_eq!(result, "(Teo | teo@*) + (hello world)");
+    assert_eq!(result, "(Teo | teo@*) + \"hello world\"");
 }
 
 #[test]
@@ -57,9 +60,12 @@ fn test_build_text_query_string_multiple_terms_are_prefixed_and_anded() {
 }
 
 #[test]
-fn test_build_text_query_string_multi_word_term_uses_group() {
+fn test_build_text_query_string_multi_word_term_uses_phrase() {
+    // Multi-word terms come from quoted phrases via `split_search_terms`
+    // and must render as a phrase so simple_query_string's AND default
+    // operator doesn't decompose them into independent tokens.
     let result = build_text_query_string(&["hi there".to_string()]);
-    assert_eq!(result, "(hi there)");
+    assert_eq!(result, "\"hi there\"");
 }
 
 #[test]
@@ -78,6 +84,48 @@ fn test_build_text_query_string_short_term_skips_prefix() {
 fn test_build_text_query_string_three_char_term_gets_prefix() {
     let result = build_text_query_string(&["abc".to_string()]);
     assert_eq!(result, "abc*");
+}
+
+#[test]
+fn test_email_search_args_quoted_phrase_uses_phrase_query_in_sqs() -> anyhow::Result<()> {
+    // Regression: a quoted phrase like `"reply test"` arrives here as a
+    // single term with internal whitespace (already stripped of quotes
+    // by `split_search_terms`). Both simple_query_string clauses must
+    // emit it as a phrase — otherwise `default_operator: "AND"` would
+    // turn `(reply test)` into `reply AND test` and match each token
+    // independently anywhere in the field.
+    let builder: EmailQueryBuilder = EmailSearchArgs {
+        terms: vec!["reply test".to_string()],
+        user_id: "macro|alice@example.com".to_string(),
+        thread_ids: vec![],
+        link_ids: vec![],
+        sender: vec![],
+        cc: vec![],
+        bcc: vec![],
+        recipients: vec![],
+        include_labels: vec![],
+        exclude_labels: vec![],
+        importance: None,
+        page: 0,
+        page_size: 20,
+        match_type: "partial".to_string(),
+        collapse: true,
+        ids_only: false,
+        subject_only: false,
+    }
+    .into();
+
+    let json = builder.build_bool_query()?.build().to_json();
+    let should = json["bool"]["must"][0]["bool"]["should"]
+        .as_array()
+        .unwrap();
+    for sqs in should.iter().map(|s| &s["simple_query_string"]) {
+        assert_eq!(
+            sqs["query"], "\"reply test\"",
+            "expected phrase query, got {sqs:?}"
+        );
+    }
+    Ok(())
 }
 
 #[test]

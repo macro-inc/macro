@@ -9,7 +9,7 @@ export type SortConfig<T, TId extends string = string> = {
 };
 
 /** Sort state return type with strongly typed IDs */
-export type SortState<T, TId extends string = string> = {
+type SortState<T, TId extends string = string> = {
   /** Currently active sort configs (ordered by priority) */
   active: Accessor<SortConfig<T, TId>[]>;
   isActive: (id: TId) => boolean;

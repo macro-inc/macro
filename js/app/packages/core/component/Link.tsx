@@ -18,7 +18,7 @@ function extractDomain(url: string) {
 }
 
 const [badLinks, setBadLinks] = createStore<Record<string, true>>({});
-export type UnfurlLinkProps = { unfurled: GetUnfurlResponse };
+type UnfurlLinkProps = { unfurled: GetUnfurlResponse };
 
 export function UnfurlLink(props: UnfurlLinkProps) {
   const domain = extractDomain(props.unfurled.url);
@@ -68,7 +68,7 @@ interface UnfurledLinkCollection {
   links: GetUnfurlResponse[];
 }
 
-export function UnfurledLinkCollection(props: UnfurledLinkCollection) {
+function _UnfurledLinkCollection(props: UnfurledLinkCollection) {
   const [isCollapsed, setIsCollapsed] = createSignal(props.collapsed ?? true);
 
   return (

@@ -1,0 +1,111 @@
+# Local E2E overrides for docker-compose.yml.
+#
+# The default .env can point at shared dev infrastructure. Keep Playwright's
+# deterministic smoke suite on local Docker dependencies by overriding the
+# service environment here and running compose with:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml
+
+x-local-e2e-env: &local-e2e-env
+  DATABASE_URL: postgres://user:password@postgres:5432/macrodb
+  DATABASE_URL_READONLY: postgres://user:password@postgres:5432/macrodb
+  LOCAL_AWS_URL: http://localstack:4566
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  AWS_REGION: us-east-1
+  AWS_DEFAULT_REGION: us-east-1
+  REDIS_URI: redis://redis:6379
+  DOCUMENT_STORAGE_SERVICE_REDIS_URI: redis://redis:6379
+
+  ATTACHMENT_BUCKET: macro-email-attachments
+  DOCUMENT_STORAGE_BUCKET: doc-storage
+  DOCX_DOCUMENT_UPLOAD_BUCKET: docx-upload
+  STATIC_STORAGE_BUCKET: static-file-storage
+  UPLOAD_STAGING_BUCKET: bulk-upload-staging
+
+  BULK_UPLOAD_REQUESTS_TABLE: bulk-upload
+  CONNECTION_GATEWAY_TABLE: connection-gateway-table
+  STATIC_FILE_SERVICE_DYNAMODB_TABLE_NAME: static-file-metadata
+
+  BACKFILL_QUEUE: email-service-backfill-queue
+  CHAT_DELETE_QUEUE: delete-chat-handler-queue
+  CONTACTS_QUEUE: contacts-queue
+  CONVERT_QUEUE: convert-service-queue
+  DOCUMENT_DELETE_QUEUE: delete-document-handler-queue
+  DOCUMENT_TEXT_EXTRACTOR_QUEUE: document-text-extractor-lambda-queue
+  EMAIL_SCHEDULED_QUEUE: email-service-scheduled-queue
+  GMAIL_INBOX_SYNC_QUEUE: email-service-gmail-inbox-sync-queue
+  GMAIL_INBOX_SYNC_RETRY_QUEUE: email-service-gmail-inbox-retry-queue
+  GMAIL_OPS_QUEUE: email-service-gmail-ops-queue
+  GMAIL_OPS_RETRY_QUEUE: email-service-gmail-ops-retry-queue
+  LINK_MANAGER_QUEUE: email-service-refresh-queue
+  NOTIFICATION_QUEUE: notification-queue
+  NOTIFICATION_INGRESS_QUEUE: http://localstack:4566/000000000000/notification-ingress-queue
+  PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE: push-delivery-queue
+  SEARCH_EVENT_QUEUE: search-event-queue
+  SFS_DELETE_QUEUE: email-sfs-delete-queue
+  SFS_UPLOADER_QUEUE: email-service-sfs-mapper-queue
+  STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL: http://localstack:4566/000000000000/static-file-s3-event-notification-queue
+
+services:
+  authentication-service:
+    environment: *local-e2e-env
+  connection_gateway:
+    environment: *local-e2e-env
+  contacts_service:
+    environment: *local-e2e-env
+  # Not needed by the smoke suite. Keep this behind an inactive profile so
+  # missing cognition-only env vars do not block local E2E startup.
+  document_cognition_service:
+    profiles:
+      - local-e2e-unused
+    environment: *local-e2e-env
+    # lexical_service is intentionally disabled below for local E2E, so remove
+    # it from the base service dependency set if this profile is enabled manually.
+    depends_on: !override
+      - document_storage_service
+      - email_service
+      - static_file_service
+      - sync_service
+  document_storage_service:
+    environment: *local-e2e-env
+  document_upload_finalizer:
+    environment:
+      <<: *local-e2e-env
+      DOCUMENT_UPLOAD_FINALIZER_QUEUE_URL: http://localstack:4566/000000000000/document-upload-finalizer-queue
+    # lexical_service is intentionally disabled below for local E2E, so remove
+    # it from the base service dependency set.
+    depends_on: !override
+      - postgres
+      - sync_service
+  email_service:
+    environment: *local-e2e-env
+  # Not needed by the smoke suite. Keep this behind an inactive profile because
+  # it requires push/SNS/email notification env that is unrelated to local E2E.
+  notification_service:
+    profiles:
+      - local-e2e-unused
+    environment: *local-e2e-env
+    depends_on: !override
+      - redis
+      - authentication-service
+      - connection_gateway
+      - document_storage_service
+  search_processing_service:
+    environment: *local-e2e-env
+  static_file_service:
+    environment: *local-e2e-env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+  unfurl_service:
+    environment: *local-e2e-env
+  image_proxy_service:
+    environment: *local-e2e-env
+  sync_service:
+    environment: *local-e2e-env
+  # Not needed by the smoke suite. Keep this behind an inactive profile because
+  # its Docker image currently depends on sibling js/lexical-core sources that
+  # are outside its build context.
+  lexical_service:
+    profiles:
+      - local-e2e-unused
+    environment: *local-e2e-env

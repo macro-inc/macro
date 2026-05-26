@@ -17,23 +17,6 @@ type NodeCursorRaw = {
   cursor: Uint8Array;
 };
 
-type UserAwareness = {
-  userId: string | undefined;
-  color: string;
-};
-
-export type PeerLexicalAwarenessRaw = {
-  anchor: NodeCursorRaw;
-  focus: NodeCursorRaw;
-  user: UserAwareness;
-};
-
-export type PeerLexicalAwareness = {
-  anchor: NodeCursor;
-  focus: NodeCursor;
-  user: UserAwareness;
-};
-
 /** Conver a Lexical node cursor to a raw node cursor */
 function toRaw(cursor: NodeCursor): NodeCursorRaw {
   return {
@@ -50,7 +33,7 @@ function fromRaw(raw: NodeCursorRaw): NodeCursor {
   };
 }
 
-export type LexicalSelectionAwarenessRaw = {
+type LexicalSelectionAwarenessRaw = {
   anchor: NodeCursorRaw;
   focus: NodeCursorRaw;
 };

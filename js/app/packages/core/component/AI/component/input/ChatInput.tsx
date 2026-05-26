@@ -11,17 +11,15 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
-import PaperPlaneRight from '@phosphor/paper-plane-right.svg';
 import PaperclipIcon from '@phosphor/paperclip.svg';
-import Stop from '@phosphor/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button, cn, Surface } from '@ui';
+import { Button, cn, Surface, SendButton as UiSendButton } from '@ui';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { useAiDataConsentGate } from './useAiDataConsent';
 
-export type ChatInputProps = {
+type ChatInputProps = {
   onSend: (args: ChatSendInput) => void;
   onStop?: () => void;
   onEscape?: (e: KeyboardEvent) => boolean;
@@ -31,7 +29,7 @@ export type ChatInputProps = {
   chatId?: string;
 };
 
-export type ChatInputComponentProps = {
+type ChatInputComponentProps = {
   editor: EditorConfigBuilder;
   initialValue?: string;
   onChange?: (markdown: string) => void;
@@ -55,6 +53,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   const [attachMenuAnchorRef, setAttachMenuAnchorRef] =
     createSignal<HTMLDivElement>();
   const [markdownText, setMarkdownText] = createSignal('');
+  const [isFocused, setIsFocused] = createSignal(false);
 
   createEffect(() => {
     const uploaded = uploadQueue.popComplete();
@@ -145,33 +144,34 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const StopButton = () => (
     <Button
-      variant="base"
+      variant="ghost"
       size="icon-sm"
       label="Stop generating"
       hotkey={TOKENS.chat.stop}
       onClick={() => props.onStop?.()}
+      class={cn(
+        'rounded-[11px] size-7.5 text-ink-extra-muted [&_svg]:stroke-[4px]',
+        'not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10',
+        'data-disabled:opacity-100 data-disabled:text-ink-extra-muted data-disabled:bg-ink-muted/5'
+      )}
     >
-      <Stop />
+      <div class="size-3.5 rounded-sm bg-current" />
     </Button>
   );
 
   const SendButton = () => (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      aria-label="Send"
-      tooltip="Send in background"
-      shortcut="cmd+enter"
+    <UiSendButton
+      tooltip={'Ask Ai'}
+      shortcut="enter"
       tooltipPlacement="top"
       disabled={!canSendMessage()}
+      hidden={isMobile() && isEmptyInput()}
       onClick={() =>
         sendMessage(
           isTouchDevice() ? { modelOverride: 'claude-opus-4-6' } : undefined
         )
       }
-    >
-      <PaperPlaneRight />
-    </Button>
+    />
   );
 
   const RightControls = () => (
@@ -183,8 +183,18 @@ export function ChatInput(props: ChatInputComponentProps) {
   );
 
   return (
-    <Surface depth={2}>
-      <div id="chat-input" ref={containerRef} class="relative flex flex-col">
+    <Surface active={isFocused()} class="rounded-xl" depth={2} solid>
+      <div
+        onFocusOut={(e) => {
+          const next = e.relatedTarget as Node | null;
+          if (next && containerRef.contains(next)) return;
+          setIsFocused(false);
+        }}
+        onFocusIn={() => setIsFocused(true)}
+        class="relative flex flex-col"
+        ref={containerRef}
+        id="chat-input"
+      >
         <Show when={hasAttachments()}>
           <div class="px-2 pt-2 w-full">
             <AttachmentList
@@ -240,7 +250,7 @@ export function ChatInput(props: ChatInputComponentProps) {
             <LeftButton />
           </div>
 
-          <div class="absolute right-2 bottom-1.5">
+          <div class="absolute right-1.5 bottom-1.5">
             <RightControls />
           </div>
         </div>

@@ -1,13 +1,16 @@
-import { usePropertiesContext } from '@core/component/Properties/context/PropertiesContext';
-import { getEntityValues, hasValue } from '@core/component/Properties/utils';
+import { useMaybeBlockId } from '@core/block';
 import { Property } from '@property';
+import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyT } from '@property/types';
+import { getEntityValues, hasValue } from '@property/utils';
 import { Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
-import { type Component, Match, Switch } from 'solid-js';
+import { type Component, type JSX, Match, Switch } from 'solid-js';
 
 type InlinePropertyValueProps = {
   property: PropertyT;
+  /** Label rendered when the property is empty. Defaults to "None". */
+  emptyLabel?: JSX.Element;
 };
 
 /**
@@ -20,6 +23,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
   props
 ) => {
   const ctx = usePropertiesContext();
+  const blockId = useMaybeBlockId();
 
   const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
   const isEmpty = () => !hasValue(props.property);
@@ -35,7 +39,8 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
     <Property.Root
       property={props.property}
       canEdit={ctx.canEdit}
-      onEdit={ctx.openPropertyEditor}
+      onSave={ctx.saveHandler.saveProperty}
+      onRefresh={ctx.onRefresh}
     >
       <Property.Tooltip property={props.property}>
         <Layer depth={2}>
@@ -44,9 +49,10 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
               'inline-flex items-center gap-1.5 min-w-0 ring ring-edge-muted',
               'px-2 py-1 leading-tight text-left rounded-full',
               'bg-surface',
+              'focus-visible:bg-active focus-visible:ring-accent/10',
               {
                 'hover:bg-hover': !isReadOnly(),
-                'text-ink-extra-muted/50': isEmpty(),
+                'text-ink-extra-muted': isEmpty(),
               }
             )}
           >
@@ -67,12 +73,19 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
             </Switch>
             <Property.Text
               property={props.property}
-              fallback={<Property.Empty label="None" />}
+              fallback={
+                <Property.Empty
+                  label={props.emptyLabel ?? props.property.displayName}
+                />
+              }
             />
             <Property.Caret />
           </Property.EditTrigger>
         </Layer>
       </Property.Tooltip>
+      <Property.PopoverEditor
+        entitySelfFilter={{ entityType: ctx.entityType, blockId }}
+      />
     </Property.Root>
   );
 };

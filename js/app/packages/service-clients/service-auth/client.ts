@@ -10,6 +10,8 @@ import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
+  EnrichGithubPullRequestsProxyRequest,
+  EnrichGithubPullRequestsResponse,
   InitGithubLinkResponse,
   PatchSubscriptionTierRequest,
   PatchUserTutorialRequest,
@@ -80,7 +82,7 @@ function getExpiresAt(token: string) {
 
 // Promise to track ongoing refresh operations to prevent multiple concurrent refreshes
 let ongoingRefresh: Promise<string | null> | null = null;
-export async function getAccessToken(): Promise<string | null> {
+async function getAccessToken(): Promise<string | null> {
   const data = accessTokenData();
   if (!data) {
     return null;
@@ -127,8 +129,6 @@ export async function getAccessToken(): Promise<string | null> {
 
   return accessToken;
 }
-
-export type { GetLegacyUserPermissionsResponse, UserOrganizationResponse };
 
 export type PatchSubscriptionTierErrorCode =
   | 'TIER_UNCHANGED'
@@ -319,6 +319,18 @@ export const authServiceClient = {
 
     return result;
   },
+
+  async enrichGithubPullRequests(args: EnrichGithubPullRequestsProxyRequest) {
+    return (
+      await fetchWithAuth<EnrichGithubPullRequestsResponse>(
+        `${authHost}/github_pull_requests/enrich`,
+        {
+          method: 'POST',
+          body: JSON.stringify(args),
+        }
+      )
+    ).map((result) => result);
+  },
   async patchUserTutorial(args: PatchUserTutorialRequest) {
     return (
       await fetchWithAuth<EmptyResponse>(`${authHost}/user/tutorial`, {
@@ -433,6 +445,32 @@ export const authServiceClient = {
           tier: args.tier ?? undefined,
         }),
       })
+    ).map((result) => result.url);
+  },
+
+  async createCheckoutSessionV2(args: {
+    successUrl: string;
+    cancelUrl: string;
+    discount?: string | null;
+    metadata?: {
+      gaClientId?: string | null;
+      fbp?: string | null;
+      fbc?: string | null;
+    };
+  }) {
+    return (
+      await fetchWithAuth<{ url: string }>(
+        `${authHost}/user/stripe/checkoutv2`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            successUrl: args.successUrl,
+            cancelUrl: args.cancelUrl,
+            discount: args.discount ?? undefined,
+            metadata: args.metadata,
+          }),
+        }
+      )
     ).map((result) => result.url);
   },
 

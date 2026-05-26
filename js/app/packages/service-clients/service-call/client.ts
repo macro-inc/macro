@@ -6,12 +6,7 @@ import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { CallTokenResponse } from '@service-storage/generated/schemas/callTokenResponse';
 import type { LeaveCallResponse } from '@service-storage/generated/schemas/leaveCallResponse';
 
-export type {
-  CallActiveResponse,
-  CallRecord,
-  CallTokenResponse,
-  LeaveCallResponse,
-};
+export type { CallRecord, CallTokenResponse };
 
 const host: string = SERVER_HOSTS['document-storage-service'];
 
@@ -72,13 +67,22 @@ export const callServiceClient = {
     return result.map((r) => r as unknown as boolean);
   },
 
-  async editCallRecord(params: { callId: string; customName: string }) {
+  async editCallRecord(params: {
+    callId: string;
+    customName?: string;
+    shareWithTeam?: boolean;
+  }) {
+    const body: { customName?: string; shareWithTeam?: boolean } = {};
+    if (params.customName !== undefined) body.customName = params.customName;
+    if (params.shareWithTeam !== undefined)
+      body.shareWithTeam = params.shareWithTeam;
+
     return (
       await fetchWithToken<Record<string, never>>(
         `${host}/call/record/${params.callId}`,
         {
           method: 'PATCH',
-          body: JSON.stringify({ customName: params.customName }),
+          body: JSON.stringify(body),
         }
       )
     ).map(() => undefined);

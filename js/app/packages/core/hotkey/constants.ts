@@ -153,7 +153,7 @@ export const macOptionReverse = {
 
 export const EVENT_MODIFIER_KEYS = new Set(['meta', 'control', 'alt', 'shift']);
 
-export const CMD_OR_CTRL: 'meta' | 'control' = IS_MAC ? 'meta' : 'control';
+const CMD_OR_CTRL: 'meta' | 'control' = IS_MAC ? 'meta' : 'control';
 
 export const HOTKEY_TO_EVENT_NAME_MAP = {
   ctrl: 'control',

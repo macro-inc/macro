@@ -13,9 +13,6 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { isBlockNameWithLocation } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import { useEntityProperties } from '@core/component/Properties/hooks';
-import { getEntityValues, hasValue } from '@core/component/Properties/utils';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
@@ -38,6 +35,9 @@ import SparkleIcon from '@phosphor/sparkle.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import TrashSimple from '@phosphor/trash-simple.svg';
 import { Property } from '@property';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { useEntityProperties } from '@property/hooks';
+import { getEntityValues, hasValue } from '@property/utils';
 import {
   isAccessiblePreviewItem,
   isChannelPreviewItem,
@@ -48,7 +48,7 @@ import { blockNameToItemType } from '@service-storage/client';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { cn, Surface, Tooltip } from '@ui';
+import { cn, Layer, Surface, Tooltip } from '@ui';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { Component, JSX } from 'solid-js';
 import {
@@ -407,9 +407,10 @@ export function TaskPropertiesPreview(props: { taskId: string }) {
 /**
  * Compact read-only pill for the document preview popup. The popup itself is
  * already a tooltip-like surface, so there's no edit trigger or hover-card.
+ * Visually matches the side-panel Properties pills.
  */
 function PreviewPropertyPill(props: {
-  property: import('@core/component/Properties/types').Property;
+  property: import('@property/types').Property;
 }) {
   const isMultiUser = () =>
     props.property.valueType === 'ENTITY' &&
@@ -422,21 +423,31 @@ function PreviewPropertyPill(props: {
 
   return (
     <Property.Root property={props.property}>
-      <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm bg-hover">
-        <Switch
-          fallback={
-            <Property.Icon property={props.property} class="size-3 shrink-0" />
-          }
+      <Layer depth={2}>
+        <div
+          class={cn(
+            'inline-flex items-center gap-1.5 min-w-0 max-w-full ring ring-edge-muted',
+            'px-2 py-1 leading-tight text-left rounded-full bg-surface'
+          )}
         >
-          <Match when={isMultiUser()}>
-            <Property.UserStack property={props.property} maxUsers={2} />
-          </Match>
-          <Match when={isUserEntity()}>
-            <Property.Icon property={props.property} />
-          </Match>
-        </Switch>
-        <Property.Text property={props.property} class="truncate" />
-      </div>
+          <Switch
+            fallback={
+              <Property.Icon
+                property={props.property}
+                class="size-3 shrink-0"
+              />
+            }
+          >
+            <Match when={isMultiUser()}>
+              <Property.UserStack property={props.property} maxUsers={2} />
+            </Match>
+            <Match when={isUserEntity()}>
+              <Property.Icon property={props.property} />
+            </Match>
+          </Switch>
+          <Property.Text property={props.property} class="truncate" />
+        </div>
+      </Layer>
     </Property.Root>
   );
 }

@@ -1,6 +1,6 @@
 use crate::pubsub::backfill::increment_counters::incr_completed_threads;
 use crate::pubsub::context::PubSubContext;
-use models_email::email::service::backfill::{BackfillPubsubMessage, UpdateMetadataPayload};
+use models_email::email::service::backfill::{JobScopedPayload, UpdateMetadataPayload};
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqs_client::search::SearchQueueMessage;
@@ -13,10 +13,10 @@ use sqs_client::search::email::EmailThreadMessage;
 #[tracing::instrument(skip(ctx))]
 pub async fn update_thread_metadata(
     ctx: &PubSubContext,
-    data: &BackfillPubsubMessage,
+    scope: &JobScopedPayload<UpdateMetadataPayload>,
     link: &link::Link,
-    p: &UpdateMetadataPayload,
 ) -> Result<(), ProcessingError> {
+    let p = &scope.payload;
     let mut tx = ctx.db.begin().await.map_err(|e| {
         ProcessingError::Retryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
@@ -78,7 +78,7 @@ pub async fn update_thread_metadata(
         })
     })?;
 
-    incr_completed_threads(ctx, link, data.job_id).await?;
+    incr_completed_threads(ctx, link, scope.job_id).await?;
 
     // notify search-service about the new thread
     let search_message = SearchQueueMessage::ExtractEmailThreadMessage(EmailThreadMessage {

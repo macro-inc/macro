@@ -85,14 +85,6 @@ const syncServiceAuthKeyArn: pulumi.Output<string> =
 const syncServiceAuthKeyValue: pulumi.Output<string> =
   syncServiceAuthSecret.apply((secret) => secret.secretString);
 
-const AUTHENTICATION_SERVICE_SECRET_KEY = config.require(
-  `authentication_service_secret_key`
-);
-const authenticationServiceSecretKeyArn: pulumi.Output<string> =
-  aws.secretsmanager
-    .getSecretVersionOutput({ secretId: AUTHENTICATION_SERVICE_SECRET_KEY })
-    .apply((secret) => secret.arn);
-
 const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
 
 const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
@@ -392,7 +384,6 @@ const cloudStorageService = new CloudStorageService(
       cloudfrontPrivateKeySecretArn,
       internalApiKeyArn,
       syncServiceAuthKeyArn,
-      authenticationServiceSecretKeyArn,
       MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
       opensearchPasswordArn,
       githubWebhookSecretKeyArn,
@@ -454,6 +445,28 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'OPENSEARCH_PASSWORD',
         value: OPENSEARCH_PASSWORD,
+      },
+      {
+        // Flips the documents alias dispatch in opensearch_client between
+        // the flat-chunk shape (`documents_v1`) and the parent/child join
+        // shape (`documents_v2`). Set via Pulumi config and flipped at
+        // cutover; defaults to `false` so the existing flat-shape paths
+        // stay active until the alias is swapped.
+        name: 'DOCUMENTS_INDEX_USES_JOIN',
+        value: config.get('documents_index_uses_join') ?? 'false',
+      },
+      {
+        // Same as DOCUMENTS_INDEX_USES_JOIN, but for the chats alias
+        // (`chats_v1` flat -> `chats_v2` parent/child).
+        name: 'CHATS_INDEX_USES_JOIN',
+        value: config.get('chats_index_uses_join') ?? 'false',
+      },
+      {
+        // Same as DOCUMENTS_INDEX_USES_JOIN, but for the call_records
+        // alias (`call_records_v1` flat -> `call_records_v2`
+        // parent/child).
+        name: 'CALL_RECORDS_INDEX_USES_JOIN',
+        value: config.get('call_records_index_uses_join') ?? 'false',
       },
       {
         name: 'DATABASE_URL',
@@ -565,14 +578,6 @@ const cloudStorageService = new CloudStorageService(
       {
         name: ServiceUrl.LEXICAL_SERVICE_URL,
         value: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
-      },
-      {
-        name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
-        value: pulumi.interpolate`${AUTHENTICATION_SERVICE_SECRET_KEY}`,
-      },
-      {
-        name: ServiceUrl.AUTHENTICATION_SERVICE_URL,
-        value: getServiceUrl(ServiceUrl.AUTHENTICATION_SERVICE_URL),
       },
       {
         name: 'MACRO_API_TOKEN_ISSUER',

@@ -112,6 +112,43 @@ pub struct TeamWithMembers {
     pub members: Vec<TeamMember<'static>>,
 }
 
+/// Current and invited members for a team.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TeamMembers {
+    /// Current accepted members of the team.
+    pub members: Vec<TeamMember<'static>>,
+    /// Pending invites for the team.
+    pub invited: Vec<TeamInviteDetails>,
+}
+
+/// Request body for `PATCH /team/crm`.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct PatchTeamCrmSettingsRequest {
+    /// The desired CRM state for the team.
+    pub enabled: bool,
+}
+
+/// Response for `PATCH /team/crm`. Reports both the resulting state
+/// and whether this call changed it; for the enable-flip case it also
+/// reports the backfill fan-out tallies.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct PatchTeamCrmSettingsResponse {
+    /// The resulting `crm_enabled` value after the call.
+    pub enabled: bool,
+    /// True if this call flipped the value (false → true or true →
+    /// false). False if the team was already at the requested state.
+    pub changed: bool,
+    /// Number of members for whom a `PopulateCrmForUser` message was
+    /// enqueued. Non-zero only on a disabled → enabled transition;
+    /// per-user enqueue failures are logged and swallowed.
+    pub backfill_enqueued: usize,
+    /// Number of members whose enqueue failed (and was swallowed).
+    /// Non-zero only on a disabled → enabled transition.
+    pub backfill_failed: usize,
+}
+
 /// Detailed information about a team invite
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -138,6 +175,8 @@ pub struct TeamInviteDetails {
 pub struct PatchTeamRequest {
     /// The new name for the team
     pub name: Option<String>,
+    /// The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE.
+    pub slug: Option<String>,
     /// Role updates to apply to team users
     pub user_role_updates: Option<Vec<PatchTeamUserRole>>,
 }
@@ -196,14 +235,25 @@ pub struct TeamCheckoutSessionRequest {
 pub struct Team {
     pub(crate) id: uuid::Uuid,
     pub(crate) name: String,
+    pub(crate) slug: String,
     #[cfg_attr(feature = "axum", schema(value_type = String))]
     pub(crate) owner_id: MacroUserIdStr<'static>,
 }
 
 impl Team {
     /// Creates a new Team
-    pub fn new(id: uuid::Uuid, name: String, owner_id: MacroUserIdStr<'static>) -> Self {
-        Self { id, name, owner_id }
+    pub fn new(
+        id: uuid::Uuid,
+        name: String,
+        slug: String,
+        owner_id: MacroUserIdStr<'static>,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            slug,
+            owner_id,
+        }
     }
 }
 
@@ -216,6 +266,11 @@ impl Team {
     /// The name of the team
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// The slug of the team
+    pub fn slug(&self) -> &str {
+        &self.slug
     }
 
     /// The owner id of the team
@@ -309,6 +364,9 @@ pub enum TeamError {
     /// The team invite does not exist
     #[error("The team invite does not exist")]
     TeamInviteDoesNotExist,
+    /// The team is not paying
+    #[error("The team is not paying")]
+    TeamNotPaying,
     /// Underlying entity access error
     #[error("Access error")]
     AccessError(#[from] entity_access::domain::models::AccessError),
@@ -403,6 +461,9 @@ pub enum CustomerError {
     /// Invalid promotion code
     #[error("Invalid promotion code {0}")]
     InvalidPromotionCode(String),
+    /// No subscription line item matched the configured Stripe price id.
+    #[error("No matching line item")]
+    NoMatchingLineItem,
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),

@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use sqlx::PgPool;
 
 use crate::domain::{
-    models::{GithubKey, MacroTaskId},
+    models::{GithubKey, MacroTaskId, TeamTaskReference},
     ports::GithubSyncRepo,
 };
 
@@ -104,6 +104,53 @@ impl GithubSyncRepo for PgGithubSyncRepo {
             .iter()
             .filter(|t| !existing_set.contains(&t.short_uuid))
             .cloned()
+            .collect())
+    }
+
+    #[tracing::instrument(skip(self, references), err)]
+    async fn resolve_team_task_references(
+        &self,
+        installation_id: &str,
+        references: &[TeamTaskReference],
+    ) -> Result<Vec<MacroTaskId>, Self::Err> {
+        if references.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let team_slugs: Vec<String> = references.iter().map(|r| r.team_slug.clone()).collect();
+        let team_task_ids: Vec<i32> = references.iter().map(|r| r.team_task_id).collect();
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT DISTINCT tt.document_id
+            FROM UNNEST($2::text[], $3::int4[]) AS refs(team_slug, task_num)
+            JOIN github_app_installation_team gait ON gait.id = $1
+            JOIN team t ON t.id = gait.team_id AND LOWER(t.slug) = LOWER(refs.team_slug)
+            JOIN team_task tt ON tt.team_id = t.id AND tt.task_num = refs.task_num
+            "#,
+            installation_id,
+            &team_slugs,
+            &team_task_ids
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                let document_id = row.document_id;
+                match uuid::Uuid::parse_str(&document_id) {
+                    Ok(uuid) => Some(MacroTaskId::from_uuid(&uuid)),
+                    Err(e) => {
+                        tracing::warn!(
+                            document_id,
+                            error=?e,
+                            "team task document id is not a UUID"
+                        );
+                        None
+                    }
+                }
+            })
             .collect())
     }
 

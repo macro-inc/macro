@@ -114,7 +114,7 @@ export function TeamStep() {
   };
 
   return (
-    <div class="flex flex-col gap-8 w-full">
+    <div class="flex flex-col gap-8 w-full mobile:h-full">
       <div class="flex flex-col gap-1">
         <h1 class="text-2xl font-semibold text-ink tracking-tight">
           Invite your team
@@ -126,46 +126,48 @@ export function TeamStep() {
         </p>
       </div>
 
-      <div class="flex flex-col gap-2">
-        <Index each={entries()}>
-          {(entry, index) => (
-            <div class="flex flex-col gap-1">
-              <div class="relative">
-                <input
-                  id={`onb-invite-${index}`}
-                  type="email"
-                  value={entry().email}
-                  onInput={(e) => updateEmail(index, e.currentTarget.value)}
-                  onBlur={(e) => validateOnBlur(index, e.currentTarget.value)}
-                  placeholder={emailPlaceholder()}
-                  class={cn(
-                    'w-full px-2.5 h-9 pr-9 text-sm rounded-sm border bg-transparent text-ink placeholder:text-ink-placeholder transition-colors',
-                    'outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:ring-offset-surface',
-                    errors()[index] ? 'border-failure' : 'border-edge-muted'
-                  )}
-                />
-                <Show when={entry().email.trim() !== ''}>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() =>
-                      entries().length > 1
-                        ? removeEntry(index)
-                        : updateEmail(index, '')
-                    }
-                    class="absolute right-1.5 top-1/2 -translate-y-1/2 text-ink-disabled not-disabled:hover:text-ink-muted"
-                    noTouchResize
-                  >
-                    <XIcon class="size-3.5" />
-                  </Button>
+      <div class="flex flex-col gap-2 mobile:min-h-0">
+        <div class="flex flex-col gap-2 p-1 -m-1 mobile:min-h-0 mobile:overflow-y-auto mobile:scrollbar-hidden">
+          <Index each={entries()}>
+            {(entry, index) => (
+              <div class="flex flex-col gap-1">
+                <div class="relative">
+                  <input
+                    id={`onb-invite-${index}`}
+                    type="email"
+                    value={entry().email}
+                    onInput={(e) => updateEmail(index, e.currentTarget.value)}
+                    onBlur={(e) => validateOnBlur(index, e.currentTarget.value)}
+                    placeholder={emailPlaceholder()}
+                    class={cn(
+                      'w-full px-2.5 h-9 pr-9 text-sm rounded-sm border bg-transparent text-ink placeholder:text-ink-placeholder transition-colors',
+                      'outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:ring-offset-surface',
+                      errors()[index] ? 'border-failure' : 'border-edge-muted'
+                    )}
+                  />
+                  <Show when={entry().email.trim() !== ''}>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() =>
+                        entries().length > 1
+                          ? removeEntry(index)
+                          : updateEmail(index, '')
+                      }
+                      class="absolute right-1.5 top-1/2 -translate-y-1/2 text-ink-disabled not-disabled:hover:text-ink-muted"
+                      noTouchResize
+                    >
+                      <XIcon class="size-3.5" />
+                    </Button>
+                  </Show>
+                </div>
+                <Show when={errors()[index]}>
+                  <p class="text-xs text-failure">{errors()[index]}</p>
                 </Show>
               </div>
-              <Show when={errors()[index]}>
-                <p class="text-xs text-failure">{errors()[index]}</p>
-              </Show>
-            </div>
-          )}
-        </Index>
+            )}
+          </Index>
+        </div>
 
         <Show
           when={hasValidEmail()}
@@ -185,15 +187,15 @@ export function TeamStep() {
             variant="ghost"
             size="sm"
             onClick={addEntry}
-            class="self-start"
+            class="w-full justify-center [&_svg]:size-3"
           >
-            <PlusIcon class="size-4" />
+            <PlusIcon />
             Add another
           </Button>
         </Show>
       </div>
 
-      <div class="flex flex-col gap-2">
+      <div class="flex flex-col gap-2 mobile:mt-auto">
         <Show
           when={isLargeTeam()}
           fallback={

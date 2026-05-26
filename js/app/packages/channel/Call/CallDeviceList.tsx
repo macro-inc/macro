@@ -1,14 +1,9 @@
-import { MENU_ITEM_CLASS } from '@core/component/Menu';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import CheckIcon from '@phosphor/check.svg';
-import { cn } from '@ui';
+import { Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 import type { MediaDeviceInfo } from './CallContext';
 
-const deviceRadioRowClass =
-  'flex min-w-0 items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs hover:bg-hover hover-transition-bg outline-none focus:bg-active data-[highlighted]:bg-active';
-
-/** Device picker rows for use inside `DropdownMenu` + `DropdownMenuContent` only. */
+/** Device picker rows for use inside `Dropdown` + `Dropdown.Content` only. */
 export function CallDeviceList(props: {
   label: string;
   devices: MediaDeviceInfo[];
@@ -16,32 +11,25 @@ export function CallDeviceList(props: {
   onSelect: (deviceId: string) => void;
 }) {
   return (
-    <DropdownMenu.Group class="w-full">
-      <DropdownMenu.GroupLabel
-        class={`${MENU_ITEM_CLASS} text-xs! text-accent`}
-      >
-        {props.label}
-      </DropdownMenu.GroupLabel>
-      <DropdownMenu.RadioGroup
+    <Dropdown.Group>
+      <Dropdown.GroupLabel>{props.label}</Dropdown.GroupLabel>
+      <Dropdown.RadioGroup
         value={props.activeDeviceId ?? ''}
         onChange={(value) => props.onSelect(value)}
       >
         <For each={props.devices}>
           {(device) => (
-            <DropdownMenu.RadioItem
-              value={device.deviceId}
-              class={cn(deviceRadioRowClass, 'w-full items-baseline')}
-            >
-              <div class="min-w-0 flex-1">{device.label}</div>
+            <Dropdown.RadioItem value={device.deviceId}>
+              <span class="flex-1 truncate">{device.label}</span>
               <span class="inline-flex w-3 shrink-0 justify-center">
                 <Show when={props.activeDeviceId === device.deviceId}>
                   <CheckIcon class="size-3 text-accent" />
                 </Show>
               </span>
-            </DropdownMenu.RadioItem>
+            </Dropdown.RadioItem>
           )}
         </For>
-      </DropdownMenu.RadioGroup>
-    </DropdownMenu.Group>
+      </Dropdown.RadioGroup>
+    </Dropdown.Group>
   );
 }

@@ -108,7 +108,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
 };
 
 /** A single entry in the actions row — icon and label rendered as a button */
-export interface ToastAction {
+interface ToastAction {
   label: string;
   icon?: Component<{ class?: string }>;
   onClick: () => void;
@@ -120,7 +120,7 @@ export interface ToastAction {
  * Note: by default, toasts do NOT render on mobile. Pass `mobile: true` to opt
  * in to the mobile-styled toast region (centered above the mobile dock).
  */
-export interface ToastOptions {
+interface ToastOptions {
   subtext?: string;
   /** Auto-dismiss duration in ms. When omitted, the toast uses a default 3s timer. */
   duration?: number;
@@ -128,7 +128,7 @@ export interface ToastOptions {
   mobile?: boolean;
 }
 
-export interface ToastSuccessOptions extends ToastOptions {
+interface ToastSuccessOptions extends ToastOptions {
   actions?: ToastAction[];
   /** When true, bypasses the 3s dedupe so repeated calls stack instead of replacing. */
   stack?: boolean;
@@ -139,7 +139,7 @@ export interface ToastSuccessOptions extends ToastOptions {
  * Replaces the icon, title, and accent color of the standard layout while
  * still using the shared Surface chrome and progress/dismiss machinery.
  */
-export interface CustomToastConfig {
+interface CustomToastConfig {
   title: string;
   content?: () => JSX.Element;
   icon?: Component<{ class?: string }>;
@@ -226,6 +226,7 @@ function ActionButtons(props: { actions: ToastAction[]; mobile?: boolean }) {
           onClick={action.onClick}
           variant={props.mobile ? 'ghost' : 'base'}
           class={cn('px-2 py-1', props.mobile && 'text-panel text-xs')}
+          depth={3}
         >
           <Show when={action.icon}>
             {(icon) => (
@@ -253,17 +254,14 @@ function ToastBodyWrapper(props: {
       fallback={
         <Surface
           highlightColor={props.accentColor}
-          active
-          class="relative w-[90vw] sm:w-md p-2 sm:p-3"
+          class="relative w-[90vw] sm:w-md p-2 sm:p-3 rounded-xl shadow-lg shadow-drop-shadow"
           depth={2}
         >
           {props.children}
         </Surface>
       }
     >
-      <div class="relative w-full p-2 text-xs rounded bg-ink text-surface shadow-md">
-        {props.children}
-      </div>
+      {props.children}
     </Show>
   );
 }
@@ -352,7 +350,7 @@ function ToastContent(props: {
     <Toast
       toastId={props.toastId}
       class={cn(
-        `relative overflow-visible pointer-events-auto shadow-md rounded
+        `relative overflow-visible pointer-events-auto
         data-opened:animate-slide-in transition-[transform,opacity] duration-100 ease-in data-closed:opacity-0 data-[swipe=move]:translate-x-(--kb-toast-swipe-move-x)
         data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`,
         props.mobile && 'w-full'

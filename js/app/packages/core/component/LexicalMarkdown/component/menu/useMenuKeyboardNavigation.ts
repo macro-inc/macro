@@ -1,6 +1,6 @@
 import { onCleanup, onMount } from 'solid-js';
 
-export type MenuKeyboardHandlers = {
+type MenuKeyboardHandlers = {
   /** Called when the user navigates up (ArrowUp, Ctrl+K, Ctrl+P, Shift+Tab) */
   onUp?: (e: KeyboardEvent) => void;
 
@@ -73,7 +73,7 @@ export type MenuKeyboardHandlers = {
  * });
  * ```
  */
-export function createMenuKeyboardNavigation(handlers: MenuKeyboardHandlers): {
+function createMenuKeyboardNavigation(handlers: MenuKeyboardHandlers): {
   handleKeyDown: (e: KeyboardEvent) => void;
 } {
   const {

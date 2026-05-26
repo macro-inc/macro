@@ -1,11 +1,5 @@
-import {
-  PROPERTY_OPTION_IDS,
-  SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
-import type {
-  Property,
-  PropertyOption,
-} from '@core/component/Properties/types';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
+import type { Property, PropertyOption } from '@property/types';
 
 const EPOCH = new Date(0).toISOString();
 const now = new Date();

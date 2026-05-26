@@ -17,7 +17,6 @@ import {
   type JSXElement,
   on,
   type Setter,
-  Show,
 } from 'solid-js';
 import { For, Portal } from 'solid-js/web';
 import type { FloatingStyle } from '../plugins/find-and-replace';
@@ -33,13 +32,13 @@ const warn = (...args: any[]) => {
 const SMALLEST_RECT_WIDTH = 1.5;
 const SMALLEST_SELECTION_WIDTH = 5;
 
-export type RemoteCursorWithStyle = {
+type RemoteCursorWithStyle = {
   user: string | undefined;
   style: FloatingStyle[];
 };
 
 /** Processes the remote cursor updates and returns a list of RemoteCursorWithStyle */
-export function $processRemoteCursorUpdates(
+function $processRemoteCursorUpdates(
   editor: LexicalEditor,
   loroManager: LoroManager,
   mapping: NodeIdMappings,
@@ -184,14 +183,14 @@ function $getRemoteCursorStyle(
   });
 }
 
-export type UseRemoteCursorsProps = {
+type UseRemoteCursorsProps = {
   loroManager: LoroManager;
   mapping: NodeIdMappings;
   editor: LexicalEditor;
   awareness: Awareness<LexicalSelectionAwareness>;
 };
 
-export type UseRemoteCursors = {
+type UseRemoteCursors = {
   remoteCursors: Accessor<RemoteCursorWithStyle[]>;
   setRemoteCursors: Setter<RemoteCursorWithStyle[]>;
   refreshRemoteCursors: () => void;
@@ -317,23 +316,23 @@ function RemoteCursorsOverlay(props: RemoteCursorsOverlayProps) {
                   }}
                 </For>
               </Portal>
-              <Show when={shouldShow()}>
-                <div
-                  class={cn(
-                    'm-0 text-transparent absolute pointer-events-none w-auto! p-2 flex items-center'
-                  )}
-                  style={{
-                    ...startStyle,
-                    top: `-${userTagHeight + 2}px`,
-                    left: startStyle.width,
-                    height: `${userTagHeight}px`,
-                    'background-color': tagName,
-                    color: textColor,
-                  }}
-                >
-                  <p class="text-xs font-mono">{userName}</p>
-                </div>
-              </Show>
+              <div
+                class={cn(
+                  'hidden m-0 text-transparent absolute pointer-events-none px-2 rounded-xs items-center',
+                  shouldShow() && 'flex'
+                )}
+                style={{
+                  transform: startStyle?.transform,
+                  top: `-${userTagHeight + 2}px`,
+                  left: startStyle.width,
+                  'background-color': tagName,
+                  color: textColor,
+                  height: `${userTagHeight}px`,
+                  width: 'fit-content',
+                }}
+              >
+                <p class="text-xs">{userName}</p>
+              </div>
             </>
           );
         }}

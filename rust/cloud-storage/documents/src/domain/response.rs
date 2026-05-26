@@ -8,6 +8,7 @@ use model::response::{PresignedUrl, TypedSuccessResponse};
 use models_permissions::share_permission::access_level::AccessLevel;
 
 use super::content::DocumentContent;
+use super::models::TeamTaskMetadata;
 
 /// Full document metadata plus content lifecycle metadata.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -18,6 +19,13 @@ pub struct DocumentMetadataWithContent {
     /// Legacy document metadata.
     #[serde(flatten)]
     pub metadata: DocumentMetadata,
+    /// The team this task number is scoped to, for task documents.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ai_tools", schemars(with = "Option<String>"))]
+    pub team_id: Option<uuid::Uuid>,
+    /// The task number assigned within the team, for task documents.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_task_id: Option<i32>,
     /// Content lifecycle and location metadata.
     pub content: DocumentContent,
 }
@@ -25,7 +33,21 @@ pub struct DocumentMetadataWithContent {
 impl DocumentMetadataWithContent {
     /// Attach content metadata to legacy document metadata.
     pub fn new(metadata: DocumentMetadata, content: DocumentContent) -> Self {
-        Self { metadata, content }
+        Self {
+            metadata,
+            team_id: None,
+            team_task_id: None,
+            content,
+        }
+    }
+
+    /// Attach per-team task metadata, when present.
+    pub fn with_team_task_metadata(mut self, metadata: Option<TeamTaskMetadata>) -> Self {
+        if let Some(metadata) = metadata {
+            self.team_id = Some(metadata.team_id);
+            self.team_task_id = Some(metadata.task_num);
+        }
+        self
     }
 }
 
@@ -37,6 +59,12 @@ pub struct DocumentResponseMetadataWithContent {
     /// Legacy create/copy response metadata.
     #[serde(flatten)]
     pub metadata: DocumentResponseMetadata,
+    /// The team this task number is scoped to, for task documents.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<uuid::Uuid>,
+    /// The task number assigned within the team, for task documents.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_task_id: Option<i32>,
     /// Content lifecycle and location metadata.
     pub content: DocumentContent,
 }
@@ -44,7 +72,21 @@ pub struct DocumentResponseMetadataWithContent {
 impl DocumentResponseMetadataWithContent {
     /// Attach content metadata to legacy response metadata.
     pub fn new(metadata: DocumentResponseMetadata, content: DocumentContent) -> Self {
-        Self { metadata, content }
+        Self {
+            metadata,
+            team_id: None,
+            team_task_id: None,
+            content,
+        }
+    }
+
+    /// Attach per-team task metadata, when present.
+    pub fn with_team_task_metadata(mut self, metadata: Option<TeamTaskMetadata>) -> Self {
+        if let Some(metadata) = metadata {
+            self.team_id = Some(metadata.team_id);
+            self.team_task_id = Some(metadata.task_num);
+        }
+        self
     }
 }
 

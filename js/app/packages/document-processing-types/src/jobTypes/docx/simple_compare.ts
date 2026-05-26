@@ -59,7 +59,7 @@ export function simple_compare_unzip_response(
   return SimpleCompareResponseDataUploadUnzippedSchema.safeParse(data).success;
 }
 
-export function simple_compare_response_data_validate(
+function _simple_compare_response_data_validate(
   data: unknown
 ): data is SimpleCompareResponseData {
   return SimpleCompareResponseData.safeParse(data).success;

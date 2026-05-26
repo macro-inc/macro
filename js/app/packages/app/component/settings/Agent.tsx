@@ -138,7 +138,7 @@ function AddServerForm(props: {
                     <span class="text-xs text-ink-muted">Name</span>
                     <input
                       type="text"
-                      class="h-8 px-2.5 rounded-sm border border-edge-muted bg-input text-sm text-ink outline-none placeholder:text-ink-muted focus:border-edge"
+                      class="h-8 px-2.5 rounded-lg border border-edge-muted bg-input text-sm text-ink outline-none placeholder:text-ink-muted focus:border-accent"
                       placeholder="My MCP Server"
                       value={name()}
                       onInput={(e) => setName(e.currentTarget.value)}
@@ -152,7 +152,7 @@ function AddServerForm(props: {
                     <span class="text-xs text-ink-muted">URL</span>
                     <input
                       type="url"
-                      class="h-8 px-2.5 rounded-sm border border-edge-muted bg-input text-sm text-ink outline-none placeholder:text-ink-muted focus:border-edge"
+                      class="h-8 px-2.5 rounded-lg border border-edge-muted bg-input text-sm text-ink outline-none placeholder:text-ink-muted focus:border-accent"
                       placeholder="https://example.com/mcp"
                       value={url()}
                       onInput={(e) => setUrl(e.currentTarget.value)}

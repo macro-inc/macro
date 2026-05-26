@@ -114,7 +114,7 @@ export async function fetchAndCacheThread(
   return ok({ thread: thread! });
 }
 
-export type ThreadQueryData = {
+type ThreadQueryData = {
   thread: Thread;
   hasMore: boolean;
 };
@@ -310,7 +310,7 @@ type ScheduleMessageParams = {
 /**
  * Mutation to send an email message.
  */
-export function useScheduleMessageMutation(
+function _useScheduleMessageMutation(
   callbacks?: MutationCallbacks<
     UpsertScheduledResponse,
     Error,

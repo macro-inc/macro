@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE crm_companies\n                SET hidden = TRUE, email_sync = FALSE\n                WHERE id = $1 AND team_id = $2\n                RETURNING id\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a6b5613f666d5c6d73c4f8a817e02554c21e5b44768f5761c1d19d019f7208c4"
+}

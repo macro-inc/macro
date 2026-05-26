@@ -35,7 +35,7 @@ false && floatWithElement;
 // Surface's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
 
-export function ActionsMenuItem(props: {
+function ActionsMenuItem(props: {
   action: Action;
   index: number;
   selected: boolean;
@@ -84,12 +84,12 @@ export function ActionsMenuItem(props: {
         props.setOpen(false);
       }}
       on:mouseover={() => props.setIndex(props.index)}
-      class={cn('group flex items-center p-1.5 mx-1.5 rounded-xs', {
-        'bg-hover': props.selected,
+      class={cn('group flex items-center p-1.5 mx-1.5 rounded-md', {
+        'bg-ink/5': props.selected,
       })}
     >
       <div class="flex flex-row gap-2 items-center w-full">
-        <div class="size-6 flex items-center justify-center text-ink-extra-muted">
+        <div class="size-4 flex items-center justify-center text-ink-extra-muted">
           <Dynamic component={props.action.icon} class="size-4" />
         </div>
         <p class=" text-sm text-ink font-medium flex-1 grow">
@@ -320,7 +320,10 @@ export function ActionMenu(props: {
           on:touchstart={(e) => e.stopPropagation()}
           ref={menuRef}
         >
-          <Surface depth={2} active class="py-2">
+          <Surface
+            depth={2}
+            class="py-1.5 shadow-lg shadow-drop-shadow rounded-xl"
+          >
             <div
               class="overflow-y-auto scrollbar-hidden"
               style={{

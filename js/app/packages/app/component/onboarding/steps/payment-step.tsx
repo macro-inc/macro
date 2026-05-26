@@ -100,7 +100,7 @@ function CheckoutView() {
   };
 
   return (
-    <div class="flex flex-col gap-8 w-full">
+    <div class="flex flex-col gap-8 w-full mobile:h-full">
       <div class="flex flex-col gap-1">
         <h1 class="text-2xl font-semibold text-ink tracking-tight">
           Review your plan
@@ -158,7 +158,7 @@ function CheckoutView() {
         </div>
       </div>
 
-      <div class="flex flex-col gap-3">
+      <div class="flex flex-col gap-3 mobile:mt-auto">
         <Button
           variant="base"
           size="lg"
@@ -201,7 +201,7 @@ function AlreadyPaidView() {
   };
 
   return (
-    <div class="flex flex-col gap-8 w-full">
+    <div class="flex flex-col gap-8 w-full mobile:h-full">
       <div class="flex flex-col gap-1">
         <h1 class="text-2xl font-semibold text-ink tracking-tight">
           You're all set
@@ -212,7 +212,7 @@ function AlreadyPaidView() {
         </p>
       </div>
 
-      <div class="flex flex-col gap-2">
+      <div class="flex flex-col gap-2 mobile:mt-auto">
         <Button
           variant="base"
           size="lg"

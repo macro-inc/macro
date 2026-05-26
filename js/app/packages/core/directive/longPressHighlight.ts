@@ -1,7 +1,7 @@
 import { type Accessor, onCleanup } from 'solid-js';
 import { touchHandler } from './touchHandler';
 
-export interface LongPressHighlightOptions {
+interface LongPressHighlightOptions {
   onLongPress?: () => void;
   /** CSS class added while the touch highlight is active. Default: `long-press-animation` */
   className?: string;

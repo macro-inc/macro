@@ -17,7 +17,7 @@ import {
 } from '../signal/blockElement';
 
 // TODO: handle nested state
-export const getBlockElementId = (blockId: string) => `block-${blockId}`;
+const getBlockElementId = (blockId: string) => `block-${blockId}`;
 
 /** 20 seconds ping interval */
 const PING_INTERVAL = 20_000;

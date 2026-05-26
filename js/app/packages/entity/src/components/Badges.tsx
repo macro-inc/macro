@@ -95,7 +95,7 @@ export function DraftBadge() {
   return <Badge class="text-accent-30 border-edge-muted px-2">draft</Badge>;
 }
 
-export function ImportantBadge() {
+function _ImportantBadge() {
   return (
     <Badge class="text-accent bg-accent/10 px-2 border-accent/10">
       important

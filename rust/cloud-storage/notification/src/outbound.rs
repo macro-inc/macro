@@ -9,6 +9,8 @@ pub mod email;
 pub mod last_online_checker;
 pub mod message_receipt_repository;
 pub mod mobile;
+/// Postgres LISTEN adapter for notification database events.
+pub mod notification_events;
 pub mod push_notification_checker;
 pub mod push_notification_event_queue;
 pub mod queue;

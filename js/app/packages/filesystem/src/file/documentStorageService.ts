@@ -311,7 +311,7 @@ export const createDocumentStorageServiceHandle = (
   return { source: FileSource.DocumentStorageService, ref: documentKey };
 };
 
-export const createHTMLDocumentStorageServiceHandle = (
+const createHTMLDocumentStorageServiceHandle = (
   ...args: Parameters<typeof makeDocumentKey>
 ): DocumentStorageServiceHandle => {
   const documentKey = `${args[0].owner}/${args[0].documentId}/${args[0].documentVersionId}.${args[0].fileType}`;

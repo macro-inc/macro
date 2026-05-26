@@ -17,9 +17,10 @@ use crate::domain::models::{
 
 use super::models::{
     AddParticipantError, Call, CallActiveResponse, CallError, CallParticipant, CallRecord,
-    CallRecordPreview, CallRecordTranscriptSegment, CallTokenResponse, CallWebhookEvent,
-    EgressS3Config, GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse,
-    GetCallRecordsRequest, LeaveCallResponse, TranscriptSegmentRequest,
+    CallRecordPreview, CallRecordTranscriptSegment, CallTokenResponse,
+    CallTranscriptCustomSpeakerResult, CallWebhookEvent, EgressS3Config, EnrichedCallTranscript,
+    GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
+    LeaveCallResponse, TranscriptSegmentRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -94,6 +95,16 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_id: &Uuid,
     ) -> impl Future<Output = Result<i64, Self::Err>> + Send;
+
+    /// Fetch the archived call participants plus all users on those
+    /// participants' teams.
+    ///
+    /// The returned user ids are distinct and owned. This is used as the
+    /// candidate speaker set for AI-generated archived transcript attribution.
+    fn get_call_participants_with_team_members(
+        &self,
+        call_record_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
 
     /// Check if a user is already a participant in a call.
     fn is_participant(
@@ -266,6 +277,26 @@ pub trait CallRepository: Send + Sync + 'static {
         assignments: &[CustomSpeakerAssignment],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Fetch archived transcript rows directly from `call_record_transcripts`.
+    ///
+    /// Unlike [`get_call_record_by_call_id`](Self::get_call_record_by_call_id),
+    /// this never consults active call transcript rows and does not collapse
+    /// `custom_speaker` over `speaker_id`; callers get the raw archived row.
+    fn get_enhanced_call_record_transcripts(
+        &self,
+        call_record_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<EnrichedCallTranscript>, Self::Err>> + Send;
+
+    /// Overwrite `custom_speaker` for archived transcript rows by row id.
+    ///
+    /// Each tuple is `(call_record_transcripts.id, custom_speaker)`. Unknown
+    /// transcript ids are ignored by the database update. Empty assignment
+    /// vectors are a no-op.
+    fn overwrite_custom_speakers(
+        &self,
+        assignments: Vec<(Uuid, String)>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Stable `(macro_user_id, voice_id)` pairs inferred from a finished
     /// call's archived transcripts. A speaker is returned only when every
     /// transcript row for that `speaker_id` has the same non-NULL
@@ -277,27 +308,6 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_record_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<(Uuid, Uuid)>, Self::Err>> + Send;
-
-    /// Distinct `(diarized_speaker_id, voice_id)` pairs from a call's
-    /// archived transcripts. Used by the post-archive voice matcher; rows
-    /// with NULL `diarized_speaker_id` or NULL `voice_id` are skipped.
-    fn get_distinct_voice_speakers_for_call_record(
-        &self,
-        call_record_id: &Uuid,
-    ) -> impl Future<Output = Result<Vec<(String, Uuid)>, Self::Err>> + Send;
-
-    /// Apply auto-matched speaker assignments to `call_record_transcripts`
-    /// rows, only where `custom_speaker IS NULL` (so manual overrides are
-    /// never clobbered) and the matched macro user shares a team with at least
-    /// one call participant. Each tuple is `(diarized_speaker_id,
-    /// macro_user_id)`; the canonical `User.id` is resolved inline via the
-    /// `User` row whose `macro_user_id` matches and stored in
-    /// `custom_speaker`. Empty `assignments` is a no-op.
-    fn patch_call_transcript_speakers_from_voice_match(
-        &self,
-        call_record_id: &Uuid,
-        assignments: &[(String, Uuid)],
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Persist the AI-generated summary text on the archived call record.
     ///
@@ -400,6 +410,18 @@ pub trait CallSummarizer: Send + Sync + 'static {
         call_id: &Uuid,
         summary: &str,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Generate row-level `custom_speaker` assignments for archived transcript
+    /// rows from the full archived transcript data and a candidate speaker set.
+    ///
+    /// Implementations should return an empty vector when no confident
+    /// attribution can be made. Callers persist non-empty results with
+    /// [`CallRepository::overwrite_custom_speakers`].
+    fn generate_custom_speakers(
+        &self,
+        transcript: Vec<EnrichedCallTranscript>,
+        candidate_speakers: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<Vec<CallTranscriptCustomSpeakerResult>, Self::Err>> + Send;
 }
 
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).
@@ -671,9 +693,8 @@ pub trait VoiceRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
     /// Same as [`Self::find_nearest_user`] but looks the embedding up by
-    /// `voice_id` in the `voice` table first. Used by the call-finished
-    /// matcher, which already has `voice_id`s on the transcript rows and
-    /// shouldn't need to re-load the embeddings client-side.
+    /// `voice_id` in the `voice` table first, so callers that already have a
+    /// persisted voice id don't need to re-load embeddings client-side.
     fn find_nearest_user_for_voice(
         &self,
         voice_id: &Uuid,

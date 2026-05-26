@@ -81,15 +81,17 @@ export default function BlockMarkdown() {
                 class="w-full grow overflow-hidden relative"
                 data-block-content
               >
-                <Scroll class="relative portal-scope" ref={setScrollRef}>
-                  <Suspense>
-                    <Show
-                      when={!isInstructionsMd()}
-                      fallback={<InstructionsNotebook />}
-                    >
-                      <Notebook />
-                    </Show>
-                  </Suspense>
+                <Scroll class="relative" ref={setScrollRef}>
+                  <div class="relative portal-scope">
+                    <Suspense>
+                      <Show
+                        when={!isInstructionsMd()}
+                        fallback={<InstructionsNotebook />}
+                      >
+                        <Notebook />
+                      </Show>
+                    </Suspense>
+                  </div>
                 </Scroll>
               </div>
             </div>

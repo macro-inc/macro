@@ -1,7 +1,7 @@
 import { themeDepth } from '@theme/signals/themeSignals';
 import type { JSX } from 'solid-js';
 
-export type LayerProps = {
+type LayerProps = {
   children?: JSX.Element;
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
 };

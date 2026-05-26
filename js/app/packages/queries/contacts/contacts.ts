@@ -14,7 +14,7 @@ function contactsQueryOptions() {
   };
 }
 
-export function useContactsQuery() {
+function useContactsQuery() {
   return useQuery(() => contactsQueryOptions());
 }
 

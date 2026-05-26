@@ -4,9 +4,20 @@ import { setUserThemes, themes, userThemes } from '@theme/signals/themeSignals';
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import { applyTheme } from '@theme/utils/themeUtils';
 import { isThemeV2 } from '@theme/utils/themeValidation';
+import { cn } from '@ui';
+import { useContext } from 'solid-js';
+import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 
 export function ThemeMention(props: ThemeMentionDecoratorProps) {
   const { openSettings } = useSettingsState();
+  const lexicalWrapper = useContext(LexicalWrapperContext);
+  const selection = () => lexicalWrapper?.selection;
+
+  const isSelectedAsNode = () => {
+    const sel = selection();
+    if (!sel) return false;
+    return sel.type === 'node' && sel.nodeKeys.has(props.key);
+  };
 
   const theme = (): ThemeV2 | null => {
     if (isThemeV2(props.data)) return props.data;
@@ -37,7 +48,10 @@ export function ThemeMention(props: ThemeMentionDecoratorProps) {
 
   return (
     <button
-      class="pointer-events-auto mx-0.5 inline-flex items-center gap-0.75 align-baseline px-1 py-px rounded-[3px] border border-edge-muted bg-transparent"
+      class={cn(
+        'pointer-events-auto mx-0.5 inline-flex items-center gap-0.75 align-baseline px-1 py-px rounded-md border border-edge-muted bg-transparent',
+        isSelectedAsNode() && 'bg-active'
+      )}
       onClick={handleClick}
       type="button"
     >

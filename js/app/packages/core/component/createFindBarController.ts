@@ -1,12 +1,12 @@
 import { type Accessor, createEffect, createSignal, on } from 'solid-js';
 
-export type FindBarSourceContext = {
+type FindBarSourceContext = {
   isOpen: Accessor<boolean>;
   submittedQuery: Accessor<string>;
   activeIndex: Accessor<number>;
 };
 
-export type FindBarSource<T> = {
+type FindBarSource<T> = {
   results: Accessor<T[]>;
   isFetching: Accessor<boolean>;
   navigate: (result: T) => void;
@@ -37,7 +37,7 @@ export type FindBarController = {
   setInputEl: (el: HTMLInputElement | undefined) => void;
 };
 
-export type FindBarControllerOptions = {
+type FindBarControllerOptions = {
   /**
    * Fires synchronously inside `submit()` *before* `submittedQuery` updates.
    * Lets callers run side-effects (e.g. clearing an existing selection)

@@ -7,7 +7,6 @@ version = "0.1.0"
 [features]
 axum = [
   "dep:axum",
-  "dep:axum-extra",
   "dep:model",
   "dep:model-error-response",
   "dep:model_user",
@@ -37,7 +36,6 @@ tokio = { workspace = true, optional = true }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
-axum-extra = { workspace = true, optional = true }
 model = { path = "../model", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
