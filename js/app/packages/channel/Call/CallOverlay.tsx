@@ -319,12 +319,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
           icon button (with optional inline label), active state = subtle
           accent tint. No chunky toggle switch. */}
       <div
-        class={cn(
-          'flex items-center px-3 py-2 bg-surface-1',
-          !isMediumNarrow() && 'relative justify-center',
-          isMediumNarrow() && !isVeryNarrow() && 'justify-between',
-          isVeryNarrow() && 'justify-center'
-        )}
+        class="flex items-center py-2 relative justify-center"
       >
         <Show when={!isVeryNarrow()}>
           <Tooltip
@@ -342,11 +337,10 @@ export function CallOverlay(props: { onLeave: () => void }) {
               role="checkbox"
               aria-checked={callCtx.isSharedWithTeam()}
               class={cn(
-                'inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none',
+                'absolute left-0 inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none',
                 'border border-ink-muted/[0.08] bg-ink-muted/[0.025]',
                 'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
                 callCtx.isSharedWithTeam() && 'text-ink',
-                !isMediumNarrow() && 'absolute left-3',
                 isConnecting() && 'pointer-events-none opacity-50'
               )}
             >
