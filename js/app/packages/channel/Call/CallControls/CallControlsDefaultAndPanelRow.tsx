@@ -228,7 +228,7 @@ export function CallControlsDefaultAndPanelRow(
       <Cell>
         <Button
           size="icon-sm"
-          class="text-failure hover:text-failure"
+          class="text-failure not-disabled:hover:text-failure not-disabled:hover:bg-failure/10"
           onClick={() => void props.onLeave()}
           disabled={isConnecting()}
           aria-label="Leave call"

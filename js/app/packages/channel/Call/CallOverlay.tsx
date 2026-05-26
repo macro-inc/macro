@@ -274,7 +274,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
 
       {/* Participants area */}
       <div
-        class={`${hasAnyScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} relative py-2`}
+        class={`${hasAnyScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} relative pt-2`}
       >
         <Show
           when={participants().length > 0}
