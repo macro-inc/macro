@@ -246,14 +246,14 @@ export function topLevelMessageHasReplies(
   channelId: string,
   messageId: string
 ): boolean {
-  const paginated = findTopLevelMessageSnapshotInChannelMessages(
-    channelId,
-    messageId
-  );
-  if (paginated) return paginated.message.thread.reply_count > 0;
+  const paginatedReplyCount =
+    findTopLevelMessageSnapshotInChannelMessages(channelId, messageId)?.message
+      .thread.reply_count ?? 0;
+  const byIdsReplyCount =
+    findTopLevelMessageInChannelMessagesByIds(channelId, messageId)?.thread
+      .reply_count ?? 0;
 
-  const byIds = findTopLevelMessageInChannelMessagesByIds(channelId, messageId);
-  return (byIds?.thread.reply_count ?? 0) > 0;
+  return paginatedReplyCount > 0 || byIdsReplyCount > 0;
 }
 
 /** Captures rollback snapshots for a target before optimistic delete. */
