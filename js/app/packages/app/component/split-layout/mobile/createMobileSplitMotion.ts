@@ -5,7 +5,7 @@ import { createMobileForwardAnimation } from './createMobileForwardAnimation';
 import { createMobileSwipeBackGesture } from './createMobileSwipeBackGesture';
 import type { MobileSwipeLayout } from './createMobileSwipeLayout';
 
-const SWIPE_EDGE_THRESHOLD = 28; // px from left edge to initiate gesture
+const SWIPE_EDGE_THRESHOLD = 40; // px from left edge to initiate gesture
 const SWIPE_VELOCITY_THRESHOLD = 0.3; // px/ms - fast flick completes swipe
 const SWIPE_DISTANCE_THRESHOLD = 0.5; // fraction of screen width
 const SWIPE_ANIMATION_MS = 88;

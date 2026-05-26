@@ -80,6 +80,7 @@ import {
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useDisplayName } from '@core/user/displayName';
 import { type MacroId, tryMacroId } from '@core/user/macroId';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
@@ -133,7 +134,6 @@ import type { CacheSnapshot } from 'virtua/unstable_core';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 const NAVIGATION_TOUCH_HIGHLIGHT_CLASS = 'navigation-touch-highlight';
 const NAVIGATION_TOUCH_HIGHLIGHT_TIMEOUT_MS = 500;

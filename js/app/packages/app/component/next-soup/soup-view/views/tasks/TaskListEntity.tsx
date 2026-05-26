@@ -2,6 +2,7 @@ import '@entity/composed/ListEntity.css';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   createEntityDraggable,
   Entity,
@@ -35,7 +36,6 @@ import {
   useContext,
 } from 'solid-js';
 import { TaskGridLayout } from './task-grid-layout';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 interface TaskListEntityProps extends BaseListEntityProps {
   showUnrollNotifications?: boolean;
