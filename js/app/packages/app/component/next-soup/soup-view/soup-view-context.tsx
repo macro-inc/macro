@@ -12,12 +12,10 @@ import {
   type Query,
   type QueryStore,
 } from '@app/component/next-soup/filters/filter-store/query-store';
-import { createInfiniteQueries } from '@app/component/next-soup/soup-view/create-infinite-queries';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { throwOnErr } from '@core/util/result';
 import {
   type EntityData,
   getPropertyOptionLabel,
@@ -25,24 +23,18 @@ import {
 } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import { useQueryClient } from '@queries/client';
-import {
-  parseGroupedSoupPage,
-  serializeGroupByField,
-} from '@queries/soup/grouped/api';
 import type {
   GroupMeta as ApiGroupMeta,
   GroupByField,
-  GroupedSoupPage,
 } from '@queries/soup/grouped/types';
-import { type SoupParams, useSoupAstItemsQuery } from '@queries/soup/items';
-import { GROUPED_SUBQUERY_MARKER, soupKeys } from '@queries/soup/keys';
-import { mapSoupPageToEntityList } from '@queries/soup/transform-utils';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import { storageServiceClient } from '@service-storage/client';
 import type {
-  SoupApiItem,
-  SoupPage,
-} from '@service-storage/generated/schemas';
+  SoupAstBody,
+  SoupAstParams,
+  SoupParams,
+} from '@queries/soup/items';
+import { useSoupAstItemsQuery } from '@queries/soup/items';
+import { soupKeys } from '@queries/soup/keys';
+import type { SoupPage } from '@service-storage/generated/schemas';
 import type { InfiniteData } from '@tanstack/solid-query';
 import {
   type Accessor,
@@ -84,6 +76,8 @@ interface SoupViewContextValues {
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
   groupByField: Accessor<GroupByField | undefined>;
+  soupParams: Accessor<SoupAstParams>;
+  soupBody: Accessor<SoupAstBody>;
 }
 
 const SoupViewContext = createContext<SoupViewContextValues>();
@@ -348,105 +342,6 @@ export const SoupViewContextProvider: FlowComponent<
     return [...featured, ...rest];
   };
 
-  const instructionsIdQuery = useInstructionsMdIdQuery();
-
-  const groupQueries = createInfiniteQueries<GroupedSoupPage, SoupEntity[]>(
-    () => {
-      const field = groupByField();
-      const groups = itemsQuery.data?.groups;
-      const itemsById = itemsQuery.data?.itemsById;
-
-      if (!field || !groups || !itemsById) {
-        return [];
-      }
-
-      return groups.map((group) => {
-        const initialItems: Record<string, SoupApiItem> = {};
-        for (const id of group.itemIds) {
-          const it = itemsById[id];
-          if (it) initialItems[id] = it;
-        }
-
-        return {
-          key: group.key,
-          queryKey: [
-            ...soupKeys.astItems({
-              params: soupParams(),
-              body: soupBody(),
-              groupBy: field,
-            }).queryKey,
-            GROUPED_SUBQUERY_MARKER,
-            group.key,
-          ] as readonly unknown[],
-          queryFn: async (ctx: { pageParam: string | null }) => {
-            const response = await throwOnErr(async () =>
-              storageServiceClient.getGroupedSoupAstItems({
-                params: {
-                  cursor: ctx.pageParam ?? undefined,
-                  group_by: serializeGroupByField(field),
-                  group_key: group.key,
-                },
-                body: {
-                  ...soupBody(),
-                  ...soupParams(),
-                },
-              })
-            );
-            return parseGroupedSoupPage(response);
-          },
-          getNextPageParam: (lastPage: GroupedSoupPage): string | null => {
-            const meta = lastPage.groups.find((g) => g.key === group.key);
-            return meta?.nextCursor ?? null;
-          },
-          initialData: {
-            pages: [
-              {
-                items: initialItems,
-                nextCursor: group.nextCursor,
-                groups: [group],
-              },
-            ],
-            pageParams: [null],
-          },
-          select: (pages: GroupedSoupPage[]): SoupEntity[] => {
-            const allItems: SoupApiItem[] = [];
-            for (const p of pages) {
-              // Each page's `groups` typically has one entry (this group);
-              // walk its itemIds and pull from the page's pool.
-              const ids = p.groups[0]?.itemIds ?? [];
-              for (const id of ids) {
-                const it = p.items[id];
-                if (it) allItems.push(it);
-              }
-            }
-            return mapSoupPageToEntityList(
-              { items: allItems, next_cursor: null },
-              { instructionsIdQuery }
-            ).map((e) => attachNotifications(e)) as SoupEntity[];
-          },
-          enabled: true,
-          staleTime: Infinity,
-          meta: { normalize: true },
-        };
-      });
-    }
-  );
-
-  const loadMoreForGroup = async (groupKey: string): Promise<void> => {
-    const query = groupQueries().find((q) => q.key === groupKey);
-    await query?.fetchNextPage();
-  };
-
-  const isGroupLoadingMore = (groupKey: string) => {
-    const query = groupQueries().find((q) => q.key === groupKey);
-    return query?.isFetchingNextPage() ?? false;
-  };
-
-  const hasMoreForGroup = (groupKey: string) => {
-    const query = groupQueries().find((q) => q.key === groupKey);
-    return query?.hasNextPage() ?? false;
-  };
-
   const buildGroupMeta = (group: ApiGroupMeta): GroupMeta => {
     const resolvedLabel = getPropertyOptionLabel(group.key) ?? group.label;
     return {
@@ -454,11 +349,9 @@ export const SoupViewContextProvider: FlowComponent<
       value: group.key,
       label: resolvedLabel,
       count: group.totalCount,
+      nextCursor: group.nextCursor,
       isExpanded: () => soup.grouping.isExpanded(group.key),
       toggle: () => soup.grouping.toggle(group.key),
-      hasMore: () => hasMoreForGroup(group.key),
-      loadMore: () => loadMoreForGroup(group.key),
-      isLoading: () => isGroupLoadingMore(group.key),
     };
   };
 
@@ -466,29 +359,29 @@ export const SoupViewContextProvider: FlowComponent<
     const field = groupByField();
     const groups = itemsQuery.data?.groups;
 
-    // Not grouped - build simple entity rows
     if (!field || !groups || search.isSearching()) {
       return entities().map((entity, index) =>
         soup.buildRow({ id: entity.id, index, original: entity })
       );
     }
 
-    // Grouped - build header + entity + loadMore rows for each group
+    const byId = new Map<string, SoupEntity>();
+    for (const e of items()) byId.set(e.id, e);
+
     const result: SoupRow[] = [];
     let globalIndex = 0;
 
     for (const apiGroup of groups) {
       const groupMeta = buildGroupMeta(apiGroup);
-      const query = groupQueries().find((q) => q.key === apiGroup.key);
-      const groupEntities = query?.data() ?? [];
+      const groupEntities: SoupEntity[] = [];
+      for (const id of apiGroup.itemIds) {
+        const entity = byId.get(id);
+        if (entity) groupEntities.push(entity);
+      }
 
-      // Get first entity to use for header original
-      // If the group has no entities, we can skip it
       const firstEntity = groupEntities[0];
-
       if (!firstEntity) continue;
 
-      // Header row
       result.push(
         soup.buildRow({
           id: `header:${apiGroup.key}`,
@@ -499,7 +392,6 @@ export const SoupViewContextProvider: FlowComponent<
         })
       );
 
-      // Entity rows
       for (const entity of groupEntities) {
         result.push(
           soup.buildRow({
@@ -511,12 +403,9 @@ export const SoupViewContextProvider: FlowComponent<
         );
       }
 
-      // We can stop here if the group has no more data
-      // that needs to be fetched
-      if (!groupMeta.hasMore()) continue;
+      if (apiGroup.nextCursor == null) continue;
 
       const lastEntity = groupEntities[groupEntities.length - 1];
-
       result.push(
         soup.buildRow({
           id: `loadmore:${apiGroup.key}`,
@@ -570,6 +459,8 @@ export const SoupViewContextProvider: FlowComponent<
     activeTab,
     setActiveTab,
     groupByField,
+    soupParams,
+    soupBody,
   };
 
   return (

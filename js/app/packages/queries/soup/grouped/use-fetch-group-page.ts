@@ -117,9 +117,9 @@ export const useFetchGroupPage = () => {
   };
 
   return {
-    fetch: (vars: FetchVars) => {
+    fetch: async (vars: FetchVars) => {
       if (latestForGroup(vars.groupKey)?.status === 'pending') return;
-      mutation.mutate(vars);
+      await mutation.mutateAsync(vars);
     },
     isPending: (k: string) => latestForGroup(k)?.status === 'pending',
     error: (k: string) => {

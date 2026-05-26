@@ -37,6 +37,7 @@ type UseSoupViewHotkeysOptions = {
   currentView: Accessor<ListView | undefined>;
   activeTab: Accessor<string | undefined>;
   applyTabPreset: (view: ListView, tabId: string) => void;
+  loadMoreGroup: (groupKey: string, cursor: string) => Promise<void>;
 };
 
 export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
@@ -49,6 +50,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     currentView,
     activeTab,
     applyTabPreset,
+    loadMoreGroup,
   } = options;
 
   const analytics = useAnalytics();
@@ -154,8 +156,10 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
       // If focused on a load more row, trigger load more and stay at same index
       if (focusedRow.getIsLoadMore() && focusedRow.group) {
+        const cursor = focusedRow.group.nextCursor;
+        if (!cursor) return true;
         const currentIndex = focusedRow.index;
-        focusedRow.group.loadMore().then(() => {
+        loadMoreGroup(focusedRow.group.key, cursor).then(() => {
           soup.navigate.toIndex(currentIndex);
           virtualizerHandle()?.scrollToIndex(currentIndex, {
             align: 'nearest',

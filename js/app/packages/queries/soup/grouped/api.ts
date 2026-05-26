@@ -1,7 +1,6 @@
 import type { ApiGroupMeta } from '@service-storage/generated/schemas/apiGroupMeta';
 import type { GroupedSoupPage as WireGroupedSoupPage } from '@service-storage/generated/schemas/groupedSoupPage';
 import type { SoupApiItem } from '@service-storage/generated/schemas/soupApiItem';
-import { GROUPED_SUBQUERY_MARKER } from '../keys';
 import {
   GROUP_BY_TYPES,
   type GroupByField,
@@ -63,15 +62,6 @@ export function extractGroupByFromKey(
     }
   }
   return;
-}
-
-export function extractPerGroupKeyFromQueryKey(
-  queryKey: readonly unknown[]
-): string | undefined {
-  const markerIdx = queryKey.indexOf(GROUPED_SUBQUERY_MARKER);
-  if (markerIdx === -1) return;
-  const key = queryKey[markerIdx + 1];
-  return typeof key === 'string' ? key : undefined;
 }
 
 /**

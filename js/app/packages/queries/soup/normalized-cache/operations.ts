@@ -17,15 +17,14 @@ import { queryClient } from '../../client';
 import {
   computeGroupKeysForItem,
   extractGroupByFromKey,
-  extractPerGroupKeyFromQueryKey,
 } from '../grouped/api';
-import type { GroupedSoupPage, GroupMeta } from '../grouped/types';
+import type { GroupMeta } from '../grouped/types';
 import type {
   SoupApiItemFilter,
   SoupAstItemsGroupedPage,
   SoupAstItemsPage,
 } from '../items';
-import { isGroupedSubqueryKey, soupKeys } from '../keys';
+import { soupKeys } from '../keys';
 import {
   getNormalizationObjectKey,
   getSoupNormalizer,
@@ -266,9 +265,6 @@ function removeFromGroupedPage<P extends { items: Record<string, SoupApiItem>; g
  */
 export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
   const previous = snapshotSoup();
-  const id = getSoupItemId(item);
-  let needGroupedInvalidation = false;
-
   queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
     {
       predicate: (query) => {
@@ -288,14 +284,9 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
     },
   );
 
-  // Parent astItems queries (grouped or flat).
   const parents = queryClient.getQueriesData<
     InfiniteData<SoupAstItemsPage, unknown>
-  >({
-    predicate: (q) =>
-      partialMatchKey(q.queryKey, soupKeys.astItems._def) &&
-      !isGroupedSubqueryKey(q.queryKey),
-  });
+  >({ queryKey: soupKeys.astItems._def });
   for (const [key, prev] of parents) {
     if (!prev?.pages?.length) continue;
     const firstPage = prev.pages[0];
@@ -314,52 +305,28 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
 
     const newKeys = computeGroupKeysForItem(item, extractGroupByFromKey(key));
     if (newKeys === undefined || newKeys.length === 0) {
-      needGroupedInvalidation = true;
+      queryClient.invalidateQueries({ queryKey: key });
       continue;
     }
 
     let nextPage: SoupAstItemsGroupedPage = firstPage;
+    let needsInvalidation = false;
     for (const targetKey of newKeys) {
       if (!nextPage.groups.find((g) => g.key === targetKey)) {
-        needGroupedInvalidation = true;
+        needsInvalidation = true;
         continue;
       }
       nextPage = addToGroupedPage(nextPage, item, targetKey);
     }
 
-    queryClient.setQueryData<InfiniteData<SoupAstItemsPage, unknown>>(key, {
-      ...prev,
-      pages: [nextPage, ...prev.pages.slice(1)],
-    });
-  }
-
-  const subs = queryClient.getQueriesData<
-    InfiniteData<GroupedSoupPage, unknown>
-  >({ predicate: (q) => isGroupedSubqueryKey(q.queryKey) });
-  for (const [key, prev] of subs) {
-    if (!prev?.pages?.length) continue;
-    const myGroupKey = extractPerGroupKeyFromQueryKey(key);
-    if (myGroupKey === undefined) continue;
-
-    const newKeys = computeGroupKeysForItem(item, extractGroupByFromKey(key));
-    if (newKeys === undefined) {
+    if (needsInvalidation) {
       queryClient.invalidateQueries({ queryKey: key });
       continue;
     }
-    if (!newKeys.includes(myGroupKey)) continue;
-    if (prev.pages.some((p) => id in p.items)) continue;
 
-    queryClient.setQueryData<InfiniteData<GroupedSoupPage, unknown>>(key, {
+    queryClient.setQueryData<InfiniteData<SoupAstItemsPage, unknown>>(key, {
       ...prev,
-      pages: prev.pages.map((p, i) =>
-        i === 0 ? addToGroupedPage(p, item, myGroupKey) : p,
-      ),
-    });
-  }
-
-  if (needGroupedInvalidation) {
-    queryClient.invalidateQueries({
-      predicate: (q) => isGroupedSubqueryKey(q.queryKey),
+      pages: [nextPage, ...prev.pages.slice(1)],
     });
   }
 
@@ -392,11 +359,7 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
   );
 
   queryClient.setQueriesData<InfiniteData<SoupAstItemsPage, unknown>>(
-    {
-      predicate: (q) =>
-        partialMatchKey(q.queryKey, soupKeys.astItems._def) &&
-        !isGroupedSubqueryKey(q.queryKey),
-    },
+    { queryKey: soupKeys.astItems._def },
     (prev) => {
       if (!prev?.pages) return prev;
       return {
@@ -411,17 +374,6 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
           if (items.length === page.items.length) return page;
           return { ...page, items };
         }),
-      };
-    },
-  );
-
-  queryClient.setQueriesData<InfiniteData<GroupedSoupPage, unknown>>(
-    { predicate: (q) => isGroupedSubqueryKey(q.queryKey) },
-    (prev) => {
-      if (!prev?.pages) return prev;
-      return {
-        ...prev,
-        pages: prev.pages.map((page) => removeFromGroupedPage(page, entityIds)),
       };
     },
   );

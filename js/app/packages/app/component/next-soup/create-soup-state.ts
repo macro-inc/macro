@@ -26,11 +26,9 @@ export type GroupMeta = {
   label: string;
   value: unknown;
   count: number;
+  nextCursor: string | null;
   isExpanded: () => boolean;
   toggle: () => void;
-  hasMore: () => boolean;
-  loadMore: () => Promise<void>;
-  isLoading: () => boolean;
   renderHeader?: (props: GroupHeaderProps) => JSX.Element;
 };
 
