@@ -1,16 +1,13 @@
 import { type Accessor, onCleanup } from 'solid-js';
 import { touchHandler } from './touchHandler';
 
+const LONG_PRESS_ENTER_DELAY_MS = 100;
+const LONG_PRESS_EXIT_DELAY_MS = 50;
+
 interface LongPressHighlightOptions {
   onLongPress?: () => void;
-  /** CSS class added while the touch highlight is active. Default: `long-press-animation` */
-  className?: string;
-  /** Delay (ms) before adding the `long-press-animation` class on touch start. If touch ends before this delay, no exit animation plays. Default: 100 */
-  enterDelay?: number;
-  /** Delay (ms) before removing the `long-press-animation` class after a long press. Default: 50 */
-  exitDelay?: number;
-  /** Delay (ms) before removing the highlight after a short touch. Default: 0 */
-  shortTouchExitDelay?: number;
+  /** CSS class added while the touch highlight is active. */
+  className: string;
 }
 
 declare module 'solid-js' {
@@ -22,8 +19,8 @@ declare module 'solid-js' {
 }
 
 /**
- * Wraps touchHandler to manage the `long-press-animation` CSS class lifecycle on an element.
- * Pair with the corresponding CSS animation on `.long-press-animation`.
+ * Wraps touchHandler to manage a touch highlight CSS class lifecycle on an element.
+ * Pair with a corresponding CSS animation for the configured className.
  */
 export function longPressHighlight(
   element: HTMLElement,
@@ -33,8 +30,7 @@ export function longPressHighlight(
   let exitTimer: number | undefined;
   let activeClassName: string | undefined;
 
-  const highlightClassName = () =>
-    options().className ?? 'long-press-animation';
+  const highlightClassName = () => options().className;
 
   const cancelExit = () => {
     if (exitTimer !== undefined) {
@@ -80,12 +76,10 @@ export function longPressHighlight(
 
   touchHandler(element, () => ({
     onTouchStart: () => {
-      const enterDelay = options().enterDelay ?? 100;
-      if (enterDelay === 0) {
-        startAnimation();
-      } else {
-        enterTimer = window.setTimeout(startAnimation, enterDelay);
-      }
+      enterTimer = window.setTimeout(
+        startAnimation,
+        LONG_PRESS_ENTER_DELAY_MS
+      );
     },
     onLongPress: () => {
       options().onLongPress?.();
@@ -97,14 +91,9 @@ export function longPressHighlight(
     onTouchEnd: (_e, longpress) => {
       cancelEnter();
       if (!longpress) {
-        const exitDelay = options().shortTouchExitDelay ?? 0;
-        if (exitDelay === 0) {
-          endAnimation();
-        } else {
-          scheduleEndAnimation(exitDelay);
-        }
+        endAnimation();
       } else {
-        scheduleEndAnimation(options().exitDelay ?? 50);
+        scheduleEndAnimation(LONG_PRESS_EXIT_DELAY_MS);
       }
     },
   }));
