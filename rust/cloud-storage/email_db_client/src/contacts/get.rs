@@ -12,6 +12,11 @@ use std::collections::{HashMap, HashSet};
 
 pub type ThreadContactsMap = HashMap<Uuid, Vec<(String, Option<String>)>>;
 
+/// `(email, name, first_at, last_at)` for a contact's known activity
+/// range on a link — what the `populate_crm_for_user` historical seed
+/// hands to `PopulateCrmContact`.
+pub type CrmContactRange = (String, Option<String>, DateTime<Utc>, DateTime<Utc>);
+
 /// fetch message sender from db
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_sender_by_message_id(
@@ -88,7 +93,7 @@ struct RecipientQueryResult {
 pub async fn fetch_sent_message_recipient_contacts_by_link(
     pool: &PgPool,
     link_id: Uuid,
-) -> anyhow::Result<Vec<(String, Option<String>, DateTime<Utc>, DateTime<Utc>)>> {
+) -> anyhow::Result<Vec<CrmContactRange>> {
     let rows = sqlx::query!(
         r#"
         SELECT
@@ -132,7 +137,7 @@ pub async fn fetch_sent_message_recipient_contacts_by_link(
 pub async fn fetch_received_sender_contacts_by_link(
     pool: &PgPool,
     link_id: Uuid,
-) -> anyhow::Result<Vec<(String, Option<String>, DateTime<Utc>, DateTime<Utc>)>> {
+) -> anyhow::Result<Vec<CrmContactRange>> {
     let rows = sqlx::query!(
         r#"
         SELECT

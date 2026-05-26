@@ -154,6 +154,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::too_many_arguments)]
     async fn populate_contact(
         &self,
         team_id: &uuid::Uuid,

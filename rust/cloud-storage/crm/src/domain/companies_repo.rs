@@ -88,6 +88,7 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     ///
     /// [`lookup_domain_metadata`]: CompaniesRepository::lookup_domain_metadata
     /// [`upsert_domain_metadata`]: CompaniesRepository::upsert_domain_metadata
+    #[allow(clippy::too_many_arguments)]
     fn populate_contact(
         &self,
         team_id: &uuid::Uuid,

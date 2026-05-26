@@ -2,7 +2,8 @@ use crate::convert::map_message_resource_to_service;
 use crate::pubsub::backfill::increment_counters;
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::{
-    CheckGmailRateLimitArgs, check_gmail_rate_limit, enqueue_populate_crm_contacts,
+    CheckGmailRateLimitArgs, CrmContactRecipient, check_gmail_rate_limit,
+    enqueue_populate_crm_contacts,
 };
 use crate::util::process_pre_insert::process_message_pre_insert;
 use anyhow::Context;
@@ -106,12 +107,7 @@ pub async fn backfill_message(
         // in. `Utc::now()` fallback when Gmail returned no
         // internal_date_ts.
         let at = message.internal_date_ts.unwrap_or_else(chrono::Utc::now);
-        let recipients: Vec<(
-            String,
-            Option<String>,
-            chrono::DateTime<chrono::Utc>,
-            chrono::DateTime<chrono::Utc>,
-        )> = if message.is_sent {
+        let recipients: Vec<CrmContactRecipient> = if message.is_sent {
             message
                 .to
                 .iter()

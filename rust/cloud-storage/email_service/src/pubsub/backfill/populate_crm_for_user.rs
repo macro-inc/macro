@@ -75,10 +75,6 @@ pub async fn populate_crm_for_user(
             })
         })?;
 
-    let sent_recipients = sent_recipients
-        .into_iter()
-        .map(|(email, name, first_at, last_at)| (email, name, first_at, last_at));
-
     enqueue_populate_crm_contacts(ctx, link.id, &self_email, sent_recipients, true).await?;
 
     let received_senders =
@@ -90,10 +86,6 @@ pub async fn populate_crm_for_user(
                     source: e.context("Failed to fetch received-message senders"),
                 })
             })?;
-
-    let received_senders = received_senders
-        .into_iter()
-        .map(|(email, name, first_at, last_at)| (email, name, first_at, last_at));
 
     enqueue_populate_crm_contacts(ctx, link.id, &self_email, received_senders, false).await
 }

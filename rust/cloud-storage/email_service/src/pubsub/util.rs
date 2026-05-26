@@ -13,6 +13,12 @@ use models_email::gmail::operations::GmailApiOperation;
 use std::collections::HashSet;
 use uuid::Uuid;
 
+/// One recipient tuple `(email, name, first_at, last_at)` fed into
+/// [`enqueue_populate_crm_contacts`]. Per-message paths use the same
+/// timestamp for both endpoints; the historical seed passes the
+/// contact's pre-aggregated MIN/MAX.
+pub type CrmContactRecipient = (String, Option<String>, DateTime<Utc>, DateTime<Utc>);
+
 /// Arguments for checking Gmail API rate limits
 pub struct CheckGmailRateLimitArgs<'a> {
     pub redis_client: &'a RedisClient,
@@ -153,7 +159,7 @@ pub async fn enqueue_populate_crm_contacts(
     ctx: &PubSubContext,
     link_id: Uuid,
     self_email: &str,
-    contacts: impl IntoIterator<Item = (String, Option<String>, DateTime<Utc>, DateTime<Utc>)>,
+    contacts: impl IntoIterator<Item = CrmContactRecipient>,
     is_sent: bool,
 ) -> Result<(), ProcessingError> {
     let mut seen: HashSet<String> = HashSet::new();
