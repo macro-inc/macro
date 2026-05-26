@@ -443,7 +443,7 @@ function SingleValueSubmenu<T>(props: {
         <span class="text-ink">{props.label}</span>
         <CaretRightIcon class="size-3 text-ink-muted" />
       </Dropdown.SubTrigger>
-      <Dropdown.SubContent class="min-w-40">
+      <Dropdown.SubContent>
         <Dropdown.Group>
           <For each={props.options}>
             {(option) => {
@@ -637,7 +637,7 @@ const SearchIndexSubRow = (props: {
       <SearchIndexRowLabel option={props.option} active={props.active} />
       <CaretRightIcon class="size-3 text-ink-muted" />
     </Dropdown.SubTrigger>
-    <Dropdown.SubContent class="min-w-45">
+    <Dropdown.SubContent>
       <Dropdown.Group>{props.children}</Dropdown.Group>
     </Dropdown.SubContent>
   </Dropdown.Sub>
@@ -810,7 +810,7 @@ export const UnifiedFilterDropdown = () => {
                           <CaretRightIcon class="size-3 text-ink-muted" />
                         </Dropdown.SubTrigger>
 
-                        <Dropdown.SubContent class="min-w-40">
+                        <Dropdown.SubContent>
                           <Dropdown.Group>
                             <For each={category.options}>
                               {(option) => {
