@@ -1,4 +1,5 @@
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
+import CheckIcon from '@phosphor/check.svg';
 import { Button, type ButtonProps } from './Button';
 import { Surface, type SurfaceProps } from './Surface';
 import { cn } from '../utils/classname';
@@ -40,7 +41,7 @@ export type DropdownItemProps = ComponentProps<typeof KobalteDropdownMenu.Item>;
 export type DropdownSubProps = ComponentProps<typeof KobalteDropdownMenu.Sub>;
 type PortalMount = ComponentProps<typeof KobalteDropdownMenu.Portal>['mount'];
 
-const ROW_CLASS = 'rounded-lg w-full flex items-center gap-2.5 px-2 h-8 text-left text-xs cursor-default outline-none hover:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
+const ROW_CLASS = 'group rounded-lg w-full flex items-center gap-2.5 px-2 h-8 text-left text-xs cursor-default outline-none hover:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
 
 function DropdownContent(props: DropdownContentProps) {
   const [local, rest] = splitProps(props, ['depth', 'class', 'mount', 'children']);
@@ -94,13 +95,28 @@ function DropdownGroupLabel(props: DropdownGroupLabelProps) {
   );
 }
 
+const CHECKBOX_ITEM_BOX_CLASS = cn(
+  'inline-flex items-center justify-center size-3.5 shrink-0 rounded-sm',
+  'border border-transparent text-surface',
+  'group-hover:not-hover:border-edge-muted group-data-highlighted:not-hover:border-edge-muted',
+  'hover:border-accent',
+  'group-data-checked:bg-accent group-data-checked:border-accent',
+);
+
 function DropdownCheckboxItem(props: DropdownCheckboxItemProps) {
-  const [local, rest] = splitProps(props, ['class']);
+  const [local, rest] = splitProps(props, ['class', 'children']);
   return (
     <KobalteDropdownMenu.CheckboxItem
       class={cn(ROW_CLASS, local.class)}
       {...rest}
-    />
+    >
+      <div class={CHECKBOX_ITEM_BOX_CLASS}>
+        <KobalteDropdownMenu.ItemIndicator>
+          <CheckIcon class="size-2.5" />
+        </KobalteDropdownMenu.ItemIndicator>
+      </div>
+      {local.children}
+    </KobalteDropdownMenu.CheckboxItem>
   );
 }
 

@@ -4,6 +4,7 @@ export { TabbedControl } from './components/TabbedControl';
 export { Avatar, AvatarGroup } from './components/Avatar';
 export { LogoProgress } from './components/LogoProgress';
 export { ToggleSwitch } from './components/ToggleSwitch';
+export { Checkbox } from './components/Checkbox';
 export { ButtonGroup } from './components/ButtonGroup';
 export { SendButton } from './components/SendButton';
 export { HoverCard } from './components/HoverCard';
@@ -22,6 +23,7 @@ export type { AvatarSize, AvatarProps, AvatarGroupSize, AvatarGroupProps } from 
 export type { ChatInputRows, ChatInputProps } from './components/ChatInput';
 export type { ToggleSwitchProps } from './components/ToggleSwitch';
 export type { SendButtonProps } from './components/SendButton';
+export type { CheckboxProps } from './components/Checkbox';
 export type { ButtonProps } from './components/Button';
 export type { DialogProps } from './components/Dialog';
 
