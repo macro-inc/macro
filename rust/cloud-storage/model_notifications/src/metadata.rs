@@ -16,6 +16,9 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 #[derive(Debug, Clone, ToSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiResponseMetadata {
@@ -349,12 +352,12 @@ impl NotificationTitle for MentionedInDocumentCommentMetadata {
 impl NotificationTitle for ChannelReplyMetadata {
     fn format_title(
         &self,
-        sender_id: Option<MacroUserIdStr<'_>>,
+        _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender =
-            sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-
-        Ok(format!("Reply from {}", sender.0.email_part().email_str()))
+        Ok(format!(
+            "Reply from {}",
+            self.user_id.email_part().local_part()
+        ))
     }
 
     fn format_body(

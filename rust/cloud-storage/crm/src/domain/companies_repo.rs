@@ -1,6 +1,7 @@
 //! Port for persistence operations on CRM companies.
 
-use crate::domain::model::{CrmCompany, CrmError, DomainMetadata};
+use crate::domain::model::{CrmCompany, CrmError, CrmScopePrecheck, DomainMetadata};
+use chrono::{DateTime, Utc};
 
 /// The CompaniesRepository defines persistence operations for CRM
 /// companies and their associated domains.
@@ -32,16 +33,16 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     ///      this domain out (the per-domain killswitch): no rows are
     ///      written and the method returns `Ok(())` so the caller can
     ///      ack the job.
-    ///    - If a row exists with `email_sync = true` it is reused.
+    ///    - If a row exists with `email_sync = true` it is reused and its
+    ///      `updated_at` is refreshed.
     ///    - Otherwise a new `crm_companies` row and a matching
     ///      `crm_domains` row are inserted. The company name itself
     ///      lives in `crm_domain_directory` keyed by `domain`, not on
     ///      `crm_companies` — see [`lookup_domain_metadata`] /
     ///      [`upsert_domain_metadata`].
-    /// 2. Upsert `crm_contacts (company_id, email, name)` with
-    ///    `ON CONFLICT DO UPDATE SET name = COALESCE(crm_contacts.name, EXCLUDED.name)`
-    ///    so the first non-NULL name wins and later populates can't
-    ///    overwrite it.
+    /// 2. Upsert `crm_contacts (company_id, email, name)`, refreshing
+    ///    `updated_at` on existing contacts while preserving the first
+    ///    non-NULL name with `name = COALESCE(crm_contacts.name, EXCLUDED.name)`.
     /// 3. Upsert `crm_contact_sources (contact_id, link_id)` with
     ///    `ON CONFLICT DO NOTHING`.
     ///
@@ -50,12 +51,44 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// this user's link (sourced from `email_contacts.name` by the
     /// caller); pass `None` when no display name is available.
     ///
+    /// `first_at` / `last_at` are the contact's known interaction
+    /// range. Per-message callers set both to the message's
+    /// `internal_date_ts`; the historical seed pre-aggregates MIN/MAX
+    /// across the contact's messages. Written to `first_interaction` /
+    /// `last_interaction` (not `created_at` / `updated_at`, which keep
+    /// their row-lifecycle semantics — DEFAULT `now()` on INSERT and
+    /// the `set_crm_updated_at` trigger on UPDATE).
+    ///
+    /// `is_sent` flags whether the populating message was sent by the
+    /// user. Insert semantics:
+    ///
+    /// - **`is_sent=true`**: full populate. INSERT a new
+    ///   `crm_companies` row when none exists; on existing, refresh
+    ///   `first_interaction = LEAST(stored, $first_at)` and
+    ///   `last_interaction = GREATEST(stored, $last_at)`. Upsert
+    ///   `crm_contacts` with the same merge. Upsert
+    ///   `crm_contact_sources`.
+    /// - **`is_sent=false`**: no-op when no `crm_companies` row exists
+    ///   for `(team, domain)`. When one exists, refresh only the
+    ///   company's `last_interaction = GREATEST(stored, $last_at)`
+    ///   (do NOT touch `first_interaction`). Upsert `crm_contacts` —
+    ///   new contacts INSERT with both endpoints; existing contacts
+    ///   get `last_interaction = GREATEST(...)` only. Upsert
+    ///   `crm_contact_sources`.
+    ///
+    /// The `email_sync=false` per-domain killswitch short-circuits in
+    /// both directions. Source rows track all interactions (sent or
+    /// received), not just sent — see also
+    /// [`CompaniesRepository::depopulate_contact`].
+    ///
     /// The caller is expected to have ensured a `crm_domain_directory`
     /// entry exists for `domain` (via [`upsert_domain_metadata`]) before
-    /// invoking — this method writes no metadata of its own.
+    /// invoking when `is_sent=true` — this method writes no metadata of
+    /// its own. `is_sent=false` doesn't need it.
     ///
     /// [`lookup_domain_metadata`]: CompaniesRepository::lookup_domain_metadata
     /// [`upsert_domain_metadata`]: CompaniesRepository::upsert_domain_metadata
+    #[allow(clippy::too_many_arguments)]
     fn populate_contact(
         &self,
         team_id: &uuid::Uuid,
@@ -63,6 +96,9 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         domain: &str,
         email: &str,
         name: Option<&str>,
+        first_at: DateTime<Utc>,
+        last_at: DateTime<Utc>,
+        is_sent: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
     /// Read the cached [`DomainMetadata`] for `domain` from
@@ -212,4 +248,23 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         contact_id: &uuid::Uuid,
         hidden: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Batched authorization probe for a CRM-scoped email query. Returns
+    /// per-input status the email service maps into typed `EmailErr`
+    /// variants (`CrmDomainNotFound`, `CrmDomainNotPermitted`,
+    /// `CrmAddressNotFound`, `CrmAddressNotPermitted`,
+    /// `CrmDisabledForTeam`).
+    ///
+    /// `domains` and `addresses` are expected to be lowercased by the
+    /// caller. Either may be empty; both may be non-empty but the
+    /// service-layer caller enforces mutual exclusivity.
+    ///
+    /// Read-only and not transactional — the dynamic query that follows
+    /// re-checks the team-level killswitch via JOIN to close the race.
+    fn crm_scope_precheck(
+        &self,
+        team_id: &uuid::Uuid,
+        domains: &[String],
+        addresses: &[String],
+    ) -> impl Future<Output = Result<CrmScopePrecheck, CrmError>> + Send;
 }

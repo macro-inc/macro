@@ -153,8 +153,8 @@ function DropdownTrigger(props: DropdownTriggerProps) {
     <KobalteDropdownMenu.Trigger
       variant="base"
       as={Button}
-      {...props}
       size="sm"
+      {...props}
     />
   );
 }

@@ -1,7 +1,3 @@
-import type {
-  Property,
-  PropertyDefinitionDomain,
-} from '@core/component/Properties/types';
 import { useEmail, useUserId } from '@core/context/user';
 import { useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
@@ -20,6 +16,7 @@ import {
   useQuickAccessEntities,
   userToEntity,
 } from '@property';
+import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import { debounce } from '@solid-primitives/scheduled';
 import {

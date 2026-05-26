@@ -36,15 +36,21 @@ interface SoupSearchbarProps {
 
 const variantStyles: Record<SearchbarVariant, string> = {
   filled:
-    'bg-ink/5 text-ink-muted hover:bg-ink/7 hover:text-ink border-edge-muted focus-within:bg-ink/7 focus-within:text-ink',
+    'bg-ink/5 text-ink-muted hover:bg-ink/7 hover:text-ink border-edge-muted focus-within:bg-ink/7 focus-within:text-ink focus-within:border-accent',
   secondary:
-    'bg-surface text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink',
+    'bg-surface text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent',
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
-  const { setSearchText, setSearchPaused, queryFilters } = useSoupView();
+  const { searchText, setSearchText, setSearchPaused, queryFilters } =
+    useSoupView();
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
+
+  // Read the current search-text signal once at mount so the editor opens
+  // with whatever was captured into per-entry state by the last visit.
+  // Falls back to the explicit `initialValue` prop when entry state is empty.
+  const initialEditorValue = searchText() || props.initialValue;
 
   const [hasContent, setHasContent] = createSignal(false);
   const [latestMarkdown, setLatestMarkdown] = createSignal('');
@@ -161,13 +167,13 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
         <SearchIcon class="size-4 shrink-0" />
         <div
           data-soup-search
-          class="flex-1 min-w-0 whitespace-nowrap overflow-hidden **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 **:[[contenteditable]]:whitespace-nowrap **:[[contenteditable]]:min-h-[1lh] [&_p]:my-0 [&_p]:whitespace-nowrap"
+          class="flex-1 min-w-0 whitespace-nowrap overflow-hidden **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 **:[[contenteditable]]:whitespace-nowrap **:[[contenteditable]]:min-h-lh [&_p]:my-0 [&_p]:whitespace-nowrap"
         >
           <MarkdownShell
             config={editor}
             placeholder={props.placeholder ?? 'Search'}
             autofocus={props.autoFocus}
-            initialValue={props.initialValue}
+            initialValue={initialEditorValue}
             class="min-h-0! overflow-visible!"
           />
         </div>

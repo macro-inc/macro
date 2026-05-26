@@ -2,18 +2,18 @@ import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
-import ShareNetwork from '@phosphor/share-network.svg';
-import { useToggleShareWithTeamMutation } from '@queries/call/call';
-import { cn, ToggleSwitch, Tooltip } from '@ui';
+import { cn, Tooltip } from '@ui';
 import { type RemoteParticipant, Track } from 'livekit-client';
 import { For, type JSXElement, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
+import { InlineCheckbox } from './CallControls/CallMenuPrimitives';
 import {
   CALL_PANEL_MEDIUM_NARROW_PX,
   CALL_PANEL_VERY_NARROW_PX,
 } from './call-panel-breakpoints';
 import { TrackView } from './TrackView';
+import { useToggleShareWithTeam } from './use-toggle-share-with-team';
 
 function VideoTag(props: {
   children: JSXElement;
@@ -197,14 +197,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
   const currentUserId = useUserId();
   const currentUserName = useAuthor();
   const isConnecting = () => callCtx.isConnecting();
-  const toggleShareWithTeam = useToggleShareWithTeamMutation();
-
-  const handleToggleShareWithTeam = async () => {
-    const callId = callCtx.activeCallId();
-    if (!callId) return;
-    const newValue = await toggleShareWithTeam.mutateAsync(callId);
-    callCtx.setSharedWithTeam(newValue);
-  };
+  const handleToggleShareWithTeam = useToggleShareWithTeam();
 
   const splitPanel = useSplitPanel();
   const panelWidth = () => splitPanel?.panelSize.width ?? Infinity;
@@ -281,7 +274,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
 
       {/* Participants area */}
       <div
-        class={`${hasAnyScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} relative py-2`}
+        class={`${hasAnyScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} relative pt-2`}
       >
         <Show
           when={participants().length > 0}
@@ -322,54 +315,39 @@ export function CallOverlay(props: { onLeave: () => void }) {
         </Show>
       </div>
 
-      {/* Controls bar */}
-      <div
-        class={cn(
-          'flex items-center p-3 pt-1 bg-surface-1',
-          !isMediumNarrow() && 'relative justify-center',
-          isMediumNarrow() && !isVeryNarrow() && 'justify-between',
-          isVeryNarrow() && 'justify-center'
-        )}
-      >
+      {/* Controls bar — soup-notification vocabulary. Share toggle is an
+          icon button (with optional inline label), active state = subtle
+          accent tint. No chunky toggle switch. */}
+      <div class="flex items-center py-2 relative justify-center">
         <Show when={!isVeryNarrow()}>
-          <div
-            class={cn(
-              'flex items-center gap-2',
-              !isMediumNarrow() && 'absolute left-3'
-            )}
+          <Tooltip
+            placement="top"
+            label={
+              callCtx.isSharedWithTeam()
+                ? 'Everyone can view the transcript and AI summary'
+                : 'Let everyone view the transcript and AI summary'
+            }
           >
-            <Show when={!isMediumNarrow()}>
-              <span class="text-xs text-ink-muted whitespace-nowrap inline-grid">
-                <span class="col-start-1 row-start-1 invisible" aria-hidden>
-                  Shared with team
-                </span>
-                <span class="col-start-1 row-start-1">
-                  {callCtx.isSharedWithTeam()
-                    ? 'Shared with team'
-                    : 'Share with team'}
-                </span>
-              </span>
-            </Show>
-            <Tooltip
-              placement="top"
-              label="When on, all team members can view and search this call's transcript and AI summary."
+            <button
+              type="button"
+              onClick={() => void handleToggleShareWithTeam()}
+              disabled={isConnecting()}
+              role="checkbox"
+              aria-checked={callCtx.isSharedWithTeam()}
+              class={cn(
+                'absolute left-0 inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none',
+                'border border-ink-muted/[0.08] bg-ink-muted/[0.025]',
+                'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
+                callCtx.isSharedWithTeam() && 'text-ink',
+                isConnecting() && 'pointer-events-none opacity-50'
+              )}
             >
-              <div class="flex items-center gap-1">
-                <ShareNetwork
-                  class={cn(
-                    'size-3 shrink-0',
-                    callCtx.isSharedWithTeam() ? 'text-ink' : 'text-ink-muted'
-                  )}
-                  aria-hidden
-                />
-                <ToggleSwitch
-                  onChange={() => void handleToggleShareWithTeam()}
-                  checked={callCtx.isSharedWithTeam()}
-                  disabled={isConnecting()}
-                />
-              </div>
-            </Tooltip>
-          </div>
+              <InlineCheckbox checked={callCtx.isSharedWithTeam()} />
+              <Show when={!isMediumNarrow()}>
+                <span class="whitespace-nowrap">Share with team</span>
+              </Show>
+            </button>
+          </Tooltip>
         </Show>
         <CallControls onLeave={props.onLeave} />
       </div>

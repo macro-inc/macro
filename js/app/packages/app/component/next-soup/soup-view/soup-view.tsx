@@ -23,10 +23,8 @@ import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters
 import { MaybeSoupEntityActionDrawerManager } from '@app/component/next-soup/soup-view/SoupEntityActionDrawerManager';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { SoupEntityContextMenu } from '@app/component/next-soup/soup-view/soup-entity-context-menu';
-import {
-  activeSoupViewCounts,
-  soupViewCacheKey,
-} from '@app/component/next-soup/soup-view/soup-view-cache-key';
+import { persistSoupNavigationTouchHighlight } from '@app/component/next-soup/soup-view/soup-navigation-touch-highlight';
+import { activeSoupViewCounts } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import {
   SoupViewContextProvider,
   useSoupView,
@@ -64,12 +62,11 @@ import {
 import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
+import { usePreference } from '@app/preferences/use-preference';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';
-import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { Resize } from '@core/component/Resize';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
@@ -97,6 +94,8 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import Spinner from '@phosphor/spinner.svg';
+import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -107,7 +106,6 @@ import {
   refetchSoupEntity,
 } from '@queries/soup/normalized-cache';
 import { debounce } from '@solid-primitives/scheduled';
-import { makePersisted } from '@solid-primitives/storage';
 import { Button, cn, Layer, Tooltip } from '@ui';
 import {
   type Accessor,
@@ -124,7 +122,6 @@ import {
   Show,
   Suspense,
   Switch,
-  untrack,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
@@ -289,20 +286,6 @@ const useSoupNotificationInvalidators = () => {
   );
 };
 
-type PersistedSoupViewState = {
-  version?: number;
-  activeTab: string | undefined;
-  filters: SetPredicatesInput<string>;
-  queryFilters: Partial<QueryState>;
-  sort: SystemSortOption[];
-  previewEntity: string | undefined;
-  assigneeFilter: string[];
-  groupBy: string | undefined;
-  collapsedGroups: string[];
-};
-
-const PERSISTED_STATE_VERSION = 8;
-
 const listStateCache = new Map<
   string,
   {
@@ -324,8 +307,6 @@ interface SoupViewProps {
    * exists for this view.
    */
   initialGroupBy?: string;
-  /** Ignore localStorage on mount and use the supplied `initial*` values. */
-  skipPersistedState?: boolean;
   disableLocalSearch?: boolean;
   /**
    * Client-side entities to merge into the soup results. Useful for entity
@@ -561,7 +542,6 @@ export const SoupView = (props: SoupViewProps) => {
                 <SoupViewList
                   initialClientFilters={props.initialClientFilters}
                   initialGroupBy={props.initialGroupBy}
-                  skipPersistedState={props.skipPersistedState}
                   onScrollOffsetBaseline={resetFloatingButtonScrollTracking}
                   onScrollOffsetChange={handleSoupScrollOffsetChange}
                 />
@@ -603,7 +583,6 @@ interface SoupViewListProps {
   scopeId?: string;
   initialClientFilters?: SetPredicatesInput<string>;
   initialGroupBy?: string;
-  skipPersistedState?: boolean;
   onScrollOffsetBaseline?: (offset: number) => void;
   onScrollOffsetChange?: (offset: number) => void;
 }
@@ -616,7 +595,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     rows,
     searchText,
     setSearchText,
-    queryFilters,
     featuredIds,
     isSearchServiceLoading,
     isLocalSearchSettling,
@@ -804,6 +782,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
       return;
     }
 
+    persistSoupNavigationTouchHighlight(event);
+
     await openEntityInSplitFromUnifiedList(entity, {
       openInNewSplit: event.shiftKey,
       location,
@@ -909,10 +889,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const isProjectList = panel.handle.content().type === 'project';
   const contentId = panel.handle.content().id;
 
-  // If another SoupViewList with the same contentId is already mounted (e.g.
-  // same view open in two splits), disable all persistence for this instance
+  // Maintained for the channel/email/call sub-filters in
+  // search-filter-controls.tsx, which check duplicate-instance status via
+  // this counter.
   const prevCount = activeSoupViewCounts.get(contentId) ?? 0;
-  const isDuplicate = prevCount > 0;
   activeSoupViewCounts.set(contentId, prevCount + 1);
   onCleanup(() => {
     const count = activeSoupViewCounts.get(contentId) ?? 1;
@@ -920,101 +900,87 @@ export const SoupViewList = (props: SoupViewListProps) => {
     else activeSoupViewCounts.set(contentId, count - 1);
   });
 
-  const persistenceDisabled = isProjectList || isDuplicate;
-
-  const [persistedState, setPersistedState] = makePersisted(
-    createSignal<PersistedSoupViewState>(),
-    { name: soupViewCacheKey(contentId) }
-  );
-
   const cacheKey = `soup-view-${panel.handle.id}-${contentId}${previewPanel ? '-preview' : ''}`;
 
-  // Restore previewEntity synchronously so the first-render effect sees the
-  // correct value and avoids a transient window where previewEntity is undefined.
-  const initialPersistedState =
-    !persistenceDisabled && !props.skipPersistedState
-      ? untrack(persistedState)
-      : null;
-  soup.setPreviewEntity(initialPersistedState?.previewEntity);
+  // Cross-session, view-kind-scoped user preferences. Each has its own
+  // localStorage key under `macro:pref:soup:{contentId}:*`.
+  const [sortPref, setSortPref] = usePreference<string[]>(
+    `macro:pref:soup:${contentId}:sort`,
+    { default: [] }
+  );
+  const [groupByPref, setGroupByPref] = usePreference<string | undefined>(
+    `macro:pref:soup:${contentId}:groupBy`,
+    { default: undefined }
+  );
 
-  // Set initial state
+  // Preview-pane open state is transient per history entry: captured into
+  // per-entry state on nav-away and restored on back/forward. Read
+  // synchronously in the body so the first render sees the correct value
+  // and we avoid a transient flash where the pane is closed.
+  const persistedPreview = panel.handle.currentEntryState()?.['soup.preview'] as
+    | string
+    | undefined;
+  soup.setPreviewEntity(persistedPreview);
+  const previewCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    'soup.preview',
+    () => soup.previewEntity()
+  );
+  onCleanup(previewCaptorTeardown);
+
+  // Which groups are collapsed is also per-entry state: captured on nav-away
+  // and restored on back/forward.
+  const persistedCollapsedGroups = panel.handle.currentEntryState()?.[
+    'soup.collapsedGroups'
+  ] as string[] | undefined;
+  const collapsedCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    'soup.collapsedGroups',
+    () => [...soup.grouping.collapsedGroups()]
+  );
+  onCleanup(collapsedCaptorTeardown);
+
   onMount(() => {
-    if (initialPersistedState) {
-      const isStale =
-        (initialPersistedState.version ?? 0) < PERSISTED_STATE_VERSION;
-      const applied =
-        isStale &&
-        isListViewID(contentId) &&
-        initialPersistedState.activeTab &&
-        applyTabPreset(contentId, initialPersistedState.activeTab);
-      if (!applied) {
-        batch(() => {
-          soup.predicates.set(
-            isStale
-              ? (props.initialClientFilters ?? {})
-              : initialPersistedState.filters
-          );
-          const persistedFilterData = isStale
-            ? {}
-            : (initialPersistedState.queryFilters ?? {});
-          queryFilters.replace({
-            include: persistedFilterData.include,
-            exclude: persistedFilterData.exclude,
-            emailView: persistedFilterData.emailView,
-          });
-          if (isListViewID(contentId)) {
-            const tab =
-              initialPersistedState.activeTab ??
-              VIEW_TAB_PRESETS[contentId].default;
-            if (tab) {
-              setActiveTab(tab);
-            }
-          }
-        });
+    batch(() => {
+      const savedSort = sortPref();
+      if (savedSort.length > 0) {
+        soup.sort.setAll(savedSort as SystemSortOption[]);
       }
-      batch(() => {
-        soup.sort.setAll(initialPersistedState.sort ?? []);
-        setAssigneeFilter(initialPersistedState.assigneeFilter ?? []);
-        soup.grouping.setActiveGroupId(initialPersistedState.groupBy);
-        soup.grouping.collapseAll(initialPersistedState.collapsedGroups ?? []);
-      });
-    } else {
-      if (props.initialClientFilters) {
+      // soup state is shared at the SplitPanel level, so a prior view in the
+      // same split (e.g. tasks) may have left grouping state behind. Always
+      // reset to this view's saved or initial grouping, even when undefined.
+      soup.grouping.setActiveGroupId(groupByPref() ?? props.initialGroupBy);
+      soup.grouping.collapseAll(persistedCollapsedGroups ?? []);
+
+      // Apply view-supplied client filters only when per-entry state didn't
+      // already populate them in SoupViewContextProvider.
+      const hasEntryFilters =
+        panel.handle.currentEntryState()?.['search.predicates'] !== undefined;
+      if (!hasEntryFilters && props.initialClientFilters) {
         soup.predicates.set(props.initialClientFilters);
       }
-      if (props.initialGroupBy) {
-        soup.grouping.setActiveGroupId(props.initialGroupBy);
-      }
-      // Set default tab for list views when no persisted state exists
-      if (isListViewID(contentId)) {
+
+      // Default tab for list views; entry state already restored it via
+      // `useEntryState` in SoupViewContextProvider when applicable.
+      if (isListViewID(contentId) && activeTab() === undefined) {
         const defaultTab = VIEW_TAB_PRESETS[contentId].default;
-        if (defaultTab) {
-          setActiveTab(defaultTab);
-        }
+        if (defaultTab) setActiveTab(defaultTab);
       }
-    }
+    });
   });
 
+  // Bridge live soup state back to preferences. `defer: true` skips the
+  // initial run on mount, so we only write when the user actually changes
+  // something.
   createEffect(
     on(
-      () =>
-        ({
-          version: PERSISTED_STATE_VERSION,
-          activeTab: activeTab(),
-          filters: {
-            and: [...soup.predicates.andIds()],
-            or: [...soup.predicates.orIds()],
-          },
-          queryFilters: JSON.parse(JSON.stringify(queryFilters.state)),
-          sort: soup.sort.active().map((s) => s.id),
-          previewEntity: soup.previewEntity(),
-          assigneeFilter: assigneeFilter(),
-          groupBy: soup.grouping.activeGroupId(),
-          collapsedGroups: [...soup.grouping.collapsedGroups()],
-        }) satisfies PersistedSoupViewState,
-      (state) => {
-        if (!persistenceDisabled) setPersistedState(state);
-      },
+      () => soup.sort.active().map((s) => s.id),
+      (ids) => setSortPref(ids),
+      { defer: true }
+    )
+  );
+  createEffect(
+    on(
+      () => soup.grouping.activeGroupId(),
+      (id) => setGroupByPref(id),
       { defer: true }
     )
   );
@@ -1036,9 +1002,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     if (restored || isProjectList) return;
     restored = true;
 
-    const cached = props.skipPersistedState
-      ? undefined
-      : listStateCache.get(cacheKey);
+    const cached = listStateCache.get(cacheKey);
     if (cached) {
       setSearchText(cached.searchText);
       soup.focus.set(cached.focus);

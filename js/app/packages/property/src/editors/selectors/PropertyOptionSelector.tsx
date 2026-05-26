@@ -1,11 +1,11 @@
-import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue';
-import { useSearchInputFocus } from '@core/component/Properties/utils';
-import { ERROR_MESSAGES } from '@core/component/Properties/utils/errorHandling';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
+import { PropertyValueIcon } from '@property/component/propertyValue';
+import { useSearchInputFocus } from '@property/utils';
+import { ERROR_MESSAGES } from '@property/utils/errorHandling';
 import { Hotkey } from '@ui';
 import { cn } from '@ui/utils/classname';
 import type { JSX, ParentComponent } from 'solid-js';

@@ -10,7 +10,6 @@ import {
 } from '@app/component/next-soup/utils';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { ResponsiveBlockToolbar } from '@app/component/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import {
   SplitHeaderBadge,
@@ -32,24 +31,18 @@ import { AnimatedTaskIcon } from '@icon/wide-task';
 import { buildMentionMarkdownString } from '@lexical-core';
 import CheckIcon from '@phosphor/check.svg';
 import ProhibitIcon from '@phosphor/prohibit.svg';
-import TagIcon from '@phosphor/tag.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import { useEmailContext } from './EmailContext';
-import {
-  EmailPropertiesButton,
-  PROPERTIES_DRAWER_ID,
-} from './EmailPropertiesModal';
 
 export function TopBar(props: {
   id: string;
   title: string;
   isDraft?: boolean;
 }) {
-  const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
   const { popoverSplit } = useSplitLayout();
   const shareCtx = useShareDialogContext();
   const emailCtx = useEmailContext();
@@ -155,12 +148,6 @@ export function TopBar(props: {
       icon: ProhibitIcon,
       action: () => emailCtx.blockSender(),
       condition: isOwnThread,
-    },
-    {
-      label: 'Properties',
-      icon: TagIcon,
-      action: propertiesControl.toggle,
-      buttonComponent: () => <EmailPropertiesButton buttonSize="sm" />,
     },
     {
       label: 'Create Task',

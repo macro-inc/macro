@@ -34,8 +34,8 @@ const MAX_RESULT_LIMIT: u16 = 500;
 #[derive(Debug, Clone, Copy, Default, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SortBy {
-    #[default]
     RecentlyViewed,
+    #[default]
     RecentlyUpdated,
     RecentlyCreated,
 }
@@ -147,7 +147,7 @@ pub struct ListEntities {
     pub include_types: Option<Vec<ItemType>>,
 
     #[schemars(
-        description = "How to sort results: recently_viewed (default), recently_updated, or recently_created. Use recently_updated for updated_at-style soup results."
+        description = "How to sort results: recently_viewed, recently_updated (default to this), or recently_created. Use recently_updated for updated_at-style soup results."
     )]
     #[serde(default)]
     pub sort_by: SortBy,
@@ -207,9 +207,14 @@ pub struct ListEntities {
     #[serde(default, rename = "propf")]
     pub properties_filter: LiteralTree<PropertiesLiteral>,
 
-    #[schemars(
-        description = "Email view to use for email results: inbox (default), sent, drafts, starred, all, important, other, or user:<label>."
-    )]
+    #[schemars(description = "\
+Which mailbox view to hydrate previews from for email results. Valid values: inbox \
+(default), sent, drafts, starred, all, important, other, or user:<label>.\n\
+\n\
+When the user asks about signal or important emails, use emailView=\"inbox\" together \
+with emailPreset=\"signal\" — do not set emailView=\"important\" in that case. Only \
+override the default when the user explicitly asks for a specific mailbox or label view \
+(e.g. \"sent\", \"drafts\", \"my Foo label\").")]
     #[serde(default, rename = "emailView")]
     pub email_view: Option<String>,
 
@@ -224,9 +229,14 @@ impl ListEntities {
             document_filter: self.document_filter.clone(),
             project_filter: self.project_filter.clone(),
             chat_filter: self.chat_filter.clone(),
-            email_filter: match self.email_preset {
-                Some(preset) => Some(Arc::new(preset.filter())),
-                None => self.email_filter.clone(),
+            // Toolset doesn't (yet) expose CRM scope; the tool surface stays
+            // per-link unless we add explicit fields for it.
+            email_filter: item_filters::ast::EmailFilterAst {
+                tree: match self.email_preset {
+                    Some(preset) => Some(Arc::new(preset.filter())),
+                    None => self.email_filter.clone(),
+                },
+                crm_scope: None,
             },
             channel_filter: self.channel_filter.clone(),
             call_filter: self.call_filter.clone(),
@@ -263,7 +273,10 @@ impl ListEntities {
             email_filter: if include_types.contains(&ItemType::Email) {
                 ast.email_filter
             } else {
-                Some(Arc::new(Expr::val(EmailLiteral::ThreadId(Uuid::nil()))))
+                item_filters::ast::EmailFilterAst {
+                    tree: Some(Arc::new(Expr::val(EmailLiteral::ThreadId(Uuid::nil())))),
+                    crm_scope: None,
+                }
             },
             channel_filter: if include_types.contains(&ItemType::Channel) {
                 ast.channel_filter

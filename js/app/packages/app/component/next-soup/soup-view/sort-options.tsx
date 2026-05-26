@@ -2,7 +2,6 @@ import type {
   SortConfig,
   SoupEntity,
 } from '@app/component/next-soup/create-soup-state';
-import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 import { compareDateDesc } from '@core/util/date';
 import type {
   EntityData,
@@ -18,6 +17,7 @@ import ClockIcon from '@phosphor/clock.svg';
 import EyeIcon from '@phosphor/eye.svg';
 import FlagIcon from '@phosphor/flag.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
+import { PROPERTY_OPTION_IDS } from '@property/constants';
 import type { JSX } from 'solid-js';
 
 export type SystemSortOption =

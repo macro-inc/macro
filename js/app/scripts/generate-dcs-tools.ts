@@ -139,10 +139,11 @@ async function generateToolTypesFile(schema: CombinedSchema) {
   );
 
   // Strip the root wrapper interface — we only want the definition types
-  const cleaned = code.replace(
-    /export interface AllToolTypes\s*\{[\s\S]*?\n\}\n*/,
-    ''
-  );
+  const cleaned = code
+    .replace(/export interface AllToolTypes\s*\{[\s\S]*?\n\}\n*/, '')
+    // Empty Rust structs compile to `export interface X {}`, which biome's
+    // `noEmptyInterface` rule rejects. Rewrite to a type alias.
+    .replace(/export interface (\w+) \{\}/g, 'export type $1 = {};');
 
   await Bun.write(typesFile, `${warning}\n${cleaned}`);
 }

@@ -7,6 +7,7 @@ export type SurfaceProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
   style?: JSX.CSSProperties;
   highlightColor?: string;
   active?: boolean;
+  solid?: boolean;
 };
 
 export function Surface(props: SurfaceProps) {
@@ -14,16 +15,24 @@ export function Surface(props: SurfaceProps) {
     'highlightColor',
     'children',
     'active',
+    'solid',
     'depth',
     'class',
     'style',
   ]);
 
+  const border = () => {
+    const edge = 'var(--b4)';
+    const top = local.active ? local.highlightColor ?? 'var(--a0)' : edge;
+    const bottom = local.active && !local.solid ? `${edge} 80%` : top;
+    return `linear-gradient(${top}, ${bottom})`;
+  };
+
   return (
     <Layer depth={local.depth ?? 0}>
       <div
         style={{
-          'background-image': local.active ? `linear-gradient(var(--b0), var(--b0)), linear-gradient(${local.highlightColor || 'var(--a0)'}, var(--b4) 80%)` : 'linear-gradient(var(--b0), var(--b0)), linear-gradient(var(--b4), var(--b4))',
+          'background-image': `linear-gradient(var(--b0), var(--b0)), ${border()}`,
           'background-origin': 'padding-box, border-box',
           'background-clip': 'padding-box, border-box',
           'border': '1px solid #0000',

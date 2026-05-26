@@ -494,6 +494,39 @@ describe('channel optimistic cache regressions', () => {
     expect(restored?.thread.preview).toHaveLength(2);
   });
 
+  it('removes top-level messages with no replies from caches on optimistic delete and restores them on rollback', () => {
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [
+          createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z'),
+          createPaginatedMessage('parent-2', '2024-01-03T01:00:00.000Z'),
+        ],
+      ])
+    );
+
+    const context = optimisticDeleteChannelMessage({
+      channelId: 'channel-1',
+      message_id: 'parent-1',
+    });
+
+    const itemsAfter =
+      getChannelMessagesFromCache('channel-1')?.pages[0].items ?? [];
+    expect(itemsAfter.map((item) => item.id)).toEqual(['parent-2']);
+
+    if (context) {
+      rollbackDeleteChannelMessage('channel-1', context);
+    }
+
+    const itemsRolledBack =
+      getChannelMessagesFromCache('channel-1')?.pages[0].items ?? [];
+    expect(itemsRolledBack.map((item) => item.id)).toEqual([
+      'parent-1',
+      'parent-2',
+    ]);
+    expect(itemsRolledBack[0].deleted_at).toBeFalsy();
+  });
+
   it('removes thread replies from caches on optimistic delete and restores them on rollback', () => {
     seedChannelMessagesCache(
       'channel-1',
@@ -545,6 +578,11 @@ describe('channel optimistic cache regressions', () => {
       [
         createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z', {
           deleted_at: previousDeletedAt,
+          thread: {
+            preview: [createThreadReply('reply-1', '2024-01-03T01:00:00.000Z')],
+            reply_count: 1,
+            latest_reply_at: '2024-01-03T01:00:00.000Z',
+          },
         }),
       ]
     );

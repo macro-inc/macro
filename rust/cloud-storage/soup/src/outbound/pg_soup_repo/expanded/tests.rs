@@ -5454,7 +5454,7 @@ fn mock_empty_ast() -> EntityFilterAst {
         document_filter: None,
         project_filter: None,
         chat_filter: None,
-        email_filter: None,
+        email_filter: item_filters::ast::EmailFilterAst::default(),
         channel_filter: None,
         call_filter: None,
         properties_filter: None,

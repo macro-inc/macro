@@ -1,7 +1,4 @@
-import {
-  PROPERTY_OPTION_IDS,
-  SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { TaskEntityWithProperties } from '../types/entity';
 
 export const TASK_STATUS_OPTIONS = [
@@ -13,7 +10,7 @@ export const TASK_STATUS_OPTIONS = [
 ] as const;
 
 const TASK_PRIORITY_OPTIONS = [
-  { value: PROPERTY_OPTION_IDS.PRIORITY.URGENT, label: 'Urgent' },
+  { value: PROPERTY_OPTION_IDS.PRIORITY.URGENT, label: 'Critical' },
   { value: PROPERTY_OPTION_IDS.PRIORITY.HIGH, label: 'High' },
   { value: PROPERTY_OPTION_IDS.PRIORITY.MEDIUM, label: 'Medium' },
   { value: PROPERTY_OPTION_IDS.PRIORITY.LOW, label: 'Low' },

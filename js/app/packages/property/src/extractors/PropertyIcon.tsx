@@ -1,5 +1,5 @@
-import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { UserIcon } from '@core/component/UserIcon';
+import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import type { Property } from '../types';

@@ -25,6 +25,7 @@ pub mod utils;
 
 mod attachments;
 mod chats;
+pub mod structured_completion;
 
 #[tracing::instrument(err, skip(state))]
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
@@ -77,6 +78,19 @@ fn api_router(api_context: ApiContext) -> Router {
     let internal_router = Router::new()
         .nest("/chats", chats::router(api_context.clone()))
         .nest("/stream", stream::router(api_context.clone()))
+        .route(
+            "/structured-completion",
+            post(structured_completion::structured_completion).layer(
+                ServiceBuilder::new()
+                    .layer(axum::middleware::from_fn(
+                        macro_middleware::auth::ensure_user_exists::handler,
+                    ))
+                    .layer(axum::middleware::from_fn_with_state(
+                        api_context.clone(),
+                        macro_middleware::user_permissions::attach_user_permissions::handler,
+                    )),
+            ),
+        )
         .nest("/attachments", attachments::router())
         .nest("/citations", citations::router())
         .nest("/preview", preview::router())

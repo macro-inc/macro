@@ -1,9 +1,9 @@
 import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
-import type { DateProperty } from '@core/component/Properties/types';
-import { useSearchInputFocus } from '@core/component/Properties/utils';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
+import type { DateProperty } from '@property/types';
+import { useSearchInputFocus } from '@property/utils';
 import { cn } from '@ui';
 import {
   createEffect,

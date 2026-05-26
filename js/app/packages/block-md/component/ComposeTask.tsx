@@ -4,24 +4,6 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
 import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
-import {
-  propertyApiValuesToNormalized,
-  propertyValueToApi,
-} from '@core/component/Properties/api/converters';
-import { Modals } from '@core/component/Properties/component/modal';
-import {
-  PROPERTY_OPTION_IDS,
-  SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
-import {
-  PropertiesProvider,
-  type PropertySaveHandler,
-} from '@core/component/Properties/context/PropertiesContext';
-import type {
-  Property,
-  PropertyApiValues,
-  PropertyOption,
-} from '@core/component/Properties/types';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -33,6 +15,21 @@ import ArrowsOutIcon from '@phosphor/arrows-out.svg';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import SplitIcon from '@phosphor/square-half.svg';
 import XIcon from '@phosphor/x.svg';
+import {
+  propertyApiValuesToNormalized,
+  propertyValueToApi,
+} from '@property/api/converters';
+import { Modals } from '@property/component/modal';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
+import {
+  PropertiesProvider,
+  type PropertySaveHandler,
+} from '@property/context/PropertiesContext';
+import type {
+  Property,
+  PropertyApiValues,
+  PropertyOption,
+} from '@property/types';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { refetchSoupEntity } from '@queries/soup/cache';
 import { propertiesServiceClient } from '@service-properties/client';

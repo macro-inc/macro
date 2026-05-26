@@ -24,7 +24,7 @@ struct QueryParams {
     resolved: ResolvedFilters,
     /// When `Some(team_id)`, the "Owned" candidate source expands from
     /// `t.link_id = $link_id` to `t.link_id IN (links of every member of
-    /// $team_id)`. Set only after team_scope has been validated upstream.
+    /// $team_id)`. Set only after CRM scope has been validated upstream.
     team_id: Option<Uuid>,
 }
 
@@ -120,7 +120,7 @@ fn push_thread_candidate_select(
                 builder.push("t.link_id = ");
                 builder.push_bind(params.link_id);
             }
-            // Team-scoped query: expand to every email_link owned by any
+            // CRM-scoped query: expand to every email_link owned by any
             // member of the team. The receipt has already been validated
             // upstream, so the team_id is trusted here.
             Some(team_id) => {
@@ -138,6 +138,22 @@ fn push_thread_candidate_select(
         ThreadCandidateSource::Shared => {
             builder.push("t.id IN (SELECT thread_id FROM SharedEmailThreads)");
         }
+    }
+
+    // Belt-and-suspenders killswitch check that covers both the Owned and
+    // Shared branches. Without this, a CRM-scoped request with
+    // `SharedEmailFilter::Include`/`Only` could still return rows after
+    // `team_crm_settings.crm_enabled` flips false between the pre-check
+    // and query execution. EXISTS short-circuits and Postgres planner
+    // treats it as a constant once evaluated per query.
+    if let Some(team_id) = params.team_id {
+        builder.push(
+            r#" AND EXISTS (
+                SELECT 1 FROM team_crm_settings tcs
+                WHERE tcs.team_id = "#,
+        );
+        builder.push_bind(team_id);
+        builder.push(" AND tcs.crm_enabled)");
     }
 
     let view_thread_filter = build_view_thread_filter(view);

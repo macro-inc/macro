@@ -28,7 +28,7 @@ fn test_list_entities_schema_validation() {
 fn test_default_values() {
     let list = ListEntities::default();
     assert!(list.include_types.is_none());
-    assert!(matches!(list.sort_by, SortBy::RecentlyViewed));
+    assert!(matches!(list.sort_by, SortBy::RecentlyUpdated));
 }
 
 #[test]
@@ -66,7 +66,7 @@ fn test_email_preset_defaults_to_email_results() {
     .unwrap();
 
     let ast = list.entity_filter_ast();
-    assert!(ast.email_filter.is_some());
+    assert!(ast.email_filter.tree.is_some());
     assert!(ast.document_filter.is_some());
     assert!(ast.project_filter.is_some());
     assert!(ast.chat_filter.is_some());

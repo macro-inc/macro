@@ -509,6 +509,15 @@ export const ListEntitiesResponse = z.object({
   summary: z.string(),
 });
 
+export const ListLabels = z.record(z.any());
+
+export const ListLabelsResponse = z.object({
+  labels: z.array(
+    z.object({ id: z.string().uuid(), name: z.string(), type: z.string() })
+  ),
+  summary: z.string(),
+});
+
 export const ListNotifications = z.object({
   done: z.union([z.boolean(), z.null()]).default(null),
   entities: z

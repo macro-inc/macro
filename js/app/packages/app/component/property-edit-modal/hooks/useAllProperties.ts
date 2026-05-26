@@ -1,5 +1,5 @@
-import type { PropertyDefinitionDomain } from '@core/component/Properties/types';
-import { toPropertyDefinitionDomain } from '@core/component/Properties/utils';
+import type { PropertyDefinitionDomain } from '@property/types';
+import { toPropertyDefinitionDomain } from '@property/utils';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { createMemo } from 'solid-js';
 

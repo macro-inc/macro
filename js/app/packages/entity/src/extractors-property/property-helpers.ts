@@ -2,12 +2,8 @@ import {
   NUMBER_DECIMAL_PLACES,
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
-import type {
-  Property,
-  PropertyOption,
-  ValueType,
-} from '@core/component/Properties/types';
+} from '@property/constants';
+import type { Property, PropertyOption, ValueType } from '@property/types';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { nanoid } from 'nanoid';
 import { TASK_STATUS_OPTIONS } from '../utils/task-properties';
@@ -68,7 +64,7 @@ const SYSTEM_PROPERTY_OPTIONS: Record<string, PropertyOption[]> = {
     {
       id: PROPERTY_OPTION_IDS.PRIORITY.URGENT,
       property_definition_id: SYSTEM_PROPERTY_IDS.PRIORITY,
-      value: { type: 'string', value: 'Urgent' },
+      value: { type: 'string', value: 'Critical' },
       display_order: 3,
       created_at: EPOCH_ZERO.toISOString(),
       updated_at: EPOCH_ZERO.toISOString(),

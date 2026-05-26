@@ -8,7 +8,6 @@ import {
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { createSignal, type ParentProps, Show } from 'solid-js';
 import { projectBlockDataSignal } from '../signal/projectBlockData';
-import { ProjectPropertiesDrawer } from './ProjectPropertiesModal';
 
 export function ModalsProvider(props: ParentProps) {
   const id = useBlockId();
@@ -25,7 +24,6 @@ export function ModalsProvider(props: ParentProps) {
       }}
     >
       {props.children}
-      <ProjectPropertiesDrawer name={name()} />
       <DetailsDrawer projectId={id} />
       <Show when={ENABLE_PROJECT_SHARING && !isSpecialProject}>
         <ShareBlockModal name={name()} owner={owner()} />

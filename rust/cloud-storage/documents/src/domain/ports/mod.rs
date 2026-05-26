@@ -26,7 +26,7 @@ use model_entity::Entity;
 use super::models::{
     BranchNameContext, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
     CreateTaskRequest, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
-    LocationQueryParams, TaskBranchName, TeamTaskMetadata,
+    GithubPullRequestsResponse, LocationQueryParams, TaskBranchName, TeamTaskMetadata,
 };
 
 /// Repository for accessing document data from the database.
@@ -178,6 +178,12 @@ pub trait DocumentRepo: Send + Sync + 'static {
         document_id: &str,
         user_id: &str,
     ) -> impl Future<Output = Result<BranchNameContext, Self::Err>> + Send;
+
+    /// Get stored GitHub PR keys associated with a task short id.
+    fn get_task_github_pull_request_keys(
+        &self,
+        task_short_id: &str,
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
 
     /// Share a document with the given team.
     fn share_with_team(
@@ -356,6 +362,13 @@ pub trait DocumentService: Send + Sync + 'static {
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
         document_name: String,
     ) -> impl Future<Output = Result<TaskBranchName, DocumentError>> + Send;
+
+    /// Get GitHub pull requests associated with a task document.
+    fn get_task_github_pull_requests(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_context: &DocumentBasic,
+    ) -> impl Future<Output = Result<GithubPullRequestsResponse, DocumentError>> + Send;
 
     /// Edit a document's metadata and share permissions.
     ///

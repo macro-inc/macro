@@ -302,6 +302,14 @@ where
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
 
+        if !self
+            .team_repository
+            .get_team_payment_status(&team_id)
+            .await?
+        {
+            return Err(InviteUsersToTeamError::TeamError(TeamError::TeamNotPaying));
+        }
+
         let invited_by = entity_access_receipt
             .get_authenticated_user()
             .map_err(|e| InviteUsersToTeamError::TeamError(TeamError::AccessError(e)))?;
@@ -614,6 +622,24 @@ where
 
         let team_member = accepted_invite.member.clone();
 
+        if !self
+            .team_repository
+            .get_team_payment_status(&team_member.team_id)
+            .await?
+        {
+            self.team_repository
+                    .rollback_accept_team_invite(&accepted_invite)
+                    .await
+                    .inspect_err(|rollback_err| {
+                        tracing::error!(
+                            error=?rollback_err,
+                            "unable to rollback accepted team invite after getting team subscription failed"
+                        );
+                    })
+                    .ok();
+            return Err(JoinTeamError::TeamError(TeamError::TeamNotPaying));
+        }
+
         let subscription_id = match self.get_team_subscription(&team_member.team_id).await {
             Ok(subscription_id) => subscription_id,
             Err(e) => {
@@ -787,6 +813,32 @@ where
                 .await
                 .map_err(RestorePermissionsForTeamMembersError::AddRolesToUserError)?;
         }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn patch_team_subscription_id(
+        &self,
+        team_id: &uuid::Uuid,
+        subscription_id: &stripe::SubscriptionId,
+    ) -> Result<(), TeamError> {
+        self.team_repository
+            .update_team_subscription(team_id, subscription_id)
+            .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn patch_team_payment_status(
+        &self,
+        team_id: &uuid::Uuid,
+        paying: bool,
+    ) -> Result<(), TeamError> {
+        self.team_repository
+            .update_team_payment_status(team_id, paying)
+            .await?;
 
         Ok(())
     }

@@ -1,4 +1,4 @@
-import { PropertyTooltip as CorePropertyTooltip } from '@core/component/Properties/component/propertyValue/PropertyTooltip';
+import { PropertyTooltip as CorePropertyTooltip } from '@property/component/propertyValue/PropertyTooltip';
 import { HoverCard } from '@ui';
 import type { JSX } from 'solid-js';
 import type { Property } from '../types';

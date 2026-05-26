@@ -316,7 +316,6 @@ pub(super) fn build_message_email_filter(
             SqlFragment::raw("TRUE")
         }
         filter_ast::ExprFrame::Literal(EmailLiteral::Shared(_)) => SqlFragment::raw("TRUE"),
-        filter_ast::ExprFrame::Literal(EmailLiteral::TeamScope) => SqlFragment::raw("TRUE"),
         filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(_)) => SqlFragment::raw("TRUE"),
         filter_ast::ExprFrame::Literal(EmailLiteral::CreatedAt(_)) => SqlFragment::raw("TRUE"),
         filter_ast::ExprFrame::Literal(EmailLiteral::UpdatedAt(_)) => SqlFragment::raw("TRUE"),
@@ -703,8 +702,7 @@ pub(super) fn build_thread_email_filter(
             | EmailLiteral::Importance(_)
             | EmailLiteral::NotificationDone(_)
             | EmailLiteral::NotificationSeen(_)
-            | EmailLiteral::Shared(_)
-            | EmailLiteral::TeamScope,
+            | EmailLiteral::Shared(_),
         ) => SqlFragment::raw("TRUE"),
     });
 

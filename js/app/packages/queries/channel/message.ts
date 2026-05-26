@@ -37,6 +37,7 @@ import {
   resolveMessageTarget,
   restoreMessageInTargetCaches,
   softInvalidateTargetCaches,
+  topLevelMessageHasReplies,
 } from './reconcile';
 
 /**
@@ -240,10 +241,11 @@ function replaceOptimisticMessage(
 /**
  * Optimistically delete a message from the channel cache.
  *
- * Top-level messages are soft-deleted in place (we set `deleted_at`) so the
- * UI renders the "this message was deleted" placeholder while preserving any
- * thread replies hanging off the message. Thread replies don't have a
- * `deleted_at` field in the schema, so we still remove them from the caches
+ * Top-level messages with thread replies are soft-deleted in place (we set
+ * `deleted_at`) so the UI renders the "this message was deleted" placeholder
+ * while preserving the replies hanging off the message. Top-level messages
+ * with no replies are removed outright. Thread replies don't have a
+ * `deleted_at` field in the schema, so we always remove them from the caches
  * and capture a snapshot for rollback.
  */
 export function optimisticDeleteChannelMessage(
@@ -263,13 +265,21 @@ export function optimisticDeleteChannelMessage(
   };
 
   if (target.kind === 'top_level') {
-    context.previousDeletedAt =
-      getTopLevelMessageDeletedAt(vars.channelId, target.messageId) ?? null;
-    markTopLevelMessageDeletedInTargetCaches(
-      vars.channelId,
-      target,
-      new Date().toISOString()
-    );
+    if (topLevelMessageHasReplies(vars.channelId, target.messageId)) {
+      context.previousDeletedAt =
+        getTopLevelMessageDeletedAt(vars.channelId, target.messageId) ?? null;
+      markTopLevelMessageDeletedInTargetCaches(
+        vars.channelId,
+        target,
+        new Date().toISOString()
+      );
+    } else {
+      context.targetSnapshot = captureDeleteSnapshotForTarget(
+        vars.channelId,
+        target
+      );
+      removeMessageFromTargetCaches(vars.channelId, target);
+    }
   } else {
     context.targetSnapshot = captureDeleteSnapshotForTarget(
       vars.channelId,
@@ -288,7 +298,7 @@ export function rollbackDeleteChannelMessage(
   channelId: string,
   context: DeleteMessageContext
 ): void {
-  if (context.target.kind === 'top_level') {
+  if (context.target.kind === 'top_level' && !context.targetSnapshot) {
     markTopLevelMessageDeletedInTargetCaches(
       channelId,
       context.target,

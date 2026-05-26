@@ -1195,7 +1195,9 @@ export interface ListEntities {
    */
   emailPreset?: EmailPreset | null;
   /**
-   * Email view to use for email results: inbox (default), sent, drafts, starred, all, important, other, or user:<label>.
+   * Which mailbox view to hydrate previews from for email results. Valid values: inbox (default), sent, drafts, starred, all, important, other, or user:<label>.
+   *
+   * When the user asks about signal or important emails, use emailView="inbox" together with emailPreset="signal" — do not set emailView="important" in that case. Only override the default when the user explicitly asks for a specific mailbox or label view (e.g. "sent", "drafts", "my Foo label").
    */
   emailView?: string | null;
   /**
@@ -1223,6 +1225,53 @@ export interface ListEntities {
 export interface ListEntitiesResponse {
   items: EntityItem[];
   summary: string;
+}
+/**
+ * List the user's Gmail labels. Returns both system labels (INBOX, SENT, DRAFTS, UNREAD, STARRED, TRASH, SPAM, IMPORTANT, CATEGORY_PERSONAL, CATEGORY_SOCIAL, CATEGORY_PROMOTIONS, CATEGORY_UPDATES, CATEGORY_FORUMS, etc.) and any custom user-created labels. Each label has a UUID `id` and a `name`.
+ *
+ * Gmail represents nearly every inbox operation as a label add/remove, so this tool is the first step for almost any thread-management action: call ListLabels once to find the label `id` by `name`, then pass that `id` to UpdateThreadLabels. Common pairings (look up the named system label here, then call UpdateThreadLabels with that id):
+ * - Archive a thread → remove `INBOX` (add=false)
+ * - Move back to inbox → add `INBOX` (add=true)
+ * - Mark as read → remove `UNREAD` (add=false)
+ * - Mark as unread → add `UNREAD` (add=true)
+ * - Star → add `STARRED`; Unstar → remove `STARRED`
+ * - Move to trash → add `TRASH`; Restore from trash → remove `TRASH`
+ * - Mark important → add `IMPORTANT`; Mark unimportant → remove `IMPORTANT`
+ * - Report spam → add `SPAM`; Not spam → remove `SPAM`
+ * - Apply or remove a custom user label → look up the label by its display name and add/remove it
+ *
+ * Match label names case-insensitively when searching the response. You can also use this to understand how the user's mail is organized before filtering or searching by label.
+ */
+export type ListLabels = {};
+/**
+ * Response from the ListLabels tool.
+ */
+export interface ListLabelsResponse {
+  /**
+   * The user's email labels.
+   */
+  labels: ToolLabel[];
+  /**
+   * A human-readable summary of the labels.
+   */
+  summary: string;
+}
+/**
+ * A simplified label for tool output.
+ */
+export interface ToolLabel {
+  /**
+   * The label's unique identifier.
+   */
+  id: string;
+  /**
+   * The display name of the label.
+   */
+  name: string;
+  /**
+   * Whether this is a "system" or "user" label.
+   */
+  type: string;
 }
 /**
  * List the current user's notifications. By default returns active notifications (not deleted, not done), ordered by most recent first. Use `done` and `seen` to request done/not-done or seen/unseen notifications.
@@ -2377,19 +2426,34 @@ export interface TextEditorCodeExecutionToolCall {
   path: string;
 }
 /**
- * Add or remove a label from all messages in an email thread. Use ListLabels first to get valid label IDs. Set `add` to true to apply the label, or false to remove it.
+ * Add or remove a single label from every message in a Gmail thread. In Gmail, nearly all inbox operations are just label add/remove operations, so this tool is the primitive for archiving, marking read/unread, starring, trashing, marking important/spam, and applying or removing custom labels.
+ *
+ * Workflow: call ListLabels first to discover the UUID `id` for the label name you need, then call this tool with that `label_id` plus the thread's `thread_id` and `add=true` (apply) or `add=false` (remove). Each call modifies one label — to do multiple changes on the same thread (e.g. archive AND mark read), call this tool once per label.
+ *
+ * Common operations (look up each system label's id via ListLabels first):
+ * - Archive: remove `INBOX` (add=false)
+ * - Move back to inbox: add `INBOX` (add=true)
+ * - Mark as read: remove `UNREAD` (add=false)
+ * - Mark as unread: add `UNREAD` (add=true)
+ * - Star: add `STARRED` (add=true) / Unstar: remove (add=false)
+ * - Move to trash: add `TRASH` (add=true) / Restore: remove (add=false)
+ * - Mark important: add `IMPORTANT` (add=true) / Mark unimportant: remove (add=false)
+ * - Report spam: add `SPAM` (add=true) / Not spam: remove (add=false)
+ * - Apply custom user label: add the label with that display name (add=true) / Remove: (add=false)
+ *
+ * `thread_id` is the email thread UUID (the same id returned by ListEntities, search results, or GetThread). `label_id` is the UUID returned by ListLabels — NOT the label name.
  */
 export interface UpdateThreadLabels {
   /**
-   * Whether to add (true) or remove (false) the label.
+   * Whether to add (true) or remove (false) the label from every message in the thread.
    */
   add: boolean;
   /**
-   * The ID of the label to add or remove. Use ListLabels to get valid label IDs.
+   * The UUID of the label to add or remove. Obtain this by calling ListLabels and looking up the label by name — do not pass the label name here.
    */
   label_id: string;
   /**
-   * The ID of the email thread to modify.
+   * The ID of the email thread to modify. Same UUID returned by ListEntities, search, or GetThread.
    */
   thread_id: string;
 }

@@ -2,10 +2,6 @@ import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
-import {
-  PROPERTY_OPTION_IDS,
-  SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
 import { toast } from '@core/component/Toast/Toast';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -18,6 +14,7 @@ import {
 import CaretDown from '@phosphor/caret-down.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import CirclePlus from '@phosphor/plus-circle.svg';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { createProject } from '@queries/storage/projects';
 import { Dialog, Dropdown, Surface } from '@ui';
 import { type Component, createSignal, For } from 'solid-js';

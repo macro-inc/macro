@@ -15,10 +15,13 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 /// [`crm::domain::companies_repo::CompaniesRepository::depopulate_contact`].
 ///
 /// Pre-check: before invoking the CRM cascade we verify via
-/// [`email_db_client::contacts::get::link_has_sent_message_to`] that this
-/// link no longer has any sent message to `contact_email`. If a sibling
-/// sent message still exists, we ack the job without touching CRM —
-/// duplicate enqueues from retries or out-of-order processing land here.
+/// [`email_db_client::contacts::get::link_has_any_message_with`] that
+/// this link no longer has any message (sent or received) involving
+/// `contact_email`. Sources track interactions in both directions, so
+/// the row must stay until both directions are gone. If a sibling
+/// message still exists in either direction, we ack the job without
+/// touching CRM — duplicate enqueues from retries or out-of-order
+/// processing land here.
 ///
 /// The check runs outside the CRM crate's advisory lock, so a brand-new
 /// sent message landing in the microseconds between the check and the
@@ -48,7 +51,7 @@ pub async fn depopulate_crm_contact(
         return Ok(());
     };
 
-    let still_has_sent = email_db_client::contacts::get::link_has_sent_message_to(
+    let still_has_any = email_db_client::contacts::get::link_has_any_message_with(
         &ctx.db,
         link.id,
         &p.contact_email,
@@ -57,12 +60,14 @@ pub async fn depopulate_crm_contact(
     .map_err(|e| {
         ProcessingError::Retryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to check remaining sent messages for contact"),
+            source: e.context("Failed to check remaining messages with contact"),
         })
     })?;
 
-    if still_has_sent {
-        tracing::debug!("Link still has other sent messages to contact; skipping depopulation");
+    if still_has_any {
+        tracing::debug!(
+            "Link still has other messages with contact (sent or received); skipping depopulation"
+        );
         return Ok(());
     }
 

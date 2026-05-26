@@ -21,6 +21,20 @@ type). `Some(false)` and `None` apply no constraint. */
   calendar_only?: EmailFiltersCalendarOnly;
   /** Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC. */
   cc?: string[];
+  /** CRM-scoped address filter. When non-empty, expands visibility to every
+teammate's mailbox and restricts to threads involving any of these
+fully-qualified addresses. Each address is authorized against
+`crm_contacts` + `crm_companies` (contact must not be hidden, company
+must not be hidden, `email_sync` must be true).
+Mutually exclusive with `crm_domains`. */
+  crm_addresses?: string[];
+  /** CRM-scoped domain filter. When non-empty, expands visibility to every
+teammate's mailbox and restricts to threads involving any of these
+domains (in any of sender/cc/bcc/recipient). Each domain is authorized
+against `crm_domains` + `crm_companies` (must exist for the caller's
+team, company must not be hidden, `email_sync` must be true).
+Mutually exclusive with `crm_addresses`. */
+  crm_domains?: string[];
   /** Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads. */
   email_thread_ids?: string[];
   /** Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. "CATEGORY_PROMOTIONS") and user-created labels. Empty to not exclude any labels.
@@ -44,10 +58,4 @@ Note: SPAM and TRASH emails are not indexed in OpenSearch, so they will never ap
   /** Controls whether shared email threads are included in results.
 Defaults to "exclude" (only the user's own threads). */
   shared?: SharedEmailFilter;
-  /** When true, expand visibility to every teammate's mailbox: results may
-include emails the requesting user is not a participant on, as long as
-at least one of their teammates is. Requires every sender/cc/bcc/recipient
-value to be a fully-qualified email address or a domain (no partial
-substring matches). */
-  team_scope?: boolean;
 }

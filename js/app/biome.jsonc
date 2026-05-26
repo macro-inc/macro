@@ -142,6 +142,7 @@
     {
       "includes": [
         "packages/app/component/settings/**",
+        "packages/animate/**",
         "packages/theme/**",
         "packages/ui/**"
       ],

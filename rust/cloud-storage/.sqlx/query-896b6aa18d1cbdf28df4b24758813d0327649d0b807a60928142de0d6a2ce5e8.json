@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT EXISTS (\n            SELECT 1\n            FROM email_messages m\n            JOIN email_message_recipients r ON r.message_id = m.id\n            JOIN email_contacts c ON c.id = r.contact_id\n            WHERE m.link_id = $1\n              AND m.is_sent = true\n              AND LOWER(c.email_address) = $2\n            UNION ALL\n            SELECT 1\n            FROM email_messages m\n            JOIN email_contacts c ON c.id = m.from_contact_id\n            WHERE m.link_id = $1\n              AND m.is_sent = false\n              AND LOWER(c.email_address) = $2\n            LIMIT 1\n        ) AS \"exists!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "896b6aa18d1cbdf28df4b24758813d0327649d0b807a60928142de0d6a2ce5e8"
+}

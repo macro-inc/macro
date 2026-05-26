@@ -9,6 +9,7 @@ import { createDocumentHandler } from './CreateDocument';
 import { getThreadHandler } from './GetThread';
 import { listCallRecordsHandler } from './ListCallRecords';
 import { listEntitiesHandler } from './ListEntities';
+import { listLabelsHandler } from './ListLabels';
 import { listTeamMembersHandler } from './ListTeamMembers';
 import {
   listNotificationsHandler,
@@ -48,6 +49,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   GetEntityProperties: getEntityPropertiesHandler,
   ListCallRecords: listCallRecordsHandler,
   ListEntities: listEntitiesHandler,
+  ListLabels: listLabelsHandler,
   ListNotifications: listNotificationsHandler,
   ListTeamMembers: listTeamMembersHandler,
   MarkNotificationsDone: markNotificationsDoneHandler,

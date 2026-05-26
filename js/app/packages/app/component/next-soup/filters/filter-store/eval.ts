@@ -3,7 +3,7 @@ import type {
   SoupApiItem,
   SoupProperty,
 } from '@service-storage/generated/schemas';
-import type { EntityFilterAst } from '@service-storage/generated/schemas/entityFilterAst';
+import type { ApiEntityFilterAst } from '@service-storage/generated/schemas/apiEntityFilterAst';
 import { FIELD_CONFIG, type QueryTarget } from './compile';
 
 function isRecord(value: unknown) {
@@ -160,7 +160,7 @@ function evalPropertyLiteral(
 /** Conservative AST filter used only to decide whether optimistic insertion is safe. */
 export function filterSoupItemByAstBody(
   item: SoupApiItem,
-  body: EntityFilterAst
+  body: ApiEntityFilterAst
 ) {
   const target = getAstTarget(item);
   const entityAst = body[target];

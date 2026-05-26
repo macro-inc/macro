@@ -29,6 +29,7 @@ import { err, ok, type Result } from 'neverthrow';
 import type {
   AccessLevel,
   CallRecordPreview,
+  GithubPullRequestsResponse,
   GroupedSoupPage,
   PostSoupAstRequest,
   PostSoupRequest,
@@ -610,6 +611,19 @@ export const storageServiceClient = {
       shortId: result.shortId,
       branchName: result.branchName,
     }));
+  },
+
+  async getDocumentGithubPullRequests({
+    documentId,
+  }: {
+    documentId: string;
+  }): Promise<
+    Result<GithubPullRequestsResponse, ResultError<FetchWithTokenErrorCode>[]>
+  > {
+    return await dssFetch<GithubPullRequestsResponse>(
+      `/documents/${documentId}/github_prs`,
+      { method: 'GET' }
+    );
   },
 
   async exportDocument({ documentId }) {

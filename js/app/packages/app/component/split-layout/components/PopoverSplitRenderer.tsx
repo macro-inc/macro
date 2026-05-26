@@ -70,6 +70,7 @@ function PopoverSplitModal(props: {
     isPopover: () => true,
     replace: () => {},
     removeFromHistory: () => {},
+    goToEntry: () => false,
     registerContentChangeListener: () => {},
     unregisterContentChangeListener: () => {},
     previousContent: () => null,
@@ -85,6 +86,9 @@ function PopoverSplitModal(props: {
         ? (props.popover.mount as any).updateMeta
         : undefined,
     referredFrom: () => null,
+    lastNavigationCause: () => 'fresh',
+    registerEntryStateCaptor: () => () => {},
+    currentEntryState: () => undefined,
   };
 
   const stubPanelContext: SplitPanelContextType = {

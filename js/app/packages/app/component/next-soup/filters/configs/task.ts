@@ -1,12 +1,9 @@
 import {
-  PROPERTY_OPTION_IDS,
-  SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
-import {
   getTaskAssigneeIds,
   isTaskEntity,
   type TaskEntityWithProperties,
 } from '@entity';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   hasNoPriority,
   isCanceled,
