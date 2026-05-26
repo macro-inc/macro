@@ -1,6 +1,7 @@
 import { StackedAvatarsRow } from '@core/component/StackedAvatarsRow';
+import PhoneDisconnect from '@icon/wide-call-disconnect.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';
-import { cn, Surface } from '@ui';
+import { Button, cn, Surface } from '@ui';
 import { type Component, createMemo, Show } from 'solid-js';
 import type { CallControlsVariant } from '../CallControls/CallControls';
 import { CallControls } from '../CallControls/CallControls';
@@ -178,6 +179,21 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
             onLeave={() => panel.controls.leaveCall()}
           />
         </div>
+
+        {/* Leave — slim only; wide mode has the leave button inline in the
+            controls pill. */}
+        <Show when={slim()}>
+          <div class="flex items-center justify-center px-1 py-1">
+            <Button
+              size="icon-sm"
+              class="text-failure hover:text-failure"
+              onClick={() => void panel.controls.leaveCall()}
+              aria-label="Leave call"
+            >
+              <PhoneDisconnect />
+            </Button>
+          </div>
+        </Show>
       </section>
     </Show>
   );

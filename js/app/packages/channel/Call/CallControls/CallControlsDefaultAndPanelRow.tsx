@@ -14,10 +14,7 @@ import { CallDeviceList } from '../CallDeviceList';
 
 import { MenuDivider, MenuLabel } from './CallMenuPrimitives';
 
-export type CallControlsSize = 'sm' | 'md';
-
 export type CallControlsDefaultAndPanelRowProps = {
-  size: CallControlsSize;
   onLeave: () => void | Promise<void>;
 };
 
@@ -125,7 +122,6 @@ export function CallControlsDefaultAndPanelRow(
 ) {
   const callCtx = useCallContext();
   const isConnecting = () => callCtx.isConnecting();
-  const size = () => (props.size === 'sm' ? 'icon-sm' : 'icon-md');
   const noiseSuppressionModeLabel = () =>
     match(callCtx.noiseSuppressionMode())
       .with('krisp', () => 'Krisp')
@@ -137,7 +133,7 @@ export function CallControlsDefaultAndPanelRow(
     <div class="inline-flex items-center overflow-hidden rounded-lg border border-ink-muted/[0.08] bg-ink-muted/[0.025] divide-x divide-ink-muted/[0.08]">
       <Cell>
         <Button
-          size={size()}
+          size="icon-sm"
           onClick={() => void callCtx.toggleAudio()}
           disabled={isConnecting()}
           aria-label={callCtx.isAudioMuted() ? 'Unmute microphone' : 'Mute microphone'}
@@ -151,7 +147,7 @@ export function CallControlsDefaultAndPanelRow(
 
       <Cell>
         <Button
-          size={size()}
+          size="icon-sm"
           onClick={() => void callCtx.toggleVideo()}
           disabled={isConnecting()}
           aria-label={callCtx.isVideoMuted() ? 'Turn on camera' : 'Turn off camera'}
@@ -165,7 +161,7 @@ export function CallControlsDefaultAndPanelRow(
 
       <Cell>
         <Button
-          size={size()}
+          size="icon-sm"
           onClick={() => void callCtx.toggleScreenShare()}
           disabled={isConnecting()}
           aria-label={callCtx.isScreenSharing() ? 'Stop sharing screen' : 'Share screen'}
@@ -179,7 +175,7 @@ export function CallControlsDefaultAndPanelRow(
         <Dropdown placement="top" gutter={6}>
           <DropdownMenu.Trigger
             as={Button}
-            size={size()}
+            size="icon-sm"
             disabled={isConnecting()}
             aria-label="Call settings"
           >
@@ -231,7 +227,7 @@ export function CallControlsDefaultAndPanelRow(
 
       <Cell>
         <Button
-          size={size()}
+          size="icon-sm"
           class="text-failure hover:text-failure"
           onClick={() => void props.onLeave()}
           disabled={isConnecting()}

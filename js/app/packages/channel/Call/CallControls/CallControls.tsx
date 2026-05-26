@@ -27,12 +27,7 @@ export function CallControls(props: CallControlsProps) {
     <Show when={() => readWhen(props.when)}>
       <Show
         when={props.variant === 'panel-small'}
-        fallback={
-          <CallControlsDefaultAndPanelRow
-            size={props.variant === 'panel' ? 'sm' : 'md'}
-            onLeave={props.onLeave}
-          />
-        }
+        fallback={<CallControlsDefaultAndPanelRow onLeave={props.onLeave} />}
       >
         <CallControlsPanelSmallRow onLeave={props.onLeave} />
       </Show>
