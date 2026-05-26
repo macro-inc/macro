@@ -1,6 +1,7 @@
 import type { SoupBody, SoupItemsQueryFilters } from '@queries/soup/items';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { match } from 'ts-pattern';
+export { filterSoupItemByAstBody } from './filter-store/eval';
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
@@ -38,7 +39,6 @@ function isAttendedFilteredOut(
   return itemAttended !== attendedFilter;
 }
 
-// TODO: this only supports the subset of soup filters needed for cache matching.
 export function filterSoupItemByRequestBody(
   item: SoupApiItem,
   body: SoupBody
