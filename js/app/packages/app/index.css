@@ -211,6 +211,7 @@
   html {
     overscroll-behavior: none;
     font: -apple-system-body;
+    scrollbar-width: none;
     overflow: hidden;
   }
 
