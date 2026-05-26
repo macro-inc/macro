@@ -134,12 +134,6 @@ const NAVIGATION_TOUCH_HIGHLIGHT_CLASS = 'navigation-touch-highlight';
 const NAVIGATION_TOUCH_HIGHLIGHT_TIMEOUT_MS = 500;
 const navigationTouchHighlightTimers = new WeakMap<HTMLElement, number>();
 
-function waitForNavigationHighlightPaint() {
-  return new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
-}
-
 function persistNavigationTouchHighlight(event: MouseEvent | PointerEvent) {
   if (!isTouchDevice()) return false;
 
@@ -822,9 +816,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       return;
     }
 
-    if (persistNavigationTouchHighlight(event)) {
-      await waitForNavigationHighlightPaint();
-    }
+    persistNavigationTouchHighlight(event);
 
     await openEntityInSplitFromUnifiedList(entity, {
       openInNewSplit: event.shiftKey,

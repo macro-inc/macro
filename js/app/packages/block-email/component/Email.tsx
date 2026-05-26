@@ -10,6 +10,7 @@ import { useUserContext } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -352,8 +353,9 @@ function EmailContent(props: EmailViewProps) {
   createEffect(() => {
     if (hasRun) return;
     // Focus the email block on mount
+    if (isTouchDevice()) return;
     if (!blockElement()) return;
-    blockElement()?.focus();
+    blockElement()?.focus({ preventScroll: true });
     hasRun = true;
   });
 
