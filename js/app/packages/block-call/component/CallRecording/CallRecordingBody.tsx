@@ -216,7 +216,7 @@ export function CallRecordingBody(props: {
         <div class="mx-auto max-w-3xl min-w-0 px-6 pt-10 pb-16">
           <div class="flex flex-col gap-10">
             <header>
-              <h1 class="text-4xl font-semibold text-ink text-balance">
+              <h1 class="text-2xl font-semibold text-ink text-balance">
                 {callTitle()}
               </h1>
               <div class="mt-3 flex flex-wrap items-center gap-x-2 text-sm text-ink-muted">

@@ -18,10 +18,8 @@ import { type DateValue, formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import GithubIcon from '@icon/mcp-github.svg';
 import { useNotificationsForEntity } from '@notifications';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import ClockIcon from '@phosphor/clock.svg';
 import Plus from '@phosphor/plus.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
 import { Property as PropertyNS } from '@property';
 import { Modals } from '@property/component/modal';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
@@ -55,7 +53,6 @@ import {
   Match,
   onCleanup,
   Show,
-  Suspense,
   Switch,
 } from 'solid-js';
 import { mdStore } from '../../signal/markdownBlockData';
@@ -120,26 +117,16 @@ function DetailsSectionContent() {
   const metadata = createMemo(() => query.data);
 
   return (
-    <Suspense fallback={<DetailsLoading />}>
-      <DetailsGrid
-        owner={() => metadata()?.owner}
-        folder={() => {
-          const id = metadata()?.projectId;
-          const name = metadata()?.projectName;
-          return id && name ? { id, name } : undefined;
-        }}
-        createdAt={() => metadata()?.createdAt}
-        updatedAt={() => metadata()?.updatedAt}
-      />
-    </Suspense>
-  );
-}
-
-function DetailsLoading() {
-  return (
-    <div class="flex justify-center items-center py-8">
-      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-ink-muted" />
-    </div>
+    <DetailsGrid
+      owner={() => metadata()?.owner}
+      folder={() => {
+        const id = metadata()?.projectId;
+        const name = metadata()?.projectName;
+        return id && name ? { id, name } : undefined;
+      }}
+      createdAt={() => metadata()?.createdAt}
+      updatedAt={() => metadata()?.updatedAt}
+    />
   );
 }
 
@@ -150,50 +137,36 @@ function DetailsGrid(props: {
   updatedAt: () => DateValue | null | undefined;
 }) {
   return (
-    <div class="grid grid-cols-[var(--sidepanel-label-width,auto)_1fr] gap-x-3 items-center text-xs auto-rows-[2rem]">
+    <SidePanel.Grid>
       <Show when={props.owner()}>
         {(ownerId) => (
-          <DetailsRow label="Owner">
+          <SidePanel.Row label="Owner">
             <OwnerValue ownerId={ownerId()} />
-          </DetailsRow>
+          </SidePanel.Row>
         )}
       </Show>
       <Show when={props.folder()}>
         {(folder) => (
-          <DetailsRow label="Folder">
+          <SidePanel.Row label="Folder">
             <FolderLink projectId={folder().id} projectName={folder().name} />
-          </DetailsRow>
+          </SidePanel.Row>
         )}
       </Show>
       <Show when={props.createdAt()}>
         {(created) => (
-          <DetailsRow label="Created">
+          <SidePanel.Row label="Created">
             <DateValueDisplay value={created()} />
-          </DetailsRow>
+          </SidePanel.Row>
         )}
       </Show>
       <Show when={props.updatedAt()}>
         {(updated) => (
-          <DetailsRow label="Last updated">
+          <SidePanel.Row label="Last updated">
             <DateValueDisplay value={updated()} />
-          </DetailsRow>
+          </SidePanel.Row>
         )}
       </Show>
-    </div>
-  );
-}
-
-function DetailsRow(props: {
-  label: string;
-  children: import('solid-js').JSX.Element;
-}) {
-  return (
-    <>
-      <span class="text-ink-muted truncate" title={props.label}>
-        {props.label}
-      </span>
-      <div class="flex items-center gap-2 min-w-0">{props.children}</div>
-    </>
+    </SidePanel.Grid>
   );
 }
 
@@ -220,21 +193,21 @@ function FolderLink(props: { projectId: string; projectName: string }) {
 function OwnerValue(props: { ownerId: string }) {
   const [displayName] = useDisplayName(tryMacroId(props.ownerId));
   return (
-    <div class={cn(PILL_CLASS, 'w-fit')}>
+    <SidePanel.Pill>
       <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />
       <span class="truncate">{displayName()}</span>
-    </div>
+    </SidePanel.Pill>
   );
 }
 
 function DateValueDisplay(props: { value: DateValue }) {
   return (
-    <div class={cn(PILL_CLASS, 'w-fit')}>
+    <SidePanel.Pill>
       <ClockIcon class="size-3 shrink-0" />
       <span class="truncate">
         {formatDate(props.value, { showTime: true })}
       </span>
-    </div>
+    </SidePanel.Pill>
   );
 }
 
@@ -367,44 +340,38 @@ function PropertiesSectionContent(props: {
         <div class="text-failure-ink text-center py-4 text-xs">{error()}</div>
       }
     >
-      <Suspense>
-        <div class="text-xs">
-          <PropertiesProvider
-            entityType={entityType}
-            canEdit={props.canEdit}
-            documentName={props.documentName}
-            properties={filteredPinnedProperties}
-            onRefresh={refetch}
-            onPropertyAdded={handlePropertyAdded}
-            onPropertyDeleted={handlePropertyDeleted}
-            onPropertyPinned={handlePropertyPinned}
-            onPropertyUnpinned={handlePropertyUnpinned}
-            pinnedPropertyIds={pinnedPropertyIds}
-            saveHandler={saveHandler}
-          >
-            <Show when={isLoading()}>
-              <div class="flex items-center justify-center py-8">
-                <div class="w-5 h-5 animate-spin">
-                  <LoadingSpinner />
-                </div>
-              </div>
-            </Show>
+      <div class="text-xs">
+        <PropertiesProvider
+          entityType={entityType}
+          canEdit={props.canEdit}
+          documentName={props.documentName}
+          properties={filteredPinnedProperties}
+          onRefresh={refetch}
+          onPropertyAdded={handlePropertyAdded}
+          onPropertyDeleted={handlePropertyDeleted}
+          onPropertyPinned={handlePropertyPinned}
+          onPropertyUnpinned={handlePropertyUnpinned}
+          pinnedPropertyIds={pinnedPropertyIds}
+          saveHandler={saveHandler}
+        >
+          <Show when={isLoading()}>
+            <SidePanel.Loading />
+          </Show>
 
-            <Show when={filteredPinnedProperties().length > 0}>
-              <div class="grid grid-cols-[var(--sidepanel-label-width,auto)_1fr] gap-x-3 items-center py-2 auto-rows-[2rem]">
-                <For each={filteredPinnedProperties()}>
-                  {(property) => <SidePanelPropertyRow property={property} />}
-                </For>
-              </div>
-            </Show>
+          <Show when={filteredPinnedProperties().length > 0}>
+            <SidePanel.Grid class="py-2">
+              <For each={filteredPinnedProperties()}>
+                {(property) => <SidePanelPropertyRow property={property} />}
+              </For>
+            </SidePanel.Grid>
+          </Show>
 
-            <Show when={props.canEdit}>
-              <AddPinnedPropertyButton />
-            </Show>
-            <Modals />
-          </PropertiesProvider>
-        </div>
-      </Suspense>
+          <Show when={props.canEdit}>
+            <AddPinnedPropertyButton />
+          </Show>
+          <Modals />
+        </PropertiesProvider>
+      </div>
     </Show>
   );
 }
@@ -451,11 +418,6 @@ function sortPinnedProperties<T extends Property>(properties: T[]): T[] {
 // Pills have no ring in this layout (the grid handles spacing/alignment).
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PILL_CLASS = cn(
-  'inline-flex items-center gap-1.5 min-w-0 max-w-full',
-  'px-2 py-1 leading-tight text-left rounded-full'
-);
-
 function SidePanelPropertyRow(props: { property: Property }) {
   const ctx = usePropertiesContext();
   const blockId = useBlockId();
@@ -500,10 +462,6 @@ function SidePanelPropertyRow(props: { property: Property }) {
   );
 }
 
-function EmptyPillIndicator() {
-  return <CircleDashedEmpty class="size-3 shrink-0 opacity-50" />;
-}
-
 function SinglePill(props: { property: Property }) {
   const ctx = usePropertiesContext();
   const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
@@ -512,11 +470,11 @@ function SinglePill(props: { property: Property }) {
   return (
     <PropertyNS.Tooltip property={props.property}>
       <PropertyNS.EditTrigger
-        class={cn(PILL_CLASS, 'w-fit', {
+        class={cn(SidePanel.pillClass, 'w-fit', {
           'hover:bg-hover': !isReadOnly(),
         })}
       >
-        <Show when={!empty()} fallback={<EmptyPillIndicator />}>
+        <Show when={!empty()} fallback={<SidePanel.EmptyPill />}>
           <PropertyNS.Icon property={props.property} class="size-3 shrink-0" />
           <PropertyNS.Text property={props.property} />
         </Show>
@@ -534,11 +492,11 @@ function UserStackPill(props: { property: Property }) {
   return (
     <PropertyNS.Tooltip property={props.property}>
       <PropertyNS.EditTrigger
-        class={cn(PILL_CLASS, 'w-fit', {
+        class={cn(SidePanel.pillClass, 'w-fit', {
           'hover:bg-hover': !isReadOnly(),
         })}
       >
-        <Show when={!empty()} fallback={<EmptyPillIndicator />}>
+        <Show when={!empty()} fallback={<SidePanel.EmptyPill />}>
           <PropertyNS.UserStack property={props.property} maxUsers={3} />
           <PropertyNS.Text property={props.property} />
         </Show>
@@ -566,7 +524,9 @@ function MultiValue(props: { property: Property }) {
             <PropertyNS.Chips
               property={props.property}
               renderChip={(chip) => (
-                <span class={cn(PILL_CLASS, 'text-xs max-w-35 bg-hover')}>
+                <span
+                  class={cn(SidePanel.pillClass, 'text-xs max-w-35 bg-hover')}
+                >
                   <PropertyValueIcon
                     optionId={chip.key}
                     class="size-3 shrink-0"
@@ -649,33 +609,21 @@ function NotificationsSectionConditional(props: { entity: Entity }) {
     () => notifications().filter((n) => !n.viewed_at).length
   );
 
-  const title = () => (
-    <>
-      Notifications
-      <Show when={unreadCount() > 0}>
-        {' '}
-        <span class="text-ink-extra-muted">({unreadCount()})</span>
-      </Show>
-    </>
-  );
-
   return (
     <Show when={count() > 0}>
-      <SidePanel.Section id="notifications" title={title()} order={40}>
-        <Suspense
-          fallback={
-            <div class="flex justify-center py-8">
-              <div class="animate-spin rounded-full size-6 border-b-2 border-ink-muted" />
-            </div>
-          }
-        >
-          <div class="text-xs">
-            <Notifications
-              entity={props.entity}
-              notificationSource={notificationSource}
-            />
-          </div>
-        </Suspense>
+      <SidePanel.Section
+        id="notifications"
+        title={
+          <SidePanel.CountTitle label="Notifications" count={unreadCount()} />
+        }
+        order={40}
+      >
+        <div class="text-xs">
+          <Notifications
+            entity={props.entity}
+            notificationSource={notificationSource}
+          />
+        </div>
       </SidePanel.Section>
     </Show>
   );
@@ -705,30 +653,16 @@ function ReferencesSectionConditional(props: { documentId: string }) {
 
   const count = createMemo(() => references()?.length ?? 0);
 
-  const title = () => (
-    <>
-      References
-      <Show when={count() > 0}>
-        {' '}
-        <span class="text-ink-extra-muted">({count()})</span>
-      </Show>
-    </>
-  );
-
   return (
     <Show when={count() > 0}>
-      <SidePanel.Section id="references" title={title()} order={50}>
-        <Suspense
-          fallback={
-            <div class="flex justify-center py-8">
-              <div class="animate-spin rounded-full size-6 border-b-2 border-ink-muted" />
-            </div>
-          }
-        >
-          <div class="text-xs">
-            <References documentId={props.documentId} />
-          </div>
-        </Suspense>
+      <SidePanel.Section
+        id="references"
+        title={<SidePanel.CountTitle label="References" count={count()} />}
+        order={50}
+      >
+        <div class="text-xs">
+          <References documentId={props.documentId} />
+        </div>
       </SidePanel.Section>
     </Show>
   );
@@ -753,21 +687,15 @@ function GithubSectionConditional(props: {
   });
   const count = createMemo(() => pullRequests().length);
 
-  const title = () => (
-    <>
-      GitHub
-      <Show when={count() > 0}>
-        {' '}
-        <span class="text-ink-extra-muted">({count()})</span>
-      </Show>
-    </>
-  );
-
   return (
     <Show when={count() > 0}>
-      <SidePanel.Section id="github" title={title()} order={35}>
-        <div class="grid grid-cols-[var(--sidepanel-label-width,auto)_1fr] gap-x-3 items-center text-xs auto-rows-[2rem]">
-          <DetailsRow label={count() === 1 ? 'PR' : 'PRs'}>
+      <SidePanel.Section
+        id="github"
+        title={<SidePanel.CountTitle label="GitHub" count={count()} />}
+        order={35}
+      >
+        <SidePanel.Grid>
+          <SidePanel.Row label={count() === 1 ? 'PR' : 'PRs'}>
             <div class="flex min-w-0 flex-wrap items-center gap-x-1">
               <For each={pullRequests()}>
                 {(pr, i) => (
@@ -798,8 +726,8 @@ function GithubSectionConditional(props: {
                 )}
               </For>
             </div>
-          </DetailsRow>
-        </div>
+          </SidePanel.Row>
+        </SidePanel.Grid>
       </SidePanel.Section>
     </Show>
   );
