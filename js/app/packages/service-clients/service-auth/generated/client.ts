@@ -14,6 +14,8 @@ import type {
   CreateTeamRequest,
   CreateUserRequest,
   EmptyResponse,
+  EnrichGithubPullRequestsProxyRequest,
+  EnrichGithubPullRequestsResponse,
   ErrorResponse,
   GenerateEmailLinkRequest,
   GenericSuccessResponse,
@@ -268,6 +270,72 @@ export const verifyEmailLink = async (
     status: res.status,
     headers: res.headers,
   } as verifyEmailLinkResponse;
+};
+
+/**
+ * @summary Enriches GitHub pull request references with live GitHub data for the authenticated user.
+ */
+export type enrichGithubPullRequestsResponse200 = {
+  data: EnrichGithubPullRequestsResponse;
+  status: 200;
+};
+
+export type enrichGithubPullRequestsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type enrichGithubPullRequestsResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type enrichGithubPullRequestsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type enrichGithubPullRequestsResponseSuccess =
+  enrichGithubPullRequestsResponse200 & {
+    headers: Headers;
+  };
+export type enrichGithubPullRequestsResponseError = (
+  | enrichGithubPullRequestsResponse401
+  | enrichGithubPullRequestsResponse404
+  | enrichGithubPullRequestsResponse500
+) & {
+  headers: Headers;
+};
+
+export type enrichGithubPullRequestsResponse =
+  | enrichGithubPullRequestsResponseSuccess
+  | enrichGithubPullRequestsResponseError;
+
+export const getEnrichGithubPullRequestsUrl = () => {
+  return `/github_pull_requests/enrich`;
+};
+
+export const enrichGithubPullRequests = async (
+  enrichGithubPullRequestsProxyRequest: EnrichGithubPullRequestsProxyRequest,
+  options?: RequestInit
+): Promise<enrichGithubPullRequestsResponse> => {
+  const res = await fetch(getEnrichGithubPullRequestsUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(enrichGithubPullRequestsProxyRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: enrichGithubPullRequestsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as enrichGithubPullRequestsResponse;
 };
 
 /**
