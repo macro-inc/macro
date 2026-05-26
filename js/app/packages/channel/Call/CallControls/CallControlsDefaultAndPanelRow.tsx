@@ -136,7 +136,9 @@ export function CallControlsDefaultAndPanelRow(
           size="icon-sm"
           onClick={() => void callCtx.toggleAudio()}
           disabled={isConnecting()}
-          aria-label={callCtx.isAudioMuted() ? 'Unmute microphone' : 'Mute microphone'}
+          aria-label={
+            callCtx.isAudioMuted() ? 'Unmute microphone' : 'Mute microphone'
+          }
           aria-pressed={!callCtx.isAudioMuted()}
         >
           <Show when={!callCtx.isAudioMuted()} fallback={<MicrophoneSlash />}>
@@ -150,7 +152,9 @@ export function CallControlsDefaultAndPanelRow(
           size="icon-sm"
           onClick={() => void callCtx.toggleVideo()}
           disabled={isConnecting()}
-          aria-label={callCtx.isVideoMuted() ? 'Turn on camera' : 'Turn off camera'}
+          aria-label={
+            callCtx.isVideoMuted() ? 'Turn on camera' : 'Turn off camera'
+          }
           aria-pressed={!callCtx.isVideoMuted()}
         >
           <Show when={!callCtx.isVideoMuted()} fallback={<VideoCameraSlash />}>
@@ -164,7 +168,9 @@ export function CallControlsDefaultAndPanelRow(
           size="icon-sm"
           onClick={() => void callCtx.toggleScreenShare()}
           disabled={isConnecting()}
-          aria-label={callCtx.isScreenSharing() ? 'Stop sharing screen' : 'Share screen'}
+          aria-label={
+            callCtx.isScreenSharing() ? 'Stop sharing screen' : 'Share screen'
+          }
           aria-pressed={callCtx.isScreenSharing()}
         >
           <Screencast />

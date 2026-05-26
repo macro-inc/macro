@@ -2,18 +2,18 @@ import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
-import { useToggleShareWithTeam } from './use-toggle-share-with-team';
 import { cn, Tooltip } from '@ui';
 import { type RemoteParticipant, Track } from 'livekit-client';
 import { For, type JSXElement, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
-import { InlineCheckbox } from './CallControls/CallMenuPrimitives';
 import { CallControls } from './CallControls/CallControls';
+import { InlineCheckbox } from './CallControls/CallMenuPrimitives';
 import {
   CALL_PANEL_MEDIUM_NARROW_PX,
   CALL_PANEL_VERY_NARROW_PX,
 } from './call-panel-breakpoints';
 import { TrackView } from './TrackView';
+import { useToggleShareWithTeam } from './use-toggle-share-with-team';
 
 function VideoTag(props: {
   children: JSXElement;
@@ -318,9 +318,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
       {/* Controls bar — soup-notification vocabulary. Share toggle is an
           icon button (with optional inline label), active state = subtle
           accent tint. No chunky toggle switch. */}
-      <div
-        class="flex items-center py-2 relative justify-center"
-      >
+      <div class="flex items-center py-2 relative justify-center">
         <Show when={!isVeryNarrow()}>
           <Tooltip
             placement="top"
