@@ -1,3 +1,7 @@
+use github::domain::models::{
+    EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
+    EnrichedGithubPullRequest, GithubPullRequestRef, GithubPullRequestStatus,
+};
 use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
 use teams::domain::model::{
     PatchTeamCrmSettingsRequest, PatchTeamCrmSettingsResponse, PatchTeamRequest, PatchTeamUserRole,
@@ -33,8 +37,8 @@ use crate::api::user::stripe::create_portal_session::CreatePortalSessionRequest;
 use crate::api::user::stripe::patch_subscription_tier::PatchSubscriptionTierRequest;
 use crate::api::user::stripe::{StripeProductTier, StripeSessionResponse};
 use crate::api::{
-    email, health, jwt, link, login, logout, merge, mobile_welcome_email, oauth, oauth2,
-    permissions, session, user,
+    email, github_pull_requests, health, jwt, link, login, logout, merge, mobile_welcome_email,
+    oauth, oauth2, permissions, session, user,
 };
 use model::authentication::login::response::SsoRequiredResponse;
 use model::authentication::{
@@ -73,6 +77,9 @@ use model::user::{
                 link::github::init_github_link_handler,
                 link::github::delete_github_link_handler,
                 link::gmail::init_gmail_link_handler,
+
+                /// /github_pull_requests
+                github_pull_requests::handler,
 
                 /// /oauth
                 oauth::oauth_redirect::handler,
@@ -169,6 +176,14 @@ use model::user::{
                         CreateInProgressLinkResponse,
                         InitGithubLinkResponse,
                         InitGmailLinkResponse,
+
+                        // GitHub pull requests
+                        EnrichGithubPullRequestsProxyRequest,
+                        EnrichGithubPullRequestsResponse,
+                        EnrichedGithubPullRequest,
+                        GithubPullRequestRef,
+                        GithubPullRequestStatus,
+
                         UserQuota,
                         UserOrganizationResponse,
                         GetLegacyUserPermissionsResponse,
@@ -215,3 +230,47 @@ use model::user::{
         )
     )]
 pub struct ApiDoc;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn github_pull_requests_openapi_includes_enrich_path() {
+        let openapi = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        let operation = &openapi["paths"]["/github_pull_requests/enrich"]["post"];
+
+        assert_eq!(operation["operationId"], "enrich_github_pull_requests");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"].as_str(),
+            Some("#/components/schemas/EnrichGithubPullRequestsProxyRequest")
+        );
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].as_str(),
+            Some("#/components/schemas/EnrichGithubPullRequestsResponse")
+        );
+    }
+
+    #[test]
+    fn github_pull_requests_openapi_includes_components() {
+        let openapi = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        let schemas = &openapi["components"]["schemas"];
+
+        for schema_name in [
+            "EnrichGithubPullRequestsProxyRequest",
+            "EnrichGithubPullRequestsResponse",
+            "EnrichedGithubPullRequest",
+            "GithubPullRequestRef",
+            "GithubPullRequestStatus",
+        ] {
+            assert!(
+                schemas.get(schema_name).is_some(),
+                "missing schema component {schema_name}"
+            );
+        }
+
+        let request_properties = &schemas["EnrichGithubPullRequestsProxyRequest"]["properties"];
+        assert!(request_properties.get("pullRequests").is_some());
+        assert!(request_properties.get("macroUserId").is_none());
+    }
+}

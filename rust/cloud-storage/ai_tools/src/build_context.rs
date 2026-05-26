@@ -193,17 +193,19 @@ pub async fn build_tool_service_context_from_env(
         presigned_url_expiry_seconds: 3600,
         browser_cache_expiry_seconds: 86400,
     };
-    let document_service = documents::domain::service::DocumentServiceImpl::new(
-        document_repo,
+    let document_service = documents::domain::service::DocumentServiceImpl {
+        repo: document_repo,
         cloudfront_config,
-        sync_client.as_ref().clone(),
-        s3_upload_adapter,
-        NoOpTaskProperties,
-        NoOpConnectionService,
-        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-            entity_access_management::outbound::PgRepository::new(pool.clone()),
-        ),
-    );
+        sync_service_client: sync_client.as_ref().clone(),
+        upload_url_service: s3_upload_adapter,
+        task_properties_service: NoOpTaskProperties,
+        connection_service: NoOpConnectionService,
+        entity_access_management_service:
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(pool.clone()),
+            ),
+    };
+
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         pool.clone(),
     )));

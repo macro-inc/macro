@@ -58,14 +58,20 @@ pub struct DocumentServiceImpl<
     C: ConnectionService,
     Eam: EntityAccessManagementService,
 > {
-    repo: R,
-    cloudfront_config: CloudFrontConfig,
-    sync_service_client: sync_service_client::SyncServiceClient,
-    upload_url_service: U,
-    task_properties_service: T,
-    connection_service: C,
-    #[allow(dead_code)]
-    entity_access_management_service: Eam,
+    /// Document repository
+    pub repo: R,
+    /// Cloudfront config
+    pub cloudfront_config: CloudFrontConfig,
+    /// Sync service client
+    pub sync_service_client: sync_service_client::SyncServiceClient,
+    /// Upload service
+    pub upload_url_service: U,
+    /// Task properties service
+    pub task_properties_service: T,
+    /// Connection service
+    pub connection_service: C,
+    /// entity access management service
+    pub entity_access_management_service: Eam,
 }
 
 fn ready_content_for_file_type(file_type: Option<FileType>) -> DocumentContent {
@@ -121,7 +127,7 @@ impl<
     Eam: EntityAccessManagementService,
 > DocumentServiceImpl<R, U, T, C, Eam>
 {
-    /// Create a new document service.
+    /// Create a document service with its repository and external service ports.
     pub fn new(
         repo: R,
         cloudfront_config: CloudFrontConfig,

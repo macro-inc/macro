@@ -78,6 +78,44 @@ export const stripeServiceClient = {
     return result.value;
   },
   /**
+   * Creates a checkout session via the v2 endpoint. Unlike v1, this does not
+   * accept a tier — the backend infers it from the new pricing model.
+   * @returns The URL of the checkout session
+   */
+  createCheckoutSessionV2: async (
+    args: {
+      type?: string;
+      discount?: string;
+      /** Override the default success URL. Useful for flows that want the user returned to a specific page. */
+      successUrl?: string;
+    } = {}
+  ) => {
+    const { type = '', discount, successUrl } = args;
+    const gaClientId = await getGaClientId();
+    const { fbp, fbc } = getMetaIds();
+
+    const result = await authServiceClient.createCheckoutSessionV2({
+      successUrl:
+        successUrl ??
+        `${window.location.origin}/app/?subscriptionSuccess=true${type ? `&type=${type}` : ''}`,
+      cancelUrl: `${window.location.origin}/app?subscriptionCancel=true`,
+      discount: discount ?? null,
+      metadata: {
+        gaClientId: gaClientId ?? null,
+        fbp: fbp ?? null,
+        fbc: fbc ?? null,
+      },
+    });
+
+    if (!result.isOk()) {
+      throw new Error(
+        result.error?.[0]?.message ?? 'Failed to create checkout session'
+      );
+    }
+
+    return result.value;
+  },
+  /**
    * Creates a portal session
    * @returns The URL of the portal session
    */

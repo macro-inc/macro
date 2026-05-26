@@ -53,6 +53,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   const [attachMenuAnchorRef, setAttachMenuAnchorRef] =
     createSignal<HTMLDivElement>();
   const [markdownText, setMarkdownText] = createSignal('');
+  const [isFocused, setIsFocused] = createSignal(false);
 
   createEffect(() => {
     const uploaded = uploadQueue.popComplete();
@@ -182,12 +183,18 @@ export function ChatInput(props: ChatInputComponentProps) {
   );
 
   return (
-    <Surface
-      depth={2}
-      class="rounded-xl ring-1 ring-edge"
-      style={{ border: '0' }}
-    >
-      <div id="chat-input" ref={containerRef} class="relative flex flex-col">
+    <Surface active={isFocused()} class="rounded-xl" depth={2} solid>
+      <div
+        onFocusOut={(e) => {
+          const next = e.relatedTarget as Node | null;
+          if (next && containerRef.contains(next)) return;
+          setIsFocused(false);
+        }}
+        onFocusIn={() => setIsFocused(true)}
+        class="relative flex flex-col"
+        ref={containerRef}
+        id="chat-input"
+      >
         <Show when={hasAttachments()}>
           <div class="px-2 pt-2 w-full">
             <AttachmentList

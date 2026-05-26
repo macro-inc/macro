@@ -93,7 +93,7 @@ export const InviteModal = () => {
               value={value()}
               onInput={(e) => setValue(e.currentTarget.value)}
               rows={4}
-              class="w-full px-3 py-2 text-sm/relaxed border border-edge-muted rounded-xs bg-surface text-ink placeholder:text-ink/30 outline-none focus:border-accent/50 resize-none"
+              class="w-full px-3 py-2 text-sm/relaxed border border-edge-muted rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none focus:border-accent resize-none"
             />
           </div>
 

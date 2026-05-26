@@ -86,6 +86,7 @@ import {
   HoverCard,
   Scroll,
   SendButton,
+  Surface,
   Tooltip,
 } from '@ui';
 import {
@@ -880,6 +881,7 @@ export function BaseInput(props: {
     useHotkeyDOMScope('compose-message');
   let composeContainerRef: HTMLDivElement | undefined;
   useTouchOutsideToDismissKeyboard(() => composeContainerRef);
+  const [isFocused, setIsFocused] = createSignal(false);
 
   const sendEmail = async (markDone = false) => {
     if (sendMutation.isPending || uploadAttachmentMutation.isPending) return;
@@ -1320,11 +1322,20 @@ export function BaseInput(props: {
   const hasBodyText = () => bodyMacro().trim().length > 0;
 
   return (
-    <div
+    <Surface
+      class="relative flex flex-col flex-1 rounded-xl max-w-full"
+      onFocusOut={(e) => {
+        const next = e.relatedTarget as Node | null;
+        if (next && e.currentTarget.contains(next)) return;
+        setIsFocused(false);
+      }}
+      onFocusIn={() => setIsFocused(true)}
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative bg-surface flex flex-col flex-1 border border-ink-muted/8 rounded-xl max-w-full"
+      active={isFocused()}
+      depth={2}
+      solid
     >
       {/* Top Bar */}
       <div class="relative flex items-start gap-2 px-3 pt-1.5 pb-0.5">
@@ -1764,6 +1775,6 @@ export function BaseInput(props: {
           />
         </div>
       </div>
-    </div>
+    </Surface>
   );
 }

@@ -10,7 +10,7 @@ use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
 use documents::{
-    domain::{models::CloudFrontConfig, service::DocumentServiceImpl},
+    domain::models::CloudFrontConfig,
     inbound::toolset::DocumentToolContext,
     outbound::{pg_document_repo::PgDocumentRepo, s3_upload_url::S3UploadUrlAdapter},
 };
@@ -216,17 +216,18 @@ async fn build_tool_context(
     };
     let sync_service_client =
         SyncServiceClient::new(sync_service_auth_key.clone(), sync_service_url.clone());
-    let document_service = DocumentServiceImpl::new(
-        document_repo,
+    let document_service = documents::domain::service::DocumentServiceImpl {
+        repo: document_repo,
         cloudfront_config,
-        sync_service_client.clone(),
-        s3_upload_adapter,
-        NoOpTaskProperties,
-        NoOpConnectionService,
-        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-            entity_access_management::outbound::PgRepository::new(db.clone()),
-        ),
-    );
+        sync_service_client: sync_service_client.clone(),
+        upload_url_service: s3_upload_adapter,
+        task_properties_service: NoOpTaskProperties,
+        connection_service: NoOpConnectionService,
+        entity_access_management_service:
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(db.clone()),
+            ),
+    };
     let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
