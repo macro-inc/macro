@@ -11,18 +11,15 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
-import ArrowUp from '@icon/bold/arrow-up-bold.svg';
-import PlusIcon from '@icon/regular/plus.svg';
-import XIcon from '@icon/regular/x.svg';
-import Stop from '@phosphor-icons/core/regular/stop.svg';
+import PaperclipIcon from '@phosphor/paperclip.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button, cn, Hotkey, Surface, Tooltip } from '@ui';
-import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
+import { Button, cn, Surface, SendButton as UiSendButton } from '@ui';
+import { createEffect, createSignal, Show } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { useAiDataConsentGate } from './useAiDataConsent';
 
-export type ChatInputProps = {
+type ChatInputProps = {
   onSend: (args: ChatSendInput) => void;
   onStop?: () => void;
   onEscape?: (e: KeyboardEvent) => boolean;
@@ -30,10 +27,9 @@ export type ChatInputProps = {
   showActiveTabs?: boolean;
   autoFocusOnMount?: boolean;
   chatId?: string;
-  extraRightControls?: () => import('solid-js').JSX.Element;
 };
 
-export type ChatInputComponentProps = {
+type ChatInputComponentProps = {
   editor: EditorConfigBuilder;
   initialValue?: string;
   onChange?: (markdown: string) => void;
@@ -57,6 +53,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   const [attachMenuAnchorRef, setAttachMenuAnchorRef] =
     createSignal<HTMLDivElement>();
   const [markdownText, setMarkdownText] = createSignal('');
+  const [isFocused, setIsFocused] = createSignal(false);
 
   createEffect(() => {
     const uploaded = uploadQueue.popComplete();
@@ -136,72 +133,68 @@ export function ChatInput(props: ChatInputComponentProps) {
     <div ref={setAttachMenuAnchorRef} class="shrink-0">
       <Button
         variant="ghost"
-        size="icon-md"
+        size="icon-sm"
         class="text-ink"
         onClick={() => setShowAttachMenu((prev) => !prev)}
       >
-        {showAttachMenu() ? <XIcon /> : <PlusIcon />}
+        <PaperclipIcon />
       </Button>
     </div>
   );
 
   const StopButton = () => (
     <Button
-      variant="base"
+      variant="ghost"
       size="icon-sm"
       label="Stop generating"
       hotkey={TOKENS.chat.stop}
       onClick={() => props.onStop?.()}
+      class={cn(
+        'rounded-[11px] size-7.5 text-ink-extra-muted [&_svg]:stroke-[4px]',
+        'not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10',
+        'data-disabled:opacity-100 data-disabled:text-ink-extra-muted data-disabled:bg-ink-muted/5'
+      )}
     >
-      <Stop />
+      <div class="size-3.5 rounded-sm bg-current" />
     </Button>
   );
 
+  const SendButton = () => (
+    <UiSendButton
+      tooltip={'Ask Ai'}
+      shortcut="enter"
+      tooltipPlacement="top"
+      disabled={!canSendMessage()}
+      hidden={isMobile() && isEmptyInput()}
+      onClick={() =>
+        sendMessage(
+          isTouchDevice() ? { modelOverride: 'claude-opus-4-6' } : undefined
+        )
+      }
+    />
+  );
+
   const RightControls = () => (
-    <Switch>
-      <Match when={!isTouchDevice()}>
-        <Show
-          when={generating() && props.onStop}
-          fallback={
-            <div class="flex flex-row items-center gap-3 text-xs text-ink-disabled opacity-70 shrink-0">
-              {props.extraRightControls?.()}
-              <Tooltip label="Enter to send" placement="top">
-                <div class="flex items-center">
-                  <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1 py-0.5">
-                    <Hotkey shortcut="enter" />
-                  </div>
-                </div>
-              </Tooltip>
-            </div>
-          }
-        >
-          <div class="flex flex-row items-center gap-1 shrink-0">
-            <StopButton />
-          </div>
-        </Show>
-      </Match>
-      <Match when={isTouchDevice()}>
-        <div class="flex flex-row gap-1 items-center shrink-0">
-          <Show when={!generating()}>
-            <Button
-              onClick={() => sendMessage({ modelOverride: 'claude-opus-4-6' })}
-            >
-              <div class="group hover:bg-accent transition ease-in-out size-6 p-0.5 border border-accent rounded-full flex items-center justify-center">
-                <ArrowUp class="group-hover:text-surface! group-hover:fill-surface! text-accent! fill-accent! size-4 transition ease-in-out" />
-              </div>
-            </Button>
-          </Show>
-          <Show when={generating()}>
-            <StopButton />
-          </Show>
-        </div>
-      </Match>
-    </Switch>
+    <div class="shrink-0">
+      <Show when={generating() && props.onStop} fallback={<SendButton />}>
+        <StopButton />
+      </Show>
+    </div>
   );
 
   return (
-    <Surface depth={2}>
-      <div id="chat-input" ref={containerRef} class="relative flex flex-col">
+    <Surface active={isFocused()} class="rounded-xl" depth={2} solid>
+      <div
+        onFocusOut={(e) => {
+          const next = e.relatedTarget as Node | null;
+          if (next && containerRef.contains(next)) return;
+          setIsFocused(false);
+        }}
+        onFocusIn={() => setIsFocused(true)}
+        class="relative flex flex-col"
+        ref={containerRef}
+        id="chat-input"
+      >
         <Show when={hasAttachments()}>
           <div class="px-2 pt-2 w-full">
             <AttachmentList
@@ -234,7 +227,7 @@ export function ChatInput(props: ChatInputComponentProps) {
             id="chat-input-text-area"
             class={cn('text-sm sm:text-sm text-ink')}
             classList={{
-              'pl-12': !isMultiline(),
+              'pl-8': !isMultiline(),
               'pr-12': !isMultiline() && isTouchDevice(),
               'pr-32.5': !isMultiline() && !isTouchDevice(),
               'px-0  pb-8': isMultiline(),
@@ -253,23 +246,11 @@ export function ChatInput(props: ChatInputComponentProps) {
             />
           </div>
 
-          <div
-            class="absolute left-2"
-            classList={{
-              'top-1/2 -translate-y-1/2': !isMultiline(),
-              'bottom-1.5 top-auto translate-y-0': isMultiline(),
-            }}
-          >
+          <div class="absolute left-2 bottom-1.5">
             <LeftButton />
           </div>
 
-          <div
-            class="absolute right-2"
-            classList={{
-              'top-1/2 -translate-y-1/2': !isMultiline(),
-              'bottom-1.5 top-auto translate-y-0': isMultiline(),
-            }}
-          >
+          <div class="absolute right-1.5 bottom-1.5">
             <RightControls />
           </div>
         </div>

@@ -22,6 +22,7 @@ use model::{
     response::ErrorResponse,
     user::UserContext,
 };
+use model_notifications::NotificationDocumentSubType;
 use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::NotificationIngress;
 use properties::PropertiesService as _;
@@ -138,6 +139,9 @@ pub async fn create_comment_handler(
                     document_id: document_id.to_string(),
                     owner: document_context.owner.clone(),
                     file_type: document_context.file_type.clone(),
+                    sub_type: document_context
+                        .sub_type
+                        .map(|_| NotificationDocumentSubType::Task),
                     sender_id: sender_id.clone(),
                     sender_profile_picture_url,
                 };

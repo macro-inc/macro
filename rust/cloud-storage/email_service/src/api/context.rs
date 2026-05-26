@@ -2,7 +2,10 @@ use axum::extract::FromRef;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{
     domain::service::EmailServiceImpl,
-    inbound::{EmailRouterState, EmailThreadRouterState, GmailTokenState},
+    inbound::axum::{
+        axum_impls::GmailTokenState, get_thread_router::EmailThreadRouterState,
+        previews_router::EmailRouterState,
+    },
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
 
@@ -18,8 +21,15 @@ use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 
 pub(crate) type EmailEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
-pub(crate) type EmailSvc =
-    EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>, sqs_client::SQS>;
+pub(crate) type EmailSvc = EmailServiceImpl<
+    EmailPgRepo,
+    FrecencyQueryServiceImpl<FrecencyPgStorage>,
+    sqs_client::SQS,
+    crm::domain::service::CrmServiceImpl<
+        crm::outbound::companies_repo::CompaniesRepositoryImpl,
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+    >,
+>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {

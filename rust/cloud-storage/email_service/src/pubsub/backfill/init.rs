@@ -3,7 +3,7 @@ use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use crate::util::process_pre_insert::sync_labels::sync_labels;
 use crate::util::sync_contacts::sync_contacts;
 use models_email::email::service::backfill::{
-    BackfillJobStatus, BackfillOperation, BackfillPubsubMessage,
+    BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::email::service::thread::ListThreadsPayload;
@@ -17,7 +17,7 @@ use std::cmp::min;
 pub async fn init_backfill(
     ctx: &PubSubContext,
     access_token: &str,
-    data: &BackfillPubsubMessage,
+    scope: &JobScopedPayload<InitPayload>,
     link: &link::Link,
     backfill_job: &backfill::BackfillJob,
 ) -> Result<(), ProcessingError> {
@@ -80,7 +80,7 @@ pub async fn init_backfill(
 
     email_db_client::backfill::job::update::update_job_total_threads(
         &ctx.db,
-        data.job_id,
+        scope.job_id,
         total_threads,
     )
     .await
@@ -92,7 +92,7 @@ pub async fn init_backfill(
     })?;
 
     ctx.redis_client
-        .init_backfill_job_progress(data.job_id, total_threads)
+        .init_backfill_job_progress(scope.job_id, total_threads)
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {
@@ -102,10 +102,12 @@ pub async fn init_backfill(
         })?;
 
     let thread_sqs_msg = BackfillPubsubMessage {
-        link_id: data.link_id,
-        job_id: data.job_id,
-        backfill_operation: BackfillOperation::ListThreads(ListThreadsPayload {
-            next_page_token: None, // a value of None tells the process to start from the beginning
+        backfill_operation: BackfillOperation::ListThreads(JobScopedPayload {
+            link_id: scope.link_id,
+            job_id: scope.job_id,
+            payload: ListThreadsPayload {
+                next_page_token: None, // a value of None tells the process to start from the beginning
+            },
         }),
     };
 
@@ -121,7 +123,7 @@ pub async fn init_backfill(
 
     email_db_client::backfill::job::update::update_backfill_job_status(
         &ctx.db,
-        data.job_id,
+        scope.job_id,
         BackfillJobStatus::InProgress,
     )
     .await

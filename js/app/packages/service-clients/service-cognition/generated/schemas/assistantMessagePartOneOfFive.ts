@@ -4,11 +4,17 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { AssistantMessagePartOneOfFiveDisplayName } from './assistantMessagePartOneOfFiveDisplayName';
 import type { AssistantMessagePartOneOfFiveType } from './assistantMessagePartOneOfFiveType';
 
 export type AssistantMessagePartOneOfFive = {
+  /** Human-readable title from the MCP server, if provided */
+  display_name?: AssistantMessagePartOneOfFiveDisplayName;
   id: string;
   json: unknown;
+  /** Demangled tool name from the MCP server */
   name: string;
+  /** MCP server name */
+  service: string;
   type: AssistantMessagePartOneOfFiveType;
 };

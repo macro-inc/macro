@@ -250,6 +250,7 @@ export const TOKENS = {
   block: {
     share: 'block.share',
     focus: 'block.focus',
+    toggleSidePanel: 'block.toggleSidePanel',
   },
 
   // channel
@@ -304,7 +305,7 @@ export type HotkeyToken = ExtractValues<typeof TOKENS>;
  * Builds a Map from token string values to their token references
  * e.g. 'channel.moveUp' -> TOKENS.channel.moveUp
  */
-export function buildTokenMap(tokens: typeof TOKENS): Map<string, HotkeyToken> {
+function buildTokenMap(tokens: typeof TOKENS): Map<string, HotkeyToken> {
   const map = new Map<string, HotkeyToken>();
 
   function traverse(obj: any, path: string[] = []) {
@@ -326,4 +327,4 @@ export function buildTokenMap(tokens: typeof TOKENS): Map<string, HotkeyToken> {
   return map;
 }
 
-export const tokenMap = buildTokenMap(TOKENS);
+const _tokenMap = buildTokenMap(TOKENS);

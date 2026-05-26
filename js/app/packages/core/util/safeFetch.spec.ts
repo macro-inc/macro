@@ -3,7 +3,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { isErr, isOk } from './maybeResult';
+
 import { type BaseFetchErrorCode, safeFetch } from './safeFetch';
 
 let originalFetch = global.fetch;
@@ -43,9 +43,9 @@ describe('safeFetch', () => {
 
     const result = await safeFetch<{ data: string }>('https://localhost/data');
 
-    expect(isOk(result)).toBe(true);
-    if (isOk(result)) {
-      const [, data] = result;
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      const data = result.value;
       expect(data).toEqual({ data: 'test' });
     }
   });
@@ -57,9 +57,9 @@ describe('safeFetch', () => {
 
     const result = await safeFetch<{ data: string }>('https://localhost/data');
 
-    expect(isErr(result)).toBe(true);
-    if (isErr(result)) {
-      const [[{ code }]] = result;
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      const [{ code }] = result.error;
       expect(code).toBe('NETWORK_ERROR');
     }
   });
@@ -81,9 +81,9 @@ describe('safeFetch', () => {
       retry: { maxTries: 2, delay: 0 },
     });
 
-    expect(isOk(result)).toBe(true);
-    if (isOk(result)) {
-      const [, data] = result;
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      const data = result.value;
       expect(data).toEqual({ data: 'retry success' });
     }
     expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -102,9 +102,9 @@ describe('safeFetch', () => {
 
     const result = await safeFetch<{ data: string }>('https://localhost/data');
 
-    expect(isErr(result)).toBe(true);
-    if (isErr(result)) {
-      const [[{ code }]] = result;
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      const [{ code }] = result.error;
       expect(code).toBe('INVALID_JSON');
     }
   });
@@ -122,9 +122,9 @@ describe('safeFetch', () => {
         'https://localhost/data'
       );
 
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        const [[{ code }]] = result;
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        const [{ code }] = result.error;
         expect(code).toBe('NOT_FOUND');
       }
     });
@@ -141,9 +141,9 @@ describe('safeFetch', () => {
         'https://localhost/data'
       );
 
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        const [[{ code }]] = result;
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        const [{ code }] = result.error;
         expect(code).toBe('UNAUTHORIZED');
       }
     });
@@ -160,9 +160,9 @@ describe('safeFetch', () => {
         'https://localhost/data'
       );
 
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        const [[{ code }]] = result;
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        const [{ code }] = result.error;
         expect(code).toBe('SERVER_ERROR');
       }
     });
@@ -179,9 +179,9 @@ describe('safeFetch', () => {
         'https://localhost/data'
       );
 
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        const [[{ code }]] = result;
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        const [{ code }] = result.error;
         expect(code).toBe('HTTP_ERROR');
       }
     });
@@ -218,9 +218,9 @@ describe('safeFetch', () => {
         customErrorHandler
       );
 
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        const [[{ code, message }]] = result;
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        const [{ code, message }] = result.error;
         expect(code).toBe('RATE_LIMITED');
         expect(message).toBe('Too many requests');
       }
@@ -240,7 +240,7 @@ describe('safeFetch', () => {
         }
       );
 
-      expect(isErr(result)).toBe(true);
+      expect(result.isErr()).toBe(true);
       expect(mockFetch).toHaveBeenCalledTimes(3);
     });
 
@@ -273,9 +273,9 @@ describe('safeFetch', () => {
         }
       );
 
-      expect(isOk(result)).toBe(true);
-      if (isOk(result)) {
-        const [, data] = result;
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        const data = result.value;
         expect(data).toEqual({ data: 'success after retries' });
       }
       expect(mockFetch).toHaveBeenCalledTimes(3);

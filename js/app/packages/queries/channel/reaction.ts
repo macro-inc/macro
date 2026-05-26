@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
   commsServiceClient,
@@ -30,7 +30,7 @@ type WithReactionState<T> = T & {
   threadId?: string;
 };
 
-export type AddReactionContext = {
+type AddReactionContext = {
   messageId: string;
   emoji: string;
   userId: string;
@@ -38,7 +38,7 @@ export type AddReactionContext = {
   target: MessageTarget;
 };
 
-export type RemoveReactionContext = {
+type RemoveReactionContext = {
   messageId: string;
   emoji: string;
   userId: string;

@@ -94,7 +94,7 @@ function FloatingContent(props: {
       ref={ref}
       style={{ position: 'fixed', left: `${pos().x}px`, top: `${pos().y}px` }}
       class={cn(
-        'bg-surface w-fit p-1 border border-edge-muted rounded-xs shadow z-highlight-menu',
+        'bg-surface w-fit p-1.5 rounded-xl ring-1 ring-edge shadow-[0_8px_24px_-16px_rgba(0,0,0,0.24),0_2px_8px_-6px_rgba(0,0,0,0.18)] z-highlight-menu',
         props.class
       )}
     >
@@ -126,7 +126,7 @@ function useSimpleDropdownContext() {
 
 // --- Item ---
 
-export type DropdownItemProps = {
+type DropdownItemProps = {
   text: string | JSX.Element;
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   onClick?: (e?: MouseEvent) => void;
@@ -134,7 +134,7 @@ export type DropdownItemProps = {
   class?: string;
 };
 
-const ITEM_BASE_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1 text-base' : 'py-1 pl-2 pr-2 text-sm'} font-medium justify-between items-center rounded-xs outline-none focus:bg-active data-[highlighted]:bg-active`;
+const ITEM_BASE_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1.5 text-base' : 'py-1 pl-2.5 pr-2 text-sm'} font-medium justify-between items-center rounded-md outline-none focus:bg-ink/3 data-[highlighted]:bg-ink/3`;
 
 function ItemInner(props: Pick<DropdownItemProps, 'icon' | 'text'>) {
   return (
@@ -160,7 +160,7 @@ function TouchItem(props: DropdownItemProps) {
         ITEM_BASE_CLASS,
         props.disabled
           ? 'opacity-50 cursor-not-allowed'
-          : 'hover:bg-hover hover-transition-bg',
+          : 'hover:bg-ink/3 hover-transition-bg',
         props.class
       )}
     >
@@ -178,7 +178,7 @@ function KobalteItem(props: DropdownItemProps) {
         ITEM_BASE_CLASS,
         props.disabled
           ? 'opacity-50 cursor-not-allowed'
-          : 'hover:bg-hover hover-transition-bg',
+          : 'hover:bg-ink/3 hover-transition-bg',
         props.class
       )}
     >
@@ -262,14 +262,14 @@ function SimpleDropdownRoot(props: {
   );
 }
 
-export const SimpleDropdown = Object.assign(SimpleDropdownRoot, {
+const SimpleDropdown = Object.assign(SimpleDropdownRoot, {
   Trigger: SimpleDropdownTrigger,
   Portal: SimpleDropdownPortal,
   Content: SimpleDropdownContent,
   Item: DropdownItem,
 });
 
-export type DropdownMenuLike = {
+type DropdownMenuLike = {
   (props: {
     open: boolean;
     onOpenChange: (v: boolean) => void;

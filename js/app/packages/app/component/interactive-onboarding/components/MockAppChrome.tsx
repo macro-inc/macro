@@ -1,16 +1,16 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
-import MacroIcon from '@macro-icons/macro-logo.svg';
-import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
-import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
-import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
-import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
-import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
+import MacroIcon from '@icon/macro-logo.svg';
+import { AnimatedChannelIcon } from '@icon/wide-channel';
+import { AnimatedCommandIcon } from '@icon/wide-command';
+import { AnimatedEmailIcon } from '@icon/wide-email';
+import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
+import { AnimatedFolderIcon } from '@icon/wide-folder';
+import { AnimatedGearIcon } from '@icon/wide-gear';
+import { AnimatedPlusIcon } from '@icon/wide-plus';
+import { AnimatedStarIcon } from '@icon/wide-star';
+import { AnimatedTaskIcon } from '@icon/wide-task';
 import { cn, HoverCard } from '@ui';
 import {
   createSignal,
@@ -27,7 +27,7 @@ import {
   sidebarFilter,
 } from '../sandbox/sandbox-store';
 
-export const MOCK_SIDEBAR_LINKS = [
+const MOCK_SIDEBAR_LINKS = [
   {
     id: 'agents',
     label: 'Agents',
@@ -226,25 +226,9 @@ export function MockAppChrome(props: MockAppChromeProps) {
                 return 'text-ink opacity-50 hover:opacity-80 hover:bg-ink/10';
               };
               return (
-                <HoverCard placement="right">
-                  <HoverCard.Trigger>
-                    <button
-                      type="button"
-                      class={cn(
-                        'size-6 rounded-xs p-1 transition-colors cursor-default',
-                        stateClass()
-                      )}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setFilter(link.id as SandboxSidebarFilter);
-                      }}
-                    >
-                      {link.icon && (
-                        <Dynamic component={link.icon} class="size-4" />
-                      )}
-                    </button>
-                  </HoverCard.Trigger>
-                  <HoverCard.Content>
+                <HoverCard
+                  placement="right"
+                  content={
                     <span class="flex items-center gap-1.5 text-xs">
                       {link.label}
                       <span class="flex items-center gap-1 text-ink/40">
@@ -257,7 +241,23 @@ export function MockAppChrome(props: MockAppChromeProps) {
                         </span>
                       </span>
                     </span>
-                  </HoverCard.Content>
+                  }
+                >
+                  <button
+                    type="button"
+                    class={cn(
+                      'size-6 rounded-xs p-1 transition-colors cursor-default',
+                      stateClass()
+                    )}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setFilter(link.id as SandboxSidebarFilter);
+                    }}
+                  >
+                    {link.icon && (
+                      <Dynamic component={link.icon} class="size-4" />
+                    )}
+                  </button>
                 </HoverCard>
               );
             }}

@@ -21,11 +21,24 @@ use schemas::{anthropic_tools, read};
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
 use subagent::Subagent;
+use teams::inbound::toolset::team_toolset;
 
 pub use build_context::build_tool_service_context_from_env;
 pub use search::search_toolset;
-pub use tool_context::*;
-
+#[cfg(any(test, feature = "test-support"))]
+pub use tool_context::no_op_schedule_context;
+pub use tool_context::{
+    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
+    NoOpScheduleContext, NoOpSnsEndpointManager, NoOpTaskProperties, RequestContext,
+    ToolCallRecordQueryService, ToolCallService, ToolCallToolContext, ToolChannelMessagesService,
+    ToolChannelToolContext, ToolChatService, ToolChatToolContext, ToolCommsService,
+    ToolDocumentService, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
+    ToolEntityAccessManagementService, ToolEntityAccessService, ToolFrecencyService,
+    ToolNotificationQueue, ToolNotificationService, ToolNotificationToolContext,
+    ToolPropertiesService, ToolPropertiesToolContext, ToolServiceContext, ToolSoupService,
+    ToolTeamService, ToolTeamToolContext, ToolUserEmailService, build_channel_tool_context,
+    build_team_tool_context,
+};
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
 
 pub struct ToolSetWithPrompt {
@@ -57,6 +70,7 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<ToolCallToolContext>(call_toolset())
         .add_subtoolset::<ToolChatToolContext>(chat_toolset())
         .add_subtoolset::<ToolChannelToolContext>(channel_toolset())
+        .add_subtoolset::<ToolTeamToolContext>(team_toolset())
 }
 
 /// These are actually sent to the AI provider

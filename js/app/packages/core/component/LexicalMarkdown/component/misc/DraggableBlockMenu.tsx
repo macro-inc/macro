@@ -1,6 +1,6 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import Dots from '@icon/bold/dots-six-vertical-bold.svg';
 import { $isListItemNode, $isListNode, type ListItemNode } from '@lexical/list';
+import Dots from '@phosphor/dots-six-vertical.svg';
 import { $getNearestNodeFromDOMNode } from 'lexical';
 import { Show, useContext } from 'solid-js';
 import type { SetStoreFunction, Store } from 'solid-js/store';
@@ -161,7 +161,10 @@ export function DraggableBlockMenu(props: {
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
         >
-          <Dots class="size-5 text-ink-extra-muted opacity-50 pointer-events-none" />
+          <Dots
+            class="size-5 text-ink-extra-muted opacity-50 pointer-events-none bg-
+          [yellow]"
+          />
         </div>
 
         <Show when={props.state.isDragging && targetLinePosition()}>

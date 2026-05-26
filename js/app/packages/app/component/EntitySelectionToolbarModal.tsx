@@ -2,7 +2,7 @@ import { ScopedPortal } from '@core/component/ScopedPortal';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { EntityData } from '@entity';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
-import { Hotkey } from '@ui';
+import { Button, Hotkey, Layer } from '@ui';
 
 interface EntitySelectionToolbarModalProps {
   multiSelectEntities: EntityData[];
@@ -15,41 +15,41 @@ export const EntitySelectionToolbarModal = (
 ) => {
   return (
     <ScopedPortal scope="split">
-      <div class="absolute left-1/2 bottom-16 -translate-x-1/2">
-        {/*<div class="absolute size-full pattern-edge-muted pattern-diagonal-4 left-1 top-1 -z-1" />*/}
-        <div class="text-sm font-bold flex rounded-sm flex-row items-center gap-2 p-2 bg-surface border border-edge-muted">
-          <div class="flex items-center">
-            <button
+      <Layer depth={2}>
+        <div class="absolute left-1/2 bottom-16 -translate-x-1/2">
+          <div class="text-sm font-bold flex rounded-xl flex-row items-center gap-2 p-2 bg-surface border border-edge shadow-xl shadow-drop-shadow">
+            <Button
               type="button"
-              class="size-6 aspect-square p-1 flex items-center justify-center hover:bg-hover"
+              size="icon-sm"
+              variant="ghost"
               onClick={props.onClose}
             >
-              <CloseIcon class="shrink-0 size-full" />
-            </button>
+              <CloseIcon />
+            </Button>
             <span class="text-ink font-regular w-full whitespace-nowrap">
               {props.multiSelectEntities.length} selected
             </span>
+            <Button
+              onClick={props.onAction}
+              variant="base"
+              class="p-1 pl-2 rounded-md bg-surface"
+              depth={3}
+            >
+              <span>Actions</span>
+              <Hotkey token={TOKENS.global.commandMenu} theme="subtle" />
+            </Button>
+            <Button
+              onClick={props.onClose}
+              variant="base"
+              class="p-1 pl-2 rounded-md bg-surface"
+              depth={3}
+            >
+              <span>Clear</span>
+              <Hotkey shortcut="escape" theme="subtle" />
+            </Button>
           </div>
-          <button
-            onClick={props.onAction}
-            class="p-1 px-2 flex gap-1 border-edge-muted rounded-xs border items-center size-full hover:bg-hover hover-transition-bg"
-          >
-            <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
-              <Hotkey token={TOKENS.global.commandMenu} class="space-x-1" />
-            </div>
-            <span>Actions</span>
-          </button>
-          <button
-            onClick={props.onClose}
-            class="p-1 px-2 flex gap-1 border-edge-muted rounded-xs border items-center size-full hover:bg-hover hover-transition-bg"
-          >
-            <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
-              <Hotkey shortcut="escape" />
-            </div>
-            <span>Clear</span>
-          </button>
         </div>
-      </div>
+      </Layer>
     </ScopedPortal>
   );
 };

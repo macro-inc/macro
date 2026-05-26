@@ -24,7 +24,7 @@ const SWIPE_DISTANCE_THRESHOLD = 0.5; // fraction of screen width
 const SWIPE_ANIMATION_MS = 88;
 const BG_PEEK_OFFSET = 110; // px the BG panel is offset left at rest; closes to 0 as FG slides away
 
-export type MobileSwipeBackContainerProps = {
+type MobileSwipeBackContainerProps = {
   splitManager: SplitManager;
   mobileSwipeLayout: MobileSwipeLayout;
   splits: Accessor<ReadonlyArray<SplitState>>;
@@ -77,6 +77,13 @@ export function MobileSwipeBackContainer(props: MobileSwipeBackContainerProps) {
     if (!mobileSwipeLayout.canGoBack()) return;
     const touch = e.touches[0];
     if (!touch || touch.clientX > SWIPE_EDGE_THRESHOLD) return;
+    // Buttons can sit inside the swipe-edge zone. If we start the gesture, the preventDefault() in touchmove suppresses the synthesized click on iOS.
+    if (
+      e.target instanceof Element &&
+      e.target.closest('button, a, [role="button"]')
+    ) {
+      return;
+    }
     startX = touch.clientX;
     startTime = Date.now();
     setIsDragging(true);
@@ -176,7 +183,7 @@ export function MobileSwipeBackContainer(props: MobileSwipeBackContainerProps) {
               },
               !mobileSwipeLayout.fgIsSlotA() &&
                 !isDragging() &&
-                !isAnimatingOut &&
+                !isAnimatingOut() &&
                 'hidden'
             )}
             style={mobileSwipeLayout.fgIsSlotA() ? fgStyle() : bgStyle()}

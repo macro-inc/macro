@@ -15,9 +15,7 @@ type DebouncedMarkerProps = {
   debounceTime?: number;
 };
 
-export const makeDebouncedMarker = (
-  props: DebouncedMarkerProps
-): VoidFunction => {
+const makeDebouncedMarker = (props: DebouncedMarkerProps): VoidFunction => {
   const debounceTime = props.debounceTime ?? DEFAULT_DEBOUNCE_TIME;
 
   const trigger = debounce(props.debouncedFn, debounceTime);

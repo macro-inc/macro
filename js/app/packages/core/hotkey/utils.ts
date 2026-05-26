@@ -92,7 +92,7 @@ type GetHotkeyCommandOptions = {
  * // Sort by displayPriority instead
  * const commands = getHotkeyCommands(scopeNode, 'h', { sortBy: 'displayPriority' });
  */
-export function getHotkeyCommands(
+function getHotkeyCommands(
   scopeOrId: ScopeNode | string,
   hotkey: ValidHotkey,
   options: GetHotkeyCommandOptions = {}
@@ -413,7 +413,7 @@ export function getActiveCommandByToken(
 /**
  * Returns a hotkey command for a given hotkey token. NOTE: this might not be THE command you are looking for, if there are hotkeys sharing the same token instantiated across different scopes. But this can be used in situations where you don't know or don't care about the scope you are in, e.g. when displaying hotkey metadata.
  */
-export function getHotkeyCommandByToken(token: HotkeyToken) {
+function _getHotkeyCommandByToken(token: HotkeyToken) {
   const command = hotkeyTokenMap().get(token)?.at(0);
   return command;
 }
@@ -638,7 +638,7 @@ export function registerScopeSignalHotkey(
   });
 }
 
-export const useIsInCommandScope = () => {
+const _useIsInCommandScope = () => {
   return createMemo(() => {
     const currentScopeId = activeScope();
     if (!currentScopeId) return false;

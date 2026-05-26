@@ -247,6 +247,24 @@ pub struct EmailFilters {
     #[serde(default, skip_serializing_if = "SharedEmailFilter::is_default")]
     pub shared: SharedEmailFilter,
 
+    /// CRM-scoped domain filter. When non-empty, expands visibility to every
+    /// teammate's mailbox and restricts to threads involving any of these
+    /// domains (in any of sender/cc/bcc/recipient). Each domain is authorized
+    /// against `crm_domains` + `crm_companies` (must exist for the caller's
+    /// team, company must not be hidden, `email_sync` must be true).
+    /// Mutually exclusive with `crm_addresses`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub crm_domains: Vec<String>,
+
+    /// CRM-scoped address filter. When non-empty, expands visibility to every
+    /// teammate's mailbox and restricts to threads involving any of these
+    /// fully-qualified addresses. Each address is authorized against
+    /// `crm_contacts` + `crm_companies` (contact must not be hidden, company
+    /// must not be hidden, `email_sync` must be true).
+    /// Mutually exclusive with `crm_domains`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub crm_addresses: Vec<String>,
+
     /// When `Some(true)`, only include threads that have at least one message
     /// with an iCalendar attachment (`.ics` filename or `application/ics` mime
     /// type). `Some(false)` and `None` apply no constraint.
@@ -268,6 +286,8 @@ impl IsEmpty for EmailFilters {
             include_labels,
             exclude_labels,
             shared,
+            crm_domains,
+            crm_addresses,
             calendar_only,
         } = self;
         senders.is_empty()
@@ -281,6 +301,8 @@ impl IsEmpty for EmailFilters {
             && include_labels.is_empty()
             && exclude_labels.is_empty()
             && shared.is_default()
+            && crm_domains.is_empty()
+            && crm_addresses.is_empty()
             && !calendar_only.unwrap_or(false)
     }
 }

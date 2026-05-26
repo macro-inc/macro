@@ -1,8 +1,8 @@
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import BuildingIcon from '@icon/regular/buildings.svg';
-import UserIcon from '@icon/regular/user.svg';
 import type { ContactMentionDecoratorProps } from '@lexical-core';
+import BuildingIcon from '@phosphor/buildings.svg';
+import UserIcon from '@phosphor/user.svg';
 import { cn } from '@ui';
 import { COMMAND_PRIORITY_NORMAL, KEY_ENTER_COMMAND } from 'lexical';
 import { createSignal, Show, useContext } from 'solid-js';
@@ -105,7 +105,7 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
       <span
         ref={mentionRef}
         class={cn(
-          'relative p-0.5 cursor-default rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent',
+          'relative p-0.5 cursor-default rounded-md bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent',
           isSelectedAsNode() && 'bg-active'
         )}
         {...navHandlers}

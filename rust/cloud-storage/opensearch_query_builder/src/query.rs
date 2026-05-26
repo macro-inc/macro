@@ -4,6 +4,7 @@ use serde::Serialize;
 
 mod bool;
 mod function_score;
+mod has_child;
 mod match_phrase;
 mod match_phrase_prefix;
 mod match_query;
@@ -14,20 +15,23 @@ mod term;
 mod terms;
 mod wildcard;
 
-pub use bool::*;
-pub use function_score::*;
-pub use match_phrase::*;
-pub use match_phrase_prefix::*;
-pub use match_query::*;
-pub use range::*;
-pub use regexp::*;
-use serde_json::Value;
-pub use simple_query_string::*;
-pub use term::*;
-pub use terms::*;
-pub use wildcard::*;
-
 use crate::ToOpenSearchJson;
+pub use bool::{BoolQuery, BoolQueryBuilder};
+pub use function_score::{
+    BoostMode, DecayFunction, FieldValueFactor, FunctionScoreQuery, FunctionScoreQueryBuilder,
+    RandomScore, ScoreFunction, ScoreFunctionType, ScoreMode, ScriptScore,
+};
+pub use has_child::{HasChildQuery, InnerHits};
+pub use match_phrase::MatchPhraseQuery;
+pub use match_phrase_prefix::MatchPhrasePrefixQuery;
+pub use match_query::MatchQuery;
+pub use range::{RangeQuery, RangeQueryBuilder};
+pub use regexp::{RegexpQuery, RegexpQueryFlags};
+use serde_json::Value;
+pub use simple_query_string::SimpleQueryStringQuery;
+pub use term::TermQuery;
+pub use terms::TermsQuery;
+pub use wildcard::WildcardQuery;
 
 /// Enum representing the different types of queries that can be used in a search request.
 #[derive(Debug, Clone, Serialize)]
@@ -55,6 +59,8 @@ pub enum QueryType<'a> {
     WildCard(WildcardQuery<'a>),
     /// Simple query string query
     SimpleQueryString(SimpleQueryStringQuery<'a>),
+    /// has_child join query (returns parents whose children match)
+    HasChild(HasChildQuery<'a>),
 }
 
 impl<'a> ToOpenSearchJson for QueryType<'a> {
@@ -71,6 +77,7 @@ impl<'a> ToOpenSearchJson for QueryType<'a> {
             QueryType::WildCard(wildcard_query) => wildcard_query.to_json(),
             QueryType::Regexp(regexp_query) => regexp_query.to_json(),
             QueryType::SimpleQueryString(simple_query_string) => simple_query_string.to_json(),
+            QueryType::HasChild(has_child) => has_child.to_json(),
         }
     }
 }
@@ -157,6 +164,7 @@ impl<'a> QueryType<'a> {
             QueryType::Terms(terms) => QueryType::Terms(terms.to_owned()),
             QueryType::WildCard(wildcard) => QueryType::WildCard(wildcard.to_owned()),
             QueryType::SimpleQueryString(sqs) => QueryType::SimpleQueryString(sqs.to_owned()),
+            QueryType::HasChild(has_child) => QueryType::HasChild(has_child.to_owned()),
         }
     }
 }

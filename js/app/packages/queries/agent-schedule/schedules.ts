@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { scheduledActionClient } from '@service-scheduled-action/client';
@@ -85,7 +85,7 @@ export function invalidateSchedules() {
   });
 }
 
-export function invalidateScheduleHistory(scheduleId: string) {
+function _invalidateScheduleHistory(scheduleId: string) {
   return queryClient.invalidateQueries({
     queryKey: scheduledActionKeys.history({ scheduleId }).queryKey,
   });
@@ -136,7 +136,7 @@ export function useUpdateScheduleMutation(
   }));
 }
 
-export function useDeleteScheduleMutation(
+function _useDeleteScheduleMutation(
   callbacks?: MutationCallbacks<
     { success: boolean },
     Error,

@@ -14,12 +14,9 @@ macro_aws_config = { path = "../macro_aws_config" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 models_bulk_upload = { path = "../models_bulk_upload" }
 s3_key = { path = "../s3_key" }
-openssl = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqs_client = { path = "../sqs_client" }
 tokio = { workspace = true }
 tracing = { workspace = true }
 
-[package.metadata.cargo-machete]
-ignored = ["openssl"]

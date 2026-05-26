@@ -1,10 +1,10 @@
 import { formatCallDuration } from '@block-call/utils';
-import { UserGroup } from '@core/component/Properties/component/propertyValue/UserGroup';
-import { usePropertyEntityDisplay } from '@core/component/Properties/hooks';
-import type { EntityReference } from '@core/component/Properties/types';
 import { UserIcon } from '@core/component/UserIcon';
 import { matches } from '@core/util/match';
-import UserCircleIcon from '@icon/regular/user-circle.svg';
+import UserCircleIcon from '@phosphor/user-circle.svg';
+import { UserGroup } from '@property/component/propertyValue/UserGroup';
+import { usePropertyEntityDisplay } from '@property/hooks';
+import type { EntityReference } from '@property/types';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { HoverCard } from '@ui';
 import { For, Show } from 'solid-js';
@@ -57,13 +57,10 @@ export function CallParticipants(props: { participantIds: string[] }) {
     }));
   return (
     <Show when={props.participantIds.length > 0}>
-      <HoverCard>
-        <HoverCard.Trigger>
-          <UserGroup entities={entities()} maxUsers={2} />
-        </HoverCard.Trigger>
-        <HoverCard.Content>
-          <ParticipantsTooltip participantIds={props.participantIds} />
-        </HoverCard.Content>
+      <HoverCard
+        content={<ParticipantsTooltip participantIds={props.participantIds} />}
+      >
+        <UserGroup entities={entities()} maxUsers={2} />
       </HoverCard>
     </Show>
   );

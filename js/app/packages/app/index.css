@@ -93,6 +93,11 @@
 
   /* scuffed: defualt 0.15, used for transition jamming, currently disabled */
   --transition: 0s;
+
+  ::selection {
+    background-color: oklch(from var(--color-accent) l c h / 0.5);
+  }
+
 }
 
 @theme {
@@ -109,10 +114,10 @@
   --color-message:         color-mix(in oklch, var(--b1) 50%, var(--b2));
   --color-hover:           var(--b2);
   --color-active:          var(--b1);
-  --color-overlay:         oklch(var(--b2) / 0.5);
+  --color-overlay:         oklch(var(--b1l) var(--b1c) var(--b1h) / 0.8);
   --color-edge-muted:      var(--b3);
   --color-edge:            var(--b4);
-  --color-rail:            color-mix(in oklch, var(--b4) 90%, var(--b0));
+  --color-rail:            color-mix(in oklch, var(--b0) 75%, var(--c0));
 
   --color-ink:             var(--c0);
   --color-ink-muted:       var(--c1);
@@ -178,6 +183,17 @@
   --animate-slide-in: slideIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
   --animate-typing-dot: typing-dot 1s infinite;
   --animate-swipe-out: swipeOut 100ms ease-out;
+
+  --z-index-modal-overlay: 100;
+  --z-index-modal:         110;
+  --z-index-modal-content: 120;
+  --z-index-tool-tip:      200;
+
+  /* Shared label column width for side-panel two-column grids so labels line
+     up across sub-panels (Details, Properties, ...). Consumers should use
+     `grid-cols-[var(--sidepanel-label-width,auto)_1fr]` so the column falls
+     back to auto when the variable isn't set. */
+  --sidepanel-label-width: 5.5rem;
 }
 
 /* scuffed: might wan to use signals for this */
@@ -195,6 +211,7 @@
   html {
     overscroll-behavior: none;
     font: -apple-system-body;
+    scrollbar-width: none;
     overflow: hidden;
   }
 
@@ -210,13 +227,13 @@
   }
 
 
-  :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
-    user-select: text;
-  }
-
   /* scuffed: stops text from being selectable by default for mobile usage */
   :where(*, ::before, ::after) {
     user-select: none;
+  }
+
+  :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
+    user-select: text;
   }
 
   *:focus-visible {
@@ -291,10 +308,6 @@
 /* Big hammer fix for cursor pointer. */
 @utility cursor-pointer {
   cursor: default;
-}
-
-@utility hide-scrollbar {
-  scrollbar-width: none;
 }
 
 /* utils for patterned bg images */
@@ -427,13 +440,7 @@
 /* Suppressed on touch devices */
 html:not([data-touch-device="true"]) [data-message][data-highlighted],
 html:not([data-touch-device="true"]) [data-message]:hover{
-  @apply bg-accent/5 outline-1 outline-accent/20 -outline-offset-1;
-}
-
-/* Keyboard selection accent bar can coexist with hover styles */
-/* Suppressed on touch devices */
-html:not([data-touch-device="true"]) [data-message][data-selected] > .message-accent-bar {
-  @apply opacity-100;
+  @apply bg-ink/3 rounded-sm ring ring-edge ring-inset;
 }
 
 /* Long-press animation */
@@ -445,23 +452,6 @@ html:not([data-touch-device="true"]) [data-message][data-selected] > .message-ac
 [data-message].long-press-animation > .message-accent-bar,
 .long-press-animation [data-accent-bar] {
   animation: long-press-accent-bar 400ms ease-in both;
-}
-
-/* scuffed scrollbar should be killed. use scroll from @ui */
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-edge);
-}
-
-::-webkit-scrollbar-thumb {
-  background: oklch(from var(--color-edge) l c h / 0.5);
-  border-radius: 10px;
-  margin: 2px;
-}
-
-::-webkit-scrollbar {
-  overflow: auto;
-  height: 8px;
-  width: 8px;
 }
 
 :focus-visible {

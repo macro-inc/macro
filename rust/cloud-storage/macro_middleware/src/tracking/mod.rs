@@ -1,1 +1,1 @@
-pub use ip_extractor::*;
+pub use ip_extractor::{ClientIp, ClientIpError};

@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT c.id, c.email_sync\n            FROM crm_companies c\n            JOIN crm_domains d ON d.company_id = c.id\n            WHERE c.team_id = $1\n              AND LOWER(d.domain) = $2\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_sync",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "c4896935fe37524d12c5745fdbf087d0d6bd11642a303dfc2213eaf8d6eb8e4e"
+}

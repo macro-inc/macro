@@ -12,11 +12,12 @@ use uuid::Uuid;
 
 use super::EmailServiceImpl;
 
-impl<T, U, E> EmailServiceImpl<T, U, E>
+impl<T, U, E, CS> EmailServiceImpl<T, U, E, CS>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
     E: crate::domain::ports::EmailMessageEnqueuer,
+    CS: crm::domain::service::CrmService,
     anyhow::Error: From<T::Err>,
 {
     #[tracing::instrument(err, skip(self, link, input))]

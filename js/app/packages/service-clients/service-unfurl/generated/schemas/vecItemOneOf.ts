@@ -8,10 +8,20 @@ import type { VecItemOneOfDescription } from './vecItemOneOfDescription';
 import type { VecItemOneOfFaviconUrl } from './vecItemOneOfFaviconUrl';
 import type { VecItemOneOfImageUrl } from './vecItemOneOfImageUrl';
 
+/**
+ * Unfurl response for a single URL: the URL itself plus any metadata that
+was extracted from the page's `<head>` (title, description, image,
+favicon).
+ */
 export type VecItemOneOf = {
+  /** The page description (from `og:description`), if any. */
   description?: VecItemOneOfDescription;
+  /** The page's favicon URL, if any. */
   favicon_url?: VecItemOneOfFaviconUrl;
+  /** The page's preview image URL (from `og:image`), if any. */
   image_url?: VecItemOneOfImageUrl;
+  /** The page title (from custom URL parser, Open Graph, or `<title>`). */
   title: string;
+  /** The URL that was unfurled. */
   url: string;
 };

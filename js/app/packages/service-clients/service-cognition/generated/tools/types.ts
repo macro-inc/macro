@@ -87,6 +87,7 @@ export type DocumentContentState = 'unknown' | 'pending' | 'ready';
  * These values should match the `document_sub_type_value` table in macrodb.
  */
 export type DocumentSubType = 'task';
+export type EmailPreset = 'signal';
 export type EntityItem =
   | {
       id: string;
@@ -730,7 +731,7 @@ export interface MarkdownNode {
   type: string;
 }
 /**
- * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. For emails, whitespace-separated terms are ANDed and each term is matched independently across the text fields and the local-part of address fields, with the two groups OR'd. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"` or `"alice@example.com"`) to force exact-token matching instead of prefix. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
+ * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"` or `"alice@example.com"`) to force exact-token / exact-phrase matching instead of prefix. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
  */
 export interface ContentSearch {
   /**
@@ -738,7 +739,7 @@ export interface ContentSearch {
    */
   entityTypes?: UnifiedSearchIndex[];
   /**
-   * The text to search. Pass 1-3 keywords drawn from words that would literally appear in the content, not the user's natural-language description. Whitespace-separated terms are ANDed. For non-email types the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. For emails each term is matched across subject/body/sender/recipient. Wrap a term in double quotes to force exact-token (or full-email-address) matching.
+   * The text to search. Pass 1-3 keywords drawn from words that would literally appear in the content, not the user's natural-language description. Whitespace-separated terms are ANDed. For documents, every term must appear somewhere in the document (different chunks/pages are fine). For emails each term is matched across subject/body/sender/recipient. For chats/channels/calls the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. Wrap a term in double quotes to force exact-token (or full-email-address) matching.
    */
   query: string;
 }
@@ -1160,9 +1161,63 @@ export interface ListCallRecordsResponse {
  */
 export interface ListEntities {
   /**
-   * Filter to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails.
+   * Full soup AST call filter (callf).
+   */
+  callf?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Full soup AST AI chat filter (cf).
+   */
+  cf?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Full soup AST channel filter (chanf).
+   */
+  chanf?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}.
+   */
+  df?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Advanced full soup AST email filter (ef). Prefer emailPreset="signal" for common requests. Signal emails and important emails are synonymous; they use {"&":[{"l":{"Importance":true}},{"l":{"Shared":"exclude"}}]}.
+   */
+  ef?: {
+    [k: string]: unknown;
+  };
+  /**
+   * High-level email filter preset. Use "signal" for signal emails. Signal emails and important emails are synonymous: if the user asks for important emails, use emailPreset="signal". This expands to the email AST {"&":[{"l":{"Importance":true}},{"l":{"Shared":"exclude"}}]} and defaults results to emails if includeTypes is omitted.
+   */
+  emailPreset?: EmailPreset | null;
+  /**
+   * Email view to use for email results: inbox (default), sent, drafts, starred, all, important, other, or user:<label>.
+   */
+  emailView?: string | null;
+  /**
+   * Filter returned items to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails. This is folded into the AST and applied as part of cursor-level filtering.
    */
   includeTypes?: ItemType[] | null;
+  /**
+   * Maximum number of items to return. Defaults to 50; max 500.
+   */
+  limit?: number | null;
+  /**
+   * Full soup AST project filter (pf).
+   */
+  pf?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Full soup AST property filter (propf).
+   */
+  propf?: {
+    [k: string]: unknown;
+  };
   sortBy?: SortBy;
 }
 export interface ListEntitiesResponse {
@@ -1261,6 +1316,49 @@ export interface NotificationItem {
   senderId?: string | null;
 }
 /**
+ * List the current members and pending invites for the authenticated user's team. Requires the caller to be a team member.
+ */
+export type ListTeamMembers = {};
+/**
+ * Response from [`ListTeamMembers`].
+ */
+export interface ListTeamMembersResponse {
+  /**
+   * Pending team invites.
+   */
+  invited: ToolTeamInvite[];
+  /**
+   * Current accepted team members.
+   */
+  members: ToolTeamMember[];
+}
+/**
+ * A pending team invite returned by [`ListTeamMembers`].
+ */
+export interface ToolTeamInvite {
+  /**
+   * The invited email address.
+   */
+  email: string;
+  /**
+   * The role the invited user will receive.
+   */
+  role: string;
+}
+/**
+ * A current team member returned by [`ListTeamMembers`].
+ */
+export interface ToolTeamMember {
+  /**
+   * The user's role in the team.
+   */
+  role: string;
+  /**
+   * The user's Macro user id.
+   */
+  userId: string;
+}
+/**
  * Mark one or more notifications as done or not done for the current user. Use this when the user has completed the action associated with a notification.
  */
 export interface MarkNotificationsDone {
@@ -1348,7 +1446,7 @@ export interface ProjectSearchResult {
   score?: number | null;
 }
 /**
- * Retrieve the transcript for a specific call record. Use ListCallRecords first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from ListCallRecords.
+ * Retrieve the transcript for a specific call record. Use ListCallRecords first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from ListCallRecords. In transcript segments, speakerId is the associated user/track, not guaranteed speaker identity; use diarizedSpeakerId to distinguish actual voices, and treat different diarizedSpeakerIds as potentially different speakers even if speakerId is the caller/"you".
  */
 export interface ReadCallRecord {
   /**
@@ -1365,12 +1463,23 @@ export interface ReadCallRecordResponse {
    */
   callId: string;
   /**
-   * Transcript segments in chronological order.
+   * The AI generated summary of the call if one was generated. Use this before you read through the transcript.
+   */
+  summary?: string | null;
+  /**
+   * Transcript segments in chronological order. Use `diarized_speaker_id`
+   * alongside `speaker_id` before attributing speech to a person.
    */
   transcript: TranscriptSegment[];
 }
 /**
  * A single transcript segment.
+ *
+ * Speaker attribution is best-effort. `speaker_id` identifies the user/track
+ * associated with the segment, while `diarized_speaker_id` identifies the
+ * diarized voice cluster that likely spoke it. If diarized IDs differ, treat
+ * those segments as potentially different real speakers even when `speaker_id`
+ * is the same (including when `speaker_id` is the caller/"you").
  */
 export interface TranscriptSegment {
   /**
@@ -1379,7 +1488,9 @@ export interface TranscriptSegment {
   content: string;
   /**
    * Stable per-speaker identifier produced by diarization, when available.
-   * Distinguishes multiple speakers sharing one audio track.
+   * Distinguishes multiple speakers sharing one audio track. Different
+   * diarized IDs should be treated as potentially different actual speakers,
+   * even if they share the same `speaker_id`.
    */
   diarizedSpeakerId?: string | null;
   /**
@@ -1387,7 +1498,12 @@ export interface TranscriptSegment {
    */
   endedAt?: string | null;
   /**
-   * The speaker's user id.
+   * The user id associated with the segment's audio track/participant.
+   *
+   * This is not guaranteed to be the human who spoke. Use
+   * `diarized_speaker_id` to distinguish actual diarized voices; when the
+   * same `speaker_id` appears with different diarized IDs, do not assume all
+   * of those utterances were said by this user (or by "you").
    */
   speakerId: string;
   /**
@@ -2004,6 +2120,14 @@ export interface ReadDocumentMetadata {
    * The sub type of the document if present.
    */
   subType?: DocumentSubType | null;
+  /**
+   * The team this task number is scoped to, for task documents.
+   */
+  teamId?: string | null;
+  /**
+   * The task number assigned within the team, for task documents.
+   */
+  teamTaskId?: number | null;
   /**
    * The time the document instance / document BOM was updated
    */

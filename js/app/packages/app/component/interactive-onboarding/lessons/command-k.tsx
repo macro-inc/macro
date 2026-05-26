@@ -3,8 +3,8 @@ import { CommandMenuInner, CommandState } from '@app/component/command';
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
 import { IS_MAC } from '@core/constant/isMac';
 import { createFreshSearch } from '@core/util/freshSort';
+import { AnimatedCommandIcon } from '@icon/wide-command';
 import { Dialog } from '@kobalte/core/dialog';
-import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
 import {
   createEffect,
   createMemo,
@@ -136,7 +136,11 @@ function CommandKDemo(props: LessonContentProps) {
   const soup = createSoupState({ wrapNavigation: true });
 
   createEffect(() => {
-    soup.setRows(filteredSandboxEntities().map((e) => soup.buildRow(e)));
+    soup.setRows(
+      filteredSandboxEntities().map((e, i) =>
+        soup.buildRow({ id: e.id, index: i, original: e })
+      )
+    );
   });
 
   return (

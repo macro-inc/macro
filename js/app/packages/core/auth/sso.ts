@@ -1,17 +1,19 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
-import { isOk } from '@core/util/maybeResult';
+
 import { getNativeMobilePlatform } from '@core/util/platform';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
 import { invoke } from '@tauri-apps/api/core';
 import { GOOGLE_GMAIL_IDP } from './email';
 
-export type StartSsoLoginParams = {
+type StartSsoLoginParams = {
   idpName?: string;
   /** Where to redirect after auth on web. Ignored on native mobile. */
   returnPath?: string;
+  /** Pre-fill the email field on the OAuth provider's login screen. */
+  loginHint?: string;
 };
 
 /**
@@ -30,6 +32,8 @@ export async function startSsoLogin(
     'referral_code'
   );
   if (referralCode) authUrl.searchParams.set('referral_code', referralCode);
+  if (params.loginHint)
+    authUrl.searchParams.set('login_hint', params.loginHint);
 
   if (isNativeMobilePlatform()) {
     authUrl.searchParams.set('is_mobile', 'true');
@@ -60,7 +64,7 @@ export async function startSsoLogin(
       session_code: result.token,
     });
 
-    if (isOk(res)) {
+    if (res.isOk()) {
       await invalidateAllAfterLogin();
       return true;
     }

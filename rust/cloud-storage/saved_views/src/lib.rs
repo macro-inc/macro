@@ -6,9 +6,8 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-pub use pgsql::*;
-pub use storage::*;
-
+pub use pgsql::PgViewStorage;
+pub use storage::{ExcludedDefaultViewStorage, ViewPatch, ViewStorage};
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct View {

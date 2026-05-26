@@ -16,7 +16,7 @@ let pendingNavigation: string | null = null;
  * Called by useTauriNavigationEffect when the router is ready.
  * Drains any navigation that was buffered before the router was ready.
  */
-export function registerNavigate(fn: (path: string) => void) {
+function registerNavigate(fn: (path: string) => void) {
   registeredNavigate = fn;
   if (pendingNavigation) {
     const path = pendingNavigation;

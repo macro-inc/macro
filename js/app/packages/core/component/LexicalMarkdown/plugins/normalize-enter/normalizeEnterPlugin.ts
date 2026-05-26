@@ -32,7 +32,7 @@ function $testSelectionPosition(
  * Returns true if the selection is at the start of an empty paragraph or is
  * directly preceded by a line break.
  */
-export function $isAtStartOfEmptyParagraph(): boolean {
+function $isAtStartOfEmptyParagraph(): boolean {
   const selection = $getSelection();
   if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
     return false;

@@ -1,9 +1,9 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
-import { isErr, ok } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { AllModels } from '@service-cognition/generated/schemas';
 import type { Entity } from '@service-cognition/generated/schemas/entity';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
+import { ok } from 'neverthrow';
 import BlockChat from './component/Block';
 
 export const DEFAULT_CHAT_NAME = 'New Chat';
@@ -21,9 +21,13 @@ export const definition = defineBlock({
       // Fetch the chat from dcs
       const chatId = source.id;
       const res = await cognitionApiServiceClient.getChat({ chat_id: chatId });
-      if (isErr(res, 'UNAUTHORIZED')) return LoadErrors.INVALID;
-      if (isErr(res)) return LoadErrors.MISSING;
-      const [, chat] = res;
+      if (
+        res.isErr() &&
+        res.error.some((error) => error.code === 'UNAUTHORIZED')
+      )
+        return LoadErrors.INVALID;
+      if (res.isErr()) return LoadErrors.MISSING;
+      const chat = res.value;
 
       if (intent === 'preload') {
         return ok({

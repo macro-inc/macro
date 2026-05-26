@@ -2,15 +2,15 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { Tabs } from '@core/component/Tabs';
+import { TabsInset } from '@core/component/TabsInset';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import type { RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
 import { type EntityData, InlineEntity } from '@entity';
-import ArrowLeft from '@icon/regular/arrow-left.svg';
-import Macro from '@macro-icons/macro-logo.svg';
+import Macro from '@icon/macro-logo.svg';
+import ArrowLeft from '@phosphor/arrow-left.svg';
 import { cn, Dialog, Hotkey, Panel } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
@@ -52,8 +52,9 @@ const CATEGORIES: { id: CategoryFilter; label: string }[] = [
 ];
 
 const VIRTUAL_ITEM_HEIGHT = 40; // tailwind h-10
-const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8;
-const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5;
+const LIST_PADDING = 16; // p-2 = 8px top + 8px bottom
+const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8 + LIST_PADDING;
+const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5 + LIST_PADDING;
 
 export function CommandMenu() {
   const splitManager = globalSplitManager();
@@ -167,6 +168,7 @@ export function CommandMenuInner(props: {
 
     if (isCommandItem(item)) {
       const command = item.data;
+      trackCommandUsage(item.id);
 
       // Check if this is a multi-stage command
       if (command.activateCommandScopeId) {
@@ -187,7 +189,6 @@ export function CommandMenuInner(props: {
       }
 
       // Regular command - close and run
-      trackCommandUsage(item.id);
       CommandState.close();
       CommandState.setQuery('');
       runCommand(command);
@@ -442,7 +443,10 @@ export function CommandMenuInner(props: {
   const resultsHeight = () => {
     const count = filteredItems().length;
     if (count === 0) return EMPTY_STATE_HEIGHT;
-    return Math.min(MAX_LIST_HEIGHT, count * VIRTUAL_ITEM_HEIGHT);
+    return Math.min(
+      MAX_LIST_HEIGHT,
+      count * VIRTUAL_ITEM_HEIGHT + LIST_PADDING
+    );
   };
 
   const categoryTabs = CATEGORIES.map((c) => ({
@@ -452,7 +456,7 @@ export function CommandMenuInner(props: {
 
   return (
     <Panel
-      class={cn('max-h-[75vh]', props.class)}
+      class={cn('max-h-[75vh] rounded-xl', props.class)}
       ref={setCommandMenuRef}
       depth={props.depth}
       active
@@ -487,14 +491,15 @@ export function CommandMenuInner(props: {
       <Show when={isEntityActionMode() || !isInCommandScope()}>
         <Panel.Toolbar
           class={cn(
-            'bg-surface',
-            isEntityActionMode() ? 'px-3 gap-2' : 'px-1.5'
+            'bg-surface px-1.5 border-0',
+            isEntityActionMode() && 'gap-1.5'
           )}
         >
           <Show
             when={isEntityActionMode()}
             fallback={
-              <Tabs
+              <TabsInset
+                depth={1}
                 list={categoryTabs}
                 value={CommandState.categoryFilter()}
                 onChange={(value) => {
@@ -602,7 +607,7 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
           return (
             <div
               class={cn(
-                'bg-hover border border-edge-muted px-2 py-1 truncate text-xs rounded-xs',
+                'bg-active border border-edge-muted px-2 py-1 truncate text-xs rounded',
                 {
                   'max-w-[50%]': props.entities.length === 2,
                 }
@@ -658,7 +663,7 @@ function VirtualizedCommandList(props: {
       }}
       data={props.items}
       style={{ height: '100%' }}
-      class="scrollbar-hidden"
+      class="scrollbar-hidden p-2"
     >
       {(item, index) => (
         <CommandItem

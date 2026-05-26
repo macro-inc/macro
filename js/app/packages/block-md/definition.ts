@@ -6,12 +6,12 @@ import {
 } from '@core/block';
 import { createLoroManager } from '@core/collab/manager';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
-import { isErr, ok } from '@core/util/maybeResult';
 import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
 import { waitForDocumentSyncServiceReady } from '@queries/storage/document-location';
 import { storageServiceClient } from '@service-storage/client';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
 import { createSyncServiceSource } from '@service-sync/source';
+import { err, ok } from 'neverthrow';
 import MarkdownBlock from './component/Block';
 import type { MarkdownRewriteOutput } from './signal/rewriteSignal';
 
@@ -42,18 +42,18 @@ export const definition = defineBlock({
         }),
       ]);
 
-      if (isErr(maybeToken)) {
+      if (maybeToken.isErr()) {
         return LoadErrors.UNAUTHORIZED;
       }
 
-      const [, { token }] = maybeToken;
+      const { token } = maybeToken.value;
 
-      if (isErr(maybeDocument)) return maybeDocument;
-      if (isErr(maybeLocation)) return maybeLocation;
+      if (maybeDocument.isErr()) return err(maybeDocument.error);
+      if (maybeLocation.isErr()) return err(maybeLocation.error);
 
-      const [, documentResult] = maybeDocument;
+      const documentResult = maybeDocument.value;
       const { documentMetadata, userAccessLevel } = documentResult;
-      let [, { data: location }] = maybeLocation;
+      let { data: location } = maybeLocation.value;
 
       if (
         location.type === 'presignedUrl' &&
@@ -98,7 +98,7 @@ export const definition = defineBlock({
         initialSync.snapshot
       );
 
-      if (isErr(result)) {
+      if (result.isErr()) {
         console.error('Failed to initialize doc state', result);
         return LoadErrors.INVALID;
       }

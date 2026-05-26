@@ -14,8 +14,6 @@ export interface TeamMember {
   role: TeamRole;
   /** The id of the team */
   team_id: string;
-  /** The tier of the team member */
-  tier: string;
   /** The user id of the team member */
   user_id: string;
 }

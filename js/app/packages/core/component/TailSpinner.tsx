@@ -10,7 +10,7 @@
 
 import type { Component, JSX } from 'solid-js';
 
-export interface SpinnerProps extends JSX.SvgSVGAttributes<SVGSVGElement> {
+interface SpinnerProps extends JSX.SvgSVGAttributes<SVGSVGElement> {
   width?: string | number;
   height?: string | number;
   class?: string;

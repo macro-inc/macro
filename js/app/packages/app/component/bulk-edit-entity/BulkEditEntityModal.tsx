@@ -43,7 +43,7 @@ const BulkEditEntityModalContent = (props: {
         props.setIsOpen(open);
       }}
     >
-      <Surface depth={2} active>
+      <Surface depth={2} active class="rounded-xl">
         <div class="*:max-h-[75vh]">
           <div class="flex flex-col text-ink">
             <Show when={props.view === 'rename'}>
@@ -76,14 +76,14 @@ const BulkEditEntityModalContent = (props: {
   );
 };
 
-export type BulkEditEntityModalProps = {
+type BulkEditEntityModalProps = {
   isOpen: Accessor<boolean>;
   setIsOpen: Setter<boolean>;
   view: 'rename' | 'moveToProject' | 'delete';
   entities: Accessor<EntityData[]>;
 };
 
-export const BulkEditEntityModal: ParentComponent<BulkEditEntityModalProps> = (
+const _BulkEditEntityModal: ParentComponent<BulkEditEntityModalProps> = (
   props
 ) => {
   return (

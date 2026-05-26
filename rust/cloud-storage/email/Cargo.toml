@@ -33,10 +33,10 @@ axum = [
   "model_user/axum",
   "models_pagination/axum",
 ]
-gmail_token = ["dep:authentication_service_client", "dep:gmail_client", "dep:redis", "ports"]
+gmail_token = ["dep:authentication_service_client", "dep:redis", "ports"]
 inbound = ["ports"]
 outbound = ["dep:sqlx", "ports"]
-ports = ["dep:tokio", "frecency/ports"]
+ports = ["crm/ports", "dep:tokio", "frecency/ports"]
 
 [dependencies]
 ai = { path = "../ai", optional = true }
@@ -49,12 +49,12 @@ futures = { workspace = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
+crm = { path = "../crm", default-features = false }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 either = { workspace = true }
 email_utils = { path = "../email_utils" }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
-gmail_client = { path = "../gmail_client", optional = true }
 item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
@@ -69,7 +69,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
 authentication_service_client = { path = "../authentication_service_client", optional = true }
-redis = { workspace = true, features = ["tokio-native-tls-comp"], optional = true }
+redis = { workspace = true, features = ["tokio-rustls-comp"], optional = true }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }

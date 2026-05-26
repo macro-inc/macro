@@ -1,4 +1,3 @@
-import { useAnalytics } from '@app/component/analytics-context';
 import {
   ChatWithAgentButton,
   ChatWithAgentIcon,
@@ -24,10 +23,6 @@ import { exportPdf } from '@block-pdf/websocket/export';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId, useBlockName } from '@core/block';
 import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
-import {
-  DocumentPropertiesButton,
-  PROPERTIES_DRAWER_ID,
-} from '@core/component/DocumentPropertiesModal';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import {
   REFERENCES_DRAWER_ID,
@@ -47,12 +42,11 @@ import { isMobile } from '@core/mobile/isMobile';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import DownloadIcon from '@icon/regular/download-simple.svg';
-import Info from '@icon/regular/info.svg';
-import Printer from '@icon/regular/printer.svg';
-import Quotes from '@icon/regular/quotes.svg';
-import TagIcon from '@icon/regular/tag.svg';
-import IconShared from '@macro-icons/wide/share.svg';
+import IconShared from '@icon/wide-share.svg';
+import DownloadIcon from '@phosphor/download-simple.svg';
+import Info from '@phosphor/info.svg';
+import Printer from '@phosphor/printer.svg';
+import Quotes from '@phosphor/quotes.svg';
 import {
   blockNameToItemType,
   storageServiceClient,
@@ -67,7 +61,6 @@ import { MarkupToolbar } from './MarkupToolbar';
 import { PageNumberInput } from './PageNumberInput';
 
 export function TopBar() {
-  const analytics = useAnalytics();
   const isAuth = useIsAuthenticated();
   const documentId = useBlockId();
   const blockName = useBlockName();
@@ -76,7 +69,6 @@ export function TopBar() {
   const fileName = useBlockDocumentName('Unknown Filename');
 
   const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
-  const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
   const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
@@ -139,8 +131,8 @@ export function TopBar() {
   const downloadDocx = createCallback(async () => {
     if (!isAuth()) return openLoginModal();
 
-    const [_, data] = await storageServiceClient.exportDocument({ documentId });
-    if (!data) {
+    const data = await storageServiceClient.exportDocument({ documentId });
+    if (data.isErr()) {
       return toast.failure('Unable to download file');
     }
 
@@ -148,7 +140,7 @@ export function TopBar() {
 
     try {
       // Fetch the file from the presigned URL
-      const response = await platformFetch(data.presigned_url);
+      const response = await platformFetch(data.value.presigned_url);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -213,20 +205,6 @@ export function TopBar() {
           documentId={documentId}
           documentName={fileName()}
           buttonSize="sm"
-        />
-      ),
-    },
-    {
-      label: 'Properties',
-      icon: TagIcon,
-      action: propertiesControl.toggle,
-      buttonComponent: () => (
-        <DocumentPropertiesButton
-          buttonSize="sm"
-          onOpenChange={(open) =>
-            open &&
-            analytics.track('properties_panel_open', { blockType: 'pdf' })
-          }
         />
       ),
     },

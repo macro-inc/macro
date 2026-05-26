@@ -39,8 +39,8 @@ import { createMarkdownFile } from '@core/util/create';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { debouncedDependent } from '@core/util/debounce';
 import { getScrollParentElement } from '@core/util/scrollParent';
+import MacroGridLoader from '@icon/macro-grid-noise-loader-4.svg';
 import type { NodeIdMappings } from '@lexical-core';
-import MacroGridLoader from '@macro-icons/macro-grid-noise-loader-4.svg';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
@@ -409,6 +409,8 @@ export function MarkdownPopup(props: {
           <Show when={shouldShowCheckboxToTaskButton()}>
             <Button
               size="sm"
+              class="rounded-md"
+              depth={3}
               variant="ghost"
               onClick={handleConvertToTasks}
               disabled={isConverting()}
@@ -422,7 +424,8 @@ export function MarkdownPopup(props: {
           </Show>
           <Button
             size="sm"
-            class="px-2 text-xs rounded-xs py-1.25"
+            class="px-2 text-xs rounded-md py-1.25"
+            depth={3}
             variant="ghost"
             onClick={async () => {
               const location = editor.read(() =>

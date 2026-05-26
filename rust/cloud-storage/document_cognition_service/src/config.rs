@@ -80,6 +80,7 @@ env_var!(
         pub DocumentStorageServiceCloudfrontSignerPublicKeyId,
         pub DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
         pub McpCredentialsKeySecretName,
+        pub DocumentCognitionServiceUrl,
     }
 );
 
@@ -104,8 +105,6 @@ impl Config {
             .and_then(|v| v.parse::<i64>().ok())
             .unwrap_or(DEFAULT_DOCUMENT_BATCH_LIMIT);
 
-        let document_cognition_service_url = format!("http://127.0.0.1:{}", port);
-
         let EnvVars {
             database_url,
             document_storage_bucket,
@@ -128,6 +127,7 @@ impl Config {
             document_storage_service_cloudfront_signer_public_key_id,
             document_storage_service_cloudfront_signer_private_key_secret_name,
             mcp_credentials_key_secret_name,
+            document_cognition_service_url,
         } = env_vars;
 
         Ok(Config {
@@ -146,7 +146,7 @@ impl Config {
             sync_service_url: sync_service_url.to_string(),
             lexical_service_url: lexical_service_url.to_string(),
             email_service_url: email_service_url.to_string(),
-            document_cognition_service_url,
+            document_cognition_service_url: document_cognition_service_url.to_string(),
             static_file_service_url: static_file_service_url.to_string(),
             authentication_service_url: authentication_service_url.to_string(),
             authentication_service_secret_key: authentication_service_secret_key.to_string(),

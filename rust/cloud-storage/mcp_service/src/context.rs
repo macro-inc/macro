@@ -10,7 +10,7 @@ use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
 use documents::{
-    domain::{models::CloudFrontConfig, service::DocumentServiceImpl},
+    domain::models::CloudFrontConfig,
     inbound::toolset::DocumentToolContext,
     outbound::{pg_document_repo::PgDocumentRepo, s3_upload_url::S3UploadUrlAdapter},
 };
@@ -69,6 +69,7 @@ pub struct McpContext {
     pub jwt_args: JwtValidationArgs,
     pub tool_context: ToolServiceContext,
     pub auth_proxy: McpAuthProxyServiceImpl<RedisInflightAuth>,
+    pub mcp_public_host: String,
 }
 
 pub async fn build_context() -> anyhow::Result<McpContext> {
@@ -120,10 +121,17 @@ pub async fn build_context() -> anyhow::Result<McpContext> {
 
     let auth_proxy = build_auth_proxy(&env_vars, &secretsmanager_client).await?;
 
+    let mcp_public_host = http::Uri::try_from(env_vars.mcp_public_url.as_ref())
+        .context("MCP_PUBLIC_URL is not a valid URI")?
+        .host()
+        .context("MCP_PUBLIC_URL has no host")?
+        .to_owned();
+
     Ok(McpContext {
         jwt_args,
         tool_context,
         auth_proxy,
+        mcp_public_host,
     })
 }
 
@@ -152,10 +160,15 @@ async fn build_tool_context(
 
     let frecency_storage = FrecencyPgStorage::new(db.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
+    let crm_service = crm::domain::service::CrmServiceImpl::new(
+        crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+    );
     let email_service = EmailServiceImpl::new(
         EmailPgRepo::new(db.clone()),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
+        crm_service.clone(),
         0,
     );
     let channels_service = ChannelServiceImpl::new(
@@ -203,17 +216,18 @@ async fn build_tool_context(
     };
     let sync_service_client =
         SyncServiceClient::new(sync_service_auth_key.clone(), sync_service_url.clone());
-    let document_service = DocumentServiceImpl::new(
-        document_repo,
+    let document_service = documents::domain::service::DocumentServiceImpl {
+        repo: document_repo,
         cloudfront_config,
-        sync_service_client.clone(),
-        s3_upload_adapter,
-        NoOpTaskProperties,
-        NoOpConnectionService,
-        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-            entity_access_management::outbound::PgRepository::new(db.clone()),
-        ),
-    );
+        sync_service_client: sync_service_client.clone(),
+        upload_url_service: s3_upload_adapter,
+        task_properties_service: NoOpTaskProperties,
+        connection_service: NoOpConnectionService,
+        entity_access_management_service:
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(db.clone()),
+            ),
+    };
     let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
@@ -241,6 +255,7 @@ async fn build_tool_context(
             EmailPgRepo::new(db.clone()),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             sqs_client,
+            crm_service.clone(),
             0,
         )),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
@@ -267,16 +282,17 @@ async fn build_tool_context(
         EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())),
     );
 
-    let notification_reader_service = NotificationReaderService::new(
-        DbNotificationRepository::new(db.clone()),
-        ToolNotificationQueue::NoOp,
-        NoOpSnsEndpointManager,
-        PlatformArnConfig {
+    let notification_reader_service = NotificationReaderService {
+        repository: DbNotificationRepository::new(db.clone()),
+        queue: ToolNotificationQueue::NoOp,
+        sns_endpoint: NoOpSnsEndpointManager,
+        platform_config: PlatformArnConfig {
             apns_platform_arn: String::new(),
             fcm_platform_arn: String::new(),
             apns_voip_platform_arn: String::new(),
         },
-    );
+        realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
+    };
     let notification_tool_context =
         notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 
@@ -306,6 +322,7 @@ async fn build_tool_context(
         notification_tool_context,
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context(db.clone()),
+        team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         schedule_tool_context: NoOpScheduleContext,
     };
 

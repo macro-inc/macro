@@ -1,10 +1,9 @@
+use ::unfurl::domain::models::GetUnfurlResponse;
+use ::unfurl::inbound::axum_router::{self, GetUnfurlQueryParams};
 use utoipa::OpenApi;
 
 use super::proxy::{self, ProxyParams};
-use super::unfurl::get_unfurl::{
-    self, GetUnfurlBulkBody, GetUnfurlBulkResponse, GetUnfurlQueryParams,
-};
-use crate::unfurl::GetUnfurlResponse;
+use super::unfurl::get_unfurl::{self, GetUnfurlBulkBody, GetUnfurlBulkResponse};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -12,7 +11,7 @@ use crate::unfurl::GetUnfurlResponse;
             terms_of_service = "https://macro.com/terms",
         ),
         paths(
-            get_unfurl::get_unfurl_handler,
+            axum_router::get_unfurl_handler,
             get_unfurl::get_bulk_unfurl_handler,
             proxy::proxy_request_handler,
         ),

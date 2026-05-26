@@ -1,4 +1,3 @@
-import { isOk } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';
 import type { UserQuota } from '@service-auth/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
@@ -14,12 +13,12 @@ const USER_QUOTA_STALE_TIME = 1000 * 60 * 5; // 5 minutes
 const getUserQuota = async (): Promise<UserQuota> => {
   const result = await authServiceClient.userQuota();
 
-  if (isOk(result)) {
-    const [, quota] = result;
+  if (result.isOk()) {
+    const quota = result.value;
     return quota;
   }
 
-  const [error] = result;
+  const error = result.error;
   const [{ code, message }] = error;
   console.error('Error getting user quota', error);
   throw new Error(`Failed to get user quota: ${code} - ${message}`);
@@ -40,7 +39,7 @@ function userQuotaQueryOptions() {
  * useQuery hook for retrieving the user's quota information.
  * Returns the current quota including documents, AI chat messages, and their limits.
  */
-export function useUserQuotaQuery() {
+function _useUserQuotaQuery() {
   return useQuery(() => userQuotaQueryOptions());
 }
 
@@ -58,7 +57,7 @@ export function invalidateUserQuota() {
  * Hook to get a function that invalidates the user quota query cache.
  * Useful for refreshing quota data after mutations that might affect it.
  */
-export function useInvalidateUserQuota() {
+function _useInvalidateUserQuota() {
   return invalidateUserQuota;
 }
 
@@ -66,7 +65,7 @@ export function useInvalidateUserQuota() {
  * Hook to get a function that updates the user quota in the query cache.
  * Useful for optimistic updates when quota changes are known.
  */
-export function useUpdateUserQuotaCache() {
+function _useUpdateUserQuotaCache() {
   return (quota: UserQuota) => {
     queryClient.setQueryData(authKeys.userQuota.queryKey, quota);
   };

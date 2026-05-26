@@ -22,27 +22,27 @@ import {
   createMarkdownFile,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { isErr, ok } from '@core/util/maybeResult';
+import { AnimatedChatIcon } from '@icon/wide-chat';
+import WideChat from '@icon/wide-chat.svg';
+import { AnimatedDiagramIcon } from '@icon/wide-diagram';
+import WideDiagram from '@icon/wide-diagram.svg';
+import { AnimatedEmailIcon } from '@icon/wide-email';
+import WideEmail from '@icon/wide-email.svg';
+import WideFileCode from '@icon/wide-file-code.svg';
+import WideFileMd from '@icon/wide-file-md.svg';
+import { AnimatedFileCodeIcon } from '@icon/wide-fileCode';
+import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
+import { AnimatedFolderIcon } from '@icon/wide-folder';
+import WideFolder from '@icon/wide-folder.svg';
+import { AnimatedStarIcon } from '@icon/wide-star';
+import WideStar from '@icon/wide-star.svg';
+import { AnimatedTaskIcon } from '@icon/wide-task';
+import WideTask from '@icon/wide-task.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import PixelArrowRight from '@macro-icons/pixel/arrow-right.svg';
-import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
-import { AnimatedDiagramIcon } from '@macro-icons/wide/animating/diagram';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
-import { AnimatedFileCodeIcon } from '@macro-icons/wide/animating/fileCode';
-import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import WideChat from '@macro-icons/wide/chat.svg';
-import WideDiagram from '@macro-icons/wide/diagram.svg';
-import WideEmail from '@macro-icons/wide/email.svg';
-import WideFileCode from '@macro-icons/wide/file-code.svg';
-import WideFileMd from '@macro-icons/wide/file-md.svg';
-import WideFolder from '@macro-icons/wide/folder.svg';
-import WideStar from '@macro-icons/wide/star.svg';
-import WideTask from '@macro-icons/wide/task.svg';
+import ArrowRight from '@phosphor/arrow-right.svg';
 import { createProject } from '@queries/storage/projects';
 import { cn, Hotkey, Layer } from '@ui';
+import { getNormalizedKeyString } from '@ui/components/Hotkey';
 import {
   type Component,
   createEffect,
@@ -167,8 +167,7 @@ export function runCreateAction(
             title: 'New Canvas',
           });
           if ('error' in result) return;
-          const [_, id] = ok(result.documentId);
-          return id;
+          return result.documentId ?? undefined;
         },
         shouldInsert,
       });
@@ -221,9 +220,8 @@ export function runCreateAction(
             extension: 'py',
             title: 'New Code File',
           });
-          if (isErr(result)) return;
-          const [, id] = ok(result[1]?.documentId);
-          return id;
+          if (result.isErr()) return;
+          return result.value.documentId ?? undefined;
         },
         shouldInsert,
       });
@@ -389,10 +387,10 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
     <Layer depth={4}>
       <button
         class={cn(
-          'size-28 shadow-md shadow-drop-shadow relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-surface ring ring-edge transition-transform ease-click duration-200 rounded-sm',
+          'size-28 shadow-sm shadow-drop-shadow relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-surface ring ring-edge transition-transform ease-click duration-200 rounded-sm',
           `create-menu-${props.creatableBlock.label.toLowerCase()}`,
           {
-            '-translate-y-2 text-ink ring-2': props.focused,
+            '-translate-y-2 text-ink': props.focused,
             'text-ink-extra-muted': !props.focused,
           }
         )}
@@ -419,8 +417,16 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
         <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-user-highlight">
           <div class="text-sm font-bold">{props.creatableBlock.label}</div>
-          <div class="size-3">
-            <PixelArrowRight />
+          <div
+            class={cn(
+              'size-3 transition-[transform,opacity] ease duration-200',
+              {
+                'opacity-100': props.focused,
+                'opacity-0': !props.focused,
+              }
+            )}
+          >
+            <ArrowRight />
           </div>
         </div>
 
@@ -660,7 +666,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   };
 
   return (
-    <div class="bg-surface ring-1 ring-edge-muted rounded-sm">
+    <div class="bg-surface ring-1 ring-edge-muted rounded-xl">
       <div class="flex items-center justify-between p-2 px-6 border-b border-edge-muted">
         <h1 class="font-bold text-ink-muted">Create New</h1>
         <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">
@@ -681,13 +687,13 @@ export const LauncherInner = (props: LauncherInnerProps) => {
             />
             <span
               class={cn(
-                'ring text-xs transition-colors duration-150',
+                'ring text-xs px-1.5 py-0.5 rounded-sm transition-colors duration-150',
                 shiftHeld()
                   ? 'ring-accent text-accent bg-accent/10'
                   : 'ring-edge-muted'
               )}
             >
-              <Hotkey shortcut="shift" />
+              {getNormalizedKeyString({ shortcut: 'shift' })}
             </span>
           </span>
           to launch in new split

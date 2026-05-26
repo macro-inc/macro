@@ -1,9 +1,14 @@
 use crate::{
     domain::{
-        models::{AdvancedSortParams, SimpleSortQuery, SimpleSortRequest},
+        models::{
+            AdvancedSortParams, GroupedSortRequest, GroupedSoupItem, SimpleSortQuery,
+            SimpleSortRequest,
+        },
         ports::SoupRepo,
     },
-    outbound::pg_soup_repo::expanded::dynamic::ExpandedDynamicCursorArgs,
+    outbound::pg_soup_repo::expanded::dynamic::{
+        ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs,
+    },
 };
 use either::Either;
 use models_soup::{SoupProperty, item::SoupItem};
@@ -11,6 +16,7 @@ use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
 
 mod expanded;
+pub mod grouping;
 mod unexpanded;
 
 pub struct PgSoupRepo {
@@ -123,6 +129,22 @@ impl SoupRepo for PgSoupRepo {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send {
         populate_properties(&self.pool.0, items)
     }
+
+    fn expanded_grouped_cursor_soup<'a>(
+        &self,
+        req: GroupedSortRequest<'a>,
+    ) -> impl Future<Output = Result<Vec<GroupedSoupItem>, Self::Err>> + Send {
+        expanded::dynamic::expanded_dynamic_cursor_soup_grouped(
+            &self.pool.0,
+            GroupedDynamicCursorArgs {
+                user_id: req.user_id,
+                limit: req.limit,
+                cursor: req.cursor,
+                exclude_frecency: false,
+                grouping: req.grouping,
+            },
+        )
+    }
 }
 
 #[tracing::instrument(err)]
@@ -159,7 +181,7 @@ pub(crate) async fn populate_properties(
     }
 
     let property_ids = SystemPropertyKey::all_system_property_keys();
-    let mut properties_map =
+    let properties_map =
         properties_db_client::entity_properties::get::get_bulk_entity_properties_values_filtered(
             db,
             &entity_refs,
@@ -168,16 +190,19 @@ pub(crate) async fn populate_properties(
         .await
         .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
 
+    // `items` may repeat an id (one row per group it belongs to), so use
+    // `.get()` not `.remove()` — every occurrence needs the props.
     for item in items {
         let props = match item {
-            SoupItem::Document(x) => properties_map.remove(&x.id.to_string()),
-            SoupItem::Project(x) => properties_map.remove(&x.id.to_string()),
-            SoupItem::EmailThread(x) => properties_map.remove(&x.thread.id.to_string()),
-            SoupItem::Chat(x) => properties_map.remove(&x.id.to_string()),
+            SoupItem::Document(x) => properties_map.get(&x.id.to_string()),
+            SoupItem::Project(x) => properties_map.get(&x.id.to_string()),
+            SoupItem::EmailThread(x) => properties_map.get(&x.thread.id.to_string()),
+            SoupItem::Chat(x) => properties_map.get(&x.id.to_string()),
             SoupItem::Channel(_) | SoupItem::Call(_) => None,
         };
         if let Some(props) = props {
-            let soup_props: Vec<SoupProperty> = props.into_iter().map(SoupProperty::from).collect();
+            let soup_props: Vec<SoupProperty> =
+                props.iter().cloned().map(SoupProperty::from).collect();
             match item {
                 SoupItem::Document(x) => x.properties = soup_props,
                 SoupItem::Project(x) => x.properties = soup_props,

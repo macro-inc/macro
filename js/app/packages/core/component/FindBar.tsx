@@ -1,7 +1,7 @@
-import CaretDown from '@icon/regular/caret-down.svg';
-import CaretUp from '@icon/regular/caret-up.svg';
-import MagnifyingGlass from '@icon/regular/magnifying-glass.svg';
-import X from '@icon/regular/x.svg';
+import CaretDown from '@phosphor/caret-down.svg';
+import CaretUp from '@phosphor/caret-up.svg';
+import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
+import X from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
 import {
@@ -20,7 +20,7 @@ import type { FindBarController } from './createFindBarController';
  * ArrowUp/Shift+Enter retreat. `'desc'` — flipped, for surfaces where the
  * natural reading direction is bottom-to-top (e.g. a chat channel).
  */
-export type FindBarDirection = 'asc' | 'desc';
+type FindBarDirection = 'asc' | 'desc';
 
 type FindBarContextValue = {
   controller: FindBarController;
@@ -36,7 +36,7 @@ function useFindBarContext(): FindBarContextValue {
   return ctx;
 }
 
-export type FindBarProps = {
+type FindBarProps = {
   controller: FindBarController;
   direction?: FindBarDirection;
   placeholder?: string;
@@ -200,6 +200,11 @@ function FindBarPreviousButton() {
       size="icon-sm"
       variant="ghost"
       aria-label={direction() === 'desc' ? 'Next match' : 'Previous match'}
+      disabled={
+        direction() === 'desc'
+          ? !controller.canNext()
+          : !controller.canPrevious()
+      }
       onClick={() =>
         direction() === 'desc' ? controller.next() : controller.previous()
       }
@@ -216,6 +221,11 @@ function FindBarNextButton() {
       size="icon-sm"
       variant="ghost"
       aria-label={direction() === 'desc' ? 'Previous match' : 'Next match'}
+      disabled={
+        direction() === 'desc'
+          ? !controller.canPrevious()
+          : !controller.canNext()
+      }
       onClick={() =>
         direction() === 'desc' ? controller.previous() : controller.next()
       }

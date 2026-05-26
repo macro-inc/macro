@@ -1,9 +1,9 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import type { ChannelEntity } from '@entity';
-import ClockIcon from '@icon/regular/clock.svg';
-import EmailIcon from '@icon/regular/envelope.svg';
-import UsersIcon from '@icon/regular/users.svg';
+import ClockIcon from '@phosphor/clock.svg';
+import EmailIcon from '@phosphor/envelope.svg';
+import UsersIcon from '@phosphor/users.svg';
 import { cn } from '@ui';
 import { createEffect } from 'solid-js';
 import type { MentionItem } from '../../../../utils/mentionsUtils';
@@ -82,8 +82,8 @@ export function MentionsMenuItem(props: {
         e.stopPropagation();
       }}
       on:mousemove={() => props.setIndex(props.index)}
-      class={cn('group flex items-center p-1.5 mx-1.5 rounded-sm', {
-        'bg-hover': props.selected,
+      class={cn('group flex items-center p-1.5 mx-1.5 rounded-md', {
+        'bg-ink/5': props.selected,
       })}
     >
       <div class="mr-2 flex items-center">{icon()}</div>

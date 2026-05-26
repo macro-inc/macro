@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  GetUnfurl500,
   GetUnfurlBulkBody,
   GetUnfurlBulkResponse,
   GetUnfurlParams,
@@ -62,34 +63,28 @@ export const proxyRequestHandler = async (
   } as proxyRequestHandlerResponse;
 };
 
+/**
+ * On success returns `200` with a [`GetUnfurlResponse`] body. On any
+failure returns `500` with a JSON `null` body — the response type is an
+`Option<GetUnfurlResponse>` so this contract is reflected in the
+signature and OpenAPI spec.
+ * @summary Unfurl the URL passed via the `url` query parameter and return its
+extracted metadata (title, description, image, favicon).
+ */
 export type getUnfurlResponse200 = {
   data: GetUnfurlResponse;
   status: 200;
 };
 
-export type getUnfurlResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type getUnfurlResponse404 = {
-  data: string;
-  status: 404;
-};
-
 export type getUnfurlResponse500 = {
-  data: string;
+  data: GetUnfurl500;
   status: 500;
 };
 
 export type getUnfurlResponseSuccess = getUnfurlResponse200 & {
   headers: Headers;
 };
-export type getUnfurlResponseError = (
-  | getUnfurlResponse401
-  | getUnfurlResponse404
-  | getUnfurlResponse500
-) & {
+export type getUnfurlResponseError = getUnfurlResponse500 & {
   headers: Headers;
 };
 

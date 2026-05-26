@@ -7,7 +7,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { ItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
-import XIcon from '@icon/regular/x.svg';
+import XIcon from '@phosphor/x.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import Close from '@phosphor-icons/core/regular/x.svg?component-solid';
 import type { ItemType } from '@service-storage/client';
@@ -109,7 +109,7 @@ function ChatAttachment(props: {
           props.attachment.entity_type
         )}
       >
-        <div class="flex items-center px-1 space-x-1 hover:bg-hover hover-transition-bg cursor-default text-sm border border-edge-muted rounded-xs">
+        <div class="flex items-center px-1 space-x-1 hover:bg-hover hover-transition-bg cursor-default text-sm border border-edge-muted rounded-xs max-w-full min-w-0">
           <ItemPreview
             id={props.attachment.entity_id}
             type={

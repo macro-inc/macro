@@ -6,7 +6,7 @@ import {
   type NodeKey,
 } from 'lexical';
 
-export type ElementEventProps<T extends LexicalNode, E extends Event> = {
+type ElementEventProps<T extends LexicalNode, E extends Event> = {
   eventName: string;
   guard: (node: LexicalNode) => node is T;
   callback: (event: E, node: T, key: NodeKey) => void;
@@ -60,7 +60,7 @@ function registerElementEventPlugin<T extends LexicalNode, E extends Event>(
  *
  * plugins.use(linkClickPlugin);
  */
-export function elementEventPlugin<T extends LexicalNode, E extends Event>(
+function _elementEventPlugin<T extends LexicalNode, E extends Event>(
   props: ElementEventProps<T, E>
 ) {
   return (editor: LexicalEditor) => registerElementEventPlugin(editor, props);

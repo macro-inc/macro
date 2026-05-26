@@ -1,15 +1,38 @@
+import { monochromeIcons, setMonochromeIcons, setTooltipsEnabled, tooltipsEnabled } from '@ui/signals/signals';
 import { ThemeEditorAdvanced } from '@theme/components/ThemeEditorAdvanced';
 import { ThemeEditorBasic } from '@theme/components/ThemeEditorBasic';
 import ThemeTools from '@theme/components/ThemeTools';
 import ThemeList from '@theme/components/ThemeList';
 import { isMobile } from '@core/mobile/isMobile';
 import { createSignal, Show } from 'solid-js';
-import { Tabs } from '@core/component/Tabs';
-import { Panel } from '@ui';
-import { UI } from './UI';
+import { TabsInset } from '@core/component/TabsInset';
+import { Panel, ToggleSwitch } from '@ui';
 
 type PanelA = 'basic' | 'advanced';
 type PanelB ='themes' | 'ui'
+
+function UserInterface() {
+  return (
+    <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
+      <div class="bg-surface flex items-center justify-between h-15.25 px-6">
+        <div class="text-sm">Monochrome Icons</div>
+        <ToggleSwitch
+          onChange={setMonochromeIcons}
+          checked={monochromeIcons()}
+        />
+      </div>
+
+      <div class="bg-surface flex items-center justify-between h-15.25 px-6">
+        <div class="text-sm">Show Tooltips</div>
+        <ToggleSwitch
+          onChange={setTooltipsEnabled}
+          checked={tooltipsEnabled()}
+        />
+      </div>
+
+    </div>
+  );
+}
 
 export function Appearance() {
   const [activeTabA, setActiveTabA] = createSignal<PanelA>('basic');
@@ -29,7 +52,7 @@ export function Appearance() {
       >
         <Panel depth={2}>
           <Panel.Header>
-            <Tabs
+            <TabsInset
               onChange={(value) => setActiveTabA(value as PanelA)}
               list={[
                 { value: 'basic', label: 'Basic' },
@@ -61,7 +84,7 @@ export function Appearance() {
 
         <Panel depth={2}>
           <Panel.Header>
-            <Tabs
+            <TabsInset
             onChange={(value) => setActiveTabB(value as PanelB)}
               list={[
                 { value: 'themes', label: 'Themes' },
@@ -76,7 +99,7 @@ export function Appearance() {
               <ThemeList />
             </Show>
             <Show when={activeTabB() === 'ui'}>
-              <UI />
+              <UserInterface />
             </Show>
           </Panel.Body>
         </Panel>

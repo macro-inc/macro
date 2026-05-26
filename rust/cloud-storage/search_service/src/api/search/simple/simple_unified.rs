@@ -76,34 +76,7 @@ fn compute_next_cursor(
     }
 }
 
-/// Splits search terms by whitespace, preserving double-quoted phrases.
-/// e.g. `["hello world"]` → `["hello", "world"]`
-/// e.g. `[r#""hello world" test"#]` → `["hello world", "test"]`
-fn split_search_terms(terms: &[String]) -> Vec<String> {
-    let joined = terms.join(" ");
-    let mut result = Vec::new();
-    // Regex-free parser: iterate chars, track quoted state
-    let mut current = String::new();
-    let mut in_quotes = false;
-    for c in joined.chars() {
-        match c {
-            '"' => in_quotes = !in_quotes,
-            c if c.is_whitespace() && !in_quotes => {
-                let trimmed = current.trim().to_string();
-                if !trimmed.is_empty() {
-                    result.push(trimmed);
-                }
-                current.clear();
-            }
-            _ => current.push(c),
-        }
-    }
-    let trimmed = current.trim().to_string();
-    if !trimmed.is_empty() {
-        result.push(trimmed);
-    }
-    result
-}
+use crate::api::search::terms::split_search_terms;
 
 /// Creates a unified search request and performs the search
 /// by calling individual simple search endpoints for each entity type
@@ -222,13 +195,35 @@ pub(in crate::api::search) async fn perform_unified_search(
     )
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
 
-    // Set terms on each index's search args
-    // Email gets split terms for multi-field search; other indices get the original query
-    filter_document_response.terms = terms.clone();
-    filter_channel_response.terms = terms.clone();
-    filter_chat_response.terms = terms.clone();
+    // Set terms on each index's search args.
+    //
+    // Emails and channels both get whitespace-split terms — emails match
+    // each term independently across many fields ANDed inside OpenSearch;
+    // channel messages are single-doc-per-message so each token must
+    // appear in the same message via bool.must. Documents and chats get
+    // split terms once their alias points at a join-shape index, where
+    // each term becomes a separate has_child clause ANDed via bool.must.
+    let document_terms = if opensearch_client::documents_shape::alias_uses_join_shape() {
+        split_search_terms(&terms)
+    } else {
+        terms.clone()
+    };
+    let chat_terms = if opensearch_client::chats_shape::alias_uses_join_shape() {
+        split_search_terms(&terms)
+    } else {
+        terms.clone()
+    };
+    let call_record_terms = if opensearch_client::call_records_shape::alias_uses_join_shape() {
+        split_search_terms(&terms)
+    } else {
+        terms.clone()
+    };
+    let channel_terms = split_search_terms(&terms);
+    filter_document_response.terms = document_terms;
+    filter_channel_response.terms = channel_terms;
+    filter_chat_response.terms = chat_terms;
     filter_email_response.terms = email_terms.clone();
-    filter_call_record_response.terms = terms.clone();
+    filter_call_record_response.terms = call_record_terms;
 
     // Clone terms for use in name searches
     let name_search_term = terms[0].clone();

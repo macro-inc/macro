@@ -1,12 +1,9 @@
-import { isErr } from '@core/util/maybeResult';
 import { storageServiceClient } from '../client';
 
 // we expire slightly before the actual expiry to avoid race condition
 const EXPIRE_OFFSET_SECONDS = 10;
 
-export const parseExpiryTimeFromPresignedUrl = (
-  blobUrl: string
-): Date | undefined => {
+const parseExpiryTimeFromPresignedUrl = (blobUrl: string): Date | undefined => {
   try {
     const url = new URL(blobUrl);
     const expires = url.searchParams.get('Expires');
@@ -39,11 +36,11 @@ export const getPresignedUrl = async ({
     documentId,
     versionId,
   });
-  if (isErr(maybeLocation)) {
+  if (maybeLocation.isErr()) {
     throw new Error('unable to retrieve location data');
   }
 
-  const [, { data }] = maybeLocation;
+  const { data } = maybeLocation.value;
   if (data.type !== 'presignedUrl') {
     throw new Error('presignedUrl not found in location data');
   }

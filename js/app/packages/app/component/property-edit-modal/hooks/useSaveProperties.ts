@@ -1,10 +1,10 @@
+import type { EntityData } from '@entity';
 import type {
   Property,
   PropertyApiValues,
   PropertyDefinitionDomain,
-} from '@core/component/Properties/types';
-import { macroEntityToPropertyEntityType } from '@core/component/Properties/utils';
-import type { EntityData } from '@entity';
+} from '@property/types';
+import { macroEntityToPropertyEntityType } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 
 export function useSavePropertyForMultiEntitites() {

@@ -1,30 +1,21 @@
-# Set the cache image name
-ARG CACHE_IMAGE=569036502058.dkr.ecr.us-east-1.amazonaws.com/cloud-storage-cache:latest
-# Load the cache image
-FROM ${CACHE_IMAGE} AS cache
-
-ARG SERVICE_NAME
-ENV SQLX_OFFLINE=true
-
+# syntax=docker/dockerfile:1
 FROM rust:latest AS chef
 ARG SERVICE_NAME
 ENV SQLX_OFFLINE=true
-RUN cargo install cargo-strip
 WORKDIR /app
 
 FROM chef AS builder
 ARG SERVICE_NAME
 
-# COPY the pre-built dependencies from cache image
-COPY --from=cache /app/target target
-COPY --from=cache /usr/local/cargo /usr/local/cargo
-
 COPY . .
 
 # Build the service
-RUN cargo build --release --bin ${SERVICE_NAME} && \
-  cargo strip && \
-  mv /app/target/release/${SERVICE_NAME} /app/svc
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
+  --mount=type=cache,target=/usr/local/cargo/git/db,sharing=shared \
+  --mount=type=cache,target=/app/target,id=rust-target-release,sharing=locked \
+  cargo build --release --bin ${SERVICE_NAME} && \
+  strip /app/target/release/${SERVICE_NAME} && \
+  cp /app/target/release/${SERVICE_NAME} /app/svc
 
 # Create slim runner to run the service
 FROM debian:trixie-slim AS runner
@@ -35,7 +26,6 @@ RUN : \
   && apt-get update \
   && apt-get install -y --no-install-recommends \
   ca-certificates \
-  openssl \
   dumb-init \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*

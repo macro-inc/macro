@@ -28,10 +28,7 @@ export function buildFileTree(items: Item[]) {
  * @param allItems - The set of all items.
  * @returns The file tree.
  */
-export function buildFileTreeWithAncestors(
-  filteredItems: Item[],
-  allItems: Item[]
-) {
+function _buildFileTreeWithAncestors(filteredItems: Item[], allItems: Item[]) {
   const ancestorProjects = new Set<Item>();
   const itemsById = new Map(allItems.map((item) => [item.id, item]));
   const relevantItemMap: { [key: string]: { item: Item; children: Item[] } } =

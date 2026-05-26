@@ -178,6 +178,65 @@
         }
       }
     },
+    "/github_pull_requests/enrich": {
+      "post": {
+        "tags": ["github_pull_requests"],
+        "summary": "Enriches GitHub pull request references with live GitHub data for the authenticated user.",
+        "operationId": "enrich_github_pull_requests",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrichGithubPullRequestsProxyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrichGithubPullRequestsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["health"],
@@ -460,6 +519,76 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/link/gmail": {
+      "post": {
+        "tags": ["link::gmail"],
+        "summary": "Initiates a Gmail link for a user",
+        "operationId": "init_gmail_link",
+        "parameters": [
+          {
+            "name": "original_url",
+            "in": "query",
+            "description": "**OPTIONAL**. The original url to redirect to.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitGmailLinkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
             "description": "",
             "content": {
               "application/json": {
@@ -1603,6 +1732,85 @@
         }
       }
     },
+    "/team/crm": {
+      "patch": {
+        "tags": ["teams::inbound::axum_router::patch_team_crm_settings"],
+        "summary": "Enables or disables CRM for the team. On enable, kicks off a\nbest-effort backfill that enqueues a `PopulateCrmForUser` message\nper team member (no-op if CRM is already enabled). On disable,\nflips the flag and purges the team's CRM data (cascading through\n`crm_companies` → `crm_domains` / `crm_contacts` /\n`crm_contact_sources`). Requires the caller to be an Admin or\nOwner of the team.",
+        "operationId": "patch_team_crm_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchTeamCrmSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatchTeamCrmSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/invite": {
       "post": {
         "tags": ["teams::inbound::axum_router::invite_to_team"],
@@ -1915,68 +2123,6 @@
             }
           },
           "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/team/tier": {
-      "patch": {
-        "tags": ["teams::inbound::axum_router::patch_team_user_tier"],
-        "summary": "Updates a team.",
-        "operationId": "patch_team_user_tier",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PatchTeamUserTierRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -2840,8 +2986,8 @@
     },
     "/user/stripe/checkout": {
       "post": {
-        "tags": ["user::stripe"],
-        "summary": "Creates a Stripe checkout session for the user to subscribe.",
+        "tags": ["user::stripe::create_checkout_session"],
+        "summary": "**LEGACY DO NOT USE** Creates a Stripe checkout session for the user to subscribe.",
         "operationId": "create_checkout_session",
         "requestBody": {
           "content": {
@@ -2907,9 +3053,78 @@
         }
       }
     },
+    "/user/stripe/checkoutv2": {
+      "post": {
+        "tags": ["user::stripe::create_checkout_session_v2"],
+        "summary": "Creates a Stripe checkout session for the user to subscribe.",
+        "operationId": "create_checkout_session_v2",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCheckoutSessionV2Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StripeSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user/stripe/portal": {
       "post": {
-        "tags": ["user::stripe"],
+        "tags": ["user::stripe::create_portal_session"],
         "summary": "Creates a Stripe billing portal session.",
         "operationId": "create_portal_session",
         "requestBody": {
@@ -2958,7 +3173,7 @@
     },
     "/user/stripe/subscription": {
       "patch": {
-        "tags": ["user::stripe"],
+        "tags": ["user::stripe::patch_subscription_tier"],
         "summary": "Updates the user's subscription tier, swapping both their RBAC role and Stripe subscription line item.",
         "operationId": "patch_subscription_tier",
         "requestBody": {
@@ -3161,6 +3376,29 @@
           }
         }
       },
+      "CreateCheckoutSessionV2Request": {
+        "type": "object",
+        "description": "Request body for creating a Stripe checkout session",
+        "required": ["successUrl", "cancelUrl"],
+        "properties": {
+          "cancelUrl": {
+            "type": "string",
+            "description": "The URL to redirect to if checkout is cancelled"
+          },
+          "discount": {
+            "type": ["string", "null"],
+            "description": "Optional discount/promo code to apply"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/CheckoutSessionMetadata",
+            "description": "Tracking metadata for conversion attribution"
+          },
+          "successUrl": {
+            "type": "string",
+            "description": "The URL to redirect to on successful checkout"
+          }
+        }
+      },
       "CreateInProgressLinkResponse": {
         "type": "object",
         "required": ["link_id"],
@@ -3215,6 +3453,101 @@
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "EnrichGithubPullRequestsProxyRequest": {
+        "type": "object",
+        "description": "Request body for the authenticated pull request enrichment proxy.",
+        "required": ["pullRequests"],
+        "properties": {
+          "pullRequests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestRef"
+            },
+            "description": "The pull requests to enrich for the authenticated user."
+          }
+        }
+      },
+      "EnrichGithubPullRequestsResponse": {
+        "type": "object",
+        "description": "Response body for pull request enrichment.",
+        "required": ["pullRequests"],
+        "properties": {
+          "pullRequests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnrichedGithubPullRequest"
+            },
+            "description": "Pull requests with enrichment fields populated when GitHub data was available."
+          }
+        }
+      },
+      "EnrichedGithubPullRequest": {
+        "type": "object",
+        "description": "A pull request reference enriched with live GitHub details when available.",
+        "required": [
+          "githubKey",
+          "owner",
+          "repo",
+          "number",
+          "url",
+          "displayName"
+        ],
+        "properties": {
+          "additions": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The number of added lines reported by GitHub, when enrichment succeeds.",
+            "minimum": 0
+          },
+          "deletions": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The number of deleted lines reported by GitHub, when enrichment succeeds.",
+            "minimum": 0
+          },
+          "displayName": {
+            "type": "string",
+            "description": "A compact label suitable for display in the UI."
+          },
+          "githubKey": {
+            "type": "string",
+            "description": "The stored GitHub association key, in `owner/repo/pull/number` format."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The GitHub pull request title, when enrichment succeeds."
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The GitHub pull request number.",
+            "minimum": 0
+          },
+          "owner": {
+            "type": "string",
+            "description": "The GitHub repository owner or organization."
+          },
+          "repo": {
+            "type": "string",
+            "description": "The GitHub repository name."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GithubPullRequestStatus",
+                "description": "The normalized GitHub pull request status, when enrichment succeeds."
+              }
+            ]
+          },
+          "url": {
+            "type": "string",
+            "description": "The public GitHub URL for the pull request."
+          }
+        }
       },
       "ErrorResponse": {
         "type": "object",
@@ -3363,7 +3696,67 @@
           }
         }
       },
+      "GithubPullRequestRef": {
+        "type": "object",
+        "description": "A pull request reference that can be enriched with live GitHub data.",
+        "required": [
+          "githubKey",
+          "owner",
+          "repo",
+          "number",
+          "url",
+          "displayName"
+        ],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "A compact label suitable for display in the UI."
+          },
+          "githubKey": {
+            "type": "string",
+            "description": "The stored GitHub association key, in `owner/repo/pull/number` format."
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The GitHub pull request number.",
+            "minimum": 0
+          },
+          "owner": {
+            "type": "string",
+            "description": "The GitHub repository owner or organization."
+          },
+          "repo": {
+            "type": "string",
+            "description": "The GitHub repository name."
+          },
+          "url": {
+            "type": "string",
+            "description": "The public GitHub URL for the pull request."
+          }
+        }
+      },
+      "GithubPullRequestStatus": {
+        "type": "string",
+        "description": "The normalized lifecycle status for a GitHub pull request.",
+        "enum": ["open", "closed", "merged"]
+      },
       "InitGithubLinkResponse": {
+        "type": "object",
+        "required": ["authorization_url", "link_id"],
+        "properties": {
+          "authorization_url": {
+            "type": "string",
+            "description": "The OAuth authorization URL to redirect the user to"
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The link ID for tracking the OAuth flow"
+          }
+        }
+      },
+      "InitGmailLinkResponse": {
         "type": "object",
         "required": ["authorization_url", "link_id"],
         "properties": {
@@ -3386,10 +3779,6 @@
           "email": {
             "type": "string",
             "description": "The email of the user to invite"
-          },
-          "tier": {
-            "$ref": "#/components/schemas/TeamUserTier",
-            "description": "The tier for this user (defaults to Haiku if not provided)"
           }
         }
       },
@@ -3459,6 +3848,47 @@
           }
         }
       },
+      "PatchTeamCrmSettingsRequest": {
+        "type": "object",
+        "description": "Request body for `PATCH /team/crm`.",
+        "required": ["enabled"],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "The desired CRM state for the team."
+          }
+        }
+      },
+      "PatchTeamCrmSettingsResponse": {
+        "type": "object",
+        "description": "Response for `PATCH /team/crm`. Reports both the resulting state\nand whether this call changed it; for the enable-flip case it also\nreports the backfill fan-out tallies.",
+        "required": [
+          "enabled",
+          "changed",
+          "backfill_enqueued",
+          "backfill_failed"
+        ],
+        "properties": {
+          "backfill_enqueued": {
+            "type": "integer",
+            "description": "Number of members for whom a `PopulateCrmForUser` message was\nenqueued. Non-zero only on a disabled → enabled transition;\nper-user enqueue failures are logged and swallowed.",
+            "minimum": 0
+          },
+          "backfill_failed": {
+            "type": "integer",
+            "description": "Number of members whose enqueue failed (and was swallowed).\nNon-zero only on a disabled → enabled transition.",
+            "minimum": 0
+          },
+          "changed": {
+            "type": "boolean",
+            "description": "True if this call flipped the value (false → true or true →\nfalse). False if the team was already at the requested state."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "The resulting `crm_enabled` value after the call."
+          }
+        }
+      },
       "PatchTeamRequest": {
         "type": "object",
         "description": "Request to update a team",
@@ -3466,6 +3896,10 @@
           "name": {
             "type": ["string", "null"],
             "description": "The new name for the team"
+          },
+          "slug": {
+            "type": ["string", "null"],
+            "description": "The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE."
           },
           "user_role_updates": {
             "type": ["array", "null"],
@@ -3484,21 +3918,6 @@
           "role": {
             "$ref": "#/components/schemas/TeamRole",
             "description": "The new role of the team user"
-          },
-          "team_user_id": {
-            "type": "string",
-            "description": "The team user you are updating"
-          }
-        }
-      },
-      "PatchTeamUserTierRequest": {
-        "type": "object",
-        "description": "Request to update a team user's tier",
-        "required": ["team_user_id", "new_tier"],
-        "properties": {
-          "new_tier": {
-            "$ref": "#/components/schemas/TeamUserTier",
-            "description": "The new tier of the team user"
           },
           "team_user_id": {
             "type": "string",
@@ -3677,7 +4096,7 @@
       "Team": {
         "type": "object",
         "description": "The Team struct",
-        "required": ["id", "name", "owner_id"],
+        "required": ["id", "name", "slug", "owner_id"],
         "properties": {
           "id": {
             "type": "string",
@@ -3687,6 +4106,9 @@
             "type": "string"
           },
           "owner_id": {
+            "type": "string"
+          },
+          "slug": {
             "type": "string"
           }
         }
@@ -3755,7 +4177,7 @@
       "TeamMember": {
         "type": "object",
         "description": "The team member struct",
-        "required": ["team_id", "user_id", "role", "tier"],
+        "required": ["team_id", "user_id", "role"],
         "properties": {
           "role": {
             "$ref": "#/components/schemas/TeamRole",
@@ -3766,25 +4188,21 @@
             "format": "uuid",
             "description": "The id of the team"
           },
-          "tier": {
-            "type": "string",
-            "description": "The tier of the team member"
-          },
           "user_id": {
             "type": "string",
             "description": "The user id of the team member"
           }
         }
       },
+      "TeamPlan": {
+        "type": "string",
+        "description": "Team plans",
+        "enum": ["idea", "pre_seed", "seed", "series_a", "growth"]
+      },
       "TeamRole": {
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["member", "admin", "owner"]
-      },
-      "TeamUserTier": {
-        "type": "string",
-        "description": "Ordered from lowest to highest tier top -> bottom",
-        "enum": ["Haiku", "Sonnet", "Opus"]
       },
       "TeamWithMembers": {
         "type": "object",

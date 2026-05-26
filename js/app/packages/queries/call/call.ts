@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
-import { MaybeResultError, throwOnErr } from '@core/util/maybeResult';
+import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
-import { callServiceClient } from '@service-call/client';
+import { type CallRecord, callServiceClient } from '@service-call/client';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
@@ -14,7 +14,7 @@ export function useActiveCallQuery(channelId: Accessor<string>) {
   }));
 }
 
-export function useJoinCallMutation() {
+function _useJoinCallMutation() {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (channelId: string) =>
@@ -24,13 +24,12 @@ export function useJoinCallMutation() {
     },
     onError(error: Error) {
       if (
-        error instanceof MaybeResultError &&
+        error instanceof ThrownResultError &&
         error.errors[0]?.code === 'CONFLICT'
       ) {
-        toast.alert(
-          "You're already in another call",
-          'Leave your current call before joining a new one.'
-        );
+        toast.alert("You're already in another call", {
+          subtext: 'Leave your current call before joining a new one.',
+        });
         return;
       }
       toast.failure('Failed to join call');
@@ -39,11 +38,27 @@ export function useJoinCallMutation() {
   }));
 }
 
+function isNotFoundResultError(error: unknown) {
+  return (
+    error instanceof ThrownResultError &&
+    error.errors.some((err) => err.code === 'NOT_FOUND')
+  );
+}
+
 export function useLeaveCallMutation() {
   return useMutation(() => ({
     gcTime: 0,
-    mutationFn: (channelId: string) =>
-      throwOnErr(() => callServiceClient.leaveCall(channelId)),
+    mutationFn: async (channelId: string) => {
+      try {
+        return await throwOnErr(() => callServiceClient.leaveCall(channelId));
+      } catch (error) {
+        // Leaving a call should be idempotent. If LiveKit/server cleanup already
+        // removed us, the UI should still finish disconnecting instead of
+        // surfacing a noisy "Resource not found" control failure.
+        if (isNotFoundResultError(error)) return undefined;
+        throw error;
+      }
+    },
     onSuccess() {
       queryClient.invalidateQueries({ queryKey: ['call', 'active'] });
     },
@@ -61,11 +76,46 @@ export function useCallRecordQuery(callId: Accessor<string>) {
   }));
 }
 
+export function setCallRecordShareWithTeamCache(
+  callId: string,
+  shareWithTeam: boolean
+) {
+  queryClient.setQueryData<CallRecord>(['call', 'record', callId], (prev) => {
+    if (!prev) return prev;
+    return { ...prev, shareWithTeam };
+  });
+}
+
+function invalidateCallRecord(callId: string) {
+  queryClient.invalidateQueries({ queryKey: ['call', 'record', callId] });
+}
+
+export function useSetCallRecordShareWithTeamMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: async (params: { callId: string; shareWithTeam: boolean }) => {
+      await throwOnErr(() => callServiceClient.editCallRecord(params));
+      return params;
+    },
+    onSuccess({ callId, shareWithTeam }) {
+      setCallRecordShareWithTeamCache(callId, shareWithTeam);
+      invalidateCallRecord(callId);
+    },
+    onError(error: Error) {
+      console.error('failed to set share with team', error);
+    },
+  }));
+}
+
 export function useToggleShareWithTeamMutation() {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: (callId: string) =>
       throwOnErr(() => callServiceClient.toggleShareWithTeam(callId)),
+    onSuccess(newValue, callId) {
+      setCallRecordShareWithTeamCache(callId, newValue);
+      invalidateCallRecord(callId);
+    },
     onError(error: Error) {
       console.error('failed to toggle share with team', error);
     },

@@ -27,8 +27,8 @@ use item_filters::ast::EntityFilterAst;
 use crate::{
     domain::{
         models::{
-            FrecencyQueryInner, IntoSoupReqAst, SimpleQueryInner, SoupErr, SoupQuery, SoupRequest,
-            SoupType,
+            FrecencyQueryInner, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
+            SimpleQueryInner, SoupErr, SoupQuery, SoupRequest, SoupType,
         },
         ports::{SoupOutput, SoupService},
     },
@@ -70,7 +70,15 @@ impl MockSoup {
 }
 
 impl SoupService for MockSoup {
-    async fn get_user_soup<T>(&self, req: SoupRequest<T>) -> Result<SoupOutput<T>, SoupErr>
+    async fn get_user_soup<T>(
+        &self,
+        req: SoupRequest<T>,
+        _team_receipt: Option<
+            entity_access::domain::models::EntityAccessReceipt<
+                entity_access::domain::models::MemberTeamRole,
+            >,
+        >,
+    ) -> Result<SoupOutput<T>, SoupErr>
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send,
@@ -99,6 +107,13 @@ impl SoupService for MockSoup {
             filter,
             expanded_filter,
         });
+        Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn get_user_soup_grouped(
+        &self,
+        _req: GroupedSortRequest<'_>,
+    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
         Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
     }
 }
@@ -231,8 +246,127 @@ impl EmailService for MockEmail {
     }
 }
 
+#[derive(Clone)]
+struct MockEntityAccess;
+
+impl entity_access::domain::ports::EntityAccessService for MockEntityAccess {
+    async fn generate_entity_access_receipt<
+        T: entity_access::domain::models::RequiredPermission,
+    >(
+        &self,
+        _user_id: &macro_user_id::user_id::MacroUserId<macro_user_id::lowercased::Lowercase<'_>>,
+        _user_org_id: Option<i64>,
+        _entity_id: &str,
+        _entity_type: entity_access::domain::models::EntityType,
+    ) -> Result<
+        entity_access::domain::models::EntityAccessReceipt<T>,
+        entity_access::domain::models::AccessError,
+    > {
+        unimplemented!()
+    }
+
+    async fn get_access_level(
+        &self,
+        _user_id: Option<
+            &macro_user_id::user_id::MacroUserId<macro_user_id::lowercased::Lowercase<'_>>,
+        >,
+        _entity_id: &str,
+        _entity_type: entity_access::domain::models::EntityType,
+    ) -> Result<
+        Option<entity_access::domain::models::AccessLevel>,
+        entity_access::domain::models::AccessError,
+    > {
+        unimplemented!()
+    }
+
+    async fn check_access(
+        &self,
+        _user_id: Option<
+            &macro_user_id::user_id::MacroUserId<macro_user_id::lowercased::Lowercase<'_>>,
+        >,
+        _entity_id: &str,
+        _entity_type: entity_access::domain::models::EntityType,
+        _required_level: entity_access::domain::models::AccessLevel,
+    ) -> Result<
+        entity_access::domain::models::AccessLevel,
+        entity_access::domain::models::AccessError,
+    > {
+        unimplemented!()
+    }
+
+    async fn check_public_access(
+        &self,
+        _entity_id: &str,
+        _entity_type: entity_access::domain::models::EntityType,
+        _required_level: entity_access::domain::models::AccessLevel,
+    ) -> Result<
+        entity_access::domain::models::AccessLevel,
+        entity_access::domain::models::AccessError,
+    > {
+        unimplemented!()
+    }
+
+    async fn get_entity_permission(
+        &self,
+        _user_id: Option<
+            &macro_user_id::user_id::MacroUserId<macro_user_id::lowercased::Lowercase<'_>>,
+        >,
+        _entity_id: &str,
+        _entity_type: entity_access::domain::models::EntityType,
+        _user_org_id: Option<i64>,
+    ) -> Result<
+        entity_access::domain::models::EntityPermission,
+        entity_access::domain::models::AccessError,
+    > {
+        unimplemented!()
+    }
+
+    async fn get_users_by_entity(
+        &self,
+        _entity_id: &str,
+        _entity_type: entity_access::domain::models::EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, entity_access::domain::models::AccessError> {
+        unimplemented!()
+    }
+
+    async fn get_call_channel(
+        &self,
+        _call_id: &Uuid,
+    ) -> Result<
+        Option<entity_access::domain::models::CallChannelInfo>,
+        entity_access::domain::models::AccessError,
+    > {
+        unimplemented!()
+    }
+
+    async fn get_call_channel_by_channel_id(
+        &self,
+        _channel_id: &Uuid,
+    ) -> Result<
+        Option<entity_access::domain::models::CallChannelInfo>,
+        entity_access::domain::models::AccessError,
+    > {
+        unimplemented!()
+    }
+
+    async fn get_user_team(
+        &self,
+        _user_id: &macro_user_id::user_id::MacroUserId<macro_user_id::lowercased::Lowercase<'_>>,
+    ) -> Result<
+        Option<entity_access::domain::models::UserTeamInfo>,
+        entity_access::domain::models::AccessError,
+    > {
+        Ok(None)
+    }
+}
+
 fn mock_router() -> Router {
-    soup_router(SoupRouterState::new(MockSoup::new(), MockEmail)).layer(Extension(UserContext {
+    soup_router(SoupRouterState::new(
+        MockSoup::new(),
+        MockEmail,
+        Arc::new(MockEntityAccess),
+    ))
+    .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
         fusion_user_id: "1234".to_string(),
         permissions: None,
@@ -395,6 +529,7 @@ async fn it_calls_soup_with_missing_link() {
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -427,6 +562,7 @@ async fn it_does_not_call_soup_with_db_err() {
                 Err(EmailErr::RepoErr(anyhow::anyhow!("failed to fetch")))
             }),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -456,6 +592,7 @@ async fn it_loads_email_all_view() {
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -496,6 +633,7 @@ async fn it_loads_email_sent_view() {
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -536,6 +674,7 @@ async fn it_parses_file_assoc_filters() {
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -575,6 +714,7 @@ async fn cursor_with_assoc_works() {
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -649,6 +789,7 @@ async fn cursor_with_assoc_works() {
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -672,6 +813,7 @@ async fn cursor_with_all_works() {
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -746,6 +888,7 @@ async fn cursor_with_all_works() {
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -769,6 +912,7 @@ async fn it_parses_channel_filters() {
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -813,6 +957,7 @@ async fn it_parses_notification_and_task_filters() {
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -925,6 +1070,7 @@ async fn it_can_filter_chat_owners() {
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -963,6 +1109,7 @@ async fn ast_endpoint_expands_file_assoc_pdf() {
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -1009,6 +1156,7 @@ async fn ast_endpoint_passes_through_plain_document_literal() {
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -1056,6 +1204,7 @@ async fn ast_endpoint_expands_file_assoc_image_to_or_tree() {
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -1193,6 +1342,7 @@ async fn it_can_expand_assoc_ast() {
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -1264,6 +1414,7 @@ async fn it_can_expand_assoc_ast() {
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
+        Arc::new(MockEntityAccess),
     ))
     .layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -1279,4 +1430,202 @@ async fn it_can_expand_assoc_ast() {
         .first()
         .expect("SoupService::handle should have been called with next cursor");
     assert!(matches!(req.cursor_kind, MockCursorKind::SimpleCursor));
+}
+
+// ============================================================================
+// /soup/ast CRM scope extension
+// ============================================================================
+
+use item_filters::ast::CrmScope;
+
+#[test]
+fn ast_endpoint_email_crm_domains_stamps_scope_and_ands_into_tree() {
+    let js = json!({
+        "ecd": ["acme.com"],
+    });
+    let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
+    let req = SoupRequest {
+        soup_type: SoupType::Expanded,
+        limit: 20,
+        cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+            SimpleSortMethod::ViewedAt,
+            api,
+        ))),
+        user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
+        email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        link_id: None,
+    };
+    let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
+    let ast = match &req.cursor {
+        SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => f.as_ref().unwrap(),
+        _ => panic!("expected simple sort"),
+    };
+    let scope = ast.email_filter.crm_scope.as_ref().expect("scope set");
+    assert!(matches!(scope, CrmScope::Domains(d) if d == &vec!["acme.com".to_string()]));
+    // Sub-tree of any-direction OR literals stamped on the email AST.
+    assert!(ast.email_filter.tree.is_some());
+}
+
+#[test]
+fn ast_endpoint_email_crm_addresses_stamps_scope() {
+    let js = json!({
+        "eca": ["alice@acme.com"],
+    });
+    let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
+    let req = SoupRequest {
+        soup_type: SoupType::Expanded,
+        limit: 20,
+        cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+            SimpleSortMethod::ViewedAt,
+            api,
+        ))),
+        user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
+        email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        link_id: None,
+    };
+    let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
+    let ast = match &req.cursor {
+        SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => f.as_ref().unwrap(),
+        _ => panic!("expected simple sort"),
+    };
+    let scope = ast.email_filter.crm_scope.as_ref().expect("scope set");
+    assert!(matches!(scope, CrmScope::Addresses(a) if a == &vec!["alice@acme.com".to_string()]));
+    assert!(ast.email_filter.tree.is_some());
+}
+
+#[test]
+fn ast_endpoint_email_crm_both_lists_rejected() {
+    let js = json!({
+        "ecd": ["acme.com"],
+        "eca": ["alice@acme.com"],
+    });
+    let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
+    let req = SoupRequest {
+        soup_type: SoupType::Expanded,
+        limit: 20,
+        cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+            SimpleSortMethod::ViewedAt,
+            api,
+        ))),
+        user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
+        email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        link_id: None,
+    };
+    let res = req.into_ast();
+    assert!(res.is_err(), "mutual exclusivity must reject both lists");
+}
+
+#[test]
+fn ast_endpoint_empty_crm_lists_leaves_scope_none() {
+    let js = json!({
+        "ef": null,
+    });
+    let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
+    let req = SoupRequest {
+        soup_type: SoupType::Expanded,
+        limit: 20,
+        cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+            SimpleSortMethod::ViewedAt,
+            api,
+        ))),
+        user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
+        email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        link_id: None,
+    };
+    let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
+    // ast.is_none() because the whole filter is empty.
+    let ast = match &req.cursor {
+        SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => f.as_ref(),
+        _ => panic!("expected simple sort"),
+    };
+    assert!(ast.is_none(), "fully-empty filter should collapse to None");
+}
+
+#[test]
+fn ast_endpoint_crm_ands_with_existing_freeform_ef() {
+    // The AND-merge between the freeform `ef` AST and the CRM-expanded
+    // sub-tree is the most consequential bit of `into_entity_ast`. This
+    // test pins the root shape:
+    //   Expr::And(
+    //       <original ef literal>,            // unchanged
+    //       <any-direction OR over the CRM domain>
+    //   )
+    let js = json!({
+        "ef": { "l": { "Sender": { "Complete": "bob@elsewhere.com" } } },
+        "ecd": ["acme.com"],
+    });
+    let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
+    let req = SoupRequest {
+        soup_type: SoupType::Expanded,
+        limit: 20,
+        cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+            SimpleSortMethod::ViewedAt,
+            api,
+        ))),
+        user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
+        email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        link_id: None,
+    };
+    let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
+    let ast = match &req.cursor {
+        SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => f.as_ref().unwrap(),
+        _ => panic!("expected simple sort"),
+    };
+
+    let tree = ast.email_filter.tree.as_ref().expect("tree set");
+    match tree.as_ref() {
+        filter_ast::Expr::And(left, right) => {
+            // Left = the original ef literal, untouched.
+            let left_json = serde_json::to_value(left.as_ref()).unwrap();
+            assert_eq!(
+                left_json,
+                serde_json::json!({ "l": { "Sender": { "Complete": "bob@elsewhere.com" } } }),
+                "left side of AND must be the original ef literal verbatim"
+            );
+            // Right = the any-direction CRM sub-tree. All four direction
+            // literals must appear in the right subtree carrying acme.com.
+            let right_json = serde_json::to_string(right.as_ref()).unwrap();
+            for direction in ["Sender", "Cc", "Bcc", "Recipient"] {
+                assert!(
+                    right_json.contains(direction),
+                    "right side must contain {} direction literal",
+                    direction
+                );
+            }
+            assert!(right_json.contains("acme.com"));
+        }
+        other => panic!(
+            "expected And at root after CRM AND-merge, got: {}",
+            serde_json::to_string(other).unwrap()
+        ),
+    }
+}
+
+#[test]
+fn ast_endpoint_crm_domains_are_lowercased_in_scope() {
+    // Mixed-case input must land in the scope as lowercase — the CRM
+    // pre-check uses LOWER(domain) on the SQL side and would otherwise
+    // miss legitimate matches.
+    let js = json!({
+        "ecd": ["ACME.com"],
+    });
+    let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
+    let req = SoupRequest {
+        soup_type: SoupType::Expanded,
+        limit: 20,
+        cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+            SimpleSortMethod::ViewedAt,
+            api,
+        ))),
+        user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
+        email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        link_id: None,
+    };
+    let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
+    let ast = match &req.cursor {
+        SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => f.as_ref().unwrap(),
+        _ => panic!("expected simple sort"),
+    };
+    let scope = ast.email_filter.crm_scope.as_ref().expect("scope set");
+    assert!(matches!(scope, CrmScope::Domains(d) if d == &vec!["acme.com".to_string()]));
 }

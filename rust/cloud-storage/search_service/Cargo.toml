@@ -27,13 +27,11 @@ http-body-util = { workspace = true }
 indexmap = "2"
 item_filters = { path = "../item_filters" }
 macro_auth = { path = "../macro_auth" }
-macro_cors = { path = "../macro_cors" }
 macro_db_client = { path = "../macro_db_client" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
 properties_db_client = { path = "../properties_db_client" }
 readonly_pool = { path = "../readonly_pool" }
-macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
@@ -57,7 +55,6 @@ tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true }
-utoipa-swagger-ui = { workspace = true }
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }

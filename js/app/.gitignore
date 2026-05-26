@@ -44,6 +44,7 @@ CodeSignTool/
 packages/app/backend.jar
 packages/app/backend_lib
 **/build
+**/.build
 **/dist
 
 **/*.tsbuildinfo

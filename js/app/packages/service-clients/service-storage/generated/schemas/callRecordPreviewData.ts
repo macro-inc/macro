@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CallRecordPreviewDataChannelName } from './callRecordPreviewDataChannelName';
+import type { CallRecordPreviewDataCustomName } from './callRecordPreviewDataCustomName';
 import type { CallRecordPreviewDataEndedAt } from './callRecordPreviewDataEndedAt';
 
 /**
@@ -17,6 +18,9 @@ export interface CallRecordPreviewData {
   channelId: string;
   /** Resolved display name for the channel. */
   channelName?: CallRecordPreviewDataChannelName;
+  /** User-supplied or AI-generated display name for the call. Only set on
+archived `call_records`; active calls always return `None`. */
+  customName?: CallRecordPreviewDataCustomName;
   /** When the call ended (None if still active). */
   endedAt?: CallRecordPreviewDataEndedAt;
   /** When the call started (created_at for active, started_at for archived). */

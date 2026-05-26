@@ -6,6 +6,7 @@
  */
 import type { RepliedToDocumentCommentThreadMetadataFileType } from './repliedToDocumentCommentThreadMetadataFileType';
 import type { RepliedToDocumentCommentThreadMetadataSenderProfilePictureUrl } from './repliedToDocumentCommentThreadMetadataSenderProfilePictureUrl';
+import type { RepliedToDocumentCommentThreadMetadataSubType } from './repliedToDocumentCommentThreadMetadataSubType';
 
 /**
  * Notification sent when someone replies to a document comment thread.
@@ -20,6 +21,7 @@ export interface RepliedToDocumentCommentThreadMetadata {
   /** The owner of the document. */
   owner: string;
   senderProfilePictureUrl?: RepliedToDocumentCommentThreadMetadataSenderProfilePictureUrl;
+  subType?: RepliedToDocumentCommentThreadMetadataSubType;
   /** the text of the comment */
   text: string;
   /** the thread id */

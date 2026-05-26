@@ -41,7 +41,7 @@ export function EmojiReactionPopover(props: EmojiReactionPopoverProps) {
           <Popover.Content class="z-modal">
             <Popover.Arrow class="fill-surface" />
             <div
-              class="w-64.5 h-78.75 pl-2 pt-2 rounded-md flex flex-col bg-surface shadow-lg border border-edge"
+              class="w-64.5 h-78.75 pl-2 pt-2 rounded-md flex flex-col bg-surface shadow-lg ring-1 ring-edge"
               role="dialog"
               aria-label="Emoji search"
             >

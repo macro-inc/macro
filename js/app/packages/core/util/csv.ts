@@ -1,4 +1,4 @@
-export type CsvParseResult<TRecord extends Record<string, string>> =
+type CsvParseResult<TRecord extends Record<string, string>> =
   | {
       ok: true;
       headers: readonly string[];

@@ -25,9 +25,9 @@ interface EditableLabelState {
   size?: FileListSize;
 }
 
-export type EditableLabelProps = ComponentProps<'input'> & EditableLabelState;
+type EditableLabelProps = ComponentProps<'input'> & EditableLabelState;
 
-export function EditableLabel(props: EditableLabelProps) {
+function _EditableLabel(props: EditableLabelProps) {
   const [editableLabelProps, inputProps] = splitProps(props, [
     'handleSubmitEdit',
     'handleCancelEdit',
@@ -181,7 +181,7 @@ export function EditableLabel(props: EditableLabelProps) {
   );
 }
 
-export type EditableComponentProps = {
+type EditableComponentProps = {
   editingComponent: JSX.Element;
   isEditing?: boolean;
 } & (
@@ -189,7 +189,7 @@ export type EditableComponentProps = {
   | { component?: never; children: JSX.Element }
 );
 
-export function EditableProvider(props: EditableComponentProps) {
+function _EditableProvider(props: EditableComponentProps) {
   const [isEditing, setIsEditing] = createSignal(props.isEditing ?? false);
   return (
     <EditingContext.Provider value={[isEditing, setIsEditing]}>

@@ -1,6 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { formatRelativeDate } from '@core/util/time';
-import CaretRight from '@icon/regular/caret-right.svg';
+import CaretRight from '@phosphor/caret-right.svg';
 import { cn } from '@ui';
 import {
   createSignal,
@@ -41,8 +41,8 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
     <button
       type="button"
       class={cn(
-        'flex flex-row gap-2 items-center text-xs w-fit h-(--user-icon-width) touch:min-h-(--user-icon-width) border bg-surface hover:bg-hover hover-transition-bg pr-2 pl-1 mb-2 select-none outline-none focus:bg-active',
-        local.hasNewMessages ? 'border-accent' : 'border-edge-muted',
+        'flex flex-row gap-2 items-center text-xs w-fit h-(--user-icon-width) touch:min-h-(--user-icon-width) ring bg-surface hover:bg-hover hover-transition-bg pr-2 pl-1 mb-2 select-none outline-none focus:bg-active rounded-sm',
+        local.hasNewMessages ? 'ring-accent' : 'ring-rail',
         local.class
       )}
       onMouseEnter={() => {

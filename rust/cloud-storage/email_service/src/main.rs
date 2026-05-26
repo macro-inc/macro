@@ -4,7 +4,10 @@ use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{
     domain::service::EmailServiceImpl,
-    inbound::{EmailRouterState, EmailThreadRouterState, GmailTokenState},
+    inbound::axum::{
+        axum_impls::GmailTokenState, get_thread_router::EmailThreadRouterState,
+        previews_router::EmailRouterState,
+    },
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
 use email_service::config::EmailServiceCloudfrontSignerPrivateKey;
@@ -126,10 +129,18 @@ async fn main() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
     let gmail_client = Arc::new(gmail_client);
+    // HTTP API only reads CRM rows — populate runs in the pubsub
+    // worker. The no-op resolver makes the unused branch explicit and
+    // keeps reqwest/scraper out of this binary.
+    let crm_service = crm::domain::service::CrmServiceImpl::new(
+        crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+    );
     let email_service = EmailRouterState::new(EmailServiceImpl::new(
         EmailPgRepo::new(db.clone()),
         FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
         (*sqs_client).clone(),
+        crm_service,
         config.sent_undo_delay_secs,
     ));
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(

@@ -111,10 +111,14 @@ export function AutomationComposer() {
           { referredFrom: 'launcher' }
         );
       }
-      toast.success('Automation created', 'The automation is now scheduled.');
+      toast.success('Automation created', {
+        subtext: 'The automation is now scheduled.',
+      });
     },
     onError: (error) => {
-      toast.alert('Failed to create automation', getErrorMessage(error));
+      toast.alert('Failed to create automation', {
+        subtext: getErrorMessage(error),
+      });
     },
   });
 
@@ -140,7 +144,7 @@ export function AutomationComposer() {
       open={automationComposerOpen()}
       onOpenChange={(open) => setAutomationComposerOpen(open, false)}
     >
-      <Surface depth={2} active>
+      <Surface depth={2} active class="rounded-xl">
         <div class="*:max-h-[75vh]">
           <div class="flex cursor-default flex-col text-ink">
             <div class="flex items-center justify-between border-b border-edge-muted px-3 py-2">

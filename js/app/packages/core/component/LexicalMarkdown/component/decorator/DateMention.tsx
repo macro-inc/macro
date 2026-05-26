@@ -1,8 +1,8 @@
 import { DatePicker } from '@core/component/DatePicker';
 import { formatDate } from '@core/util/dateParser';
-import ClockIcon from '@icon/regular/clock.svg';
 import type { DateMentionDecoratorProps } from '@lexical-core';
 import { $isDateMentionNode } from '@lexical-core';
+import ClockIcon from '@phosphor/clock.svg';
 import { differenceInCalendarDays } from 'date-fns';
 import {
   $getNodeByKey,
@@ -113,7 +113,7 @@ export function DateMention(props: DateMentionDecoratorProps) {
     <>
       <span
         ref={mentionRef}
-        class="relative p-0.5 rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent cursor-default"
+        class="relative p-0.5 rounded-md bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent cursor-default"
         classList={{
           'bg-active': isSelectedAsNode(),
         }}

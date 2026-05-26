@@ -1,10 +1,10 @@
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useListLayout } from '@entity/composed/list-entity/shared';
-import ArrowDownIcon from '@icon/regular/arrow-down.svg';
-import UsersIcon from '@icon/regular/users.svg';
-import StatusInProgress from '@macro-icons/square/task-in-progress-circle.svg';
-import PriorityHigh from '@macro-icons/wide/priority-high.svg';
+import StatusInProgress from '@icon/square-task-in-progress-circle.svg';
+import PriorityHigh from '@icon/wide-priority-high.svg';
+import ArrowDownIcon from '@phosphor/arrow-down.svg';
+import UsersIcon from '@phosphor/users.svg';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, type JSX, Show } from 'solid-js';
 import {
@@ -51,17 +51,23 @@ export function ResponsiveTaskListHeader(props: { class?: string }) {
  *
  * Status, Priority, and Updated columns are clickable to set the active sort.
  */
-export function TaskListHeader(props: { class?: string }) {
+function TaskListHeader(props: { class?: string }) {
   const { soup } = useSoupView();
-  const activeSortId = createMemo(() => soup.sort.active()[0]?.id);
-  const setSort = (id: SystemSortOption) => soup.sort.setAll([id]);
+  const activeSort = createMemo(() => soup.sort.active()[0]);
+  const setSort = (id: SystemSortOption) => {
+    if (activeSort()?.id === id) {
+      soup.sort.flip(id);
+    } else {
+      soup.sort.setAll([id]);
+    }
+  };
 
   return (
     <div
       class={cn(
         'task-grid-row w-full grid items-center gap-2 px-2 h-10',
         'text-xs font-medium text-ink-extra-muted',
-        'bg-surface border-b border-edge-muted',
+        'bg-surface',
         props.class
       )}
       style={{
@@ -81,7 +87,8 @@ export function TaskListHeader(props: { class?: string }) {
               gridArea={col.id}
               label={col.label}
               sortKey={sortKey}
-              active={sortKey !== undefined && activeSortId() === sortKey}
+              active={sortKey !== undefined && activeSort()?.id === sortKey}
+              reversed={activeSort()?.reversed ?? false}
               onSort={setSort}
               narrowIcon={COLUMN_ICONS[col.id]}
             />
@@ -98,7 +105,8 @@ export function TaskListHeader(props: { class?: string }) {
         gridArea="timestamp"
         label="Updated"
         sortKey="updated_at"
-        active={activeSortId() === 'updated_at'}
+        active={activeSort()?.id === 'updated_at'}
+        reversed={activeSort()?.reversed ?? false}
         onSort={setSort}
         align="end"
       />
@@ -111,6 +119,7 @@ function HeaderCell(props: {
   label: string;
   sortKey?: SystemSortOption;
   active?: boolean;
+  reversed?: boolean;
   onSort?: (id: SystemSortOption) => void;
   narrowIcon?: () => JSX.Element;
   align?: 'start' | 'end';
@@ -161,8 +170,9 @@ function HeaderCell(props: {
             </span>
             <ArrowDownIcon
               class={cn(
-                'size-3 shrink-0 @max-[840px]/u-list:hidden',
-                props.active ? 'text-ink' : 'text-ink-extra-muted'
+                'size-3 shrink-0 @max-[840px]/u-list:hidden transition-transform',
+                props.active ? 'text-ink' : 'text-ink-extra-muted',
+                props.active && props.reversed && 'rotate-180'
               )}
             />
           </button>

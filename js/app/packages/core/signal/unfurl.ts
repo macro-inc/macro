@@ -1,5 +1,5 @@
 import { debounce } from '@core/util/debounce';
-import { isErr } from '@core/util/maybeResult';
+
 import { UnfurlServiceClient } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import {
@@ -21,7 +21,7 @@ type UnfurledLinkSuccess = {
   _createdAt: Date;
 };
 
-export type UnfurledLinkData =
+type UnfurledLinkData =
   | UnfurledLinkError
   | UnfurledLinkLoading
   | UnfurledLinkSuccess;
@@ -75,7 +75,7 @@ async function batchFetchUnfurls(urls: string[]) {
 
   const result = await UnfurlServiceClient.unfurlBulk({ url_list: urls });
 
-  if (isErr(result)) {
+  if (result.isErr()) {
     console.error('Failed to fetch unfurl bulk data');
     const errorUpdates: UnfurlStore = {};
     urls.forEach((url) => {
@@ -85,7 +85,7 @@ async function batchFetchUnfurls(urls: string[]) {
     return;
   }
 
-  const [, data] = result;
+  const data = result.value;
   const successUpdates: UnfurlStore = {};
 
   data.responses.forEach((unfurl) => {
@@ -116,7 +116,7 @@ function isCacheExpired(cached: UnfurledLinkData | undefined): boolean {
   );
 }
 
-export type UnfurlFetcher = [
+type UnfurlFetcher = [
   Accessor<UnfurledLinkData | undefined>,
   {
     refetch: () => void;
@@ -168,7 +168,7 @@ export function useUnfurl(url: string | undefined): UnfurlFetcher {
  * Prefetch multiple URLs at once
  * Useful for preloading unfurls when you know multiple URLs will be needed
  */
-export function prefetchUnfurls(urls: string[]) {
+function _prefetchUnfurls(urls: string[]) {
   const urlsToFetch = urls.filter((url) => isCacheExpired(unfurlStore[url]));
 
   if (urlsToFetch.length > 0) {
@@ -179,6 +179,6 @@ export function prefetchUnfurls(urls: string[]) {
 /**
  * Get unfurl data from cache without triggering a fetch
  */
-export function getCachedUnfurl(url: string): UnfurledLinkData | undefined {
+function _getCachedUnfurl(url: string): UnfurledLinkData | undefined {
   return unfurlStore[url];
 }

@@ -2,11 +2,6 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useAllProperties } from '@app/component/property-edit-modal/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/component/property-edit-modal/state/propertyEditor';
 import { useBlockId } from '@core/block';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import type {
-  Property,
-  PropertyDefinitionDomain,
-} from '@core/component/Properties/types';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { HotkeyTags } from '@core/hotkey/constants';
@@ -14,6 +9,8 @@ import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { type EntityData, isTaskEntity } from '@entity';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { createEffect, onCleanup } from 'solid-js';
 import {
   makeCopyAction,

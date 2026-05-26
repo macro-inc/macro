@@ -8,11 +8,14 @@ import type {
   AppleLoginRequest,
   CreateAccountMergeRequest,
   CreateCheckoutSessionRequest,
+  CreateCheckoutSessionV2Request,
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
   CreateTeamRequest,
   CreateUserRequest,
   EmptyResponse,
+  EnrichGithubPullRequestsProxyRequest,
+  EnrichGithubPullRequestsResponse,
   ErrorResponse,
   GenerateEmailLinkRequest,
   GenericSuccessResponse,
@@ -23,6 +26,8 @@ import type {
   GetUserLinkExistsParams,
   InitGithubLinkParams,
   InitGithubLinkResponse,
+  InitGmailLinkParams,
+  InitGmailLinkResponse,
   InviteToTeamRequest,
   MacroApiTokenParams,
   MacroApiTokenResponse,
@@ -30,8 +35,9 @@ import type {
   PasswordlessRequest,
   PasswordRequest,
   PatchSubscriptionTierRequest,
+  PatchTeamCrmSettingsRequest,
+  PatchTeamCrmSettingsResponse,
   PatchTeamRequest,
-  PatchTeamUserTierRequest,
   PatchUserGroupRequest,
   PatchUserOnboardingRequest,
   PatchUserTutorialRequest,
@@ -264,6 +270,72 @@ export const verifyEmailLink = async (
     status: res.status,
     headers: res.headers,
   } as verifyEmailLinkResponse;
+};
+
+/**
+ * @summary Enriches GitHub pull request references with live GitHub data for the authenticated user.
+ */
+export type enrichGithubPullRequestsResponse200 = {
+  data: EnrichGithubPullRequestsResponse;
+  status: 200;
+};
+
+export type enrichGithubPullRequestsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type enrichGithubPullRequestsResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type enrichGithubPullRequestsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type enrichGithubPullRequestsResponseSuccess =
+  enrichGithubPullRequestsResponse200 & {
+    headers: Headers;
+  };
+export type enrichGithubPullRequestsResponseError = (
+  | enrichGithubPullRequestsResponse401
+  | enrichGithubPullRequestsResponse404
+  | enrichGithubPullRequestsResponse500
+) & {
+  headers: Headers;
+};
+
+export type enrichGithubPullRequestsResponse =
+  | enrichGithubPullRequestsResponseSuccess
+  | enrichGithubPullRequestsResponseError;
+
+export const getEnrichGithubPullRequestsUrl = () => {
+  return `/github_pull_requests/enrich`;
+};
+
+export const enrichGithubPullRequests = async (
+  enrichGithubPullRequestsProxyRequest: EnrichGithubPullRequestsProxyRequest,
+  options?: RequestInit
+): Promise<enrichGithubPullRequestsResponse> => {
+  const res = await fetch(getEnrichGithubPullRequestsUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(enrichGithubPullRequestsProxyRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: enrichGithubPullRequestsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as enrichGithubPullRequestsResponse;
 };
 
 /**
@@ -644,6 +716,85 @@ export const deleteGithubLink = async (
     status: res.status,
     headers: res.headers,
   } as deleteGithubLinkResponse;
+};
+
+/**
+ * @summary Initiates a Gmail link for a user
+ */
+export type initGmailLinkResponse200 = {
+  data: InitGmailLinkResponse;
+  status: 200;
+};
+
+export type initGmailLinkResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type initGmailLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type initGmailLinkResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
+export type initGmailLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type initGmailLinkResponseSuccess = initGmailLinkResponse200 & {
+  headers: Headers;
+};
+export type initGmailLinkResponseError = (
+  | initGmailLinkResponse400
+  | initGmailLinkResponse401
+  | initGmailLinkResponse429
+  | initGmailLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type initGmailLinkResponse =
+  | initGmailLinkResponseSuccess
+  | initGmailLinkResponseError;
+
+export const getInitGmailLinkUrl = (params: InitGmailLinkParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/link/gmail?${stringifiedParams}`
+    : `/link/gmail`;
+};
+
+export const initGmailLink = async (
+  params: InitGmailLinkParams,
+  options?: RequestInit
+): Promise<initGmailLinkResponse> => {
+  const res = await fetch(getInitGmailLinkUrl(params), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: initGmailLinkResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as initGmailLinkResponse;
 };
 
 /**
@@ -1931,6 +2082,90 @@ export const patchTeam = async (
 };
 
 /**
+ * @summary Enables or disables CRM for the team. On enable, kicks off a
+best-effort backfill that enqueues a `PopulateCrmForUser` message
+per team member (no-op if CRM is already enabled). On disable,
+flips the flag and purges the team's CRM data (cascading through
+`crm_companies` → `crm_domains` / `crm_contacts` /
+`crm_contact_sources`). Requires the caller to be an Admin or
+Owner of the team.
+ */
+export type patchTeamCrmSettingsResponse200 = {
+  data: PatchTeamCrmSettingsResponse;
+  status: 200;
+};
+
+export type patchTeamCrmSettingsResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type patchTeamCrmSettingsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type patchTeamCrmSettingsResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type patchTeamCrmSettingsResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type patchTeamCrmSettingsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type patchTeamCrmSettingsResponseSuccess =
+  patchTeamCrmSettingsResponse200 & {
+    headers: Headers;
+  };
+export type patchTeamCrmSettingsResponseError = (
+  | patchTeamCrmSettingsResponse400
+  | patchTeamCrmSettingsResponse401
+  | patchTeamCrmSettingsResponse403
+  | patchTeamCrmSettingsResponse404
+  | patchTeamCrmSettingsResponse500
+) & {
+  headers: Headers;
+};
+
+export type patchTeamCrmSettingsResponse =
+  | patchTeamCrmSettingsResponseSuccess
+  | patchTeamCrmSettingsResponseError;
+
+export const getPatchTeamCrmSettingsUrl = () => {
+  return `/team/crm`;
+};
+
+export const patchTeamCrmSettings = async (
+  patchTeamCrmSettingsRequest: PatchTeamCrmSettingsRequest,
+  options?: RequestInit
+): Promise<patchTeamCrmSettingsResponse> => {
+  const res = await fetch(getPatchTeamCrmSettingsUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(patchTeamCrmSettingsRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: patchTeamCrmSettingsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as patchTeamCrmSettingsResponse;
+};
+
+/**
  * @summary Invites a user to a team.
  */
 export type inviteToTeamResponse201 = {
@@ -2311,75 +2546,6 @@ export const removeUserFromTeam = async (
     status: res.status,
     headers: res.headers,
   } as removeUserFromTeamResponse;
-};
-
-/**
- * @summary Updates a team.
- */
-export type patchTeamUserTierResponse200 = {
-  data: void;
-  status: 200;
-};
-
-export type patchTeamUserTierResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type patchTeamUserTierResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type patchTeamUserTierResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type patchTeamUserTierResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type patchTeamUserTierResponseSuccess = patchTeamUserTierResponse200 & {
-  headers: Headers;
-};
-export type patchTeamUserTierResponseError = (
-  | patchTeamUserTierResponse400
-  | patchTeamUserTierResponse401
-  | patchTeamUserTierResponse404
-  | patchTeamUserTierResponse500
-) & {
-  headers: Headers;
-};
-
-export type patchTeamUserTierResponse =
-  | patchTeamUserTierResponseSuccess
-  | patchTeamUserTierResponseError;
-
-export const getPatchTeamUserTierUrl = () => {
-  return `/team/tier`;
-};
-
-export const patchTeamUserTier = async (
-  patchTeamUserTierRequest: PatchTeamUserTierRequest,
-  options?: RequestInit
-): Promise<patchTeamUserTierResponse> => {
-  const res = await fetch(getPatchTeamUserTierUrl(), {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(patchTeamUserTierRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: patchTeamUserTierResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as patchTeamUserTierResponse;
 };
 
 /**
@@ -3429,7 +3595,7 @@ export const getUserQuota = async (
 };
 
 /**
- * @summary Creates a Stripe checkout session for the user to subscribe.
+ * @summary **LEGACY DO NOT USE** Creates a Stripe checkout session for the user to subscribe.
  */
 export type createCheckoutSessionResponse200 = {
   data: StripeSessionResponse;
@@ -3498,6 +3664,78 @@ export const createCheckoutSession = async (
     status: res.status,
     headers: res.headers,
   } as createCheckoutSessionResponse;
+};
+
+/**
+ * @summary Creates a Stripe checkout session for the user to subscribe.
+ */
+export type createCheckoutSessionV2Response200 = {
+  data: StripeSessionResponse;
+  status: 200;
+};
+
+export type createCheckoutSessionV2Response400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type createCheckoutSessionV2Response404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type createCheckoutSessionV2Response409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type createCheckoutSessionV2Response500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createCheckoutSessionV2ResponseSuccess =
+  createCheckoutSessionV2Response200 & {
+    headers: Headers;
+  };
+export type createCheckoutSessionV2ResponseError = (
+  | createCheckoutSessionV2Response400
+  | createCheckoutSessionV2Response404
+  | createCheckoutSessionV2Response409
+  | createCheckoutSessionV2Response500
+) & {
+  headers: Headers;
+};
+
+export type createCheckoutSessionV2Response =
+  | createCheckoutSessionV2ResponseSuccess
+  | createCheckoutSessionV2ResponseError;
+
+export const getCreateCheckoutSessionV2Url = () => {
+  return `/user/stripe/checkoutv2`;
+};
+
+export const createCheckoutSessionV2 = async (
+  createCheckoutSessionV2Request: CreateCheckoutSessionV2Request,
+  options?: RequestInit
+): Promise<createCheckoutSessionV2Response> => {
+  const res = await fetch(getCreateCheckoutSessionV2Url(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createCheckoutSessionV2Request),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createCheckoutSessionV2Response['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createCheckoutSessionV2Response;
 };
 
 /**

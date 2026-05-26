@@ -10,7 +10,6 @@ import {
 } from '@app/component/next-soup/utils';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { ResponsiveBlockToolbar } from '@app/component/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import {
   SplitHeaderBadge,
@@ -27,29 +26,23 @@ import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { isMobile } from '@core/mobile/isMobile';
-import CheckIcon from '@icon/regular/check.svg';
-import ProhibitIcon from '@icon/regular/prohibit.svg';
-import TagIcon from '@icon/regular/tag.svg';
-import TrashIcon from '@icon/regular/trash.svg';
+import IconShared from '@icon/wide-share.svg';
+import { AnimatedTaskIcon } from '@icon/wide-task';
 import { buildMentionMarkdownString } from '@lexical-core';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import IconShared from '@macro-icons/wide/share.svg';
+import CheckIcon from '@phosphor/check.svg';
+import ProhibitIcon from '@phosphor/prohibit.svg';
+import TrashIcon from '@phosphor/trash.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import { useEmailContext } from './EmailContext';
-import {
-  EmailPropertiesButton,
-  PROPERTIES_DRAWER_ID,
-} from './EmailPropertiesModal';
 
 export function TopBar(props: {
   id: string;
   title: string;
   isDraft?: boolean;
 }) {
-  const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
   const { popoverSplit } = useSplitLayout();
   const shareCtx = useShareDialogContext();
   const emailCtx = useEmailContext();
@@ -88,10 +81,8 @@ export function TopBar(props: {
       openEntityInSplitFromUnifiedList(nextRow.original, {});
     }
 
-    const toastId = toast.success(
-      'Moved to Trash',
-      undefined,
-      [
+    const toastId = toast.success('Moved to Trash', {
+      actions: [
         {
           label: 'Undo',
           icon: ArrowCounterClockwise,
@@ -104,8 +95,8 @@ export function TopBar(props: {
           },
         },
       ],
-      10_000
-    );
+      duration: 10_000,
+    });
 
     handle.done.catch(() => {
       toast.failure('Failed to move to Trash');
@@ -157,12 +148,6 @@ export function TopBar(props: {
       icon: ProhibitIcon,
       action: () => emailCtx.blockSender(),
       condition: isOwnThread,
-    },
-    {
-      label: 'Properties',
-      icon: TagIcon,
-      action: propertiesControl.toggle,
-      buttonComponent: () => <EmailPropertiesButton buttonSize="sm" />,
     },
     {
       label: 'Create Task',

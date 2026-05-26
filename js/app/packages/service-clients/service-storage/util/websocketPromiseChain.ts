@@ -1,4 +1,6 @@
-import { isErr, type MaybeError, onlyErr } from '@core/util/maybeResult';
+import type { ResultError } from '@core/util/result';
+
+import { err, ok, type Result } from 'neverthrow';
 import { v7 as uuid7 } from 'uuid';
 
 type PromiseHandler = Promise<any> & {
@@ -36,23 +38,25 @@ export function createWebsocketPromiseChain<
 
   const websocketErrorFilter = (
     response: any
-  ): MaybeError<'INVALID_RESPONSE' | 'SERVICE_ERROR'> => {
+  ): Result<void, ResultError<'INVALID_RESPONSE' | 'SERVICE_ERROR'>[]> => {
     if (isJobSubmissionErrorResponse(response)) {
-      return onlyErr('SERVICE_ERROR', response.error);
+      return err([{ code: 'SERVICE_ERROR', message: response.error }]);
     }
 
     if (!isJobSubmissionSuccessResponse(response)) {
-      return onlyErr('INVALID_RESPONSE', 'Invalid response format');
+      return err([
+        { code: 'INVALID_RESPONSE', message: 'Invalid response format' },
+      ]);
     }
 
     if (
       isDocumentProcessResponse(response.data) &&
       isDocumentProcessResponseError(response.data)
     ) {
-      return onlyErr('SERVICE_ERROR', response.data.message);
+      return err([{ code: 'SERVICE_ERROR', message: response.data.message }]);
     }
 
-    return [null];
+    return ok(undefined);
   };
 
   const createResultPromise = (): PromiseHandler => {
@@ -87,9 +91,9 @@ export function createWebsocketPromiseChain<
         if (response?.macroRequestId !== requestId) return;
 
         const errorCheck = websocketErrorFilter(response);
-        if (isErr(errorCheck)) {
+        if (errorCheck.isErr()) {
           for (const [promise] of promiseHandlerListeners) {
-            console.error(errorCheck[1]);
+            console.error(errorCheck.error);
             if (!promise.resolved) promise.resolve(undefined);
           }
           return;
@@ -167,16 +171,6 @@ export function createWebsocketPromiseChain<
 
 // Supporting types and interfaces
 export enum JobTypeEnum {
-  Ping = 'ping',
-  CreateTempFile = 'create_temp_file',
-  PdfExport = 'pdf_export',
-  PdfPreprocess = 'pdf_preprocess',
-  PdfModify = 'pdf_modify',
-  PdfPasswordEncrypt = 'pdf_password_encrypt',
-  PdfSplitTexts = 'pdf_split_texts',
-  PdfRemoveMetadata = 'pdf_remove_metadata',
-  DocxSimpleCompare = 'docx_simple_compare',
-  DocxConsolidate = 'docx_consolidate',
   DocxUpload = 'docx_upload',
 }
 
@@ -197,7 +191,7 @@ type DocumentProcessResponse =
   | DocumentProcessSuccessResponse
   | DocumentProcessErrorResponse;
 
-export type WebsocketJobSubmissionErrorResponse = {
+type WebsocketJobSubmissionErrorResponse = {
   jobId?: string;
   macroRequestId?: string;
   event?: string;
@@ -220,14 +214,6 @@ export type WebsocketJobSubmissionSuccessResponse<T = unknown> = Omit<
 > & {
   data: T;
 };
-
-export type WebsocketJobSubmissionResponse<T = unknown> =
-  | WebsocketJobSubmissionSuccessResponse<T>
-  | WebsocketJobSubmissionErrorResponse;
-
-export type ListenerCallback = (
-  response: WebsocketJobSubmissionResponse & { macroRequestId: string }
-) => void | Promise<void>;
 
 // Type Guards
 function isDocumentProcessResponse(data: any): data is DocumentProcessResponse {

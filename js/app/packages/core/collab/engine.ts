@@ -1,4 +1,3 @@
-import { isErr } from '@core/util/maybeResult';
 import { type InferType, SyncDirection } from '@loro-mirror/packages/core/src';
 import { logger } from '@observability/logger';
 import { Mutex } from 'async-mutex';
@@ -11,7 +10,7 @@ import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import type { SyncSource, TimeoutError } from './source';
 import { compareLoroDocVersions, loroDocFromSnapshot } from './utils';
 
-export type EngineBindings<S extends GenericRootSchema, D> = {
+type EngineBindings<S extends GenericRootSchema, D> = {
   /**
    * Callback for handling state updates from the remote
    * @param state - The serialized state
@@ -25,7 +24,7 @@ export type EngineBindings<S extends GenericRootSchema, D> = {
   syncFromAwareness?: (awareness: D) => void;
 };
 
-export type Engine<S extends GenericRootSchema, D> = {
+type Engine<S extends GenericRootSchema, D> = {
   /** Is the engine running ¯\_(ツ)_/¯  */
   readonly isRunning: Accessor<boolean>;
   /**
@@ -58,13 +57,13 @@ export function createSyncEngine<
   awareness: Awareness<D>,
   source: SyncSource,
   bindings: EngineBindings<S, D>,
-  readonly: boolean = false
+  readonly: Accessor<boolean> = () => false
 ): Engine<S, D> {
   const [running, setRunning] = createSignal(false);
   const syncLock = new Mutex();
 
   const handleLocalUpdates = async (update: LoroRawUpdate) => {
-    if (readonly) return;
+    if (readonly()) return;
     const peerId = loroManager.getPeerId();
     await source.pushUpdate(update, peerId).mapErr((err) => {
       logger.error('failed to push local update to remote', {
@@ -91,7 +90,7 @@ export function createSyncEngine<
     await syncLock.runExclusive(async () => {
       let importResult = loroManager.importUpdate(update);
       await Promise.resolve();
-      if (isErr(importResult)) {
+      if (importResult.isErr()) {
         logger.error('failed to import remote update', {
           resolution: 'reset engine',
           scope: 'sync_engine',
@@ -140,7 +139,7 @@ export function createSyncEngine<
       const syncResult = await loroManager.syncToLoro(state);
 
       // Failed to sync, try to reset the engine
-      if (isErr(syncResult)) {
+      if (syncResult.isErr()) {
         let error = syncResult;
         logger.error('failed to sync state to remote', {
           resolution: 'reset engine',
@@ -176,7 +175,7 @@ export function createSyncEngine<
       }
 
       let resetResult = await loroManager.reset(snapshot.value);
-      if (isErr(resetResult)) {
+      if (resetResult.isErr()) {
         logger.error('failed to reset engine or loro manager', {
           resolution: 'fail',
           scope: 'sync_engine',

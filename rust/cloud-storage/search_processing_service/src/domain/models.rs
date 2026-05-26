@@ -59,24 +59,60 @@ impl DeletionFilter {
 }
 
 /// Call-record backfill filter. Empty `call_ids` means "all archived calls".
+///
+/// `started_after` / `started_before` filter on `call_records.started_at`
+/// because the table doesn't carry an updated_at — calls are immutable
+/// after creation, so this gives the equivalent "since X" semantics.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct CallBackfillRequest {
     pub call_ids: Vec<String>,
+    pub started_after: Option<DateTime<Utc>>,
+    pub started_before: Option<DateTime<Utc>>,
     /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
     pub index_override: Option<String>,
 }
 
+/// Keyset (seek-method) pagination cursor for call backfills.
+///
+/// `get_call_records_for_search_backfill` walks `call_records` in
+/// `(started_at ASC, id ASC)` order; the cursor carries the last row's
+/// pair so the next page resumes with `WHERE (started_at, id) > cursor`.
+/// `None` starts at the beginning.
+#[derive(Debug, Clone)]
+pub struct CallBackfillCursor {
+    pub started_at: DateTime<Utc>,
+    pub call_id: uuid::Uuid,
+}
+
 /// Chat-message backfill filter. Empty vectors mean "all messages for every
 /// chat / every user".
+///
+/// `updated_after` / `updated_before` filter on `updatedAt`, not `createdAt`,
+/// so incremental runs (e.g. "anything changed since X") catch messages that
+/// existed before the cutoff but were edited after it.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct ChatBackfillRequest {
     pub chat_ids: Vec<String>,
     pub user_ids: Vec<String>,
+    pub updated_after: Option<DateTime<Utc>>,
+    pub updated_before: Option<DateTime<Utc>>,
     pub deletion_filter: DeletionFilter,
     /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
     pub index_override: Option<String>,
+}
+
+/// Keyset (seek-method) pagination cursor for chat backfills.
+///
+/// `get_chat_messages_for_search_backfill` walks `"ChatMessage"` in
+/// `(updatedAt ASC, id ASC)` order; the cursor carries the last row's
+/// pair so the next page resumes with `WHERE (updatedAt, id) > cursor`.
+/// `None` starts at the beginning.
+#[derive(Debug, Clone)]
+pub struct ChatBackfillCursor {
+    pub updated_at: DateTime<Utc>,
+    pub message_id: String,
 }
 
 /// Channel-message backfill filter. No scoping knobs yet — reserved so adding
@@ -89,15 +125,31 @@ pub struct ChannelBackfillRequest {
     pub index_override: Option<String>,
 }
 
+/// Keyset (seek-method) pagination cursor for document backfills.
+///
+/// `get_documents_for_search` walks `"Document"` in
+/// `(updatedAt ASC, id ASC)` order; the cursor carries the last row's
+/// pair so the next page resumes with `WHERE (updatedAt, id) > cursor`.
+/// `None` starts at the beginning.
+#[derive(Debug, Clone)]
+pub struct DocumentBackfillCursor {
+    pub updated_at: DateTime<Utc>,
+    pub document_id: String,
+}
+
 /// Document backfill filter. Every field is additive — all `None` means "every
 /// document this service knows about".
+///
+/// `updated_after` / `updated_before` filter on `updatedAt`, not `createdAt`,
+/// so incremental runs (e.g. "anything changed since X") catch documents that
+/// existed before the cutoff but were modified after it.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct DocumentBackfillRequest {
     pub file_types: Option<Vec<String>>,
     pub sub_type: Option<String>,
-    pub created_after: Option<DateTime<Utc>>,
-    pub created_before: Option<DateTime<Utc>>,
+    pub updated_after: Option<DateTime<Utc>>,
+    pub updated_before: Option<DateTime<Utc>>,
     pub deletion_filter: DeletionFilter,
     /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
     pub index_override: Option<String>,

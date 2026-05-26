@@ -5,7 +5,7 @@ import { getFirstName } from './name';
 /**
  * Check if a message is from the current user
  */
-export function isMessageFromCurrentUser(
+function isMessageFromCurrentUser(
   message: ApiMessage,
   currentUserEmail?: string
 ): boolean {

@@ -104,10 +104,8 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       let toastId: number | undefined;
 
       const showToast = () => {
-        toastId = toast.success(
-          message,
-          undefined,
-          [
+        toastId = toast.success(message, {
+          actions: [
             {
               label: 'Undo',
               icon: ArrowCounterClockwise,
@@ -118,9 +116,9 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
               },
             },
           ],
-          3_000,
-          true
-        );
+          duration: 3_000,
+          stack: true,
+        });
       };
 
       showToast();

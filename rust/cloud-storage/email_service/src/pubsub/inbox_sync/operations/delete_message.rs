@@ -1,5 +1,7 @@
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::{cg_refresh_email, complete_transaction_with_processing_error};
+use crate::pubsub::util::{
+    cg_refresh_email, complete_transaction_with_processing_error, enqueue_depopulate_crm_contacts,
+};
 use models_email::email::service::link;
 use models_email::gmail::inbox_sync::DeleteMessagePayload;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
@@ -34,6 +36,46 @@ pub async fn delete_message(
             return Ok(());
         }
     };
+
+    // For sent messages, snapshot the recipients before deletion so we can
+    // tear down the CRM source rows we created in `populate_crm_contact` /
+    // `upsert_message`. Received messages don't contribute to CRM, so the
+    // snapshot is skipped for them. Generic addresses are dropped here for
+    // parity with the producer side.
+    let recipient_emails: Vec<String> = if message.is_sent {
+        let recipients =
+            email_db_client::contacts::get::fetch_db_recipients(&ctx.db, message.db_id)
+                .await
+                .map_err(|e| {
+                    ProcessingError::Retryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e
+                            .context("Failed to fetch recipients for deleted message".to_string()),
+                    })
+                })?;
+        // No producer-side filtering — the crm crate decides what's
+        // depopulatable. Filtering here would create drift with the
+        // populate side, which is also unfiltered at the producer.
+        recipients
+            .into_iter()
+            .filter_map(|(contact, _)| contact.email_address)
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    // Enqueue CRM teardown BEFORE the delete commits, so a transient
+    // enqueue failure here doesn't strand the depopulate job after the
+    // message row is already gone (SQS retry would then short-circuit
+    // at the `None` arm above and never re-enqueue). If enqueue
+    // succeeds but the delete below fails, the depopulate consumer's
+    // `link_has_sent_message_to` pre-check sees the message still in
+    // place and acks without touching CRM — so the ordering is safe in
+    // both directions.
+    if !recipient_emails.is_empty() {
+        let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
+        enqueue_depopulate_crm_contacts(ctx, link.id, &self_email, recipient_emails).await?;
+    }
 
     let mut tx = ctx.db.begin().await.map_err(|e| {
         ProcessingError::Retryable(DetailedError {

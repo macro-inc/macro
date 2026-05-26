@@ -1,6 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
-import UserPlus from '@icon/fill/user-plus-fill.svg';
+import UserPlus from '@phosphor/user-plus.svg';
 import { cn, HoverCard } from '@ui';
 import type { ParentProps } from 'solid-js';
 
@@ -39,13 +39,8 @@ export function SharedBadgeSmall(props: { ownerId: string }) {
   };
 
   return (
-    <HoverCard>
-      <HoverCard.Trigger>
-        <div class="text-ink-extra-muted/50 p-1">
-          <UserPlus class="size-4" />
-        </div>
-      </HoverCard.Trigger>
-      <HoverCard.Content>
+    <HoverCard
+      content={
         <div class="flex items-center gap-1.5 text-xs">
           <UserIcon
             id={props.ownerId}
@@ -55,7 +50,11 @@ export function SharedBadgeSmall(props: { ownerId: string }) {
           />
           <span>{name()()} shared this with you</span>
         </div>
-      </HoverCard.Content>
+      }
+    >
+      <div class="text-ink-extra-muted/50 p-1">
+        <UserPlus class="size-4" />
+      </div>
     </HoverCard>
   );
 }
@@ -72,13 +71,8 @@ export function CreatedByBadgeSmall(props: { ownerId: string }) {
   };
 
   return (
-    <HoverCard>
-      <HoverCard.Trigger>
-        <div class="text-ink-extra-muted/50 p-1">
-          <UserPlus class="size-4" />
-        </div>
-      </HoverCard.Trigger>
-      <HoverCard.Content>
+    <HoverCard
+      content={
         <div class="flex items-center gap-1.5 text-xs">
           <UserIcon
             id={props.ownerId}
@@ -88,7 +82,11 @@ export function CreatedByBadgeSmall(props: { ownerId: string }) {
           />
           <span>Created by {name()()}</span>
         </div>
-      </HoverCard.Content>
+      }
+    >
+      <div class="text-ink-extra-muted/50 p-1">
+        <UserPlus class="size-4" />
+      </div>
     </HoverCard>
   );
 }
@@ -97,7 +95,7 @@ export function DraftBadge() {
   return <Badge class="text-accent-30 border-edge-muted px-2">draft</Badge>;
 }
 
-export function ImportantBadge() {
+function _ImportantBadge() {
   return (
     <Badge class="text-accent bg-accent/10 px-2 border-accent/10">
       important

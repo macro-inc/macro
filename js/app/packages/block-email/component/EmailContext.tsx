@@ -61,7 +61,7 @@ export function markThreadDraftSaved(threadId: string) {
 }
 export type EmailRecipient = WithCustomUserInput<'user' | 'contact'>;
 
-export type EmailContextValues = {
+type EmailContextValues = {
   registerMessagesList: (list: HTMLElement) => void;
   messagesListRef: Accessor<HTMLElement | undefined>;
   registerMessagesContainer: (container: HTMLElement) => void;

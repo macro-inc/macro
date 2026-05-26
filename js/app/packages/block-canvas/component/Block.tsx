@@ -7,7 +7,7 @@ import {
 } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { blockFileSignal, blockHandleSignal } from '@core/signal/load';
-import { isErr } from '@core/util/maybeResult';
+
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import { storageServiceClient } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
@@ -154,8 +154,8 @@ export default function BlockCanvas(props: BlockCanvasProps) {
         },
       });
 
-      if (isErr(res)) return null;
-      const [, { viewLocation }] = res;
+      if (res.isErr()) return null;
+      const { viewLocation } = res.value;
 
       if (!viewLocation) return null;
       const initialParams = new URLSearchParams(viewLocation.replace('#', ''));

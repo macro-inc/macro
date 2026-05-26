@@ -1,6 +1,14 @@
+mod grouping;
+
+pub use grouping::{
+    GroupMeta, GroupedResponse, build_grouped_response, entity_type_labels,
+    resolve_group_label_and_order,
+};
+
 use call::domain::models::GetCallRecordsRequest;
 use comms::domain::models::GetChannelsRequest;
 use email::domain::models::{GetEmailsRequest, PreviewView};
+use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
 use item_filters::{
     EntityFilters,
@@ -8,6 +16,7 @@ use item_filters::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
+use models_grouping::GroupingConfig;
 use models_pagination::{
     Cursor, CursorVal, CursorWithValAndFilter, Frecency, FrecencyValue, Identify, Query,
     SimpleSortMethod, SortOn,
@@ -32,6 +41,19 @@ pub struct SimpleSortRequest<'a> {
     pub(crate) cursor: SimpleSortQuery,
     /// the id of the user
     pub(crate) user_id: MacroUserIdStr<'a>,
+}
+
+/// Parameters for grouped soup queries.
+#[derive(Debug)]
+pub struct GroupedSortRequest<'a> {
+    /// the limit of the number of items to return
+    pub limit: u16,
+    /// the cursor/query
+    pub cursor: Query<Uuid, SimpleSortMethod, EntityFilterAst>,
+    /// the id of the user
+    pub user_id: MacroUserIdStr<'a>,
+    /// grouping configuration
+    pub grouping: GroupingConfig,
 }
 
 #[derive(Debug)]
@@ -249,8 +271,25 @@ impl<T> SoupRequest<T> {
 
 impl SoupRequest<Option<EntityFilterAst>> {
     /// take the parts of the [SoupRequest] that are only relevant to email
-    /// and move them into a [GetEmailsRequest] if it is possible to create one
-    pub(crate) fn build_email_request(&self) -> Option<GetEmailsRequest> {
+    /// and move them into a [GetEmailsRequest] if it is possible to create one.
+    ///
+    /// `team_receipt` is forwarded onto the email request so the query
+    /// layer can verify and use it when the email filter carries a CRM
+    /// scope tag (`EntityFilterAst::email_filter::crm_scope`).
+    pub(crate) fn build_email_request(
+        &self,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Option<GetEmailsRequest> {
+        let entity_ast: Option<&EntityFilterAst> = match &self.cursor {
+            SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => f.as_ref(),
+            SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
+                filter,
+                ..
+            }))) => filter.as_ref(),
+            SoupQuery::Frecency(_) => None,
+        };
+        let crm_scope = entity_ast.and_then(|a| a.email_filter.crm_scope.clone());
+
         Some(GetEmailsRequest {
             view: self.email_preview_view.clone(),
             link_id: self.link_id?,
@@ -259,7 +298,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
             query: match &self.cursor {
                 SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
                     *t,
-                    f.as_ref().and_then(|f| f.email_filter.clone()),
+                    f.as_ref().and_then(|f| f.email_filter.tree.clone()),
                 )),
                 SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
                     id,
@@ -270,11 +309,13 @@ impl SoupRequest<Option<EntityFilterAst>> {
                     id: *id,
                     limit: *limit,
                     val: val.clone(),
-                    filter: filter.as_ref().and_then(|f| f.email_filter.clone()),
+                    filter: filter.as_ref().and_then(|f| f.email_filter.tree.clone()),
                 })),
                 // we don't yet have sort by frecency implemented for emails yet
                 SoupQuery::Frecency(_) => None,
             }?,
+            team_receipt,
+            crm_scope,
         })
     }
 
@@ -367,6 +408,34 @@ impl SortOn<SimpleSortMethod> for FrecencySoupItem {
         let mut cb = SoupItem::sort_on(sort);
         move |v| cb(&v.item)
     }
+}
+
+/// A soup request with optional grouping configuration.
+#[derive(Debug)]
+pub struct GroupedSoupRequest<T> {
+    /// Base soup request parameters
+    pub base: SoupRequest<T>,
+    /// Optional grouping configuration
+    pub grouping: Option<GroupingConfig>,
+}
+
+/// A soup item with group metadata attached (returned from grouped queries).
+#[derive(Debug)]
+pub struct GroupedSoupItem {
+    /// The soup item
+    pub item: SoupItem,
+    /// The frecency score (if available)
+    pub frecency_score: Option<AggregateFrecency>,
+    /// Which group this item belongs to
+    pub group_key: String,
+    /// Total items in this group (computed via window function)
+    pub group_total_count: u32,
+    /// This item's position within the group (1-indexed)
+    pub row_in_group: u32,
+    /// Label for this group (from property_options or computed)
+    pub group_label: Option<String>,
+    /// Display order for this group
+    pub group_display_order: Option<i32>,
 }
 
 #[derive(Debug, Error)]

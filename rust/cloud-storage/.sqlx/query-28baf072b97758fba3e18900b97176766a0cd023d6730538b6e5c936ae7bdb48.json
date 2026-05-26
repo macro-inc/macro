@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id AS \"call_id!\",\n            started_at AS \"started_at!\"\n        FROM call_records\n        WHERE\n            ($2::timestamptz IS NULL OR started_at >= $2)\n            AND ($3::timestamptz IS NULL OR started_at < $3)\n            AND (\n                $4::timestamptz IS NULL\n                OR (started_at, id) > ($4, $5::uuid)\n            )\n        ORDER BY started_at ASC, id ASC\n        LIMIT $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "call_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "started_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "28baf072b97758fba3e18900b97176766a0cd023d6730538b6e5c936ae7bdb48"
+}

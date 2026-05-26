@@ -6,7 +6,6 @@ import { useRenderState } from '@block-canvas/store/RenderState';
 import { vec2 } from '@block-canvas/util/vector2';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { DropdownMenuContent } from '@core/component/Menu';
 import {
   blockAcceptsFileExtension,
   blockNameToFileExtensions,
@@ -19,12 +18,11 @@ import {
 import { fileDrop } from '@core/directive/fileDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import { HEIC_EXTENSIONS, HEIC_MIME_TYPES } from '@core/heic/constants';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import UploadSimple from '@phosphor-icons/core/bold/upload-simple-bold.svg?component-solid';
 import Image from '@phosphor-icons/core/regular/image.svg?component-solid';
 //import { copiedFile } from "@core/state/clipboard";
 import { useHistoryQuery } from '@queries/history/history';
-import { Button } from '@ui';
+import { Dropdown } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { Tools } from '../constants';
@@ -131,20 +129,17 @@ export function MediaSelector() {
   });
 
   return (
-    <DropdownMenu
-      open={imageSelectorOpen()}
-      onOpenChange={setImageSelectorOpen}
-    >
-      <DropdownMenu.Trigger class="dropdown-menu__trigger">
-        <Button variant="ghost" size="icon-md" label="Media" tabIndex={-1}>
-          <Image />
-        </Button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenuContent
-          class="dropdown-menu__content"
-          onCloseAutoFocus={focusCanvas}
-        >
+    <Dropdown open={imageSelectorOpen()} onOpenChange={setImageSelectorOpen}>
+      <Dropdown.Trigger
+        variant="ghost"
+        size="icon-md"
+        label="Media"
+        tabIndex={-1}
+      >
+        <Image />
+      </Dropdown.Trigger>
+      <Dropdown.Content onCloseAutoFocus={focusCanvas}>
+        <Dropdown.Group>
           <div
             use:fileDrop={{
               acceptedMimeTypes: acceptedMimeTypes,
@@ -165,7 +160,7 @@ export function MediaSelector() {
                 </div>
               </FileDropOverlay>
             </Show>
-            <DropdownMenu.Item closeOnSelect={false}>
+            <Dropdown.Item closeOnSelect={false}>
               <div
                 class="w-72 flex flex-row select-none items-center gap-1"
                 onmousedown={(e) => {
@@ -196,7 +191,7 @@ export function MediaSelector() {
                   </span>
                 </div>
               </div>
-            </DropdownMenu.Item>
+            </Dropdown.Item>
             <div class="w-full">
               <Show
                 when={userMediaFiles().length > 0}
@@ -210,9 +205,9 @@ export function MediaSelector() {
                   bufferSize={500}
                 >
                   {(media) => (
-                    <DropdownMenu.Item closeOnSelect={true} class="w-full">
+                    <Dropdown.Item closeOnSelect={true} class="w-full">
                       <ItemOption media={media} />
-                    </DropdownMenu.Item>
+                    </Dropdown.Item>
                   )}
                 </VList>
               </Show>
@@ -223,8 +218,8 @@ export function MediaSelector() {
                     </Show> */}
             </div>
           </div>
-        </DropdownMenuContent>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }

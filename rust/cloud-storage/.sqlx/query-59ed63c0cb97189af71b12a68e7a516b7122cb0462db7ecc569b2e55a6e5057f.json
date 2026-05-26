@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    input.domain                       AS \"domain!\",\n                    (d.id IS NOT NULL)                 AS \"exists!\",\n                    COALESCE(c.hidden, FALSE)          AS \"company_hidden!\",\n                    COALESCE(c.email_sync, FALSE)      AS \"email_sync!\"\n                FROM UNNEST($2::text[]) WITH ORDINALITY AS input(domain, ord)\n                LEFT JOIN crm_domains d\n                    ON d.team_id = $1 AND LOWER(d.domain) = input.domain\n                LEFT JOIN crm_companies c\n                    ON c.id = d.company_id\n                ORDER BY input.ord\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "domain!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "exists!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "company_hidden!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "email_sync!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "59ed63c0cb97189af71b12a68e7a516b7122cb0462db7ecc569b2e55a6e5057f"
+}

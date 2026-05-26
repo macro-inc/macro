@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH updated AS (\n                UPDATE user_notification\n                SET done = $3\n                WHERE user_id = $1 AND notification_id = ANY($2) AND deleted_at IS NULL\n                RETURNING notification_id, done, seen_at::timestamptz as viewed_at\n            )\n            SELECT\n                updated.notification_id,\n                updated.done,\n                updated.viewed_at,\n                NOW()::timestamptz as \"updated_at!\"\n            FROM updated\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notification_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "done",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "viewed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "015a45b5c16b4bcc135372478d585af4ce10f5f6ae5e3578637b66655ea6d67e"
+}

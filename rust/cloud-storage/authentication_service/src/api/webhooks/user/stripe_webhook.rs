@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 
 use crate::api::context::ApiContext;
 
@@ -10,8 +11,8 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Json, Response},
 };
-use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::Email;
+use macro_user_id::{cowlike::CowLike, lowercased::Lowercase};
 use miniserde::json::Value as JsonValue;
 use model::response::ErrorResponse;
 use referral::domain::ports::ReferralService;
@@ -252,6 +253,7 @@ async fn handle_customer_subscription_event(
             subscription_id,
             subscription_status,
             &team_id,
+            &email,
             SubscriptionTrackingData {
                 ga_client_id: ga_client_id.clone(),
                 fbp: fbp.clone(),
@@ -355,22 +357,14 @@ async fn handle_customer_subscription_event(
     }
 
     // Extract the price ID(s) from the subscription items
-    let price_id = subscription
+    let _price_id = subscription
         .items
         .data
         .first() // SAFETY: we only need the first item because we know the user is not in a team
         .map(|item| item.price.id.as_str().to_string())
         .context("no price id attached to subscription")?;
 
-    let product_tier = match price_id.as_str() {
-        id if id == ctx.stripe_price_ids.stripe_price_id_haiku.as_ref() => ProductTier::Haiku,
-        id if id == ctx.stripe_price_ids.stripe_price_id_sonnet.as_ref() => ProductTier::Sonnet,
-        id if id == ctx.stripe_price_ids.stripe_price_id_opus.as_ref() => ProductTier::Opus,
-        _ => {
-            tracing::warn!(price_id=?price_id.as_str(), "unsupported price id, defaulting to haiku tier");
-            ProductTier::Haiku
-        }
-    };
+    let product_tier = ProductTier::Opus;
 
     ctx.user_roles_and_permissions_service
         .update_user_roles_and_permissions_for_subscription(
@@ -381,9 +375,10 @@ async fn handle_customer_subscription_event(
         .await?;
 
     // Track conversion events to GA and Meta (fire-and-forget)
+    let subscription_id = stripe::SubscriptionId::from_str(subscription_id).unwrap();
     track_stripe_subscription(
         ctx.analytics_client.clone(),
-        subscription_id,
+        &subscription_id,
         SubscriptionTrackingData {
             ga_client_id,
             fbp,
@@ -435,18 +430,25 @@ async fn check_and_process_referral(
 /// NOTE: We use strs here because there is a mismatch between stripe crate and
 /// stripe_webhook crate for these types. *sigh*
 #[tracing::instrument(skip(ctx, tracking_data), err, ret)]
-async fn handle_team_subscription_event(
+async fn handle_team_subscription_event<'a>(
     ctx: &ApiContext,
     subscription_id: &str,
     subscription_status: &str,
     team_id: &uuid::Uuid,
+    email: &Email<Lowercase<'a>>,
     tracking_data: SubscriptionTrackingData,
 ) -> anyhow::Result<()> {
     tracing::trace!("handling team subscription");
 
     if subscription_status == "trialing" {
-        anyhow::bail!("unexpected trialing status for team subscription");
+        // set has_trialed in macro_user table
+        macro_db_client::user::patch::update_macro_user_has_trialed(&ctx.db, email, true).await?;
     }
+
+    let subscription_id = stripe::SubscriptionId::from_str(subscription_id).unwrap();
+    ctx.teams_service
+        .patch_team_subscription_id(team_id, &subscription_id)
+        .await?;
 
     match subscription_status {
         "active" => {
@@ -454,17 +456,28 @@ async fn handle_team_subscription_event(
                 .restore_permissions_for_team_members(team_id)
                 .await?;
 
-            track_stripe_subscription(ctx.analytics_client.clone(), subscription_id, tracking_data);
+            ctx.teams_service
+                .patch_team_payment_status(team_id, true)
+                .await?;
+
+            track_stripe_subscription(
+                ctx.analytics_client.clone(),
+                &subscription_id,
+                tracking_data,
+            );
             Ok(())
         }
         "canceled" | "past_due" | "paused" | "unpaid" => {
             ctx.teams_service
                 .revoke_permissions_for_team_members(team_id)
                 .await?;
+            ctx.teams_service
+                .patch_team_payment_status(team_id, false)
+                .await?;
 
             track_stripe_subscription(
                 ctx.analytics_client.clone(),
-                subscription_id,
+                &subscription_id,
                 SubscriptionTrackingData {
                     is_new: false,
                     ..tracking_data
@@ -501,7 +514,7 @@ struct SubscriptionTrackingData {
 #[tracing::instrument(skip(client, data), fields(subscription_id, email = %data.email, status = %data.status, is_new = data.is_new))]
 fn track_stripe_subscription(
     client: std::sync::Arc<AnalyticsClient>,
-    subscription_id: &str,
+    subscription_id: &stripe::SubscriptionId,
     data: SubscriptionTrackingData,
 ) {
     let Some(value_cents) = data.value_cents else {

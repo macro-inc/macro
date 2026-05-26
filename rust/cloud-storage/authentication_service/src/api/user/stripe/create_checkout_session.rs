@@ -37,7 +37,7 @@ pub struct CreateCheckoutSessionRequest {
     pub tier: StripeProductTier,
 }
 
-/// Creates a Stripe checkout session for the user to subscribe.
+/// **LEGACY DO NOT USE** Creates a Stripe checkout session for the user to subscribe.
 #[utoipa::path(
     post,
     path = "/user/stripe/checkout",
@@ -130,9 +130,9 @@ pub async fn create_checkout_session(
         });
 
     let price_id = match req.tier {
-        StripeProductTier::Haiku => ctx.stripe_price_ids.stripe_price_id_haiku.as_ref(),
-        StripeProductTier::Sonnet => ctx.stripe_price_ids.stripe_price_id_sonnet.as_ref(),
-        StripeProductTier::Opus => ctx.stripe_price_ids.stripe_price_id_opus.as_ref(),
+        StripeProductTier::Haiku => ctx.legacy_stripe_price_ids.stripe_price_id_haiku.as_ref(),
+        StripeProductTier::Sonnet => ctx.legacy_stripe_price_ids.stripe_price_id_sonnet.as_ref(),
+        StripeProductTier::Opus => ctx.legacy_stripe_price_ids.stripe_price_id_opus.as_ref(),
     };
 
     // Create the checkout session

@@ -3,13 +3,9 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import {
-  type MaybeError,
-  type MaybeResult,
-  mapOk,
-  type ObjectLike,
-} from '@core/util/maybeResult';
+import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
+import type { Result } from 'neverthrow';
 import { z } from 'zod';
 import type {
   BulkGetByEventItemIdsRequest,
@@ -23,44 +19,31 @@ import type { UserUnsubscribe } from './generated/schemas/userUnsubscribe';
 const notificationHost: string = SERVER_HOSTS['notification-service'];
 // const notificationHost: string = 'http://localhost:8086';
 
-export const NOTIFICATION_WEBSOCKET_EVENT = 'notification';
-type NotificationEventType = typeof NOTIFICATION_WEBSOCKET_EVENT;
+const _NOTIFICATION_WEBSOCKET_EVENT = 'notification';
 
-export type IncomingNotification = {
-  type: NotificationEventType;
-  data: string;
-};
 type WithEventItemId = { event_item_id: string };
 type WithItem = { item_id: string; item_type: string };
 
-export type UnifiedNotification = Omit<ApiUserNotification, 'ownerId'> & {
-  senderId?: string | null;
-  // whether the notification is incoming on the websocket and needs processing
-  // as opposed to coming from the database or an already processed notification
-  new?: boolean;
-};
-
-export function notificationFetch(
+function notificationFetch(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeError<FetchWithTokenErrorCode>>;
-export function notificationFetch<T extends ObjectLike>(
+): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
+function notificationFetch<T extends ObjectLike>(
   url: string,
   init?: SafeFetchInit
-): Promise<MaybeResult<FetchWithTokenErrorCode, T>>;
-export function notificationFetch<T extends ObjectLike = never>(
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
+function notificationFetch<T extends ObjectLike = never>(
   url: string,
   init?: SafeFetchInit
 ):
-  | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
-  | Promise<MaybeError<FetchWithTokenErrorCode>> {
+  | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
+  | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${notificationHost}${url}`, init);
 }
-export type Success = { success: boolean };
 
 // message id is set by the notification service
-export type ChannelMentionMetadata = z.infer<typeof channelMentionMetadata>;
-export const channelMentionMetadata = z.object({
+
+const _channelMentionMetadata = z.object({
   message_id: z.string(),
 });
 
@@ -94,32 +77,30 @@ type NotificationParams = { cursor?: string; limit?: number };
 export const notificationServiceClient = {
   async userNotifications(args: NotificationParams) {
     const { limit, cursor } = args;
-    return mapOk(
+    return (
       await notificationFetch<GetAllUserNotificationsResponse>(
         `/user_notifications?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`,
         {
           method: 'GET',
         }
-      ),
-      (result) => {
-        return result;
-      }
-    );
+      )
+    ).map((result) => {
+      return result;
+    });
   },
   async getUserNotificationById(notificationId: string) {
-    return mapOk(
+    return (
       await notificationFetch<ApiUserNotification>(
         `/user_notifications/${notificationId}`,
         { method: 'GET' }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async bulkGetUserNotificationsByEventItemId(
     args: NotificationParams & BulkGetByEventItemIdsRequest
   ) {
     const { limit, cursor } = args;
-    return mapOk(
+    return (
       await notificationFetch<GetAllUserNotificationsResponse>(
         `/user_notifications/item/bulk?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`,
         {
@@ -127,85 +108,77 @@ export const notificationServiceClient = {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ eventItemIds: args.eventItemIds }),
         }
-      ),
-      (result) => {
-        return result;
-      }
-    );
+      )
+    ).map((result) => {
+      return result;
+    });
   },
   async markNotificationAsSeen(args: NotificationBulkRequest) {
     const { notificationIds } = args;
-    return mapOk(
+    return (
       await notificationFetch<any>(`/user_notifications/bulk/seen`, {
         method: 'PATCH',
         body: JSON.stringify({ notificationIds }),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async markNotificationAsDone(args: NotificationBulkRequest) {
     const { notificationIds } = args;
-    return mapOk(
+    return (
       await notificationFetch<any>(`/user_notifications/bulk/done`, {
         method: 'PATCH',
         body: JSON.stringify({ notificationIds }),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async bulkMarkNotificationAsSeen(args: NotificationBulkRequest) {
     const { notificationIds } = args;
-    return mapOk(
+    return (
       await notificationFetch<any>(`/user_notifications/bulk/seen`, {
         method: 'PATCH',
         body: JSON.stringify({ notificationIds }),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async bulkMarkNotificationAsDone(args: NotificationBulkRequest) {
     const { notificationIds } = args;
-    return mapOk(
+    return (
       await notificationFetch<any>(`/user_notifications/bulk/done`, {
         method: 'PATCH',
         body: JSON.stringify({ notificationIds }),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async bulkMarkNotificationAsUndone(args: NotificationBulkRequest) {
     const { notificationIds } = args;
-    return mapOk(
+    return (
       await notificationFetch<any>(`/user_notifications/bulk/undone`, {
         method: 'PATCH',
         body: JSON.stringify({ notificationIds }),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async markNotificationEntityAsSeen(args: WithEventItemId) {
     const { event_item_id } = args;
-    return mapOk(
+    return (
       await notificationFetch<{}>(
         `/user_notifications/item/${event_item_id}/seen`,
         {
           method: 'PATCH',
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async markNotificationEntityAsDone(args: WithEventItemId) {
     const { event_item_id } = args;
-    return mapOk(
+    return (
       await notificationFetch<{}>(
         `/user_notifications/item/${event_item_id}/done`,
         {
           method: 'PATCH',
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async registerDevice(args: DeviceRequest) {
     return notificationFetch<{}>('/device/register', {
@@ -220,12 +193,11 @@ export const notificationServiceClient = {
     });
   },
   async getUnsubscribes() {
-    return mapOk(
+    return (
       await notificationFetch<UserUnsubscribe[]>('/unsubscribe', {
         method: 'GET',
-      }),
-      (result) => ({ data: result })
-    );
+      })
+    ).map((result) => ({ data: result }));
   },
   async unsubscribeItem(args: WithItem) {
     return notificationFetch<{}>(

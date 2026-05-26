@@ -23,7 +23,7 @@ interface IFloatingMenuContext {
   isMenuOpen: (id: string) => boolean;
 }
 
-export const FloatingMenuContext = createContext<IFloatingMenuContext>();
+const FloatingMenuContext = createContext<IFloatingMenuContext>();
 
 export function FloatingMenuGroup(props: ParentProps) {
   const [currentMenu, setCurrentMenu] = createSignal<{

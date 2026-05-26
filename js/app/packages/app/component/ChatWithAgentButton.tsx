@@ -3,7 +3,7 @@ import type { Attachment } from '@core/component/AI/types';
 import { storeChatStateImmediate } from '@core/component/AI/util/storage';
 import { toast } from '@core/component/Toast/Toast';
 import { createChat } from '@core/util/create';
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
+import { AnimatedStarIcon } from '@icon/wide-star';
 import { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
@@ -13,14 +13,14 @@ export { AnimatedStarIcon as ChatWithAgentIcon };
 
 const CHANNEL_TYPE_VALUES = new Set<string>(Object.values(ChannelType));
 
-export function toChatChannelType(
+function _toChatChannelType(
   t: string | undefined | null
 ): ChannelType | undefined {
   if (t && CHANNEL_TYPE_VALUES.has(t)) return t as ChannelType;
   return undefined;
 }
 
-export type ChatWithAgentEntity =
+type ChatWithAgentEntity =
   | { type: 'email'; id: string; name: string }
   | {
       type: 'document';
@@ -96,7 +96,7 @@ export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {
       onMouseLeave={() => setHovering(false)}
       onClick={() => openChatWithAgent(props.entity)}
       depth={2}
-      class="bg-surface text-ink-muted"
+      class="bg-surface"
     >
       <AnimatedStarIcon triggerAnimation={hovering()} />
       <span class="text-xs">Chat</span>

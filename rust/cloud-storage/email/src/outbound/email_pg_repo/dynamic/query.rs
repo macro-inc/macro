@@ -22,6 +22,10 @@ struct QueryParams {
     shared: SharedEmailFilter,
     user_id: String,
     resolved: ResolvedFilters,
+    /// When `Some(team_id)`, the "Owned" candidate source expands from
+    /// `t.link_id = $link_id` to `t.link_id IN (links of every member of
+    /// $team_id)`. Set only after CRM scope has been validated upstream.
+    team_id: Option<Uuid>,
 }
 
 enum ThreadCandidateSource {
@@ -110,13 +114,46 @@ fn push_thread_candidate_select(
     ));
 
     match source {
-        ThreadCandidateSource::Owned => {
-            builder.push("t.link_id = ");
-            builder.push_bind(params.link_id);
-        }
+        ThreadCandidateSource::Owned => match params.team_id {
+            // Normal per-mailbox query.
+            None => {
+                builder.push("t.link_id = ");
+                builder.push_bind(params.link_id);
+            }
+            // CRM-scoped query: expand to every email_link owned by any
+            // member of the team. The receipt has already been validated
+            // upstream, so the team_id is trusted here.
+            Some(team_id) => {
+                builder.push(
+                    r#"t.link_id IN (
+                        SELECT el.id
+                        FROM email_links el
+                        JOIN team_user tu ON tu.user_id = el.macro_id
+                        WHERE tu.team_id = "#,
+                );
+                builder.push_bind(team_id);
+                builder.push(")");
+            }
+        },
         ThreadCandidateSource::Shared => {
             builder.push("t.id IN (SELECT thread_id FROM SharedEmailThreads)");
         }
+    }
+
+    // Belt-and-suspenders killswitch check that covers both the Owned and
+    // Shared branches. Without this, a CRM-scoped request with
+    // `SharedEmailFilter::Include`/`Only` could still return rows after
+    // `team_crm_settings.crm_enabled` flips false between the pre-check
+    // and query execution. EXISTS short-circuits and Postgres planner
+    // treats it as a constant once evaluated per query.
+    if let Some(team_id) = params.team_id {
+        builder.push(
+            r#" AND EXISTS (
+                SELECT 1 FROM team_crm_settings tcs
+                WHERE tcs.team_id = "#,
+        );
+        builder.push_bind(team_id);
+        builder.push(" AND tcs.crm_enabled)");
     }
 
     let view_thread_filter = build_view_thread_filter(view);
@@ -373,6 +410,7 @@ pub(super) fn debug_build_query_sql_with_resolved(
             shared,
             user_id: "test-user".to_string(),
             resolved,
+            team_id: None,
         },
     )
     .build()
@@ -427,6 +465,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
     view: &PreviewView,
     query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
     user_id: &str,
+    team_id: Option<Uuid>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
     let query_limit = limit as i64;
     let sort_method_str = query.sort_method().to_string();
@@ -445,7 +484,10 @@ pub(crate) async fn dynamic_email_thread_cursor(
     // Resolve Complete email addresses to contact ids and look up the TRASH
     // label id once, so the candidate WHERE can use direct id equality
     // instead of joining email_contacts/email_labels per message row.
-    let resolved = resolve_filters(pool, *link_id, email_filter).await?;
+    //
+    // When team_id is set, resolution spans every team-member's link so the
+    // resulting contact_id / TRASH label_id sets cover all team mailboxes.
+    let resolved = resolve_filters(pool, *link_id, team_id, email_filter).await?;
     if can_short_circuit(email_filter, &resolved) {
         return Ok(Vec::new());
     }
@@ -463,6 +505,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
             shared,
             user_id: user_id.to_string(),
             resolved,
+            team_id,
         },
     );
 

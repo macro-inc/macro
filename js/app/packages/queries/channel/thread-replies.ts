@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import { type ApiThreadReply, commsServiceClient } from '@service-comms/client';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
@@ -12,7 +12,7 @@ export type ThreadReplySnapshot = {
   reply: ApiThreadReply;
 };
 
-export type ThreadRepliesQueryKey = ReturnType<
+type ThreadRepliesQueryKey = ReturnType<
   typeof channelKeys.threadReplies
 >['queryKey'];
 
@@ -56,7 +56,7 @@ export function getThreadRepliesQueryKey(
 }
 
 /** Returns the shared prefix for all thread reply queries in a channel. */
-export function getThreadRepliesQueryKeyPrefix(channelId: string) {
+function getThreadRepliesQueryKeyPrefix(channelId: string) {
   return [...channelKeys.threadReplies._def, channelId];
 }
 

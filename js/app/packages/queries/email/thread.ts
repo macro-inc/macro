@@ -1,7 +1,7 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
-import { catchToResult, isErr, ok, throwOnErr } from '@core/util/maybeResult';
+import { catchToResult, throwOnErr } from '@core/util/result';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
@@ -17,6 +17,7 @@ import {
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
+import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { optimisticUpdateSoupEntity } from '../soup/cache';
@@ -103,17 +104,17 @@ export async function fetchAndCacheThread(
       await queryClient.fetchInfiniteQuery(threadQueryOptions(threadId))
   );
 
-  if (isErr(result)) {
-    return result;
+  if (result.isErr()) {
+    return err(result.error as any);
   }
 
-  data = result[1];
+  data = result.value;
 
   const thread = flattenThreadPages(data);
   return ok({ thread: thread! });
 }
 
-export type ThreadQueryData = {
+type ThreadQueryData = {
   thread: Thread;
   hasMore: boolean;
 };
@@ -309,7 +310,7 @@ type ScheduleMessageParams = {
 /**
  * Mutation to send an email message.
  */
-export function useScheduleMessageMutation(
+function _useScheduleMessageMutation(
   callbacks?: MutationCallbacks<
     UpsertScheduledResponse,
     Error,
@@ -382,15 +383,14 @@ export async function blockSenderWithToast(senderEmail: string) {
     email_address: senderEmail,
   });
 
-  if (isErr(result)) {
-    toast.failure('Failed to block sender', senderEmail);
+  if (result.isErr()) {
+    toast.failure('Failed to block sender', { subtext: senderEmail });
     return;
   }
 
-  toast.success(
-    'Sender blocked',
-    `All new messages will be trashed for ${senderEmail}`,
-    [
+  toast.success('Sender blocked', {
+    subtext: `All new messages will be trashed for ${senderEmail}`,
+    actions: [
       {
         label: 'Undo',
         icon: ArrowCounterClockwise,
@@ -398,15 +398,15 @@ export async function blockSenderWithToast(senderEmail: string) {
           const undoResult = await emailClient.unblockSender({
             email_address: senderEmail,
           });
-          if (isErr(undoResult)) {
-            toast.failure('Failed to unblock sender', senderEmail);
+          if (undoResult.isErr()) {
+            toast.failure('Failed to unblock sender', { subtext: senderEmail });
           } else {
             toast.success('Sender unblocked');
           }
         },
       },
-    ]
-  );
+    ],
+  });
 }
 
 async function upsertSenderFilterWithToast(
@@ -420,18 +420,19 @@ async function upsertSenderFilterWithToast(
     is_important: isImportant,
   });
 
-  if (isErr(result)) {
-    toast.failure(`Failed to mark sender as ${label}`, senderEmail);
+  if (result.isErr()) {
+    toast.failure(`Failed to mark sender as ${label}`, {
+      subtext: senderEmail,
+    });
     return;
   }
 
-  const filterId = result[1].filter.id;
+  const filterId = result.value.filter.id;
   invalidateAllSoup();
 
-  toast.success(
-    `Sender marked as ${label}`,
-    `Messages from ${senderEmail} will appear in ${label}`,
-    [
+  toast.success(`Sender marked as ${label}`, {
+    subtext: `Messages from ${senderEmail} will appear in ${label}`,
+    actions: [
       {
         label: 'Undo',
         icon: ArrowCounterClockwise,
@@ -439,16 +440,16 @@ async function upsertSenderFilterWithToast(
           const undoResult = await emailClient.deleteEmailFilter({
             id: filterId,
           });
-          if (isErr(undoResult)) {
-            toast.failure('Failed to undo', senderEmail);
+          if (undoResult.isErr()) {
+            toast.failure('Failed to undo', { subtext: senderEmail });
           } else {
             invalidateAllSoup();
             toast.success('Sender filter removed');
           }
         },
       },
-    ]
-  );
+    ],
+  });
 }
 
 export const markSenderSignalWithToast = (senderEmail: string) =>

@@ -18,6 +18,8 @@ pub enum ToolInfo {
         service_name: String,
         /// the name of the tool
         tool_name: String,
+        /// Human-readable title from the MCP server, if provided
+        display_name: Option<String>,
     },
 }
 

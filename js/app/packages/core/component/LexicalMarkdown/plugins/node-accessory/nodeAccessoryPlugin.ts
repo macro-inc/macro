@@ -36,7 +36,7 @@ export function createAccessoryStore() {
   return createStore<Record<NodeKey, AccessoryItem>>({});
 }
 
-export type NodeAccessoryPluginProps<T extends LexicalNode> = {
+type NodeAccessoryPluginProps<T extends LexicalNode> = {
   klass: Klass<T>;
   component: NodeAccessory;
   store: AccessoryStore;

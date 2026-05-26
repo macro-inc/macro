@@ -1,11 +1,11 @@
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { commsServiceClient } from '@service-comms/client';
 import type { GetOrCreateDmResponse } from '@service-comms/generated/models';
 import { useMutation } from '@tanstack/solid-query';
 import { invalidateListChannels } from './channels';
 
-export type GetOrCreateDirectMessageParams = {
+type GetOrCreateDirectMessageParams = {
   recipient_id: string;
 };
 

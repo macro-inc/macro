@@ -1,9 +1,7 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import clickOutside from '@core/directive/clickOutside';
-import { isErr } from '@core/util/maybeResult';
-import Quotes from '@icon/regular/quotes.svg';
-import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
+import Quotes from '@phosphor/quotes.svg';
 import { commsServiceClient } from '@service-comms/client';
 import type { ItemType } from '@service-storage/client';
 import { Button, Tooltip } from '@ui';
@@ -75,14 +73,14 @@ export function ReferencesDrawer(props: {
   );
 }
 
-export type ReferencesModalProps = {
+type ReferencesModalProps = {
   documentId: string;
   documentName?: string;
   buttonSize?: 'sm';
   entityType?: ItemType;
 };
 
-export function ReferencesModal(props: ReferencesModalProps) {
+function _ReferencesModal(props: ReferencesModalProps) {
   const drawerControl = useDrawerControl(REFERENCES_DRAWER_ID);
   const [referenceCount] = createResource(
     () => props.documentId,
@@ -93,12 +91,12 @@ export function ReferencesModal(props: ReferencesModalProps) {
         entity_id: id,
       });
 
-      if (isErr(response)) {
+      if (response.isErr()) {
         console.error(response);
         return 0;
       }
 
-      return response[1].references.length;
+      return response.value.references.length;
     }
   );
 
@@ -123,12 +121,10 @@ export function ReferencesModal(props: ReferencesModalProps) {
           onClick={drawerControl.toggle}
           role="button"
         >
-          <BracketLeft class="h-4 w-2 text-edge" />
           <Quotes class="size-4 text-ink" />
           <Suspense fallback={<div class="text-xs">0</div>}>
             <span class="text-xs">{referenceCount() ?? ''}</span>
           </Suspense>
-          <BracketLeft class="h-4 w-2 rotate-180 text-edge" />
         </div>
       </Tooltip>
       <SplitDrawer

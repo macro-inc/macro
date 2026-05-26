@@ -1424,6 +1424,32 @@
           },
           {
             "type": "object",
+            "required": ["name", "service", "json", "id", "type"],
+            "properties": {
+              "display_name": {
+                "type": ["string", "null"],
+                "description": "Human-readable title from the MCP server, if provided"
+              },
+              "id": {
+                "type": "string"
+              },
+              "json": {},
+              "name": {
+                "type": "string",
+                "description": "Demangled tool name from the MCP server"
+              },
+              "service": {
+                "type": "string",
+                "description": "MCP server name"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["mcpToolCall"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "required": ["name", "json", "id", "type"],
             "properties": {
               "id": {

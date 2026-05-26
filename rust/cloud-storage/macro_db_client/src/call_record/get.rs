@@ -4,6 +4,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub struct CallRecordSearchBackfill {
     pub call_id: Uuid,
+    pub started_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone)]
@@ -87,17 +88,49 @@ pub async fn get_accessible_call_ids(
     .map_err(Into::into)
 }
 
+/// Gets call records for search backfill.
+///
+/// Pagination is **keyset (seek-method)**: pass `cursor` as the last
+/// row's `(started_at, id)` pair from the previous page (or `None` for
+/// the first page). call_records doesn't have an updated_at column so
+/// the cursor and `started_after` / `started_before` filters use
+/// started_at — functionally equivalent because calls are immutable
+/// after creation.
 #[tracing::instrument(skip(db))]
 pub async fn get_call_records_for_search_backfill(
     db: &sqlx::Pool<sqlx::Postgres>,
     limit: i64,
-    offset: i64,
+    cursor: Option<(DateTime<Utc>, Uuid)>,
+    started_after: Option<DateTime<Utc>>,
+    started_before: Option<DateTime<Utc>>,
 ) -> anyhow::Result<Vec<CallRecordSearchBackfill>> {
+    let (cursor_started_at, cursor_id) = match cursor {
+        Some((t, id)) => (Some(t), Some(id)),
+        None => (None, None),
+    };
+
     sqlx::query_as!(
         CallRecordSearchBackfill,
-        r#"SELECT id AS "call_id!" FROM call_records ORDER BY started_at DESC LIMIT $1 OFFSET $2"#,
+        r#"
+        SELECT
+            id AS "call_id!",
+            started_at AS "started_at!"
+        FROM call_records
+        WHERE
+            ($2::timestamptz IS NULL OR started_at >= $2)
+            AND ($3::timestamptz IS NULL OR started_at < $3)
+            AND (
+                $4::timestamptz IS NULL
+                OR (started_at, id) > ($4, $5::uuid)
+            )
+        ORDER BY started_at ASC, id ASC
+        LIMIT $1
+        "#,
         limit,
-        offset,
+        started_after as Option<DateTime<Utc>>,
+        started_before as Option<DateTime<Utc>>,
+        cursor_started_at as Option<DateTime<Utc>>,
+        cursor_id as Option<Uuid>,
     )
     .fetch_all(db)
     .await

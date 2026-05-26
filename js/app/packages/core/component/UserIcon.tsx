@@ -8,7 +8,6 @@ import {
   useDisplayName,
   useDisplayNameParts,
 } from '@core/user';
-import { isOk } from '@core/util/maybeResult';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
 import { Avatar, type AvatarSize } from '@ui';
@@ -156,7 +155,7 @@ export function UserIcon(props: UserIconProps) {
       recipient_id: props.id,
     });
 
-    const channelId = isOk(result) && result[1]?.channel_id;
+    const channelId = result.isOk() && result.value?.channel_id;
     if (!channelId) return;
 
     replaceOrInsertSplit({ type: 'channel', id: channelId });
@@ -261,6 +260,7 @@ function UserAvatarWithTooltip(props: {
       onOpenChange={setOpen}
       triggerAs="div"
       triggerClass={props.triggerClass}
+      triggerTabIndex={-1}
       trigger={props.avatar}
       content={props.renderContent(() => setOpen(false))}
     />

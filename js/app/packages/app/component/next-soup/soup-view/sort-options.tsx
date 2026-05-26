@@ -2,7 +2,6 @@ import type {
   SortConfig,
   SoupEntity,
 } from '@app/component/next-soup/create-soup-state';
-import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 import { compareDateDesc } from '@core/util/date';
 import type {
   EntityData,
@@ -13,11 +12,12 @@ import {
   getTaskPriorityOptionId,
   getTaskStatusOptionId,
 } from '@entity/utils/task-properties';
-import ArrowClockwiseIcon from '@icon/regular/arrow-clockwise.svg';
-import ClockIcon from '@icon/regular/clock.svg';
-import EyeIcon from '@icon/regular/eye.svg';
-import FlagIcon from '@icon/regular/flag.svg';
-import ListChecksIcon from '@icon/regular/list-checks.svg';
+import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
+import ClockIcon from '@phosphor/clock.svg';
+import EyeIcon from '@phosphor/eye.svg';
+import FlagIcon from '@phosphor/flag.svg';
+import ListChecksIcon from '@phosphor/list-checks.svg';
+import { PROPERTY_OPTION_IDS } from '@property/constants';
 import type { JSX } from 'solid-js';
 
 export type SystemSortOption =
@@ -33,10 +33,7 @@ export interface SortOption {
   icon?: () => JSX.Element;
 }
 
-export function sortByNotifiedAt<T extends WithNotification<EntityData>>(
-  a: T,
-  b: T
-) {
+function _sortByNotifiedAt<T extends WithNotification<EntityData>>(a: T, b: T) {
   const aNotification = a.notifications?.()[0];
   const bNotification = b.notifications?.()[0];
 
@@ -51,15 +48,15 @@ export function sortByNotifiedAt<T extends WithNotification<EntityData>>(
   return sortByUpdatedAt(a, b);
 }
 
-export function sortByCreatedAt<T extends EntityData>(a: T, b: T): number {
+function sortByCreatedAt<T extends EntityData>(a: T, b: T): number {
   return compareDateDesc(a.sortTs ?? a.createdAt, b.sortTs ?? b.createdAt);
 }
 
-export function sortByUpdatedAt<T extends EntityData>(a: T, b: T) {
+function sortByUpdatedAt<T extends EntityData>(a: T, b: T) {
   return compareDateDesc(a.sortTs ?? a.updatedAt, b.sortTs ?? b.updatedAt);
 }
 
-export function sortByViewedAt<T extends EntityData>(a: T, b: T) {
+function sortByViewedAt<T extends EntityData>(a: T, b: T) {
   return compareDateDesc(a.sortTs ?? a.viewedAt, b.sortTs ?? b.viewedAt);
 }
 
@@ -103,7 +100,7 @@ const getStatusOrder = (status: string | undefined) => {
  * Sort tasks by priority (Urgent first, no priority last).
  * Non-task entities are sorted to the end.
  */
-export function sortByPriority<T extends EntityData>(a: T, b: T): number {
+function sortByPriority<T extends EntityData>(a: T, b: T): number {
   // Cast to TaskEntityWithProperties - the getter safely handles missing properties
   const aPriority = getTaskPriorityOptionId(a as TaskEntityWithProperties);
   const bPriority = getTaskPriorityOptionId(b as TaskEntityWithProperties);
@@ -123,7 +120,7 @@ export function sortByPriority<T extends EntityData>(a: T, b: T): number {
  * Sort tasks by status (Not Started first, Canceled last).
  * Non-task entities are sorted to the end.
  */
-export function sortByStatus<T extends EntityData>(a: T, b: T): number {
+function sortByStatus<T extends EntityData>(a: T, b: T): number {
   // Cast to TaskEntityWithProperties - the getter safely handles missing properties
   const aStatus = getTaskStatusOptionId(a as TaskEntityWithProperties);
   const bStatus = getTaskStatusOptionId(b as TaskEntityWithProperties);
@@ -192,7 +189,7 @@ const SORT_OPTIONS = [
 
 type OptionValue = (typeof SORT_OPTIONS)[number]['value'];
 
-export const buildSortOptions = (options: OptionValue[]) => {
+const buildSortOptions = (options: OptionValue[]) => {
   return SORT_OPTIONS.filter((o) => options.includes(o.value));
 };
 

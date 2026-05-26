@@ -4,6 +4,7 @@ import { Tooltip } from './Tooltip';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import type { Placement } from '@floating-ui/dom';
 import { cn } from '../utils/classname';
+import { themeReactive } from '@theme/signals/themeReactive';
 import { useButtonGroupContext } from './ButtonGroup';
 import { Layer } from './Layer';
 
@@ -16,19 +17,24 @@ export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> &
   tooltip?: string;
   label?: string;
   hotkey?: HotkeyToken | HotkeyToken[];
+  /**
+   * Raw shortcut string(s) shown in the tooltip when no `hotkey` token is available.
+   */
+  shortcut?: string | string[];
   size?: ButtonSize;
   class?: string;
 };
 
 export type ButtonSize = 'sm' | 'icon-sm' | 'md' | 'icon-md' | 'lg' | 'icon-lg';
 
-export type ButtonVariant = 'ghost' | 'base' | 'active' | 'danger';
+export type ButtonVariant = 'ghost' | 'base' | 'active' | 'danger' | 'cta';
 
 const variantStyles: Record<ButtonVariant, string> = {
-  danger: 'bg-transparent text-failure    border border-failure/50 not-disabled:hover:bg-failure/10 not-disabled:active:bg-failure/20                   disabled:opacity-30 ',
-  base:   'bg-transparent text-ink-muted  border border-edge-muted not-disabled:hover:bg-hover      not-disabled:hover:text-ink        active:bg-active disabled:opacity-30 ',
-  active: 'bg-accent-bg   text-accent     border border-accent                                                                                      disabled:opacity-30 ',
-  ghost:  'bg-transparent text-ink-muted                           not-disabled:hover:bg-hover      not-disabled:hover:text-ink        active:bg-active disabled:opacity-30 ',
+  danger:           'bg-transparent text-failure    border border-failure/50 not-disabled:hover:bg-failure/10 not-disabled:active:bg-failure/20                   disabled:opacity-30 ',
+  base:             'bg-transparent text-ink-muted  border border-edge-muted not-disabled:hover:bg-hover      not-disabled:hover:text-ink        active:bg-active disabled:opacity-30 ',
+  active:           'bg-accent-bg   text-accent     border border-accent                                                                                      disabled:opacity-30 ',
+  ghost:            'bg-transparent text-ink-muted                           not-disabled:hover:bg-hover      not-disabled:hover:text-ink        active:bg-active disabled:opacity-30 ',
+  'cta':            'bg-accent      text-surface    border border-transparent not-disabled:hover:bg-accent/90                                  active:bg-accent/80 disabled:opacity-30 ',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -37,7 +43,7 @@ const sizeStyles: Record<ButtonSize, string> = {
   'sm':      'h-6       px-2   [&_:where(svg)]:size-4 gap-1   text-xs  ',
   'icon-lg': 'size-11   p-2    [&_:where(svg)]:size-7                  ', /* unused */
   'icon-md': 'size-9    p-1.5  [&_:where(svg)]:size-6                  ',
-  'icon-sm': 'size-6    p-0.5    [&_:where(svg)]:size-5                  ',
+  'icon-sm': 'size-6    p-0.5  [&_:where(svg)]:size-5                  ',
 };
 
 export const Button = (props: ButtonProps) => {
@@ -47,6 +53,7 @@ export const Button = (props: ButtonProps) => {
     'tooltip',
     'variant',
     'hotkey',
+    'shortcut',
     'class',
     'depth',
     'label',
@@ -68,27 +75,50 @@ export const Button = (props: ButtonProps) => {
 
   const placement = () => local.tooltipPlacement ?? 'bottom';
 
+  const variantStyle = (): JSX.CSSProperties | string | undefined => {
+    const variant = local.variant ?? group?.variant;
+    if (variant === 'cta') {
+      // TODO (seamus): this is scuffed but better than what we had.
+      const textL = themeReactive.a0.l[0]() < 0.72 ? 0.97 : 0.2;
+      return {
+        'color': `oklch(${textL} var(--c0c) var(--c0h))`,
+        '--color-edge': `oklch(${textL} var(--c0c) var(--c0h) / 0.7)`,
+        '--color-edge-muted': `oklch(${textL} var(--c0c) var(--c0h) / 0.7)`,
+      };
+    }
+    return others.style;
+  };
+
   const button = () => (
-    <KobalteButton data-button class={cls()} {...others}>
+    <KobalteButton data-button class={cls()} {...others} style={variantStyle()}>
       {local.children}
     </KobalteButton>
   );
 
   const tooltipLabel = () => local.label ?? local.tooltip;
 
+  // Skip Layer when inside a ButtonGroup (the group already provides one)
+  // unless the button has its own explicit depth
+  const skipLayer = () => group !== undefined && local.depth === undefined;
+
+  const content = () => (
+    <Show when={tooltipLabel() !== undefined ? tooltipLabel() : false} fallback={button()}>
+      {(label) => (
+        <Tooltip
+          hotkey={local.hotkey}
+          shortcut={local.shortcut}
+          placement={placement()}
+          label={label()}
+        >
+          {button()}
+        </Tooltip>
+      )}
+    </Show>
+  );
+
   return (
-    <Layer depth={local.depth ?? 0}>
-      <Show when={tooltipLabel() !== undefined ? tooltipLabel() : false} fallback={button()}>
-        {(label) => (
-          <Tooltip
-            hotkey={local.hotkey}
-            placement={placement()}
-            label={label()}
-          >
-            {button()}
-          </Tooltip>
-        )}
-      </Show>
-    </Layer>
+    <Show when={skipLayer()} fallback={<Layer depth={local.depth ?? 0}>{content()}</Layer>}>
+      {content()}
+    </Show>
   );
 };

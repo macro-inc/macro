@@ -39,7 +39,6 @@ cal = { path = "../cal", features = ["axum", "outbound"] }
 call = { path = "../call" }
 channels = { path = "../channels", features = ["inbound", "outbound"] }
 chrono = { workspace = true }
-clap = { workspace = true }
 cloudfront_sign = { workspace = true }
 comms = { path = "../comms", features = ["outbound"] }
 comms_db_client = { path = "../comms_db_client" }
@@ -50,6 +49,7 @@ connection = { path = "../connection", default-features = false, features = [
 ] }
 connection_gateway_client = { path = "../connection_gateway_client" }
 cowlike = { path = "../cowlike" }
+crm = { path = "../crm" }
 document_sub_type = { path = "../document_sub_type" }
 documents_hex = { path = "../documents", package = "documents" }
 dynamodb_client = { path = "../dynamodb_client" }
@@ -109,7 +109,7 @@ readonly_pool = { path = "../readonly_pool" }
 redis = { workspace = true, features = [
   "aio",
   "cluster-async",
-  "tokio-native-tls-comp",
+  "tokio-rustls-comp",
 ] }
 regex = { workspace = true }
 reqwest = { workspace = true }

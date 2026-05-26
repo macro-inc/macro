@@ -7,8 +7,10 @@ use axum::routing::{delete, post};
 use crate::api::ApiContext;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
-    let hex_list_labels_routes =
-        email::inbound::list_labels_router::<ApiContext, crate::api::context::EmailSvc>();
+    let hex_list_labels_routes = email::inbound::axum::list_labels_router::list_labels_router::<
+        ApiContext,
+        crate::api::context::EmailSvc,
+    >();
 
     Router::new()
         .route(

@@ -24,8 +24,9 @@ use model::sync_service::SyncServiceVersionID;
 use model_entity::Entity;
 
 use super::models::{
-    CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
-    EditDocumentRepoArgs, EditDocumentServiceArgs, LocationQueryParams,
+    BranchNameContext, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
+    CreateTaskRequest, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
+    GithubPullRequestsResponse, LocationQueryParams, TaskBranchName, TeamTaskMetadata,
 };
 
 /// Repository for accessing document data from the database.
@@ -159,10 +160,35 @@ pub trait DocumentRepo: Send + Sync + 'static {
         document_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Share a document with all members of the user's team.
-    fn share_with_team(
+    /// Get all team IDs the user belongs to.
+    fn get_team_ids_for_user(
         &self,
         user_id: &str,
+    ) -> impl Future<Output = Result<Vec<uuid::Uuid>, Self::Err>> + Send;
+
+    /// Get per-team task metadata for a document, when it is a team task.
+    fn get_team_task_metadata(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<TeamTaskMetadata>, Self::Err>> + Send;
+
+    /// Get user/team data needed to build a branch name for this user and task.
+    fn get_branch_name_context(
+        &self,
+        document_id: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<BranchNameContext, Self::Err>> + Send;
+
+    /// Get stored GitHub PR keys associated with a task short id.
+    fn get_task_github_pull_request_keys(
+        &self,
+        task_short_id: &str,
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+
+    /// Share a document with the given team.
+    fn share_with_team(
+        &self,
+        team_id: &uuid::Uuid,
         document_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
@@ -329,6 +355,20 @@ pub trait DocumentService: Send + Sync + 'static {
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<String, DocumentError>> + Send;
+
+    /// Build the branch name for a task document for the authenticated user.
+    fn get_task_branch_name(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_name: String,
+    ) -> impl Future<Output = Result<TaskBranchName, DocumentError>> + Send;
+
+    /// Get GitHub pull requests associated with a task document.
+    fn get_task_github_pull_requests(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_context: &DocumentBasic,
+    ) -> impl Future<Output = Result<GithubPullRequestsResponse, DocumentError>> + Send;
 
     /// Edit a document's metadata and share permissions.
     ///

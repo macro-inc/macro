@@ -23,7 +23,7 @@ import {
 } from 'lexical';
 import type { MenuOperations } from '../../shared/inlineMenu';
 
-export const TYPE_SLASH_COMMAND: LexicalCommand<void> =
+const TYPE_SLASH_COMMAND: LexicalCommand<void> =
   createCommand('TYPE_SLASH_COMMAND');
 
 export const CLOSE_ACTION_SEARCH_COMMAND: LexicalCommand<void> = createCommand(
@@ -33,17 +33,11 @@ export const REMOVE_ACTION_SEARCH_COMMAND: LexicalCommand<void> = createCommand(
   'REMOVE_ACTION_SEARCH_COMMAND'
 );
 
-export type ActionInfo = {
-  id: string;
-  name: string;
-  action: () => void;
-};
-
 // Validators for the position of the / trigger.
 const beforeRegex = /\s$/;
 const afterRegex = /^\s/;
 
-export type ActionsPluginProps = {
+type ActionsPluginProps = {
   menu?: MenuOperations;
   peerIdValidator?: PeerIdValidator;
 };

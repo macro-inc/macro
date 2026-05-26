@@ -2,7 +2,7 @@ import { buildChatEditor } from '@core/component/AI/component/input/buildChatEdi
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import type { Model } from '@core/component/AI/types';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { isErr } from '@core/util/maybeResult';
+
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
@@ -132,11 +132,11 @@ function ChatInputBoxConnectedInner() {
       attachments: input.attachments.length > 0 ? input.attachments : undefined,
       toolset: input.toolset,
     });
-    if (isErr(response)) {
+    if (response.isErr()) {
       console.log('error sending message', response);
       return;
     }
-    const [, { stream_id, chat_id }] = response;
+    const { stream_id, chat_id } = response.value;
     const connectionStream = subscribe('chat', chat_id, stream_id);
     if (!connectionStream) {
       console.log('no connection stream');
@@ -244,11 +244,11 @@ function FullChatInner() {
       attachments: input.attachments.length > 0 ? input.attachments : undefined,
       toolset: input.toolset,
     });
-    if (isErr(response)) {
+    if (response.isErr()) {
       console.log('error sending message', response);
       return;
     }
-    const [, { stream_id, chat_id }] = response;
+    const { stream_id, chat_id } = response.value;
     const connectionStream = subscribe('chat', chat_id, stream_id);
     if (!connectionStream) {
       console.log('no connection stream');

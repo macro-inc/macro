@@ -2,9 +2,9 @@ import { UserIcon } from '@core/component/UserIcon';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { idToDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
-import Check from '@icon/regular/check.svg';
-import Link from '@icon/regular/link.svg';
-import NotePencil from '@icon/regular/note-pencil.svg';
+import Check from '@phosphor/check.svg';
+import Link from '@phosphor/link.svg';
+import NotePencil from '@phosphor/note-pencil.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { Button, cn } from '@ui';
 import { type ParentProps, Show, useContext } from 'solid-js';
@@ -19,22 +19,7 @@ const NewTag = () => {
   );
 };
 
-export enum Color {
-  gray,
-  red,
-  amber,
-  yellow,
-  green,
-  teal,
-  sky,
-  blue,
-  indigo,
-  purple,
-  pink,
-  rose,
-}
-
-export function MessageRow(
+function MessageRow(
   props: ParentProps<{
     authorId: string | null;
     date?: DateValue | null;
@@ -55,7 +40,7 @@ export function MessageRow(
   );
 }
 
-export function MessageRowUI(
+function MessageRowUI(
   props: ParentProps<{
     authorId: string;
     date?: DateValue | null;

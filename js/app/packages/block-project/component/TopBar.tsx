@@ -39,16 +39,11 @@ import {
 import { isMobile } from '@core/mobile/isMobile';
 import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import Info from '@icon/regular/info.svg';
-import TagIcon from '@icon/regular/tag.svg';
-import IconShared from '@macro-icons/wide/share.svg';
+import IconShared from '@icon/wide-share.svg';
+import Info from '@phosphor/info.svg';
 import { toast } from 'core/component/Toast/Toast';
 import { createMemo, For, Show } from 'solid-js';
 import { ProjectCreateMenu, useProjectCreateTools } from './ProjectCreateMenu';
-import {
-  PROPERTIES_DRAWER_ID,
-  ProjectPropertiesButton,
-} from './ProjectPropertiesModal';
 
 // TODO (SEAMUS) : Revisit this file when we figure out what we wanna do
 //     with folder block.
@@ -64,7 +59,6 @@ export function TopBar() {
     () => projectBlockDataSignal()?.projectMetadata.name ?? ''
   );
 
-  const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
   const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
@@ -109,13 +103,6 @@ export function TopBar() {
   );
 
   const tools: BlockTool[] = [
-    {
-      label: 'Properties',
-      icon: TagIcon,
-      action: propertiesControl.toggle,
-      condition: () => !isSpecialProject,
-      buttonComponent: () => <ProjectPropertiesButton buttonSize="sm" />,
-    },
     {
       label: 'Chat',
       icon: ChatWithAgentIcon,

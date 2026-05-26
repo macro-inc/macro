@@ -74,10 +74,10 @@ fn test_query_key_create_query_partial() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_generate_terms_must_query() -> anyhow::Result<()> {
+fn test_generate_terms_must_query_single_term() -> anyhow::Result<()> {
     let terms: Cow<'_, [&str]> = Cow::Borrowed(&["test"]);
 
-    let result = generate_terms_must_query(QueryKey::MatchPhrase, "test", terms);
+    let result = generate_terms_must_query(QueryKey::MatchPhrase, "test", terms, TermCombine::And);
 
     let expected = serde_json::json!({
         "match_phrase": {
@@ -87,29 +87,20 @@ fn test_generate_terms_must_query() -> anyhow::Result<()> {
 
     assert_eq!(result.to_json(), expected);
 
-    let terms: Cow<'_, [&str]> = Cow::Borrowed(&["test", "test2"]);
-    let result = generate_terms_must_query(QueryKey::MatchPhrasePrefix, "test", terms);
+    Ok(())
+}
+
+#[test]
+fn test_generate_terms_must_query_and_combine() -> anyhow::Result<()> {
+    let terms: Cow<'_, [&str]> = Cow::Borrowed(&["foo", "bar"]);
+    let result =
+        generate_terms_must_query(QueryKey::MatchPhrase, "content", terms, TermCombine::And);
 
     let expected = serde_json::json!({
         "bool": {
-            "minimum_should_match": 1,
-            "should": [
-                {
-                    "match_phrase_prefix": {
-                        "test": {
-                            "query": "test",
-                            "max_expansions": 256
-                        }
-                    }
-                },
-                {
-                    "match_phrase_prefix": {
-                        "test": {
-                            "query": "test2",
-                            "max_expansions": 256
-                        }
-                    }
-                }
+            "must": [
+                { "match_phrase": { "content": "foo" } },
+                { "match_phrase": { "content": "bar" } }
             ]
         }
     });

@@ -18,7 +18,7 @@ macro_env = { path = "../macro_env" }
 mockall = { workspace = true }
 redis = { workspace = true, features = [
   "aio",
-  "tokio-native-tls-comp",
+  "tokio-rustls-comp",
 ] }
 sqlx = { workspace = true }
 tokio = { workspace = true }

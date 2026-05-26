@@ -1,23 +1,20 @@
-import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { DebugSlider } from '@core/component/Slider';
-
 import { Bar } from '@core/component/TopBar/Bar';
 import clickOutside from '@core/directive/clickOutside';
-import Rotate from '@icon/regular/arrow-counter-clockwise.svg';
-import Upload from '@icon/regular/arrow-square-in.svg';
-import Copy from '@icon/regular/copy.svg';
-import Download from '@icon/regular/download.svg';
-import Erase from '@icon/regular/eraser.svg';
-import MirrorX from '@icon/regular/flip-horizontal.svg';
-import MirrorY from '@icon/regular/flip-vertical.svg';
-import Fill from '@icon/regular/paint-bucket.svg';
-import Pencil from '@icon/regular/pencil.svg';
-import Plus from '@icon/regular/plus.svg';
-import Trash from '@icon/regular/trash.svg';
-import X from '@icon/regular/x.svg';
+import Rotate from '@phosphor/arrow-counter-clockwise.svg';
+import Upload from '@phosphor/arrow-square-in.svg';
+import Copy from '@phosphor/copy.svg';
+import Download from '@phosphor/download.svg';
+import Erase from '@phosphor/eraser.svg';
+import MirrorX from '@phosphor/flip-horizontal.svg';
+import MirrorY from '@phosphor/flip-vertical.svg';
+import Fill from '@phosphor/paint-bucket.svg';
+import Pencil from '@phosphor/pencil.svg';
+import Plus from '@phosphor/plus.svg';
+import Trash from '@phosphor/trash.svg';
+import X from '@phosphor/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button } from '@ui';
-
+import { Button, ToggleSwitch } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -901,7 +898,6 @@ function GlyphEditor(props: GlyphEditorProps) {
                       </span>
                       <ToggleSwitch
                         checked={symmetryX()}
-                        size="SM"
                         onChange={() => setSymmetryX((prev) => !prev)}
                       />
                     </div>
@@ -911,7 +907,6 @@ function GlyphEditor(props: GlyphEditorProps) {
                       </span>
                       <ToggleSwitch
                         checked={symmetryY()}
-                        size="SM"
                         onChange={() => setSymmetryY((prev) => !prev)}
                       />
                     </div>

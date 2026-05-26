@@ -4,6 +4,10 @@ import {
   InviteModal,
   setInviteModalOpen,
 } from '@app/component/app-sidebar/invite-modal';
+import {
+  SidebarPromoCard,
+  SidebarPromoHint,
+} from '@app/component/app-sidebar/sidebar-promo';
 import { CommandState } from '@app/component/command';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
 import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
@@ -19,41 +23,55 @@ import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { InCallPanel } from '@channel/Call';
 import { useCallContextOptional } from '@channel/Call/CallContext';
-import { ContextMenuContent, MenuItem } from '@core/component/Menu';
-
+import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
+import { UserIcon } from '@core/component/UserIcon';
 import {
+  DEV_MODE_ENV,
+  ENABLE_APP_STORE_QR_CODE,
   ENABLE_CALLS,
+  ENABLE_TEAMS_OVERRIDE,
   ENABLE_DASHBOARD_OVERRIDE,
 } from '@core/constant/featureFlags';
-import { useSettingsState } from '@core/constant/SettingsState';
+import {
+  type SettingsTab,
+  useSettingsState,
+} from '@core/constant/SettingsState';
+import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
-import BellIcon from '@icon/regular/bell.svg';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import LogoIcon from '@icon/macro-logo.svg';
+import SquareSidebarIcon from '@icon/square-sidebar.svg';
+import { AnimatedCallIcon } from '@icon/wide-call';
+import { AnimatedChannelIcon } from '@icon/wide-channel';
+import CommandKIcon from '@icon/wide-command-k.svg';
+import { AnimatedEmailIcon } from '@icon/wide-email';
+import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
+import { AnimatedFolderIcon } from '@icon/wide-folder';
+import { AnimatedInboxIcon } from '@icon/wide-inbox';
+import { AnimatedNewSplitIcon } from '@icon/wide-newSplit';
+import { AnimatedPlusIcon } from '@icon/wide-plus';
+import { AnimatedSearchIcon } from '@icon/wide-search';
+import { AnimatedStarIcon } from '@icon/wide-star';
+import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import LogoIcon from '@macro-icons/macro-logo.svg';
-import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
-import { AnimatedDashboardIcon } from '@macro-icons/wide/animating/dashboard';
-import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
-import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
-import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
-import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
-import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
-import { AnimatedNewSplitIcon } from '@macro-icons/wide/animating/newSplit';
-import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
-import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
-import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
 import { useNotificationSettings } from '@notifications';
+import BellIcon from '@phosphor/bell.svg';
+import CaretUpIcon from '@phosphor/caret-up.svg';
+import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
+import KeyboardIcon from '@phosphor/keyboard.svg';
+import PaintBucketIcon from '@phosphor/paint-bucket.svg';
+import PlugIcon from '@phosphor/plug.svg';
+import UserIconPhosphor from '@phosphor/user.svg';
+import UsersThreeIcon from '@phosphor/users-three.svg';
 import { debounce } from '@solid-primitives/scheduled';
+import { makePersisted } from '@solid-primitives/storage';
 import { useLocation } from '@solidjs/router';
-import { Button, cn, Hotkey } from '@ui';
+import { Button, cn, Dropdown, Hotkey } from '@ui';
 import {
   type Component,
   createMemo,
@@ -77,7 +95,7 @@ interface SidebarItem {
   standaloneHotkey?: boolean;
 }
 
-export const SIDEBAR_LINKS = [
+const SIDEBAR_LINKS = [
   {
     id: 'inbox',
     label: 'Inbox',
@@ -240,7 +258,7 @@ type SidebarHotkeyDeps = {
   openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'];
 };
 
-export const registerSidebarHotkeys = ({
+const registerSidebarHotkeys = ({
   links,
   isSlim,
   onOpenChange,
@@ -376,15 +394,133 @@ export const registerSidebarHotkeys = ({
   }
 };
 
+/** Persisted dismissal for the Premium upgrade promo card. */
+const [premiumCardDismissed, setPremiumCardDismissed] = makePersisted(
+  createSignal<boolean>(false),
+  { name: 'sidebar-premium-card-dismissed' }
+);
+
+/** Session-only signal so a hint shows after dismissal until the user acknowledges or the timer expires. */
+const [premiumHintVisible, setPremiumHintVisible] = createSignal(false);
+
 type SidebarActionButtonProps = {
-  label: string;
-  hotkeyToken?: HotkeyToken;
-  /** Whether the sidebar is currently in slim (icon-only) mode. */
-  isSlim: () => boolean;
-  onClick: () => void;
-  disabled?: boolean | (() => boolean);
-  /** Animated icon component that accepts a `triggerAnimation` prop. */
   icon: Component<{ triggerAnimation?: boolean; class?: string }>;
+  onClick: (event?: MouseEvent) => void;
+  disabled?: boolean | (() => boolean);
+  hotkeyToken?: HotkeyToken;
+  isSlim: () => boolean;
+  label: string;
+};
+
+type SidebarShortcutLinkProps = {
+  label: string;
+  icon: Component<{ triggerAnimation?: boolean; class?: string }>;
+  onClick: () => void;
+  isSlim: () => boolean;
+};
+
+const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
+  const [isHovering, setIsHovering] = createSignal(false);
+
+  return (
+    <Button
+      draggable={false}
+      variant="ghost"
+      class={cn(
+        'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-md py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3'
+      )}
+      tooltipPlacement="right"
+      label={props.isSlim() ? props.label : undefined}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+      onMouseDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        props.onClick();
+      }}
+    >
+      <div class="relative shrink-0 [&_svg]:size-4">
+        <Dynamic component={props.icon} triggerAnimation={isHovering()} />
+      </div>
+
+      <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
+        <span class="whitespace-nowrap">{props.label}</span>
+      </div>
+    </Button>
+  );
+};
+
+type SettingsMenuItem = {
+  tab: SettingsTab;
+  label: string;
+  icon: Component<{ class?: string }>;
+};
+
+const SETTINGS_MENU_TOP_ITEMS: SettingsMenuItem[] = [
+  {
+    tab: 'Mobile App',
+    label: 'App',
+    icon: DeviceMobileIcon,
+  },
+  {
+    tab: 'Agent',
+    label: 'MCPs',
+    icon: PlugIcon,
+  },
+  {
+    tab: 'Team',
+    label: 'Team',
+    icon: UsersThreeIcon,
+  },
+];
+
+const SETTINGS_MENU_BOTTOM_ITEMS: SettingsMenuItem[] = [
+  {
+    tab: 'Shortcuts',
+    label: 'Shortcuts',
+    icon: KeyboardIcon,
+  },
+  {
+    tab: 'Appearance',
+    label: 'Appearance',
+    icon: PaintBucketIcon,
+  },
+  {
+    tab: 'Account',
+    label: 'Account',
+    icon: UserIconPhosphor,
+  },
+];
+
+/**
+ * Mirrors the gating in `Settings.tsx`'s `settingsTabs()`. Use to filter the
+ * sidebar menu/shortcuts and to guard `setActiveTabId` callers so we never
+ * activate a tab that the settings panel won't render.
+ */
+const useIsSettingsTabAvailable = () => {
+  const teamsFlag = useFeatureFlag('enable-teams-settings', {
+    enabledOverride: ENABLE_TEAMS_OVERRIDE,
+  });
+
+  return (tab: SettingsTab): boolean => {
+    switch (tab) {
+      case 'Appearance':
+      case 'Account':
+        return true;
+      case 'Team':
+        return teamsFlag().enabled;
+      case 'Shortcuts':
+        return !isTouchDevice();
+      case 'Mobile App':
+        return ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform();
+      case 'Agent':
+        return !isNativeMobilePlatform();
+      case 'Mobile':
+        return isNativeMobilePlatform() && DEV_MODE_ENV;
+      default:
+        return false;
+    }
+  };
 };
 
 /**
@@ -404,12 +540,18 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
 
   return (
     <Button
-      class="flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-xs py-1"
+      class={cn(
+        'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-md py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3'
+      )}
       variant="ghost"
       tooltipPlacement="right"
       label={props.isSlim() ? props.label : undefined}
       hotkey={props.isSlim() ? props.hotkeyToken : undefined}
-      onClick={props.onClick}
+      onMouseDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+      }}
+      onClick={(event: MouseEvent) => props.onClick(event)}
       disabled={isDisabled()}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
@@ -428,6 +570,101 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
         )}
       </Show>
     </Button>
+  );
+};
+
+type SidebarSettingsWidgetProps = {
+  isSlim: () => boolean;
+  onSelect: (tab: SettingsTab) => void;
+  isTabAvailable: (tab: SettingsTab) => boolean;
+};
+
+const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
+  const userId = useUserId();
+
+  const topItems = createMemo(() =>
+    SETTINGS_MENU_TOP_ITEMS.filter((item) => props.isTabAvailable(item.tab))
+  );
+  const bottomItems = createMemo(() =>
+    SETTINGS_MENU_BOTTOM_ITEMS.filter((item) => props.isTabAvailable(item.tab))
+  );
+
+  return (
+    <Dropdown placement="top-start" gutter={6}>
+      <Dropdown.Trigger
+        variant="ghost"
+        class={cn(
+          'flex items-center w-full rounded-md cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
+          'justify-start gap-2 px-1.5 py-1',
+          'group-data-[slim=true]/sidebar:justify-center group-data-[slim=true]/sidebar:gap-0'
+        )}
+        label={props.isSlim() ? 'Settings' : undefined}
+        tooltipPlacement="right"
+        onMouseDown={(e: MouseEvent) => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+        }}
+      >
+        <Show
+          when={userId()}
+          fallback={<div class="size-5 shrink-0 rounded-full bg-ink/10" />}
+        >
+          {(id) => (
+            <div class="size-5">
+              <UserIcon
+                id={id()}
+                size="fill"
+                suppressClick
+                showTooltip={false}
+                // class="-m-1"
+              />
+            </div>
+          )}
+        </Show>
+        <span class="flex-1 min-w-0 text-left whitespace-nowrap text-sm truncate group-data-[slim=true]/sidebar:hidden">
+          Settings
+        </span>
+        <CaretUpIcon class="size-3 text-ink-extra-muted shrink-0 group-data-[slim=true]/sidebar:hidden" />
+      </Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.Group>
+          <For each={topItems()}>
+            {(item) => (
+              <Dropdown.Item
+                class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+                onSelect={() => props.onSelect(item.tab)}
+              >
+                <span class="size-5 flex items-center justify-center">
+                  <Dynamic
+                    component={item.icon}
+                    class="size-4 shrink-0 text-ink-extra-muted"
+                  />
+                </span>
+                <span class="text-ink">{item.label}</span>
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Group>
+        <Dropdown.Group>
+          <For each={bottomItems()}>
+            {(item) => (
+              <Dropdown.Item
+                class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+                onSelect={() => props.onSelect(item.tab)}
+              >
+                <span class="size-5 flex items-center justify-center">
+                  <Dynamic
+                    component={item.icon}
+                    class="size-4 shrink-0 text-ink-extra-muted"
+                  />
+                </span>
+                <span class="text-ink">{item.label}</span>
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 };
 
@@ -452,7 +689,8 @@ const DASHBOARD_LINK: SidebarItem = {
 export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
-  const { toggleSettings } = useSettingsState();
+  const { openSettings, setActiveTabId, settingsOpen } = useSettingsState();
+  const isTabAvailable = useIsSettingsTabAvailable();
   const notificationSettings = useNotificationSettings();
   const callCtx = useCallContextOptional();
 
@@ -532,6 +770,29 @@ export const AppSidebar = (props: AppSidebarProps) => {
     });
   };
 
+  const openSettingsTab = (tab: SettingsTab) => {
+    if (!isTabAvailable(tab)) return;
+    if (settingsOpen()) {
+      setActiveTabId(tab);
+      return;
+    }
+    if (globalSplitManager()?.canAppendSplit() ?? true) {
+      setActiveTabId(tab);
+      analytics.track('split_created', { from: 'sidebar' });
+      layout.openWithSplit(
+        { type: 'component', id: 'settings' },
+        {
+          referredFrom: 'sidebar',
+          allowDuplicate: true,
+          preferNewSplit: true,
+          mergeHistory: false,
+        }
+      );
+      return;
+    }
+    openSettings(tab);
+  };
+
   const isExpanded = () => props.sidebarState === 'expanded';
   const isSlim = () => props.sidebarState === 'slim';
 
@@ -541,8 +802,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
     parentOnOpenChange: props.onOpenChange,
     getShell: () => sidebarShell,
   });
-
-  const [sidebarBtnHovering, setSidebarBtnHovering] = createSignal(false);
 
   registerSidebarHotkeys({
     links: visibleLinks(),
@@ -562,7 +821,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       class={cn(
         'group/sidebar h-full py-2 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
         isExpanded() &&
-          'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
+          'max-w-49.75 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
         props.sidebarState === 'hidden' &&
           '-translate-x-full overflow-hidden opacity-0',
 
@@ -572,21 +831,60 @@ export const AppSidebar = (props: AppSidebarProps) => {
       data-slim={isSlim()}
       style={{ transition: SIDEBAR_MAX_WIDTH_TRANSITION_STYLE }}
     >
-      <div class="flex items-center justify-between p-2 relative">
-        <div class="flex items-center group/logo-area w-full">
+      <div class="flex items-center justify-between p-2 relative group-data-[slim=true]/sidebar:pr-2.25">
+        <div class="flex items-center group/logo-area w-full group-data-[slim=true]/sidebar:justify-end">
           <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0">
             <LogoIcon class="size-6" />
           </div>
-          <div class="grow shrink-10 min-w-0" />
+          <div class="grow shrink-10 min-w-0 group-data-[slim=true]/sidebar:hidden" />
+          <Show when={isExpanded()}>
+            <div class="flex items-center gap-1 mr-1">
+              <Show when={showEnableNotifications()}>
+                <Button
+                  class="rounded-md p-1 text-ink-extra-muted"
+                  size="icon-sm"
+                  label="Enable Notifications"
+                  onClick={handleEnableNotifications}
+                >
+                  <BellIcon />
+                </Button>
+              </Show>
+              <Button
+                class="rounded-md p-1 text-ink-extra-muted"
+                size="icon-sm"
+                label="Command"
+                hotkey={TOKENS.global.commandMenu}
+                onClick={handleCommandPaletteClick}
+              >
+                <CommandKIcon />
+              </Button>
+              <Button
+                class="rounded-md p-1 text-ink-extra-muted"
+                size="icon-sm"
+                label="New Split"
+                hotkey={TOKENS.global.createNewSplit}
+                disabled={!canCreateNewSplit()}
+                onClick={handleNewSplitClick}
+              >
+                <AnimatedNewSplitIcon class="size-4" />
+              </Button>
+            </div>
+          </Show>
           <Button
-            class="flex items-center justify-center rounded-xs p-0.5 px-2 bg-surface [&_svg]:size-4"
-            onClick={() => handleSidebarOpenChange(!isExpanded())}
-            onMouseEnter={() => setSidebarBtnHovering(true)}
-            onMouseLeave={() => setSidebarBtnHovering(false)}
+            class="rounded-md p-1 text-ink-extra-muted [&_svg]:size-4"
+            size="icon-sm"
+            onMouseDown={(e) => {
+              if (e.button !== 0) return;
+              e.preventDefault();
+            }}
+            onClick={() => {
+              handleSidebarOpenChange(!isExpanded());
+              globalSplitManager()?.returnFocus();
+            }}
             label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
             hotkey={TOKENS.global.toggleSidebar}
           >
-            <AnimatedSidebarIcon triggerAnimation={sidebarBtnHovering()} />
+            <SquareSidebarIcon />
           </Button>
         </div>
       </div>
@@ -643,45 +941,75 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <hr class="border-transparent mb-2" />
       </div>
 
-      <div class="w-full px-2 flex flex-col">
-        <Show when={showEnableNotifications()}>
-          <SidebarActionButton
-            label="Enable Notifications"
+      <Show when={!isSlim() && !premiumCardDismissed()}>
+        <div class="w-full px-2 mb-2">
+          <SidebarPromoCard
+            label="Upgrade to Premium"
+            description="Unlock MCP integrations, better AI models, and team collaboration."
+            onDismiss={() => {
+              setPremiumCardDismissed(true);
+              setPremiumHintVisible(true);
+            }}
+            primaryAction={{
+              label: 'Upgrade',
+              onClick: () => openSettingsTab('Account'),
+            }}
+            secondaryAction={{
+              label: 'Later',
+              onClick: () => {
+                setPremiumCardDismissed(true);
+                setPremiumHintVisible(true);
+              },
+            }}
+          />
+        </div>
+      </Show>
+      <Show when={!isSlim() && premiumHintVisible() && premiumCardDismissed()}>
+        <div class="w-full px-2 mb-2">
+          <SidebarPromoHint
+            title="Maybe later"
+            message="You can upgrade anytime from Account settings."
+            onDone={() => setPremiumHintVisible(false)}
+            secondaryAction={{
+              label: 'Take me there',
+              onClick: () => openSettingsTab('Account'),
+            }}
+          />
+        </div>
+      </Show>
+
+      <div class="w-full px-2 flex flex-col gap-1 mb-1">
+        <Show when={isTabAvailable('Mobile App')}>
+          <SidebarShortcutLink
+            label="App"
             isSlim={isSlim}
-            onClick={handleEnableNotifications}
-            icon={() => <BellIcon class="size-4" />}
+            onClick={() => openSettingsTab('Mobile App')}
+            icon={() => <DeviceMobileIcon class="size-4" />}
           />
         </Show>
-        <SidebarActionButton
-          label="Invite"
-          isSlim={isSlim}
-          onClick={() => setInviteModalOpen(true)}
-          icon={AnimatedUsersIcon}
-        />
+        <Show when={isTabAvailable('Agent')}>
+          <SidebarShortcutLink
+            label="MCPs"
+            isSlim={isSlim}
+            onClick={() => openSettingsTab('Agent')}
+            icon={() => <PlugIcon class="size-4" />}
+          />
+        </Show>
+        <Show when={isTabAvailable('Team')}>
+          <SidebarShortcutLink
+            label="Team"
+            isSlim={isSlim}
+            onClick={() => openSettingsTab('Team')}
+            icon={() => <UsersThreeIcon class="size-4" />}
+          />
+        </Show>
+      </div>
 
-        <SidebarActionButton
-          label="New Split"
-          hotkeyToken={TOKENS.global.createNewSplit}
+      <div class="w-full px-2">
+        <SidebarSettingsWidget
           isSlim={isSlim}
-          onClick={handleNewSplitClick}
-          disabled={() => !canCreateNewSplit()}
-          icon={AnimatedNewSplitIcon}
-        />
-
-        <SidebarActionButton
-          label="Command"
-          hotkeyToken={TOKENS.global.commandMenu}
-          isSlim={isSlim}
-          onClick={handleCommandPaletteClick}
-          icon={AnimatedCommandIcon}
-        />
-
-        <SidebarActionButton
-          label="Settings"
-          hotkeyToken={TOKENS.global.toggleSettings}
-          isSlim={isSlim}
-          onClick={toggleSettings}
-          icon={AnimatedGearIcon}
+          onSelect={openSettingsTab}
+          isTabAvailable={isTabAvailable}
         />
       </div>
       <InviteModal />
@@ -757,9 +1085,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
         <Button
           draggable={false}
           variant="ghost"
+          data-sidebar-link={props.id}
+          data-active={isActive() ? '' : undefined}
           class={cn(
-            'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-xs py-1 text-ink-extra-muted',
-            isActive() && 'bg-ink/5 not-disabled:hover:bg-ink/10 text-ink'
+            'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-md py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3',
+            isActive() && 'bg-ink/6 not-disabled:hover:bg-ink/6 text-ink'
           )}
           tooltipPlacement="right"
           onMouseEnter={() => setIsHovering(true)}
@@ -774,12 +1104,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
               : undefined
           }
           onMouseLeave={() => setIsHovering(false)}
-          onClick={(e) => {
+          onMouseDown={(e) => {
+            if (e.button !== 0) return;
             analytics.track('sidebar_click', {
               view: props.id,
             });
-            // Middle mouse handling
-            if (e.button === 1) return;
 
             e.preventDefault();
             let currentContentHandle = layoutManager?.activeSplit();

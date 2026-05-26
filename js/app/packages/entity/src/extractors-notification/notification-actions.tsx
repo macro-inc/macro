@@ -43,10 +43,8 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
         let toastId: number | undefined;
 
         const showToast = () => {
-          toastId = toast.success(
-            'Marked as done',
-            undefined,
-            [
+          toastId = toast.success('Marked as done', {
+            actions: [
               {
                 label: 'Undo',
                 icon: ArrowCounterClockwise,
@@ -59,9 +57,9 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
                 },
               },
             ],
-            10_000,
-            true
-          );
+            duration: 10_000,
+            stack: true,
+          });
         };
 
         showToast();

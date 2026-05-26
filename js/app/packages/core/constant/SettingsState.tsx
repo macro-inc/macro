@@ -12,14 +12,17 @@ export type SettingsTab =
   | 'Inbox'
   | 'Shortcuts'
   | 'Mobile App'
-  | 'MCP'
+  | 'Agent'
   | 'Team';
 
-export const [activeTabId, setActiveTabId] =
-  createSignal<SettingsTab>('Appearance');
+const [activeTabId, setActiveTabId] = createSignal<SettingsTab>('Appearance');
+
+export type AgentSettingsSubTab = 'connectors' | 'mcp_server';
+export const [agentSettingsSubTab, setAgentSettingsSubTab] =
+  createSignal<AgentSettingsSubTab>('connectors');
 
 export const useSettingsState = () => {
-  const { insertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
 
   const getSettingsSplit = () => {
     const splitManager = globalSplitManager();
@@ -36,8 +39,7 @@ export const useSettingsState = () => {
 
   const openSettings = (activeTabId?: SettingsTab) => {
     if (activeTabId) setActiveTabId(activeTabId);
-    if (isOpen()) return; // Already open
-    insertSplit({ type: 'component', id: 'settings' });
+    openWithSplit({ type: 'component', id: 'settings' }, { activate: true });
   };
 
   const closeSettings = () => {

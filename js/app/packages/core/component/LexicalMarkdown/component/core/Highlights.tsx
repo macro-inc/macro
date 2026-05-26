@@ -39,7 +39,7 @@ type PaddingValue =
  *   - [x, y]: horizontal and vertical padding
  *   - [top, right, bottom, left]: individual side padding (CSS-style)
  */
-export function getHighlightStyle(
+function getHighlightStyle(
   targetRect: DOMRect | null,
   anchorElem: HTMLElement,
   padding: PaddingValue = 0
@@ -229,7 +229,7 @@ function createRectsFromDOMRange(
 /**
  * Get the highlight rects for a selection.
  */
-export function getSelectionRects(
+function _getSelectionRects(
   editor: LexicalEditor,
   selection: BaseSelection | null
 ): DOMRect[] {

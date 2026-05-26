@@ -77,11 +77,16 @@ async fn main() {
         ),
     );
 
-    let email_repo = EmailPgRepo::new(pool);
+    let email_repo = EmailPgRepo::new(pool.clone());
+    let crm_service = crm::domain::service::CrmServiceImpl::new(
+        crm::outbound::companies_repo::CompaniesRepositoryImpl::new(pool),
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+    );
     let email_service = EmailServiceImpl::new(
         email_repo,
         frecency_service,
         email::domain::ports::NoOpEnqueuer,
+        crm_service,
         0,
     );
 
@@ -92,7 +97,6 @@ async fn main() {
     );
     let toolset = email_toolset();
 
-    #[expect(deprecated)]
     let context = RequestContext { user_id };
 
     let cli = Cli::new(

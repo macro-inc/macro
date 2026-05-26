@@ -1,4 +1,4 @@
-import { ContextMenuContent } from '@core/component/Menu';
+import { ContextMenuContent } from '@core/component/ContextMenu';
 import { longPressHighlight } from '@core/directive/longPressHighlight';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';

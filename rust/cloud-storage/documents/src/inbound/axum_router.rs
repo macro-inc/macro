@@ -4,7 +4,8 @@
 //! - `POST /` — create a new document
 //! - `GET /{document_id}` — get document metadata
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
-//! - `GET /{document_id}/branch_name` — get short ID + git branch name (when the document is a task)
+//! - `GET /{document_id}/branch_name` — get short ID + task-aware git branch name (when the document is a task)
+//! - `GET /{document_id}/github_prs` — get GitHub pull requests associated with a task document
 //! - `GET /{document_id}/short_id` — get document short ID
 //! - `POST /create_markdown` — create and initialize a markdown document
 //! - `DELETE /{document_id}` — soft-delete a document
@@ -12,17 +13,18 @@
 #[cfg(test)]
 mod tests;
 
-mod copy_document;
-mod create_document;
+pub mod copy_document;
+pub mod create_document;
 #[cfg(feature = "document_create")]
-mod create_markdown;
-mod create_task;
-mod delete_document;
-mod edit_document;
-mod get_branch_name;
-mod get_document;
-mod get_location;
-mod get_short_id;
+pub mod create_markdown;
+pub mod create_task;
+pub mod delete_document;
+pub mod edit_document;
+pub mod get_branch_name;
+pub mod get_document;
+pub mod get_github_pull_requests;
+pub mod get_location;
+pub mod get_short_id;
 
 use std::sync::Arc;
 
@@ -39,23 +41,20 @@ use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use sqlx::PgPool;
 
+#[cfg(feature = "document_create")]
+use self::create_markdown::create_markdown_handler;
+use self::{
+    copy_document::copy_document_handler, create_document::create_document_handler,
+    create_task::create_task_handler, delete_document::delete_document_handler,
+    edit_document::edit_document_handler, get_branch_name::get_branch_name_handler,
+    get_document::get_document_handler, get_github_pull_requests::get_github_pull_requests_handler,
+    get_location::get_location_v3_handler, get_short_id::get_short_id_handler,
+};
+
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
 #[cfg(feature = "document_create")]
 use crate::domain::ports::create::DocumentCreationService;
-
-// Re-export handlers and utoipa path types for external use (swagger, internal routes)
-pub use copy_document::*;
-pub use create_document::*;
-#[cfg(feature = "document_create")]
-pub use create_markdown::*;
-pub use create_task::*;
-pub use delete_document::*;
-pub use edit_document::*;
-pub use get_branch_name::*;
-pub use get_document::*;
-pub use get_location::*;
-pub use get_short_id::*;
 
 impl IntoResponse for DocumentError {
     fn into_response(self) -> axum::response::Response {
@@ -151,6 +150,10 @@ where
         .route(
             "/{document_id}/branch_name",
             axum::routing::get(get_branch_name_handler::<T, Svc>),
+        )
+        .route(
+            "/{document_id}/github_prs",
+            axum::routing::get(get_github_pull_requests_handler::<T, Svc>),
         )
         .route(
             "/{document_id}/short_id",

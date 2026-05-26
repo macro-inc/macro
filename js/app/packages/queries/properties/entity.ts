@@ -1,22 +1,20 @@
 import { toast } from '@core/component/Toast/Toast';
-import { throwOnErr } from '@core/util/maybeResult';
-import { useMutation, useQuery } from '@tanstack/solid-query';
-import { type Accessor, batch } from 'solid-js';
+import { throwOnErr } from '@core/util/result';
 import {
   entityPropertyFromApi,
   propertyValueToApi,
-} from '../../core/component/Properties/api/converters';
+} from '@property/api/converters';
 import type {
   Property,
   PropertyApiValues,
   PropertyDefinitionDomain,
-} from '../../core/component/Properties/types';
-import { isInstantiatedProperty } from '../../core/component/Properties/utils';
-import {
-  type PropertiesEntityType,
-  propertiesServiceClient,
-} from '../../service-clients/service-properties/client';
+} from '@property/types';
+import { isInstantiatedProperty } from '@property/utils';
+import { useMutation, useQuery } from '@tanstack/solid-query';
+import { type Accessor, batch } from 'solid-js';
+import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
+import type { SoupProperty } from '../../service-clients/service-storage/generated/schemas/soupProperty';
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
 import { queryClient } from '../client';
 import {
@@ -61,7 +59,7 @@ export function useEntityPropertiesQuery(
   );
 }
 
-export function invalidatePropertiesForEntity(
+function invalidatePropertiesForEntity(
   entityType: EntityType,
   entityId: string
 ) {
@@ -80,7 +78,7 @@ function getPropertyDefinitionId(
 
 function optimisticUpdateSoupEntityProperty(
   entityId: string,
-  propertyDefinitionId: string,
+  property: Property | PropertyDefinitionDomain,
   value: SoupPropertyValue
 ): SoupTransaction | undefined {
   const current = getSoupEntityById(entityId);
@@ -93,16 +91,73 @@ function optimisticUpdateSoupEntityProperty(
     return undefined;
   }
 
+  const propertyDefinitionId = getPropertyDefinitionId(property);
+  const existing = current.data.properties;
+  const existingProp = existing.find(
+    (prop) => prop.definition.id === propertyDefinitionId
+  );
+
+  const nextProp: SoupProperty = existingProp
+    ? {
+        ...existingProp,
+        definition: {
+          ...existingProp.definition,
+          // HACK (seamus): we need to change something other than value in
+          // order to get normy to update the cache. Changing
+          // definition.updated_at is INCORRECT, but it's currently harmless.
+          updated_at: new Date().toISOString(),
+        },
+        value,
+      }
+    : buildSoupProperty(property, value);
+
+  const nextProperties = existing.map((prop) =>
+    prop.definition.id === nextProp.definition.id ? nextProp : prop
+  );
+
+  if (
+    nextProperties.every(
+      (prop) => prop.definition.id !== nextProp.definition.id
+    )
+  ) {
+    nextProperties.push(nextProp);
+  }
+
   return optimisticUpdateSoupEntity({
     tag: current.tag,
     data: {
       ...current.data,
-      properties: current.data.properties.map((prop) =>
-        prop.definition.id === propertyDefinitionId ? { ...prop, value } : prop
-      ),
+      properties: nextProperties,
     },
     frecency_score: current.frecency_score,
   });
+}
+
+function buildSoupProperty(
+  property: Property | PropertyDefinitionDomain,
+  value: SoupPropertyValue
+): SoupProperty {
+  const now = new Date().toISOString();
+  const instantiated = isInstantiatedProperty(property);
+  return {
+    definition: {
+      id: getPropertyDefinitionId(property),
+      display_name: property.displayName,
+      data_type: property.valueType,
+      is_metadata: instantiated
+        ? (property.isMetadata ?? false)
+        : property.isMetadata,
+      is_multi_select: property.isMultiSelect,
+      is_system: instantiated
+        ? (property.isSystemProperty ?? false)
+        : property.isSystem,
+      owner: property.owner,
+      specific_entity_type: property.specificEntityType ?? undefined,
+      created_at: now,
+      updated_at: now,
+    },
+    value,
+  };
 }
 
 /**
@@ -146,7 +201,7 @@ function apiValuesToSoupPropertyValue(
   }
 }
 
-export type DeleteEntityPropertyParams = {
+type DeleteEntityPropertyParams = {
   entityPropertyId: string;
   entityType: EntityType;
   entityId: string;
@@ -182,7 +237,7 @@ export function useDeleteEntityPropertyMutation(
   }));
 }
 
-export type AddEntityPropertyParams = {
+type AddEntityPropertyParams = {
   entityId: string;
   entityType: EntityType;
   propertyDefinitionId: string;
@@ -224,12 +279,7 @@ export function useAddEntityPropertyMutation(
   }));
 }
 
-export type SetPropertyStatusCompleteParams = {
-  entityType: PropertiesEntityType;
-  entityId: string;
-};
-
-export type BulkSaveEntityPropertiesParams = {
+type BulkSaveEntityPropertiesParams = {
   properties: Array<{
     entityId: string;
     entityType: EntityType;
@@ -289,7 +339,7 @@ export function useBulkSaveEntityPropertiesMutation(
             for (const item of vars.properties) {
               const txn = optimisticUpdateSoupEntityProperty(
                 item.entityId,
-                getPropertyDefinitionId(item.property),
+                item.property,
                 apiValuesToSoupPropertyValue(item.apiValues)
               );
               if (txn) txns.push(txn);

@@ -47,8 +47,7 @@ pub type DcsMessageService = MessageServiceImpl<PgChatRepo, DcsAttachmentProvide
 #[cfg(test)]
 mod test;
 #[cfg(test)]
-pub use test::*;
-
+pub use test::test_api_context;
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 
 pub type DcsMemoryService =

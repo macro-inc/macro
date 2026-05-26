@@ -1,20 +1,17 @@
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
-import {
-  isOk,
-  mapOk,
-  type ObjectLike,
-  ok,
-  resultError,
-} from '@core/util/maybeResult';
 import { registerClient } from '@core/util/mockClient';
+import type { ObjectLike } from '@core/util/result';
 import { type SafeFetchInit, safeFetch } from '@core/util/safeFetch';
 import { logger } from '@observability';
 import { makePersisted } from '@solid-primitives/storage';
+import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
+  EnrichGithubPullRequestsProxyRequest,
+  EnrichGithubPullRequestsResponse,
   InitGithubLinkResponse,
   PatchSubscriptionTierRequest,
   PatchUserTutorialRequest,
@@ -32,7 +29,6 @@ import type { InviteToTeamRequest } from './generated/schemas/inviteToTeamReques
 import type { MacroApiTokenResponse } from './generated/schemas/macroApiTokenResponse';
 import type { PasswordRequest } from './generated/schemas/passwordRequest';
 import type { PatchTeamRequest } from './generated/schemas/patchTeamRequest';
-import type { PatchTeamUserTierRequest } from './generated/schemas/patchTeamUserTierRequest';
 import type { PatchUserGroupRequest } from './generated/schemas/patchUserGroupRequest';
 import type { PatchUserOnboardingRequest } from './generated/schemas/patchUserOnboardingRequest';
 import type { PostGetNamesRequestBody } from './generated/schemas/postGetNamesRequestBody';
@@ -86,7 +82,7 @@ function getExpiresAt(token: string) {
 
 // Promise to track ongoing refresh operations to prevent multiple concurrent refreshes
 let ongoingRefresh: Promise<string | null> | null = null;
-export async function getAccessToken(): Promise<string | null> {
+async function getAccessToken(): Promise<string | null> {
   const data = accessTokenData();
   if (!data) {
     return null;
@@ -107,14 +103,14 @@ export async function getAccessToken(): Promise<string | null> {
           refreshToken,
         });
 
-        if (isOk(result)) {
+        if (result.isOk()) {
           // After successful refresh, get the updated access token from storage
           setAccessTokenData({
-            accessToken: result[1].access_token,
-            refreshToken: result[1].refresh_token,
-            expiresAt: getExpiresAt(result[1].access_token),
+            accessToken: result.value.access_token,
+            refreshToken: result.value.refresh_token,
+            expiresAt: getExpiresAt(result.value.access_token),
           });
-          return result[1].access_token;
+          return result.value.access_token;
         } else {
           // Refresh failed
           return null;
@@ -134,8 +130,6 @@ export async function getAccessToken(): Promise<string | null> {
   return accessToken;
 }
 
-export type { GetLegacyUserPermissionsResponse, UserOrganizationResponse };
-
 export type PatchSubscriptionTierErrorCode =
   | 'TIER_UNCHANGED'
   | 'USER_IN_TEAM'
@@ -145,36 +139,34 @@ export type PatchSubscriptionTierErrorCode =
 export const authServiceClient = {
   async logout() {
     setAccessTokenData(null);
-    return mapOk(
-      await authApiFetch<EmptyResponse>(`/logout`, { method: 'POST' }),
-      (result) => result
-    );
+    return (
+      await authApiFetch<EmptyResponse>(`/logout`, { method: 'POST' })
+    ).map((result) => result);
   },
   async getUserInfo() {
-    return mapOk(
+    return (
       await fetchWithAuth<Partial<GetUserInfo>>(`${authHost}/user/me`, {
         method: 'GET',
-      }),
-      (data) => ({
-        authenticated: !!data.user_id,
-        permissions: data.permissions || [],
-        userId: data.user_id,
-        organizationId: data.organization_id ?? undefined,
       })
-    );
+    ).map((data) => ({
+      authenticated: !!data.user_id,
+      permissions: data.permissions || [],
+      userId: data.user_id,
+      organizationId: data.organization_id ?? undefined,
+    }));
   },
   async sessionLogin(args: { session_code: string }) {
-    const maybeResult = await authApiFetch<UserTokensResponse>(
+    const result = await authApiFetch<UserTokensResponse>(
       `/session/login/${args.session_code}`
     );
-    if (isOk(maybeResult)) {
+    if (result.isOk()) {
       setAccessTokenData({
-        accessToken: maybeResult[1].access_token,
-        refreshToken: maybeResult[1].refresh_token,
-        expiresAt: getExpiresAt(maybeResult[1].access_token),
+        accessToken: result.value.access_token,
+        refreshToken: result.value.refresh_token,
+        expiresAt: getExpiresAt(result.value.access_token),
       });
     }
-    return maybeResult;
+    return result;
   },
   async deleteUser() {
     setAccessTokenData(null);
@@ -195,22 +187,22 @@ export const authServiceClient = {
     });
   },
   async passwordlessCallback({ code, email }: { code: string; email: string }) {
-    const maybeResult = await safeFetch<UserTokensResponse>(
+    const result = await safeFetch<UserTokensResponse>(
       `${authHost}/oauth/passwordless/${code}?email=${encodeURIComponent(email)}&disable_redirect=true`,
       { cache: 'no-store', credentials: 'include' },
       async (response) => {
         const message = await response.text();
-        return resultError({ code: 'UNAUTHORIZED', message });
+        return { code: 'UNAUTHORIZED' as const, message };
       }
     );
-    if (isOk(maybeResult)) {
+    if (result.isOk()) {
       setAccessTokenData({
-        accessToken: maybeResult[1].access_token,
-        refreshToken: maybeResult[1].refresh_token,
-        expiresAt: getExpiresAt(maybeResult[1].access_token),
+        accessToken: result.value.access_token,
+        refreshToken: result.value.refresh_token,
+        expiresAt: getExpiresAt(result.value.access_token),
       });
     }
-    return maybeResult;
+    return result;
   },
   async refreshToken(args: { accessToken: string; refreshToken: string }) {
     return authApiFetch<UserTokensResponse>('/jwt/refresh', {
@@ -225,7 +217,7 @@ export const authServiceClient = {
     args: GetProfilePicturesRequestBody,
     init?: SafeFetchInit
   ) {
-    return mapOk(
+    return (
       await fetchWithAuth<ProfilePictures>(
         `${authHost}/user/profile_pictures`,
         {
@@ -233,28 +225,25 @@ export const authServiceClient = {
           method: 'POST',
           body: JSON.stringify(args),
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async putProfilePicture(args: PutProfilePictureParams) {
-    return mapOk(
+    return (
       await fetchWithAuth<ProfilePictures>(
         `${authHost}/user/profile_picture?url=${args.url}`,
         {
           method: 'PUT',
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async getUserName() {
-    return mapOk(
+    return (
       await fetchWithAuth<UserName>(`${authHost}/user/name`, {
         method: 'GET',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async putUserName(args: PutUserNameQueryParams) {
     const queryParams: string[] = [];
@@ -267,30 +256,27 @@ export const authServiceClient = {
       queryParams.push(`last_name=${encodeURIComponent(args.last_name)}`);
     }
     const queryString = queryParams.join('&');
-    return mapOk(
+    return (
       await fetchWithAuth<UserName>(`${authHost}/user/name?${queryString}`, {
         method: 'PUT',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async getUserNames(args: PostGetNamesRequestBody) {
-    return mapOk(
+    return (
       await fetchWithAuth<UserNames>(`${authHost}/user/get_names`, {
         method: 'POST',
         body: JSON.stringify(args),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async getUserNamesWithEmail(args: PostGetNamesRequestBody) {
-    return mapOk(
+    return (
       await fetchWithAuth<UserNames>(`${authHost}/user/get_names_with_email`, {
         method: 'POST',
         body: JSON.stringify(args),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
   async checkLinkExists(args: { idp_name?: string; idp_id?: string }) {
     const queryParams: string[] = [];
@@ -302,15 +288,14 @@ export const authServiceClient = {
       queryParams.push(`idp_id=${args.idp_id}`);
     }
     const queryString = queryParams.join('&');
-    return mapOk(
+    return (
       await fetchWithAuth<UserLinkResponse>(
         `${authHost}/user/link_exists?${queryString}`,
         {
           method: 'GET',
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
   async macroApiToken() {
     const accessToken = await getAccessToken();
@@ -326,33 +311,42 @@ export const authServiceClient = {
     });
   },
   async userQuota() {
-    const result = await mapOk(
+    const result = await (
       await fetchWithAuth<UserQuota>(`${authHost}/user/quota`, {
         method: 'GET',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
 
     return result;
   },
+
+  async enrichGithubPullRequests(args: EnrichGithubPullRequestsProxyRequest) {
+    return (
+      await fetchWithAuth<EnrichGithubPullRequestsResponse>(
+        `${authHost}/github_pull_requests/enrich`,
+        {
+          method: 'POST',
+          body: JSON.stringify(args),
+        }
+      )
+    ).map((result) => result);
+  },
   async patchUserTutorial(args: PatchUserTutorialRequest) {
-    return mapOk(
+    return (
       await fetchWithAuth<EmptyResponse>(`${authHost}/user/tutorial`, {
         method: 'PATCH',
         body: JSON.stringify(args),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 
   async patchAiConsent(args: { aiDataConsent: boolean }) {
-    return mapOk(
+    return (
       await fetchWithAuth<EmptyResponse>(`${authHost}/user/ai_consent`, {
         method: 'PATCH',
         body: JSON.stringify(args),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 
   // HTTP methods (migrated from RPC)
@@ -362,7 +356,7 @@ export const authServiceClient = {
       { method: 'GET' }
     );
 
-    return mapOk(result, (data) => ({
+    return result.map((data) => ({
       id: data.userId,
       permissions: data.permissions,
       email: data.email,
@@ -386,7 +380,7 @@ export const authServiceClient = {
     );
 
     // If the response is an error, treat as no organization (204 No Content or other errors)
-    if (!isOk(response)) {
+    if (!response.isOk()) {
       return ok({
         organizationId: undefined as string | undefined,
         organizationName: undefined as string | undefined,
@@ -394,41 +388,38 @@ export const authServiceClient = {
     }
 
     return ok({
-      organizationId: response[1].organizationId
-        ? String(response[1].organizationId)
+      organizationId: response.value.organizationId
+        ? String(response.value.organizationId)
         : undefined,
-      organizationName: response[1].organizationName as string | undefined,
+      organizationName: response.value.organizationName as string | undefined,
     });
   },
 
   async completeOnboarding(args: PatchUserOnboardingRequest) {
-    return mapOk(
+    return (
       await fetchWithAuth<EmptyResponse>(`${authHost}/user/onboarding`, {
         method: 'PATCH',
         body: JSON.stringify(args),
-      }),
-      () => undefined
-    );
+      })
+    ).map(() => undefined);
   },
 
   async setGroup(args: PatchUserGroupRequest) {
-    return mapOk(
+    return (
       await fetchWithAuth<EmptyResponse>(`${authHost}/user/group`, {
         method: 'PATCH',
         body: JSON.stringify(args),
-      }),
-      () => undefined
-    );
+      })
+    ).map(() => undefined);
   },
 
   async sendReferralInvite(recipient: string) {
-    return mapOk(
+    return (
       await fetchWithAuth<EmptyResponse>(`${authHost}/referral/send`, {
         method: 'POST',
         body: JSON.stringify({ recipient }),
-      }),
-      () => undefined
-    );
+      })
+    ).map(() => undefined);
   },
 
   // Stripe HTTP methods (replacing RPC calls)
@@ -443,7 +434,7 @@ export const authServiceClient = {
     };
     tier?: string;
   }) {
-    return mapOk(
+    return (
       await fetchWithAuth<{ url: string }>(`${authHost}/user/stripe/checkout`, {
         method: 'POST',
         body: JSON.stringify({
@@ -453,21 +444,45 @@ export const authServiceClient = {
           metadata: args.metadata,
           tier: args.tier ?? undefined,
         }),
-      }),
-      (result) => result.url
-    );
+      })
+    ).map((result) => result.url);
+  },
+
+  async createCheckoutSessionV2(args: {
+    successUrl: string;
+    cancelUrl: string;
+    discount?: string | null;
+    metadata?: {
+      gaClientId?: string | null;
+      fbp?: string | null;
+      fbc?: string | null;
+    };
+  }) {
+    return (
+      await fetchWithAuth<{ url: string }>(
+        `${authHost}/user/stripe/checkoutv2`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            successUrl: args.successUrl,
+            cancelUrl: args.cancelUrl,
+            discount: args.discount ?? undefined,
+            metadata: args.metadata,
+          }),
+        }
+      )
+    ).map((result) => result.url);
   },
 
   async createPortalSession(args: { returnUrl: string }) {
-    return mapOk(
+    return (
       await fetchWithAuth<{ url: string }>(`${authHost}/user/stripe/portal`, {
         method: 'POST',
         body: JSON.stringify({
           returnUrl: args.returnUrl,
         }),
-      }),
-      (result) => result.url
-    );
+      })
+    ).map((result) => result.url);
   },
 
   /**
@@ -537,12 +552,11 @@ export const authServiceClient = {
     const url = originalUrl
       ? `${authHost}/link/github?original_url=${encodeURIComponent(originalUrl)}`
       : `${authHost}/link/github`;
-    return mapOk(
+    return (
       await fetchWithAuth<InitGithubLinkResponse>(url, {
         method: 'POST',
-      }),
-      (result) => result.authorization_url
-    );
+      })
+    ).map((result) => result.authorization_url);
   },
 
   /**
@@ -550,12 +564,11 @@ export const authServiceClient = {
    * NOTE: this does not delete the github application from being installed on a teams repository
    */
   async deleteGithubLink() {
-    return mapOk(
+    return (
       await fetchWithAuth<{}>(`${authHost}/link/github`, {
         method: 'DELETE',
-      }),
-      (_result) => {}
-    );
+      })
+    ).map((_result) => {});
   },
 
   async sendMobileWelcomeEmail(email: string) {
@@ -585,125 +598,103 @@ export const authServiceClient = {
   },
 
   async getUserTeams() {
-    return mapOk(
-      await fetchWithAuth<Team[]>(`${authHost}/team/user`, { method: 'GET' }),
-      (result) => result
-    );
+    return (
+      await fetchWithAuth<Team[]>(`${authHost}/team/user`, { method: 'GET' })
+    ).map((result) => result);
   },
 
   async getUserInvites() {
-    return mapOk(
+    return (
       await fetchWithAuth<TeamInvitesResponse>(
         `${authHost}/team/user/invites`,
         {
           method: 'GET',
         }
-      ),
-      (result) => result
-    );
+      )
+    ).map((result) => result);
   },
 
   async getTeam() {
-    return mapOk(
+    return (
       await fetchWithAuth<TeamWithMembers>(`${authHost}/team`, {
         method: 'GET',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 
   async getTeamInvites() {
-    return mapOk(
+    return (
       await fetchWithAuth<TeamInvitesResponse>(`${authHost}/team/invites`, {
         method: 'GET',
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 
   async createTeam(args: CreateTeamRequest) {
-    return mapOk(
+    return (
       await fetchWithAuth<Team>(`${authHost}/team`, {
         method: 'POST',
         body: JSON.stringify(args),
-      }),
-      (result) => result
-    );
+      })
+    ).map((result) => result);
   },
 
   async joinTeam(teamInviteId: string) {
-    return mapOk(
+    return (
       await fetchWithAuth<{}>(`${authHost}/team/join/${teamInviteId}`, {
         method: 'GET',
-      }),
-      () => undefined
-    );
+      })
+    ).map(() => undefined);
   },
 
   async rejectInvitation(teamInviteId: string) {
-    return mapOk(
+    return (
       await fetchWithAuth<{}>(`${authHost}/team/join/${teamInviteId}`, {
         method: 'DELETE',
-      }),
-      () => undefined
-    );
+      })
+    ).map(() => undefined);
   },
 
   async patchTeam(args: PatchTeamRequest) {
-    return mapOk(
+    return (
       await fetchWithAuth<{}>(`${authHost}/team`, {
         method: 'PATCH',
         body: JSON.stringify(args),
-      }),
-      () => undefined
-    );
-  },
-
-  async patchTeamUserTier(args: PatchTeamUserTierRequest) {
-    return mapOk(
-      await fetchWithAuth<{}>(`${authHost}/team/tier`, {
-        method: 'PATCH',
-        body: JSON.stringify(args),
-      }),
-      () => undefined
-    );
+      })
+    ).map(() => undefined);
   },
 
   async inviteToTeam(args: InviteToTeamRequest) {
-    return mapOk(
+    return (
       await fetchWithAuth<{}>(`${authHost}/team/invite`, {
         method: 'POST',
         body: JSON.stringify(args),
-      }),
-      () => undefined
-    );
+      })
+    ).map(() => undefined);
   },
 
   async deleteTeamInvite(teamInviteId: string) {
-    return mapOk(
+    return (
       await fetchWithAuth<{}>(`${authHost}/team/invite/${teamInviteId}`, {
         method: 'DELETE',
-      }),
-      () => undefined
-    );
+      })
+    ).map(() => undefined);
   },
 
   async removeUserFromTeam(userId: string) {
-    return mapOk(
+    return (
       await fetchWithAuth<{}>(`${authHost}/team/remove/${userId}`, {
         method: 'DELETE',
-      }),
-      () => undefined
-    );
+      })
+    ).map(() => undefined);
   },
 
   async deleteTeam() {
-    return mapOk(
+    return (
       await fetchWithAuth<{}>(`${authHost}/team`, {
         method: 'DELETE',
-      }),
-      () => undefined
-    );
+      })
+    ).map(() => undefined);
   },
 };
 

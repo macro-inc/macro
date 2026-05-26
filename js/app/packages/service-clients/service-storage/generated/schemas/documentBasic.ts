@@ -10,6 +10,7 @@ import type { DocumentBasicDeletedAt } from './documentBasicDeletedAt';
 import type { DocumentBasicDocumentFamilyId } from './documentBasicDocumentFamilyId';
 import type { DocumentBasicFileType } from './documentBasicFileType';
 import type { DocumentBasicProjectId } from './documentBasicProjectId';
+import type { DocumentBasicSubType } from './documentBasicSubType';
 
 /**
  * Returns basic information of a document used for some db queries
@@ -24,4 +25,5 @@ export interface DocumentBasic {
   fileType?: DocumentBasicFileType;
   owner: string;
   projectId?: DocumentBasicProjectId;
+  subType?: DocumentBasicSubType;
 }

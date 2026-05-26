@@ -21,19 +21,19 @@ export function hasEntityAccess(
   return response.status === 'access';
 }
 
-export function isAccessLevelPermission(
+function isAccessLevelPermission(
   permission: EntityPermission
 ): permission is AccessLevelPermission {
   return permission.type === 'access_level';
 }
 
-export function isChannelRolePermission(
+function isChannelRolePermission(
   permission: EntityPermission
 ): permission is ChannelRolePermission {
   return permission.type === 'channel_role';
 }
 
-export function getEntityAccessLevel(
+function _getEntityAccessLevel(
   response: EntityPermissionResponse
 ): AccessLevel | null {
   if (!hasEntityAccess(response)) {
@@ -47,7 +47,7 @@ export function getEntityAccessLevel(
   return response.permission.access_level;
 }
 
-export function getEntityChannelRole(
+function _getEntityChannelRole(
   response: EntityPermissionResponse
 ): ParticipantRole | null {
   if (!hasEntityAccess(response)) {

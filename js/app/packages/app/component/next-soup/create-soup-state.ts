@@ -16,45 +16,36 @@ import { createMemo, createSignal, type JSX } from 'solid-js';
 
 export type SoupEntity = WithNotification<EntityData | WithSearch<EntityData>>;
 
+export type GroupHeaderProps = {
+  group: GroupMeta;
+  highlighted?: boolean;
+};
+
 export type GroupMeta = {
-  id: string;
-  value: unknown;
+  key: string;
   label: string;
+  value: unknown;
   count: number;
   isExpanded: () => boolean;
   toggle: () => void;
-  renderHeader?: (props: {
-    value: unknown;
-    label: string;
-    count: number;
-  }) => JSX.Element;
+  hasMore: () => boolean;
+  loadMore: () => Promise<void>;
+  isLoading: () => boolean;
+  renderHeader?: (props: GroupHeaderProps) => JSX.Element;
 };
 
 export type SoupRow = {
-  original: SoupEntity;
   id: string;
-  depth: number;
-  group?: GroupMeta;
-  parentGroupId: string | null;
+  index: number;
+  original: SoupEntity;
+  group: GroupMeta | undefined;
+  getIsGrouped: () => boolean;
+  getIsLoadMore: () => boolean;
   isFocused: () => boolean;
   isSelected: () => boolean;
-  isExpanded: () => boolean;
-  isGrouped: () => boolean;
 };
 
-export type NavigationResult = { row: SoupRow; index: number } | undefined;
-
-export type GroupConfig<T> = {
-  id: string;
-  label: string;
-  getValue: (item: T) => unknown;
-  getLabel?: (value: unknown) => string;
-  renderHeader?: (props: {
-    value: unknown;
-    label: string;
-    count: number;
-  }) => JSX.Element;
-};
+type NavigationResult = { row: SoupRow; index: number } | undefined;
 
 export type SortConfig<T> = {
   id: string;
@@ -94,7 +85,10 @@ export const createSoupState = <TId extends string = FilterID>(
 
   const sort = createSortState(SORT_CONFIGS, ['updated_at']);
 
-  const [focusedId, setFocusedId] = createSignal<string | undefined>();
+  // Tracked by index (not id) so a row id duplicated across groups highlights
+  // only one occurrence. lastFocusedRowId follows that row across setRows.
+  const [focusedIndex, setFocusedIndex] = createSignal(-1);
+  let lastFocusedRowId: string | undefined;
 
   const [activeGroupId, setActiveGroupId] = createSignal<string | undefined>();
 
@@ -116,35 +110,46 @@ export const createSoupState = <TId extends string = FilterID>(
 
   const isGroupExpanded = (groupId: string) => !collapsedGroups().has(groupId);
 
-  const buildRow = (
-    entity: SoupEntity,
-    options: {
-      depth?: number;
-      group?: GroupMeta;
-      parentGroupId?: string | null;
-    } = {}
-  ): SoupRow => {
-    const { depth = 0, group, parentGroupId = null } = options;
-    const rowId = group ? group.id : entity.id;
-    return {
-      original: entity,
-      id: rowId,
-      depth,
+  const buildRow = (options: {
+    id: string;
+    index: number;
+    original: SoupEntity;
+    group?: GroupMeta;
+    isGrouped?: boolean;
+    isLoadMore?: boolean;
+  }): SoupRow => {
+    const {
+      id,
+      index,
+      original,
       group,
-      parentGroupId,
-      isFocused: () => focusedId() === rowId,
-      isSelected: () => selection.isSelected(entity.id),
-      isGrouped: () => parentGroupId !== null,
-      isExpanded: () => (group ? isGroupExpanded(group.id) : false),
+      isGrouped = false,
+      isLoadMore = false,
+    } = options;
+    return {
+      id,
+      index,
+      original,
+      group,
+      getIsGrouped: () => isGrouped,
+      getIsLoadMore: () => isLoadMore,
+      isFocused: () => focusedIndex() === index,
+      isSelected: () =>
+        !isGrouped && !isLoadMore && selection.isSelected(original.id),
     };
   };
 
   const [rows, setRowsInternal] = createSignal<SoupRow[]>(
-    initialData?.map((e) => buildRow(e)) ?? []
+    initialData?.map((e, i) => buildRow({ id: e.id, index: i, original: e })) ??
+      []
   );
 
   const setRows = (newRows: SoupRow[]) => {
     setRowsInternal(newRows);
+    if (!lastFocusedRowId) return;
+    const nextIndex = newRows.findIndex((r) => r.id === lastFocusedRowId);
+    setFocusedIndex(nextIndex);
+    if (nextIndex < 0) lastFocusedRowId = undefined;
   };
 
   const [previewEntity, setPreviewEntity] = createSignal<string | undefined>();
@@ -155,22 +160,15 @@ export const createSoupState = <TId extends string = FilterID>(
 
   const indexOf = (id: string): number => rows().findIndex((r) => r.id === id);
 
-  const focusedIndex = createMemo(() => {
-    const id = focusedId();
-    if (!id) return -1;
-    return indexOf(id);
-  });
-
   const focusedRow = createMemo(() => {
     const index = focusedIndex();
     if (index === -1) return undefined;
     return rows()[index];
   });
 
-  const focusedItem = createMemo(() => {
-    const row = focusedRow();
-    return row?.original;
-  });
+  const focusedId = createMemo(() => focusedRow()?.id);
+
+  const focusedItem = createMemo(() => focusedRow()?.original);
 
   const getRow = (id: string): SoupRow | undefined =>
     rows().find((r) => r.id === id);
@@ -200,7 +198,8 @@ export const createSoupState = <TId extends string = FilterID>(
     const result = calculateFocusRow(index);
 
     if (result) {
-      setFocusedId(result.row.id);
+      setFocusedIndex(result.index);
+      lastFocusedRowId = result.row.id;
     }
 
     return result;
@@ -214,36 +213,41 @@ export const createSoupState = <TId extends string = FilterID>(
     return calculateFocusRow(current + offset);
   };
 
+  const shouldSkipRow = (row: SoupRow): boolean => {
+    if (!row.group) return false;
+    if (row.getIsGrouped()) {
+      return !!skipGroupHeaders;
+    }
+    return !row.group.isExpanded();
+  };
+
   const findNextIndex = (startIndex: number, offset: number): number => {
     const allRows = rows();
     if (allRows.length === 0) return -1;
 
-    let targetIndex = startIndex;
     const direction = offset > 0 ? 1 : -1;
     let steps = Math.abs(offset);
+    let cursor = startIndex;
+    let lastValid = startIndex;
 
     while (steps > 0) {
-      targetIndex += direction;
+      cursor += direction;
 
-      if (targetIndex < 0) {
-        targetIndex = wrapNavigation ? allRows.length - 1 : 0;
+      if (cursor < 0 || cursor >= allRows.length) {
         if (!wrapNavigation) break;
-      } else if (targetIndex >= allRows.length) {
-        targetIndex = wrapNavigation ? 0 : allRows.length - 1;
-        if (!wrapNavigation) break;
+        cursor = (cursor + allRows.length) % allRows.length;
       }
 
-      const row = allRows[targetIndex];
+      const row = allRows[cursor];
       if (!row) break;
 
-      if (skipGroupHeaders && row.group) {
-        continue;
-      }
+      if (shouldSkipRow(row)) continue;
 
+      lastValid = cursor;
       steps--;
     }
 
-    return targetIndex;
+    return lastValid;
   };
 
   const navigateBy = (offset: number): NavigationResult => {
@@ -251,14 +255,14 @@ export const createSoupState = <TId extends string = FilterID>(
     const allRows = rows();
 
     if (current === -1) {
-      let startIndex = offset > 0 ? 0 : allRows.length - 1;
-      if (skipGroupHeaders) {
-        const row = allRows[startIndex];
-        if (row?.group) {
-          startIndex = findNextIndex(startIndex, offset);
-        }
+      const startIndex = offset > 0 ? 0 : allRows.length - 1;
+      const direction = offset > 0 ? 1 : -1;
+      let i = startIndex;
+      while (i >= 0 && i < allRows.length && shouldSkipRow(allRows[i])) {
+        i += direction;
       }
-      return setFocus(startIndex);
+      if (i < 0 || i >= allRows.length) return;
+      return setFocus(i);
     }
 
     const nextIndex = findNextIndex(current, offset);
@@ -266,7 +270,8 @@ export const createSoupState = <TId extends string = FilterID>(
   };
 
   const clearFocus = () => {
-    setFocusedId(undefined);
+    setFocusedIndex(-1);
+    lastFocusedRowId = undefined;
   };
 
   return {
@@ -292,7 +297,22 @@ export const createSoupState = <TId extends string = FilterID>(
       id: focusedId,
       index: focusedIndex,
       clear: clearFocus,
-      set: (id: string | undefined) => setFocusedId(id),
+      set: (id: string | undefined) => {
+        if (id === undefined) {
+          clearFocus();
+          return;
+        }
+        const idx = indexOf(id);
+        if (idx < 0) return;
+        setFocusedIndex(idx);
+        lastFocusedRowId = id;
+      },
+      setIndex: (index: number) => {
+        const row = rows()[index];
+        if (!row) return;
+        setFocusedIndex(index);
+        lastFocusedRowId = row.id;
+      },
     },
 
     navigate: {

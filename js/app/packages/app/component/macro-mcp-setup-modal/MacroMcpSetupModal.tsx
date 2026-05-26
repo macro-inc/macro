@@ -14,7 +14,7 @@ export const openMacroMcpSetupModal = () => {
   setMacroMcpSetupOpen(true);
 };
 
-export const closeMacroMcpSetupModal = () => {
+const _closeMacroMcpSetupModal = () => {
   setMacroMcpSetupOpen(false);
 };
 
@@ -26,7 +26,7 @@ export function MacroMcpSetupModal() {
         onOpenChange={setMacroMcpSetupOpen}
         class="w-190"
       >
-        <Surface depth={2} active>
+        <Surface depth={2} active class="rounded-xl">
           <div class="*:max-h-[75vh]">
             <AiChatEmptyState />
           </div>

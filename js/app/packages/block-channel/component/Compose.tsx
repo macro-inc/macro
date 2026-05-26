@@ -29,13 +29,13 @@ import {
 } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
-import { isErr } from '@core/util/maybeResult';
+
 import {
   chatRuleset,
   handleFileFolderDrop,
   uploadFile,
 } from '@core/util/upload';
-import InfoIcon from '@icon/regular/info.svg';
+import InfoIcon from '@phosphor/info.svg';
 import { commsServiceClient } from '@service-comms/client';
 import { Surface } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
@@ -130,10 +130,10 @@ export function ChannelCompose() {
           name: channelName() ?? null,
           participants: destination.users,
         });
-        if (isErr(res)) {
+        if (res.isErr()) {
           throw new Error('Could not create channel');
         }
-        const [, { id }] = res;
+        const { id } = res.value;
         await sendToChannel({
           channelId: id,
           content,
@@ -261,13 +261,17 @@ export function ChannelCompose() {
             </div>
           </div>
         </Show>
-        <div class="p-2">
+        <div class="px-2">
           <ChannelInputContainer>
             <Input.Root
               input={inputState.view()}
               commands={inputState.commands}
             >
-              <Surface depth={2}>
+              <Surface
+                depth={2}
+                class="rounded-xl ring-1 ring-edge"
+                style={{ border: '0' }}
+              >
                 <Input.DropZone
                   onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
                   onDragEnd={() => inputState.setIsDraggedOver(false)}

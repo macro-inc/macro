@@ -7,9 +7,13 @@ import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import {
+  ENTITY_ID_DATA_ATTRIBUTE,
+  entityIdSelector,
+} from '@core/dom-selectors';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
 import {
   type EntityData,
@@ -148,7 +152,7 @@ const getEntityTimestamp = (entity: EntityData): DateValue => {
 /**
  * Returns true if the new entity should replace the existing one based on timestamp. If the timestamp is the same, prefer to use the newer entity to handle optimistic updates
  */
-export const isNewerEntity = (
+const isNewerEntity = (
   newEntity: EntityData,
   existing: EntityData
 ): boolean => {
@@ -279,13 +283,13 @@ export const restoreSoupFocus = async (
   // up by focusing the soup container (which has `tabindex={-1}`) — that's
   // what actually reactivates the hotkey scope.
   if (entityId) {
-    const entityEl = domRef.querySelector(`[data-entity-id="${entityId}"]`);
+    const entityEl = domRef.querySelector(entityIdSelector(entityId));
     if (entityEl instanceof HTMLElement) entityEl.focus();
   }
 
   if (document.activeElement && domRef.contains(document.activeElement)) return;
 
-  const firstEntityEl = domRef.querySelector('[data-entity-id]');
+  const firstEntityEl = domRef.querySelector(`[${ENTITY_ID_DATA_ATTRIBUTE}]`);
   if (firstEntityEl instanceof HTMLElement) firstEntityEl.focus();
 
   if (document.activeElement && domRef.contains(document.activeElement)) return;
@@ -293,7 +297,7 @@ export const restoreSoupFocus = async (
   domRef.focus();
 };
 
-export interface OpenEntityOptions {
+interface OpenEntityOptions {
   openInNewSplit?: boolean;
   location?: SearchLocation;
   splitHandle?: SplitHandle;
@@ -433,7 +437,7 @@ async function navigateToLocation(
   }
 }
 
-export async function archiveEmail(
+async function _archiveEmail(
   id: string,
   options: { archive: boolean; optimisticallyExclude?: boolean }
 ) {
@@ -492,7 +496,7 @@ export async function archiveEmail(
   }
 }
 
-export type TrashEmailsHandle = {
+type TrashEmailsHandle = {
   /** Fire-and-forget promise for the API calls. Rejects on failure (rolls back optimistic update). */
   done: Promise<void>;
   /** Optimistically restores all entities and calls the API to remove the TRASH label. */

@@ -6,16 +6,13 @@ import { useAllProperties } from '@app/component/property-edit-modal/hooks/useAl
 import { openPropertyEditor } from '@app/component/property-edit-modal/state/propertyEditor';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { isListViewID } from '@app/constants/list-views';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import type {
-  Property,
-  PropertyDefinitionDomain,
-} from '@core/component/Properties/types';
 import { useUserId } from '@core/context/user';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { type EntityData, isTaskEntity } from '@entity';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { onCleanup } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
 import {

@@ -18,7 +18,7 @@ import {
  *     position of a list item node.
  * @returns true if a ParagraphNode was inserted successfully, false otherwise
  */
-export function $handleDeleteListItemAtStart(): boolean {
+function $handleDeleteListItemAtStart(): boolean {
   // this is the lexical handler for hitting 'ENTER' from an empty list item.
   // if that returns true, we are already done.
   const selection = $getSelection();

@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import type { InviteToTeamRequest } from '@service-auth/generated/schemas/inviteToTeamRequest';
 import type { TeamInvitesResponse } from '@service-auth/generated/schemas/teamInvitesResponse';
@@ -20,7 +20,7 @@ export function useTeamInvitesQuery(teamId: Accessor<string>) {
   }));
 }
 
-export function invalidateTeamInvites(teamId: string) {
+function invalidateTeamInvites(teamId: string) {
   return queryClient.invalidateQueries({
     queryKey: teamKeys.invites(teamId).queryKey,
   });

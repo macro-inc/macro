@@ -1,7 +1,9 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type HoverCardRootProps,
   HoverCard as KobalteHoverCard,
 } from '@kobalte/core/hover-card';
+import { cn } from '@ui';
 import type { JSX, Setter } from 'solid-js';
 import {
   createContext,
@@ -20,7 +22,12 @@ const HoverCardPortalNestedPreviewOpenContext = createContext<
   NestedHoverCardContext | undefined
 >(undefined);
 
-export type HoverCardComponentProps = {
+// Top-level open cards. When a new card opens, close any already-open siblings
+// so only one card is visible at a time — Kobalte instances are independent
+// and a missed pointerleave (common during scroll) can leave multiple stranded.
+const openTopLevelHoverCards = new Set<() => void>();
+
+type HoverCardComponentProps = {
   /** The trigger content to hover over */
   trigger: JSX.Element;
   /** The content to show in the hover card */
@@ -42,6 +49,8 @@ export type HoverCardComponentProps = {
   triggerAs?: 'span' | 'div';
   /** Class applied to the underlying trigger element. */
   triggerClass?: string;
+  /** Tab index for the trigger element. Use -1 to remove from tab order. */
+  triggerTabIndex?: number;
   /** Whether to disable the hover card */
   disabled?: boolean;
   /** Callback when open state changes */
@@ -67,6 +76,7 @@ export function HoverCard(props: HoverCardComponentProps) {
 
   const [nestedOpenCount, setNestedOpenCount] = createSignal(0);
   const [isHoverCardOpen, setIsHoverCardOpen] = createSignal(false);
+  let contentEl: HTMLElement | undefined;
 
   // Keep the internal open signal in sync with controlled `open` so the
   // nested-card tracking effect below still fires when consumers control state.
@@ -85,16 +95,60 @@ export function HoverCard(props: HoverCardComponentProps) {
     }
   });
 
+  const closeSelf = () => {
+    setIsHoverCardOpen(false);
+    props.onOpenChange?.(false);
+  };
+
+  const isTopLevel = parentNestedContext === undefined;
+
   const handleOpenChange = (open: boolean) => {
     if (!open && nestedOpenCount() > 0) {
       return;
+    }
+
+    if (open && isTopLevel) {
+      for (const close of openTopLevelHoverCards) {
+        if (close !== closeSelf) close();
+      }
+      openTopLevelHoverCards.add(closeSelf);
+    } else if (!open && isTopLevel) {
+      openTopLevelHoverCards.delete(closeSelf);
     }
 
     setIsHoverCardOpen(open);
     props.onOpenChange?.(open);
   };
 
+  onCleanup(() => {
+    if (isTopLevel) openTopLevelHoverCards.delete(closeSelf);
+  });
+
+  const isDisabled = () => props.disabled || isTouchDevice();
+
   const shouldForceMount = () => nestedOpenCount() > 0;
+
+  // Dismiss on scroll outside the card content. Kobalte only listens for
+  // pointermove to detect leaving the trigger, so a static cursor during
+  // rapid scrolling never fires the close — leaving cards stranded as new
+  // triggers slide under the cursor.
+  createEffect(() => {
+    if (!isHoverCardOpen()) return;
+
+    const onScroll = (e: Event) => {
+      const target = e.target as Node | null;
+      if (contentEl && target && contentEl.contains(target)) return;
+      handleOpenChange(false);
+    };
+
+    window.addEventListener('scroll', onScroll, {
+      capture: true,
+      passive: true,
+    });
+    onCleanup(() => {
+      window.removeEventListener('scroll', onScroll, true);
+    });
+  });
 
   return (
     <KobalteHoverCard
@@ -115,13 +169,19 @@ export function HoverCard(props: HoverCardComponentProps) {
       <KobalteHoverCard.Trigger
         as={props.triggerAs ?? 'span'}
         class={props.triggerClass}
-        disabled={props.disabled}
+        disabled={isDisabled()}
+        tabIndex={props.triggerTabIndex}
       >
         {props.trigger}
       </KobalteHoverCard.Trigger>
 
       <KobalteHoverCard.Portal>
-        <KobalteHoverCard.Content class={props.contentClass}>
+        <KobalteHoverCard.Content
+          ref={(el) => {
+            contentEl = el;
+          }}
+          class={cn('z-tool-tip', props.contentClass)}
+        >
           <HoverCardPortalNestedPreviewOpenContext.Provider
             value={{ count: nestedOpenCount, setCount: setNestedOpenCount }}
           >

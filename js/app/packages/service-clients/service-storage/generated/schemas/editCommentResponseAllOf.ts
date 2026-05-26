@@ -5,10 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EditCommentResponseAllOfFileType } from './editCommentResponseAllOfFileType';
+import type { EditCommentResponseAllOfSubType } from './editCommentResponseAllOfSubType';
 
 export type EditCommentResponseAllOf = {
   documentId: string;
   documentName: string;
   documentOwner: string;
   fileType?: EditCommentResponseAllOfFileType;
+  subType?: EditCommentResponseAllOfSubType;
 };

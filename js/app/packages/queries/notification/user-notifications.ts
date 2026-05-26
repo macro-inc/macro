@@ -1,5 +1,5 @@
 import type { Maybe } from '@core/types';
-import { type MaybeResult, throwOnErr } from '@core/util/maybeResult';
+import { type ResultError, throwOnErr } from '@core/util/result';
 import type { UnifiedNotification } from '@notifications/types';
 import {
   optimisticUpdateSoupItemUpdatedAt,
@@ -15,7 +15,9 @@ import {
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
+import type { Result } from 'neverthrow';
 import { match, P } from 'ts-pattern';
+import { z } from 'zod';
 import { queryClient } from '../client';
 import { notificationKeys } from './keys';
 
@@ -25,8 +27,6 @@ function stripOwnerId({
 }: ApiUserNotification): UnifiedNotification {
   return rest;
 }
-
-export { notificationKeys } from './keys';
 
 const DEFAULT_NOTIFICATION_LIMIT = 20;
 const NOTIFICATION_STALE_TIME = 5 * 60 * 1000; // 5 minutes
@@ -114,7 +114,7 @@ function entityNotificationsQueryOptions(eventItemId: string, limit: number) {
 }
 
 /** Paginated query for notifications for a single entity. */
-export function useEntityNotificationsQuery(args: {
+function _useEntityNotificationsQuery(args: {
   eventItemId: () => string;
   limit?: number;
 }) {
@@ -168,7 +168,7 @@ function entitiesNotificationsQueryOptions(
 }
 
 /** Paginated query for notifications across multiple entities. */
-export function useEntitiesNotificationsQuery(args: {
+function _useEntitiesNotificationsQuery(args: {
   eventItemIds: () => string[];
   limit?: number;
 }) {
@@ -222,7 +222,7 @@ export function invalidateEntityNotifications(eventItemId: string) {
   });
 }
 
-export function invalidateAllNotifications() {
+function _invalidateAllNotifications() {
   return queryClient.invalidateQueries({
     queryKey: notificationKeys._def,
   });
@@ -259,7 +259,7 @@ type NotificationsMutationCallbacks<T> = MutationCallbacks<
 >;
 
 type NotificationsMutationFn<T> = MutationFunction<
-  MaybeResult<string, T>,
+  Result<T, ResultError<string>[]>,
   NotificationsMutationParams
 >;
 
@@ -400,6 +400,118 @@ export const useMarkNotificationsAsDoneMutation = createNotificationsMutation(
 );
 
 type NotificationItem = GetAllUserNotificationsResponse['items'][number];
+
+export type NotificationStatusPatch = {
+  id: string;
+  done: boolean;
+  viewed_at: string | null;
+  updated_at: string;
+};
+
+export type NotificationStatusPatchDelete =
+  | { t: 'Patch'; c: NotificationStatusPatch }
+  | { t: 'Delete'; c: { id: string } };
+
+export type NotificationStatusUpdate = {
+  type: 'notification_status_updated';
+  updates: NotificationStatusPatchDelete[];
+};
+
+const jsonStringSchema = z.string().transform((value, ctx) => {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid JSON' });
+    return z.NEVER;
+  }
+});
+
+export const notificationStatusUpdateSchema = z.object({
+  type: z.literal('notification_status_updated'),
+  updates: z.array(
+    z.discriminatedUnion('t', [
+      z.object({
+        t: z.literal('Patch'),
+        c: z.object({
+          id: z.string(),
+          done: z.boolean(),
+          viewed_at: z.string().nullable(),
+          updated_at: z.string(),
+        }),
+      }),
+      z.object({
+        t: z.literal('Delete'),
+        c: z.object({
+          id: z.string(),
+        }),
+      }),
+    ])
+  ),
+}) satisfies z.ZodType<NotificationStatusUpdate>;
+
+export const notificationStatusUpdatePayloadSchema = z.union([
+  notificationStatusUpdateSchema,
+  jsonStringSchema.pipe(notificationStatusUpdateSchema),
+]);
+
+function applyNotificationStatusPatch(
+  notification: NotificationItem,
+  patch: NotificationStatusPatch
+): NotificationItem {
+  return {
+    ...notification,
+    ...(patch.done !== undefined ? { done: patch.done } : {}),
+    ...(patch.viewed_at !== undefined ? { viewed_at: patch.viewed_at } : {}),
+    ...(patch.updated_at !== undefined ? { updated_at: patch.updated_at } : {}),
+  };
+}
+
+export function applyNotificationStatusUpdate(
+  update: NotificationStatusUpdate
+) {
+  const patches = update.updates
+    .filter((item) => item.t === 'Patch')
+    .map((item) => item.c);
+  const patchById = new Map(patches.map((patch) => [patch.id, patch]));
+  const deleteIds = new Set(
+    update.updates
+      .filter((item) => item.t === 'Delete')
+      .map((item) => item.c.id)
+  );
+  const doneIds = new Set(
+    [...patchById.values()]
+      .filter((patch) => patch.done === true)
+      .map((patch) => patch.id)
+  );
+  const removeIds = new Set([...deleteIds, ...doneIds]);
+
+  queryClient.setQueriesData<NotificationData<UserNotificationsPageParam>>(
+    { queryKey: notificationKeys.user._def },
+    (data) => {
+      if (!data) return data;
+
+      return {
+        ...data,
+        pages: data.pages.map((page) => ({
+          ...page,
+          items: page.items
+            .filter((notification) => !removeIds.has(notification.id))
+            .map((notification) => {
+              const patch = patchById.get(notification.id);
+              return patch
+                ? applyNotificationStatusPatch(notification, patch)
+                : notification;
+            }),
+        })),
+      };
+    }
+  );
+
+  queryClient.invalidateQueries({
+    queryKey: notificationKeys.user._def,
+    refetchType: 'none',
+  });
+}
 
 /**
  * Lookup a notification by id via the notification-service.

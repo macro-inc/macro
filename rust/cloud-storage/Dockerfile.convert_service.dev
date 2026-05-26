@@ -37,7 +37,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice \
     libreofficekit-dev \
     ca-certificates \
-    openssl \
     dumb-init \
     libkrb5-3 \
     ttf-mscorefonts-installer \

@@ -2,16 +2,17 @@ import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntit
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { ResponsiveDropdown } from '@app/component/SimpleDropdown';
 import { useBlockAliasedName, useBlockName } from '@core/block';
+import { MENU_CONTENT_CLASS } from '@core/component/ContextMenu';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { toast } from '@core/component/Toast/Toast';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { useIsDocumentOwner } from '@core/signal/permissions';
 import { buildEntityData } from '@entity';
-import ArrowRight from '@icon/regular/arrow-right.svg';
-import Copy from '@icon/regular/copy.svg';
-import ThreeDots from '@icon/regular/list.svg';
-import Rename from '@icon/regular/pencil-line.svg';
-import Trash from '@icon/regular/trash-simple.svg';
+import ArrowRight from '@phosphor/arrow-right.svg';
+import Copy from '@phosphor/copy.svg';
+import ThreeDots from '@phosphor/list.svg';
+import Rename from '@phosphor/pencil-line.svg';
+import Trash from '@phosphor/trash-simple.svg';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
 import { Button, cn, Layer } from '@ui';
 import {
@@ -199,7 +200,7 @@ export function SplitFileMenu(props: {
       </ResponsiveDropdown.Trigger>
       <ResponsiveDropdown.Portal>
         <Layer depth={2}>
-          <ResponsiveDropdown.Content class="bg-surface w-fit p-1 border border-edge-muted rounded-xs shadow">
+          <ResponsiveDropdown.Content class={cn(MENU_CONTENT_CLASS, 'w-fit')}>
             <For each={ops()}>
               {(op, i) => (
                 <>

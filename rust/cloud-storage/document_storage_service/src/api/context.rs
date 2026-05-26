@@ -18,7 +18,7 @@ use channels::{
 };
 use comms::{
     domain::service::ChannelServiceImpl,
-    inbound::CommsRouterState,
+    inbound::router::CommsRouterState,
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use comms_service::CommsHandlerState;
@@ -72,11 +72,22 @@ pub struct InternalFlag {
     pub internal: bool,
 }
 
+/// CRM service for DSS — no-op resolver since DSS doesn't populate.
+pub(crate) type DssCrmService = crm::domain::service::CrmServiceImpl<
+    crm::outbound::companies_repo::CompaniesRepositoryImpl,
+    crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+>;
+
 type DssEmailService = EmailServiceImpl<
     EmailPgRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
     email::domain::ports::NoOpEnqueuer,
+    DssCrmService,
 >;
+
+/// CRM router state.
+pub(crate) type DssCrmState =
+    crm::inbound::axum_router::CrmRouterState<DssCrmService, EntityAccessService>;
 
 type DssSoupState = SoupRouterState<
     SoupImpl<
@@ -87,6 +98,7 @@ type DssSoupState = SoupRouterState<
         call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
     >,
     DssEmailService,
+    EntityAccessService,
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
@@ -265,6 +277,7 @@ pub(crate) struct ApiContext {
     pub call_internal_state: DssCallInternalState,
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,
+    pub crm_state: DssCrmState,
 }
 
 env_var! {

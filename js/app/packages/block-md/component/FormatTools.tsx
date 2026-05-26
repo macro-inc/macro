@@ -10,46 +10,41 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/';
 import { CREATE_DRAFT_COMMENT_COMMAND } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
-import {
-  DropdownMenuContent,
-  MenuItem,
-  SubTrigger,
-} from '@core/component/Menu';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
-import ThreeDots from '@icon/bold/dots-three-bold.svg';
-import TextBold from '@icon/bold/text-b-bold.svg';
-import ChatTeardrop from '@icon/regular/chat-teardrop.svg';
-import Check from '@icon/regular/check-square.svg';
-import TextCode from '@icon/regular/code.svg';
-import CodeBlock from '@icon/regular/code-block.svg';
-import MathIcon from '@icon/regular/function.svg';
-import Grid from '@icon/regular/grid-four.svg';
-import BrokenLinkIcon from '@icon/regular/link-break.svg';
-import LinkIcon from '@icon/regular/link-simple.svg';
-import ListBullets from '@icon/regular/list-bullets.svg';
-import ListChecks from '@icon/regular/list-checks.svg';
-import ListNumbers from '@icon/regular/list-numbers.svg';
-import Minus from '@icon/regular/minus.svg';
-import One from '@icon/regular/number-one.svg';
-import TextHighlight from '@icon/regular/paint-roller.svg';
-import PlusSquare from '@icon/regular/plus-square.svg';
-import Quote from '@icon/regular/quotes.svg';
-import TextAA from '@icon/regular/text-aa.svg';
-import TextH from '@icon/regular/text-h.svg';
-import TextH1 from '@icon/regular/text-h-one.svg';
-import TextH3 from '@icon/regular/text-h-three.svg';
-import TextH2 from '@icon/regular/text-h-two.svg';
-import TextItalic from '@icon/regular/text-italic.svg';
-import TextStriketrough from '@icon/regular/text-strikethrough.svg';
-import TextSub from '@icon/regular/text-subscript.svg';
-import TextSuper from '@icon/regular/text-superscript.svg';
-import TextT from '@icon/regular/text-t.svg';
-import TextUnderline from '@icon/regular/text-underline.svg';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { ElementName } from '@lexical-core';
-import { Button, Hotkey, Layer } from '@ui';
+import CaretRight from '@phosphor/caret-right.svg';
+import ChatTeardrop from '@phosphor/chat-teardrop.svg';
+import Check from '@phosphor/check-square.svg';
+import TextCode from '@phosphor/code.svg';
+import CodeBlock from '@phosphor/code-block.svg';
+import ThreeDots from '@phosphor/dots-three.svg';
+import MathIcon from '@phosphor/function.svg';
+import Grid from '@phosphor/grid-four.svg';
+import BrokenLinkIcon from '@phosphor/link-break.svg';
+import LinkIcon from '@phosphor/link-simple.svg';
+import ListBullets from '@phosphor/list-bullets.svg';
+import ListChecks from '@phosphor/list-checks.svg';
+import ListNumbers from '@phosphor/list-numbers.svg';
+import Minus from '@phosphor/minus.svg';
+import One from '@phosphor/number-one.svg';
+import TextHighlight from '@phosphor/paint-roller.svg';
+import PlusSquare from '@phosphor/plus-square.svg';
+import Quote from '@phosphor/quotes.svg';
+import TextAA from '@phosphor/text-aa.svg';
+import TextBold from '@phosphor/text-b.svg';
+import TextH from '@phosphor/text-h.svg';
+import TextH1 from '@phosphor/text-h-one.svg';
+import TextH3 from '@phosphor/text-h-three.svg';
+import TextH2 from '@phosphor/text-h-two.svg';
+import TextItalic from '@phosphor/text-italic.svg';
+import TextStriketrough from '@phosphor/text-strikethrough.svg';
+import TextSub from '@phosphor/text-subscript.svg';
+import TextSuper from '@phosphor/text-superscript.svg';
+import TextT from '@phosphor/text-t.svg';
+import TextUnderline from '@phosphor/text-underline.svg';
+import { Button, Dropdown, Hotkey } from '@ui';
 import { toast } from 'core/component/Toast/Toast';
 import type { ValidHotkey } from 'core/hotkey/types';
 import {
@@ -82,10 +77,6 @@ import { TableInsert } from './TableInsert';
 
 function VerticalBar() {
   return <div class="w-px mx-1 h-full bg-edge"></div>;
-}
-
-function HorizontalBar() {
-  return <div class="w-full h-px bg-edge my-1"></div>;
 }
 
 type DropdownItemProps = {
@@ -196,6 +187,8 @@ const InlineFormatButton = (props: {
       hotkey={TOKENS.global.commandMenu}
       size="icon-sm"
       variant="ghost"
+      class="rounded-md"
+      depth={3}
       classList={{
         'bg-active text-ink': !!props.selection()?.[props.format],
       }}
@@ -216,24 +209,20 @@ const InlineFormatMenuItem = (props: {
   buttonIsDisabled: Accessor<boolean>;
 }) => {
   const icon = InlineIcons[props.format];
-  const inner = () => (
-    <div class="flex justify-between">
-      <span class="capitalize">{props.format}</span>
-      <Show when={InlineShortcuts[props.format]}>
-        {(_shortcut) => {
-          return <Hotkey token={TOKENS.global.commandMenu} />;
-        }}
-      </Show>
-    </div>
-  );
-
   return (
-    <MenuItem
-      text={inner()}
-      icon={icon}
-      onClick={props.onClick}
-      disabled={props.buttonIsDisabled()}
-    />
+    <Dropdown.Item onSelect={props.onClick} disabled={props.buttonIsDisabled()}>
+      <Dynamic component={icon} class="size-4 shrink-0" />
+      <span class="flex-1 truncate capitalize">{props.format}</span>
+      <Show when={InlineShortcuts[props.format]}>
+        {(_shortcut) => (
+          <Hotkey
+            token={TOKENS.global.commandMenu}
+            class="text-ink-muted"
+            showPlus
+          />
+        )}
+      </Show>
+    </Dropdown.Item>
   );
 };
 
@@ -249,7 +238,8 @@ export const ElementFormatButton = (props: {
     <Button
       tooltip={name}
       size="icon-sm"
-      class="rounded-xs"
+      class="rounded-md"
+      depth={3}
       variant="ghost"
       classList={{
         'bg-active text-ink': !!props
@@ -290,13 +280,22 @@ const ElementFormatMenuItem = (
     }
     return <span>{name}</span>;
   };
+  const icon = () =>
+    props.useIcon ? NodeMenuOptions[props.format]?.icon : undefined;
   return (
-    <MenuItem
-      icon={props.useIcon ? NodeMenuOptions[props.format]?.icon : undefined}
-      text={inner()}
-      onClick={props.onClick}
-      disabled={props.buttonIsDisabled()}
-    />
+    <Dropdown.Item onSelect={props.onClick} disabled={props.buttonIsDisabled()}>
+      <Show when={icon()}>
+        {(IconComp) => (
+          <Dynamic
+            component={
+              IconComp() as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
+            }
+            class="size-4 shrink-0"
+          />
+        )}
+      </Show>
+      <span class="flex-1 truncate">{inner()}</span>
+    </Dropdown.Item>
   );
 };
 
@@ -447,26 +446,25 @@ export function FormatTools(props: { withinPopup?: boolean }) {
   const FormatDropDown = (props: { buttonIsDisabled: Accessor<boolean> }) => {
     const [menuOpen, setMenuOpen] = createSignal(false);
     return (
-      <DropdownMenu open={menuOpen()} onOpenChange={setMenuOpen}>
-        <DropdownMenu.Trigger
-          as={Button}
+      <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
+        <Dropdown.Trigger
           variant="ghost"
           size="icon-sm"
-          class="rounded-xs"
+          class="rounded-md"
+          depth={3}
           tooltip={'Text Styles'}
           disabled={buttonIsDisabled()}
           tabIndex={-1}
         >
           <TextAA />
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Portal>
-          <DropdownMenuContent
-            class="w-54"
-            onCloseAutoFocus={() => {
-              lastFocusedEditor()?.focus();
-            }}
-          >
-            <div class="w-full flex gap-1 justify-center items-center p-1">
+        </Dropdown.Trigger>
+        <Dropdown.Content
+          onCloseAutoFocus={() => {
+            lastFocusedEditor()?.focus();
+          }}
+        >
+          <Dropdown.Group>
+            <div class="w-full flex gap-1 justify-center items-center">
               <For each={InlineFormats}>
                 {(format) => (
                   <InlineFormatButton
@@ -483,8 +481,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
                 )}
               </For>
             </div>
-
-            <HorizontalBar />
+          </Dropdown.Group>
+          <Dropdown.Group>
             <For each={MainFormatOptions}>
               {(format) => (
                 <ElementFormatMenuItem
@@ -499,9 +497,9 @@ export function FormatTools(props: { withinPopup?: boolean }) {
                 />
               )}
             </For>
-          </DropdownMenuContent>
-        </DropdownMenu.Portal>
-      </DropdownMenu>
+          </Dropdown.Group>
+        </Dropdown.Content>
+      </Dropdown>
     );
   };
 
@@ -511,27 +509,26 @@ export function FormatTools(props: { withinPopup?: boolean }) {
   }) => {
     const [menuOpen, setMenuOpen] = createSignal(false);
     return (
-      <DropdownMenu open={menuOpen()} onOpenChange={setMenuOpen}>
-        <DropdownMenu.Trigger
-          as={Button}
+      <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
+        <Dropdown.Trigger
           variant="ghost"
           size="icon-sm"
-          class="rounded-xs"
+          class="rounded-md"
+          depth={3}
           tooltip="Text Styles"
           disabled={props.buttonIsDisabled()}
           tabIndex={-1}
         >
           <TextAA />
-        </DropdownMenu.Trigger>
+        </Dropdown.Trigger>
         <Show when={!props.buttonIsDisabled()}>
-          <DropdownMenu.Portal>
-            <DropdownMenuContent
-              class="w-fit"
-              onCloseAutoFocus={() => {
-                lastFocusedEditor()?.focus();
-              }}
-            >
-              <div class="w-full flex gap-1 justify-center items-center p-1">
+          <Dropdown.Content
+            onCloseAutoFocus={() => {
+              lastFocusedEditor()?.focus();
+            }}
+          >
+            <Dropdown.Group>
+              <div class="w-full flex gap-1 justify-center items-center">
                 <For each={props.formats}>
                   {(format) => (
                     <InlineFormatButton
@@ -548,10 +545,10 @@ export function FormatTools(props: { withinPopup?: boolean }) {
                   )}
                 </For>
               </div>
-            </DropdownMenuContent>
-          </DropdownMenu.Portal>
+            </Dropdown.Group>
+          </Dropdown.Content>
         </Show>
-      </DropdownMenu>
+      </Dropdown>
     );
   };
 
@@ -562,26 +559,25 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     label?: string;
     buttonIsDisabled: Accessor<boolean>;
   }) => (
-    <DropdownMenu>
-      <DropdownMenu.Trigger
-        as={Button}
+    <Dropdown>
+      <Dropdown.Trigger
         variant="ghost"
         size="icon-sm"
-        class="rounded-xs"
+        class="rounded-md"
+        depth={3}
         tooltip={props.label ?? 'More Formats'}
         disabled={buttonIsDisabled()}
         tabIndex={-1}
       >
         <Dynamic component={props.icon ?? ThreeDots} />
-      </DropdownMenu.Trigger>
+      </Dropdown.Trigger>
       <Show when={!buttonIsDisabled()}>
-        <DropdownMenu.Portal>
-          <DropdownMenuContent
-            class="w-48"
-            onCloseAutoFocus={() => {
-              lastFocusedEditor()?.focus();
-            }}
-          >
+        <Dropdown.Content
+          onCloseAutoFocus={() => {
+            lastFocusedEditor()?.focus();
+          }}
+        >
+          <Dropdown.Group>
             <For each={Object.keys(InlineIcons)}>
               {(format) => (
                 <Show when={!props.excludes?.includes(format as InlineFormat)}>
@@ -596,10 +592,10 @@ export function FormatTools(props: { withinPopup?: boolean }) {
                 </Show>
               )}
             </For>
-          </DropdownMenuContent>
-        </DropdownMenu.Portal>
+          </Dropdown.Group>
+        </Dropdown.Content>
       </Show>
-    </DropdownMenu>
+    </Dropdown>
   );
 
   const ElementFormatMenu = (props: {
@@ -608,26 +604,25 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     label?: string;
     buttonIsDisabled: Accessor<boolean>;
   }) => (
-    <DropdownMenu>
-      <DropdownMenu.Trigger
-        as={Button}
+    <Dropdown>
+      <Dropdown.Trigger
         variant="ghost"
         size="icon-sm"
-        class="rounded-xs"
+        class="rounded-md"
+        depth={3}
         tooltip={props.label ?? 'More Formats'}
         disabled={buttonIsDisabled()}
         tabIndex={-1}
       >
         <Dynamic component={props.icon ?? ThreeDots} />
-      </DropdownMenu.Trigger>
+      </Dropdown.Trigger>
       <Show when={!buttonIsDisabled()}>
-        <DropdownMenu.Portal>
-          <DropdownMenuContent
-            class="w-42"
-            onCloseAutoFocus={() => {
-              lastFocusedEditor()?.focus();
-            }}
-          >
+        <Dropdown.Content
+          onCloseAutoFocus={() => {
+            lastFocusedEditor()?.focus();
+          }}
+        >
+          <Dropdown.Group>
             <For each={props.elements}>
               {(format) => (
                 <ElementFormatMenuItem
@@ -641,10 +636,10 @@ export function FormatTools(props: { withinPopup?: boolean }) {
                 />
               )}
             </For>
-          </DropdownMenuContent>
-        </DropdownMenu.Portal>
+          </Dropdown.Group>
+        </Dropdown.Content>
       </Show>
-    </DropdownMenu>
+    </Dropdown>
   );
 
   const FullWithElementButtons: ElementName[] = [
@@ -720,7 +715,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           <Button
             variant="ghost"
             size="icon-sm"
-            class="rounded-xs"
+            class="rounded-md"
+            depth={3}
             onClick={handleLink}
             tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
             disabled={buttonIsDisabled()}
@@ -734,7 +730,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           <Button
             variant="ghost"
             size="icon-sm"
-            class="rounded-xs"
+            class="rounded-md"
+            depth={3}
             tooltip="Comment"
             onClick={(e) => {
               e.preventDefault();
@@ -865,7 +862,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
             <Button
               variant="ghost"
               size="icon-sm"
-              class="rounded-xs"
+              class="rounded-md"
+              depth={3}
               onClick={handleLink}
               tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
               disabled={buttonIsDisabled()}
@@ -879,7 +877,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                class="rounded-xs"
+                class="rounded-md"
+                depth={3}
                 tooltip="Comment"
                 onClick={(e) => {
                   e.preventDefault();
@@ -892,43 +891,42 @@ export function FormatTools(props: { withinPopup?: boolean }) {
               </Button>
             </Show>
             <VerticalBar />
-            <DropdownMenu
+            <Dropdown
               open={moreOptionsOpen()}
               onOpenChange={setMoreOptionsOpen}
             >
-              <DropdownMenu.Trigger
-                as={Button}
+              <Dropdown.Trigger
                 variant="ghost"
                 size="icon-sm"
-                class="rounded-xs"
+                class="rounded-md"
+                depth={3}
                 tooltip="More"
                 disabled={buttonIsDisabled()}
                 tabIndex={-1}
               >
                 <PlusSquare />
-              </DropdownMenu.Trigger>
+              </Dropdown.Trigger>
               <Show when={!buttonIsDisabled()}>
-                <DropdownMenu.Portal>
-                  <DropdownMenuContent
-                    class="w-42"
-                    onCloseAutoFocus={() => {
-                      lastFocusedEditor()?.focus();
-                    }}
-                  >
-                    <MenuItem
-                      icon={Quote}
-                      text="Block Quote"
-                      onClick={() => {
+                <Dropdown.Content
+                  onCloseAutoFocus={() => {
+                    lastFocusedEditor()?.focus();
+                  }}
+                >
+                  <Dropdown.Group>
+                    <Dropdown.Item
+                      onSelect={() => {
                         setMoreOptionsOpen(false);
                         nodeFormat('quote');
                       }}
                       disabled={buttonIsDisabled()}
-                    />
-                    <HorizontalBar />
-                    <MenuItem
-                      icon={Minus}
-                      text="Divider"
-                      onClick={() => {
+                    >
+                      <Quote class="size-4 shrink-0" />
+                      <span class="flex-1 truncate">Block Quote</span>
+                    </Dropdown.Item>
+                  </Dropdown.Group>
+                  <Dropdown.Group>
+                    <Dropdown.Item
+                      onSelect={() => {
                         setMoreOptionsOpen(false);
                         editor()?.dispatchCommand(
                           INSERT_HORIZONTAL_RULE_COMMAND,
@@ -936,36 +934,38 @@ export function FormatTools(props: { withinPopup?: boolean }) {
                         );
                       }}
                       disabled={buttonIsDisabled()}
-                    />
-                    <MenuItem
-                      icon={MathIcon}
-                      text="Equation"
-                      onClick={() => {
+                    >
+                      <Minus class="size-4 shrink-0" />
+                      <span class="flex-1 truncate">Divider</span>
+                    </Dropdown.Item>
+                    <Dropdown.Item
+                      onSelect={() => {
                         setMoreOptionsOpen(false);
                         handleInsertEquation();
                       }}
                       disabled={buttonIsDisabled()}
-                    />
-                    <DropdownMenu.Sub>
-                      <SubTrigger
-                        text="Table"
-                        icon={Grid}
-                        disabled={buttonIsDisabled()}
-                      />
-                      <DropdownMenu.Portal>
-                        <Layer depth={2}>
-                          <DropdownMenu.SubContent>
-                            <TableInsert
-                              onMenuClose={() => setMoreOptionsOpen(false)}
-                            />
-                          </DropdownMenu.SubContent>
-                        </Layer>
-                      </DropdownMenu.Portal>
-                    </DropdownMenu.Sub>
-                  </DropdownMenuContent>
-                </DropdownMenu.Portal>
+                    >
+                      <MathIcon class="size-4 shrink-0" />
+                      <span class="flex-1 truncate">Equation</span>
+                    </Dropdown.Item>
+                    <Dropdown.Sub>
+                      <Dropdown.SubTrigger disabled={buttonIsDisabled()}>
+                        <Grid class="size-4 shrink-0" />
+                        <span class="flex-1 truncate">Table</span>
+                        <CaretRight class="size-3.5" />
+                      </Dropdown.SubTrigger>
+                      <Dropdown.SubContent>
+                        <Dropdown.Group>
+                          <TableInsert
+                            onMenuClose={() => setMoreOptionsOpen(false)}
+                          />
+                        </Dropdown.Group>
+                      </Dropdown.SubContent>
+                    </Dropdown.Sub>
+                  </Dropdown.Group>
+                </Dropdown.Content>
               </Show>
-            </DropdownMenu>
+            </Dropdown>
           </div>
 
           {/* spacer before the AI button */}
@@ -975,7 +975,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           <Button
             variant="ghost"
             size="icon-sm"
-            class="rounded-xs"
+            class="rounded-md"
+            depth={3}
             tooltip="Comment"
             onClick={(e) => {
               e.preventDefault();

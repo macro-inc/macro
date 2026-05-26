@@ -13,7 +13,7 @@ import {
 import { MarkdownEditorErrors } from '../../constants';
 import { MARKDOWN_VERSION_COUNTER } from '../../version';
 
-export type DocumentMetadata = {
+type DocumentMetadata = {
   version: number;
   environmentTags?: string[];
 };
@@ -51,16 +51,14 @@ export function $getDocumentMetadata(): DocumentMetadata {
   return $getState(root, documentMetadataState);
 }
 
-export function $setDocumentMetadata(
-  metadata: Partial<DocumentMetadata>
-): void {
+function $setDocumentMetadata(metadata: Partial<DocumentMetadata>): void {
   const root = $getRoot();
   const currentMetadata = $getState(root, documentMetadataState);
   const newMetadata = { ...currentMetadata, ...metadata };
   $setState(root, documentMetadataState, newMetadata);
 }
 
-export function $addEnvironmentTags(tags: string[]): void {
+function _$addEnvironmentTags(tags: string[]): void {
   const currentMetadata = $getDocumentMetadata();
   const existingTags = currentMetadata.environmentTags || [];
   const newTags = [...new Set([...existingTags, ...tags])];
@@ -70,7 +68,7 @@ export function $addEnvironmentTags(tags: string[]): void {
   });
 }
 
-export function $removeEnvironmentTags(tags: string[]): void {
+function _$removeEnvironmentTags(tags: string[]): void {
   const currentMetadata = $getDocumentMetadata();
   const existingTags = currentMetadata.environmentTags || [];
   const filteredTags = existingTags.filter((tag) => !tags.includes(tag));
@@ -80,11 +78,11 @@ export function $removeEnvironmentTags(tags: string[]): void {
   });
 }
 
-export function $setDocumentVersion(version: number): void {
+function $setDocumentVersion(version: number): void {
   $setDocumentMetadata({ version });
 }
 
-export function $hasEnvironmentTag(tag: string): boolean {
+function _$hasEnvironmentTag(tag: string): boolean {
   const metadata = $getDocumentMetadata();
   return metadata.environmentTags?.includes(tag) ?? false;
 }
@@ -92,7 +90,7 @@ export function $hasEnvironmentTag(tag: string): boolean {
 /**
  * Get document version
  */
-export function $getDocumentVersion(): number {
+function _$getDocumentVersion(): number {
   const metadata = $getDocumentMetadata();
   return metadata.version;
 }

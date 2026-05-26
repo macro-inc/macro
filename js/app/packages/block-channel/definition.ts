@@ -1,5 +1,6 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
-import { ok } from '@core/util/maybeResult';
+import { ok } from 'neverthrow';
+
 import { NewChannelBlockAdapter } from './component/NewChannelBlockAdapter';
 
 export const definition = defineBlock({

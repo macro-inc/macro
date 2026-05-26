@@ -1,7 +1,7 @@
 import type { StreamItem } from '.';
 import type { Splitter } from './types';
 
-export const noSplit: Splitter = (items) => items;
+const _noSplit: Splitter = (items) => items;
 
 export const characters: (n: number) => Splitter = (n) => (items) => {
   const splitItems: StreamItem[] = [];

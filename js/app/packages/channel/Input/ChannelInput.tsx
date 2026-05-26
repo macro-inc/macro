@@ -179,9 +179,22 @@ export function ChannelInput(props: ChannelInputProps) {
     },
   });
 
+  const [isFocused, setIsFocused] = createSignal(false);
+
   return (
     <Input.Root input={inputState.view()} commands={inputState.commands}>
-      <Surface depth={2}>
+      <Surface
+        onFocusOut={(e) => {
+          const next = e.relatedTarget as Node | null;
+          if (next && e.currentTarget.contains(next)) return;
+          setIsFocused(false);
+        }}
+        onFocusIn={() => setIsFocused(true)}
+        active={isFocused()}
+        class="rounded-xl"
+        depth={2}
+        solid
+      >
         <Input.DropZone
           onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
           onDragEnd={() => inputState.setIsDraggedOver(false)}

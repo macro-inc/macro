@@ -8,7 +8,6 @@ version = "0.1.0"
 local = []
 
 [dependencies]
-anyhow = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 macro_env = { path = "../macro_env" }
 mockall = { workspace = true }

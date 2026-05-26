@@ -2,8 +2,8 @@ import { EntityIcon, type EntityIconProps } from '@core/component/EntityIcon';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { Resize } from '@core/component/Resize/Resize';
 import { Bar } from '@core/component/TopBar/Bar';
-import XIcon from '@icon/regular/x.svg';
-import AddIcon from '@macro-icons/pixel/add.svg';
+import AddIcon from '@phosphor/plus.svg';
+import XIcon from '@phosphor/x.svg';
 import { nanoid } from 'nanoid';
 import { createSignal, For, type ParentProps } from 'solid-js';
 

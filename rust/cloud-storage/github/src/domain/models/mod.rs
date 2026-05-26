@@ -4,11 +4,19 @@
 mod test;
 
 mod link;
+mod pull_request;
 mod sync;
 
-pub use link::*;
-pub use sync::*;
-
+pub use link::{GithubAccessToken, GithubExchangeTokenResponse, GithubLink, GithubUserInfo};
+pub use pull_request::{
+    EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
+    EnrichedGithubPullRequest, GithubPullRequestDetails, GithubPullRequestRef,
+    GithubPullRequestStatus,
+};
+pub use sync::{
+    GithubInstallationAccessToken, GithubKey, GithubWebhookEventType, MacroTaskId,
+    TeamTaskReference, ValidatedGithubWebhookEvent,
+};
 /// Errors that can occur during github operations.
 #[derive(Debug, thiserror::Error)]
 pub enum GithubError {

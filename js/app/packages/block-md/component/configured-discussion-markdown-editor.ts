@@ -32,11 +32,12 @@ export function createConfiguredDiscussionMarkdownEditor(
   editor.namespace(options.namespace);
 
   if (options.enableMentions !== false) {
+    // Intentionally no `block: 'channel'` — discussions live inside docs/tasks,
+    // not channels, so `@here` doesn't belong here.
     editor.withMentions({
       onCreate: options.onMentionCreate,
       onRemove: options.onMentionRemove,
       users: options.users,
-      block: 'channel',
     });
   }
 

@@ -44,10 +44,12 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         // Document routes
         .route(
             "/documents/{document_id}",
-            get(documents_hex::inbound::axum_router::get_document_handler::<
-                DocumentService,
-                EntityAccessService,
-            >)
+            get(
+                documents_hex::inbound::axum_router::get_document::get_document_handler::<
+                    DocumentService,
+                    EntityAccessService,
+                >,
+            )
             .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
@@ -75,7 +77,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/documents/{document_id}/location_v3",
             get(
-                documents_hex::inbound::axum_router::get_location_v3_handler::<
+                documents_hex::inbound::axum_router::get_location::get_location_v3_handler::<
                     DocumentService,
                     EntityAccessService,
                 >,
@@ -93,7 +95,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/documents",
             post(
-                documents_hex::inbound::axum_router::create_document_handler::<
+                documents_hex::inbound::axum_router::create_document::create_document_handler::<
                     DocumentService,
                     EntityAccessService,
                 >,

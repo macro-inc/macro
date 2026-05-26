@@ -1,4 +1,3 @@
-import { isErr } from '@core/util/maybeResult';
 import { storageServiceClient } from '@service-storage/client';
 import type { Project } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
@@ -12,10 +11,10 @@ async function fetchProjectData(projectId: string): Promise<Project> {
   const result = await storageServiceClient.projects.getProject({
     id: projectId,
   });
-  if (isErr(result)) {
+  if (result.isErr()) {
     throw new Error('Failed to fetch project');
   }
-  return result[1].projectMetadata;
+  return result.value.projectMetadata;
 }
 
 export function useProjectDataQuery(

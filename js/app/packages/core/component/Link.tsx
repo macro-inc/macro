@@ -1,7 +1,7 @@
-import CaretDown from '@icon/regular/caret-down.svg';
-import CaretRight from '@icon/regular/caret-right.svg';
-import GlobeIcon from '@icon/regular/globe-simple.svg';
-import LinkIcon from '@icon/regular/link.svg';
+import CaretDown from '@phosphor/caret-down.svg';
+import CaretRight from '@phosphor/caret-right.svg';
+import GlobeIcon from '@phosphor/globe-simple.svg';
+import LinkIcon from '@phosphor/link.svg';
 import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import { cn } from '@ui';
@@ -18,7 +18,7 @@ function extractDomain(url: string) {
 }
 
 const [badLinks, setBadLinks] = createStore<Record<string, true>>({});
-export type UnfurlLinkProps = { unfurled: GetUnfurlResponse };
+type UnfurlLinkProps = { unfurled: GetUnfurlResponse };
 
 export function UnfurlLink(props: UnfurlLinkProps) {
   const domain = extractDomain(props.unfurled.url);
@@ -68,7 +68,7 @@ interface UnfurledLinkCollection {
   links: GetUnfurlResponse[];
 }
 
-export function UnfurledLinkCollection(props: UnfurledLinkCollection) {
+function _UnfurledLinkCollection(props: UnfurledLinkCollection) {
   const [isCollapsed, setIsCollapsed] = createSignal(props.collapsed ?? true);
 
   return (

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    INSERT INTO crm_domains (company_id, team_id, domain)\n                    VALUES ($1, $2, $3)\n                    ON CONFLICT (team_id, LOWER(domain)) DO NOTHING\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "361c3d6e5a9549af7dd9042a088005f8da9e6128de27e65a9bb69e780615bf4c"
+}

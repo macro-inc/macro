@@ -14,10 +14,11 @@ use uuid::Uuid;
 
 use crate::{
     domain::{models::GetEmailsRequest, ports::EmailService},
-    inbound::{
-        ApiPaginatedThreadCursor, EmailLinkExtractor,
-        axum::axum_impls::{
-            GetPreviewsCursorError, GetPreviewsCursorParams, PreviewViewPathExtractor,
+    inbound::axum::{
+        api_types::ApiPaginatedThreadCursor,
+        axum_impls::{
+            EmailLinkExtractor, GetPreviewsCursorError, GetPreviewsCursorParams,
+            PreviewViewPathExtractor,
         },
     },
 };
@@ -104,6 +105,8 @@ async fn cursor_handler<T: EmailService>(
                         (),
                     )
                     .map_filter(|_| None),
+                team_receipt: None,
+                crm_scope: None,
             })
             .await?
             .type_erase(),

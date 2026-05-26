@@ -33,6 +33,32 @@ async fn test_get_stripe_customer_id(pool: Pool<Postgres>) -> anyhow::Result<()>
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
+async fn test_has_user_trialed(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    sqlx::query("UPDATE macro_user SET has_trialed = FALSE WHERE email = 'user4@user.com'")
+        .execute(&pool)
+        .await?;
+
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let has_trialed = team_repo
+        .has_user_trialed(&MacroUserIdStr::parse_from_str("macro|user@user.com")?)
+        .await?;
+
+    assert!(has_trialed);
+
+    let has_trialed = team_repo
+        .has_user_trialed(&MacroUserIdStr::parse_from_str("macro|user4@user.com")?)
+        .await?;
+
+    assert!(!has_trialed);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
 async fn test_get_team_subscription_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
@@ -72,21 +98,58 @@ async fn test_get_team_subscription_id(pool: Pool<Postgres>) -> anyhow::Result<(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
+async fn test_get_team_payment_status(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    let paying = team_repo.get_team_payment_status(&team_id).await?;
+    assert!(!paying);
+
+    sqlx::query!(
+        r#"
+        UPDATE team
+        SET paying = TRUE
+        WHERE id = $1
+        "#,
+        &team_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let paying = team_repo.get_team_payment_status(&team_id).await?;
+    assert!(paying);
+
+    let missing_team_id = macro_uuid::string_to_uuid("63333333-3333-3333-3333-333333333333")?;
+    let err = team_repo
+        .get_team_payment_status(&missing_team_id)
+        .await
+        .err()
+        .unwrap();
+
+    assert!(err.to_string().contains("does not exist"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
 async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
     let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
-    let result = team_repo
-        .create_team(&user_id, "team1", &TeamUserTier::Sonnet)
-        .await?;
+    let result = team_repo.create_team(&user_id, "team1").await?;
 
     assert!(!result.id.to_string().is_empty());
     assert_eq!(result.name, "team1");
+    assert_eq!(result.slug, "MACRO");
     assert_eq!(result.owner_id.0.as_ref(), "macro|user3@user.com");
 
     // Create team with too large a name
     let err = team_repo
-        .create_team(&user_id, "12345678901234567890123456789012345678901234567890123456789000000000000000000000000000000000000000000000", &TeamUserTier::Sonnet)
+        .create_team(&user_id, "12345678901234567890123456789012345678901234567890123456789000000000000000000000000000000000000000000000")
         .await
         .err()
         .unwrap();
@@ -107,10 +170,7 @@ async fn test_invite_users_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
 
-    let invites = vec![(
-        Email::parse_from_str("new@macro.com")?.lowercase(),
-        TeamUserTier::Haiku,
-    )];
+    let invites = vec![Email::parse_from_str("new@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
@@ -121,14 +181,8 @@ async fn test_invite_users_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     assert_eq!(invited[0].email.as_ref(), "new@macro.com");
 
     let invites = vec![
-        (
-            Email::parse_from_str("invite@macro.com")?.lowercase(),
-            TeamUserTier::Haiku,
-        ),
-        (
-            Email::parse_from_str("user2@user.com")?.lowercase(),
-            TeamUserTier::Haiku,
-        ),
+        Email::parse_from_str("invite@macro.com")?.lowercase(),
+        Email::parse_from_str("user2@user.com")?.lowercase(),
     ];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
@@ -141,55 +195,81 @@ async fn test_invite_users_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Inviting users with different tiers stores each tier correctly.
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
-async fn test_invite_stores_tier(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let team_repo = TeamRepositoryImpl::new(pool.clone());
-    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
+async fn test_get_new_invites_filters_existing_invites(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
 
     let invites = vec![
-        (
-            Email::parse_from_str("opus-user@macro.com")?.lowercase(),
-            TeamUserTier::Opus,
-        ),
-        (
-            Email::parse_from_str("sonnet-user@macro.com")?.lowercase(),
-            TeamUserTier::Sonnet,
-        ),
+        Email::parse_from_str("invite@macro.com")?.lowercase(),
+        Email::parse_from_str("fresh@macro.com")?.lowercase(),
     ];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
-    let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
-        .await?;
+    let new_invites = team_repo.get_new_invites(&team_id, invites).await?;
 
-    assert_eq!(invited.len(), 2);
+    assert_eq!(new_invites.len(), 1);
+    assert_eq!(new_invites[0].as_ref(), "fresh@macro.com");
 
-    let opus_row = sqlx::query!(
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_get_new_invites_filters_existing_team_members(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    let invites = vec![
+        Email::parse_from_str("user2@user.com")?.lowercase(),
+        Email::parse_from_str("fresh@macro.com")?.lowercase(),
+    ];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+
+    let new_invites = team_repo.get_new_invites(&team_id, invites).await?;
+
+    assert_eq!(new_invites.len(), 1);
+    assert_eq!(new_invites[0].as_ref(), "fresh@macro.com");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_get_new_invites_keeps_invites_scoped_to_team(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let other_team_id = macro_uuid::string_to_uuid("22222222-2222-2222-2222-222222222222")?;
+
+    sqlx::query!(
         r#"
-        SELECT tier as "tier!: TeamUserTier"
-        FROM team_invite
-        WHERE email = 'opus-user@macro.com'
+        INSERT INTO team_invite (id, team_id, email, team_role, invited_by, created_at, last_sent_at)
+        VALUES ($1, $2, 'other-team-only@macro.com', 'member', 'macro|user4@user.com', NOW(), NOW())
         "#,
+        macro_uuid::generate_uuid_v7(),
+        other_team_id,
     )
-    .fetch_one(&pool)
+    .execute(&pool)
     .await?;
-    assert_eq!(opus_row.tier, TeamUserTier::Opus);
 
-    let sonnet_row = sqlx::query!(
-        r#"
-        SELECT tier as "tier!: TeamUserTier"
-        FROM team_invite
-        WHERE email = 'sonnet-user@macro.com'
-        "#,
-    )
-    .fetch_one(&pool)
-    .await?;
-    assert_eq!(sonnet_row.tier, TeamUserTier::Sonnet);
+    let invites = vec![Email::parse_from_str("other-team-only@macro.com")?.lowercase()];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+
+    let new_invites = team_repo.get_new_invites(&team_id, invites).await?;
+
+    assert_eq!(new_invites.len(), 1);
+    assert_eq!(new_invites[0].as_ref(), "other-team-only@macro.com");
 
     Ok(())
 }
@@ -206,10 +286,7 @@ async fn test_invite_existing_user_within_rate_limit(pool: Pool<Postgres>) -> an
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
 
     // invite@macro.com already has an invite with last_sent_at = NOW() in the fixture
-    let invites = vec![(
-        Email::parse_from_str("invite@macro.com")?.lowercase(),
-        TeamUserTier::Haiku,
-    )];
+    let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
@@ -241,10 +318,7 @@ async fn test_invite_existing_user_after_rate_limit(pool: Pool<Postgres>) -> any
     .execute(&pool)
     .await?;
 
-    let invites = vec![(
-        Email::parse_from_str("invite@macro.com")?.lowercase(),
-        TeamUserTier::Haiku,
-    )];
+    let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
@@ -277,14 +351,8 @@ async fn test_invite_mix_new_and_existing(pool: Pool<Postgres>) -> anyhow::Resul
     .await?;
 
     let invites = vec![
-        (
-            Email::parse_from_str("brand-new@macro.com")?.lowercase(),
-            TeamUserTier::Haiku,
-        ),
-        (
-            Email::parse_from_str("invite@macro.com")?.lowercase(),
-            TeamUserTier::Haiku,
-        ),
+        Email::parse_from_str("brand-new@macro.com")?.lowercase(),
+        Email::parse_from_str("invite@macro.com")?.lowercase(),
     ];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
@@ -321,10 +389,7 @@ async fn test_reinvite_updates_last_sent_at(pool: Pool<Postgres>) -> anyhow::Res
     .await?;
 
     // First re-invite should succeed
-    let invites = vec![(
-        Email::parse_from_str("invite@macro.com")?.lowercase(),
-        TeamUserTier::Haiku,
-    )];
+    let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
         .invite_users_to_team(&team_id, &user_id, invites)
@@ -336,10 +401,7 @@ async fn test_reinvite_updates_last_sent_at(pool: Pool<Postgres>) -> anyhow::Res
     team_repo.mark_invites_sent(&sent_ids).await?;
 
     // Second immediate re-invite should be rate limited
-    let invites = vec![(
-        Email::parse_from_str("invite@macro.com")?.lowercase(),
-        TeamUserTier::Haiku,
-    )];
+    let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
         .invite_users_to_team(&team_id, &user_id, invites)
@@ -369,10 +431,7 @@ async fn test_resend_without_mark_sent_stays_eligible(pool: Pool<Postgres>) -> a
     .await?;
 
     // First re-invite returns the invite
-    let invites = vec![(
-        Email::parse_from_str("invite@macro.com")?.lowercase(),
-        TeamUserTier::Haiku,
-    )];
+    let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
         .invite_users_to_team(&team_id, &user_id, invites)
@@ -382,10 +441,7 @@ async fn test_resend_without_mark_sent_stays_eligible(pool: Pool<Postgres>) -> a
     // Do NOT call mark_invites_sent (simulating failed notification delivery)
 
     // Second re-invite should still return the invite because last_sent_at was not updated
-    let invites = vec![(
-        Email::parse_from_str("invite@macro.com")?.lowercase(),
-        TeamUserTier::Haiku,
-    )];
+    let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
         .invite_users_to_team(&team_id, &user_id, invites)
@@ -435,10 +491,7 @@ async fn test_mark_invites_sent(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     // The invite should now be rate limited
     let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
-    let invites = vec![(
-        Email::parse_from_str("invite@macro.com")?.lowercase(),
-        TeamUserTier::Haiku,
-    )];
+    let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
         .invite_users_to_team(&team_id, &user_id, invites)
@@ -577,6 +630,59 @@ async fn test_update_team_subscription(pool: Pool<Postgres>) -> anyhow::Result<(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
+async fn test_update_team_payment_status(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    team_repo.update_team_payment_status(&team_id, true).await?;
+
+    let row = sqlx::query!(
+        r#"
+        SELECT paying
+        FROM team
+        WHERE id = $1
+        "#,
+        &team_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert!(row.paying);
+
+    team_repo
+        .update_team_payment_status(&team_id, false)
+        .await?;
+
+    let row = sqlx::query!(
+        r#"
+        SELECT paying
+        FROM team
+        WHERE id = $1
+        "#,
+        &team_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert!(!row.paying);
+
+    let missing_team_id = macro_uuid::string_to_uuid("63333333-3333-3333-3333-333333333333")?;
+    let err = team_repo
+        .update_team_payment_status(&missing_team_id, true)
+        .await
+        .err()
+        .unwrap();
+
+    assert!(err.to_string().contains("does not exist"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
 async fn test_delete_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool.clone());
 
@@ -664,42 +770,6 @@ async fn test_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Result<()> {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
-async fn test_accept_team_invite_uses_invite_tier(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let team_repo = TeamRepositoryImpl::new(pool.clone());
-
-    // Invite 22222222... has tier = 'opus' in the fixture
-    let team_invite_id = macro_uuid::string_to_uuid("22222222-2222-2222-2222-222222222222")?;
-    let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
-
-    let accepted_invite = team_repo
-        .accept_team_invite(&team_invite_id, &user_id)
-        .await?;
-    let team_member = accepted_invite.member;
-
-    assert_eq!(team_member.tier, TeamUserTier::Opus);
-
-    // Verify the tier persisted in team_user table
-    let row = sqlx::query!(
-        r#"
-        SELECT tier as "tier!: TeamUserTier"
-        FROM team_user
-        WHERE team_id = $1 AND user_id = $2
-        "#,
-        &team_member.team_id,
-        user_id.as_ref(),
-    )
-    .fetch_one(&pool)
-    .await?;
-
-    assert_eq!(row.tier, TeamUserTier::Opus);
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("teams"))
-)]
 async fn test_rollback_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool.clone());
 
@@ -730,7 +800,7 @@ async fn test_rollback_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Resul
 
     let invite = sqlx::query(
         r#"
-        SELECT email, team_role, tier
+        SELECT email, team_role
         FROM team_invite
         WHERE id = $1
         "#,
@@ -742,10 +812,6 @@ async fn test_rollback_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Resul
     assert_eq!(
         invite.try_get::<TeamRole, _>("team_role")?,
         TeamRole::Member
-    );
-    assert_eq!(
-        invite.try_get::<TeamUserTier, _>("tier")?,
-        TeamUserTier::Opus
     );
 
     let team = sqlx::query(r#"SELECT seat_count FROM team WHERE id = $1"#)
@@ -770,13 +836,9 @@ async fn test_rollback_remove_user_from_team(pool: Pool<Postgres>) -> anyhow::Re
     team_repo
         .patch_team_user_role(&team_id, &user_id, TeamRole::Admin)
         .await?;
-    team_repo
-        .patch_team_tier(&team_id, &user_id, TeamUserTier::Sonnet)
-        .await?;
 
     let removed_member = team_repo.remove_user_from_team(&team_id, &user_id).await?;
     assert_eq!(removed_member.role, TeamRole::Admin);
-    assert_eq!(removed_member.tier, TeamUserTier::Sonnet);
 
     team_repo
         .rollback_remove_user_from_team(&removed_member)
@@ -784,7 +846,6 @@ async fn test_rollback_remove_user_from_team(pool: Pool<Postgres>) -> anyhow::Re
 
     let member = team_repo.get_team_member(&team_id, &user_id).await?;
     assert_eq!(member.role, TeamRole::Admin);
-    assert_eq!(member.tier, TeamUserTier::Sonnet);
 
     let team = sqlx::query(r#"SELECT seat_count FROM team WHERE id = $1"#)
         .bind(team_id)
@@ -891,6 +952,193 @@ async fn test_bump_seat_count_negative(pool: Pool<Postgres>) -> anyhow::Result<(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
+async fn test_get_team_seat_count(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let seat_count = team_repo.get_team_seat_count(&team_id).await?;
+    assert_eq!(seat_count, 3);
+
+    let missing_team_id = macro_uuid::string_to_uuid("63333333-3333-3333-3333-333333333333")?;
+    let err = team_repo
+        .get_team_seat_count(&missing_team_id)
+        .await
+        .err()
+        .unwrap();
+    assert!(err.to_string().contains("does not exist"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_get_team_plan(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    let plan = team_repo.get_team_plan(&team_id).await?;
+    assert_eq!(plan, None);
+
+    team_repo
+        .patch_team_plan(&team_id, TeamPlan::SeriesA)
+        .await?;
+
+    let plan = team_repo.get_team_plan(&team_id).await?;
+    assert_eq!(plan, Some(TeamPlan::SeriesA));
+
+    let missing_team_id = macro_uuid::string_to_uuid("63333333-3333-3333-3333-333333333333")?;
+    let err = team_repo
+        .get_team_plan(&missing_team_id)
+        .await
+        .err()
+        .unwrap();
+    assert!(err.to_string().contains("does not exist"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_patch_team_plan(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    team_repo.patch_team_plan(&team_id, TeamPlan::Seed).await?;
+
+    let row = sqlx::query!(
+        r#"SELECT plan::text AS "plan!" FROM team WHERE id = $1"#,
+        &team_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(row.plan, "seed");
+
+    team_repo
+        .patch_team_plan(&team_id, TeamPlan::Growth)
+        .await?;
+
+    let row = sqlx::query!(
+        r#"SELECT plan::text AS "plan!" FROM team WHERE id = $1"#,
+        &team_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(row.plan, "growth");
+
+    let missing_team_id = macro_uuid::string_to_uuid("63333333-3333-3333-3333-333333333333")?;
+    let err = team_repo
+        .patch_team_plan(&missing_team_id, TeamPlan::Idea)
+        .await
+        .err()
+        .unwrap();
+    assert!(err.to_string().contains("does not exist"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_get_team_by_id_includes_slug(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    let team = team_repo.get_team_by_id(&team_id).await?.team;
+
+    assert_eq!(team.name(), "team1");
+    assert_eq!(team.slug(), "MACRO");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_patch_team_normalizes_slug_to_screaming_snake_case(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let req = PatchTeamRequest {
+        name: Some("New Name".to_string()),
+        slug: Some("my-team  slug".to_string()),
+        user_role_updates: None,
+    };
+
+    team_repo.patch_team(&team_id, &req).await?;
+
+    let row = sqlx::query(r#"SELECT name, slug FROM team WHERE id = $1"#)
+        .bind(team_id)
+        .fetch_one(&pool)
+        .await?;
+
+    assert_eq!(row.try_get::<String, _>("name")?, "New Name");
+    assert_eq!(row.try_get::<String, _>("slug")?, "MY_TEAM_SLUG");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_patch_team_rejects_invalid_slug_without_updating_name(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let req = PatchTeamRequest {
+        name: Some("Should Not Apply".to_string()),
+        slug: Some("bad.slug".to_string()),
+        user_role_updates: None,
+    };
+
+    let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
+    assert!(matches!(err, TeamError::BadRequest(_)));
+
+    let row = sqlx::query(r#"SELECT name, slug FROM team WHERE id = $1"#)
+        .bind(team_id)
+        .fetch_one(&pool)
+        .await?;
+
+    assert_eq!(row.try_get::<String, _>("name")?, "team1");
+    assert_eq!(row.try_get::<String, _>("slug")?, "MACRO");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_patch_team_rejects_too_long_slug(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let req = PatchTeamRequest {
+        name: None,
+        slug: Some("THIS_SLUG_IS_WAY_TOO_LONG".to_string()),
+        user_role_updates: None,
+    };
+
+    let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
+
+    assert!(matches!(err, TeamError::BadRequest(_)));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
 async fn test_get_team_member(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
@@ -920,46 +1168,6 @@ async fn test_get_team_member(pool: Pool<Postgres>) -> anyhow::Result<()> {
         .unwrap();
 
     assert!(err.to_string().contains("does not exist"));
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("teams"))
-)]
-async fn test_patch_team_tier(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let team_repo = TeamRepositoryImpl::new(pool);
-
-    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
-    let user_id = MacroUserIdStr::parse_from_str("macro|user2@user.com")?;
-
-    // Patch tier to Opus
-    team_repo
-        .patch_team_tier(&team_id, &user_id, TeamUserTier::Opus)
-        .await?;
-
-    // Verify the tier was updated
-    let member = team_repo.get_team_member(&team_id, &user_id).await?;
-    assert_eq!(member.tier, TeamUserTier::Opus);
-
-    // Patch tier to Haiku
-    team_repo
-        .patch_team_tier(&team_id, &user_id, TeamUserTier::Haiku)
-        .await?;
-
-    let member = team_repo.get_team_member(&team_id, &user_id).await?;
-    assert_eq!(member.tier, TeamUserTier::Haiku);
-
-    // Patch tier for non-existent user
-    let missing_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
-    let err = team_repo
-        .patch_team_tier(&team_id, &missing_id, TeamUserTier::Opus)
-        .await
-        .err()
-        .unwrap();
-
-    assert!(err.to_string().contains("member not found"));
 
     Ok(())
 }

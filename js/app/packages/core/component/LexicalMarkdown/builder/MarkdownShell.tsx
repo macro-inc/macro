@@ -188,7 +188,10 @@ export const MarkdownShell: Component<
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
       <div
-        class={cn('relative h-full overflow-y-auto min-h-8', props.class)}
+        class={cn(
+          'relative h-full overflow-y-auto min-h-8 scrollbar-hidden',
+          props.class
+        )}
         on:keydown={(e) => e.stopPropagation()}
         on:click={(e) => {
           e.stopPropagation();

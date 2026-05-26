@@ -1,4 +1,4 @@
-import { MaybeResultError, throwOnErr } from '@core/util/maybeResult';
+import { ThrownResultError, throwOnErr } from '@core/util/result';
 import {
   type ApiChannelMessage,
   type ApiThreadReply,
@@ -30,15 +30,9 @@ export type ChannelMessagesData = InfiniteData<
   ChannelMessagesPageParam | null
 >;
 
-export type ChannelMessagesQueryKey = ReturnType<
+type ChannelMessagesQueryKey = ReturnType<
   typeof channelKeys.messages
 >['queryKey'];
-
-export type IndexedChannelMessages = {
-  items: ApiChannelMessage[];
-  keys: string[];
-  byId: Map<string, ApiChannelMessage>;
-};
 
 export type TopLevelMessageSnapshot = {
   itemIndex: number;
@@ -58,7 +52,7 @@ type ChannelMessagesPageParam = {
 
 export function isMissingChannelMessageError(error: unknown): boolean {
   return (
-    error instanceof MaybeResultError &&
+    error instanceof ThrownResultError &&
     error.errors.some(({ code }) => code === 'NOT_FOUND' || code === 'GONE')
   );
 }
@@ -171,7 +165,7 @@ export function setChannelMessagesData(
 }
 
 /** Returns all cached message query entries for a channel. */
-export function getChannelMessagesEntries(channelId: string) {
+function getChannelMessagesEntries(channelId: string) {
   return queryClient.getQueriesData<ChannelMessagesData>({
     queryKey: getChannelMessagesQueryKeyPrefix(channelId),
   });
@@ -332,7 +326,21 @@ export function replaceTopLevelMessageStateInChannelMessages(
   );
 }
 
-export function getTopLevelMessageSnapshot(
+export function markTopLevelMessageDeletedInChannelMessages(
+  data: ChannelMessagesData | undefined,
+  messageId: string,
+  deletedAt: string | null | undefined
+): ChannelMessagesData | undefined {
+  if (!data) return data;
+
+  return mapChannelMessagesItems(data, (message) =>
+    message.id === messageId
+      ? { ...message, deleted_at: deletedAt ?? undefined }
+      : message
+  );
+}
+
+function getTopLevelMessageSnapshot(
   data: ChannelMessagesData | undefined,
   messageId: string
 ): TopLevelMessageSnapshot | undefined {
@@ -518,7 +526,7 @@ export function replaceThreadReplyStateInChannelMessages(
   });
 }
 
-export function getThreadPreviewReplySnapshot(
+function getThreadPreviewReplySnapshot(
   data: ChannelMessagesData | undefined,
   threadId: string,
   replyId: string
@@ -555,7 +563,7 @@ export function restoreThreadPreviewReplyInChannelMessages(
 }
 
 /** Finds a top-level message across all cached variants for a channel. */
-export function findTopLevelMessageInChannelMessages(
+function _findTopLevelMessageInChannelMessages(
   channelId: string,
   messageId: string
 ): ApiChannelMessage | undefined {
@@ -619,7 +627,7 @@ export function softInvalidateChannelMessages(channelId: string) {
 }
 
 /** Returns the shared prefix for all by-ids message queries in a channel. */
-export function getChannelMessagesByIdsQueryKeyPrefix(channelId: string) {
+function getChannelMessagesByIdsQueryKeyPrefix(channelId: string) {
   return [...channelKeys.messagesByIds._def, channelId];
 }
 
@@ -647,6 +655,20 @@ function mapChannelMessagesByIdsItems(
     return nextMessage;
   });
   return didChange ? next : data;
+}
+
+/** Finds a top-level message in any cached by-ids query for the channel. */
+export function findTopLevelMessageInChannelMessagesByIds(
+  channelId: string,
+  messageId: string
+): ApiChannelMessage | undefined {
+  const entries = queryClient.getQueriesData<ApiChannelMessage[]>({
+    queryKey: getChannelMessagesByIdsQueryKeyPrefix(channelId),
+  });
+  for (const [, data] of entries) {
+    const match = data?.find((message) => message.id === messageId);
+    if (match) return match;
+  }
 }
 
 export function replaceTopLevelMessageReactionsInChannelMessagesByIds(
@@ -691,6 +713,19 @@ export function replaceTopLevelMessageStateInChannelMessagesByIds(
           updated_at: nextState.updatedAt,
           attachments: nextState.attachments,
         }
+      : message
+  );
+}
+
+export function markTopLevelMessageDeletedInChannelMessagesByIds(
+  data: ApiChannelMessage[] | undefined,
+  messageId: string,
+  deletedAt: string | null | undefined
+): ApiChannelMessage[] | undefined {
+  if (!data) return data;
+  return mapChannelMessagesByIdsItems(data, (message) =>
+    message.id === messageId
+      ? { ...message, deleted_at: deletedAt ?? undefined }
       : message
   );
 }

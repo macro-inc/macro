@@ -1,4 +1,5 @@
 use anyhow::{Result, bail};
+use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::annotations::{
     Comment,
@@ -14,17 +15,27 @@ pub async fn edit_document_comment(
     user_id: &str,
     req: &EditCommentRequest,
 ) -> Result<EditCommentResponse> {
-    let (comment_owner, document_id, document_name, file_type, document_owner) = sqlx::query!(
+    let (comment_owner, document_id, document_name, file_type, sub_type, document_owner) = sqlx::query!(
         r#"
-        SELECT c.owner, t."documentId" as document_id, d.name as document_name, d."fileType" as file_type, d.owner as document_owner
+        SELECT c.owner, t."documentId" as document_id, d.name as document_name, d."fileType" as file_type, dt.sub_type as "sub_type?: DocumentSubType", d.owner as document_owner
         FROM "Comment" c
         JOIN "Thread" t ON c."threadId" = t.id
         JOIN "Document" d ON t."documentId" = d.id
+        LEFT JOIN document_sub_type dt ON dt.document_id = d.id
         WHERE c.id = $1 and c."deletedAt" IS NULL AND t."deletedAt" IS NULL
         "#,
         comment_id
     )
-    .map(|row| (row.owner, row.document_id, row.document_name, row.file_type, row.document_owner))
+    .map(|row| {
+        (
+            row.owner,
+            row.document_id,
+            row.document_name,
+            row.file_type,
+            row.sub_type,
+            row.document_owner,
+        )
+    })
     .fetch_one(db)
     .await
     .map_err(|e| match e {
@@ -65,6 +76,7 @@ pub async fn edit_document_comment(
         document_id,
         document_name,
         file_type,
+        sub_type,
         document_owner: MacroUserIdStr::parse_from_str(&document_owner)?.into_owned(),
         comment,
     })
@@ -95,12 +107,14 @@ mod tests {
             document_id,
             document_name,
             file_type,
+            sub_type,
             document_owner,
         } = result.unwrap();
         assert_eq!(comment.text, "Updated comment text");
         assert_eq!(document_id, "document-with-comments");
         assert_eq!(document_name, "Document With Comments");
         assert_eq!(file_type, Some("pdf".to_string()));
+        assert_eq!(sub_type, None);
         assert_eq!(
             document_owner,
             MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap()

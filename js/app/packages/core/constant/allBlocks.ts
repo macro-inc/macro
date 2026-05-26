@@ -38,7 +38,7 @@ const fileTypeToBlockName_: Record<string, BlockName> = {};
 const aliasToBlockName_: Record<string, BlockName> = {};
 
 // Map from base block names to their aliases
-export const blockNameToAliases: Partial<Record<BlockName, string[]>> = {};
+const blockNameToAliases: Partial<Record<BlockName, string[]>> = {};
 
 export const blockAcceptedFileExtensionSet = new Set<string>();
 
@@ -48,8 +48,8 @@ export const blockNameToFileExtensionSet: Record<
   Set<FileTypeString>
 > = {};
 // @ts-ignore This type is built below
-export const blockNameToMimeTypeSet: Record<BlockName, Set<MimeType>> = {};
-export const blockNameToDefaultFilename: Partial<
+const blockNameToMimeTypeSet: Record<BlockName, Set<MimeType>> = {};
+const blockNameToDefaultFilename: Partial<
   Record<BlockName | BlockAlias, string>
 > = {};
 
@@ -87,7 +87,7 @@ for (const [name, block] of Object.entries(blocks)) {
   }
 }
 
-export function blockAcceptsMimeType(blockName: BlockName, mimeType: MimeType) {
+function _blockAcceptsMimeType(blockName: BlockName, mimeType: MimeType) {
   return blockNameToMimeTypeSet[blockName].has(mimeType);
 }
 
@@ -112,13 +112,11 @@ export const blockNameToMimeTypes = Object.fromEntries(
   ])
 ) as Record<BlockName, string[]>;
 
-export const blockAcceptedMimeTypes = Object.keys(
+const _blockAcceptedMimeTypes = Object.keys(
   blockAcceptedMimetypeToFileExtension
 );
 
-export const blockAcceptedFileExtensions = Array.from(
-  blockAcceptedFileExtensionSet
-);
+const _blockAcceptedFileExtensions = Array.from(blockAcceptedFileExtensionSet);
 
 /**
  * Check if a string is a block alias

@@ -431,6 +431,13 @@ export const ListCallRecordsResponse = z.object({
 });
 
 export const ListEntities = z.object({
+  callf: z.any().default(null),
+  cf: z.any().default(null),
+  chanf: z.any().default(null),
+  df: z.any().default(null),
+  ef: z.any().default(null),
+  emailPreset: z.union([z.literal('signal'), z.null()]).optional(),
+  emailView: z.union([z.string(), z.null()]).default(null),
   includeTypes: z
     .union([
       z.array(
@@ -439,6 +446,9 @@ export const ListEntities = z.object({
       z.null(),
     ])
     .optional(),
+  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).default(null),
+  pf: z.any().default(null),
+  propf: z.any().default(null),
   sortBy: z
     .enum(['recently_viewed', 'recently_updated', 'recently_created'])
     .optional(),
@@ -559,6 +569,13 @@ export const ListNotificationsResponse = z.object({
   ),
 });
 
+export const ListTeamMembers = z.record(z.any());
+
+export const ListTeamMembersResponse = z.object({
+  invited: z.array(z.object({ email: z.string(), role: z.string() })),
+  members: z.array(z.object({ role: z.string(), userId: z.string() })),
+});
+
 export const MarkNotificationsDone = z.object({
   done: z.boolean(),
   notificationIds: z.array(z.string().uuid()),
@@ -593,6 +610,7 @@ export const ReadCallRecord = z.object({ callId: z.string().uuid() });
 
 export const ReadCallRecordResponse = z.object({
   callId: z.string().uuid(),
+  summary: z.union([z.string(), z.null()]).optional(),
   transcript: z.array(
     z.object({
       content: z.string(),
@@ -1597,6 +1615,8 @@ export const ReadMetadataResponse = z.object({
     projectName: z.union([z.string(), z.null()]).optional(),
     sha: z.union([z.string(), z.null()]).optional(),
     subType: z.union([z.literal('task'), z.null()]).optional(),
+    teamId: z.union([z.string(), z.null()]).optional(),
+    teamTaskId: z.union([z.number().int(), z.null()]).optional(),
     updatedAt: z
       .union([z.string().datetime({ offset: true }), z.null()])
       .optional(),

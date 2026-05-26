@@ -11,19 +11,22 @@ import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
 } from '@core/constant/allBlocks';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   DEV_MODE_ENV,
   ENABLE_AUTO_UPDATE_UI,
   ENABLE_EMAIL,
   ENABLE_PROFILE_PICTURES,
+  ENABLE_NEW_PRICING_OVERRIDE,
 } from '@core/constant/featureFlags';
+import { useUserTeamsQuery } from '@queries/team';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { fileSelector } from '@core/directive/fileSelector';
 import {
   type ProfilePictureItem,
   useProfilePictureUrl,
 } from '@core/signal/profilePicture';
-import IconUpload from '@macro-icons/macro-upload.svg';
+import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
 import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
 import { authServiceClient } from '@service-auth/client';
 import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
@@ -33,11 +36,15 @@ import {
   createResource,
   createSignal,
   type JSX,
+  Match,
   Show,
+  Switch,
 } from 'solid-js';
 import { usePermissions } from '@core/context/user';
 import { useSettingsState } from '@core/constant/SettingsState';
 import PaywallComponent from '../paywall/PaywallComponent';
+import PaywallTeamMemberView from '../paywall/PaywallTeamMemberView';
+import PaywallTeamOwnerView from '../paywall/PaywallTeamOwnerView';
 import {
     useEmailLinks,
   useEmailLinksStatus,
@@ -89,12 +96,8 @@ function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
 
 function useUserName() {
   const fetchUserName = async () => {
-    const [_, response] = await authServiceClient.getUserName();
-    if (response) {
-      return response;
-    }
-
-    return null;
+    const response = await authServiceClient.getUserName();
+    return response.isOk() ? response.value : null;
   };
 
   const [userNameResource] = createResource(fetchUserName);
@@ -124,6 +127,20 @@ export function Account() {
 
   const { disconnect: disconnectEmail } = useEmailLinks();
 
+  const userTeamsQuery = useUserTeamsQuery();
+  const ownedTeam = createMemo(() => {
+    const teams = userTeamsQuery.data;
+    const uid = userId();
+    if (!teams || !uid) return undefined;
+    return teams.find((t) => t.owner_id === uid);
+  });
+  const isNonOwnerTeamMember = createMemo(() => {
+    const teams = userTeamsQuery.data;
+    const uid = userId();
+    if (!teams || !uid) return false;
+    return teams.some((t) => t.owner_id !== uid);
+  });
+
   const userName = useUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<
     string | undefined
@@ -135,14 +152,14 @@ export function Account() {
   const emailActive = useEmailLinksStatus();
 
   const [githubLinkExists, { refetch: refetchGithubLink }] = createResource(async () => {
-    const [_, response] = await authServiceClient.checkLinkExists({ idp_name: 'github' });
-    return response?.link_exists ?? false;
+    const response = await authServiceClient.checkLinkExists({ idp_name: 'github' });
+    return response.isOk() ? response.value.link_exists : false;
   });
 
   const handleGithubEnable = async () => {
-    const [_, url] = await authServiceClient.initGithubLink(window.location.href);
-    if (url) {
-      window.location.href = url;
+    const url = await authServiceClient.initGithubLink(window.location.href);
+    if (url.isOk()) {
+      window.location.href = url.value;
     }
   };
 
@@ -191,11 +208,34 @@ export function Account() {
           <Panel.Toolbar class="h-full w-full">
             <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
               <div class="px-4 py-2 w-full">
-                <PaywallComponent
-                  hideCloseButton
-                  cb={() => {}}
-                  handleGuest={() => toggleSettings()}
-                />
+                <ShowFeatureFlag
+                  key="enable-new-pricing"
+                  enabledOverride={ENABLE_NEW_PRICING_OVERRIDE}
+                  fallback={
+                    <PaywallComponent
+                      hideCloseButton
+                      cb={() => {}}
+                      handleGuest={() => toggleSettings()}
+                    />
+                  }
+                >
+                  <Switch
+                    fallback={
+                      <PaywallComponent
+                        hideCloseButton
+                        cb={() => {}}
+                        handleGuest={() => toggleSettings()}
+                      />
+                    }
+                  >
+                    <Match when={ownedTeam()}>
+                      {(team) => <PaywallTeamOwnerView team={team()} />}
+                    </Match>
+                    <Match when={isNonOwnerTeamMember()}>
+                      <PaywallTeamMemberView />
+                    </Match>
+                  </Switch>
+                </ShowFeatureFlag>
               </div>
             </Show>
           </Panel.Toolbar>
@@ -440,7 +480,7 @@ export function Account() {
                   position="center"
                   class="w-120"
                 >
-                  <Panel active depth={2}>
+                  <Panel active depth={2} class="rounded-xl">
                     <Panel.Header class="px-6">
                       <Dialog.Title class="text-ink text-sm font-semibold">
                         Delete Account
@@ -471,7 +511,7 @@ export function Account() {
                   position="center"
                   class="w-120"
                 >
-                  <Panel active depth={2}>
+                  <Panel active depth={2} class="rounded-xl">
                     <Panel.Header class="px-6">
                       <Dialog.Title class="text-ink text-sm font-semibold">
                         Are you absolutely sure?
@@ -546,7 +586,7 @@ function NameInput(props: {
   };
 
   return (
-    <div class="ph-no-capture group relative flex items-center gap-1 rounded-sm h-7 mobile:h-9 px-2 border text-xs bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink">
+    <div class="ph-no-capture group relative flex items-center gap-1 rounded-lg h-7 mobile:h-9 px-2 border text-xs bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent">
       <input
         type="text"
         class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-xs placeholder:text-ink-extra-muted"

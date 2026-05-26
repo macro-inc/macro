@@ -9,7 +9,7 @@ use crate::{
             DefaultSearchResponse, Hit, MacroEm, SearchGotoChannel, SearchGotoContent, SearchHit,
             exclude_source_content, inject_fragment_size, parse_highlight_hit,
         },
-        query::Keys,
+        query::{Keys, TermCombine},
     },
 };
 
@@ -53,7 +53,9 @@ pub(crate) struct ChannelMessageQueryBuilder {
 impl ChannelMessageQueryBuilder {
     pub fn new(terms: Vec<String>) -> Self {
         Self {
-            inner: SearchQueryBuilder::new(terms),
+            // Channel messages are single-doc-per-message, so every term
+            // must match the same document.
+            inner: SearchQueryBuilder::new(terms).term_combine(TermCombine::And),
             ..Default::default()
         }
     }

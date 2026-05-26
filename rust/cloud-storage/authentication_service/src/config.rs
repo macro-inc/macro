@@ -63,6 +63,11 @@ pub struct Config {
     /// The email link manager queue
     pub link_manager_queue: String,
 
+    /// The email backfill queue. Used by `join_team` to enqueue a
+    /// `PopulateCrmForUser` message that seeds CRM tables with the new
+    /// member's historical sent-mail contacts.
+    pub email_backfill_queue: String,
+
     /// The github client id
     pub github_client_id: String,
     /// The github client secret
@@ -87,19 +92,31 @@ pub struct Config {
     /// PostHog host (optional)
     pub posthog_host: Option<String>,
 
-    /// The stripe price ids
-    pub stripe_price_ids: StripePriceIds,
+    /// The legacy stripe price ids
+    pub legacy_stripe_price_ids: LegacyStripePriceIds,
+
+    /// The stripe price id
+    pub stripe_price_id: String,
 }
 
 env_var! {
     #[derive(Clone)]
-    pub struct StripePriceIds {
+    pub struct LegacyStripePriceIds {
         #[derive(Clone)]
         pub StripePriceIdHaiku,
         #[derive(Clone)]
         pub StripePriceIdSonnet,
         #[derive(Clone)]
         pub StripePriceIdOpus,
+    }
+}
+
+/// Grab the stripe product price id using the environment
+fn get_stripe_price_id_from_environment(environment: Environment) -> String {
+    // SAFETY: stripe price ids are not sensitive information so hard coding them here is simpler
+    match environment {
+        Environment::Production => "price_1TZY5FJaD7zvQeOBMldBpUHg".to_string(),
+        Environment::Develop | Environment::Local => "price_1TZY5uJaD7zvQeOBRu9a5v8P".to_string(),
     }
 }
 
@@ -153,6 +170,9 @@ impl Config {
         let link_manager_queue =
             std::env::var("LINK_MANAGER_QUEUE").context("LINK_MANAGER_QUEUE must be provided")?;
 
+        let email_backfill_queue = std::env::var("EMAIL_BACKFILL_QUEUE")
+            .context("EMAIL_BACKFILL_QUEUE must be provided")?;
+
         let github_client_id =
             std::env::var("GITHUB_CLIENT_ID").context("GITHUB_CLIENT_ID must be provided")?;
         let github_client_secret = std::env::var("GITHUB_CLIENT_SECRET")
@@ -173,7 +193,9 @@ impl Config {
         let posthog_api_key = std::env::var("POSTHOG_API_KEY").ok();
         let posthog_host = std::env::var("POSTHOG_HOST").ok();
 
-        let stripe_price_ids = StripePriceIds::new()?;
+        let legacy_stripe_price_ids = LegacyStripePriceIds::new()?;
+
+        let stripe_price_id = get_stripe_price_id_from_environment(environment);
 
         Ok(Config {
             base_url,
@@ -194,6 +216,7 @@ impl Config {
             notification_queue,
             search_event_queue,
             link_manager_queue,
+            email_backfill_queue,
             environment,
             github_client_id,
             github_client_secret,
@@ -205,7 +228,8 @@ impl Config {
             meta_test_event_code,
             posthog_api_key,
             posthog_host,
-            stripe_price_ids,
+            legacy_stripe_price_ids,
+            stripe_price_id,
         })
     }
 }

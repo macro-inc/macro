@@ -1,6 +1,7 @@
+import type { ResultError } from '@core/util/result';
+import type { Result } from 'neverthrow';
 import { z } from 'zod';
 import type { FlattenObject } from './util/flatten';
-import type { MaybeError, MaybeResult } from './util/maybeResult';
 
 type ErrorDef = {
   code: string;
@@ -11,7 +12,7 @@ type ErrorDef = {
 /**
  * Defines the types of actors that can interact with the service.
  */
-export const ACTORS = {
+const ACTORS = {
   user: 'Human users of a service, acted upon through UI',
   ai: 'Chat or other AI users of a service that act on behalf of the user',
   producer: 'The block that produced the block can access these services',
@@ -20,14 +21,14 @@ export const ACTORS = {
 /**
  * Represents the type of an actor in the system.
  */
-export type Actor = keyof typeof ACTORS;
+type Actor = keyof typeof ACTORS;
 
 /**
  * Access controls should be used sparingly. If there are functions or services
  * that behave similarly but have different access, consider breaking up or
  * consolidating the functionality first.
  */
-export type Access =
+type Access =
   | {
       /** access is solely denied to actors specified */
       exclude?: Actor[];
@@ -110,7 +111,7 @@ export interface FunctionDefinition<
   access?: Access;
 }
 
-export interface SvcDefinition {
+interface SvcDefinition {
   /**
    * A description of the overall functionality this service represents.
    * Use cases by user/AI/blocks or examples of inter-service behavior should be
@@ -262,17 +263,17 @@ type ClientFunctionArgs<T> =
     : never;
 
 type ClientFunctionResult<T> =
-  T extends FunctionDefinition<any, any, infer Result, infer Throws>
-    ? Result extends z.ZodRawShape | AnyZodType
+  T extends FunctionDefinition<any, any, infer Output, infer Throws>
+    ? Output extends z.ZodRawShape | AnyZodType
       ? Throws extends string[]
-        ? MaybeResult<Throws[number], ZodResultToType<Result>>
-        : ZodResultToType<Result>
+        ? Result<ZodResultToType<Output>, ResultError<Throws[number]>[]>
+        : ZodResultToType<Output>
       : Throws extends string[]
-        ? MaybeError<Throws[number]>
+        ? Result<void, ResultError<Throws[number]>[]>
         : void
     : never;
 
-export type ClientFunction<T extends FunctionDefinition<any, any, any, any>> =
+type ClientFunction<T extends FunctionDefinition<any, any, any, any>> =
   ClientFunctionArgs<T> extends undefined
     ? () => Promise<ClientFunctionResult<T>>
     : (args: ClientFunctionArgs<T>) => Promise<ClientFunctionResult<T>>;
@@ -312,7 +313,7 @@ export const fetchErrorsSvc = new Svc('Common fetch errors')
 
 export type FetchError = keyof typeof fetchErrorsSvc.state.errors;
 
-export const fetchErrors = Object.keys(fetchErrorsSvc.state.errors) as Array<
+const fetchErrors = Object.keys(fetchErrorsSvc.state.errors) as Array<
   keyof typeof fetchErrorsSvc.state.errors
 >;
 

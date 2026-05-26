@@ -1,18 +1,17 @@
 import { isListViewID } from '@app/constants/list-views';
-
 import {
   ENABLE_PREVIEW,
   ENABLE_PROJECT_VIEW_PREVIEW,
 } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CollapseIcon from '@icon/regular/arrows-in.svg';
-import ExpandIcon from '@icon/regular/arrows-out.svg';
-import CaretLeft from '@icon/regular/caret-left.svg';
-import CaretRight from '@icon/regular/caret-right.svg';
-import SplitIcon from '@icon/regular/square-half.svg';
-import CloseIcon from '@icon/regular/x.svg';
+import CollapseIcon from '@phosphor/arrows-in.svg';
+import ExpandIcon from '@phosphor/arrows-out.svg';
+import CaretLeft from '@phosphor/caret-left.svg';
+import CaretRight from '@phosphor/caret-right.svg';
+import EyeIcon from '@phosphor/eye.svg';
+import EyeSlashIcon from '@phosphor/eye-slash.svg';
+import CloseIcon from '@phosphor/x.svg';
 import { Button, cn } from '@ui';
 import {
   createMemo,
@@ -30,7 +29,7 @@ function SplitBackButton() {
   if (!context) return null;
   return (
     <Button
-      class="p-1"
+      class="p-1 rounded-lg"
       label="Go Back"
       hotkey={TOKENS.split.go.back}
       disabled={!context.handle.canGoBack()}
@@ -51,7 +50,7 @@ function SplitForwardButton() {
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
       class={cn(
-        'p-1',
+        'p-1 rounded-lg',
         isMobile() && !context.handle.canGoForward() && 'hidden'
       )}
     >
@@ -60,14 +59,14 @@ function SplitForwardButton() {
   );
 }
 
-function SplitSpotlightButton() {
+function _SplitSpotlightButton() {
   const context = useContext(SplitPanelContext);
   const layout = useContext(SplitLayoutContext);
   if (!context || !layout) return '';
   return (
     <Show when={canSpotlight(layout.manager)}>
       <Button
-        class="p-1 rounded-xs hidden"
+        class="p-1 rounded-lg hidden"
         label={
           context.handle.isSpotLight() ? 'Minimize Split' : 'Spotlight Split'
         }
@@ -98,7 +97,7 @@ function SplitCloseButton() {
   return (
     <Show when={layout.manager.splits().length > 1}>
       <Button
-        class="p-1"
+        class="p-1 rounded-lg"
         label={label()}
         hotkey={TOKENS.split.close}
         onClick={context.handle.close}
@@ -126,7 +125,7 @@ function _SplitPreviewToggle() {
     <Show when={isUnifiedList()}>
       <div class="max-sm:rotate-90">
         <Button
-          class="p-1"
+          class="p-1 rounded-lg"
           classList={{
             'bg-accent/20 text-accent': preview(),
           }}
@@ -135,7 +134,7 @@ function _SplitPreviewToggle() {
           tabIndex={-1}
           onClick={() => setPreview((prev) => !prev)}
         >
-          <SplitIcon class="h-4" />
+          {preview() ? <EyeSlashIcon /> : <EyeIcon />}
         </Button>
       </div>
     </Show>
@@ -156,21 +155,21 @@ function _SplitControlButtons() {
 
 export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
   const panel = useContext(SplitPanelContext);
-  if (!panel)
+  if (!panel) {
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
-  const layout = useContext(SplitLayoutContext);
-
-  const shouldShowRightmost = () =>
-    !isTouchDevice() && layout && canSpotlight(layout.manager);
+  }
 
   return (
     <div
-      class="isolate relative w-full min-h-10.25 touch:min-h-11.25 overflow-clip text-ink shrink-0 border-b border-edge-muted"
+      class={cn(
+        'isolate relative w-full h-full overflow-clip text-ink',
+        isMobile() && isListViewID(panel.handle.content().id) && 'hidden'
+      )}
       data-split-header
       ref={props.ref}
     >
-      <div class="absolute inset-0 flex justify-start items-center bg-surface">
-        <div class="z-annotation-layer relative flex items-center bg-surface pl-2 mobile:pl-0 h-full">
+      <div class="absolute inset-0 flex justify-start items-center">
+        <div class="relative flex items-center pl-2 mobile:pl-0 h-full">
           <div class="mobile:hidden">
             <SplitCloseButton />
           </div>
@@ -179,6 +178,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
             <SplitForwardButton />
           </Show>
         </div>
+
         <div
           class="relative min-w-0 h-full shrink pl-2 flex items-center gap-0.5"
           ref={(ref) => {
@@ -186,7 +186,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           }}
         />
 
-        <Show when={shouldShowRightmost()}>
+        {/*<Show when={shouldShowRightmost()}>
           <div
             class={
               'pl-2 z-annotation-layer relative flex items-center gap-0.5 h-full'
@@ -194,10 +194,10 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           >
             <SplitSpotlightButton />
           </div>
-        </Show>
+        </Show>*/}
 
         <div
-          class="min-w-4 h-full grow shrink flex items-center justify-end gap-0.5 pl-2 pr-2"
+          class="min-w-4 h-full grow shrink flex items-center justify-end gap-0.5 px-2"
           ref={(ref) => {
             panel.layoutRefs.headerRight = ref;
           }}

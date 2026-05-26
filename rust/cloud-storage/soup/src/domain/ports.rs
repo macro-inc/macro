@@ -1,7 +1,9 @@
 use crate::domain::models::{
-    AdvancedSortParams, FrecencySoupItem, IntoSoupReqAst, SimpleSortRequest, SoupErr, SoupRequest,
+    AdvancedSortParams, FrecencySoupItem, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
+    SimpleSortRequest, SoupErr, SoupRequest,
 };
 use either::Either;
+use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use models_pagination::{Frecency, PaginatedCursor, SimpleSortMethod};
 use models_soup::item::SoupItem;
 use serde::Serialize;
@@ -34,6 +36,12 @@ pub trait SoupRepo: Send + Sync + 'static {
         &self,
         items: &mut [SoupItem],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Fetches expanded soup items with group metadata.
+    fn expanded_grouped_cursor_soup<'a>(
+        &self,
+        req: GroupedSortRequest<'a>,
+    ) -> impl Future<Output = Result<Vec<GroupedSoupItem>, Self::Err>> + Send;
 }
 
 /// type alias which represents the posible outputs of soup
@@ -48,11 +56,23 @@ pub type SoupOutput<T> = Either<
 >;
 
 pub trait SoupService: Send + Sync + 'static {
+    /// Run a soup query for the authenticated user.
+    ///
+    /// `team_receipt` proves the user belongs to a team and may be used by
+    /// filters that broaden visibility beyond the user's own mailboxes (e.g.
+    /// `EmailFilters::crm_domains` / `crm_addresses`). Pass `None` when
+    /// no CRM-scoped filter is active.
     fn get_user_soup<T>(
         &self,
         req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
     ) -> impl Future<Output = Result<SoupOutput<T>, SoupErr>> + Send
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send;
+
+    fn get_user_soup_grouped(
+        &self,
+        req: GroupedSortRequest<'_>,
+    ) -> impl Future<Output = Result<Vec<GroupedSoupItem>, SoupErr>> + Send;
 }

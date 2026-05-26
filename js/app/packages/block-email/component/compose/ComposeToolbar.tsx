@@ -2,22 +2,17 @@ import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHe
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
 import { FormatButtons } from '@channel/Input/FormatButtons';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import { fileSelector } from '@core/directive/fileSelector';
 import { isMobile } from '@core/mobile/isMobile';
 import { plural } from '@core/util/string';
-import ArrowUp from '@icon/bold/arrow-up-bold.svg';
-import TextAa from '@icon/regular/text-aa.svg';
-import Trash from '@icon/regular/trash.svg';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import PaperPlane from '@macro-icons/wide/paper-plane-cutout.svg';
+import PaperclipIcon from '@phosphor/paperclip.svg?component-solid';
+import TextAa from '@phosphor/text-aa.svg';
+import Trash from '@phosphor/trash.svg';
 import DotsThreeIcon from '@phosphor-icons/core/bold/dots-three-bold.svg?component-solid';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import PaperclipHorizontalIcon from '@phosphor-icons/core/regular/paperclip-horizontal.svg?component-solid';
-import { Button, Tooltip } from '@ui';
+import { Button, Dropdown, SendButton, Tooltip } from '@ui';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,
@@ -53,10 +48,9 @@ export function EmailComposeToolbar(props: {
       currentAttachmentsByteSize + attachmentsToAddByteSize >=
       MAX_ATTACHMENTS_BYTES_SIZE
     ) {
-      toast.failure(
-        "Can't add more attachments",
-        'Total attachments exceed 18MB limit'
-      );
+      toast.failure("Can't add more attachments", {
+        subtext: 'Total attachments exceed 18MB limit',
+      });
       return;
     }
 
@@ -104,15 +98,15 @@ export function EmailComposeToolbar(props: {
                     }))
                   }
                   tooltip="Attach"
-                  class="aspect-square p-1"
+                  size="icon-sm"
                   disabled={ctx.disabled()}
                 >
-                  <PaperclipIcon class="h-5" />
+                  <PaperclipIcon />
                 </Button>
               </div>
             </Show>
             <Button
-              variant="ghost"
+              tooltip="Format"
               size="icon-sm"
               disabled={ctx.disabled()}
               onClick={() => {
@@ -142,36 +136,29 @@ export function EmailComposeToolbar(props: {
           <div class="flex items-center gap-2">
             <Show when={ctx.onSaveDraft}>
               <Button
-                variant="base"
-                size="sm"
                 disabled={
                   ctx.isSending() || ctx.isSavingDraft?.() || ctx.disabled()
                 }
                 onClick={() => void ctx.onSaveDraft?.()}
+                variant="base"
+                size="sm"
               >
                 {ctx.isSavingDraft?.() ? 'Saving…' : 'Save Draft'}
               </Button>
             </Show>
             <Tooltip label={ctx.sendTime() ? 'Send time is scheduled' : ''}>
-              <button
-                disabled={
-                  ctx.isSending() ||
-                  ctx.isSavingDraft?.() ||
-                  ctx.disabled() ||
-                  !!ctx.sendTime()
-                }
+              <SendButton
                 onClick={() => ctx.onSend()}
-                class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
-              >
-                <Show
-                  when={!ctx.isSending()}
-                  fallback={<Spinner class="size-6 animate-spin" />}
-                >
-                  <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                    <ArrowUp class="group-hover:text-surface! group-hover:fill-surface! text-accent! fill-accent! size-4 transition ease-in-out" />
-                  </div>
-                </Show>
-              </button>
+                disabled={
+                  ctx.isSavingDraft?.() ||
+                  !!ctx.sendTime() ||
+                  ctx.isSending() ||
+                  ctx.disabled()
+                }
+                pending={ctx.isSending()}
+                tooltip="Send email"
+                shortcut="cmd+enter"
+              />
             </Tooltip>
           </div>
         </Show>
@@ -225,32 +212,30 @@ function MobileToolbar(props: {
               {ctx.isSavingDraft?.() ? 'Saving…' : 'Draft'}
             </Button>
           </Show>
-          <Button
+          <SendButton
             disabled={
               ctx.isSending() ||
               ctx.isSavingDraft?.() ||
               ctx.disabled() ||
               !!ctx.sendTime()
             }
+            pending={ctx.isSending()}
             onClick={() => ctx.onSend()}
-          >
-            <PaperPlane class="size-4.5 text-accent" />
-          </Button>
+            tooltip="Send email"
+          />
         </Tooltip>
-        <DropdownMenu placement="bottom-end">
-          <DropdownMenu.Trigger as={Button} class="aspect-square p-1">
+        <Dropdown placement="bottom-end">
+          <Dropdown.Trigger class="aspect-square p-1">
             <DotsThreeIcon class="h-4.5" />
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenuContent>
-              <MenuItem
-                text="Delete Draft"
-                disabled={!ctx.hasDraft()}
-                onClick={ctx.onDelete}
-              />
-            </DropdownMenuContent>
-          </DropdownMenu.Portal>
-        </DropdownMenu>
+          </Dropdown.Trigger>
+          <Dropdown.Content>
+            <Dropdown.Group>
+              <Dropdown.Item disabled={!ctx.hasDraft()} onSelect={ctx.onDelete}>
+                <span class="flex-1 truncate">Delete Draft</span>
+              </Dropdown.Item>
+            </Dropdown.Group>
+          </Dropdown.Content>
+        </Dropdown>
       </div>
     </SplitHeaderRight>
   );

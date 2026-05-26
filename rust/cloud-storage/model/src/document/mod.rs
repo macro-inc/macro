@@ -8,16 +8,18 @@ use schemars::JsonSchema;
 use utoipa::ToSchema;
 
 mod file_type;
-pub use file_type::*;
+pub use file_type::{ContentType, ContentTypeExt, FileAssociation, FileType, FileTypeExt};
 mod docx;
-pub use docx::*;
+pub use docx::{BomPart, BomPartWithContent, SaveBomPart};
 mod pdf;
-pub use pdf::*;
+pub use pdf::modification_data;
 mod basic;
-pub use basic::*;
+pub use basic::{
+    Document, DocumentBasic, DocumentInfo, ID, IDWithTimeStamps, VersionID,
+    VersionIDWithTimeStamps, VersionIDWithTimeStampsNoSha, VersionIDWithTimeStampsOptionalSha,
+};
 mod document_family;
-pub use document_family::*;
-
+pub use document_family::DocumentFamily;
 use models_permissions::share_permission::access_level::AccessLevel;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
@@ -139,7 +141,7 @@ pub struct BackfillSearchDocumentInformation {
     pub document_version_id: i64,
     pub owner: String,
     pub file_type: FileType,
-    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 #[derive(
     sqlx::FromRow,

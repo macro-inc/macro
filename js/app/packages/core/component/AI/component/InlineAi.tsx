@@ -1,22 +1,11 @@
-import PaperPlaneRight from '@icon/fill/paper-plane-right-fill.svg';
-import GridLoader from '@macro-icons/macro-grid-noise-loader-4.svg';
+import GridLoader from '@icon/macro-grid-noise-loader-4.svg';
+import PaperPlaneRight from '@phosphor/paper-plane-right.svg';
 import { cn } from '@ui';
 import { createSignal, onMount } from 'solid-js';
 
 const defaultPlaceholder = 'Generate with AI...';
 
-export enum AiState {
-  // pressing enter causes state transition
-  Ready,
-  // pressing enter show spinner, transition on event
-  Processing,
-  // do nothing
-  Disabled,
-  // loading but can be stopped
-  Stopable,
-}
-
-export type InlineInputReadyProps = {
+type InlineInputReadyProps = {
   // send message to chat
   sendCallback: (input: string) => void;
   closeInput?: () => void;
@@ -24,7 +13,7 @@ export type InlineInputReadyProps = {
   options?: InlineInputOptions;
 };
 
-export type InlineInputOptions = {
+type InlineInputOptions = {
   defaultLines?: number;
   placeholderText?: string;
   focusOnMount?: boolean;
@@ -112,7 +101,7 @@ export function InlineInputReady(props: InlineInputReadyProps) {
   );
 }
 
-export type InlineInputLoadingProps = {
+type InlineInputLoadingProps = {
   options?: InlineInputOptions;
 };
 

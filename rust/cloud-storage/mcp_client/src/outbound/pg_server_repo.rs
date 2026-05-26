@@ -27,6 +27,7 @@ impl PgServerRepo {
         }
     }
 
+    #[tracing::instrument(skip_all, err)]
     fn encrypt(&self, creds: &StoredCredentials) -> Result<Vec<u8>, sqlx::Error> {
         let plaintext =
             serde_json::to_vec(creds).map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
@@ -41,6 +42,7 @@ impl PgServerRepo {
         Ok(out)
     }
 
+    #[tracing::instrument(skip_all, err)]
     fn decrypt(&self, data: &[u8]) -> Result<StoredCredentials, sqlx::Error> {
         if data.len() <= NONCE_LEN {
             return Err(sqlx::Error::Decode(
@@ -60,6 +62,7 @@ impl PgServerRepo {
 impl McpServerStore for PgServerRepo {
     type Err = sqlx::Error;
 
+    #[tracing::instrument(skip_all, err)]
     async fn save(&self, record: &McpServerRecord) -> Result<(), Self::Err> {
         let encrypted: Option<Vec<u8>> = record
             .credentials
@@ -89,6 +92,7 @@ impl McpServerStore for PgServerRepo {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, err)]
     async fn load(
         &self,
         user_id: &MacroUserIdStr<'static>,
@@ -110,6 +114,7 @@ impl McpServerStore for PgServerRepo {
             .transpose()
     }
 
+    #[tracing::instrument(skip_all, err)]
     async fn delete(
         &self,
         user_id: &MacroUserIdStr<'static>,
@@ -129,6 +134,7 @@ impl McpServerStore for PgServerRepo {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, err)]
     async fn list(
         &self,
         user_id: &MacroUserIdStr<'static>,
@@ -152,6 +158,7 @@ impl McpServerStore for PgServerRepo {
 }
 
 impl PgServerRepo {
+    #[tracing::instrument(skip_all, err)]
     fn to_record(
         &self,
         user_id: String,
