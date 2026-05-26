@@ -35,7 +35,10 @@ export function EditorPopover(props: EditorPopoverProps) {
   };
 
   const handleInteractOutside = () => {
-    if (props.withClickBlock === false) return;
+    if (props.withClickBlock === false) {
+      close();
+      return;
+    }
     // Swallow the next global click. Or reset on next pointer down.
     const swallow = (clickEvent: PointerEvent) => {
       clickEvent.stopPropagation();
