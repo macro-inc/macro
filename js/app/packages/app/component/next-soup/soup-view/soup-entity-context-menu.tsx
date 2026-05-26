@@ -27,6 +27,7 @@ export const SoupEntityContextMenu: FlowComponent<
           data-soup-entity
           ref={(el) =>
             longPressHighlight(el, () => ({
+              className: 'touch-highlight',
               onLongPress: () => drawerManager?.open(props.entity, soup),
             }))
           }

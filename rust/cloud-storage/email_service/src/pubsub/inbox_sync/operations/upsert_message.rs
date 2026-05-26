@@ -4,7 +4,7 @@ use crate::pubsub::inbox_sync::operations::shared::notify_search;
 use crate::pubsub::inbox_sync::process;
 use crate::pubsub::inbox_sync::process::check_gmail_rate_limit_inbox_sync;
 use crate::pubsub::util::cg_refresh_email;
-use crate::pubsub::util::enqueue_populate_crm_contacts;
+use crate::pubsub::util::{CrmContactRecipient, enqueue_populate_crm_contacts};
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
 use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
 use contacts::domain::ports::ContactsIngress;
@@ -107,24 +107,35 @@ pub async fn upsert_message(
     .filter(|e| !email_utils::is_generic_email(e))
     .collect::<Vec<_>>();
 
-    // Snapshot `(email, name)` pairs for the CRM populate fan-out below.
-    // We capture it here (before `message` is moved into
-    // `process_and_insert_message`) so the consumer can write
+    // Snapshot `(email, name, first_at, last_at)` tuples for the CRM
+    // populate fan-out below. Captured here (before `message` is moved
+    // into `process_and_insert_message`) so the consumer can write
     // `crm_contacts.name` without a separate email_contacts lookup.
-    // No producer-side filtering — the crm crate is the single source
-    // of truth for "what belongs in the CRM" (generic-provider domains,
-    // killswitched companies, etc.) and applying the same rules here
-    // would just drift over time.
-    let crm_recipients: Vec<(String, Option<String>)> = if is_sent {
+    //
+    // Single message → single timestamp covers both endpoints; the
+    // consumer merges with the stored range over time. Sent: enumerate
+    // to/cc/bcc. Received: enumerate `from`. Drafts are skipped — they
+    // don't represent real correspondence. No producer-side filtering
+    // of addresses — the crm crate is the single source of truth.
+    let is_draft = message.is_draft;
+    // `Utc::now()` fallback when Gmail returned no internal_date_ts.
+    let at = message.internal_date_ts.unwrap_or_else(chrono::Utc::now);
+    let crm_recipients: Vec<CrmContactRecipient> = if is_draft {
+        Vec::new()
+    } else if is_sent {
         message
             .to
             .iter()
             .chain(&message.cc)
             .chain(&message.bcc)
-            .map(|c| (c.email.clone(), c.name.clone()))
+            .map(|c| (c.email.clone(), c.name.clone(), at, at))
             .collect()
     } else {
-        Vec::new()
+        message
+            .from
+            .iter()
+            .map(|c| (c.email.clone(), c.name.clone(), at, at))
+            .collect()
     };
 
     // determine if message's thread already exists in the database
@@ -216,13 +227,13 @@ pub async fn upsert_message(
     )
     .await?;
 
-    // For messages sent BY the user, fan out a PopulateCrmContact job per
-    // recipient so the CRM tables learn about the contacts the team has
-    // been emailing. Mirrors the backfill path in backfill_message.rs;
-    // `crm_recipients` was snapshotted above before `message` was moved.
-    if is_sent {
+    // Fan out a PopulateCrmContact job per address. Mirrors
+    // `backfill_message.rs`: sent → to/cc/bcc, received → from,
+    // drafts → skipped. The consumer branches on `is_sent` for the
+    // company-insert gate.
+    if !crm_recipients.is_empty() {
         let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
-        enqueue_populate_crm_contacts(ctx, link.id, &self_email, crm_recipients).await?;
+        enqueue_populate_crm_contacts(ctx, link.id, &self_email, crm_recipients, is_sent).await?;
     }
 
     notify_search(ctx, link, message_db_id, is_spam_or_trash).await?;

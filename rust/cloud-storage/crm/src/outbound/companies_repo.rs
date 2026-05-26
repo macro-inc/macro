@@ -10,6 +10,7 @@ use crate::domain::{
         DomainMetadata,
     },
 };
+use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
 /// PostgreSQL-backed [`CompaniesRepository`].
@@ -26,10 +27,8 @@ impl CompaniesRepositoryImpl {
     }
 
     /// Take per-`(team_id, lower(domain))` advisory locks for every
-    /// domain attached to the company, in sorted order. This is the
-    /// same lock scheme `populate_contact` and `depopulate_contact`
-    /// hold, so any caller mutating company-scoped sync state should
-    /// take these locks before observing contacts/sources.
+    /// domain on the company, sorted — same scheme `populate_contact` /
+    /// `depopulate_contact` use, sorted order prevents deadlock.
     async fn lock_company_domains(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         team_id: &uuid::Uuid,
@@ -62,9 +61,7 @@ impl CompaniesRepositoryImpl {
         Ok(())
     }
 
-    /// Delete every `crm_contact_sources` row pointing at a contact in
-    /// `company_id`, then every `crm_contacts` row for the company.
-    /// Caller is expected to be inside a tx that already holds the
+    /// Drop the company's sources then contacts. Caller must hold the
     /// per-domain advisory locks (see [`Self::lock_company_domains`]).
     async fn delete_company_contacts(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -157,6 +154,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::too_many_arguments)]
     async fn populate_contact(
         &self,
         team_id: &uuid::Uuid,
@@ -164,6 +162,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         domain: &str,
         email: &str,
         name: Option<&str>,
+        first_at: DateTime<Utc>,
+        last_at: DateTime<Utc>,
+        is_sent: bool,
     ) -> Result<(), CrmError> {
         let normalized_domain = domain.to_ascii_lowercase();
         let normalized_email = email.to_ascii_lowercase();
@@ -174,15 +175,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // Serialize on (team_id, lower(domain)) for the duration of this
-        // transaction. Without this lock two concurrent populate_contact
-        // calls can both observe "no existing company" and both insert one,
-        // leaving the team with duplicate crm_companies rows. The
-        // UNIQUE(team_id, LOWER(domain)) on crm_domains catches the race at
-        // the second insert, but only after the first transaction has
-        // already created an orphan company. The advisory lock prevents
-        // that orphan from ever existing. Lock scope is the (team, domain)
-        // key only — different teams/different domains run in parallel.
+        // Serialize on (team, lower(domain)): the unique constraint on
+        // crm_domains catches the race only after an orphan crm_companies
+        // row was already inserted by the loser.
         sqlx::query!(
             r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))"#,
             format!("{team_id}:{normalized_domain}"),
@@ -191,12 +186,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // Team-level CRM killswitch. Disable flips
-        // `team_crm_settings.crm_enabled` and purges `crm_companies` in
-        // the same transaction, so reading the flag here — inside our
-        // tx, after the advisory lock — guarantees we see the disable's
-        // commit and don't strand an orphan row it already raced past.
-        // Missing row = default false = treat as disabled.
+        // Team killswitch. Read inside the tx (after the lock) so a
+        // concurrent disable+purge can't race past us. Missing row =
+        // default false.
         let team_crm_enabled = sqlx::query_scalar!(
             r#"
             SELECT COALESCE(
@@ -217,10 +209,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             return Ok(());
         }
 
-        // Look up the company for this (team, domain). The per-domain
-        // killswitch lives here: a pre-existing row with
-        // email_sync=false means the team has opted this domain out and
-        // we must not write anything.
+        // Per-domain killswitch: existing row with email_sync=false
+        // means the team has opted this domain out, no-op.
         let existing = sqlx::query!(
             r#"
             SELECT c.id, c.email_sync
@@ -239,17 +229,30 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
 
         let company_id = match existing {
             Some(row) if !row.email_sync => {
-                // Killswitch: team has opted this domain out. Commit the
-                // (empty) transaction and return so the caller acks.
+                // Killswitch: domain opted out, ack and exit.
                 tx.commit()
                     .await
                     .map_err(|e| CrmError::StorageLayerError(e.into()))?;
                 return Ok(());
             }
             Some(row) => {
+                // `last_interaction` always bumps via GREATEST.
+                // `first_interaction` only LEAST-merges on is_sent=true:
+                // received-direction populates must not pull the anchor
+                // backwards.
                 sqlx::query!(
-                    r#"UPDATE crm_companies SET updated_at = now() WHERE id = $1"#,
+                    r#"UPDATE crm_companies
+                       SET updated_at = now(),
+                           first_interaction = CASE
+                               WHEN $4 THEN LEAST(first_interaction, $2)
+                               ELSE first_interaction
+                           END,
+                           last_interaction = GREATEST(last_interaction, $3)
+                       WHERE id = $1"#,
                     row.id,
+                    first_at,
+                    last_at,
+                    is_sent,
                 )
                 .execute(&mut *tx)
                 .await
@@ -257,27 +260,33 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
 
                 row.id
             }
+            None if !is_sent => {
+                // Received-direction never creates a company row.
+                tx.commit()
+                    .await
+                    .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+                return Ok(());
+            }
             None => {
+                // Seed interaction columns from the producer's known
+                // range so backfilled mail keeps accurate timestamps.
                 let new_company = sqlx::query!(
                     r#"
-                    INSERT INTO crm_companies (team_id)
-                    VALUES ($1)
+                    INSERT INTO crm_companies (team_id, first_interaction, last_interaction)
+                    VALUES ($1, $2, $3)
                     RETURNING id
                     "#,
                     team_id,
+                    first_at,
+                    last_at,
                 )
                 .fetch_one(&mut *tx)
                 .await
                 .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-                // The advisory lock guarantees no concurrent insert for the
-                // same (team_id, lower(domain)). The UNIQUE index on
-                // crm_domains backs that promise up — `ON CONFLICT DO
-                // NOTHING` is defensive. If it does fire (e.g. an old row
-                // predating the advisory lock somehow exists), the
-                // crm_companies row we just inserted would be orphaned with
-                // no domain pointing at it. Detect via rows_affected, look
-                // up the real company id, and delete the orphan.
+                // Defensive ON CONFLICT — the advisory lock should
+                // prevent it, but if it fires we'd orphan the company
+                // we just inserted, so we recover via rows_affected.
                 let domain_insert = sqlx::query!(
                     r#"
                     INSERT INTO crm_domains (company_id, team_id, domain)
@@ -309,9 +318,21 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                     .await
                     .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
+                    // is_sent is true here (the !is_sent arm exited);
+                    // CASE kept for symmetry with the regular path.
                     sqlx::query!(
-                        r#"UPDATE crm_companies SET updated_at = now() WHERE id = $1"#,
+                        r#"UPDATE crm_companies
+                           SET updated_at = now(),
+                               first_interaction = CASE
+                                   WHEN $4 THEN LEAST(first_interaction, $2)
+                                   ELSE first_interaction
+                               END,
+                               last_interaction = GREATEST(last_interaction, $3)
+                           WHERE id = $1"#,
                         existing_company_id,
+                        first_at,
+                        last_at,
+                        is_sent,
                     )
                     .execute(&mut *tx)
                     .await
@@ -329,26 +350,29 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             }
         };
 
-        // Upsert the contact. `name` is supplied by the caller (the
-        // backfill consumer looks it up in email_contacts before invoking
-        // populate). On conflict, COALESCE preserves the existing
-        // crm_contacts.name when it's non-NULL, so the first non-empty
-        // name wins and a subsequent populate from a different team
-        // member can't overwrite it. The conflict path still performs
-        // an UPDATE for existing contacts so `updated_at` reflects the
-        // latest populate even when the stored name is unchanged.
+        // First non-NULL name wins (COALESCE preserves existing).
+        // `last_interaction` always GREATEST; `first_interaction`
+        // LEAST-merges only on is_sent=true (mirrors company rule).
         let contact_id = sqlx::query_scalar!(
             r#"
-            INSERT INTO crm_contacts (company_id, email, name)
-            VALUES ($1, $2, $3)
+            INSERT INTO crm_contacts (company_id, email, name, first_interaction, last_interaction)
+            VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (company_id, email) DO UPDATE
                 SET name = COALESCE(crm_contacts.name, EXCLUDED.name),
-                    updated_at = now()
+                    updated_at = now(),
+                    first_interaction = CASE
+                        WHEN $6 THEN LEAST(crm_contacts.first_interaction, EXCLUDED.first_interaction)
+                        ELSE crm_contacts.first_interaction
+                    END,
+                    last_interaction = GREATEST(crm_contacts.last_interaction, EXCLUDED.last_interaction)
             RETURNING id
             "#,
             company_id,
             normalized_email,
             name,
+            first_at,
+            last_at,
+            is_sent,
         )
         .fetch_one(&mut *tx)
         .await
@@ -391,16 +415,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // Take the lock BEFORE looking at any state. A concurrent
-        // populate_contact for the same (team, domain) might have a tx
-        // open that has inserted rows but hasn't committed yet — without
-        // the lock our SELECT below would miss those rows, return
-        // Ok(()) here, and the in-flight populate would then commit and
-        // leave the team with CRM data for a since-deleted sent message.
-        // Holding the lock for the rest of this tx forces populate to
-        // either commit first (we then see + tear down its rows) or
-        // wait until we're done (its row will be inserted after, and
-        // a future depopulate will catch it).
+        // Lock BEFORE observing state: a concurrent populate could
+        // commit rows for a since-deleted sent message otherwise.
         sqlx::query!(
             r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))"#,
             format!("{team_id}:{normalized_domain}"),
@@ -409,9 +425,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // Resolve (contact_id, company_id, email_sync) for this
-        // (team, domain, email). Returning None here means there is
-        // nothing to tear down: commit the empty tx and ack.
+        // None here = nothing to tear down.
         let Some(row) = sqlx::query!(
             r#"
             SELECT
@@ -479,13 +493,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // 3. Keep the company when other contacts in the team still
-        //    belong to it, OR when the team has opted the domain out.
-        //    The killswitch (`email_sync = false`) is stored on
-        //    crm_companies and is configuration, not derived data;
-        //    dropping the company would silently erase the opt-out and
-        //    a future populate would recreate the row with the default
-        //    `email_sync = true`.
+        // 3. Keep killswitched companies — dropping would erase the
+        //    opt-out and a future populate would recreate as enabled.
         if !row.email_sync {
             tx.commit()
                 .await
@@ -512,8 +521,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             return Ok(());
         }
 
-        // crm_domains FK is ON DELETE CASCADE — deleting the company
-        // takes its domain rows with it.
+        // crm_domains cascades via FK.
         sqlx::query!(r#"DELETE FROM crm_companies WHERE id = $1"#, row.company_id,)
             .execute(&mut *tx)
             .await
@@ -573,12 +581,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // 3. Drop every company in this team that no longer has any
-        //    contact AND is not killswitched. Companies with
-        //    `email_sync = false` are preserved so the team's
-        //    configuration survives teardown — a future populate will
-        //    re-find the row and short-circuit on the same flag.
-        //    `crm_domains` falls out via FK cascade.
+        // 3. Drop orphan non-killswitched companies. crm_domains
+        //    cascades via FK.
         sqlx::query!(
             r#"
             DELETE FROM crm_companies co
@@ -634,11 +638,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         metadata: &DomainMetadata,
     ) -> Result<(), CrmError> {
         let normalized_domain = domain.to_ascii_lowercase();
-        // First-write-wins: the unique index is on `LOWER(domain)`, so
-        // a concurrent populate of the same domain hits the conflict
-        // path and we leave the existing row untouched (treat-as-forever
-        // cache). Negative cache entries (all-NULL fields) are inserted
-        // verbatim so subsequent populates suppress the resolver call.
+        // First-write-wins. Negative cache entries (all-NULL) are
+        // preserved to suppress future resolver calls.
         sqlx::query!(
             r#"
             INSERT INTO crm_domain_directory (domain, name, description, icon_url)
@@ -671,19 +672,12 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         if !email_sync {
-            // Disable path holds the same per-(team, domain) advisory
-            // locks populate_contact uses, so a populate already past
-            // its killswitch check can't slip a contact in after we
-            // observe state. Populates only hold one domain lock at a
-            // time, so deadlock isn't possible.
+            // Hold the same per-domain locks populate_contact takes so
+            // an in-flight populate can't slip past our killswitch.
             Self::lock_company_domains(&mut tx, team_id, company_id).await?;
         } else {
-            // Enabling on a hidden company would let populate re-create
-            // contacts under a row the team has explicitly hidden, so
-            // refuse. Lock the row FOR UPDATE so a concurrent hide can't
-            // commit between this check and the email_sync UPDATE below.
-            // Domain locks aren't needed because we don't mutate
-            // contacts on the enable path.
+            // Refuse enable on hidden — populate would recreate under a
+            // hidden company. FOR UPDATE blocks concurrent hide.
             let row = sqlx::query!(
                 r#"
                 SELECT hidden
@@ -706,7 +700,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             }
         }
 
-        // Scoping UPDATE on both id AND team_id rejects cross-team callers as NotFound.
+        // Scoping on (id, team_id) rejects cross-team as NotFound.
         let updated = sqlx::query_scalar!(
             r#"
             UPDATE crm_companies
@@ -751,12 +745,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         if hidden {
-            // Hiding implies opting out of email sync — flip both flags
-            // and tear down contacts/sources in one transaction so a
-            // partial failure can't leave the company visible with its
-            // contacts gone. Take the per-(team, domain) advisory locks
-            // first so a concurrent populate past its killswitch check
-            // can't slip a contact in after we observe state.
+            // Hiding implies email_sync=false; flip both atomically.
+            // Domain locks block in-flight populates past their
+            // killswitch check.
             Self::lock_company_domains(&mut tx, team_id, company_id).await?;
 
             // Scoping UPDATE on both id AND team_id rejects cross-team callers as NotFound.
@@ -780,9 +771,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
 
             Self::delete_company_contacts(&mut tx, company_id).await?;
         } else {
-            // Un-hide only flips the flag — email_sync stays whatever
-            // the team last set it to. Re-enabling sync is an explicit
-            // separate action.
+            // Un-hide leaves email_sync alone; re-enable is separate.
             let updated = sqlx::query_scalar!(
                 r#"
                 UPDATE crm_companies
@@ -816,8 +805,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         contact_id: &uuid::Uuid,
         hidden: bool,
     ) -> Result<(), CrmError> {
-        // Scope to team via the contact's company. A contact owned by a
-        // different team's company won't match and we return NotFound.
+        // Scope via the contact's company; cross-team = NotFound.
         let updated = sqlx::query_scalar!(
             r#"
             UPDATE crm_contacts ct
@@ -877,9 +865,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .map_err(|e| CrmError::StorageLayerError(e.into()))?
         .unwrap_or(false);
 
-        // When the team killswitch is off, the email service will reject the
-        // request with `CrmDisabledForTeam` before looking at per-input
-        // statuses — so skip the probes entirely.
+        // Killswitch off: caller rejects with CrmDisabledForTeam, so
+        // skip the per-input probes.
         if !crm_enabled {
             return Ok(CrmScopePrecheck {
                 crm_enabled: false,
@@ -891,9 +878,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         let domain_statuses: Vec<CrmDomainStatus> = if domains.is_empty() {
             Vec::new()
         } else {
-            // `WITH ORDINALITY` + `ORDER BY input.ord` guarantees output
-            // row order matches the input list — `CrmScopePrecheck.domains`
-            // documents that contract.
+            // `WITH ORDINALITY` + `ORDER BY input.ord` preserves the
+            // input order (contract on `CrmScopePrecheck.domains`).
             sqlx::query!(
                 r#"
                 SELECT
@@ -927,16 +913,12 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         let address_statuses: Vec<CrmAddressStatus> = if addresses.is_empty() {
             Vec::new()
         } else {
-            // Pre-materialize the team's contact rows in a derived table,
-            // then hash-join against the input array. Avoids LATERAL's
-            // per-outer-row execution. Safe to assume at most one row per
-            // (team, email) thanks to crm_contacts_company_id_email_key
-            // UNIQUE (company_id, email) plus the populate-path invariant
-            // that an email's domain uniquely identifies its company
-            // within a team (via crm_domains_team_id_lower_domain_unique).
-            // `WITH ORDINALITY` + `ORDER BY input.ord` guarantees output
-            // row order matches the input list — `CrmScopePrecheck.addresses`
-            // documents that contract.
+            // Hash-join via derived table (avoids LATERAL per-row).
+            // At most one row per (team, email) by virtue of
+            // crm_contacts UNIQUE(company_id, email) +
+            // crm_domains UNIQUE(team_id, lower(domain)).
+            // ORDER BY input.ord preserves input order
+            // (contract on `CrmScopePrecheck.addresses`).
             sqlx::query!(
                 r#"
                 SELECT

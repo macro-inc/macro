@@ -189,6 +189,7 @@ export function ChannelMessage(props: ChannelMessageProps) {
       onClick={props.onClick}
       ref={(el) =>
         longPressHighlight(el, () => ({
+          className: 'channel-message-long-press-highlight',
           onLongPress: () => drawerManager?.open(props.message, props.actions),
         }))
       }

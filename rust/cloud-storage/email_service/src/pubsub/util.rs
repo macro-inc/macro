@@ -1,6 +1,7 @@
 use crate::pubsub::context::PubSubContext;
 use crate::util::redis::RedisClient;
 use crate::util::redis::rate_limit::RateLimitArgs;
+use chrono::{DateTime, Utc};
 use connection_gateway_client::client::ConnectionGatewayClient;
 /// shared utils across different pubsub workers
 use models_email::email::service::backfill::{
@@ -11,6 +12,12 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 use models_email::gmail::operations::GmailApiOperation;
 use std::collections::HashSet;
 use uuid::Uuid;
+
+/// One recipient tuple `(email, name, first_at, last_at)` fed into
+/// [`enqueue_populate_crm_contacts`]. Per-message paths use the same
+/// timestamp for both endpoints; the historical seed passes the
+/// contact's pre-aggregated MIN/MAX.
+pub type CrmContactRecipient = (String, Option<String>, DateTime<Utc>, DateTime<Utc>);
 
 /// Arguments for checking Gmail API rate limits
 pub struct CheckGmailRateLimitArgs<'a> {
@@ -130,23 +137,33 @@ fn normalized_non_self_contact_emails(
 /// Producer-side fan-out helper: normalizes and enqueues one
 /// `PopulateCrmContact` message per distinct, non-self contact.
 ///
-/// Takes `(email, name)` pairs so the consumer can write
-/// `crm_contacts.name` without a follow-up round-trip to `email_contacts`.
-/// `name` comes from the gmail message's recipient header on the
-/// per-message paths (`backfill_message`, `upsert_message`) and from
-/// `email_contacts.name` on the historical path (`populate_crm_for_user`).
+/// Takes `(email, name, first_at, last_at)` tuples. `name` comes from
+/// the gmail message's recipient header on per-message paths and from
+/// `email_contacts.name` on the historical path. `first_at` /
+/// `last_at` carry the contact's known activity range — per-message
+/// paths set both to `message.internal_date_ts`; the historical seed
+/// sets them to MIN/MAX from its aggregating SQL.
+///
+/// `is_sent` flags whether the populating message was sent by the user
+/// (true) or received (false). One fan-out batch is one direction;
+/// callers that need to enqueue both (the historical seed) call this
+/// helper twice. The consumer uses the flag to gate company INSERTs
+/// and `first_interaction` LEAST-merging (received-direction never
+/// creates a new `crm_companies` row and never moves
+/// `first_interaction` backwards).
 ///
 /// Email validation rules and dedup match
 /// [`normalized_non_self_contact_emails`]; dedup is by email only, so the
-/// first name seen for a given address in this batch wins.
+/// first name / timestamps seen for a given address in this batch win.
 pub async fn enqueue_populate_crm_contacts(
     ctx: &PubSubContext,
     link_id: Uuid,
     self_email: &str,
-    contacts: impl IntoIterator<Item = (String, Option<String>)>,
+    contacts: impl IntoIterator<Item = CrmContactRecipient>,
+    is_sent: bool,
 ) -> Result<(), ProcessingError> {
     let mut seen: HashSet<String> = HashSet::new();
-    for (raw_email, contact_name) in contacts {
+    for (raw_email, contact_name, first_at, last_at) in contacts {
         let contact_email = raw_email.trim().to_ascii_lowercase();
         let Some((local, domain)) = contact_email.split_once('@') else {
             continue;
@@ -164,6 +181,9 @@ pub async fn enqueue_populate_crm_contacts(
                 payload: PopulateCrmContactPayload {
                     contact_email,
                     contact_name,
+                    first_at,
+                    last_at,
+                    is_sent,
                 },
             }),
         };

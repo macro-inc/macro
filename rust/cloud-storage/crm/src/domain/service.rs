@@ -6,6 +6,7 @@ use crate::domain::{
     generic_email_domains::is_generic_email_domain,
     model::{CrmCompany, CrmError, CrmScopePrecheck},
 };
+use chrono::{DateTime, Utc};
 
 /// The CrmService exposes operations over CRM records (companies, their
 /// domains and contacts).
@@ -46,6 +47,29 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// failure — that's the negative cache). The directory write is its
     /// own transaction so the populate tx never holds locks across an
     /// HTTP fetch.
+    ///
+    /// `first_at` / `last_at` are the contact's known activity range
+    /// for this populate. Per-message paths pass the message's
+    /// `internal_date_ts` as both (single message = single endpoint).
+    /// The historical seed (`populate_crm_for_user`) pre-aggregates
+    /// MIN/MAX over the contact's matching messages and passes the
+    /// real range, so a single populate per contact stamps the CRM
+    /// rows with the full span. Callers without a real timestamp pass
+    /// `Utc::now()`. `created_at` / `updated_at` keep their
+    /// row-lifecycle semantics (DEFAULT `now()` /
+    /// `set_crm_updated_at` trigger).
+    ///
+    /// `is_sent` flags whether the populating message was sent by the
+    /// user. The write matrix:
+    ///
+    /// | `is_sent` | No `crm_companies` row | Existing `crm_companies` row (`email_sync=true`) |
+    /// |---|---|---|
+    /// | `true`  | INSERT company + contact + source; `first_interaction = $first_at`, `last_interaction = $last_at`. | UPDATE company `first=LEAST(stored, $first_at), last=GREATEST(stored, $last_at)` + upsert contact (same merge) + upsert source. |
+    /// | `false` | **No-op** — no domain-metadata resolve, no inserts. | UPDATE company `last=GREATEST(stored, $last_at)` only (do NOT touch `first_interaction`) + upsert contact (INSERT sets both endpoints; ON CONFLICT bumps `last` only) + upsert source. |
+    ///
+    /// The `email_sync=false` per-domain killswitch short-circuits in
+    /// both directions.
+    #[allow(clippy::too_many_arguments)]
     fn populate_contact(
         &self,
         team_id: &uuid::Uuid,
@@ -53,6 +77,9 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         user_email: &str,
         email: &str,
         name: Option<&str>,
+        first_at: DateTime<Utc>,
+        last_at: DateTime<Utc>,
+        is_sent: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
     /// Reverses [`populate_contact`] for one `(link_id, email)`. Drops the
@@ -211,6 +238,7 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::too_many_arguments)]
     async fn populate_contact(
         &self,
         team_id: &uuid::Uuid,
@@ -218,6 +246,9 @@ where
         user_email: &str,
         email: &str,
         name: Option<&str>,
+        first_at: DateTime<Utc>,
+        last_at: DateTime<Utc>,
+        is_sent: bool,
     ) -> Result<(), CrmError> {
         let email = email.trim();
         let Some((local_part, domain)) = email.split_once('@') else {
@@ -272,11 +303,19 @@ where
         // its own transaction, idempotent under concurrent populates
         // for the same domain (first-write-wins via the unique index
         // on `LOWER(domain)`).
-        if self
-            .companies_repository
-            .lookup_domain_metadata(domain)
-            .await?
-            .is_none()
+        //
+        // Skip the resolve when `is_sent=false`: a received-direction
+        // populate never inserts a new `crm_companies` row, so we don't
+        // need to seed metadata. If the domain is already tracked the
+        // directory entry was written when its first sent message
+        // populated; if it isn't tracked, this call will no-op in the
+        // repo anyway.
+        if is_sent
+            && self
+                .companies_repository
+                .lookup_domain_metadata(domain)
+                .await?
+                .is_none()
         {
             let metadata = self.metadata_resolver.resolve(domain).await;
             self.companies_repository
@@ -285,7 +324,9 @@ where
         }
 
         self.companies_repository
-            .populate_contact(team_id, link_id, domain, email, name)
+            .populate_contact(
+                team_id, link_id, domain, email, name, first_at, last_at, is_sent,
+            )
             .await
     }
 

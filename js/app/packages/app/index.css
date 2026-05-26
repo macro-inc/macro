@@ -421,15 +421,26 @@ html:not([data-touch-device="true"]) [data-message]:hover{
   @apply bg-ink/3 rounded-sm ring ring-edge ring-inset;
 }
 
-/* Long-press animation */
-.long-press-animation [data-swipe-content],
-[data-message].long-press-animation{
+/* Channel message long-press animation */
+.channel-message-long-press-highlight [data-swipe-content],
+[data-message].channel-message-long-press-highlight{
   animation: long-press-message-highlight 400ms ease-in both;
 }
 
-[data-message].long-press-animation > .message-accent-bar,
-.long-press-animation [data-accent-bar] {
+[data-message].channel-message-long-press-highlight > .message-accent-bar,
+.channel-message-long-press-highlight [data-accent-bar] {
   animation: long-press-accent-bar 400ms ease-in both;
+}
+
+/* Immediate touch feedback for mobile soup entity rows */
+[data-soup-entity].touch-highlight [data-swipe-content],
+[data-soup-entity].touch-highlight .soup-list-entity,
+[data-soup-entity].navigation-touch-highlight [data-swipe-content],
+[data-soup-entity].navigation-touch-highlight .soup-list-entity,
+.soup-list-entity.navigation-touch-highlight,
+.soup-list-entity.navigation-touch-highlight [data-swipe-content] {
+  background-color: var(--color-hover);
+  transition: none;
 }
 
 :focus-visible {

@@ -4,7 +4,6 @@ import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { useEmailLinks } from '@core/email-link';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { getNativeMobilePlatform } from '@core/util/platform';
@@ -38,7 +37,6 @@ import {
   onCleanup,
   onMount,
   Show,
-  splitProps,
   untrack,
 } from 'solid-js';
 import { sendEmailCode, useResetEmailCode } from './EmailForm';
@@ -64,80 +62,6 @@ function PostLoginRedirect() {
   return <LoadingBlock />;
 }
 
-type ActionButtonVariant = 'primary' | 'secondary';
-
-type ActionButtonProps = {
-  icon?: JSX.Element;
-  trailingIcon?: JSX.Element;
-  children: JSX.Element;
-  onClick?: () => void;
-  variant?: ActionButtonVariant;
-  type?: 'button' | 'submit';
-  autofocus?: boolean;
-  disabled?: boolean;
-  class?: string;
-};
-
-const actionButtonVariants: Record<ActionButtonVariant, string> = {
-  primary:
-    'bg-accent text-surface not-disabled:hover:bg-accent not-disabled:hover:text-surface focus-visible:bg-accent active:outline-accent disabled:bg-ink/30 disabled:text-surface/70 disabled:cursor-not-allowed disabled:hover:outline-transparent',
-  secondary:
-    'bg-surface text-ink border border-edge hover:border-edge disabled:opacity-50 disabled:cursor-not-allowed',
-};
-
-function ActionButton(props: ActionButtonProps) {
-  const [local, others] = splitProps(props, [
-    'icon',
-    'trailingIcon',
-    'children',
-    'variant',
-    'type',
-    'onClick',
-    'class',
-  ]);
-  const isSubmit = () => local.type === 'submit';
-
-  return (
-    <Button
-      {...others}
-      type={local.type ?? 'button'}
-      onClick={(e) => {
-        if (isSubmit()) {
-          if (isTouchDevice()) e.preventDefault();
-          return;
-        }
-        if (isTouchDevice()) return;
-        local.onClick?.();
-      }}
-      onPointerDown={(e) => {
-        if (!isTouchDevice()) return;
-        if (others.disabled) return;
-        e.stopPropagation();
-        e.preventDefault();
-        if (isSubmit()) {
-          e.currentTarget.form?.requestSubmit();
-        } else {
-          local.onClick?.();
-        }
-      }}
-      class={cn(
-        'gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
-        actionButtonVariants[local.variant ?? 'secondary'],
-        local.class
-      )}
-      tabIndex={0}
-    >
-      <Show when={local.icon}>
-        <span class="shrink-0 inline-flex">{local.icon}</span>
-      </Show>
-      <span>{local.children}</span>
-      <Show when={local.trailingIcon}>
-        <span class="shrink-0 inline-flex">{local.trailingIcon}</span>
-      </Show>
-    </Button>
-  );
-}
-
 function LoginPicker(props: { setStage: (next: Stage) => void }) {
   const startSsoLogin = useSsoLogin();
   const showApple =
@@ -145,30 +69,32 @@ function LoginPicker(props: { setStage: (next: Stage) => void }) {
 
   return (
     <div class="flex flex-col gap-3">
-      <ActionButton
-        variant="primary"
+      <Button
+        variant="cta"
         autofocus
-        icon={<IconGoogle />}
         onClick={() => startSsoLogin(GOOGLE_GMAIL_IDP)}
       >
+        <IconGoogle />
         Continue with Google
-      </ActionButton>
+      </Button>
 
       <Show when={showApple}>
-        <ActionButton
-          icon={<IconApple />}
+        <Button
+          class="ring ring-edge-muted"
           onClick={() => startSsoLogin('Apple')}
         >
+          <IconApple />
           Continue with Apple
-        </ActionButton>
+        </Button>
       </Show>
 
-      <ActionButton
-        icon={<IconMail />}
+      <Button
+        class="ring ring-edge-muted"
         onClick={() => props.setStage(Stage.Email)}
       >
+        <IconMail />
         Continue with email
-      </ActionButton>
+      </Button>
     </div>
   );
 }
@@ -275,22 +201,14 @@ function EmailFormNew(props: {
         />
       </Show>
       <FormError msg={submission.error?.message} />
-      <ActionButton
-        variant="primary"
-        type="submit"
-        trailingIcon={<ArrowRight />}
-        disabled={submission.pending}
-      >
+      <Button variant="cta" type="submit" disabled={submission.pending}>
         Continue
-      </ActionButton>
-      <ActionButton
-        type="button"
-        variant="secondary"
-        icon={<ArrowLeft class="size-4" />}
-        onClick={props.onBack}
-      >
+        <ArrowRight class="size-4" />
+      </Button>
+      <Button class="ring ring-edge-muted" onClick={props.onBack}>
+        <ArrowLeft class="size-4" />
         Back to sign in
-      </ActionButton>
+      </Button>
     </form>
   );
 }
@@ -427,22 +345,14 @@ function VerifyFormNew(props: {
         </Button>
       </div>
       <FormError msg={submission.error?.message ?? resendError()} />
-      <ActionButton
-        variant="primary"
-        type="submit"
-        trailingIcon={<ArrowRight />}
-        disabled={submission.pending}
-      >
+      <Button variant="cta" type="submit" disabled={submission.pending}>
         Verify
-      </ActionButton>
-      <ActionButton
-        type="button"
-        variant="secondary"
-        icon={<ArrowLeft class="size-4" />}
-        onClick={props.onBack}
-      >
+        <ArrowRight class="size-4" />
+      </Button>
+      <Button class="ring ring-edge-muted" onClick={props.onBack}>
+        <ArrowLeft class="size-4" />
         Change email
-      </ActionButton>
+      </Button>
     </form>
   );
 }

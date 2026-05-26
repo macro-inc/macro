@@ -2,7 +2,8 @@ use crate::convert::map_message_resource_to_service;
 use crate::pubsub::backfill::increment_counters;
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::{
-    CheckGmailRateLimitArgs, check_gmail_rate_limit, enqueue_populate_crm_contacts,
+    CheckGmailRateLimitArgs, CrmContactRecipient, check_gmail_rate_limit,
+    enqueue_populate_crm_contacts,
 };
 use crate::util::process_pre_insert::process_message_pre_insert;
 use anyhow::Context;
@@ -81,22 +82,50 @@ pub async fn backfill_message(
         })
     })?;
 
-    // For messages sent BY the user, fan out a PopulateCrmContact job per
-    // recipient so the CRM tables learn about the contacts the team has been
-    // emailing. ON CONFLICT DO NOTHING on the consumer side keeps duplicate
+    // Fan out a PopulateCrmContact job per address involved in the
+    // message — every non-draft message contributes, in both
+    // directions. Sent: enumerate to/cc/bcc (recipients the team
+    // emailed). Received: enumerate `from` (external sender). The
+    // consumer branches on `is_sent` to decide whether a new
+    // `crm_companies` row may be inserted — received-direction
+    // populates only ever touch already-tracked companies.
+    //
+    // Drafts are skipped: their from = the user, their to/cc/bcc may
+    // not be finalized, and they don't represent real correspondence.
+    //
+    // ON CONFLICT DO NOTHING on the consumer side keeps duplicate
     // enqueues (e.g. retried backfill_message attempts) harmless. The
     // display name from the gmail header is threaded through so the
     // consumer doesn't have to re-query email_contacts.
-    if message.is_sent {
+    // `internal_date_ts` is passed as `message_at`; `contact_id` is
+    // `None` here because we already carry `message_at` and the
+    // contact row may not exist yet at producer time.
+    if !message.is_draft {
         let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
-        let recipients: Vec<(String, Option<String>)> = message
-            .to
-            .iter()
-            .chain(&message.cc)
-            .chain(&message.bcc)
-            .map(|c| (c.email.clone(), c.name.clone()))
-            .collect();
-        enqueue_populate_crm_contacts(ctx, link.id, &self_email, recipients).await?;
+        // Single message → single timestamp covers both endpoints. The
+        // consumer's stored-value merge converges as more messages come
+        // in. `Utc::now()` fallback when Gmail returned no
+        // internal_date_ts.
+        let at = message.internal_date_ts.unwrap_or_else(chrono::Utc::now);
+        let recipients: Vec<CrmContactRecipient> = if message.is_sent {
+            message
+                .to
+                .iter()
+                .chain(&message.cc)
+                .chain(&message.bcc)
+                .map(|c| (c.email.clone(), c.name.clone(), at, at))
+                .collect()
+        } else {
+            message
+                .from
+                .iter()
+                .map(|c| (c.email.clone(), c.name.clone(), at, at))
+                .collect()
+        };
+        if !recipients.is_empty() {
+            enqueue_populate_crm_contacts(ctx, link.id, &self_email, recipients, message.is_sent)
+                .await?;
+        }
     }
 
     // Handle all success-related operations

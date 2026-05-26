@@ -218,7 +218,10 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const [searchPaused, setSearchPaused] = createSignal(false);
-  const [assigneeFilter, setAssigneeFilter] = createSignal<string[]>([]);
+  const [assigneeFilter, setAssigneeFilter] = useEntryState<string[]>(
+    'soup.assigneeFilter',
+    { default: [] }
+  );
   const [activeTab, setActiveTab] = useEntryState<string | undefined>(
     'soup.tab',
     { default: undefined }

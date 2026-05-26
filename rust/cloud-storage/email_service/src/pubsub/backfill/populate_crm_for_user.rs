@@ -53,22 +53,39 @@ pub async fn populate_crm_for_user(
 
     let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
 
-    // Pull every distinct recipient (email + display name) from sent
-    // messages on this link. Mirrors what backfill_message would have
-    // produced if the per-message fan-out had been running when these
-    // messages were first backfilled — including the name from
-    // email_contacts so the consumer can set crm_contacts.name without
-    // its own round-trip.
-    let recipients = email_db_client::contacts::get::fetch_sent_message_recipient_contacts_by_link(
-        &ctx.db, link.id,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to fetch sent-message recipients"),
-        })
-    })?;
+    // The by_link queries aggregate MIN/MAX of `internal_date_ts` per
+    // contact, so each fan-out job carries the contact's full known
+    // activity range. The consumer stamps `first_interaction` /
+    // `last_interaction` directly from those endpoints.
+    //
+    // Two fan-outs: sent recipients (`is_sent=true`, may create new
+    // `crm_companies` rows), then received senders (`is_sent=false`,
+    // only updates already-tracked rows). Sent first so received-pass
+    // contacts at brand-new companies can also land. Both passes are
+    // idempotent.
+    let sent_recipients =
+        email_db_client::contacts::get::fetch_sent_message_recipient_contacts_by_link(
+            &ctx.db, link.id,
+        )
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e.context("Failed to fetch sent-message recipients"),
+            })
+        })?;
 
-    enqueue_populate_crm_contacts(ctx, link.id, &self_email, recipients).await
+    enqueue_populate_crm_contacts(ctx, link.id, &self_email, sent_recipients, true).await?;
+
+    let received_senders =
+        email_db_client::contacts::get::fetch_received_sender_contacts_by_link(&ctx.db, link.id)
+            .await
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("Failed to fetch received-message senders"),
+                })
+            })?;
+
+    enqueue_populate_crm_contacts(ctx, link.id, &self_email, received_senders, false).await
 }
