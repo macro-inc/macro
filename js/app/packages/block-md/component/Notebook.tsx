@@ -266,8 +266,10 @@ export function Notebook() {
       <div class={contentDivClasses()} ref={contentRef}>
         <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
         <div class="spacer h-3" />
-        <InlineTaskProperties />
-        <InlineTaskGithubPullRequests />
+        <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
+          <InlineTaskProperties />
+          <InlineTaskGithubPullRequests />
+        </div>
         <ParamsProvider>
           <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
           <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>

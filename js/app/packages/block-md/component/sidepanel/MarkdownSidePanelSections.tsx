@@ -16,6 +16,7 @@ import type { Entity, EntityType } from '@core/types';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import GithubIcon from '@icon/mcp-github.svg';
 import { useNotificationsForEntity } from '@notifications';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import ClockIcon from '@phosphor/clock.svg';
@@ -38,9 +39,11 @@ import type { Property, PropertyApiValues } from '@property/types';
 import { hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
+import { useDocumentGithubPullRequestsQuery } from '@queries/storage/github-pull-requests';
 import { commsServiceClient } from '@service-comms/client';
 import type { EntityType as PropertiesEntityType } from '@service-properties/generated/schemas/entityType';
 import { blockNameToItemType } from '@service-storage/client';
+import type { GithubPullRequest } from '@service-storage/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui/utils/classname';
 import {
@@ -100,6 +103,7 @@ export function MarkdownSidePanelSections(
           <StatsSectionContent />
         </SidePanel.Section>
       </Show>
+      <GithubSectionConditional documentId={blockId} isTask={isTask()} />
       <NotificationsSectionConditional entity={entity()} />
       <ReferencesSectionConditional documentId={blockId} />
     </>
@@ -725,6 +729,77 @@ function ReferencesSectionConditional(props: { documentId: string }) {
             <References documentId={props.documentId} />
           </div>
         </Suspense>
+      </SidePanel.Section>
+    </Show>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GitHub Section (conditional)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function GithubSectionConditional(props: {
+  documentId: string;
+  isTask: boolean;
+}) {
+  const query = useDocumentGithubPullRequestsQuery(
+    props.documentId,
+    props.isTask
+  );
+
+  const pullRequests = createMemo((): GithubPullRequest[] => {
+    if (!props.isTask || query.isLoading || query.isError) return [];
+    return query.data?.pullRequests ?? [];
+  });
+  const count = createMemo(() => pullRequests().length);
+
+  const title = () => (
+    <>
+      GitHub
+      <Show when={count() > 0}>
+        {' '}
+        <span class="text-ink-extra-muted">({count()})</span>
+      </Show>
+    </>
+  );
+
+  return (
+    <Show when={count() > 0}>
+      <SidePanel.Section id="github" title={title()} order={35}>
+        <div class="grid grid-cols-[var(--sidepanel-label-width,auto)_1fr] gap-x-3 items-center text-xs auto-rows-[2rem]">
+          <DetailsRow label={count() === 1 ? 'PR' : 'PRs'}>
+            <div class="flex min-w-0 flex-wrap items-center gap-x-1">
+              <For each={pullRequests()}>
+                {(pr, i) => (
+                  <>
+                    <Show when={i() > 0}>
+                      <span class="text-ink-extra-muted">,</span>
+                    </Show>
+                    <a
+                      href={pr.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="inline-flex min-w-0 items-center gap-1 text-ink hover:text-ink"
+                      title={
+                        pr.name?.trim()
+                          ? `${pr.name.trim()} ${pr.displayName}`
+                          : pr.displayName
+                      }
+                    >
+                      <GithubIcon
+                        class="size-3 shrink-0 text-ink-extra-muted"
+                        aria-hidden="true"
+                      />
+                      <span class="truncate underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current">
+                        {pr.displayName}
+                      </span>
+                    </a>
+                  </>
+                )}
+              </For>
+            </div>
+          </DetailsRow>
+        </div>
       </SidePanel.Section>
     </Show>
   );

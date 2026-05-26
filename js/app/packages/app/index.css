@@ -288,6 +288,10 @@
   cursor: default;
 }
 
+a {
+  cursor: default;
+}
+
 /* utils for patterned bg images */
 @utility pattern-* {
   --pattern-color: --value(--color-*);
