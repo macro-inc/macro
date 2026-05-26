@@ -23,6 +23,7 @@ import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters
 import { MaybeSoupEntityActionDrawerManager } from '@app/component/next-soup/soup-view/SoupEntityActionDrawerManager';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { SoupEntityContextMenu } from '@app/component/next-soup/soup-view/soup-entity-context-menu';
+import { persistSoupNavigationTouchHighlight } from '@app/component/next-soup/soup-view/soup-navigation-touch-highlight';
 import {
   activeSoupViewCounts,
   soupViewCacheKey,
@@ -80,7 +81,6 @@ import {
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useDisplayName } from '@core/user/displayName';
 import { type MacroId, tryMacroId } from '@core/user/macroId';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
@@ -134,35 +134,6 @@ import type { CacheSnapshot } from 'virtua/unstable_core';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
-
-const NAVIGATION_TOUCH_HIGHLIGHT_CLASS = 'navigation-touch-highlight';
-const NAVIGATION_TOUCH_HIGHLIGHT_TIMEOUT_MS = 500;
-const navigationTouchHighlightTimers = new WeakMap<HTMLElement, number>();
-
-function persistNavigationTouchHighlight(event: MouseEvent | PointerEvent) {
-  if (!isTouchDevice()) return false;
-
-  const target = event.currentTarget ?? event.target;
-  if (!(target instanceof Element)) return false;
-
-  const trigger = target.closest('[data-soup-entity]');
-  if (!(trigger instanceof HTMLElement)) return false;
-
-  trigger.classList.add(NAVIGATION_TOUCH_HIGHLIGHT_CLASS);
-
-  const existingTimer = navigationTouchHighlightTimers.get(trigger);
-  if (existingTimer !== undefined) {
-    window.clearTimeout(existingTimer);
-  }
-
-  const timer = window.setTimeout(() => {
-    trigger.classList.remove(NAVIGATION_TOUCH_HIGHLIGHT_CLASS);
-    navigationTouchHighlightTimers.delete(trigger);
-  }, NAVIGATION_TOUCH_HIGHLIGHT_TIMEOUT_MS);
-
-  navigationTouchHighlightTimers.set(trigger, timer);
-  return true;
-}
 
 export const SoupSectionHeader = (props: {
   children: JSX.Element;
@@ -819,7 +790,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       return;
     }
 
-    persistNavigationTouchHighlight(event);
+    persistSoupNavigationTouchHighlight(event);
 
     await openEntityInSplitFromUnifiedList(entity, {
       openInNewSplit: event.shiftKey,
