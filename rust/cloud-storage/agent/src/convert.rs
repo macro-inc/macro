@@ -86,6 +86,7 @@ fn convert_assistant(msg: &ChatMessage) -> Vec<Message> {
                     OneOrMany::one(ToolResultContent::text(description.clone())),
                 ));
             }
+            AssistantMessagePart::Thinking { .. } => {}
         }
     }
 

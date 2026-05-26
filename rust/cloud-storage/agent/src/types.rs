@@ -96,6 +96,11 @@ pub enum AssistantMessagePart {
         /// Corresponding call id.
         id: String,
     },
+    /// A thinking/reasoning block from the model.
+    Thinking {
+        /// The thinking text content.
+        thinking: String,
+    },
 }
 
 impl fmt::Display for AssistantMessagePart {
@@ -112,6 +117,7 @@ impl fmt::Display for AssistantMessagePart {
             Self::ToolCallErr {
                 name, description, ..
             } => write!(f, "[tool_err:{name}: {description}]"),
+            Self::Thinking { .. } => Ok(()),
         }
     }
 }

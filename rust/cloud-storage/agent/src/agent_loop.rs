@@ -12,7 +12,7 @@ use rig_core::agent::{Agent, MultiTurnStreamItem};
 use rig_core::client::{CompletionClient, ProviderClient};
 use rig_core::message::Message;
 use rig_core::providers::anthropic;
-use rig_core::streaming::StreamingPrompt;
+use rig_core::streaming::{StreamedAssistantContent, StreamingPrompt};
 use rig_core::tool::server::ToolServer;
 use std::sync::{Arc, RwLock};
 
@@ -103,6 +103,7 @@ impl AgentLoop {
             .tool_server_handle(handle)
             .default_max_turns(self.max_turns)
             .max_tokens(self.max_tokens)
+            .additional_params(self.model.thinking_params())
             .preamble(system_prompt)
             .build();
 
@@ -153,27 +154,44 @@ impl Session {
             .await;
 
         let stream = async_stream::stream! {
+            let mut thinking_buf = String::new();
+
             while let Some(item) = rig_stream.next().await {
                 while let Ok(part) = rx.try_recv() {
                     yield part;
                 }
                 match item {
-                    Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
-                        #[cfg(feature = "debug-messages")]
-                        if let Some(history) = final_resp.history() {
-                            dump_messages("agent_output.log", history);
+                    Ok(MultiTurnStreamItem::StreamAssistantItem(
+                        StreamedAssistantContent::ReasoningDelta { reasoning, .. },
+                    )) => {
+                        thinking_buf.push_str(&reasoning);
+                    }
+                    other => {
+                        if !thinking_buf.is_empty() {
+                            yield Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf)));
                         }
-                        let usage = final_resp.usage();
-                        yield Ok(StreamPart::Usage(crate::stream::Usage {
-                            input_tokens: usage.input_tokens,
-                            output_tokens: usage.output_tokens,
-                        }));
+                        match other {
+                            Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
+                                #[cfg(feature = "debug-messages")]
+                                if let Some(history) = final_resp.history() {
+                                    dump_messages("agent_output.log", history);
+                                }
+                                let usage = final_resp.usage();
+                                yield Ok(StreamPart::Usage(crate::stream::Usage {
+                                    input_tokens: usage.input_tokens,
+                                    output_tokens: usage.output_tokens,
+                                }));
+                            }
+                            Err(e) => {
+                                yield Err(AgentError::Streaming(e));
+                            }
+                            _ => {}
+                        }
                     }
-                    Err(e) => {
-                        yield Err(AgentError::Streaming(e));
-                    }
-                    _ => {}
                 }
+            }
+            if !thinking_buf.is_empty() {
+                yield Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf)));
             }
             while let Ok(part) = rx.try_recv() {
                 yield part;

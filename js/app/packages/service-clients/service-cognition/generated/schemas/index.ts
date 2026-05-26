@@ -15,6 +15,8 @@ export * from './assistantMessagePartOneOfEightType';
 export * from './assistantMessagePartOneOfFive';
 export * from './assistantMessagePartOneOfFiveDisplayName';
 export * from './assistantMessagePartOneOfFiveType';
+export * from './assistantMessagePartOneOfOnetwo';
+export * from './assistantMessagePartOneOfOnetwoType';
 export * from './assistantMessagePartOneOfOnezero';
 export * from './assistantMessagePartOneOfOnezeroType';
 export * from './assistantMessagePartOneOfThree';

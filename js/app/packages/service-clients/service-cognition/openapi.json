@@ -1528,6 +1528,21 @@
                 "enum": ["toolCallErr"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A thinking/reasoning block from the model.",
+            "required": ["thinking", "type"],
+            "properties": {
+              "thinking": {
+                "type": "string",
+                "description": "The thinking text content."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["thinking"]
+              }
+            }
           }
         ],
         "description": "A structured part within an assistant message.\n\nWhen the model responds with tool calls the full turn is persisted as a\nflat sequence of these parts.  [`crate::convert::to_rig_messages`]\nreconstructs the turn boundaries that providers expect."

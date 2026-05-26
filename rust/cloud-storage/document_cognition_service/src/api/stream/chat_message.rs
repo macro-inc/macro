@@ -558,6 +558,12 @@ fn stream_and_save_message(
                             }
                             AssistantMessagePart::Text { text: content }
                         }
+                        StreamPart::Thinking(thinking) => {
+                            if thinking.is_empty() {
+                                continue;
+                            }
+                            AssistantMessagePart::Thinking { thinking }
+                        }
                         StreamPart::ToolCall(call) => match call.mcp {
                             Some(mcp) => AssistantMessagePart::McpToolCall {
                                 name: mcp.tool_name,

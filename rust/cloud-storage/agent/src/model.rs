@@ -64,6 +64,27 @@ impl AgentModel {
         }
     }
 
+    /// Returns `additional_params` JSON to enable extended thinking.
+    ///
+    /// - Opus 4.7: `adaptive` (model chooses when to think)
+    /// - Sonnet 4.6 / Haiku 4.5: `enabled` with `budget_tokens`
+    pub fn thinking_params(&self) -> serde_json::Value {
+        match self {
+            Self::Smart | Self::Opus4_7 | Self::Retired => serde_json::json!({
+                "thinking": { "type": "adaptive", "display": "summarized" },
+                "temperature": 1
+            }),
+            Self::Sonnet4_6 | Self::Fast | Self::Haiku4_5 => serde_json::json!({
+                "thinking": {
+                    "type": "enabled",
+                    "budget_tokens": 10_000,
+                    "display": "summarized"
+                },
+                "temperature": 1
+            }),
+        }
+    }
+
     /// Context window size in tokens.
     pub fn context_window(&self) -> u64 {
         match self {

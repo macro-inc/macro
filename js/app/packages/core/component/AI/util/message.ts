@@ -29,6 +29,14 @@ export function asChatMessage(
           text: last.text + item.content.text,
         },
       ];
+    } else if (last.type === 'thinking' && item.content.type === 'thinking') {
+      return [
+        ...acc.slice(0, -1),
+        {
+          type: 'thinking',
+          thinking: last.thinking + item.content.thinking,
+        },
+      ];
     } else {
       return [...acc, item.content];
     }

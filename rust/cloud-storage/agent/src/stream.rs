@@ -13,6 +13,8 @@ pub type ChatCompletionStream<'a> =
 pub enum StreamPart {
     /// A text delta from the assistant.
     Content(String),
+    /// A thinking/reasoning text delta from the assistant.
+    Thinking(String),
     /// A complete tool invocation by the assistant.
     ToolCall(ToolCall),
     /// The result of executing a tool.
