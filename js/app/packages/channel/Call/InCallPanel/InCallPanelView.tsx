@@ -1,10 +1,8 @@
 import { StackedAvatarsRow } from '@core/component/StackedAvatarsRow';
+import PhoneDisconnect from '@icon/wide-call-disconnect.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';
-import ShareNetwork from '@phosphor/share-network.svg';
-import { useToggleShareWithTeamMutation } from '@queries/call/call';
-import { cn, Surface, ToggleSwitch, Tooltip } from '@ui';
+import { cn, Surface } from '@ui';
 import { type Component, createMemo, Show } from 'solid-js';
-import { useCallContext } from '../CallContext';
 import type { CallControlsVariant } from '../CallControls/CallControls';
 import { CallControls } from '../CallControls/CallControls';
 import type { InCallPanelProps } from '../InCallPanel/types';
@@ -28,37 +26,22 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
     onLeaveCall: props.onLeaveCall,
     onJoinCall: props.onJoinCall,
   });
-  const callCtx = useCallContext();
-  const toggleShareWithTeam = useToggleShareWithTeamMutation();
-
-  const handleToggleShareWithTeam = async () => {
-    const callId = callCtx.activeCallId();
-    if (!callId) return;
-    const newValue = await toggleShareWithTeam.mutateAsync(callId);
-    callCtx.setSharedWithTeam(newValue);
-  };
-
-  /** Memo so `props.isSlim` (boolean or accessor) always drives updates. */
-  const isSlimLayout = createMemo((): boolean => {
+  const slim = createMemo((): boolean => {
     const v = props.isSlim;
     return typeof v === 'function' ? v() : v;
   });
-  const slim = () => isSlimLayout();
-
-  const showCallLabel = createMemo(() => !isSlimLayout());
 
   const onCallPage = createMemo(() => panel.callCtx.isCallPage());
 
-  const showHeaderPulse = createMemo(
-    () => !isSlimLayout() || (isSlimLayout() && onCallPage())
-  );
+  // Hide the pulse in the slim sidebar unless we're on the active call page,
+  // so the icon-only strip doesn't read as a distracting live indicator.
+  const showHeaderPulse = () => !slim() || onCallPage();
 
   const orderedMembers = createMemo(() => [
     ...panel.visibleMembers(),
     ...panel.overflowMembers(),
   ]);
 
-  /** Full roster order for the in-call avatar strip. */
   const stripStackEach = createMemo((): InCallStripImage[] => {
     if (!panel.isActive()) return [];
     const out: InCallStripImage[] = [];
@@ -94,70 +77,38 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
 
   const showExpandToFullCall = createMemo(() => !onCallPage());
 
-  const headerRowClass = createMemo(() =>
-    cn(
-      'py-1 px-2 border-b border-edge-muted bg-accent/5 rounded-t-lg flex items-center min-w-0 w-full',
-      slim() ? 'justify-center' : 'justify-between'
-    )
-  );
-
   return (
     <Show when={() => panel.isActive()}>
       <section
         data-in-call-panel
         aria-label="In call"
-        class="relative isolate overflow-hidden rounded-lg border border-edge-muted"
+        class="relative isolate overflow-hidden rounded-lg border border-ink-muted/[0.08] bg-ink-muted/[0.025] divide-y divide-ink-muted/[0.08]"
       >
-        <div class={headerRowClass()}>
-          <div
-            class={cn(
-              'flex min-w-0 shrink-0 items-center gap-0.5',
-              slim() && !showExpandToFullCall() && 'p-1'
-            )}
-          >
+        {/* Header — soup notification vocabulary: muted label, accent pulse,
+            share affordance is a single icon button (no chunky toggle switch).
+            Active = subtle accent-tinted bg. */}
+        <div
+          class={cn(
+            'flex items-center min-w-0 w-full px-3 h-8',
+            slim() ? 'justify-center' : 'justify-between'
+          )}
+        >
+          <div class="flex min-w-0 shrink-0 items-center gap-2">
             <Show when={showHeaderPulse()}>
-              <span
-                class={cn(
-                  'size-1.5 shrink-0 rounded-full bg-accent animate-pulse',
-                  showCallLabel() && 'mr-1'
-                )}
-              />
+              <span class="size-1.5 shrink-0 rounded-full bg-accent animate-pulse" />
             </Show>
-
-            <Show when={showCallLabel()}>
-              <span class="text-sm text-accent truncate">Call</span>
+            <Show when={!slim()}>
+              <span class="text-xs font-medium text-ink truncate">In call</span>
             </Show>
           </div>
 
-          <div class="flex items-center gap-1 shrink-0">
-            <Show when={!slim()}>
-              <Tooltip
-                placement="top"
-                label="When on, all team members can view and search this call's transcript and AI summary."
-              >
-                <div class="flex items-center gap-1 px-1">
-                  <ShareNetwork
-                    class={cn(
-                      'size-3 shrink-0',
-                      callCtx.isSharedWithTeam() ? 'text-ink' : 'text-ink-muted'
-                    )}
-                    aria-hidden
-                  />
-                  <ToggleSwitch
-                    onChange={() => void handleToggleShareWithTeam()}
-                    checked={callCtx.isSharedWithTeam()}
-                    disabled={callCtx.isConnecting()}
-                  />
-                </div>
-              </Tooltip>
-            </Show>
-
+          <div class="flex items-center gap-0.5 shrink-0">
             <Show when={showExpandToFullCall()}>
               <button
                 type="button"
                 class={cn(
-                  'shrink-0 transition-colors hover:bg-accent/30 outline-0 outline-accent/50 hover:outline-1 hover-transition-outline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-edge-muted',
-                  slim() && 'animate-pulse hover:outline-0'
+                  'inline-flex items-center justify-center size-6 rounded transition-colors text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
+                  slim() && 'animate-pulse'
                 )}
                 title="Open full call view"
                 aria-label="Open full call view"
@@ -166,18 +117,17 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
                   if (id) void openChannelCallTab(id);
                 }}
               >
-                <ArrowsOut
-                  class={cn('text-accent', slim() ? 'size-3.5' : 'size-4')}
-                />
+                <ArrowsOut class="size-3.5" />
               </button>
             </Show>
           </div>
         </div>
 
+        {/* Avatars */}
         <div
           class={cn(
-            'px-2 py-3 bg-surface rounded-b-lg w-full',
-            slim() && 'px-2 pt-2 pb-1 flex flex-col items-center gap-2'
+            'px-3 py-2.5',
+            slim() && 'flex flex-col items-center gap-2 pt-2 pb-1'
           )}
         >
           <div
@@ -187,7 +137,10 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
             )}
             data-in-call-panel-avatars
           >
-            <Show when={!slim()}>
+            <Show
+              when={!slim()}
+              fallback={<InCallParticipantsListPopover panel={panel} />}
+            >
               <StackedAvatarsRow<InCallStripImage>
                 class="w-full min-w-0"
                 distribute="fill"
@@ -195,7 +148,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
                 max={6}
                 size={IN_CALL_STRIP_IMAGE_SIZE}
                 defaultEmptyUserPlaceholder
-                overflowChipClass="bg-edge-muted"
+                overflowChipClass="bg-ink-muted/10"
                 overflowTooltipContent={(close) => (
                   <Surface depth={3} class="min-w-48 max-w-72">
                     <InCallRosterListSection
@@ -215,25 +168,30 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
                 )}
               </StackedAvatarsRow>
             </Show>
-
-            <Show when={slim()}>
-              <InCallParticipantsListPopover panel={panel} />
-            </Show>
           </div>
         </div>
 
-        <div
-          class={cn(
-            !slim() && 'bg-surface border-t border-edge-muted',
-            slim() && 'px-2 pt-1 pb-2'
-          )}
-        >
+        {/* Controls */}
+        <div class="flex justify-center px-1 py-1">
           <CallControls
             variant={controlsVariant()}
             when={props.showCallControls}
             onLeave={() => panel.controls.leaveCall()}
           />
         </div>
+
+        <Show when={slim()}>
+          <div class="flex items-center justify-center px-1 py-1">
+            <button
+              class="flex items-center justify-center size-5 shrink-0 rounded-md transition-colors text-failure hover:bg-failure/10"
+              onClick={() => void panel.controls.leaveCall()}
+              aria-label="Leave call"
+              type="button"
+            >
+              <PhoneDisconnect class="size-4" />
+            </button>
+          </div>
+        </Show>
       </section>
     </Show>
   );

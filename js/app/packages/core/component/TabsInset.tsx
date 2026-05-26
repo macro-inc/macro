@@ -48,7 +48,7 @@ export const TabsInset = (props: TabsInsetProps) => {
                 >
                   <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
                   <KSegmentedControl.ItemLabel
-                    class="flex items-center px-2.5 py-1 text-xs font-medium data-checked:ring data-checked:ring-edge-muted ring-inset rounded-md text-ink-extra-muted hover:text-ink data-checked:bg-surface data-checked:text-ink data-checked:shadow-[0_1px_2px_rgba(0,0,0,0.06)] transition-[background-color,color,box-shadow] duration-150 ease-out motion-reduce:transition-none"
+                    class="flex items-center px-2.5 py-1 text-xs font-medium data-checked:ring data-checked:ring-edge-muted ring-inset rounded-md text-ink-extra-muted hover:text-ink data-checked:bg-surface data-checked:text-ink data-checked:shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
                     onPointerDown={(e) => {
                       if (isTouchDevice()) e.preventDefault();
                     }}

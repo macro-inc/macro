@@ -1,12 +1,3 @@
-import { Modals } from '@core/component/Properties/component/modal';
-import {
-  PropertiesProvider,
-  type PropertySaveHandler,
-} from '@core/component/Properties/context/PropertiesContext';
-import type {
-  Property,
-  PropertyApiValues,
-} from '@core/component/Properties/types';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
 import {
@@ -24,6 +15,12 @@ import {
 } from '@entity/components/Badges';
 import type { LayoutProps } from '@entity/composed/list-entity/shared';
 import { soupPropertyToProperty } from '@entity/extractors-property';
+import { Modals } from '@property/component/modal';
+import {
+  PropertiesProvider,
+  type PropertySaveHandler,
+} from '@property/context/PropertiesContext';
+import type { Property, PropertyApiValues } from '@property/types';
 import { useUserId } from '@queries/auth';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';

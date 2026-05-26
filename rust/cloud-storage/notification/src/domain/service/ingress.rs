@@ -18,10 +18,12 @@ use crate::domain::models::request::{
 };
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, Notification, NotificationResult,
-    NotificationTypeName, UserNotificationRow,
+    NotificationStatusUpdate, NotificationTypeName, UserNotificationRow,
+    UserNotificationStatusUpdate,
 };
 use crate::domain::ports::{
-    NotificationIngressQueue, NotificationQueue, NotificationRepository, SnsEndpointManager,
+    NoopNotificationRealtimePublisher, NotificationIngressQueue, NotificationQueue,
+    NotificationRealtimePublisher, NotificationRepository, SnsEndpointManager,
 };
 use crate::domain::service::SendNotificationError;
 use ::futures::future::join_all;
@@ -442,34 +444,26 @@ pub struct PlatformArnConfig {
 ///
 /// Handles notification queries, status updates, and deletion.
 /// Does not require a bulk-digest state machine.
-pub struct NotificationReaderService<N, Q, S> {
-    pub(crate) repository: N,
-    pub(crate) queue: Q,
-    pub(crate) sns_endpoint: S,
-    pub(crate) platform_config: PlatformArnConfig,
+pub struct NotificationReaderService<N, Q, S, R = NoopNotificationRealtimePublisher> {
+    /// Notification repository.
+    pub repository: N,
+    /// Queue used to enqueue notification work.
+    pub queue: Q,
+    /// SNS endpoint manager.
+    pub sns_endpoint: S,
+    /// Platform ARN configuration.
+    pub platform_config: PlatformArnConfig,
+    /// Realtime update publisher.
+    pub realtime: R,
 }
 
-impl<N, Q, S> NotificationReaderService<N, Q, S>
+impl<N, Q, S, R> NotificationReaderService<N, Q, S, R>
 where
     N: NotificationRepository,
     Q: NotificationQueue,
     S: SnsEndpointManager,
+    R: NotificationRealtimePublisher,
 {
-    /// Create a new reader service.
-    pub fn new(
-        repository: N,
-        queue: Q,
-        sns_endpoint: S,
-        platform_config: PlatformArnConfig,
-    ) -> Self {
-        Self {
-            repository,
-            queue,
-            sns_endpoint,
-            platform_config,
-        }
-    }
-
     /// Update notification status for a user and optionally enqueue push notification clearing.
     ///
     /// This method performs the following steps:
@@ -483,16 +477,26 @@ where
         &self,
         req: UpdateNotificationsRequest<'_>,
     ) -> Result<(), Report> {
-        match &req.status {
+        let changed = match &req.status {
             NotificationStatus::Seen => {
                 self.repository
                     .mark_notifications_seen(req.user_id.copied(), req.notification_ids)
-                    .await?;
+                    .await?
             }
             NotificationStatus::Done(done) => {
                 self.repository
                     .mark_notifications_done(&req.user_id, req.notification_ids, *done)
-                    .await?;
+                    .await?
+            }
+        };
+
+        if !changed.is_empty() {
+            let update = UserNotificationStatusUpdate {
+                user: req.user_id.copied(),
+                update: NotificationStatusUpdate::new(changed),
+            };
+            if let Err(err) = self.realtime.publish_updates(&[update]).await {
+                tracing::warn!(error = ?err, "failed to publish notification status realtime update");
             }
         }
 
@@ -581,11 +585,12 @@ where
     }
 }
 
-impl<N, Q, S> NotificationReader for NotificationReaderService<N, Q, S>
+impl<N, Q, S, R> NotificationReader for NotificationReaderService<N, Q, S, R>
 where
     N: NotificationRepository,
     Q: NotificationQueue,
     S: SnsEndpointManager,
+    R: NotificationRealtimePublisher,
 {
     fn update_notifications(
         &self,

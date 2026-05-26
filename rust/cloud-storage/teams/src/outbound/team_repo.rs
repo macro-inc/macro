@@ -174,6 +174,20 @@ impl TeamRepositoryImpl {
         .execute(&mut *transaction)
         .await?;
 
+        // Seed the team's CRM settings row. `crm_enabled` defaults to
+        // FALSE — toggled on later via `PATCH /team/crm`. Created in
+        // the same tx as the team itself so the row always exists for
+        // any team that exists.
+        sqlx::query!(
+            r#"
+            INSERT INTO team_crm_settings (team_id)
+            VALUES ($1)
+            "#,
+            &team.id,
+        )
+        .execute(&mut *transaction)
+        .await?;
+
         transaction.commit().await?;
 
         Ok(team)
@@ -306,6 +320,22 @@ impl TeamRepository for TeamRepositoryImpl {
         };
 
         Ok(team_subscription_id)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_payment_status(&self, team_id: &uuid::Uuid) -> Result<bool, TeamError> {
+        let paying = sqlx::query_scalar!(
+            r#"
+            SELECT paying
+            FROM team
+            WHERE id = $1
+            "#,
+            team_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(paying)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -609,6 +639,31 @@ impl TeamRepository for TeamRepositoryImpl {
         )
         .execute(&self.pool)
         .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn update_team_payment_status(
+        &self,
+        team_id: &uuid::Uuid,
+        paying: bool,
+    ) -> Result<(), TeamError> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE team
+            SET paying = $2
+            WHERE id = $1
+            "#,
+            team_id,
+            paying,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(TeamError::TeamDoesNotExist);
+        }
 
         Ok(())
     }

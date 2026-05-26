@@ -401,6 +401,14 @@ export const StorageService = new Svc('Document++ Storage Service API')
     result: schemas.getDocumentVersionResponse.shape.data.shape,
     throws: withFetchErrors(),
   })
+  .fn('getDocumentGithubPullRequests', {
+    description: 'Get GitHub pull requests associated with a task document',
+    args: {
+      documentId: schemas.getDocumentGithubPullRequestsParams.shape.document_id,
+    },
+    result: schemas.getDocumentGithubPullRequestsResponse.shape,
+    throws: withFetchErrors(),
+  })
   .fn('createDocument', {
     description: schemas.createDocumentResponse.description!,
     args: schemas.createDocumentBody.shape,

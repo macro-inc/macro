@@ -8,12 +8,6 @@
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { createBlockSignal } from '@core/block';
 import {
-  DropdownMenuContent,
-  MenuItem,
-  MenuSeparator,
-} from '@core/component/Menu';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import {
   $computeTableMapSkipCellCheck,
   $deleteTableColumnAtSelection,
   $deleteTableRowAtSelection,
@@ -39,7 +33,7 @@ import CaretDown from '@phosphor/caret-down.svg';
 import TrashCan from '@phosphor/trash-simple.svg';
 import X from '@phosphor/x.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { Tooltip } from '@ui';
+import { Dropdown, Tooltip } from '@ui';
 import type { ElementNode, LexicalEditor } from 'lexical';
 import {
   $createParagraphNode,
@@ -353,81 +347,78 @@ function ActionMenu({
 
   // Component Render
   return (
-    <DropdownMenu placement="right-start">
-      <DropdownMenu.Trigger class="dropdown-menu__trigger">
+    <Dropdown placement="right-start">
+      <Dropdown.Trigger class="dropdown-menu__trigger">
         <Tooltip label="Table Options">
           <div class="size-6 rounded-md p-0 bg-surface hover:bg-hover hover-transition-bg flex items-center justify-center">
             <CaretDown class="size-4" />
           </div>
         </Tooltip>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenuContent class="dropdown-menu__content w-44">
-          <Show when={cellMerge}>
-            <Show when={canMergeCells()}>
-              <MenuItem
-                text="Merge cells"
-                onClick={() => mergeTableCellsAtSelection()}
-                icon={ArrowsIn}
-              />
-              <MenuSeparator />
-            </Show>
-            <Show when={canUnmergeCell()}>
-              <MenuItem
-                text="Unmerge cells"
-                onClick={() => unmergeTableCellsAtSelection()}
-                icon={ArrowsOut}
-              />
-              <MenuSeparator />
-            </Show>
-          </Show>
+      </Dropdown.Trigger>
+      <Dropdown.Content>
+        <Show when={cellMerge && canMergeCells()}>
+          <Dropdown.Group>
+            <Dropdown.Item onSelect={() => mergeTableCellsAtSelection()}>
+              <ArrowsIn class="size-4 shrink-0" />
+              <span class="flex-1 truncate">Merge cells</span>
+            </Dropdown.Item>
+          </Dropdown.Group>
+        </Show>
+        <Show when={cellMerge && canUnmergeCell()}>
+          <Dropdown.Group>
+            <Dropdown.Item onSelect={() => unmergeTableCellsAtSelection()}>
+              <ArrowsOut class="size-4 shrink-0" />
+              <span class="flex-1 truncate">Unmerge cells</span>
+            </Dropdown.Item>
+          </Dropdown.Group>
+        </Show>
 
-          <MenuItem
-            text={`Insert ${selectionCounts().rows === 1 ? 'row' : `${selectionCounts().rows} rows`} above`}
-            onClick={() => insertTableRowAtSelection(false)}
-            icon={ArrowLineUp}
-          />
+        <Dropdown.Group>
+          <Dropdown.Item onSelect={() => insertTableRowAtSelection(false)}>
+            <ArrowLineUp class="size-4 shrink-0" />
+            <span class="flex-1 truncate">
+              {`Insert ${selectionCounts().rows === 1 ? 'row' : `${selectionCounts().rows} rows`} above`}
+            </span>
+          </Dropdown.Item>
+          <Dropdown.Item onSelect={() => insertTableRowAtSelection(true)}>
+            <ArrowLineDown class="size-4 shrink-0" />
+            <span class="flex-1 truncate">
+              {`Insert ${selectionCounts().rows === 1 ? 'row' : `${selectionCounts().rows} rows`} below`}
+            </span>
+          </Dropdown.Item>
+        </Dropdown.Group>
 
-          <MenuItem
-            text={`Insert ${selectionCounts().rows === 1 ? 'row' : `${selectionCounts().rows} rows`} below`}
-            onClick={() => insertTableRowAtSelection(true)}
-            icon={ArrowLineDown}
-          />
-          <MenuSeparator />
+        <Dropdown.Group>
+          <Dropdown.Item onSelect={() => insertTableColumnAtSelection(false)}>
+            <ArrowLineLeft class="size-4 shrink-0" />
+            <span class="flex-1 truncate">
+              {`Insert ${selectionCounts().columns === 1 ? 'column' : `${selectionCounts().columns} columns`} left`}
+            </span>
+          </Dropdown.Item>
+          <Dropdown.Item onSelect={() => insertTableColumnAtSelection(true)}>
+            <ArrowLineRight class="size-4 shrink-0" />
+            <span class="flex-1 truncate">
+              {`Insert ${selectionCounts().columns === 1 ? 'column' : `${selectionCounts().columns} columns`} right`}
+            </span>
+          </Dropdown.Item>
+        </Dropdown.Group>
 
-          <MenuItem
-            text={`Insert ${selectionCounts().columns === 1 ? 'column' : `${selectionCounts().columns} columns`} left`}
-            onClick={() => insertTableColumnAtSelection(false)}
-            icon={ArrowLineLeft}
-          />
-
-          <MenuItem
-            text={`Insert ${selectionCounts().columns === 1 ? 'column' : `${selectionCounts().columns} columns`} right`}
-            onClick={() => insertTableColumnAtSelection(true)}
-            icon={ArrowLineRight}
-          />
-          <MenuSeparator />
-
-          <MenuItem
-            text="Delete column"
-            onClick={() => deleteTableColumnAtSelection()}
-            icon={X}
-          />
-
-          <MenuItem
-            text="Delete row"
-            onClick={() => deleteTableRowAtSelection()}
-            icon={X}
-          />
-
-          <MenuItem
-            text="Delete table"
-            onClick={() => deleteTableAtSelection()}
-            icon={() => <TrashCan class="text-failure size-4" />}
-          />
-        </DropdownMenuContent>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+        <Dropdown.Group>
+          <Dropdown.Item onSelect={() => deleteTableColumnAtSelection()}>
+            <X class="size-4 shrink-0" />
+            <span class="flex-1 truncate">Delete column</span>
+          </Dropdown.Item>
+          <Dropdown.Item onSelect={() => deleteTableRowAtSelection()}>
+            <X class="size-4 shrink-0" />
+            <span class="flex-1 truncate">Delete row</span>
+          </Dropdown.Item>
+          <Dropdown.Item onSelect={() => deleteTableAtSelection()}>
+            <TrashCan class="size-4 shrink-0 text-failure" />
+            <span class="flex-1 truncate">Delete table</span>
+          </Dropdown.Item>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }
 

@@ -3,10 +3,8 @@
  * language selector.
  */
 import { isInBlock, useIsNestedBlock } from '@core/block';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Switch } from '@kobalte/core/switch';
 import { $isCodeNode, CodeNode } from '@lexical/code';
 import {
@@ -28,7 +26,7 @@ import FilePy from '@phosphor/file-py.svg';
 import FileRs from '@phosphor/file-rs.svg';
 import FileSql from '@phosphor/file-sql.svg';
 import FileTs from '@phosphor/file-ts.svg';
-import { Button, cn } from '@ui';
+import { Button, cn, Dropdown } from '@ui';
 import {
   $getNodeByKey,
   type EditorThemeClasses,
@@ -99,49 +97,51 @@ function CodeLanguageSelector(props: {
   };
 
   return (
-    <DropdownMenu open={open() && editable()} onOpenChange={setOpen}>
-      <DropdownMenu.Trigger>
-        <Show
-          when={editable()}
-          fallback={<StaticLabel language={validCurrentLanguage()} />}
+    <Show
+      when={editable()}
+      fallback={<StaticLabel language={validCurrentLanguage()} />}
+    >
+      <Dropdown open={open()} onOpenChange={setOpen}>
+        <Dropdown.Trigger
+          variant="ghost"
+          size="sm"
+          class="text-ink-extra-muted/50 rounded-xs p-1.5"
+          tabIndex={-1}
         >
-          <Button
-            variant="ghost"
-            size="sm"
-            class="text-ink-extra-muted/50 rounded-xs p-1.5"
-            tabIndex={-1}
-          >
-            <Dynamic
-              component={LanguageIcons[validCurrentLanguage()]}
-              class="size-4"
-            />
-            <span>{LanguageDefinitions[validCurrentLanguage()].label}</span>
-          </Button>
-        </Show>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenuContent class="w-42 z-1200">
-          <For
-            each={Object.entries(LanguageDefinitions).filter(
-              ([, info]) => info.show
-            )}
-          >
-            {([key, info]) => (
-              <MenuItem
-                text={info.label}
-                icon={
-                  LanguageIcons[key as SupportedLanguage] ??
-                  LanguageIcons.plaintext
-                }
-                onClick={() => {
-                  props.setLanguage(key);
-                }}
-              />
-            )}
-          </For>
-        </DropdownMenuContent>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+          <Dynamic
+            component={LanguageIcons[validCurrentLanguage()]}
+            class="size-4"
+          />
+          <span>{LanguageDefinitions[validCurrentLanguage()].label}</span>
+        </Dropdown.Trigger>
+        <Dropdown.Content>
+          <Dropdown.Group>
+            <For
+              each={Object.entries(LanguageDefinitions).filter(
+                ([, info]) => info.show
+              )}
+            >
+              {([key, info]) => (
+                <Dropdown.Item
+                  onSelect={() => {
+                    props.setLanguage(key);
+                  }}
+                >
+                  <Dynamic
+                    component={
+                      LanguageIcons[key as SupportedLanguage] ??
+                      LanguageIcons.plaintext
+                    }
+                    class="size-4 shrink-0"
+                  />
+                  <span class="flex-1 truncate">{info.label}</span>
+                </Dropdown.Item>
+              )}
+            </For>
+          </Dropdown.Group>
+        </Dropdown.Content>
+      </Dropdown>
+    </Show>
   );
 }
 

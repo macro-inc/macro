@@ -13,9 +13,8 @@ import {
 import ChevronDownIcon from '@phosphor/caret-down.svg';
 import PlusCircleIcon from '@phosphor/plus-circle.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
-import { Button, Dropdown, Layer } from '@ui';
+import { Button, cn, Dropdown } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
-import { CREATE_BUTTON_CLASS } from './create-button-style';
 import { NewCallButton } from './NewCallButton';
 
 // Which blocks to show as create options per view, in order
@@ -140,12 +139,15 @@ export const SoupViewCreateButton = () => {
 
   const SingleOptionButton = (props: { hideLabel?: boolean }) => (
     <Button
-      variant="accent-reverse"
+      variant="active"
+      class={cn(
+        'border-0 rounded-full px-3 py-2 pl-1 font-semibold',
+        props.hideLabel && 'pr-1'
+      )}
       size="sm"
-      class={CREATE_BUTTON_CLASS}
       onClick={() => handleSelect(options()[0])}
     >
-      <PlusCircleIcon class="size-3.5" />
+      <PlusCircleIcon class="size-3.5 text-accent" />
       <Show when={!props.hideLabel}>
         <span>{createLabel()}</span>
       </Show>
@@ -153,35 +155,34 @@ export const SoupViewCreateButton = () => {
   );
 
   const MultiOptionButton = (props: { hideLabel?: boolean }) => (
-    <Dropdown placement="bottom-start" gutter={4}>
-      <Dropdown.Trigger variant="accent-reverse" class={CREATE_BUTTON_CLASS}>
+    <Dropdown placement="bottom-start">
+      <Dropdown.Trigger
+        variant="active"
+        class={cn(
+          'border-0 rounded-full px-3 py-2 pl-1 font-semibold',
+          props.hideLabel && 'pr-1'
+        )}
+      >
         <PlusCircleIcon class="size-3.5" />
         <Show when={!props.hideLabel}>
           <span>{createLabel()}</span>
         </Show>
         <ChevronDownIcon class="size-2.5" />
       </Dropdown.Trigger>
-      <Dropdown.Portal>
-        <Layer depth={2}>
-          <Dropdown.Content class="min-w-35">
-            <For each={options()}>
-              {(item) => (
-                <Dropdown.Item
-                  class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
-                  onSelect={() => handleSelect(item)}
-                >
-                  <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
-                    <CreateOptionIcon id={item.id} />
-                  </span>
-                  <span class="flex-1 truncate text-ink-muted">
-                    {item.label}
-                  </span>
-                </Dropdown.Item>
-              )}
-            </For>
-          </Dropdown.Content>
-        </Layer>
-      </Dropdown.Portal>
+      <Dropdown.Content>
+        <Dropdown.Group>
+          <For each={options()}>
+            {(item) => (
+              <Dropdown.Item onSelect={() => handleSelect(item)}>
+                <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
+                  <CreateOptionIcon id={item.id} />
+                </span>
+                <span class="flex-1 truncate text-ink-muted">{item.label}</span>
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Group>
+      </Dropdown.Content>
     </Dropdown>
   );
 

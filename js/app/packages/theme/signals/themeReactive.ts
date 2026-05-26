@@ -8,7 +8,7 @@ export const themeReactive: ThemeReactive = {
   a2: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'accent color +80°'},
   a3: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'accent color +120°'},
   a4: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'accent color +160°'},
-  b0: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'backaground'},
+  b0: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'background'},
   b1: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'background active'},
   b2: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'background hover'},
   b3: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'muted edge'},

@@ -138,6 +138,11 @@ impl FusionAuthClient {
         }
     }
 
+    /// Returns the Google OAuth client ID.
+    pub fn google_client_id(&self) -> &str {
+        &self.google_client_id
+    }
+
     /// Constructs the oauth2 authorize url for the given idp
     /// If login_hint is provided, it will be used as the login_hint parameter. This is used to
     /// ensure users are correctly redirected for domain specific SSO

@@ -21,8 +21,15 @@ use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 
 pub(crate) type EmailEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
-pub(crate) type EmailSvc =
-    EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>, sqs_client::SQS>;
+pub(crate) type EmailSvc = EmailServiceImpl<
+    EmailPgRepo,
+    FrecencyQueryServiceImpl<FrecencyPgStorage>,
+    sqs_client::SQS,
+    crm::domain::service::CrmServiceImpl<
+        crm::outbound::companies_repo::CompaniesRepositoryImpl,
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+    >,
+>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {

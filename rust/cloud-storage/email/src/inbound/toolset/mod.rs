@@ -109,4 +109,5 @@ where
     AsyncToolCollection::new()
         .add_tool::<UpdateThreadLabels, EmailToolContext<T, G, E>>()
         .add_tool::<GetThread, EmailToolContext<T, G, E>>()
+        .add_tool::<ListLabels, EmailToolContext<T, G, E>>()
 }

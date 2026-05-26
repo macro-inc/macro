@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use crate::domain::{
-    models::{GithubExchangeTokenResponse, GithubUserInfo},
+    models::{GithubExchangeTokenResponse, GithubPullRequestDetails, GithubUserInfo},
     ports::GithubOauth,
 };
 
@@ -179,5 +179,47 @@ impl GithubOauth for GithubOauthImpl {
         }
 
         Ok(user_info)
+    }
+
+    #[tracing::instrument(skip(self, access_token), err)]
+    async fn get_pull_request_details(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<GithubPullRequestDetails, Self::Err> {
+        let response = self
+            .client
+            .get(format!(
+                "https://api.github.com/repos/{owner}/{repo}/pulls/{number}"
+            ))
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "Macro-Auth-Service")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .timeout(Duration::from_secs(15))
+            .send()
+            .await?;
+
+        let status = response.status();
+
+        if !status.is_success() {
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "unknown error".to_string());
+
+            if status.as_u16() == 401 {
+                tracing::warn!(error_body=%error_body, "GitHub token expired or invalid");
+                anyhow::bail!("unauthorized access")
+            }
+
+            anyhow::bail!("failed to get pull request details {}", error_body)
+        }
+
+        let details: GithubPullRequestDetails = response.json().await?;
+
+        Ok(details)
     }
 }

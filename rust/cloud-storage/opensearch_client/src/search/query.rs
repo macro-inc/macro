@@ -72,15 +72,23 @@ impl QueryKey {
     }
 }
 
-/// Generate the terms for the "must" query
+/// How multi-term content queries combine.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TermCombine {
+    #[default]
+    And,
+}
+
+/// Generate the terms for the "must" query — each term becomes its own
+/// `match_*` clause and the clauses are combined per `combine`.
 pub(crate) fn generate_terms_must_query<'a>(
     query_key: QueryKey,
     field: &'a str,
     terms: impl Into<Cow<'a, [&'a str]>>,
+    combine: TermCombine,
 ) -> QueryType<'a> {
     let terms = terms.into();
 
-    // Map terms to queries
     let queries: Vec<_> = terms
         .iter()
         .map(|term| {
@@ -96,16 +104,16 @@ pub(crate) fn generate_terms_must_query<'a>(
         return queries[0].clone();
     }
 
-    // Use OR (should) across terms because document content is split across
-    // multiple OpenSearch nodes. AND filtering happens post-collapse at the
-    // application layer.
-    let mut terms_should_query = BoolQueryBuilder::new();
-    terms_should_query.minimum_should_match(1);
-    for query in queries {
-        terms_should_query.should(query);
+    let mut bool_query = BoolQueryBuilder::new();
+    match combine {
+        TermCombine::And => {
+            for query in queries {
+                bool_query.must(query);
+            }
+        }
     }
 
-    terms_should_query.build().into()
+    bool_query.build().into()
 }
 
 #[cfg(test)]

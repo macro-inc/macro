@@ -9,10 +9,9 @@ use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr
 
 use crate::domain::model::{
     AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
-    PatchTeamPlanRequest, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
-    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
-    TeamCheckoutError, TeamCheckoutSessionRequest, TeamError, TeamInvite, TeamInviteDetails,
-    TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
+    PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
+    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team, TeamError,
+    TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
 };
 
 /// The TeamChannelsRepository defines a set of actions related to team channels
@@ -51,6 +50,12 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<Option<stripe::SubscriptionId>, TeamError>> + Send;
+
+    /// Gets the payment status for a team
+    fn get_team_payment_status(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send;
 
     /// Creates a new team
     fn create_team(
@@ -108,6 +113,13 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
         subscription_id: &stripe::SubscriptionId,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Updates the teams payment status
+    fn update_team_payment_status(
+        &self,
+        team_id: &uuid::Uuid,
+        paying: bool,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
     /// Deletes a team
@@ -316,11 +328,27 @@ pub trait TeamService: Clone + Send + Sync + 'static {
 
     /// Restores permissions for all team members.
     /// This is used when a team subscription becomes active again.
-    /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.   
+    /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.
     fn restore_permissions_for_team_members(
         &self,
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<(), RestorePermissionsForTeamMembersError>> + Send;
+
+    /// Patches the team subscription id
+    /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.
+    fn patch_team_subscription_id(
+        &self,
+        team_id: &uuid::Uuid,
+        subscription_id: &stripe::SubscriptionId,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Patches the teams payment status
+    /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.
+    fn patch_team_payment_status(
+        &self,
+        team_id: &uuid::Uuid,
+        paying: bool,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
     /// Gets a team by id with all its members
     fn get_team(
@@ -361,19 +389,15 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         Output = Result<HashSet<roles_and_permissions::domain::model::PermissionId>, TeamError>,
     > + Send;
 
-    /// Updates the teams plan
-    fn update_team_plan(
+    /// Enables or disables CRM for a team. On a `false → true`
+    /// transition, fans out a `PopulateCrmForUser` enqueue per current
+    /// team member (best-effort, log-and-swallow). On any disable call,
+    /// flips the flag and purges the team's `crm_companies` rows in a
+    /// single transaction — the FK cascade clears the rest of the CRM
+    /// tables. Idempotent in both directions.
+    fn set_team_crm_enabled(
         &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
-        req: &PatchTeamPlanRequest,
-    ) -> impl Future<Output = Result<(), TeamError>> + Send;
-
-    /// Creates a checkout session for the initial team purchase
-    /// This should only be called if the team currently is not on a plan
-    /// Returns the checkout session url
-    fn create_checkout_session(
-        &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
-        req: &TeamCheckoutSessionRequest,
-    ) -> impl Future<Output = Result<String, TeamCheckoutError>> + Send;
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        enabled: bool,
+    ) -> impl Future<Output = Result<PatchTeamCrmSettingsResponse, TeamError>> + Send;
 }

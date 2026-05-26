@@ -37,7 +37,7 @@ pub struct CreateCheckoutSessionRequest {
     pub tier: StripeProductTier,
 }
 
-/// Creates a Stripe checkout session for the user to subscribe.
+/// **LEGACY DO NOT USE** Creates a Stripe checkout session for the user to subscribe.
 #[utoipa::path(
     post,
     path = "/user/stripe/checkout",

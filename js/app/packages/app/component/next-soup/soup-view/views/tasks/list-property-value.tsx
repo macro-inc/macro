@@ -1,8 +1,9 @@
-import { usePropertiesContext } from '@core/component/Properties/context/PropertiesContext';
-import { getEntityValues, hasValue } from '@core/component/Properties/utils';
+import { useMaybeBlockId } from '@core/block';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import { Property } from '@property';
+import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyT } from '@property/types';
+import { getEntityValues, hasValue } from '@property/utils';
 import { type Component, Match, Show, Switch } from 'solid-js';
 import './list-property-value.css';
 import { Layer } from '@ui';
@@ -18,6 +19,7 @@ type ListPropertyValueProps = {
  */
 export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
   const ctx = usePropertiesContext();
+  const blockId = useMaybeBlockId();
 
   const isUserEntity = () =>
     props.property.valueType === 'ENTITY' &&
@@ -32,7 +34,8 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
     <Property.Root
       property={props.property}
       canEdit={ctx.canEdit}
-      onEdit={ctx.openPropertyEditor}
+      onSave={ctx.saveHandler.saveProperty}
+      onRefresh={ctx.onRefresh}
     >
       <Property.Tooltip property={props.property}>
         <Layer depth={2}>
@@ -43,7 +46,7 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
                 <>
                   <CircleDashedEmpty class="size-3 shrink-0 opacity-50" />
                   <span class="truncate flex-1 opacity-50 @max-[840px]/u-list:hidden">
-                    None
+                    {props.property.displayName}
                   </span>
                 </>
               }
@@ -84,6 +87,9 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
           </Property.EditTrigger>
         </Layer>
       </Property.Tooltip>
+      <Property.PopoverEditor
+        entitySelfFilter={{ entityType: ctx.entityType, blockId }}
+      />
     </Property.Root>
   );
 };

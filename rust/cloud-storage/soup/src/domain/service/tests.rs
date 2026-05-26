@@ -175,19 +175,22 @@ async fn it_should_not_query_frecency() {
         NoopCommsService,
         NoopCallRecordQueryService,
     )
-    .get_user_soup(SoupRequest {
-        email_preview_view: PreviewView::StandardLabel(
-            email::domain::models::PreviewViewStandardLabel::Inbox,
-        ),
-        link_id: Some(Uuid::new_v4()),
-        soup_type: SoupType::UnExpanded,
-        limit: 0,
-        cursor: SoupQuery::new_sort_simple(
-            SimpleSortMethod::ViewedUpdated,
-            EntityFilters::default(),
-        ),
-        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-    })
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Some(Uuid::new_v4()),
+            soup_type: SoupType::UnExpanded,
+            limit: 0,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilters::default(),
+            ),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
     .await
     .unwrap()
     .type_erase();
@@ -257,16 +260,19 @@ async fn it_should_query_frecency() {
         NoopCommsService,
         NoopCallRecordQueryService,
     )
-    .get_user_soup(SoupRequest {
-        email_preview_view: PreviewView::StandardLabel(
-            email::domain::models::PreviewViewStandardLabel::Inbox,
-        ),
-        link_id: Some(Uuid::new_v4()),
-        soup_type: SoupType::UnExpanded,
-        limit: u16::MAX,
-        cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
-        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-    })
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Some(Uuid::new_v4()),
+            soup_type: SoupType::UnExpanded,
+            limit: u16::MAX,
+            cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
     .await
     .unwrap()
     .type_erase();
@@ -336,16 +342,19 @@ async fn it_should_sort_frecency_descending() {
         NoopCommsService,
         NoopCallRecordQueryService,
     )
-    .get_user_soup(SoupRequest {
-        email_preview_view: PreviewView::StandardLabel(
-            email::domain::models::PreviewViewStandardLabel::Inbox,
-        ),
-        link_id: Some(Uuid::new_v4()),
-        soup_type: SoupType::UnExpanded,
-        limit: u16::MAX,
-        cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
-        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-    })
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Some(Uuid::new_v4()),
+            soup_type: SoupType::UnExpanded,
+            limit: u16::MAX,
+            cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
     .await
     .unwrap()
     .type_erase();
@@ -429,16 +438,19 @@ async fn frecency_should_fallback() {
         NoopCommsService,
         NoopCallRecordQueryService,
     )
-    .get_user_soup(SoupRequest {
-        email_preview_view: PreviewView::StandardLabel(
-            email::domain::models::PreviewViewStandardLabel::Inbox,
-        ),
-        link_id: Some(Uuid::new_v4()),
-        soup_type: SoupType::UnExpanded,
-        limit: 100,
-        cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
-        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-    })
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Some(Uuid::new_v4()),
+            soup_type: SoupType::UnExpanded,
+            limit: 100,
+            cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
     .await
     .unwrap()
     .unwrap_right();
@@ -506,16 +518,19 @@ async fn frecency_should_paginate() {
         NoopCommsService,
         NoopCallRecordQueryService,
     )
-    .get_user_soup(SoupRequest {
-        email_preview_view: PreviewView::StandardLabel(
-            email::domain::models::PreviewViewStandardLabel::Inbox,
-        ),
-        link_id: Some(Uuid::new_v4()),
-        soup_type: SoupType::UnExpanded,
-        limit: 100,
-        cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
-        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-    })
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Some(Uuid::new_v4()),
+            soup_type: SoupType::UnExpanded,
+            limit: 100,
+            cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
     .await
     .unwrap()
     .unwrap_right();
@@ -585,24 +600,27 @@ async fn frecency_should_resume_cursor() {
         NoopCommsService,
         NoopCallRecordQueryService,
     )
-    .get_user_soup(SoupRequest {
-        email_preview_view: PreviewView::StandardLabel(
-            email::domain::models::PreviewViewStandardLabel::Inbox,
-        ),
-        link_id: Some(Uuid::new_v4()),
-        soup_type: SoupType::UnExpanded,
-        limit: 100,
-        cursor: SoupQuery::new_cursor_frecency(CursorWithValAndFilter {
-            id: Uuid::from_u128(5),
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Some(Uuid::new_v4()),
+            soup_type: SoupType::UnExpanded,
             limit: 100,
-            val: CursorVal {
-                sort_type: Frecency,
-                last_val: FrecencyValue::FrecencyScore(5.0),
-            },
-            filter: Default::default(),
-        }),
-        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-    })
+            cursor: SoupQuery::new_cursor_frecency(CursorWithValAndFilter {
+                id: Uuid::from_u128(5),
+                limit: 100,
+                val: CursorVal {
+                    sort_type: Frecency,
+                    last_val: FrecencyValue::FrecencyScore(5.0),
+                },
+                filter: Default::default(),
+            }),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
     .await
     .unwrap()
     .unwrap_right();
@@ -680,24 +698,27 @@ async fn frecency_fallback_cursor_should_resume() {
         NoopCommsService,
         NoopCallRecordQueryService,
     )
-    .get_user_soup(SoupRequest {
-        email_preview_view: PreviewView::StandardLabel(
-            email::domain::models::PreviewViewStandardLabel::Inbox,
-        ),
-        link_id: Some(Uuid::new_v4()),
-        soup_type: SoupType::UnExpanded,
-        limit: 100,
-        cursor: SoupQuery::new_cursor_frecency(CursorWithValAndFilter {
-            id: Uuid::from_u128(100),
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Some(Uuid::new_v4()),
+            soup_type: SoupType::UnExpanded,
             limit: 100,
-            val: CursorVal {
-                sort_type: Frecency,
-                last_val: FrecencyValue::UpdatedAt(DateTime::default() + Days::new(5)),
-            },
-            filter: Default::default(),
-        }),
-        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-    })
+            cursor: SoupQuery::new_cursor_frecency(CursorWithValAndFilter {
+                id: Uuid::from_u128(100),
+                limit: 100,
+                val: CursorVal {
+                    sort_type: Frecency,
+                    last_val: FrecencyValue::UpdatedAt(DateTime::default() + Days::new(5)),
+                },
+                filter: Default::default(),
+            }),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
     .await
     .unwrap()
     .unwrap_right();
@@ -751,19 +772,22 @@ async fn cursor_should_return_simple_sort() {
         NoopCommsService,
         NoopCallRecordQueryService,
     )
-    .get_user_soup(SoupRequest {
-        email_preview_view: PreviewView::StandardLabel(
-            email::domain::models::PreviewViewStandardLabel::Inbox,
-        ),
-        link_id: Some(Uuid::new_v4()),
-        soup_type: SoupType::UnExpanded,
-        limit: 0,
-        cursor: SoupQuery::new_sort_simple(
-            SimpleSortMethod::ViewedUpdated,
-            EntityFilters::default(),
-        ),
-        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-    })
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Some(Uuid::new_v4()),
+            soup_type: SoupType::UnExpanded,
+            limit: 0,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilters::default(),
+            ),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
     .await
     .unwrap();
 
@@ -818,16 +842,19 @@ async fn cursor_should_return_frecency() {
         NoopCommsService,
         NoopCallRecordQueryService,
     )
-    .get_user_soup(SoupRequest {
-        email_preview_view: PreviewView::StandardLabel(
-            email::domain::models::PreviewViewStandardLabel::Inbox,
-        ),
-        link_id: Some(Uuid::new_v4()),
-        soup_type: SoupType::UnExpanded,
-        limit: 100,
-        cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
-        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-    })
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Some(Uuid::new_v4()),
+            soup_type: SoupType::UnExpanded,
+            limit: 100,
+            cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
     .await
     .unwrap();
 
@@ -875,19 +902,22 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
         NoopCommsService,
         NoopCallRecordQueryService,
     )
-    .get_user_soup(SoupRequest {
-        email_preview_view: PreviewView::StandardLabel(
-            email::domain::models::PreviewViewStandardLabel::Inbox,
-        ),
-        link_id: Some(Uuid::new_v4()),
-        soup_type: SoupType::UnExpanded,
-        limit: 0,
-        cursor: SoupQuery::new_sort_simple(
-            SimpleSortMethod::ViewedUpdated,
-            EntityFilters::default(),
-        ),
-        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-    })
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Some(Uuid::new_v4()),
+            soup_type: SoupType::UnExpanded,
+            limit: 0,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilters::default(),
+            ),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
     .await
     .unwrap()
     .type_erase();
@@ -922,19 +952,22 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
         NoopCommsService,
         NoopCallRecordQueryService,
     )
-    .get_user_soup(SoupRequest {
-        email_preview_view: PreviewView::StandardLabel(
-            email::domain::models::PreviewViewStandardLabel::Inbox,
-        ),
-        link_id: Some(Uuid::new_v4()),
-        soup_type: SoupType::UnExpanded,
-        limit: 0,
-        cursor: SoupQuery::new_sort_simple(
-            SimpleSortMethod::ViewedUpdated,
-            EntityFilters::default(),
-        ),
-        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-    })
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Some(Uuid::new_v4()),
+            soup_type: SoupType::UnExpanded,
+            limit: 0,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilters::default(),
+            ),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
     .await
     .unwrap()
     .type_erase();
@@ -969,19 +1002,22 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
         NoopCommsService,
         NoopCallRecordQueryService,
     )
-    .get_user_soup(SoupRequest {
-        email_preview_view: PreviewView::StandardLabel(
-            email::domain::models::PreviewViewStandardLabel::Inbox,
-        ),
-        link_id: Some(Uuid::new_v4()),
-        soup_type: SoupType::UnExpanded,
-        limit: 0,
-        cursor: SoupQuery::new_sort_simple(
-            SimpleSortMethod::ViewedUpdated,
-            EntityFilters::default(),
-        ),
-        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-    })
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Some(Uuid::new_v4()),
+            soup_type: SoupType::UnExpanded,
+            limit: 0,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilters::default(),
+            ),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
     .await
     .unwrap()
     .type_erase();
@@ -1028,19 +1064,22 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
         NoopCommsService,
         NoopCallRecordQueryService,
     )
-    .get_user_soup(SoupRequest {
-        email_preview_view: PreviewView::StandardLabel(
-            email::domain::models::PreviewViewStandardLabel::Inbox,
-        ),
-        link_id: Some(Uuid::new_v4()),
-        soup_type: SoupType::UnExpanded,
-        limit: 0,
-        cursor: SoupQuery::new_sort_simple(
-            SimpleSortMethod::ViewedUpdated,
-            EntityFilters::default(),
-        ),
-        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-    })
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Some(Uuid::new_v4()),
+            soup_type: SoupType::UnExpanded,
+            limit: 0,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilters::default(),
+            ),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
     .await
     .unwrap()
     .type_erase();
@@ -1106,16 +1145,19 @@ async fn it_should_preserve_is_completed_in_by_ids_queries() {
         NoopCommsService,
         NoopCallRecordQueryService,
     )
-    .get_user_soup(SoupRequest {
-        email_preview_view: PreviewView::StandardLabel(
-            email::domain::models::PreviewViewStandardLabel::Inbox,
-        ),
-        link_id: Some(Uuid::new_v4()),
-        soup_type: SoupType::UnExpanded,
-        limit: 3,
-        cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
-        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-    })
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Some(Uuid::new_v4()),
+            soup_type: SoupType::UnExpanded,
+            limit: 3,
+            cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
     .await
     .unwrap()
     .unwrap_right();

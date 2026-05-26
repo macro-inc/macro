@@ -1,7 +1,7 @@
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
-} from '@core/component/Properties/utils/entityConversion';
+} from '@property/utils/entityConversion';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createSignal, Show } from 'solid-js';

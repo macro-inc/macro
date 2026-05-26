@@ -1,3 +1,4 @@
+import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { EmailCompose } from '@block-email/component/compose/Compose';
 import {
   EmailProvider,
@@ -10,6 +11,7 @@ import { useUserContext } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -61,6 +63,7 @@ function EmailContent(props: EmailViewProps) {
   const blockElement = blockElementSignal.get;
 
   const context = useEmailContext();
+  const splitPanel = useSplitPanel();
   const { isLoading: isUserLoading } = useUserContext();
 
   const [isScrolled, setIsScrolled] = createSignal(false);
@@ -193,12 +196,19 @@ function EmailContent(props: EmailViewProps) {
     )?.db_id;
   });
 
+  const canRunInitialEmailScroll = () =>
+    !isTouchDevice() || splitPanel?.isPanelActive() !== false;
+
   // ============================================
   // PHASE 2: HANDLE TARGET MESSAGE SCROLLING
   // ============================================
   // This effect handles scrolling to a specific message (if provided via URL) or scrolling to the last message by default
   // This effect should only run once.
   context.onInitialDataLoad(() => {
+    // Initial scroll positioning visibly shifts the email panel if it runs
+    // while the split is swiping in on touch devices.
+    if (!canRunInitialEmailScroll()) return false;
+
     // Check for target message
     const targetMessageId_ = context.messages.targetMessageID();
 
@@ -352,8 +362,9 @@ function EmailContent(props: EmailViewProps) {
   createEffect(() => {
     if (hasRun) return;
     // Focus the email block on mount
+    if (isTouchDevice()) return;
     if (!blockElement()) return;
-    blockElement()?.focus();
+    blockElement()?.focus({ preventScroll: true });
     hasRun = true;
   });
 

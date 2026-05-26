@@ -40,7 +40,7 @@ export function DragInsertIndicator(props: {
     <Show when={props.active}>
       <Portal>
         <div
-          class="invisible fixed bg-accent/60 pointer-events-none rounded-full ring-6 ring-accent/10 transition-all duration-100 ease-in-out"
+          class="z-tool-tip invisible fixed bg-accent/60 pointer-events-none rounded-full ring-6 ring-accent/10 transition-all duration-100 ease-in-out"
           classList={{
             visible: props.state.visible,
           }}

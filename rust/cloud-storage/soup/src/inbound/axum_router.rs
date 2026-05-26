@@ -23,6 +23,13 @@ use email::{
         previews_router::EmailRouterState,
     },
 };
+use entity_access::{
+    domain::{
+        models::{EntityAccessReceipt, MemberTeamRole},
+        ports::EntityAccessService,
+    },
+    inbound::axum_extractors::OptionalMacroUserTeamExtractor,
+};
 use filter_ast::{Expr, ExprFrame};
 use item_filters::{
     EntityFilters,
@@ -259,35 +266,45 @@ pub struct GroupedSoupPage {
     pub groups: Option<Vec<ApiGroupMeta>>,
 }
 
-pub struct SoupRouterState<T, U> {
+pub struct SoupRouterState<T, U, EAS> {
     service: Arc<T>,
     email: EmailRouterState<U>,
+    entity_access_service: Arc<EAS>,
 }
 
-impl<T, U> Clone for SoupRouterState<T, U> {
+impl<T, U, EAS> Clone for SoupRouterState<T, U, EAS> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
             email: self.email.clone(),
+            entity_access_service: self.entity_access_service.clone(),
         }
     }
 }
 
-impl<T, U> FromRef<SoupRouterState<T, U>> for EmailRouterState<U> {
-    fn from_ref(input: &SoupRouterState<T, U>) -> Self {
+impl<T, U, EAS> FromRef<SoupRouterState<T, U, EAS>> for EmailRouterState<U> {
+    fn from_ref(input: &SoupRouterState<T, U, EAS>) -> Self {
         input.email.clone()
     }
 }
 
-impl<T, U> SoupRouterState<T, U>
+impl<T, U, EAS> FromRef<SoupRouterState<T, U, EAS>> for Arc<EAS> {
+    fn from_ref(input: &SoupRouterState<T, U, EAS>) -> Self {
+        input.entity_access_service.clone()
+    }
+}
+
+impl<T, U, EAS> SoupRouterState<T, U, EAS>
 where
     T: SoupService,
     U: EmailService,
+    EAS: entity_access::domain::ports::EntityAccessService,
 {
-    pub fn new(service: T, email: U) -> Self {
+    pub fn new(service: T, email: U, entity_access_service: Arc<EAS>) -> Self {
         SoupRouterState {
             service: Arc::new(service),
             email: EmailRouterState::new(email),
+            entity_access_service,
         }
     }
 
@@ -295,6 +312,7 @@ where
         &self,
         macro_user_id: MacroUserIdStr<'static>,
         email_link: Option<Link>,
+        team_receipt_option: Option<EntityAccessReceipt<MemberTeamRole>>,
         ApiSoupRequestInner {
             filters,
             params,
@@ -304,7 +322,7 @@ where
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
     where
         SoupRequest<R>: IntoSoupReqAst,
-        R: Clone + Serialize + Send,
+        R: Clone + Serialize + Send + RequestsCrmScope,
     {
         let create_fallback = move || -> SoupQuery<R> {
             let params_sort = params
@@ -328,19 +346,30 @@ where
                 .unwrap_or_else(create_fallback),
         };
 
+        // Derive CRM-scope authorization from the *effective* filter (the
+        // one embedded in the resolved SoupQuery), not the raw request body.
+        // For cursor-paginated requests the body's filters may be empty and
+        // the real filter lives inside the cursor — checking the body would
+        // miss CRM scope on follow-up pages.
+        let team_receipt =
+            resolve_crm_team_receipt(cursor.filter().requests_crm_scope(), team_receipt_option)?;
+
         let res = self
             .service
-            .get_user_soup(SoupRequest {
-                soup_type: match params.expand {
-                    Some(true) | None => SoupType::Expanded,
-                    Some(false) => SoupType::UnExpanded,
+            .get_user_soup(
+                SoupRequest {
+                    soup_type: match params.expand {
+                        Some(true) | None => SoupType::Expanded,
+                        Some(false) => SoupType::UnExpanded,
+                    },
+                    limit: params.limit.unwrap_or(20),
+                    cursor,
+                    user: macro_user_id,
+                    email_preview_view: email_view,
+                    link_id: email_link.map(|l| l.id),
                 },
-                limit: params.limit.unwrap_or(20),
-                cursor,
-                user: macro_user_id,
-                email_preview_view: email_view,
-                link_id: email_link.map(|l| l.id),
-            })
+                team_receipt,
+            )
             .await?;
 
         Ok(Json(
@@ -409,10 +438,35 @@ where
     }
 }
 
-pub fn soup_router<T, U, S>(state: SoupRouterState<T, U>) -> Router<S>
+/// Probe applied to whichever filter type a soup endpoint accepts
+/// (`EntityFilters` for the typed POST, `ApiEntityFilterAst` for the AST
+/// endpoint). Lets `handle` inspect the *materialized* SoupQuery's filter
+/// — which may have come from the request body or from the cursor — and
+/// decide whether CRM scope is in play.
+pub trait RequestsCrmScope {
+    /// True when this filter asks the query to expand visibility across
+    /// the requesting user's team via a CRM-scoped attribute
+    /// (`crm_domains` or `crm_addresses`).
+    fn requests_crm_scope(&self) -> bool;
+}
+
+impl RequestsCrmScope for EntityFilters {
+    fn requests_crm_scope(&self) -> bool {
+        !self.email_filters.crm_domains.is_empty() || !self.email_filters.crm_addresses.is_empty()
+    }
+}
+
+impl RequestsCrmScope for ApiEntityFilterAst {
+    fn requests_crm_scope(&self) -> bool {
+        !self.email_crm_domains.is_empty() || !self.email_crm_addresses.is_empty()
+    }
+}
+
+pub fn soup_router<T, U, EAS, S>(state: SoupRouterState<T, U, EAS>) -> Router<S>
 where
     T: SoupService,
     U: EmailService,
+    EAS: EntityAccessService,
     S: Send + Sync,
 {
     Router::new()
@@ -455,6 +509,8 @@ pub enum SoupHandlerErr {
     ExpandErr(ExpandErr),
     #[error("Invalid compound filter could not be expanded")]
     Expand,
+    #[error("CRM-scoped queries require team membership")]
+    CrmScopeForbidden,
 }
 
 impl From<SoupErr> for SoupHandlerErr {
@@ -470,6 +526,7 @@ impl IntoResponse for SoupHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {
             SoupHandlerErr::ExpandErr(_) | SoupHandlerErr::Expand => StatusCode::BAD_REQUEST,
+            SoupHandlerErr::CrmScopeForbidden => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -496,26 +553,32 @@ impl IntoResponse for SoupHandlerErr {
             (status = 500, body=ErrorResponse),
     )
 )]
-pub async fn get_soup_handler<T, U>(
-    State(service): State<SoupRouterState<T, U>>,
+pub async fn get_soup_handler<T, U, EAS>(
+    State(service): State<SoupRouterState<T, U, EAS>>,
     Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
     email_link: Result<Cached<EmailLinkExtractor<U>>, EmailLinkErr>,
+    team: OptionalMacroUserTeamExtractor<MemberTeamRole, EAS>,
     Query(params): Query<Params>,
     cursor: SoupCursor<EntityFilters>,
 ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
 where
     T: SoupService,
     U: EmailService,
+    EAS: EntityAccessService,
 {
     let link = match email_link {
         Ok(l) => Some(l.0.0),
         Err(EmailLinkErr::NotFound) => None,
         Err(e) => Err(e)?,
     };
+    // Team receipt is plumbed through even for GET so that paginating a
+    // team-scoped query via a cursor (which carries the original filter)
+    // continues to authorize correctly.
     service
         .handle(
             macro_user_id,
             link,
+            team.entity_access_receipt,
             ApiSoupRequestInner {
                 params,
                 filters: EntityFilters::default(),
@@ -564,10 +627,11 @@ type SoupCursor<R> = axum_extra::either::Either<
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn post_soup_handler<T, U>(
-    State(service): State<SoupRouterState<T, U>>,
+pub async fn post_soup_handler<T, U, EAS>(
+    State(service): State<SoupRouterState<T, U, EAS>>,
     Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
     email_link: Result<Cached<EmailLinkExtractor<U>>, EmailLinkErr>,
+    team: OptionalMacroUserTeamExtractor<MemberTeamRole, EAS>,
     cursor: SoupCursor<EntityFilters>,
     Json(PostSoupRequest {
         filters,
@@ -578,16 +642,21 @@ pub async fn post_soup_handler<T, U>(
 where
     T: SoupService,
     U: EmailService,
+    EAS: EntityAccessService,
 {
     let link = match email_link {
         Ok(l) => Some(l.0.0),
         Err(EmailLinkErr::NotFound) => None,
         Err(e) => Err(e)?,
     };
+    // Pass the raw extractor receipt through — `handle` resolves the
+    // CRM-scope check against the *effective* filter (which may come from
+    // the cursor on follow-up pages), not the request body.
     service
         .handle(
             macro_user_id,
             link,
+            team.entity_access_receipt,
             ApiSoupRequestInner {
                 filters,
                 params,
@@ -602,7 +671,6 @@ where
 #[serde(rename_all = "camelCase")]
 pub struct PostSoupAstRequest {
     #[serde(default, flatten)]
-    #[schema(value_type = EntityFilterAst)]
     filters: ApiEntityFilterAst,
     #[serde(default, flatten)]
     params: Params,
@@ -627,10 +695,11 @@ pub struct PostSoupAstRequest {
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn post_soup_ast_handler<T, U>(
-    State(service): State<SoupRouterState<T, U>>,
+pub async fn post_soup_ast_handler<T, U, EAS>(
+    State(service): State<SoupRouterState<T, U, EAS>>,
     Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
     email_link: Result<Cached<EmailLinkExtractor<U>>, EmailLinkErr>,
+    team: OptionalMacroUserTeamExtractor<MemberTeamRole, EAS>,
     cursor: SoupCursor<ApiEntityFilterAst>,
     Json(PostSoupAstRequest {
         filters,
@@ -641,16 +710,21 @@ pub async fn post_soup_ast_handler<T, U>(
 where
     T: SoupService,
     U: EmailService,
+    EAS: EntityAccessService,
 {
     let link = match email_link {
         Ok(l) => Some(l.0.0),
         Err(EmailLinkErr::NotFound) => None,
         Err(e) => Err(e)?,
     };
+    // Pass the raw extractor receipt through — `handle` resolves the
+    // CRM-scope check against the *effective* filter (which may come from
+    // the cursor on follow-up pages), not the request body.
     service
         .handle(
             macro_user_id,
             link,
+            team.entity_access_receipt,
             ApiSoupRequestInner {
                 filters,
                 params,
@@ -667,7 +741,6 @@ where
 pub struct PostGroupedSoupAstRequest {
     /// Filters to apply (AST format)
     #[serde(default, flatten)]
-    #[schema(value_type = EntityFilterAst)]
     filters: ApiEntityFilterAst,
     /// Grouping parameters (required)
     #[serde(flatten)]
@@ -689,8 +762,8 @@ pub struct PostGroupedSoupAstRequest {
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn post_grouped_soup_ast_handler<T, U>(
-    State(service): State<SoupRouterState<T, U>>,
+pub async fn post_grouped_soup_ast_handler<T, U, EAS>(
+    State(service): State<SoupRouterState<T, U, EAS>>,
     Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
     cursor: Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, ApiEntityFilterAst>>,
     Json(PostGroupedSoupAstRequest { filters, params }): Json<PostGroupedSoupAstRequest>,
@@ -698,6 +771,7 @@ pub async fn post_grouped_soup_ast_handler<T, U>(
 where
     T: SoupService,
     U: EmailService,
+    EAS: EntityAccessService,
 {
     let filters = filters
         .into_entity_ast()
@@ -728,29 +802,66 @@ where
         .await
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+/// Returns the team receipt to use when CRM-scoped visibility is required.
+/// `crm_scope_requested` is true when the request body carries a
+/// `crm_domains` / `crm_addresses` attribute. Returns
+/// `Err(CrmScopeForbidden)` when CRM scope was requested but the user has
+/// no qualifying team membership.
+fn resolve_crm_team_receipt(
+    crm_scope_requested: bool,
+    receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+) -> Result<Option<EntityAccessReceipt<MemberTeamRole>>, SoupHandlerErr> {
+    if crm_scope_requested && receipt.is_none() {
+        return Err(SoupHandlerErr::CrmScopeForbidden);
+    }
+    Ok(receipt)
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, Clone, ToSchema)]
 pub struct ApiEntityFilterAst {
     /// the filters that should be applied to the document entity
     #[serde(default, rename = "df")]
+    #[schema(value_type = serde_json::Value)]
     pub document_filter: LiteralTree<ApiDocumentLiteral>,
     /// the filters that should be applied to the project entity
     #[serde(default, rename = "pf")]
+    #[schema(value_type = serde_json::Value)]
     pub project_filter: LiteralTree<ProjectLiteral>,
     /// the filters that should be applied to the chat entity
     #[serde(default, rename = "cf")]
+    #[schema(value_type = serde_json::Value)]
     pub chat_filter: LiteralTree<ChatLiteral>,
-    /// the filters that should be applied to the email entity
+    /// the filters that should be applied to the email entity (raw AST
+    /// tree only; CRM scope is carried by the `ecd` / `eca` sibling
+    /// fields). On this endpoint the email filter stays a bare tree,
+    /// unlike the materialized [`EntityFilterAst`] used for cursors.
     #[serde(default, rename = "ef")]
+    #[schema(value_type = serde_json::Value)]
     pub email_filter: LiteralTree<EmailLiteral>,
     /// the filters that should be applied to the channel entity
     #[serde(default, rename = "chanf")]
+    #[schema(value_type = serde_json::Value)]
     pub channel_filter: LiteralTree<ChannelLiteral>,
     /// the filters that should be applied to the call entity
     #[serde(default, rename = "callf")]
+    #[schema(value_type = serde_json::Value)]
     pub call_filter: LiteralTree<CallLiteral>,
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
+    #[schema(value_type = serde_json::Value)]
     pub properties_filter: LiteralTree<PropertiesLiteral>,
+    /// CRM-scoped domain filter (wire key: `ecd`). Parallel to the
+    /// freeform `ef` AST. Expanded by the router into an any-direction
+    /// OR sub-tree AND-merged into `ef`, plus a `CrmScope` tag stamped
+    /// on the resulting [`item_filters::ast::EmailFilterAst::crm_scope`].
+    /// Drives the per-team CRM authorization pre-check and candidate-set
+    /// widening downstream. Mutually exclusive with `eca`.
+    #[serde(default, rename = "ecd", skip_serializing_if = "Vec::is_empty")]
+    pub email_crm_domains: Vec<String>,
+    /// CRM-scoped address filter (wire key: `eca`). Symmetric counterpart
+    /// to `ecd` for fully-qualified email addresses.
+    #[serde(default, rename = "eca", skip_serializing_if = "Vec::is_empty")]
+    pub email_crm_addresses: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -817,6 +928,8 @@ impl ApiEntityFilterAst {
             channel_filter,
             call_filter,
             properties_filter,
+            email_crm_domains,
+            email_crm_addresses,
         } = self;
 
         let document_filter = document_filter
@@ -843,11 +956,39 @@ impl ApiEntityFilterAst {
             .transpose()?
             .map(Arc::new);
 
+        // Build the CRM sub-tree and tag from the typed lists. Mutual
+        // exclusivity and per-value validation happen here. We then
+        // AND-merge the sub-tree into the freeform `email_filter` AST so
+        // the matching SQL works identically to the typed POST path.
+        let crm =
+            item_filters::ast::email::expand_crm_scope(email_crm_domains, email_crm_addresses)
+                .map_err(|e| report!("{e}"))?;
+
+        let (email_tree, crm_scope) = match (email_filter, crm) {
+            (Some(existing), Some((crm_tree, scope))) => {
+                // The Arc was freshly constructed by serde when this
+                // request body deserialized, and has not been cloned
+                // since — refcount is 1, so `try_unwrap` always succeeds.
+                let existing_owned = Arc::try_unwrap(existing)
+                    .map_err(|_| report!("internal: email_filter Arc was unexpectedly shared"))?;
+                (
+                    Some(Arc::new(Expr::and(existing_owned, crm_tree))),
+                    Some(scope),
+                )
+            }
+            (Some(existing), None) => (Some(existing), None),
+            (None, Some((crm_tree, scope))) => (Some(Arc::new(crm_tree)), Some(scope)),
+            (None, None) => (None, None),
+        };
+
         Ok(EntityFilterAst {
             document_filter,
             project_filter,
             chat_filter,
-            email_filter,
+            email_filter: item_filters::ast::EmailFilterAst {
+                tree: email_tree,
+                crm_scope,
+            },
             channel_filter,
             call_filter,
             properties_filter,

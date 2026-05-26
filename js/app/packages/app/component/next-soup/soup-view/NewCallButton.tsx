@@ -5,12 +5,11 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { getDestinationFromOptions } from '@core/util/destination';
 import PhoneCallIcon from '@icon/wide-call.svg';
-import PlusCircleIcon from '@phosphor/plus-circle.svg';
+import PlusCircleIcon from '@phosphor/plus.svg';
 import XIcon from '@phosphor/x.svg';
 import { commsServiceClient } from '@service-comms/client';
 import { Button, Dialog, Surface } from '@ui';
 import { createSignal } from 'solid-js';
-import { CREATE_BUTTON_CLASS } from './create-button-style';
 
 export function NewCallButton() {
   const [isOpen, setIsOpen] = createSignal(false);
@@ -82,12 +81,12 @@ export function NewCallButton() {
   return (
     <>
       <Button
-        variant="accent-reverse"
+        variant="active"
+        class="border-0 rounded-full px-3 py-2 pl-1 font-semibold"
         size="sm"
-        class={CREATE_BUTTON_CLASS}
         onClick={() => setIsOpen(true)}
       >
-        <PlusCircleIcon class="size-3.5" />
+        <PlusCircleIcon class="size-3.5 text-accent" />
         <span>Call</span>
       </Button>
       <Dialog

@@ -15,6 +15,7 @@ use email::domain::{
     models::{EnrichedEmailThreadPreview, GetEmailsRequest},
     ports::EmailPreviewServiceReadOnly,
 };
+use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use frecency::domain::{
     models::{AggregateId, FrecencyPageRequest, JoinFrecency},
     ports::FrecencyQueryService,
@@ -406,8 +407,12 @@ where
     C: ChannelsService,
     K: CallRecordQueryService,
 {
-    #[tracing::instrument(err, skip(self, req))]
-    async fn get_user_soup<R>(&self, req: SoupRequest<R>) -> Result<SoupOutput<R>, SoupErr>
+    #[tracing::instrument(err, skip(self, req, team_receipt))]
+    async fn get_user_soup<R>(
+        &self,
+        req: SoupRequest<R>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<R>, SoupErr>
     where
         SoupRequest<R>: IntoSoupReqAst,
         R: Clone + Serialize + Send,
@@ -416,7 +421,7 @@ where
         let req = req.into_ast()?;
         let limit = req.limit.clamp(20, 500);
 
-        let email_request = req.build_email_request();
+        let email_request = req.build_email_request(team_receipt);
         let comms_request = req.build_comms_request();
         let call_request = req.build_call_request();
 

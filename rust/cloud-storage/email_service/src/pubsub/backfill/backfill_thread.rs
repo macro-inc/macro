@@ -3,6 +3,7 @@ use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use models_email::email::service::backfill::{
     BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage, BackfillThreadPayload,
+    JobScopedPayload,
 };
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
@@ -16,10 +17,10 @@ use std::collections::HashSet;
 pub async fn backfill_thread(
     ctx: &PubSubContext,
     access_token: &str,
-    data: &BackfillPubsubMessage,
+    scope: &JobScopedPayload<BackfillThreadPayload>,
     link: &link::Link,
-    p: &BackfillThreadPayload,
 ) -> Result<(), ProcessingError> {
+    let p = &scope.payload;
     let thread_provider_id = p.thread_provider_id.clone();
 
     let existing_threads = email_db_client::threads::get::get_threads_by_link_id_and_provider_ids(
@@ -40,7 +41,7 @@ pub async fn backfill_thread(
 
     // if the thread already exists, skip backfilling and update redis counters
     if !existing_threads.is_empty() {
-        incr_completed_threads(ctx, link, data.job_id).await?;
+        incr_completed_threads(ctx, link, scope.job_id).await?;
         return Ok(());
     }
 
@@ -71,7 +72,7 @@ pub async fn backfill_thread(
     };
 
     ctx.redis_client
-        .init_backfill_thread_progress(data.job_id, &thread_provider_id, message_ids.len() as i32)
+        .init_backfill_thread_progress(scope.job_id, &thread_provider_id, message_ids.len() as i32)
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {
@@ -109,9 +110,11 @@ pub async fn backfill_thread(
         };
 
         let ps_message = BackfillPubsubMessage {
-            link_id: link.id,
-            job_id: data.job_id,
-            backfill_operation: BackfillOperation::BackfillMessage(new_payload),
+            backfill_operation: BackfillOperation::BackfillMessage(JobScopedPayload {
+                link_id: link.id,
+                job_id: scope.job_id,
+                payload: new_payload,
+            }),
         };
 
         ctx.sqs_client

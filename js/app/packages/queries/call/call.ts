@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
-import { callServiceClient } from '@service-call/client';
+import { type CallRecord, callServiceClient } from '@service-call/client';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
@@ -76,11 +76,46 @@ export function useCallRecordQuery(callId: Accessor<string>) {
   }));
 }
 
+export function setCallRecordShareWithTeamCache(
+  callId: string,
+  shareWithTeam: boolean
+) {
+  queryClient.setQueryData<CallRecord>(['call', 'record', callId], (prev) => {
+    if (!prev) return prev;
+    return { ...prev, shareWithTeam };
+  });
+}
+
+function invalidateCallRecord(callId: string) {
+  queryClient.invalidateQueries({ queryKey: ['call', 'record', callId] });
+}
+
+export function useSetCallRecordShareWithTeamMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: async (params: { callId: string; shareWithTeam: boolean }) => {
+      await throwOnErr(() => callServiceClient.editCallRecord(params));
+      return params;
+    },
+    onSuccess({ callId, shareWithTeam }) {
+      setCallRecordShareWithTeamCache(callId, shareWithTeam);
+      invalidateCallRecord(callId);
+    },
+    onError(error: Error) {
+      console.error('failed to set share with team', error);
+    },
+  }));
+}
+
 export function useToggleShareWithTeamMutation() {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: (callId: string) =>
       throwOnErr(() => callServiceClient.toggleShareWithTeam(callId)),
+    onSuccess(newValue, callId) {
+      setCallRecordShareWithTeamCache(callId, newValue);
+      invalidateCallRecord(callId);
+    },
     onError(error: Error) {
       console.error('failed to toggle share with team', error);
     },

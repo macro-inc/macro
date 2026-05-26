@@ -51,10 +51,15 @@ async fn main() {
 
     // Create the email service with real database connections
     let email_repo = EmailPgRepo::new(pool.clone());
+    let crm_service = crm::domain::service::CrmServiceImpl::new(
+        crm::outbound::companies_repo::CompaniesRepositoryImpl::new(pool.clone()),
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+    );
     let email_service = EmailServiceImpl::new(
         email_repo,
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
+        crm_service,
         0,
     );
 

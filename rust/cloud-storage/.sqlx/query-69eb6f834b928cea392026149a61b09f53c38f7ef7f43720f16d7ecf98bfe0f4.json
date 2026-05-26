@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT tt.document_id\n            FROM UNNEST($2::text[], $3::int4[]) AS refs(team_slug, task_num)\n            JOIN github_app_installation_team gait ON gait.id = $1\n            JOIN team t ON t.id = gait.team_id AND LOWER(t.slug) = LOWER(refs.team_slug)\n            JOIN team_task tt ON tt.team_id = t.id AND tt.task_num = refs.task_num\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Int4Array"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "69eb6f834b928cea392026149a61b09f53c38f7ef7f43720f16d7ecf98bfe0f4"
+}

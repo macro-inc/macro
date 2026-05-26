@@ -1,15 +1,13 @@
-import { Modals } from '@core/component/Properties/component/modal';
+import { useMaybeBlockId } from '@core/block';
+import { ScopedPortal } from '@core/component/ScopedPortal';
+import { Property } from '@property';
+import { Modals } from '@property/component/modal';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
   usePropertiesContext,
-} from '@core/component/Properties/context/PropertiesContext';
-import type {
-  PropertyApiValues,
-  Property as PropertyT,
-} from '@core/component/Properties/types';
-import { ScopedPortal } from '@core/component/ScopedPortal';
-import { Property } from '@property';
+} from '@property/context/PropertiesContext';
+import type { PropertyApiValues, Property as PropertyT } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -55,13 +53,17 @@ interface EntityKeyPropertiesProps {
   entity: EntityWithProperties<EntityData>;
   /** Callback when properties are refreshed */
   onRefresh?: () => void;
+  /** Max visible user avatars in the assignees stack before collapsing to +N. */
+  maxUserStackUsers?: number;
+  /** Whether to show the edit affordance caret. */
+  showCaret?: boolean;
 }
 
 /**
  * Displays key properties (Status, Priority, Assignees) for an entity as a
- * row of condensed icon-only pills. Click routes through the legacy modal
- * stack via `openPropertyEditor` so the existing PropertyEditModal (now
- * itself a thin bridge over Property.PopoverEditor) handles editing.
+ * row of condensed icon-only pills. Each pill owns its own Kobalte-backed
+ * popover editor via <Property.PopoverEditor /> rendered inline below the
+ * trigger — no modal stack involved.
  */
 export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
   const entityType = createMemo(() => getEntityType(props.entity));
@@ -105,6 +107,8 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
         <KeyPropertiesRow
           properties={keyProperties}
           onRefresh={props.onRefresh}
+          maxUserStackUsers={props.maxUserStackUsers}
+          showCaret={props.showCaret}
         />
         <ScopedPortal scope="split">
           <Suspense>
@@ -119,8 +123,11 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
 function KeyPropertiesRow(props: {
   properties: Accessor<PropertyT[]>;
   onRefresh?: () => void;
+  maxUserStackUsers?: number;
+  showCaret?: boolean;
 }) {
   const ctx = usePropertiesContext();
+  const blockId = useMaybeBlockId();
 
   return (
     <div class="flex items-center gap-1 justify-start text-xs">
@@ -139,7 +146,8 @@ function KeyPropertiesRow(props: {
             <Property.Root
               property={property}
               canEdit={ctx.canEdit}
-              onEdit={ctx.openPropertyEditor}
+              onSave={ctx.saveHandler.saveProperty}
+              onRefresh={ctx.onRefresh}
             >
               <Property.Tooltip property={property}>
                 <Layer depth={2}>
@@ -163,22 +171,37 @@ function KeyPropertiesRow(props: {
                       }
                     >
                       <Match when={isMultiUserEntity()}>
-                        <Property.UserStack property={property} maxUsers={2} />
+                        <Property.UserStack
+                          property={property}
+                          maxUsers={props.maxUserStackUsers ?? 2}
+                        />
                       </Match>
                       <Match when={isUserEntity()}>
                         <Property.Icon property={property} />
                       </Match>
                     </Switch>
-                    <span class="@max-2xl/u-list:hidden">
-                      <Property.Text
-                        property={property}
-                        fallback={<Property.Empty label="None" />}
-                      />
-                    </span>
-                    <Property.Caret />
+                    <Property.Text
+                      property={property}
+                      class="@max-2xl/u-list:hidden"
+                      fallback={
+                        <>
+                          <Property.Empty
+                            label="None"
+                            class="@max-2xl/u-list:hidden"
+                          />
+                          <Property.Empty class="hidden @max-2xl/u-list:inline-flex" />
+                        </>
+                      }
+                    />
+                    <Show when={props.showCaret ?? true}>
+                      <Property.Caret />
+                    </Show>
                   </Property.EditTrigger>
                 </Layer>
               </Property.Tooltip>
+              <Property.PopoverEditor
+                entitySelfFilter={{ entityType: ctx.entityType, blockId }}
+              />
             </Property.Root>
           );
         }}

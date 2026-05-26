@@ -5,18 +5,12 @@ import {
   useMaybeBlockName,
 } from '@core/block';
 import { useItemPreviewData } from '@core/component/ItemPreview';
-import {
-  DropdownMenuContent,
-  MenuItem,
-  MenuSeparator,
-} from '@core/component/Menu';
-import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { canNestBlock, createBlockInstance } from '@core/orchestrator';
+import { blockElementSignal } from '@core/signal/blockElement';
 import { matches } from '@core/util/match';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import {
   $convertCardToMention,
   $getId,
@@ -41,7 +35,7 @@ import {
 } from '@queries/preview';
 import { blockNameToItemType } from '@service-storage/client';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn, Layer } from '@ui';
+import { cn, Dropdown, Layer } from '@ui';
 import {
   $addUpdateTag,
   $createNodeSelection,
@@ -364,31 +358,29 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
               <span class="hover:underline">{props.item.name}</span>
             </BlockLink>
           </div>
-          <DropdownMenu open={dropdownOpen()} onOpenChange={setDropdownOpen}>
-            <DropdownMenu.Trigger as={Button} size="icon-sm" variant="ghost">
+          <Dropdown open={dropdownOpen()} onOpenChange={setDropdownOpen}>
+            <Dropdown.Trigger size="icon-sm" variant="ghost">
               <DotsThree />
-            </DropdownMenu.Trigger>
-            <ScopedPortal scope="block">
-              <DropdownMenuContent class="z-action-menu">
-                <MenuItem
-                  onClick={convertToMention}
-                  icon={Minimize}
-                  text="Convert to Inline Mention"
-                />
-                <MenuItem
-                  onClick={handleCopy}
-                  icon={Clipboard}
-                  text="Copy Link"
-                />
-                <MenuSeparator />
-                <MenuItem
-                  onClick={deleteCard}
-                  icon={TrashSimple}
-                  text="Delete"
-                />
-              </DropdownMenuContent>
-            </ScopedPortal>
-          </DropdownMenu>
+            </Dropdown.Trigger>
+            <Dropdown.Content mount={blockElementSignal.get()}>
+              <Dropdown.Group>
+                <Dropdown.Item onSelect={convertToMention}>
+                  <Minimize class="size-4 shrink-0" />
+                  <span class="flex-1 truncate">Convert to Inline Mention</span>
+                </Dropdown.Item>
+                <Dropdown.Item onSelect={handleCopy}>
+                  <Clipboard class="size-4 shrink-0" />
+                  <span class="flex-1 truncate">Copy Link</span>
+                </Dropdown.Item>
+              </Dropdown.Group>
+              <Dropdown.Group>
+                <Dropdown.Item onSelect={deleteCard}>
+                  <TrashSimple class="size-4 shrink-0" />
+                  <span class="flex-1 truncate">Delete</span>
+                </Dropdown.Item>
+              </Dropdown.Group>
+            </Dropdown.Content>
+          </Dropdown>
         </div>
         <div
           class={cn('flex items-center justify-between', {

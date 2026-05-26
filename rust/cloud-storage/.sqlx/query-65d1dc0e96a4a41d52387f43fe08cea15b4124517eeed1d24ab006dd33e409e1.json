@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM crm_contact_sources cs\n            USING crm_contacts ct, crm_companies co\n            WHERE cs.contact_id = ct.id\n              AND ct.company_id = co.id\n              AND co.team_id = $1\n              AND cs.link_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "65d1dc0e96a4a41d52387f43fe08cea15b4124517eeed1d24ab006dd33e409e1"
+}

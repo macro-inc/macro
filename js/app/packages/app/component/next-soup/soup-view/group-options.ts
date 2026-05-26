@@ -1,4 +1,4 @@
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 
 export type GroupOptionId =
   | 'none'

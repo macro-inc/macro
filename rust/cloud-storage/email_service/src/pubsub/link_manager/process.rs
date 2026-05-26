@@ -4,6 +4,7 @@ use crate::util::gmail::auth::{
 };
 use crate::util::sync_contacts::sync_contacts;
 use anyhow::{Context, anyhow};
+use crm::domain::service::CrmService;
 use models_email::email::service::pubsub::{DeletionReason, LinkManagerMessage};
 use models_email::service::cache::TokenCacheKey;
 use models_email::service::link::{Link, UserProvider};
@@ -220,6 +221,31 @@ async fn handle_delete(
             tracing::error!(error=?e, "failed to send message to search extractor queue");
         })
         .ok();
+
+    // Tear down CRM rows this link contributed to the user's team before
+    // the big cascading link delete fires. Best-effort: a failure here
+    // would only leave orphan `crm_contacts`/`crm_companies` rows behind
+    // (the `crm_contact_sources` FK to `email_links` cascades on the
+    // upcoming `delete_link_by_id`, so the link-scoped source rows go
+    // away regardless), so we log and continue rather than bailing.
+    let macro_id_str = link.macro_id.to_string();
+    match ctx.crm_service.get_team_id_for_user(&macro_id_str).await {
+        Ok(Some(team_id)) => {
+            if let Err(e) = ctx
+                .crm_service
+                .depopulate_link_in_team(&team_id, &link.id)
+                .await
+            {
+                tracing::error!(error=?e, team_id=%team_id, link_id=%link.id, "Failed to depopulate CRM rows before link delete; orphan crm_contacts/crm_companies may remain");
+            }
+        }
+        Ok(None) => {
+            tracing::debug!("User has no team; skipping CRM teardown before link delete");
+        }
+        Err(e) => {
+            tracing::error!(error=?e, link_id=%link.id, "Failed to look up team for CRM teardown before link delete");
+        }
+    }
 
     // finally, delete all the user's link as well as all of their email data in a big cascading delete
     email_db_client::links::delete::delete_link_by_id(&ctx.db, link.id)

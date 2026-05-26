@@ -3,6 +3,7 @@ import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { stackNotifications } from '@notifications';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
@@ -162,13 +163,26 @@ export function ListEntity(props: ListEntityProps) {
     return stackNotifications(validNotifs);
   });
 
-  // Latch to true once multi-stack is ever seen (including async arrivals).
-  // Prevents a jarring layout switch when swiping down to 1 stack.
-  const [hasBeenMultiStack, setHasBeenMultiStack] = createSignal(
-    mobileStacks().length > 1
+  // A single stack collapses into the condensed entity row only when it's a
+  // new-messages-in-a-channel stack — the entity (channel) preview already
+  // conveys "new messages here". Replies, mentions, and other types carry
+  // per-stack context worth showing, so they render as a stack even when
+  // alone.
+  const shouldUnrollStacks = () => {
+    const stacks = mobileStacks();
+    if (stacks.length === 0) return false;
+    if (stacks.length > 1) return true;
+    return stacks[0].type !== 'channel_message_send';
+  };
+
+  // Latch to true once the stack view has ever been used (including async
+  // arrivals). Prevents a jarring layout switch when notifications drop back
+  // to a single condensable stack.
+  const [hasBeenUnrolled, setHasBeenUnrolled] = createSignal(
+    shouldUnrollStacks()
   );
   createEffect(() => {
-    if (mobileStacks().length > 1) setHasBeenMultiStack(true);
+    if (shouldUnrollStacks()) setHasBeenUnrolled(true);
   });
 
   return (
@@ -183,14 +197,15 @@ export function ListEntity(props: ListEntityProps) {
       }}
       ref={mergeRefs(props.ref, draggable)}
       class={cn(
-        'soup-list-entity rounded-lg @container/entity w-[calc(100%-0.5rem)] mx-1 relative group/narrow flex flex-col py-0.5',
+        'soup-list-entity rounded-lg @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5',
         {
-          'min-h-10': !isMobile(),
+          'min-h-10 mx-1': !isMobile(),
           'bg-accent/8': props.checked,
           'ring ring-accent/16 ring-inset': props.checked && props.highlighted,
           'ring ring-edge bg-active/60 ring-inset':
-            props.highlighted && !props.checked,
-          'hover:bg-active/30': !props.highlighted && !props.checked,
+            props.highlighted && !props.checked && !isTouchDevice(),
+          'hover:bg-active/30':
+            !props.highlighted && !props.checked && !isTouchDevice(),
         }
       )}
       onMouseMove={props.onMouseMove}
@@ -204,11 +219,7 @@ export function ListEntity(props: ListEntityProps) {
             <WideLayout {...layoutProps()} />
           </MaybeEntityRow>
         </Match>
-        <Match
-          when={
-            isMobile() && (hasBeenMultiStack() || mobileStacks().length > 1)
-          }
-        >
+        <Match when={isMobile() && (hasBeenUnrolled() || shouldUnrollStacks())}>
           <Entity.Notification.MobileStacks
             stacks={mobileStacks()}
             entity={props.entity}

@@ -2,7 +2,7 @@ import type { SidebarState } from '@app/component/app-sidebar/sidebar';
 import { useSenderName } from '@app/component/app-sidebar/utils';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { ContextMenuContent, MenuItem } from '@core/component/Menu';
+import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { UserIcon } from '@core/component/UserIcon';
 import { compareDateDesc } from '@core/util/date';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -148,19 +148,11 @@ function ChannelGroupItem(props: {
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? false;
 
-  const navigateToLatestNotification = async (newSplit = false) => {
+  const navigateToLatestNotification = (newSplit = false) => {
     const manager = globalSplitManager();
     if (!manager) return;
     const notification = latestNotification();
-    try {
-      await openNotification(notification, manager, newSplit);
-      await notificationSource.markAsRead(notification);
-    } catch (error) {
-      console.error(
-        'Failed to open unread notification from sidebar widget:',
-        error
-      );
-    }
+    openNotification(notification, manager, newSplit);
   };
 
   const openInCurrentSplit = () => {
@@ -204,7 +196,6 @@ function ChannelGroupItem(props: {
       draggable={false}
       variant="ghost"
       size="sm"
-      data-unread-entity-id={props.group.entityId}
       classList={{
         'opacity-0 -translate-y-2': !isVisible(),
         'opacity-100 translate-y-0': isVisible(),

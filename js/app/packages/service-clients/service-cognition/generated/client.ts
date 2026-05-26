@@ -35,6 +35,9 @@ import type {
   StopChatStreamRequest,
   StopChatStreamResponse,
   StringIDResponse,
+  StructuredCompletionError,
+  StructuredCompletionRequest,
+  StructuredCompletionResponse,
   UpdateServerRequest,
   UpdateToolCallRequest,
   UpdateToolResponseRequest,
@@ -1627,4 +1630,73 @@ export const stopChatStream = async (
     status: res.status,
     headers: res.headers,
   } as stopChatStreamResponse;
+};
+
+export type structuredCompletionResponse200 = {
+  data: StructuredCompletionResponse;
+  status: 200;
+};
+
+export type structuredCompletionResponse400 = {
+  data: StructuredCompletionError;
+  status: 400;
+};
+
+export type structuredCompletionResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type structuredCompletionResponse402 = {
+  data: void;
+  status: 402;
+};
+
+export type structuredCompletionResponse500 = {
+  data: StructuredCompletionError;
+  status: 500;
+};
+
+export type structuredCompletionResponseSuccess =
+  structuredCompletionResponse200 & {
+    headers: Headers;
+  };
+export type structuredCompletionResponseError = (
+  | structuredCompletionResponse400
+  | structuredCompletionResponse401
+  | structuredCompletionResponse402
+  | structuredCompletionResponse500
+) & {
+  headers: Headers;
+};
+
+export type structuredCompletionResponse =
+  | structuredCompletionResponseSuccess
+  | structuredCompletionResponseError;
+
+export const getStructuredCompletionUrl = () => {
+  return `/structured-completion`;
+};
+
+export const structuredCompletion = async (
+  structuredCompletionRequest: StructuredCompletionRequest,
+  options?: RequestInit
+): Promise<structuredCompletionResponse> => {
+  const res = await fetch(getStructuredCompletionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(structuredCompletionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: structuredCompletionResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as structuredCompletionResponse;
 };

@@ -1,5 +1,5 @@
 import { Switch as KobalteSwitch } from '@kobalte/core/switch';
-import { Show } from 'solid-js';
+import { Show, createSignal, onCleanup, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import type { JSX } from 'solid-js';
 
@@ -14,29 +14,58 @@ export type ToggleSwitchProps = {
 };
 
 export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
+  const [local, others] = splitProps(props, [
+    'defaultChecked',
+    'labelClass',
+    'onChange',
+    'disabled',
+    'checked',
+    'class',
+    'label',
+  ]);
+  const [isStretched, setIsStretched] = createSignal(false);
+  let stretchTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  const triggerStretch = () => {
+    setIsStretched(true);
+    if (stretchTimeout) clearTimeout(stretchTimeout);
+    stretchTimeout = setTimeout(() => setIsStretched(false), 75);
+  };
+
+  const handleChange = (checked: boolean) => {
+    triggerStretch();
+    local.onChange?.(checked);
+  };
+
+  onCleanup(() => {
+    if (stretchTimeout) clearTimeout(stretchTimeout);
+  });
+
   return (
     <KobalteSwitch
-      class={cn(
-        'inline-flex items-center gap-2 font-medium text-[14px]',
-        props.disabled && 'opacity-50 cursor-not-allowed',
-        props.class
-      )}
-      checked={props.checked}
-      defaultChecked={props.defaultChecked}
-      onChange={props.onChange}
-      disabled={props.disabled}
+      class={cn('inline-flex items-center gap-2', local.class)}
+      defaultChecked={local.defaultChecked}
+      onChange={handleChange}
+      disabled={local.disabled}
+      checked={local.checked}
+      {...others}
     >
       <KobalteSwitch.Input class="sr-only" />
-      <Show when={props.label != null}>
-        <KobalteSwitch.Label
-          class={cn('whitespace-nowrap', props.labelClass)}
-        >
-          {props.label}
+      <KobalteSwitch.Control class="relative h-4 w-6 rounded-full bg-edge transition-colors duration-100 data-checked:bg-accent">
+        <KobalteSwitch.Thumb
+          class={cn(
+            'absolute top-0.5 left-0.5 h-3 rounded-full bg-surface transition-all duration-100 ease-in-out',
+            isStretched()
+              ? 'w-4 data-checked:translate-x-1'
+              : 'w-3 data-checked:translate-x-2',
+          )}
+        />
+      </KobalteSwitch.Control>
+      <Show when={local.label != null}>
+        <KobalteSwitch.Label class={cn(local.labelClass)}>
+          {local.label}
         </KobalteSwitch.Label>
       </Show>
-      <KobalteSwitch.Control class="relative w-8 h-3 touch:w-12 touch:h-8 rounded-full bg-edge transition-colors duration-80 data-[checked]:bg-accent">
-        <KobalteSwitch.Thumb class="absolute top-0.5 size-2 touch:size-7 rounded-full bg-surface transition-transform duration-200 ease-out translate-x-0.5 data-[checked]:translate-x-5.5 touch:data-[checked]:translate-x-4.5" />
-      </KobalteSwitch.Control>
     </KobalteSwitch>
   );
 };

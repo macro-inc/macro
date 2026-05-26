@@ -19,6 +19,7 @@ export const OptionCheckBox: Component<{
         'bg-accent border-accent border': props.checked,
         'bg-transparent border-edge-muted border': !props.checked,
         'rounded-full': props.multiselect === false,
+        'rounded-sm': props.multiselect !== false,
       }}
     >
       <Show when={props.checked && props.multiselect !== false}>

@@ -1,9 +1,6 @@
-import type {
-  Property,
-  PropertyDefinitionDomain,
-} from '@core/component/Properties/types';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
+import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { createStore, reconcile } from 'solid-js/store';
 
 type PropertyEditorMode = 'selector' | 'direct';

@@ -1,8 +1,10 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMemo, createSignal } from 'solid-js';
 
 export type SettingsTab =
+  | 'Account'
   | 'Subscription'
   | 'Organization'
   | 'Appearance'
@@ -10,9 +12,9 @@ export type SettingsTab =
   | 'AI Memory'
   | 'Inbox'
   | 'Shortcuts'
-  | 'Keyboard Shortcuts'
-  | 'Account & Team'
-  | 'Mobile & MCPs';
+  | 'Mobile App'
+  | 'Agent'
+  | 'Team';
 
 const [activeTabId, setActiveTabId] = createSignal<SettingsTab>('Appearance');
 
@@ -36,9 +38,22 @@ export const useSettingsState = () => {
     return getSettingsSplit() !== undefined;
   });
 
+  const focusSettingsPanel = () => {
+    if (isTouchDevice()) return;
+    setTimeout(() => {
+      const settingsSplit = getSettingsSplit();
+      if (!settingsSplit) return;
+      const settingsPanel = document.querySelector<HTMLElement>(
+        `[data-split-id="${settingsSplit.id}"] [data-settings-panel]`
+      );
+      settingsPanel?.focus({ preventScroll: true });
+    }, 10);
+  };
+
   const openSettings = (activeTabId?: SettingsTab) => {
     if (activeTabId) setActiveTabId(activeTabId);
     openWithSplit({ type: 'component', id: 'settings' }, { activate: true });
+    focusSettingsPanel();
   };
 
   const closeSettings = () => {

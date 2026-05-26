@@ -286,6 +286,7 @@ async fn create_dss_document_record(
         branched_from_version_id: None,
         job_id: None,
         project_id: None,
+        team_id: None,
         created_at,
         email_attachment_id: Some(p.attachment_db_id),
         is_task: false,

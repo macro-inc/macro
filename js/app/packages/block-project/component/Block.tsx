@@ -1,3 +1,4 @@
+import { useAnalytics } from '@app/component/analytics-context';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import {
   createSoupState,
@@ -93,22 +94,7 @@ const Block: Component = () => {
   const previewPanel = useMaybePreviewPanel();
 
   const splitPanelContext = useSplitPanelOrThrow();
-
-  const [preview, setPreview] = splitPanelContext.previewState;
-
-  if (!previewPanel) {
-    registerHotkey({
-      hotkey: ['space'],
-      scopeId: splitPanelContext.splitHotkeyScope,
-      description: 'Toggle Preview',
-      hotkeyToken: TOKENS.unifiedList.togglePreview,
-      keyDownHandler: () => {
-        setPreview((prev) => !prev);
-        return true;
-      },
-      hide: true,
-    });
-  }
+  const analytics = useAnalytics();
 
   const projectSoup = createSoupState({
     initialPredicates: { and: ['project-content'] },
@@ -120,6 +106,29 @@ const Block: Component = () => {
       },
     ],
   });
+
+  // Preview can only work one level deep — don't register the toggle when
+  // this project is already being rendered inside a preview panel.
+  if (!previewPanel) {
+    registerHotkey({
+      hotkey: ['space'],
+      scopeId: splitPanelContext.splitHotkeyScope,
+      description: 'Toggle Preview',
+      hotkeyToken: TOKENS.unifiedList.togglePreview,
+      keyDownHandler: () => {
+        if (projectSoup.previewEntity()) {
+          projectSoup.setPreviewEntity(undefined);
+          return true;
+        }
+        const focused = projectSoup.focus.id();
+        if (!focused) return true;
+        analytics.track('preview_panel_use');
+        projectSoup.setPreviewEntity(focused);
+        return true;
+      },
+      hide: true,
+    });
+  }
 
   const [attachHotkeys, projectViewScope] = useHotkeyDOMScope('project-view');
 
@@ -157,7 +166,9 @@ const Block: Component = () => {
                 value={{
                   ...splitPanelContext,
                   halfSplitState: () =>
-                    preview() ? { side: 'left', percentage: 30 } : undefined,
+                    projectSoup.previewEntity() && projectSoup.focus.item()
+                      ? { side: 'left', percentage: 30 }
+                      : undefined,
                 }}
               >
                 <ProjectEntityList

@@ -1,3 +1,4 @@
+mod crm_scope_dynamic_query;
 mod draft;
 mod dynamic_query;
 mod labels;

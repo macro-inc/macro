@@ -235,6 +235,32 @@ async fn main() -> anyhow::Result<()> {
         PgSystemPropertiesRepository::new(db.clone()),
     ));
 
+    // Shared unfurl service drives the CRM crate's company metadata
+    // resolver — wraps the SSRF-safe reqwest fetcher in an
+    // `UnfurlServiceImpl`, then in an `UnfurlCompanyMetadataResolver`
+    // adapter. Resolver is cheap to clone (`Arc` internally) and is
+    // consulted by `crm_service.populate_contact` only on
+    // `crm_domain_directory` misses.
+    let unfurl_service = Arc::new(unfurl::domain::service::UnfurlServiceImpl::new(
+        unfurl::outbound::ReqwestUnfurlFetcher::new()
+            .context("failed to build ReqwestUnfurlFetcher")?,
+    ));
+    let metadata_resolver =
+        crm::outbound::unfurl_resolver::UnfurlCompanyMetadataResolver::new(unfurl_service);
+
+    let crm_service = crm::domain::service::CrmServiceImpl::new(
+        crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
+        metadata_resolver.clone(),
+    );
+
+    // Backfill workers run against a dedicated pool to keep their writes
+    // off the primary worker pool. CRM writes are part of the backfill
+    // flow, so route them through `db_backfill` too.
+    let crm_service_backfill = crm::domain::service::CrmServiceImpl::new(
+        crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db_backfill.clone()),
+        metadata_resolver,
+    );
+
     // process user inbox updates from gmail inbox_sync queue, triggered by update pubsub messages from Google
     for worker in inbox_sync_workers {
         let db_inbox_sync = db.clone();
@@ -248,6 +274,7 @@ async fn main() -> anyhow::Result<()> {
         let connection_gateway_client_inbox_sync = connection_gateway_client.clone();
         let dss_client_inbox_sync = dss_client.clone();
         let system_properties_service_inbox_sync = system_properties_service.clone();
+        let crm_service_inbox_sync = crm_service.clone();
         tokio::spawn(async move {
             email_service::pubsub::inbox_sync::worker::run_worker(
                 db_inbox_sync,
@@ -262,6 +289,7 @@ async fn main() -> anyhow::Result<()> {
                 connection_gateway_client_inbox_sync,
                 dss_client_inbox_sync,
                 system_properties_service_inbox_sync,
+                crm_service_inbox_sync,
                 config.notifications_enabled,
                 false,
             )
@@ -286,6 +314,7 @@ async fn main() -> anyhow::Result<()> {
         let connection_gateway_client_inbox_sync = connection_gateway_client.clone();
         let dss_client_inbox_sync = dss_client.clone();
         let system_properties_service_inbox_sync = system_properties_service.clone();
+        let crm_service_inbox_sync = crm_service.clone();
         tokio::spawn(async move {
             email_service::pubsub::inbox_sync::worker::run_worker(
                 db_inbox_sync,
@@ -300,6 +329,7 @@ async fn main() -> anyhow::Result<()> {
                 connection_gateway_client_inbox_sync,
                 dss_client_inbox_sync,
                 system_properties_service_inbox_sync,
+                crm_service_inbox_sync,
                 config.notifications_enabled,
                 true,
             )
@@ -374,6 +404,7 @@ async fn main() -> anyhow::Result<()> {
         let connection_gateway_client_backfill = connection_gateway_client.clone();
         let dss_client_backfill = dss_client.clone();
         let system_properties_service_backfill = system_properties_service.clone();
+        let crm_service_backfill = crm_service_backfill.clone();
         tokio::spawn(async move {
             email_service::pubsub::backfill::worker::run_worker(
                 db_backfill,
@@ -388,6 +419,7 @@ async fn main() -> anyhow::Result<()> {
                 connection_gateway_client_backfill,
                 dss_client_backfill,
                 system_properties_service_backfill,
+                crm_service_backfill,
                 config.notifications_enabled,
             )
             .await;
@@ -403,6 +435,7 @@ async fn main() -> anyhow::Result<()> {
     let auth_service_client_link_manager = auth_service_client.clone();
     let redis_client_link_manager = redis_client.clone();
     let sqs_client_link_manager = sqs_client.clone();
+    let crm_service_link_manager = crm_service.clone();
     // daily link_manager operations for user contacts and inbox subscriptions
     tokio::spawn(async move {
         email_service::pubsub::link_manager::worker::run_worker(
@@ -412,6 +445,7 @@ async fn main() -> anyhow::Result<()> {
             auth_service_client_link_manager,
             redis_client_link_manager,
             sqs_client_link_manager,
+            crm_service_link_manager,
         )
         .await;
     });

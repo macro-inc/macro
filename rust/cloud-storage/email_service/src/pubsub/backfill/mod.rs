@@ -1,10 +1,14 @@
 mod backfill_attachment;
 mod backfill_message;
 mod backfill_thread;
+mod depopulate_crm_contact;
+mod depopulate_crm_for_user;
 mod error_handlers;
 mod increment_counters;
 mod init;
 mod list_threads;
+mod populate_crm_contact;
+mod populate_crm_for_user;
 mod process;
 mod update_metadata;
 pub mod worker;

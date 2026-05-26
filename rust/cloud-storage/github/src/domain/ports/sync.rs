@@ -3,7 +3,8 @@
 use std::future::Future;
 
 use crate::domain::models::{
-    GithubError, GithubInstallationAccessToken, GithubKey, MacroTaskId, ValidatedGithubWebhookEvent,
+    GithubError, GithubInstallationAccessToken, GithubKey, MacroTaskId, TeamTaskReference,
+    ValidatedGithubWebhookEvent,
 };
 
 /// Repository for accessing github sync data from the database.
@@ -34,6 +35,17 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
         &self,
         github_key: GithubKey,
         task_ids: &[MacroTaskId],
+    ) -> impl Future<Output = Result<Vec<MacroTaskId>, Self::Err>> + Send;
+
+    /// Resolves team-scoped task references for a GitHub App installation.
+    ///
+    /// Implementations should use the installation's teams (via
+    /// `github_app_installation_team`) and the referenced team slug/task number
+    /// to find the backing Macro task document.
+    fn resolve_team_task_references(
+        &self,
+        installation_id: &str,
+        references: &[TeamTaskReference],
     ) -> impl Future<Output = Result<Vec<MacroTaskId>, Self::Err>> + Send;
 
     /// Looks up the macro user ID associated with a GitHub user ID via the `github_links` table.

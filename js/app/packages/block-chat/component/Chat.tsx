@@ -271,7 +271,6 @@ function ChatInner(props: {
             }
           >
             <ChatDebugIcon />
-            {/*{showStreamDebug() ? 'Hide' : 'Show'} Stream Debug*/}
           </Button>
         </Show>
       </SplitToolbarLeft>

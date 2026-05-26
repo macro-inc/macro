@@ -7,6 +7,7 @@ export type SurfaceProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
   style?: JSX.CSSProperties;
   highlightColor?: string;
   active?: boolean;
+  solid?: boolean;
 };
 
 export function Surface(props: SurfaceProps) {
@@ -14,16 +15,24 @@ export function Surface(props: SurfaceProps) {
     'highlightColor',
     'children',
     'active',
+    'solid',
     'depth',
     'class',
     'style',
   ]);
 
+  const border = () => {
+    const edge = 'var(--b4)';
+    const top = local.active ? local.highlightColor ?? 'var(--a0)' : edge;
+    const bottom = local.active && !local.solid ? `${edge} 80%` : top;
+    return `linear-gradient(${top}, ${bottom})`;
+  };
+
   return (
     <Layer depth={local.depth ?? 0}>
       <div
         style={{
-          'background-image': local.active ? `linear-gradient(var(--b0), var(--b0)), linear-gradient(${local.highlightColor || 'var(--a0)'}, var(--b4) 80%)` : 'linear-gradient(var(--b0), var(--b0)), linear-gradient(var(--b4), var(--b4))',
+          'background-image': `linear-gradient(var(--b0), var(--b0)), ${border()}`,
           'background-origin': 'padding-box, border-box',
           'background-clip': 'padding-box, border-box',
           'border': '1px solid #0000',
@@ -31,8 +40,6 @@ export function Surface(props: SurfaceProps) {
         }}
         class={cn(
           'relative rounded-md overflow-clip min-h-0 size-full',
-          "after:content-[''] after:absolute after:inset-0 after:pointer-events-none after:rounded-[inherit] after:z-10",
-          'after:shadow-[inset_0_0_4px_var(--color-shadow)]',
           local.class,
         )}
         {...rest}
@@ -42,3 +49,9 @@ export function Surface(props: SurfaceProps) {
     </Layer>
   );
 }
+
+/*
+shadow sudo element
+"after:content-[''] after:absolute after:inset-0 after:pointer-events-none after:rounded-[inherit] after:z-10",
+'after:shadow-[inset_0_0_4px_var(--color-shadow)]'"
+*/

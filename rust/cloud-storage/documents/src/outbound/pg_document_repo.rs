@@ -21,8 +21,8 @@ use sqlx::Row;
 
 use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
-    Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs,
-    Thread,
+    BranchNameContext, Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
+    EditDocumentRepoArgs, TeamTaskMetadata, Thread,
 };
 use crate::domain::ports::DocumentRepo;
 
@@ -400,6 +400,7 @@ impl DocumentRepo for PgDocumentRepo {
             user_id,
             file_type,
             project_id,
+            team_id,
             email_attachment_id,
             created_at: provided_created_at,
             is_task,
@@ -437,6 +438,10 @@ impl DocumentRepo for PgDocumentRepo {
         // Insert document sub-type
         let sub_type: Option<DocumentSubType> =
             create::set_document_sub_type(&mut transaction, &document_id, is_task).await?;
+
+        if is_task && let Some(team_id) = team_id.as_ref() {
+            create::allocate_team_task_number(&mut transaction, team_id, &document_id).await?;
+        }
 
         // Insert document version (DocumentBom for docx, DocumentInstance for others)
         let document_version = create::set_document_version(
@@ -650,8 +655,119 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn share_with_team(&self, user_id: &str, document_id: &str) -> Result<(), Self::Err> {
-        share::share_with_team(&self.pool, user_id, document_id).await
+    async fn get_team_ids_for_user(&self, user_id: &str) -> Result<Vec<uuid::Uuid>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT team_id
+            FROM team_user
+            WHERE user_id = $1
+            ORDER BY team_id
+            "#,
+            user_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|row| row.team_id).collect())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_task_metadata(
+        &self,
+        document_id: &str,
+    ) -> Result<Option<TeamTaskMetadata>, Self::Err> {
+        let Some(row) = sqlx::query!(
+            r#"
+            SELECT team_id, task_num
+            FROM team_task
+            WHERE document_id = $1
+            LIMIT 1
+            "#,
+            document_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(TeamTaskMetadata {
+            team_id: row.team_id,
+            task_num: row.task_num,
+        }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_branch_name_context(
+        &self,
+        document_id: &str,
+        user_id: &str,
+    ) -> Result<BranchNameContext, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                COALESCE(u.email, NULLIF(split_part(request_user.user_id, '|', 2), ''), request_user.user_id) AS "user_email!",
+                gl.github_username AS "github_username?",
+                t.slug AS "team_slug?",
+                tt.task_num AS "team_task_id?"
+            FROM (SELECT $1::text AS user_id) request_user
+            LEFT JOIN "User" u ON u.id = request_user.user_id
+            LEFT JOIN LATERAL (
+                SELECT github_username
+                FROM github_links
+                WHERE macro_id = request_user.user_id
+                ORDER BY updated_at DESC
+                LIMIT 1
+            ) gl ON true
+            LEFT JOIN LATERAL (
+                SELECT team_id
+                FROM team_user
+                WHERE user_id = request_user.user_id
+                ORDER BY team_id
+                LIMIT 1
+            ) tu ON true
+            LEFT JOIN team t ON t.id = tu.team_id
+            LEFT JOIN team_task tt ON tt.team_id = tu.team_id AND tt.document_id = $2
+            "#,
+            user_id,
+            document_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(BranchNameContext {
+            user_email: row.user_email,
+            github_username: row.github_username,
+            team_slug: row.team_slug,
+            team_task_id: row.team_task_id,
+        })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_task_github_pull_request_keys(
+        &self,
+        task_short_id: &str,
+    ) -> Result<Vec<String>, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT github_key
+            FROM github_pr_tasks
+            WHERE task_id = $1
+            ORDER BY created_at ASC, github_key ASC
+            "#,
+            task_short_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn share_with_team(
+        &self,
+        team_id: &uuid::Uuid,
+        document_id: &str,
+    ) -> Result<(), Self::Err> {
+        share::share_with_team(&self.pool, team_id, document_id).await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -833,6 +949,7 @@ impl DocumentRepo for PgDocumentRepo {
             user_id,
             document_name,
             file_type,
+            team_id,
         } = args;
 
         let mut transaction = self.pool.begin().await?;
@@ -860,6 +977,12 @@ impl DocumentRepo for PgDocumentRepo {
 
         let document_id = uuid::Uuid::parse_str(&document.document_id)
             .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+
+        if document.sub_type == Some(DocumentSubType::Task)
+            && let Some(team_id) = team_id.as_ref()
+        {
+            create::allocate_team_task_number(&mut transaction, team_id, &document_id).await?;
+        }
 
         // Create share permission
         create::set_share_permission(&mut transaction, &document_id, file_type).await?;

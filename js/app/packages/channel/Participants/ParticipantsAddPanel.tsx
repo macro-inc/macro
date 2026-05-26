@@ -37,7 +37,7 @@ export function ParticipantsAddPanel(props: {
 
   return (
     <div class="flex flex-col gap-2 md:flex-row md:items-center">
-      <div class="min-w-0 flex-1 rounded-xs border border-edge-muted bg-surface px-3 py-2 text-sm text-ink outline-none focus-within:border-accent/50">
+      <div class="min-w-0 flex-1 rounded-lg border border-edge-muted bg-surface px-3 py-2 text-sm text-ink outline-none focus-within:border-accent">
         <RecipientSelector<'user'>
           setSelectedOptions={setSelectedUsers}
           selectedOptions={selectedUsers()}

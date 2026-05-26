@@ -6,7 +6,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use tower::ServiceBuilder;
 use tower_cookies::CookieManagerLayer;
 
-use crate::api::ApiContext;
+use crate::api::{ApiContext, context::EntityAccessServiceType};
 
 // needs to be public in api crate for swagger
 pub(in crate::api) mod create_user;
@@ -60,6 +60,14 @@ fn router_with_auth(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<Ap
         .route(
             "/stripe/checkout",
             post(stripe::create_checkout_session::create_checkout_session),
+        )
+        .route(
+            "/stripe/checkoutv2",
+            post(
+                stripe::create_checkout_session_v2::create_checkout_session::<
+                    EntityAccessServiceType,
+                >,
+            ),
         )
         .route(
             "/stripe/portal",

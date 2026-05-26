@@ -20,6 +20,10 @@ use roles_and_permissions::domain::{
     port::UserRolesAndPermissionsService,
 };
 
+use crate::domain::{
+    crm_enqueuer::NoOpCrmEnqueuer, team_crm_settings_repo::NoOpTeamCrmSettingsRepository,
+};
+
 fn test_team_receipt<T: RequiredPermission>(
     team_id: uuid::Uuid,
     user_id: &MacroUserIdStr<'_>,
@@ -35,9 +39,9 @@ use super::*;
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        AcceptedTeamInvite, CreateSubscriptionArgs, CustomerError, PatchTeamRequest,
-        PatchTeamUserRole, RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError,
-        TeamInvite, TeamInviteDetails, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+        AcceptedTeamInvite, CustomerError, PatchTeamRequest, PatchTeamUserRole,
+        RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
+        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
     },
     team_repo::{TeamChannelsRepository, TeamRepository},
 };
@@ -52,6 +56,7 @@ struct MockTeamRepository {
     team_for_get_by_id: Option<Team>,
     team_subscription_id: Option<stripe::SubscriptionId>,
     stripe_customer_id: Option<stripe::CustomerId>,
+    team_payment_status: bool,
     accepted_invite: Option<AcceptedTeamInvite<'static>>,
     removed_member: Option<TeamMember<'static>>,
     rollback_accept_calls: Arc<Mutex<usize>>,
@@ -75,6 +80,7 @@ impl MockTeamRepository {
             team_for_get_by_id: None,
             team_subscription_id: None,
             stripe_customer_id: None,
+            team_payment_status: true,
             accepted_invite: None,
             removed_member: None,
             rollback_accept_calls: Arc::new(Mutex::new(0)),
@@ -107,6 +113,14 @@ impl TeamRepository for MockTeamRepository {
     ) -> impl Future<Output = Result<Option<stripe::SubscriptionId>, TeamError>> + Send {
         let subscription_id = self.team_subscription_id.clone();
         async move { Ok(subscription_id) }
+    }
+
+    fn get_team_payment_status(
+        &self,
+        _: &uuid::Uuid,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send {
+        let team_payment_status = self.team_payment_status;
+        async move { Ok(team_payment_status) }
     }
 
     fn has_user_trialed(
@@ -191,6 +205,14 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
         _: &stripe::SubscriptionId,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send {
+        async { Ok(()) }
+    }
+
+    fn update_team_payment_status(
+        &self,
+        _: &uuid::Uuid,
+        _: bool,
     ) -> impl Future<Output = Result<(), TeamError>> + Send {
         async { Ok(()) }
     }
@@ -383,7 +405,25 @@ impl TeamRepository for MockTeamRepository {
 // -- Mock CustomerRepository --
 
 #[derive(Clone)]
-struct MockCustomerRepository;
+struct MockCustomerRepository {
+    subscription_id: stripe::SubscriptionId,
+    increment_calls: Arc<Mutex<Vec<(String, u64)>>>,
+    decrement_calls: Arc<Mutex<Vec<(String, u64)>>>,
+    fail_increment: bool,
+    fail_decrement: bool,
+}
+
+impl Default for MockCustomerRepository {
+    fn default() -> Self {
+        Self {
+            subscription_id: "sub_test".parse().unwrap(),
+            increment_calls: Arc::new(Mutex::new(Vec::new())),
+            decrement_calls: Arc::new(Mutex::new(Vec::new())),
+            fail_increment: false,
+            fail_decrement: false,
+        }
+    }
+}
 
 impl CustomerRepository for MockCustomerRepository {
     fn convert_subscription_to_team(
@@ -399,14 +439,50 @@ impl CustomerRepository for MockCustomerRepository {
         &self,
         _: &stripe::CustomerId,
     ) -> impl Future<Output = Result<stripe::SubscriptionId, CustomerError>> + Send {
-        async { unimplemented!() }
+        let subscription_id = self.subscription_id.clone();
+        async move { Ok(subscription_id) }
     }
 
-    fn create_subscription(
+    fn increment_seat_count(
         &self,
-        _: CreateSubscriptionArgs,
-    ) -> impl Future<Output = Result<stripe::SubscriptionId, CustomerError>> + Send {
-        async { unimplemented!() }
+        subscription_id: &stripe::SubscriptionId,
+        amount: u64,
+    ) -> impl Future<Output = Result<(), CustomerError>> + Send {
+        self.increment_calls
+            .lock()
+            .unwrap()
+            .push((subscription_id.to_string(), amount));
+        let fail = self.fail_increment;
+        async move {
+            if fail {
+                Err(CustomerError::StorageLayerError(anyhow::anyhow!(
+                    "increment failed"
+                )))
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    fn decrement_seat_count(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        amount: u64,
+    ) -> impl Future<Output = Result<(), CustomerError>> + Send {
+        self.decrement_calls
+            .lock()
+            .unwrap()
+            .push((subscription_id.to_string(), amount));
+        let fail = self.fail_decrement;
+        async move {
+            if fail {
+                Err(CustomerError::StorageLayerError(anyhow::anyhow!(
+                    "decrement failed"
+                )))
+            } else {
+                Ok(())
+            }
+        }
     }
 
     fn cancel_subscription(
@@ -415,54 +491,71 @@ impl CustomerRepository for MockCustomerRepository {
     ) -> impl Future<Output = Result<(), CustomerError>> + Send {
         async { unimplemented!() }
     }
-
-    fn update_team_plan(
-        &self,
-        _subscription_id: &stripe::SubscriptionId,
-        _current_team_plan: Option<TeamPlan>,
-        _team_plan: TeamPlan,
-    ) -> impl Future<Output = Result<(), CustomerError>> + Send {
-        async { unimplemented!() }
-    }
-
-    fn create_team_checkout_session(
-        &self,
-        _team_id: &uuid::Uuid,
-        _customer_id: stripe::CustomerId,
-        _req: &TeamCheckoutSessionRequest,
-        _has_trialed: bool,
-    ) -> impl Future<Output = Result<String, CustomerError>> + Send {
-        async { unimplemented!() }
-    }
 }
 
 // -- Mock TeamChannelsRepository --
 
-#[derive(Clone)]
-struct MockTeamChannelsRepository;
+#[derive(Clone, Default)]
+struct MockTeamChannelsRepository {
+    add_calls: Arc<Mutex<Vec<(uuid::Uuid, String)>>>,
+    remove_calls: Arc<Mutex<Vec<(uuid::Uuid, String)>>>,
+    fail_add: bool,
+    fail_remove: bool,
+}
 
 impl TeamChannelsRepository for MockTeamChannelsRepository {
     fn add_team_member_to_channels(
         &self,
-        _: &uuid::Uuid,
-        _: &MacroUserIdStr<'_>,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), TeamError>> + Send {
-        async { unimplemented!() }
+        self.add_calls
+            .lock()
+            .unwrap()
+            .push((*team_id, user_id.as_ref().to_string()));
+        let fail = self.fail_add;
+        async move {
+            if fail {
+                Err(TeamError::StorageLayerError(anyhow::anyhow!(
+                    "add channels failed"
+                )))
+            } else {
+                Ok(())
+            }
+        }
     }
 
     fn remove_team_member_from_channels(
         &self,
-        _: &uuid::Uuid,
-        _: &MacroUserIdStr<'_>,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), TeamError>> + Send {
-        async { unimplemented!() }
+        self.remove_calls
+            .lock()
+            .unwrap()
+            .push((*team_id, user_id.as_ref().to_string()));
+        let fail = self.fail_remove;
+        async move {
+            if fail {
+                Err(TeamError::StorageLayerError(anyhow::anyhow!(
+                    "remove channels failed"
+                )))
+            } else {
+                Ok(())
+            }
+        }
     }
 }
 
 // -- Mock UserRolesAndPermissionsService --
 
-#[derive(Clone)]
-struct MockUserRolesAndPermissionsService;
+#[derive(Clone, Default)]
+struct MockUserRolesAndPermissionsService {
+    upsert_calls: Arc<Mutex<Vec<(String, Vec<RoleId>)>>>,
+    remove_calls: Arc<Mutex<Vec<(String, Vec<RoleId>)>>>,
+    fail_upsert: bool,
+    fail_remove: bool,
+}
 
 impl UserRolesAndPermissionsService for MockUserRolesAndPermissionsService {
     fn get_user_roles(
@@ -491,18 +584,44 @@ impl UserRolesAndPermissionsService for MockUserRolesAndPermissionsService {
 
     fn dangerous_upsert_roles_for_user(
         &self,
-        _: &MacroUserIdStr<'_>,
-        _: non_empty::NonEmpty<&[RoleId]>,
+        user_id: &MacroUserIdStr<'_>,
+        role_ids: non_empty::NonEmpty<&[RoleId]>,
     ) -> impl Future<Output = Result<(), UserRolesAndPermissionsError>> + Send {
-        async { unimplemented!() }
+        self.upsert_calls
+            .lock()
+            .unwrap()
+            .push((user_id.as_ref().to_string(), role_ids.inner().to_vec()));
+        let fail = self.fail_upsert;
+        async move {
+            if fail {
+                Err(UserRolesAndPermissionsError::StorageLayerError(
+                    anyhow::anyhow!("upsert roles failed"),
+                ))
+            } else {
+                Ok(())
+            }
+        }
     }
 
     fn dangerous_remove_roles_from_user(
         &self,
-        _: &MacroUserIdStr<'_>,
-        _: &non_empty::NonEmpty<&[RoleId]>,
+        user_id: &MacroUserIdStr<'_>,
+        role_ids: &non_empty::NonEmpty<&[RoleId]>,
     ) -> impl Future<Output = Result<(), UserRolesAndPermissionsError>> + Send {
-        async { unimplemented!() }
+        self.remove_calls
+            .lock()
+            .unwrap()
+            .push((user_id.as_ref().to_string(), role_ids.inner().to_vec()));
+        let fail = self.fail_remove;
+        async move {
+            if fail {
+                Err(UserRolesAndPermissionsError::StorageLayerError(
+                    anyhow::anyhow!("remove roles failed"),
+                ))
+            } else {
+                Ok(())
+            }
+        }
     }
 }
 
@@ -565,6 +684,34 @@ fn make_invite(email: &str, invite_id: uuid::Uuid, team_id: uuid::Uuid) -> TeamI
     }
 }
 
+fn make_accepted_invite(
+    team_id: uuid::Uuid,
+    invite_id: uuid::Uuid,
+    user_id: &MacroUserIdStr<'_>,
+) -> AcceptedTeamInvite<'static> {
+    AcceptedTeamInvite {
+        member: TeamMember {
+            team_id,
+            user_id: user_id.clone().into_owned(),
+            role: TeamRole::Member,
+        },
+        invite: TeamInviteSnapshot {
+            id: invite_id,
+            team_id,
+            email: Email::parse_from_str(user_id.email_part().as_ref())
+                .unwrap()
+                .into_owned()
+                .lowercase(),
+            team_role: TeamRole::Member,
+            invited_by: MacroUserIdStr::parse_from_str("macro|owner@example.com")
+                .unwrap()
+                .into_owned(),
+            created_at: chrono::Utc::now(),
+            last_sent_at: chrono::Utc::now(),
+        },
+    }
+}
+
 fn build_service(
     invites: Vec<TeamInvite<'static>>,
     fail_indices: HashSet<usize>,
@@ -574,10 +721,12 @@ fn build_service(
     let notification_ingress = Arc::new(MockNotificationIngress::new(fail_indices));
     let service = TeamServiceImpl::new(
         team_repo,
-        MockCustomerRepository,
-        MockTeamChannelsRepository,
-        MockUserRolesAndPermissionsService,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
         notification_ingress.clone(),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
     );
     (service, notification_ingress)
 }
@@ -732,10 +881,12 @@ fn build_service_with_team(
     let notification_ingress = Arc::new(MockNotificationIngress::new(HashSet::new()));
     let service = TeamServiceImpl::new(
         team_repo,
-        MockCustomerRepository,
-        MockTeamChannelsRepository,
-        MockUserRolesAndPermissionsService,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
         notification_ingress,
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
     );
     (service, role_calls, name_calls)
 }
@@ -901,4 +1052,332 @@ async fn test_patch_team_empty_role_updates() {
     let name_calls = name_calls.lock().unwrap();
     assert_eq!(name_calls.len(), 1);
     assert_eq!(name_calls[0], (team_id, Some("New Name".to_string()), None));
+}
+
+#[tokio::test]
+async fn test_join_team_increments_customer_seat_count() {
+    let team_id = uuid::Uuid::from_u128(1);
+    let invite_id = uuid::Uuid::from_u128(2);
+    let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
+    team_repo.accepted_invite = Some(make_accepted_invite(team_id, invite_id, &user_id));
+    team_repo.team_subscription_id = Some(subscription_id.clone());
+    let rollback_accept_calls = team_repo.rollback_accept_calls.clone();
+
+    let customer_repo = MockCustomerRepository {
+        subscription_id: subscription_id.clone(),
+        ..Default::default()
+    };
+    let increment_calls = customer_repo.increment_calls.clone();
+    let decrement_calls = customer_repo.decrement_calls.clone();
+
+    let channels_repo = MockTeamChannelsRepository::default();
+    let add_channel_calls = channels_repo.add_calls.clone();
+    let roles_service = MockUserRolesAndPermissionsService::default();
+    let upsert_role_calls = roles_service.upsert_calls.clone();
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        customer_repo,
+        channels_repo,
+        roles_service,
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    service.join_team(&invite_id, &user_id).await.unwrap();
+
+    assert_eq!(
+        *increment_calls.lock().unwrap(),
+        vec![(subscription_id.to_string(), 1)]
+    );
+    assert!(decrement_calls.lock().unwrap().is_empty());
+    assert_eq!(*rollback_accept_calls.lock().unwrap(), 0);
+    assert_eq!(
+        *add_channel_calls.lock().unwrap(),
+        vec![(team_id, user_id.as_ref().to_string())]
+    );
+    assert_eq!(upsert_role_calls.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_join_team_rolls_back_accept_when_customer_increment_fails() {
+    let team_id = uuid::Uuid::from_u128(1);
+    let invite_id = uuid::Uuid::from_u128(2);
+    let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
+    team_repo.accepted_invite = Some(make_accepted_invite(team_id, invite_id, &user_id));
+    team_repo.team_subscription_id = Some(subscription_id.clone());
+    let rollback_accept_calls = team_repo.rollback_accept_calls.clone();
+
+    let customer_repo = MockCustomerRepository {
+        subscription_id: subscription_id.clone(),
+        fail_increment: true,
+        ..Default::default()
+    };
+    let increment_calls = customer_repo.increment_calls.clone();
+    let channels_repo = MockTeamChannelsRepository::default();
+    let add_channel_calls = channels_repo.add_calls.clone();
+    let roles_service = MockUserRolesAndPermissionsService::default();
+    let upsert_role_calls = roles_service.upsert_calls.clone();
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        customer_repo,
+        channels_repo,
+        roles_service,
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let err = service.join_team(&invite_id, &user_id).await.err().unwrap();
+
+    assert!(matches!(err, JoinTeamError::CustomerError(_)));
+    assert_eq!(
+        *increment_calls.lock().unwrap(),
+        vec![(subscription_id.to_string(), 1)]
+    );
+    assert_eq!(*rollback_accept_calls.lock().unwrap(), 1);
+    assert!(add_channel_calls.lock().unwrap().is_empty());
+    assert!(upsert_role_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_remove_user_from_team_decrements_customer_seat_count() {
+    let team_id = uuid::Uuid::from_u128(1);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let member_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
+    team_repo.removed_member = Some(TeamMember {
+        team_id,
+        user_id: member_id.clone().into_owned(),
+        role: TeamRole::Member,
+    });
+    team_repo.team_subscription_id = Some(subscription_id.clone());
+    let rollback_remove_calls = team_repo.rollback_remove_calls.clone();
+
+    let customer_repo = MockCustomerRepository {
+        subscription_id: subscription_id.clone(),
+        ..Default::default()
+    };
+    let increment_calls = customer_repo.increment_calls.clone();
+    let decrement_calls = customer_repo.decrement_calls.clone();
+
+    let channels_repo = MockTeamChannelsRepository::default();
+    let remove_channel_calls = channels_repo.remove_calls.clone();
+    let roles_service = MockUserRolesAndPermissionsService::default();
+    let remove_role_calls = roles_service.remove_calls.clone();
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        customer_repo,
+        channels_repo,
+        roles_service,
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    service
+        .remove_user_from_team(
+            test_team_receipt::<OwnerTeamRole>(team_id, &owner_id),
+            &member_id,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *decrement_calls.lock().unwrap(),
+        vec![(subscription_id.to_string(), 1)]
+    );
+    assert!(increment_calls.lock().unwrap().is_empty());
+    assert_eq!(*rollback_remove_calls.lock().unwrap(), 0);
+    assert_eq!(
+        *remove_channel_calls.lock().unwrap(),
+        vec![(team_id, member_id.as_ref().to_string())]
+    );
+    assert_eq!(remove_role_calls.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_remove_user_from_team_rolls_back_remove_when_customer_decrement_fails() {
+    let team_id = uuid::Uuid::from_u128(1);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let member_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
+    team_repo.removed_member = Some(TeamMember {
+        team_id,
+        user_id: member_id.clone().into_owned(),
+        role: TeamRole::Member,
+    });
+    team_repo.team_subscription_id = Some(subscription_id.clone());
+    let rollback_remove_calls = team_repo.rollback_remove_calls.clone();
+
+    let customer_repo = MockCustomerRepository {
+        subscription_id: subscription_id.clone(),
+        fail_decrement: true,
+        ..Default::default()
+    };
+    let decrement_calls = customer_repo.decrement_calls.clone();
+    let channels_repo = MockTeamChannelsRepository::default();
+    let remove_channel_calls = channels_repo.remove_calls.clone();
+    let roles_service = MockUserRolesAndPermissionsService::default();
+    let remove_role_calls = roles_service.remove_calls.clone();
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        customer_repo,
+        channels_repo,
+        roles_service,
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let err = service
+        .remove_user_from_team(
+            test_team_receipt::<OwnerTeamRole>(team_id, &owner_id),
+            &member_id,
+        )
+        .await
+        .err()
+        .unwrap();
+
+    assert!(matches!(err, RemoveUserFromTeamError::CustomerError(_)));
+    assert_eq!(
+        *decrement_calls.lock().unwrap(),
+        vec![(subscription_id.to_string(), 1)]
+    );
+    assert_eq!(*rollback_remove_calls.lock().unwrap(), 1);
+    assert!(remove_channel_calls.lock().unwrap().is_empty());
+    assert!(remove_role_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_join_team_rolls_back_customer_roles_and_accept_when_channel_add_fails() {
+    let team_id = uuid::Uuid::from_u128(1);
+    let invite_id = uuid::Uuid::from_u128(2);
+    let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
+    team_repo.accepted_invite = Some(make_accepted_invite(team_id, invite_id, &user_id));
+    team_repo.team_subscription_id = Some(subscription_id.clone());
+    let rollback_accept_calls = team_repo.rollback_accept_calls.clone();
+
+    let customer_repo = MockCustomerRepository {
+        subscription_id: subscription_id.clone(),
+        ..Default::default()
+    };
+    let increment_calls = customer_repo.increment_calls.clone();
+    let decrement_calls = customer_repo.decrement_calls.clone();
+    let channels_repo = MockTeamChannelsRepository {
+        fail_add: true,
+        ..Default::default()
+    };
+    let roles_service = MockUserRolesAndPermissionsService::default();
+    let upsert_role_calls = roles_service.upsert_calls.clone();
+    let remove_role_calls = roles_service.remove_calls.clone();
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        customer_repo,
+        channels_repo,
+        roles_service,
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let err = service.join_team(&invite_id, &user_id).await.err().unwrap();
+
+    assert!(matches!(err, JoinTeamError::TeamError(_)));
+    assert_eq!(
+        *increment_calls.lock().unwrap(),
+        vec![(subscription_id.to_string(), 1)]
+    );
+    assert_eq!(
+        *decrement_calls.lock().unwrap(),
+        vec![(subscription_id.to_string(), 1)]
+    );
+    assert_eq!(*rollback_accept_calls.lock().unwrap(), 1);
+    assert_eq!(upsert_role_calls.lock().unwrap().len(), 1);
+    assert_eq!(remove_role_calls.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_remove_user_from_team_rolls_back_customer_and_remove_when_channel_remove_fails() {
+    let team_id = uuid::Uuid::from_u128(1);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let member_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
+    team_repo.removed_member = Some(TeamMember {
+        team_id,
+        user_id: member_id.clone().into_owned(),
+        role: TeamRole::Member,
+    });
+    team_repo.team_subscription_id = Some(subscription_id.clone());
+    let rollback_remove_calls = team_repo.rollback_remove_calls.clone();
+
+    let customer_repo = MockCustomerRepository {
+        subscription_id: subscription_id.clone(),
+        ..Default::default()
+    };
+    let increment_calls = customer_repo.increment_calls.clone();
+    let decrement_calls = customer_repo.decrement_calls.clone();
+    let channels_repo = MockTeamChannelsRepository {
+        fail_remove: true,
+        ..Default::default()
+    };
+    let roles_service = MockUserRolesAndPermissionsService::default();
+    let remove_role_calls = roles_service.remove_calls.clone();
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        customer_repo,
+        channels_repo,
+        roles_service,
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let err = service
+        .remove_user_from_team(
+            test_team_receipt::<OwnerTeamRole>(team_id, &owner_id),
+            &member_id,
+        )
+        .await
+        .err()
+        .unwrap();
+
+    assert!(matches!(err, RemoveUserFromTeamError::TeamError(_)));
+    assert_eq!(
+        *decrement_calls.lock().unwrap(),
+        vec![(subscription_id.to_string(), 1)]
+    );
+    assert_eq!(
+        *increment_calls.lock().unwrap(),
+        vec![(subscription_id.to_string(), 1)]
+    );
+    assert_eq!(*rollback_remove_calls.lock().unwrap(), 1);
+    assert!(remove_role_calls.lock().unwrap().is_empty());
 }

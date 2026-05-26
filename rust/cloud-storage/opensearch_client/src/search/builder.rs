@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use crate::Result;
 use crate::error::OpensearchClientError;
 use crate::search::query::QueryKey;
-use crate::search::query::generate_terms_must_query;
+use crate::search::query::{TermCombine, generate_terms_must_query};
 use models_opensearch::OpenSearchEntityType;
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, QueryType, Script, ScriptSort, ScriptSortType, SortOrder, SortType,
@@ -123,6 +123,8 @@ pub struct SearchQueryBuilder<T: SearchQueryConfig> {
     pub ids_only: bool,
     /// The ids to search for defaults to an empty vector
     pub ids: Vec<String>,
+    /// How multi-term content queries combine.
+    pub term_combine: TermCombine,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -137,8 +139,14 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             collapse: false,
             ids_only: false,
             ids: Vec::new(),
+            term_combine: TermCombine::default(),
             _phantom: std::marker::PhantomData,
         }
+    }
+
+    pub fn term_combine(mut self, term_combine: TermCombine) -> Self {
+        self.term_combine = term_combine;
+        self
     }
 
     pub fn match_type(mut self, match_type: &str) -> Self {
@@ -258,7 +266,12 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         let terms: Cow<'_, [&str]> =
             Cow::Owned(self.terms.iter().map(|t| t.as_str()).collect::<Vec<&str>>());
 
-        let must_array = vec![generate_terms_must_query(query_key, T::CONTENT_KEY, terms)];
+        let must_array = vec![generate_terms_must_query(
+            query_key,
+            T::CONTENT_KEY,
+            terms,
+            self.term_combine,
+        )];
 
         Ok(must_array)
     }
@@ -273,7 +286,12 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         let terms: Cow<'_, [&str]> =
             Cow::Owned(self.terms.iter().map(|t| t.as_str()).collect::<Vec<&str>>());
 
-        Ok(generate_terms_must_query(query_key, T::TITLE_KEY, terms))
+        Ok(generate_terms_must_query(
+            query_key,
+            T::TITLE_KEY,
+            terms,
+            self.term_combine,
+        ))
     }
 }
 

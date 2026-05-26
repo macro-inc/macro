@@ -50,4 +50,24 @@ pub enum EmailErr {
     /// Invalid email filter input.
     #[error("{0}")]
     InvalidEmailFilter(String),
+    /// The caller's team has `team_crm_settings.crm_enabled = false` (or no
+    /// row at all), so no CRM-scoped query is allowed.
+    #[error("CRM is disabled for this team")]
+    CrmDisabledForTeam,
+    /// A CRM-scoped query referenced a domain that does not have a matching
+    /// `crm_domains` row for the caller's team.
+    #[error("CRM domain {0} not found for this team")]
+    CrmDomainNotFound(String),
+    /// A CRM-scoped query referenced a domain whose company is hidden or
+    /// has `email_sync = false`.
+    #[error("CRM domain {0} is not permitted for CRM-scoped queries")]
+    CrmDomainNotPermitted(String),
+    /// A CRM-scoped query referenced an address with no matching
+    /// `crm_contacts` row for the caller's team.
+    #[error("CRM address {0} not found for this CRM scope")]
+    CrmAddressNotFound(String),
+    /// A CRM-scoped query referenced an address whose contact or company
+    /// is hidden, or whose company has `email_sync = false`.
+    #[error("CRM address {0} is not permitted for CRM-scoped queries")]
+    CrmAddressNotPermitted(String),
 }

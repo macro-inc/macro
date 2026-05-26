@@ -27,6 +27,8 @@ import type { StartAuthResponse } from './generated/schemas/startAuthResponse';
 import type { StopChatStreamRequest } from './generated/schemas/stopChatStreamRequest';
 import type { StopChatStreamResponse } from './generated/schemas/stopChatStreamResponse';
 import type { StringIDResponse } from './generated/schemas/stringIDResponse';
+import type { StructuredCompletionRequest } from './generated/schemas/structuredCompletionRequest';
+import type { StructuredCompletionResponse } from './generated/schemas/structuredCompletionResponse';
 import type { UpdateServerRequest } from './generated/schemas/updateServerRequest';
 import type * as toolTypes from './generated/tools/tool.ts';
 
@@ -349,6 +351,15 @@ export const cognitionApiServiceClient = {
   async startMcpAuth(args: StartAuthRequest) {
     return (
       await dcsFetch<StartAuthResponse>(`/mcp/servers/auth/start`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
+
+  async structuredCompletion(args: StructuredCompletionRequest) {
+    return (
+      await dcsFetch<StructuredCompletionResponse>(`/structured-completion`, {
         method: 'POST',
         body: JSON.stringify(args),
       })

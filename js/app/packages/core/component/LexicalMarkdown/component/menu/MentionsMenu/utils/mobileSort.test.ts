@@ -228,4 +228,100 @@ describe('sortMobileMentions', () => {
 
     expect(result[0].id).toBe('d1');
   });
+
+  describe('top user pinning', () => {
+    test('pins the first 2 candidates above the rest of the sorted list', () => {
+      const now = new Date();
+      const alice = userItem('u1', 'Alice', now);
+      const bob = userItem('u2', 'Bob', now);
+      const carol = userItem('u3', 'Carol', now);
+      const doc = docItem('d1', 'Doc', now);
+
+      const result = sortMobileMentions([carol, doc, alice, bob], '', [
+        alice,
+        bob,
+        carol,
+      ]);
+
+      expect(result.slice(0, 2).map((i) => i.id)).toEqual(['u1', 'u2']);
+    });
+
+    test('does not duplicate pinned candidates in the rest of the list', () => {
+      const now = new Date();
+      const alice = userItem('u1', 'Alice', now);
+      const bob = userItem('u2', 'Bob', now);
+      const doc = docItem('d1', 'Doc', now);
+
+      const result = sortMobileMentions([alice, bob, doc], '', [alice, bob]);
+
+      expect(result.map((i) => i.id)).toEqual(['u1', 'u2', 'd1']);
+    });
+
+    test('pins fewer than 2 when there are fewer than 2 candidates', () => {
+      const now = new Date();
+      const alice = userItem('u1', 'Alice', now);
+      const doc = docItem('d1', 'Doc', now);
+
+      const result = sortMobileMentions([alice, doc], '', [alice]);
+
+      expect(result[0].id).toBe('u1');
+      expect(result.length).toBe(2);
+    });
+
+    test('pins users even when the blended sort would rank docs above them', () => {
+      const now = new Date();
+      const staleUser = userItem(
+        'u1',
+        'Old User',
+        new Date(now.getTime() - 14 * 24 * HOUR)
+      );
+      const freshDoc = docItem('d1', 'Just Viewed', now);
+
+      const result = sortMobileMentions([staleUser, freshDoc], '', [staleUser]);
+
+      expect(result[0].id).toBe('u1');
+    });
+
+    test('respects the candidate order when pinning', () => {
+      const now = new Date();
+      const a = userItem('u1', 'AAA', now);
+      const b = userItem('u2', 'BBB', new Date(now.getTime() - HOUR));
+
+      // Candidates pre-sorted as [b, a] should pin b first even though a is fresher.
+      const result = sortMobileMentions([a, b], '', [b, a]);
+
+      expect(result.slice(0, 2).map((i) => i.id)).toEqual(['u2', 'u1']);
+    });
+
+    test('pins @here at position 1 when present (channel block case)', () => {
+      const now = new Date();
+      const here = groupItem('here');
+      const alice = userItem('u1', 'Alice', now);
+      const bob = userItem('u2', 'Bob', new Date(now.getTime() - HOUR));
+      const doc = docItem('d1', 'Doc', now);
+
+      // useUsersMention returns groups before users, so candidates lead with `here`.
+      const result = sortMobileMentions([alice, bob, doc], '', [
+        here,
+        alice,
+        bob,
+      ]);
+
+      expect(result.slice(0, 2).map((i) => i.id)).toEqual(['here', 'u1']);
+    });
+
+    test('no pinning when topUserCandidates is empty (default arg)', () => {
+      const now = new Date();
+      const veryStaleUser = userItem(
+        'u1',
+        'Old User',
+        new Date(now.getTime() - 14 * 24 * HOUR)
+      );
+      const freshDoc = docItem('d1', 'Just Viewed', now);
+
+      const result = sortMobileMentions([veryStaleUser, freshDoc], '');
+
+      expect(result[0].id).toBe('d1');
+    });
+  });
 });

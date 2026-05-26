@@ -2,6 +2,7 @@ import '@entity/composed/ListEntity.css';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   createEntityDraggable,
   Entity,
@@ -125,14 +126,16 @@ export function TaskListEntity(props: TaskListEntityProps) {
       }}
       ref={mergeRefs(props.ref, draggable)}
       class={cn(
-        'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mx-1 relative group/narrow flex flex-col py-0.5 rounded-lg',
+        'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5 rounded-lg',
         {
-          'min-h-10': !isMobile(),
+          'min-h-10 mx-1': !isMobile(),
           'bg-accent/8': props.checked,
-          'ring ring-accent/16 ring-inset': props.checked && props.highlighted,
+          'ring ring-accent/16 ring-inset':
+            props.checked && props.highlighted && !isTouchDevice(),
           'ring ring-edge bg-active/60 ring-inset':
-            props.highlighted && !props.checked,
-          'hover:bg-active/30': !props.highlighted && !props.checked,
+            props.highlighted && !props.checked && !isTouchDevice(),
+          'hover:bg-active/30':
+            !props.highlighted && !props.checked && !isTouchDevice(),
         }
       )}
       onMouseMove={props.onMouseMove}

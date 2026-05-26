@@ -215,6 +215,10 @@ fn api_router(state: ApiContext) -> Router {
             "/call",
             call::inbound::axum_router::call_router(state.call_state.clone()),
         )
+        .nest(
+            "/crm",
+            crm::inbound::axum_router::crm_router(state.crm_state.clone()),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn(

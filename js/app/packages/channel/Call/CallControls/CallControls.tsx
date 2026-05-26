@@ -1,5 +1,4 @@
-import { type Accessor, Match, mergeProps, Show, Switch } from 'solid-js';
-import type { CallControlButtonSize } from './CallControlButton';
+import { type Accessor, Show } from 'solid-js';
 import { CallControlsDefaultAndPanelRow } from './CallControlsDefaultAndPanelRow';
 import { CallControlsPanelSmallRow } from './CallControlsPanelSmallRow';
 
@@ -19,33 +18,19 @@ function readWhen(when: boolean | Accessor<boolean> | undefined): boolean {
 
 /**
  * Mic / camera / screen / leave wired to `useCallContext()`. Single place for
- * control markup so Call overlay and sidebar InCall panel stay in sync.
+ * control markup so the Call overlay and the sidebar InCall panel stay in
+ * sync. The slim `panel-small` variant renders a single gear-menu instead of
+ * the inline pill row.
  */
-export function CallControls(rawProps: CallControlsProps) {
-  const props = mergeProps(
-    { variant: 'default' as CallControlsVariant },
-    rawProps
-  );
-
-  const variant = () => props.variant ?? 'default';
-
-  const buttonSize = (): CallControlButtonSize =>
-    variant() === 'default' ? 'md' : 'sm';
-
+export function CallControls(props: CallControlsProps) {
   return (
     <Show when={() => readWhen(props.when)}>
-      <Switch
-        fallback={
-          <CallControlsDefaultAndPanelRow
-            size={buttonSize}
-            onLeave={props.onLeave}
-          />
-        }
+      <Show
+        when={props.variant === 'panel-small'}
+        fallback={<CallControlsDefaultAndPanelRow onLeave={props.onLeave} />}
       >
-        <Match when={variant() === 'panel-small'}>
-          <CallControlsPanelSmallRow onLeave={props.onLeave} />
-        </Match>
-      </Switch>
+        <CallControlsPanelSmallRow />
+      </Show>
     </Show>
   );
 }

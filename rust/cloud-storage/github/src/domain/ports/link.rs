@@ -3,7 +3,8 @@
 use std::future::Future;
 
 use crate::domain::models::{
-    GithubAccessToken, GithubError, GithubExchangeTokenResponse, GithubLink, GithubUserInfo,
+    EnrichedGithubPullRequest, GithubAccessToken, GithubError, GithubExchangeTokenResponse,
+    GithubLink, GithubPullRequestDetails, GithubPullRequestRef, GithubUserInfo,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 
@@ -81,6 +82,15 @@ pub trait GithubOauth: Send + Sync + 'static {
         &self,
         access_token: &str,
     ) -> impl Future<Output = Result<GithubUserInfo, Self::Err>> + Send;
+
+    /// Gets pull request details using the user's access token.
+    fn get_pull_request_details(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> impl Future<Output = Result<GithubPullRequestDetails, Self::Err>> + Send;
 }
 
 /// Repository for handling auth related actions.
@@ -111,7 +121,7 @@ pub trait Auth: Send + Sync + 'static {
         &self,
         fusionauth_user_id: &uuid::Uuid,
         github_idp_id: &str,
-    ) -> impl Future<Output = Result<GithubAccessToken, Self::Err>>;
+    ) -> impl Future<Output = Result<GithubAccessToken, Self::Err>> + Send;
 }
 
 /// Service interface for github link operations (OAuth and account linking).
@@ -146,4 +156,11 @@ pub trait GithubLinkService: Send + Sync + 'static {
         &self,
         user_id: &MacroUserId<Lowercase<'static>>,
     ) -> impl Future<Output = Result<(), GithubError>> + Send;
+
+    /// Enriches GitHub pull request references with details from the GitHub API.
+    fn enrich_pull_requests(
+        &self,
+        user_id: &MacroUserId<Lowercase<'static>>,
+        pull_requests: Vec<GithubPullRequestRef>,
+    ) -> impl Future<Output = Result<Vec<EnrichedGithubPullRequest>, GithubError>> + Send;
 }

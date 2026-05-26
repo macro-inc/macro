@@ -8,7 +8,6 @@ use connection_gateway_models::{
 use model_entity::Entity;
 
 mod email;
-mod project;
 
 /// HTTP client for communicating with the connection gateway service.
 #[derive(Clone, Debug)]
@@ -39,11 +38,10 @@ impl ConnectionGatewayClient {
         }
     }
 
-    /// Send a message to an entity
+    /// Send a message to an entity.
     pub async fn send_message(
         &self,
-        entity_type: &str,
-        entity_id: &str,
+        entity: Entity<'_>,
         message_type: String,
         message: serde_json::Value,
     ) -> anyhow::Result<Vec<MessageReceipt>> {
@@ -56,7 +54,7 @@ impl ConnectionGatewayClient {
             .client
             .post(format!(
                 "{}/message/send/{}/{}",
-                self.connection_gateway_url, entity_type, entity_id
+                self.connection_gateway_url, entity.entity_type, entity.entity_id
             ))
             .json(&body)
             .send()
@@ -121,17 +119,13 @@ impl ConnectionGatewayClient {
         Ok(receipts.receipts)
     }
 
-    /// Get users who are interacting with a given item
-    pub async fn track_entity_users(
-        &self,
-        entity_type: String,
-        entity_id: String,
-    ) -> anyhow::Result<Vec<String>> {
+    /// Get users who are interacting with a given entity.
+    pub async fn track_entity_users(&self, entity: Entity<'_>) -> anyhow::Result<Vec<String>> {
         let res = self
             .client
             .get(format!(
                 "{}/track/{}/{}",
-                self.connection_gateway_url, entity_type, entity_id
+                self.connection_gateway_url, entity.entity_type, entity.entity_id
             ))
             .send()
             .await?;

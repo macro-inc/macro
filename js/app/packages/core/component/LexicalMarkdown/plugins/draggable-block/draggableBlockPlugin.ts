@@ -40,6 +40,18 @@ function getTopLevelNodeKeys(editor: LexicalEditor): string[] {
   return editor.read(() => $getRoot().getChildrenKeys());
 }
 
+function getScrollParent(element: HTMLElement): HTMLElement | null {
+  let parent = element.parentElement;
+  while (parent) {
+    const { overflowY } = window.getComputedStyle(parent);
+    if (overflowY === 'auto' || overflowY === 'scroll') {
+      return parent;
+    }
+    parent = parent.parentElement;
+  }
+  return null;
+}
+
 function getCollapsedMargins(elem: HTMLElement): {
   marginTop: number;
   marginBottom: number;
@@ -258,21 +270,47 @@ function registerDraggableBlock(
     // Keep the current hover while the cursor sits on the drag handle itself.
     if (target.closest('.draggable-block-menu')) return;
 
-    // Only react when the cursor is horizontally near the editor.
-    const rootRect = editor.getRootElement()?.getBoundingClientRect();
-    if (rootRect) {
-      const inXRange =
-        event.clientX >= rootRect.left - HORIZONTAL_BUFFER &&
-        event.clientX <= rootRect.right;
-      const inYRange =
-        event.clientY >= rootRect.top && event.clientY <= rootRect.bottom;
-      if (!inXRange || !inYRange) {
+    // Only react when the cursor is near the editor.
+    const root = editor.getRootElement();
+    const rootRect = root?.getBoundingClientRect();
+    if (!root || !rootRect) return;
+
+    const inXRange =
+      event.clientX >= rootRect.left - HORIZONTAL_BUFFER &&
+      event.clientX <= rootRect.right;
+    if (!inXRange) {
+      clearHover();
+      return;
+    }
+
+    const inYRange =
+      event.clientY >= rootRect.top && event.clientY <= rootRect.bottom;
+    if (!inYRange) {
+      clearHover();
+      return;
+    }
+
+    // Also check against the scroll parent's visible area
+    const scrollParent = getScrollParent(root);
+    const scrollRect = scrollParent?.getBoundingClientRect();
+    if (scrollRect) {
+      if (event.clientY < scrollRect.top || event.clientY > scrollRect.bottom) {
         clearHover();
         return;
       }
     }
 
     const blockElem = getBlockElement(editor, event);
+
+    // Don't show handle if element is clipped by scroll parent
+    if (blockElem && scrollRect) {
+      const blockRect = blockElem.getBoundingClientRect();
+      if (blockRect.top < scrollRect.top) {
+        clearHover();
+        return;
+      }
+    }
+
     setState({ hoveredElement: blockElem });
   }
 
@@ -506,7 +544,7 @@ function registerDraggableBlock(
 
   function onScroll() {
     if (!isDraggingBlock) {
-      setState({ hoveredElement: null });
+      clearHover();
     }
   }
 

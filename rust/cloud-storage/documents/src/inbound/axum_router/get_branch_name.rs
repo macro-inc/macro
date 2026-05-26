@@ -9,7 +9,6 @@ use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
 use super::{DocumentRouterState, Params};
-use crate::domain::branch_name::build_task_branch_name;
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
 use document_sub_type::DocumentSubType;
@@ -53,17 +52,19 @@ pub async fn get_branch_name_handler<T: DocumentService, Svc: EntityAccessServic
     let receipt = access.entity_access_receipt;
 
     let document = state.service.get_document(receipt.clone()).await?;
-    let short_id = state.service.get_short_id(receipt).await?;
 
     match document.document_metadata.metadata.sub_type {
         Some(DocumentSubType::Task) => {
-            let branch_name = build_task_branch_name(
-                &short_id,
-                &document.document_metadata.metadata.document_name,
-            );
+            let task_branch_name = state
+                .service
+                .get_task_branch_name(
+                    receipt,
+                    document.document_metadata.metadata.document_name.clone(),
+                )
+                .await?;
             Ok(Json(BranchNameResponse {
-                short_id,
-                branch_name,
+                short_id: task_branch_name.short_id,
+                branch_name: task_branch_name.branch_name,
             }))
         }
         None => Err(DocumentError::BadRequest(format!(

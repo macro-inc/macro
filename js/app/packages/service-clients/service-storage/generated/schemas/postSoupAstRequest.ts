@@ -4,10 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { EntityFilterAst } from './entityFilterAst';
+import type { ApiEntityFilterAst } from './apiEntityFilterAst';
 import type { Params } from './params';
 import type { PostSoupAstRequestAllOf } from './postSoupAstRequestAllOf';
 
-export type PostSoupAstRequest = EntityFilterAst &
+export type PostSoupAstRequest = ApiEntityFilterAst &
   Params &
   PostSoupAstRequestAllOf;

@@ -7,6 +7,7 @@ import {
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
 import type { FilterContext } from '@app/component/next-soup/filters/configs/';
+import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import {
   createQueryStore,
   type Query,
@@ -15,6 +16,8 @@ import {
 import { createInfiniteQueries } from '@app/component/next-soup/soup-view/create-infinite-queries';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
+import { useEntryState } from '@app/component/split-layout/entry-state';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
@@ -50,10 +53,12 @@ import {
   createSignal,
   type FlowComponent,
   on,
+  onCleanup,
   type Setter,
   Suspense,
   useContext,
 } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 
 type DataSource<T> = {
   data: Accessor<T[]>;
@@ -135,16 +140,45 @@ export const SoupViewContextProvider: FlowComponent<
       : 'created_at';
 
     return {
-      // When doing a group by query, the limit will end up cutting off groups.
-      // So, instead we increase the fetch limit for the group by query to make
-      // sure we get as many groups as we can. Alternative would be to implement
-      // paginated loading of groups, but we dont have that right now.
-      limit: soup.grouping.activeGroupId() ? 2_000 : 100,
+      limit: 100,
       sort_method: sortMethod,
     };
   });
 
-  const store = createQueryStore({ initial: props.initialQuery });
+  const panel = useSplitPanelOrThrow();
+
+  // Restore filter state from this history entry if it was captured during a
+  // previous nav-away; otherwise fall back to the caller-provided initial.
+  const persistedFilters = panel.handle.currentEntryState()?.[
+    'search.filters'
+  ] as Query | undefined;
+  const store = createQueryStore({
+    initial: persistedFilters ?? props.initialQuery,
+  });
+
+  const filterCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    'search.filters',
+    () => structuredClone(unwrap(store.state)) as Query
+  );
+  onCleanup(filterCaptorTeardown);
+
+  // Client-side predicate state (drives the "Type: X" chips and other
+  // toggleable filters) also needs to round-trip per entry, since the chip UI
+  // reads predicates directly and would otherwise show empty after back-nav.
+  const persistedPredicates = panel.handle.currentEntryState()?.[
+    'search.predicates'
+  ] as SetPredicatesInput<string> | undefined;
+  if (persistedPredicates) {
+    soup.predicates.set(persistedPredicates);
+  }
+  const predicatesCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    'search.predicates',
+    (): SetPredicatesInput<string> => ({
+      and: [...soup.predicates.andIds()],
+      or: [...soup.predicates.orIds()],
+    })
+  );
+  onCleanup(predicatesCaptorTeardown);
 
   const invalidateCache = () => {
     queryClient.setQueryData(
@@ -184,8 +218,14 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const [searchPaused, setSearchPaused] = createSignal(false);
-  const [assigneeFilter, setAssigneeFilter] = createSignal<string[]>([]);
-  const [activeTab, setActiveTab] = createSignal<string | undefined>(undefined);
+  const [assigneeFilter, setAssigneeFilter] = useEntryState<string[]>(
+    'soup.assigneeFilter',
+    { default: [] }
+  );
+  const [activeTab, setActiveTab] = useEntryState<string | undefined>(
+    'soup.tab',
+    { default: undefined }
+  );
 
   const groupByField = createMemo((): GroupByField | undefined => {
     const id = soup.grouping.activeGroupId();
@@ -212,13 +252,18 @@ export const SoupViewContextProvider: FlowComponent<
   // soupBody is derived from the query filter store's compiled AST
   const soupBody = createMemo(() => queryFilters.compile());
 
+  const [searchText, setSearchText] = useEntryState<string>('search.text', {
+    default: props.initialSearchText ?? '',
+  });
+
   const search = createSearchState({
     soup,
     filters: () => queryFilters.state,
     assignees: assigneeFilter,
     disableLocalSearch: props.disableLocalSearch,
     searchPaused,
-    initialText: props.initialSearchText,
+    searchText,
+    setSearchText,
   });
 
   const notificationSource = useGlobalNotificationSource();
@@ -458,7 +503,7 @@ export const SoupViewContextProvider: FlowComponent<
     const groups = itemsQuery.data?.groups;
 
     // Not grouped - build simple entity rows
-    if (!field || !groups) {
+    if (!field || !groups || search.isSearching()) {
       return entities().map((entity, index) =>
         soup.buildRow({ id: entity.id, index, original: entity })
       );

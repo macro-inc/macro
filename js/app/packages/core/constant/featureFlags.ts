@@ -71,7 +71,7 @@ export const ENABLE_PDF_MULTISPLIT = resolveFeatureFlag(
 
 export const ENABLE_PROJECT_SHARING = resolveFeatureFlag(
   'ENABLE_PROJECT_SHARING',
-  DEV_MODE_ENV
+  true
 );
 
 export const ENABLE_CANVAS_IMAGES = resolveFeatureFlag(
@@ -332,6 +332,8 @@ export function ENABLE_CALLS(): boolean {
 
 export const ENABLE_NEW_ONBOARDING_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
+export const ENABLE_NEW_LOGIN_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+
 export const ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE = DEV_MODE_ENV
   ? true
   : undefined;
@@ -344,7 +346,7 @@ export const ENABLE_SOUP_GROUP_BY_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
 export const ENABLE_AUTO_UPDATE_UI = resolveFeatureFlag(
   'ENABLE_AUTO_UPDATE_UI',
-  false
+  true
 );
 
 export const ENABLE_CALLKIT = resolveFeatureFlag('ENABLE_CALLKIT', false);
@@ -358,3 +360,11 @@ export const ENABLE_REFOCUS_HIGHLIGHT = resolveFeatureFlag(
   'ENABLE_REFOCUS_HIGHLIGHT',
   true
 );
+
+export const ENABLE_CREATE_PROPERTY = resolveFeatureFlag(
+  'ENABLE_CREATE_PROPERTY',
+  false
+);
+
+export const ENABLE_NEW_PRICING_OVERRIDE =
+  resolveFeatureFlag('ENABLE_NEW_PRICING', DEV_MODE_ENV) || undefined;

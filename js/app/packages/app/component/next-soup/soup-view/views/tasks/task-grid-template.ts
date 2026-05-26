@@ -1,4 +1,4 @@
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { DataType } from '@service-storage/generated/schemas/dataType';
 import { EntityType } from '@service-storage/generated/schemas/entityType';
 
