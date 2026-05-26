@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    INSERT INTO crm_companies (team_id, first_interaction, last_interaction)\n                    VALUES ($1, $2, $2)\n                    RETURNING id\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1bcba45edade7d96e698f9541456d582db6f786791b317e12d9f74162ada8975"
+}

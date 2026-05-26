@@ -165,7 +165,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         domain: &str,
         email: &str,
         name: Option<&str>,
-        message_at: Option<DateTime<Utc>>,
+        message_at: DateTime<Utc>,
     ) -> Result<(), CrmError> {
         let normalized_domain = domain.to_ascii_lowercase();
         let normalized_email = email.to_ascii_lowercase();
@@ -256,17 +256,15 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 // `last_interaction` carry the domain-specific date
                 // range of message activity: `LEAST` / `GREATEST`
                 // against the stored values let out-of-order backfill
-                // converge to the true earliest / latest, and
-                // `COALESCE($message_at, now())` lets the realtime path
-                // (no message_at) still advance `last_interaction`.
-                // Postgres `LEAST` / `GREATEST` skip NULL operands, so
-                // a row that somehow has NULL stored values picks up
-                // the new value cleanly.
+                // converge to the true earliest / latest. Postgres
+                // `LEAST` / `GREATEST` skip NULL operands, so a row
+                // that somehow has NULL stored values picks up the
+                // new value cleanly.
                 sqlx::query!(
                     r#"UPDATE crm_companies
                        SET updated_at = now(),
-                           first_interaction = LEAST(first_interaction, COALESCE($2, now())),
-                           last_interaction = GREATEST(last_interaction, COALESCE($2, now()))
+                           first_interaction = LEAST(first_interaction, $2),
+                           last_interaction = GREATEST(last_interaction, $2)
                        WHERE id = $1"#,
                     row.id,
                     message_at,
@@ -281,13 +279,12 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 // `first_interaction` / `last_interaction` both seed
                 // from `message_at` so backfilled historical mail
                 // stamps the row with the date the relationship
-                // actually started; `None` collapses to `now()`.
-                // `created_at` / `updated_at` keep their `DEFAULT now()`
-                // / trigger semantics.
+                // actually started. `created_at` / `updated_at` keep
+                // their `DEFAULT now()` / trigger semantics.
                 let new_company = sqlx::query!(
                     r#"
                     INSERT INTO crm_companies (team_id, first_interaction, last_interaction)
-                    VALUES ($1, COALESCE($2, now()), COALESCE($2, now()))
+                    VALUES ($1, $2, $2)
                     RETURNING id
                     "#,
                     team_id,
@@ -339,8 +336,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                     sqlx::query!(
                         r#"UPDATE crm_companies
                            SET updated_at = now(),
-                               first_interaction = LEAST(first_interaction, COALESCE($2, now())),
-                               last_interaction = GREATEST(last_interaction, COALESCE($2, now()))
+                               first_interaction = LEAST(first_interaction, $2),
+                               last_interaction = GREATEST(last_interaction, $2)
                            WHERE id = $1"#,
                         existing_company_id,
                         message_at,
@@ -375,7 +372,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         let contact_id = sqlx::query_scalar!(
             r#"
             INSERT INTO crm_contacts (company_id, email, name, first_interaction, last_interaction)
-            VALUES ($1, $2, $3, COALESCE($4, now()), COALESCE($4, now()))
+            VALUES ($1, $2, $3, $4, $4)
             ON CONFLICT (company_id, email) DO UPDATE
                 SET name = COALESCE(crm_contacts.name, EXCLUDED.name),
                     updated_at = now(),

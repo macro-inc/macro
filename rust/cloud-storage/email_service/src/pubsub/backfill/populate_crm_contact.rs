@@ -1,4 +1,5 @@
 use crate::pubsub::context::PubSubContext;
+use chrono::Utc;
 use crm::domain::service::CrmService;
 use models_email::email::service::backfill::PopulateCrmContactPayload;
 use models_email::email::service::link;
@@ -20,12 +21,12 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 /// `crm_domain_directory` lookup → resolver → upsert path, so the
 /// consumer here doesn't need to know how that's done.
 ///
-/// When `p.message_at` is `None`, falls back to a `MAX(internal_date_ts)`
-/// lookup keyed on `p.contact_id` so the historical (`populate_crm_for_user`)
-/// path stamps `first_interaction` / `last_interaction` with a real
-/// message date rather than `now()`. Without a `contact_id`, the lookup
-/// is skipped and the populate runs with `message_at = None` (the repo
-/// collapses to `now()`).
+/// `message_at` for the populate call is resolved here so the CRM
+/// service can require a non-optional timestamp: prefer `p.message_at`
+/// when set; otherwise fall back to a `MAX(internal_date_ts)` lookup
+/// keyed on `p.contact_id` (the `populate_crm_for_user` historical
+/// path); otherwise default to `Utc::now()`. This keeps the
+/// fallback explicit at the boundary rather than buried in repo SQL.
 #[tracing::instrument(skip(ctx), err, fields(contact_email = %p.contact_email, link_id = %link.id))]
 pub async fn populate_crm_contact(
     ctx: &PubSubContext,
@@ -51,7 +52,7 @@ pub async fn populate_crm_contact(
     };
 
     let message_at = match (p.message_at, p.contact_id) {
-        (Some(ts), _) => Some(ts),
+        (Some(ts), _) => ts,
         (None, Some(contact_id)) => {
             email_db_client::contacts::get::fetch_latest_sent_message_at_to_contact(
                 &ctx.db, link.id, contact_id,
@@ -63,8 +64,9 @@ pub async fn populate_crm_contact(
                     source: e.context("Failed to look up latest sent-message timestamp"),
                 })
             })?
+            .unwrap_or_else(Utc::now)
         }
-        (None, None) => None,
+        (None, None) => Utc::now(),
     };
 
     ctx.crm_service

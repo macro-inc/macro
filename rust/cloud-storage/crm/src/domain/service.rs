@@ -49,16 +49,20 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// HTTP fetch.
     ///
     /// `message_at` is the timestamp of the message that triggered this
-    /// populate, threaded through from the per-message backfill /
-    /// inbox-sync paths so historical messages stamp the CRM rows'
-    /// `first_interaction` / `last_interaction` columns with the dates
-    /// the relationship actually spans rather than `now()`. Pass `None`
-    /// when no per-message timestamp is available (`populate_crm_for_user`);
-    /// the repo falls back to `now()` in that case. `LEAST`/`GREATEST`
+    /// populate. It stamps the CRM rows' `first_interaction` /
+    /// `last_interaction` columns with the date the relationship
+    /// actually spans rather than the row's insert time. `LEAST`/`GREATEST`
     /// on the conflict path keep out-of-order backfill converging to
     /// the true earliest / latest. `created_at` / `updated_at` keep
     /// their row-lifecycle semantics (DEFAULT `now()` /
     /// `set_crm_updated_at` trigger).
+    ///
+    /// Callers that don't have a real per-message timestamp (the
+    /// `populate_crm_for_user` historical seed, or messages where Gmail
+    /// returned no `internal_date_ts`) are expected to resolve a
+    /// fallback — typically `Utc::now()` — before invoking. Keeping
+    /// the parameter non-optional makes that resolution explicit at the
+    /// boundary instead of silently `COALESCE`ing inside the repo.
     fn populate_contact(
         &self,
         team_id: &uuid::Uuid,
@@ -66,7 +70,7 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         user_email: &str,
         email: &str,
         name: Option<&str>,
-        message_at: Option<DateTime<Utc>>,
+        message_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
     /// Reverses [`populate_contact`] for one `(link_id, email)`. Drops the
@@ -232,7 +236,7 @@ where
         user_email: &str,
         email: &str,
         name: Option<&str>,
-        message_at: Option<DateTime<Utc>>,
+        message_at: DateTime<Utc>,
     ) -> Result<(), CrmError> {
         let email = email.trim();
         let Some((local_part, domain)) = email.split_once('@') else {
