@@ -3,6 +3,7 @@ import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { stackNotifications } from '@notifications';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
@@ -52,7 +53,6 @@ import {
   useListLayout,
 } from './list-entity/shared';
 import { WideLayout } from './list-entity/wide-layout';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export { ListLayoutProvider } from './list-entity/shared';
 
