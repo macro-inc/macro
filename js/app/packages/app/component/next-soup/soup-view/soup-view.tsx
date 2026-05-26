@@ -896,10 +896,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
     { default: [] }
   );
 
-  // Preview-pane open state travels with the history entry, like search text:
-  // transient, captured into per-entry state and restored on back/forward.
-  // Read synchronously in the body so the first render sees the correct
-  // value and we avoid a transient flash where the pane is closed.
+  // Preview-pane open state is transient per history entry: captured into
+  // per-entry state on nav-away and restored on back/forward. Read
+  // synchronously in the body so the first render sees the correct value
+  // and we avoid a transient flash where the pane is closed.
   const persistedPreview = panel.handle.currentEntryState()?.['soup.preview'] as
     | string
     | undefined;
