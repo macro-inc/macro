@@ -52,9 +52,15 @@ import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInvi
 import { formatRelativeTimestamp } from '@entity';
 import { useHasPaidAccess } from '@core/auth/license';
 import { usePaywallState } from '@core/constant/PaywallState';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { z } from 'zod';
-
 import { getTeamSlugError, normalizeTeamSlugInput } from './teamSlug';
+
+function useRequiresPaidUpgrade() {
+  const hasPaidAccess = useHasPaidAccess();
+  const newPricingFlag = useFeatureFlag('enable-new-pricing');
+  return createMemo(() => newPricingFlag().enabled && !hasPaidAccess());
+}
 
 const roleOrder: Record<string, number> = {
   [TeamRole.owner]: 0,
@@ -422,6 +428,8 @@ function UserInviteRow(props: {
   onDecline: () => void;
   isAccepting: boolean;
   isDeclining: boolean;
+  requiresUpgrade: boolean;
+  onUpgrade: () => void;
 }) {
   return (
     <div class="flex items-center justify-between py-3 border-b border-edge-muted last:border-b-0 gap-3">
@@ -452,7 +460,12 @@ function UserInviteRow(props: {
           variant="active"
           class="px-2 py-1 rounded-xs"
           disabled={props.isAccepting || props.isDeclining}
-          onClick={props.onAccept}
+          tooltip={
+            props.requiresUpgrade
+              ? 'Joining a team requires a paid plan'
+              : undefined
+          }
+          onClick={props.requiresUpgrade ? props.onUpgrade : props.onAccept}
         >
           <Show when={props.isAccepting} fallback="Join">
             <SpinnerIcon class="size-4 animate-spin" />
@@ -467,6 +480,8 @@ function TeamInvites() {
   const userInvitesQuery = useUserInvitesQuery();
   const joinTeamMutation = useJoinTeamMutation();
   const rejectMutation = useRejectInvitationMutation();
+  const requiresUpgrade = useRequiresPaidUpgrade();
+  const { showPaywall } = usePaywallState();
 
   const invites = () => userInvitesQuery.data?.invites ?? [];
 
@@ -501,6 +516,8 @@ function TeamInvites() {
                       }
                       isAccepting={isAccepting(invite.id)}
                       isDeclining={isDeclining(invite.id)}
+                      requiresUpgrade={requiresUpgrade()}
+                      onUpgrade={() => showPaywall()}
                     />
                   )}
                 </For>
@@ -536,6 +553,7 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
   );
 
   const createTeamMutation = useCreateTeamWithInvitesMutation();
+  const requiresUpgrade = useRequiresPaidUpgrade();
 
   const charCountColor = () => {
     const len = teamName().trim().length;
@@ -629,17 +647,19 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
               <p class="text-xs text-failure-ink">{teamNameError()}</p>
             </Show>
           </div>
-          <div class="flex flex-col gap-1">
-            <label class="text-sm text-ink-muted">
-              Invite members (optional)
-            </label>
-            <InviteEmailsInput
-            invites={invites()}
-            onChange={setInvites}
-            errors={inviteErrors()}
-            onErrorsChange={setInviteErrors}
-            />
-          </div>
+          <Show when={!requiresUpgrade()}>
+            <div class="flex flex-col gap-1">
+              <label class="text-sm text-ink-muted">
+                Invite members (optional)
+              </label>
+              <InviteEmailsInput
+              invites={invites()}
+              onChange={setInvites}
+              errors={inviteErrors()}
+              onErrorsChange={setInviteErrors}
+              />
+            </div>
+          </Show>
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"
@@ -748,6 +768,8 @@ function TeamManagement(props: {
   const patchTeamMutation = usePatchTeamMutation();
   const inviteToTeamMutation = useInviteToTeamMutation();
   const deleteTeamMutation = useDeleteTeamMutation();
+  const requiresUpgrade = useRequiresPaidUpgrade();
+  const { showPaywall } = usePaywallState();
 
   const [showDeleteTeamModal, setShowDeleteTeamModal] = createSignal(false);
   const [deleteConfirmation, setDeleteConfirmation] = createSignal('');
@@ -980,7 +1002,16 @@ function TeamManagement(props: {
                 variant="base"
                 size="sm"
                 class="rounded-xs"
-                onClick={() => setShowInviteModal(true)}
+                tooltip={
+                  requiresUpgrade()
+                    ? 'Inviting members requires a paid plan'
+                    : undefined
+                }
+                onClick={() =>
+                  requiresUpgrade()
+                    ? showPaywall()
+                    : setShowInviteModal(true)
+                }
               >
                 <PlusIcon class="size-4" />
                 Invite

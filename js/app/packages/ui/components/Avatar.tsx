@@ -41,7 +41,7 @@ export function Avatar(props: AvatarProps) {
       data-slot="avatar"
       data-size={size()}
       class={cn(
-        'group/avatar relative flex shrink-0 select-none items-center justify-center overflow-hidden rounded-full bg-ink-extra-muted text-surface',
+        'group/avatar relative flex shrink-0 select-none items-center justify-center overflow-hidden rounded-full bg-ink-extra-muted has-[img]:bg-transparent text-surface',
         size() === 'fill' && '@container',
         AVATAR_SIZE_CLASSES,
         AVATAR_SVG_CLASSES,
@@ -68,11 +68,11 @@ type AvatarImageProps = {
 function AvatarImage(props: AvatarImageProps) {
   return (
     <img
+      class={cn('size-full object-cover', props.class)}
+      onError={props.onError}
+      alt={props.alt}
       ref={props.ref}
       src={props.src}
-      alt={props.alt}
-      class={cn('size-full object-cover rounded-full', props.class)}
-      onError={props.onError}
     />
   );
 }
