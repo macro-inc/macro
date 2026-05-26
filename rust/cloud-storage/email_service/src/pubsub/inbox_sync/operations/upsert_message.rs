@@ -107,25 +107,32 @@ pub async fn upsert_message(
     .filter(|e| !email_utils::is_generic_email(e))
     .collect::<Vec<_>>();
 
-    // Snapshot `(email, name)` pairs for the CRM populate fan-out below.
-    // We capture it here (before `message` is moved into
+    // Snapshot `(email, name, contact_id)` triples for the CRM populate
+    // fan-out below. We capture it here (before `message` is moved into
     // `process_and_insert_message`) so the consumer can write
     // `crm_contacts.name` without a separate email_contacts lookup.
+    // `contact_id` is `None` because we pass `message_at` directly —
+    // the consumer's DB-lookup fallback isn't needed here.
     // No producer-side filtering — the crm crate is the single source
     // of truth for "what belongs in the CRM" (generic-provider domains,
     // killswitched companies, etc.) and applying the same rules here
     // would just drift over time.
-    let crm_recipients: Vec<(String, Option<String>)> = if is_sent {
+    let crm_recipients: Vec<(String, Option<String>, Option<Uuid>)> = if is_sent {
         message
             .to
             .iter()
             .chain(&message.cc)
             .chain(&message.bcc)
-            .map(|c| (c.email.clone(), c.name.clone()))
+            .map(|c| (c.email.clone(), c.name.clone(), None))
             .collect()
     } else {
         Vec::new()
     };
+    // Capture the message timestamp before `message` is moved so the
+    // CRM consumer can stamp crm_companies/crm_contacts with the actual
+    // message date rather than `now()`. Mirrors `internal_date_ts` use
+    // in backfill_message.rs.
+    let crm_message_at = is_sent.then_some(message.internal_date_ts).flatten();
 
     // determine if message's thread already exists in the database
     let thread_provider_to_db_map = threads::get::get_threads_by_link_id_and_provider_ids(
@@ -222,7 +229,8 @@ pub async fn upsert_message(
     // `crm_recipients` was snapshotted above before `message` was moved.
     if is_sent {
         let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
-        enqueue_populate_crm_contacts(ctx, link.id, &self_email, crm_recipients).await?;
+        enqueue_populate_crm_contacts(ctx, link.id, &self_email, crm_recipients, crm_message_at)
+            .await?;
     }
 
     notify_search(ctx, link, message_db_id, is_spam_or_trash).await?;

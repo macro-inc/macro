@@ -632,6 +632,7 @@ async fn service_populate_contact_skips_when_domain_matches_user_domain(
             "user@macro.com",
             "colleague@macro.com",
             None,
+            None,
         )
         .await?;
 
@@ -664,6 +665,7 @@ async fn service_populate_contact_same_domain_check_is_case_insensitive(
             &link_id,
             "User@MACRO.com",
             "colleague@macro.com",
+            None,
             None,
         )
         .await?;
@@ -738,6 +740,7 @@ async fn service_populate_contact_refreshes_existing_company_and_contact_updated
             "user@macro.com",
             "alice@acme.com",
             Some("Alice"),
+            None,
         )
         .await?;
 
@@ -767,7 +770,14 @@ async fn service_populate_contact_writes_when_domain_differs(pool: PgPool) -> an
     );
 
     service
-        .populate_contact(&team_id, &link_id, "user@macro.com", "alice@acme.com", None)
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            None,
+        )
         .await?;
 
     assert_eq!(

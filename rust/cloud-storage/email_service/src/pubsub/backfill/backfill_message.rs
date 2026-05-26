@@ -86,17 +86,28 @@ pub async fn backfill_message(
     // emailing. ON CONFLICT DO NOTHING on the consumer side keeps duplicate
     // enqueues (e.g. retried backfill_message attempts) harmless. The
     // display name from the gmail header is threaded through so the
-    // consumer doesn't have to re-query email_contacts.
+    // consumer doesn't have to re-query email_contacts. `internal_date_ts`
+    // is passed as `message_at` so historical messages stamp the CRM rows
+    // with the date the relationship actually started rather than `now()`;
+    // `contact_id` is `None` here because we already carry `message_at`
+    // and the contact row may not exist yet at producer time.
     if message.is_sent {
         let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
-        let recipients: Vec<(String, Option<String>)> = message
+        let recipients: Vec<(String, Option<String>, Option<uuid::Uuid>)> = message
             .to
             .iter()
             .chain(&message.cc)
             .chain(&message.bcc)
-            .map(|c| (c.email.clone(), c.name.clone()))
+            .map(|c| (c.email.clone(), c.name.clone(), None))
             .collect();
-        enqueue_populate_crm_contacts(ctx, link.id, &self_email, recipients).await?;
+        enqueue_populate_crm_contacts(
+            ctx,
+            link.id,
+            &self_email,
+            recipients,
+            message.internal_date_ts,
+        )
+        .await?;
     }
 
     // Handle all success-related operations

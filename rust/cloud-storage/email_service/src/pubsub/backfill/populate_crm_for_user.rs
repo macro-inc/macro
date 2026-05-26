@@ -53,12 +53,15 @@ pub async fn populate_crm_for_user(
 
     let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
 
-    // Pull every distinct recipient (email + display name) from sent
-    // messages on this link. Mirrors what backfill_message would have
-    // produced if the per-message fan-out had been running when these
-    // messages were first backfilled — including the name from
-    // email_contacts so the consumer can set crm_contacts.name without
-    // its own round-trip.
+    // Pull every distinct recipient (email + display name + contact_id)
+    // from sent messages on this link. Mirrors what backfill_message
+    // would have produced if the per-message fan-out had been running
+    // when these messages were first backfilled — including the name
+    // from email_contacts so the consumer can set crm_contacts.name
+    // without its own round-trip. `contact_id` lets the consumer do
+    // the latest-interaction lookup that stamps the CRM rows with a
+    // realistic timestamp (this path has no per-message timestamp to
+    // pass).
     let recipients = email_db_client::contacts::get::fetch_sent_message_recipient_contacts_by_link(
         &ctx.db, link.id,
     )
@@ -70,5 +73,9 @@ pub async fn populate_crm_for_user(
         })
     })?;
 
-    enqueue_populate_crm_contacts(ctx, link.id, &self_email, recipients).await
+    let recipients = recipients
+        .into_iter()
+        .map(|(email, name, contact_id)| (email, name, Some(contact_id)));
+
+    enqueue_populate_crm_contacts(ctx, link.id, &self_email, recipients, None).await
 }

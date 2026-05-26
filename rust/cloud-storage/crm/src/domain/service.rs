@@ -6,6 +6,7 @@ use crate::domain::{
     generic_email_domains::is_generic_email_domain,
     model::{CrmCompany, CrmError, CrmScopePrecheck},
 };
+use chrono::{DateTime, Utc};
 
 /// The CrmService exposes operations over CRM records (companies, their
 /// domains and contacts).
@@ -46,6 +47,18 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// failure — that's the negative cache). The directory write is its
     /// own transaction so the populate tx never holds locks across an
     /// HTTP fetch.
+    ///
+    /// `message_at` is the timestamp of the message that triggered this
+    /// populate, threaded through from the per-message backfill /
+    /// inbox-sync paths so historical messages stamp the CRM rows'
+    /// `first_interaction` / `last_interaction` columns with the dates
+    /// the relationship actually spans rather than `now()`. Pass `None`
+    /// when no per-message timestamp is available (`populate_crm_for_user`);
+    /// the repo falls back to `now()` in that case. `LEAST`/`GREATEST`
+    /// on the conflict path keep out-of-order backfill converging to
+    /// the true earliest / latest. `created_at` / `updated_at` keep
+    /// their row-lifecycle semantics (DEFAULT `now()` /
+    /// `set_crm_updated_at` trigger).
     fn populate_contact(
         &self,
         team_id: &uuid::Uuid,
@@ -53,6 +66,7 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         user_email: &str,
         email: &str,
         name: Option<&str>,
+        message_at: Option<DateTime<Utc>>,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
     /// Reverses [`populate_contact`] for one `(link_id, email)`. Drops the
@@ -218,6 +232,7 @@ where
         user_email: &str,
         email: &str,
         name: Option<&str>,
+        message_at: Option<DateTime<Utc>>,
     ) -> Result<(), CrmError> {
         let email = email.trim();
         let Some((local_part, domain)) = email.split_once('@') else {
@@ -285,7 +300,7 @@ where
         }
 
         self.companies_repository
-            .populate_contact(team_id, link_id, domain, email, name)
+            .populate_contact(team_id, link_id, domain, email, name, message_at)
             .await
     }
 

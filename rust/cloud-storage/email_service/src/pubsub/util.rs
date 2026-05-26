@@ -1,6 +1,7 @@
 use crate::pubsub::context::PubSubContext;
 use crate::util::redis::RedisClient;
 use crate::util::redis::rate_limit::RateLimitArgs;
+use chrono::{DateTime, Utc};
 use connection_gateway_client::client::ConnectionGatewayClient;
 /// shared utils across different pubsub workers
 use models_email::email::service::backfill::{
@@ -130,23 +131,35 @@ fn normalized_non_self_contact_emails(
 /// Producer-side fan-out helper: normalizes and enqueues one
 /// `PopulateCrmContact` message per distinct, non-self contact.
 ///
-/// Takes `(email, name)` pairs so the consumer can write
-/// `crm_contacts.name` without a follow-up round-trip to `email_contacts`.
-/// `name` comes from the gmail message's recipient header on the
-/// per-message paths (`backfill_message`, `upsert_message`) and from
+/// Takes `(email, name, contact_id)` triples so the consumer can write
+/// `crm_contacts.name` without a follow-up round-trip to `email_contacts`,
+/// and so the consumer can fall back to a `MAX(internal_date_ts)`
+/// lookup keyed on `contact_id` when `message_at` is `None`. `name`
+/// comes from the gmail message's recipient header on the per-message
+/// paths (`backfill_message`, `upsert_message`) and from
 /// `email_contacts.name` on the historical path (`populate_crm_for_user`).
+/// `contact_id` is `Some` only on the historical path — the per-message
+/// paths already carry `message_at` so the consumer doesn't need to
+/// look it up.
+///
+/// `message_at` is the single message timestamp shared by every
+/// recipient of this fan-out (per-message paths pass
+/// `Some(message.internal_date_ts)`; the historical path passes `None`
+/// and lets the consumer derive a per-contact timestamp from
+/// `contact_id`).
 ///
 /// Email validation rules and dedup match
 /// [`normalized_non_self_contact_emails`]; dedup is by email only, so the
-/// first name seen for a given address in this batch wins.
+/// first name / contact_id seen for a given address in this batch wins.
 pub async fn enqueue_populate_crm_contacts(
     ctx: &PubSubContext,
     link_id: Uuid,
     self_email: &str,
-    contacts: impl IntoIterator<Item = (String, Option<String>)>,
+    contacts: impl IntoIterator<Item = (String, Option<String>, Option<Uuid>)>,
+    message_at: Option<DateTime<Utc>>,
 ) -> Result<(), ProcessingError> {
     let mut seen: HashSet<String> = HashSet::new();
-    for (raw_email, contact_name) in contacts {
+    for (raw_email, contact_name, contact_id) in contacts {
         let contact_email = raw_email.trim().to_ascii_lowercase();
         let Some((local, domain)) = contact_email.split_once('@') else {
             continue;
@@ -164,6 +177,8 @@ pub async fn enqueue_populate_crm_contacts(
                 payload: PopulateCrmContactPayload {
                     contact_email,
                     contact_name,
+                    message_at,
+                    contact_id,
                 },
             }),
         };

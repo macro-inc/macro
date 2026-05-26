@@ -280,6 +280,33 @@ pub struct PopulateCrmContactPayload {
     /// no display name was associated with the address.
     #[serde(default)]
     pub contact_name: Option<String>,
+    /// Timestamp of the message that triggered this populate. Set on the
+    /// per-message paths (`backfill_message`, `upsert_message`) from the
+    /// message's `internal_date_ts` so backfilling historical mail
+    /// writes `crm_companies` / `crm_contacts` `first_interaction` /
+    /// `last_interaction` with the date range the relationship actually
+    /// spans rather than `now()`. The consumer uses `LEAST` against
+    /// `first_interaction` and `GREATEST` against `last_interaction` so
+    /// out-of-order backfill converges to the true earliest / latest.
+    /// `created_at` / `updated_at` are untouched — they keep their
+    /// row-lifecycle semantics (DEFAULT `now()` on INSERT,
+    /// `set_crm_updated_at` trigger on UPDATE).
+    ///
+    /// When `None`, the consumer falls back to a DB lookup keyed on
+    /// `contact_id` (the latest sent message's `internal_date_ts` on the
+    /// link to that contact). If `contact_id` is also `None`, the
+    /// consumer collapses to `now()`.
+    #[serde(default)]
+    pub message_at: Option<DateTime<Utc>>,
+    /// `email_contacts.id` for `contact_email` on the producer's link.
+    /// Set on the historical path (`populate_crm_for_user`) so the
+    /// consumer can DB-lookup the latest sent-message timestamp for the
+    /// contact when `message_at` is `None`. `None` on the per-message
+    /// paths — those already carry `message_at` so the lookup is
+    /// unnecessary, and the contact row may not even exist yet when the
+    /// producer queues the job.
+    #[serde(default)]
+    pub contact_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]

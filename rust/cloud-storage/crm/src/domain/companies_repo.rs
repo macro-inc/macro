@@ -1,6 +1,7 @@
 //! Port for persistence operations on CRM companies.
 
 use crate::domain::model::{CrmCompany, CrmError, CrmScopePrecheck, DomainMetadata};
+use chrono::{DateTime, Utc};
 
 /// The CompaniesRepository defines persistence operations for CRM
 /// companies and their associated domains.
@@ -50,6 +51,19 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// this user's link (sourced from `email_contacts.name` by the
     /// caller); pass `None` when no display name is available.
     ///
+    /// `message_at` is the timestamp the populating message was sent /
+    /// received at. It is written to the domain-specific
+    /// `first_interaction` / `last_interaction` columns (not
+    /// `created_at` / `updated_at`, which keep their row-lifecycle
+    /// semantics — DEFAULT `now()` on INSERT and the
+    /// `set_crm_updated_at` trigger on UPDATE). On INSERT, both
+    /// interaction columns seed to `COALESCE($message_at, now())`. On
+    /// UPDATE, `first_interaction = LEAST(stored, COALESCE(...))` and
+    /// `last_interaction = GREATEST(stored, COALESCE(...))` so the
+    /// pair converges to the true earliest / latest message date
+    /// regardless of backfill order. `None` falls back to `now()`,
+    /// which is correct for the realtime path.
+    ///
     /// The caller is expected to have ensured a `crm_domain_directory`
     /// entry exists for `domain` (via [`upsert_domain_metadata`]) before
     /// invoking — this method writes no metadata of its own.
@@ -63,6 +77,7 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         domain: &str,
         email: &str,
         name: Option<&str>,
+        message_at: Option<DateTime<Utc>>,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
     /// Read the cached [`DomainMetadata`] for `domain` from

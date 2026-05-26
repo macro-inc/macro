@@ -19,6 +19,13 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 /// inside `crm_service.populate_contact` via the
 /// `crm_domain_directory` lookup → resolver → upsert path, so the
 /// consumer here doesn't need to know how that's done.
+///
+/// When `p.message_at` is `None`, falls back to a `MAX(internal_date_ts)`
+/// lookup keyed on `p.contact_id` so the historical (`populate_crm_for_user`)
+/// path stamps `first_interaction` / `last_interaction` with a real
+/// message date rather than `now()`. Without a `contact_id`, the lookup
+/// is skipped and the populate runs with `message_at = None` (the repo
+/// collapses to `now()`).
 #[tracing::instrument(skip(ctx), err, fields(contact_email = %p.contact_email, link_id = %link.id))]
 pub async fn populate_crm_contact(
     ctx: &PubSubContext,
@@ -43,6 +50,23 @@ pub async fn populate_crm_contact(
         return Ok(());
     };
 
+    let message_at = match (p.message_at, p.contact_id) {
+        (Some(ts), _) => Some(ts),
+        (None, Some(contact_id)) => {
+            email_db_client::contacts::get::fetch_latest_sent_message_at_to_contact(
+                &ctx.db, link.id, contact_id,
+            )
+            .await
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("Failed to look up latest sent-message timestamp"),
+                })
+            })?
+        }
+        (None, None) => None,
+    };
+
     ctx.crm_service
         .populate_contact(
             &team_id,
@@ -50,6 +74,7 @@ pub async fn populate_crm_contact(
             link.email_address.0.as_ref(),
             &p.contact_email,
             p.contact_name.as_deref(),
+            message_at,
         )
         .await
         .map_err(|e| {
