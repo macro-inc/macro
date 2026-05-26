@@ -1,11 +1,11 @@
 import { SidePanel } from '@app/component/side-panel';
 import { useCallContextOptional } from '@channel/Call/CallContext';
+import { InlineCheckbox } from '@channel/Call/CallControls/CallMenuPrimitives';
 import { useBlockId } from '@core/block';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
-import CheckIcon from '@phosphor/check.svg';
 import ClockIcon from '@phosphor/clock.svg';
 import {
   useSetCallRecordShareWithTeamMutation,
@@ -172,36 +172,24 @@ function SharingSectionContent(props: { record: Accessor<CallRecord> }) {
 
   return (
     <div class="flex flex-col gap-2 text-xs">
-      <label
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={isShared()}
+        disabled={isDisabled()}
+        onClick={() => void handleChange(!isShared())}
         class={cn(
-          'flex items-center gap-2 -mx-1 px-1 py-1 rounded-md',
-          isDisabled() ? 'opacity-60' : 'hover:bg-hover/50'
+          'inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none w-fit',
+          'border border-ink-muted/[0.08] bg-ink-muted/[0.025]',
+          'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
+          isShared() && 'text-ink',
+          isDisabled() && 'pointer-events-none opacity-50'
         )}
       >
-        <span class="relative inline-flex shrink-0">
-          <input
-            type="checkbox"
-            class="peer sr-only"
-            checked={isShared()}
-            disabled={isDisabled()}
-            onChange={(e) => void handleChange(e.currentTarget.checked)}
-          />
-          <span
-            class={cn(
-              'size-3.5 rounded-sm border border-edge bg-surface',
-              'peer-checked:bg-accent peer-checked:border-accent',
-              'peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40',
-              'transition-colors'
-            )}
-          >
-            <Show when={isShared()}>
-              <CheckIcon class="size-full text-surface p-0.5" />
-            </Show>
-          </span>
-        </span>
-        <span class="text-ink">Share with team</span>
-      </label>
-      <p class="text-ink-muted leading-5 pl-[1.375rem]">
+        <InlineCheckbox checked={isShared()} />
+        <span class="whitespace-nowrap">Share with team</span>
+      </button>
+      <p class="text-ink-muted leading-5">
         Lets everyone on your team view and search this call's transcript and AI
         summary.
       </p>
