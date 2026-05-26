@@ -1329,7 +1329,9 @@ export function BaseInput(props: {
         if (next && e.currentTarget.contains(next)) return;
         setIsFocused(false);
       }}
-      ref={ (el) => { composeContainerRef = el; } }
+      ref={(el) => {
+        composeContainerRef = el;
+      }}
       onFocusIn={() => setIsFocused(true)}
       active={isFocused()}
       depth={2}

@@ -183,12 +183,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   );
 
   return (
-    <Surface
-      active={isFocused()}
-      class="rounded-xl"
-      depth={2}
-      solid
-    >
+    <Surface active={isFocused()} class="rounded-xl" depth={2} solid>
       <div
         onFocusOut={(e) => {
           const next = e.relatedTarget as Node | null;
