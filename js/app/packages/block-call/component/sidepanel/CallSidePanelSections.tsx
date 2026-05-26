@@ -14,13 +14,7 @@ import {
 import { commsServiceClient } from '@service-comms/client';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { cn } from '@ui';
-import {
-  type Accessor,
-  createMemo,
-  createResource,
-  Show,
-  Suspense,
-} from 'solid-js';
+import { type Accessor, createResource, Show, Suspense } from 'solid-js';
 import { formatCallDuration } from '../../utils';
 
 interface CallSidePanelSectionsProps {
@@ -50,11 +44,9 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
 function DetailsSectionContent(props: { record: Accessor<CallRecord> }) {
   const record = props.record;
 
-  const startedAt = createMemo<DateValue | undefined>(() => record().startedAt);
-  const endedAt = createMemo<DateValue | undefined>(
-    () => record().endedAt ?? undefined
-  );
-  const durationMs = createMemo(() => record().durationMs ?? undefined);
+  const startedAt = (): DateValue | undefined => record().startedAt;
+  const endedAt = (): DateValue | undefined => record().endedAt ?? undefined;
+  const durationMs = () => record().durationMs ?? undefined;
 
   return (
     <div class="grid grid-cols-[var(--sidepanel-label-width,auto)_1fr] gap-x-3 items-center text-xs auto-rows-[2rem]">
@@ -145,10 +137,9 @@ function SharingSectionContent(props: { record: Accessor<CallRecord> }) {
   const toggleActiveShare = useToggleShareWithTeamMutation();
   const setArchivedShare = useSetCallRecordShareWithTeamMutation();
 
-  const isShared = createMemo(() => record().shareWithTeam);
-  const isDisabled = createMemo(
-    () => toggleActiveShare.isPending || setArchivedShare.isPending
-  );
+  const isShared = () => record().shareWithTeam;
+  const isDisabled = () =>
+    toggleActiveShare.isPending || setArchivedShare.isPending;
 
   const handleChange = async (checked: boolean) => {
     const current = record();
@@ -219,7 +210,7 @@ function ReferencesSectionConditional(props: { callId: string }) {
     }
   );
 
-  const count = createMemo(() => references()?.length ?? 0);
+  const count = () => references()?.length ?? 0;
 
   const title = () => (
     <>
