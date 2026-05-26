@@ -29,6 +29,7 @@ import {
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_CALLS,
+  ENABLE_NEW_PRICING_OVERRIDE,
   ENABLE_TEAMS_OVERRIDE,
 } from '@core/constant/featureFlags';
 import {
@@ -684,6 +685,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const notificationSettings = useNotificationSettings();
   const callCtx = useCallContextOptional();
 
+  const newPricingFF = useFeatureFlag('enable-new-pricing', {
+    enabledOverride: ENABLE_NEW_PRICING_OVERRIDE,
+  });
+
   const showEnableNotifications = () =>
     notificationSettings.isSupported && notificationSettings.canPrompt();
 
@@ -922,7 +927,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <hr class="border-transparent mb-2" />
       </div>
 
-      <Show when={!isSlim() && !premiumCardDismissed()}>
+      <Show
+        when={!isSlim() && !premiumCardDismissed() && newPricingFF().enabled}
+      >
         <div class="w-full px-2 mb-2">
           <SidebarPromoCard
             label="Upgrade to Premium"
@@ -945,7 +952,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
           />
         </div>
       </Show>
-      <Show when={!isSlim() && premiumHintVisible() && premiumCardDismissed()}>
+      <Show
+        when={
+          !isSlim() &&
+          premiumHintVisible() &&
+          premiumCardDismissed() &&
+          newPricingFF().enabled
+        }
+      >
         <div class="w-full px-2 mb-2">
           <SidebarPromoHint
             title="Maybe later"
