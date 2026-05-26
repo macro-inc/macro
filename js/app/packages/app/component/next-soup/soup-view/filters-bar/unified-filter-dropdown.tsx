@@ -415,14 +415,16 @@ const SearchableFilterSubmenu = (props: {
       </Dropdown.SubTrigger>
 
       <Dropdown.SubContent class="w-65 max-w-[90vw]">
-        <SearchableMultiSelectInline
-          options={props.options}
-          activeIds={props.activeIds}
-          onChange={props.onChange}
-          placeholder={props.placeholder}
-          inputRef={setInputRef}
-          onRequestClose={() => setIsOpen(false)}
-        />
+        <Dropdown.Group class="p-0 gap-0">
+          <SearchableMultiSelectInline
+            onRequestClose={() => setIsOpen(false)}
+            placeholder={props.placeholder}
+            activeIds={props.activeIds}
+            onChange={props.onChange}
+            options={props.options}
+            inputRef={setInputRef}
+          />
+        </Dropdown.Group>
       </Dropdown.SubContent>
     </Dropdown.Sub>
   );
