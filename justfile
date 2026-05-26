@@ -8,11 +8,11 @@ export COMPOSE_PROJECT_NAME := "macro"
 create_networks:
   docker network create databases 2>/dev/null || true -- db network
   docker network create auth 2>/dev/null || true -- fusionauth network
-  docker volume create macro_postgres_data >/dev/null
-  docker volume create macro_redis_data >/dev/null
-  docker volume create macro_opensearch_data >/dev/null
-  docker volume create fusionauth_db_data >/dev/null
-  docker volume create fusionauth_config >/dev/null
+  docker volume create macro_postgres_data 2>/dev/null || true
+  docker volume create macro_redis_data 2>/dev/null || true
+  docker volume create macro_opensearch_data 2>/dev/null || true
+  docker volume create fusionauth_db_data 2>/dev/null || true
+  docker volume create fusionauth_config 2>/dev/null || true
   echo "docker networks and volumes created"
 
 fix_environment *ARGS:
@@ -209,7 +209,7 @@ setup_local_dbs:
 # stop container
 setup_fusionauth:
   just create_networks
-  just infra/stacks/fusionauth-instance/setup_fusionauth
+  just infra/stacks/fusionauth-instance/setup
 
 # Stop FusionAuth containers
 stop_fusionauth:
