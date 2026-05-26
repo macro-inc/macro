@@ -1,0 +1,332 @@
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+use chrono::Utc;
+use serde_json::json;
+use uuid::Uuid;
+
+use super::*;
+
+#[derive(Clone, Default)]
+struct FakeForeignEntityRepository {
+    records: Arc<Mutex<HashMap<Uuid, ForeignEntity>>>,
+}
+
+impl FakeForeignEntityRepository {
+    fn records(&self) -> std::sync::MutexGuard<'_, HashMap<Uuid, ForeignEntity>> {
+        self.records
+            .lock()
+            .expect("fake foreign entity repository lock poisoned")
+    }
+}
+
+impl ForeignEntityRepository for FakeForeignEntityRepository {
+    type Err = anyhow::Error;
+
+    async fn get_foreign_entity_by_id(&self, id: Uuid) -> Result<Option<ForeignEntity>, Self::Err> {
+        Ok(self.records().get(&id).cloned())
+    }
+
+    async fn get_foreign_entities_by_foreign_entity_id(
+        &self,
+        foreign_entity_id: &str,
+        foreign_entity_source: Option<&str>,
+    ) -> Result<Vec<ForeignEntity>, Self::Err> {
+        let records = self
+            .records()
+            .values()
+            .filter(|record| {
+                record.foreign_entity_id == foreign_entity_id
+                    && foreign_entity_source
+                        .map(|source| record.foreign_entity_source == source)
+                        .unwrap_or(true)
+            })
+            .cloned()
+            .collect();
+
+        Ok(records)
+    }
+
+    async fn create_foreign_entity(
+        &self,
+        id: Uuid,
+        create: CreateForeignEntity,
+    ) -> Result<ForeignEntity, Self::Err> {
+        let now = Utc::now();
+        let entity = ForeignEntity {
+            id,
+            foreign_entity_id: create.foreign_entity_id,
+            foreign_entity_source: create.foreign_entity_source,
+            metadata: create.metadata,
+            stored_for_id: create.stored_for_id,
+            stored_for_auth_entity: create.stored_for_auth_entity,
+            created_at: now,
+            updated_at: now,
+        };
+
+        self.records().insert(id, entity.clone());
+
+        Ok(entity)
+    }
+
+    async fn delete_foreign_entity(&self, id: Uuid) -> Result<bool, Self::Err> {
+        Ok(self.records().remove(&id).is_some())
+    }
+
+    async fn patch_foreign_entity(
+        &self,
+        id: Uuid,
+        patch: PatchForeignEntity,
+    ) -> Result<Option<ForeignEntity>, Self::Err> {
+        let mut records = self.records();
+        let Some(entity) = records.get_mut(&id) else {
+            return Ok(None);
+        };
+
+        if let Some(foreign_entity_id) = patch.foreign_entity_id {
+            entity.foreign_entity_id = foreign_entity_id;
+        }
+        if let Some(foreign_entity_source) = patch.foreign_entity_source {
+            entity.foreign_entity_source = foreign_entity_source;
+        }
+        if let Some(metadata) = patch.metadata {
+            entity.metadata = metadata;
+        }
+        if let Some(stored_for_id) = patch.stored_for_id {
+            entity.stored_for_id = stored_for_id;
+        }
+        if let Some(stored_for_auth_entity) = patch.stored_for_auth_entity {
+            entity.stored_for_auth_entity = stored_for_auth_entity;
+        }
+
+        entity.updated_at = Utc::now();
+
+        Ok(Some(entity.clone()))
+    }
+}
+
+fn service() -> ForeignEntityServiceImpl<FakeForeignEntityRepository> {
+    ForeignEntityServiceImpl::new(FakeForeignEntityRepository::default())
+}
+
+fn valid_create() -> CreateForeignEntity {
+    CreateForeignEntity {
+        foreign_entity_id: "external-entity-1".to_string(),
+        foreign_entity_source: "linear".to_string(),
+        metadata: json!({ "team": "engineering" }),
+        stored_for_id: "document-1".to_string(),
+        stored_for_auth_entity: "document".to_string(),
+    }
+}
+
+fn assert_bad_request(error: ForeignEntityError, expected_message: &str) {
+    let ForeignEntityError::BadRequest(message) = error else {
+        panic!("expected bad request error, got {error:?}");
+    };
+
+    assert!(
+        message.contains(expected_message),
+        "expected bad request message '{message}' to contain '{expected_message}'"
+    );
+}
+
+fn assert_not_found(error: ForeignEntityError, expected_id: Uuid) {
+    let ForeignEntityError::NotFound(actual_id) = error else {
+        panic!("expected not found error, got {error:?}");
+    };
+
+    assert_eq!(actual_id, expected_id);
+}
+
+#[tokio::test]
+async fn create_persists_foreign_entity_with_generated_id() {
+    let service = service();
+
+    let created = service
+        .create_foreign_entity(valid_create())
+        .await
+        .expect("valid foreign entity should be created");
+
+    assert_ne!(created.id, Uuid::nil());
+    assert_eq!(created.foreign_entity_id, "external-entity-1");
+    assert_eq!(created.foreign_entity_source, "linear");
+    assert_eq!(created.metadata, json!({ "team": "engineering" }));
+    assert_eq!(created.stored_for_id, "document-1");
+    assert_eq!(created.stored_for_auth_entity, "document");
+
+    let fetched = service
+        .get_foreign_entity_by_id(created.id)
+        .await
+        .expect("created foreign entity should be fetched");
+
+    assert_eq!(fetched, created);
+}
+
+#[tokio::test]
+async fn get_by_foreign_entity_id_returns_all_matching_records() {
+    let service = service();
+    let mut second_create = valid_create();
+    second_create.foreign_entity_source = "github".to_string();
+
+    service
+        .create_foreign_entity(valid_create())
+        .await
+        .expect("first foreign entity should be created");
+    service
+        .create_foreign_entity(second_create)
+        .await
+        .expect("second foreign entity should be created");
+
+    let all_matches = service
+        .get_foreign_entities_by_foreign_entity_id("external-entity-1", None)
+        .await
+        .expect("matching foreign entities should be returned");
+    let source_matches = service
+        .get_foreign_entities_by_foreign_entity_id("external-entity-1", Some("github"))
+        .await
+        .expect("source-filtered foreign entities should be returned");
+
+    assert_eq!(all_matches.len(), 2);
+    assert_eq!(source_matches.len(), 1);
+    assert_eq!(source_matches[0].foreign_entity_source, "github");
+}
+
+#[tokio::test]
+async fn get_missing_foreign_entity_by_id_returns_not_found() {
+    let service = service();
+    let id = Uuid::new_v4();
+
+    let error = service
+        .get_foreign_entity_by_id(id)
+        .await
+        .expect_err("missing foreign entity should return not found");
+
+    assert_not_found(error, id);
+}
+
+#[tokio::test]
+async fn create_rejects_blank_required_fields() {
+    let service = service();
+    let cases: Vec<(&str, fn(&mut CreateForeignEntity))> = vec![
+        ("foreignEntityId", |create| {
+            create.foreign_entity_id = " \t".to_string();
+        }),
+        ("foreignEntitySource", |create| {
+            create.foreign_entity_source = "\n".to_string();
+        }),
+        ("storedForId", |create| {
+            create.stored_for_id = " ".to_string();
+        }),
+        ("storedForAuthEntity", |create| {
+            create.stored_for_auth_entity = "\r\n".to_string();
+        }),
+    ];
+
+    for (field_name, make_blank) in cases {
+        let mut create = valid_create();
+        make_blank(&mut create);
+
+        let error = service
+            .create_foreign_entity(create)
+            .await
+            .expect_err("blank create field should be rejected");
+
+        assert_bad_request(error, field_name);
+    }
+}
+
+#[tokio::test]
+async fn patch_rejects_empty_patch() {
+    let service = service();
+
+    let error = service
+        .patch_foreign_entity(Uuid::new_v4(), PatchForeignEntity::default())
+        .await
+        .expect_err("empty patch should be rejected");
+
+    assert_bad_request(error, "at least one field");
+}
+
+#[tokio::test]
+async fn patch_rejects_blank_string_fields() {
+    let service = service();
+    let cases = vec![
+        (
+            "foreignEntityId",
+            PatchForeignEntity {
+                foreign_entity_id: Some(" ".to_string()),
+                ..Default::default()
+            },
+        ),
+        (
+            "foreignEntitySource",
+            PatchForeignEntity {
+                foreign_entity_source: Some("\t".to_string()),
+                ..Default::default()
+            },
+        ),
+        (
+            "storedForId",
+            PatchForeignEntity {
+                stored_for_id: Some("\n".to_string()),
+                ..Default::default()
+            },
+        ),
+        (
+            "storedForAuthEntity",
+            PatchForeignEntity {
+                stored_for_auth_entity: Some("\r\n".to_string()),
+                ..Default::default()
+            },
+        ),
+    ];
+
+    for (field_name, patch) in cases {
+        let error = service
+            .patch_foreign_entity(Uuid::new_v4(), patch)
+            .await
+            .expect_err("blank patch field should be rejected");
+
+        assert_bad_request(error, field_name);
+    }
+}
+
+#[tokio::test]
+async fn patch_missing_foreign_entity_returns_not_found() {
+    let service = service();
+    let id = Uuid::new_v4();
+
+    let error = service
+        .patch_foreign_entity(
+            id,
+            PatchForeignEntity {
+                metadata: Some(json!({ "status": "updated" })),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect_err("missing foreign entity should return not found");
+
+    assert_not_found(error, id);
+}
+
+#[tokio::test]
+async fn delete_returns_ok_when_deleted_and_not_found_when_missing() {
+    let service = service();
+    let created = service
+        .create_foreign_entity(valid_create())
+        .await
+        .expect("valid foreign entity should be created");
+
+    service
+        .delete_foreign_entity(created.id)
+        .await
+        .expect("existing foreign entity should be deleted");
+
+    let error = service
+        .delete_foreign_entity(created.id)
+        .await
+        .expect_err("second delete should return not found");
+
+    assert_not_found(error, created.id);
+}
