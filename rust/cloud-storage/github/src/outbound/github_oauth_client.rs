@@ -198,7 +198,7 @@ impl GithubOauth for GithubOauthImpl {
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", "Macro-Auth-Service")
             .header("X-GitHub-Api-Version", "2022-11-28")
-            .timeout(Duration::from_secs(30))
+            .timeout(Duration::from_secs(15))
             .send()
             .await?;
 
