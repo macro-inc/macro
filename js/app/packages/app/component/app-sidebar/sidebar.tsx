@@ -394,12 +394,6 @@ const registerSidebarHotkeys = ({
   }
 };
 
-/** Persisted dismissal for the Premium upgrade promo card. */
-const [premiumCardDismissed, setPremiumCardDismissed] = makePersisted(
-  createSignal<boolean>(false),
-  { name: 'sidebar-premium-card-dismissed' }
-);
-
 /** Session-only signal so a hint shows after dismissal until the user acknowledges or the timer expires. */
 const [premiumHintVisible, setPremiumHintVisible] = createSignal(false);
 
@@ -684,6 +678,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const isTabAvailable = useIsSettingsTabAvailable();
   const notificationSettings = useNotificationSettings();
   const callCtx = useCallContextOptional();
+
+  /** Persisted dismissal for the Premium upgrade promo card. */
+  const [premiumCardDismissed, setPremiumCardDismissed] = makePersisted(
+    createSignal<boolean>(false),
+    { name: 'sidebar-premium-card-dismissed' }
+  );
 
   const newPricingFF = useFeatureFlag('enable-new-pricing', {
     enabledOverride: ENABLE_NEW_PRICING_OVERRIDE,
