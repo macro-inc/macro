@@ -200,7 +200,6 @@ pub async fn build_tool_service_context_from_env(
         upload_url_service: s3_upload_adapter,
         task_properties_service: NoOpTaskProperties,
         connection_service: NoOpConnectionService,
-        github_pull_request_enricher: documents::domain::ports::NoopGithubPullRequestEnricher,
         entity_access_management_service:
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
                 entity_access_management::outbound::PgRepository::new(pool.clone()),

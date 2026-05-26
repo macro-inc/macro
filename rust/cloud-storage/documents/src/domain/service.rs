@@ -44,10 +44,7 @@ use super::models::{
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
-use super::ports::{
-    DocumentRepo, DocumentService, GithubPullRequestEnricher, NoopGithubPullRequestEnricher,
-    PresignedUploadUrlPort, TaskPropertiesPort,
-};
+use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
 use super::response::{
     CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
     DocumentResponseMetadataWithContent, GetDocumentResponseData, LocationResponseV3,
@@ -60,7 +57,6 @@ pub struct DocumentServiceImpl<
     T: TaskPropertiesPort,
     C: ConnectionService,
     Eam: EntityAccessManagementService,
-    G: GithubPullRequestEnricher = NoopGithubPullRequestEnricher,
 > {
     /// Document repository
     pub repo: R,
@@ -74,8 +70,6 @@ pub struct DocumentServiceImpl<
     pub task_properties_service: T,
     /// Connection service
     pub connection_service: C,
-    /// Github pr enricher
-    pub github_pull_request_enricher: G,
     /// entity access management service
     pub entity_access_management_service: Eam,
 }
@@ -131,9 +125,29 @@ impl<
     T: TaskPropertiesPort,
     C: ConnectionService,
     Eam: EntityAccessManagementService,
-    G: GithubPullRequestEnricher,
-> DocumentServiceImpl<R, U, T, C, Eam, G>
+> DocumentServiceImpl<R, U, T, C, Eam>
 {
+    /// Create a document service with its repository and external service ports.
+    pub fn new(
+        repo: R,
+        cloudfront_config: CloudFrontConfig,
+        sync_service_client: sync_service_client::SyncServiceClient,
+        upload_url_service: U,
+        task_properties_service: T,
+        connection_service: C,
+        entity_access_management_service: Eam,
+    ) -> Self {
+        Self {
+            repo,
+            cloudfront_config,
+            sync_service_client,
+            upload_url_service,
+            task_properties_service,
+            connection_service,
+            entity_access_management_service,
+        }
+    }
+
     fn get_signed_options(&self) -> SignedOptions {
         let current_unix_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -395,8 +409,7 @@ impl<
     T: TaskPropertiesPort,
     C: ConnectionService,
     Eam: EntityAccessManagementService,
-    G: GithubPullRequestEnricher,
-> DocumentCreationService for DocumentServiceImpl<R, U, T, C, Eam, G>
+> DocumentCreationService for DocumentServiceImpl<R, U, T, C, Eam>
 {
     async fn create_document(
         &self,
@@ -448,8 +461,7 @@ impl<
     T: TaskPropertiesPort,
     C: ConnectionService,
     Eam: EntityAccessManagementService,
-    G: GithubPullRequestEnricher,
-> DocumentService for DocumentServiceImpl<R, U, T, C, Eam, G>
+> DocumentService for DocumentServiceImpl<R, U, T, C, Eam>
 {
     #[tracing::instrument(err, skip(self))]
     async fn get_document(
@@ -738,21 +750,7 @@ impl<
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
 
-        let mut response = GithubPullRequestsResponse::from_github_keys(github_keys);
-        let Ok(user_id) = entity_access_receipt.get_authenticated_user() else {
-            return Ok(response);
-        };
-
-        if response.pull_requests.is_empty() {
-            return Ok(response);
-        }
-
-        response.pull_requests = self
-            .github_pull_request_enricher
-            .enrich_pull_requests(user_id, response.pull_requests)
-            .await;
-
-        Ok(response)
+        Ok(GithubPullRequestsResponse::from_github_keys(github_keys))
     }
 
     #[tracing::instrument(err, skip(self, document_context))]

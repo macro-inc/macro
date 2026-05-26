@@ -10,6 +10,8 @@ import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
+  EnrichGithubPullRequestsProxyRequest,
+  EnrichGithubPullRequestsResponse,
   InitGithubLinkResponse,
   PatchSubscriptionTierRequest,
   PatchUserTutorialRequest,
@@ -316,6 +318,18 @@ export const authServiceClient = {
     ).map((result) => result);
 
     return result;
+  },
+
+  async enrichGithubPullRequests(args: EnrichGithubPullRequestsProxyRequest) {
+    return (
+      await fetchWithAuth<EnrichGithubPullRequestsResponse>(
+        `${authHost}/github_pull_requests/enrich`,
+        {
+          method: 'POST',
+          body: JSON.stringify(args),
+        }
+      )
+    ).map((result) => result);
   },
   async patchUserTutorial(args: PatchUserTutorialRequest) {
     return (

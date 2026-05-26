@@ -1,11 +1,8 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 use macro_user_id::cowlike::CowLike;
 use model::document::DocumentMetadata;
 
 use crate::domain::models::GithubPullRequest;
-use crate::domain::ports::{GithubPullRequestEnricher, MockDocumentRepo};
+use crate::domain::ports::MockDocumentRepo;
 
 use super::*;
 
@@ -188,54 +185,52 @@ impl EntityAccessManagementService for TestEntityAccessManagementService {
     }
 }
 
-struct TestGithubPullRequestEnricher {
-    calls: Arc<AtomicUsize>,
-}
-
-impl GithubPullRequestEnricher for TestGithubPullRequestEnricher {
-    fn enrich_pull_requests(
-        &self,
-        user_id: &macro_user_id::user_id::MacroUserIdStr<'static>,
-        mut pull_requests: Vec<GithubPullRequest>,
-    ) -> impl Future<Output = Vec<GithubPullRequest>> + Send {
-        assert_eq!(user_id.as_ref(), "macro|user@user.com");
-        self.calls.fetch_add(1, Ordering::SeqCst);
-
-        for pull_request in &mut pull_requests {
-            pull_request.name = Some("Enriched pull request".to_string());
-            pull_request.status = Some("open".to_string());
-            pull_request.additions = Some(12);
-            pull_request.deletions = Some(3);
-        }
-
-        std::future::ready(pull_requests)
-    }
-}
-
-fn make_test_service<G: GithubPullRequestEnricher>(
+fn make_test_service(
     repo: MockDocumentRepo,
-    github_pull_request_enricher: G,
 ) -> DocumentServiceImpl<
     MockDocumentRepo,
     TestUploadUrlPort,
     TestTaskPropertiesPort,
     TestConnectionService,
     TestEntityAccessManagementService,
-    G,
 > {
-    DocumentServiceImpl{
+    DocumentServiceImpl::new(
         repo,
-        cloudfront_config: test_cloudfront_config(),
-        sync_service_client:sync_service_client::SyncServiceClient::new(
+        test_cloudfront_config(),
+        sync_service_client::SyncServiceClient::new(
             "test-sync-key".to_string(),
             "http://sync-service.test".to_string(),
         ),
-        upload_url_service: TestUploadUrlPort,
-        task_properties_service: TestTaskPropertiesPort,
-        connection_service: TestConnectionService,
-        entity_access_management_service: TestEntityAccessManagementService,
-        github_pull_request_enricher,
-    }
+        TestUploadUrlPort,
+        TestTaskPropertiesPort,
+        TestConnectionService,
+        TestEntityAccessManagementService,
+    )
+}
+
+fn assert_raw_pull_request(
+    pull_request: &GithubPullRequest,
+    github_key: &str,
+    owner: &str,
+    repo: &str,
+    number: u64,
+) {
+    let expected_url = format!("https://github.com/{owner}/{repo}/pull/{number}");
+    let expected_display_name = format!("{owner}/{repo}#{number}");
+
+    assert_eq!(pull_request.github_key.as_str(), github_key);
+    assert_eq!(pull_request.owner.as_str(), owner);
+    assert_eq!(pull_request.repo.as_str(), repo);
+    assert_eq!(pull_request.number, number);
+    assert_eq!(pull_request.url.as_str(), expected_url.as_str());
+    assert_eq!(
+        pull_request.display_name.as_str(),
+        expected_display_name.as_str()
+    );
+    assert!(pull_request.name.is_none());
+    assert!(pull_request.status.is_none());
+    assert!(pull_request.additions.is_none());
+    assert!(pull_request.deletions.is_none());
 }
 
 #[tokio::test]
@@ -295,7 +290,7 @@ async fn test_soft_delete_document() {
 }
 
 #[tokio::test]
-async fn test_get_task_github_pull_requests_enriches_for_authenticated_user() {
+async fn test_get_task_github_pull_requests_returns_raw_refs_for_authenticated_user() {
     let document_id = "00000000-0000-0000-0000-000000000001";
     let expected_short_id = short_id_for_entity_id(document_id).unwrap();
     let mut repo = make_mock_repo();
@@ -308,13 +303,7 @@ async fn test_get_task_github_pull_requests_enriches_for_authenticated_user() {
             ])))
         });
 
-    let calls = Arc::new(AtomicUsize::new(0));
-    let service = make_test_service(
-        repo,
-        TestGithubPullRequestEnricher {
-            calls: calls.clone(),
-        },
-    );
+    let service = make_test_service(repo);
 
     let response = service
         .get_task_github_pull_requests(
@@ -324,19 +313,18 @@ async fn test_get_task_github_pull_requests_enriches_for_authenticated_user() {
         .await
         .unwrap();
 
-    assert_eq!(calls.load(Ordering::SeqCst), 1);
     assert_eq!(response.pull_requests.len(), 1);
-    assert_eq!(
-        response.pull_requests[0].name,
-        Some("Enriched pull request".to_string())
+    assert_raw_pull_request(
+        &response.pull_requests[0],
+        "macro/repo/pull/7",
+        "macro",
+        "repo",
+        7,
     );
-    assert_eq!(response.pull_requests[0].status, Some("open".to_string()));
-    assert_eq!(response.pull_requests[0].additions, Some(12));
-    assert_eq!(response.pull_requests[0].deletions, Some(3));
 }
 
 #[tokio::test]
-async fn test_get_task_github_pull_requests_skips_enrichment_for_internal_access() {
+async fn test_get_task_github_pull_requests_returns_raw_refs_for_internal_access() {
     let document_id = "00000000-0000-0000-0000-000000000002";
     let expected_short_id = short_id_for_entity_id(document_id).unwrap();
     let mut repo = make_mock_repo();
@@ -349,13 +337,7 @@ async fn test_get_task_github_pull_requests_skips_enrichment_for_internal_access
             ])))
         });
 
-    let calls = Arc::new(AtomicUsize::new(0));
-    let service = make_test_service(
-        repo,
-        TestGithubPullRequestEnricher {
-            calls: calls.clone(),
-        },
-    );
+    let service = make_test_service(repo);
 
     let response = service
         .get_task_github_pull_requests(
@@ -365,10 +347,12 @@ async fn test_get_task_github_pull_requests_skips_enrichment_for_internal_access
         .await
         .unwrap();
 
-    assert_eq!(calls.load(Ordering::SeqCst), 0);
     assert_eq!(response.pull_requests.len(), 1);
-    assert_eq!(response.pull_requests[0].name, None);
-    assert_eq!(response.pull_requests[0].status, None);
-    assert_eq!(response.pull_requests[0].additions, None);
-    assert_eq!(response.pull_requests[0].deletions, None);
+    assert_raw_pull_request(
+        &response.pull_requests[0],
+        "macro/repo/pull/8",
+        "macro",
+        "repo",
+        8,
+    );
 }

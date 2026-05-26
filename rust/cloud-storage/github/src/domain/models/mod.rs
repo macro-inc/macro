@@ -9,8 +9,9 @@ mod sync;
 
 pub use link::{GithubAccessToken, GithubExchangeTokenResponse, GithubLink, GithubUserInfo};
 pub use pull_request::{
-    EnrichGithubPullRequestsRequest, EnrichGithubPullRequestsResponse, EnrichedGithubPullRequest,
-    GithubPullRequestDetails, GithubPullRequestRef, GithubPullRequestStatus,
+    EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
+    EnrichedGithubPullRequest, GithubPullRequestDetails, GithubPullRequestRef,
+    GithubPullRequestStatus,
 };
 pub use sync::{
     GithubInstallationAccessToken, GithubKey, GithubWebhookEventType, MacroTaskId,

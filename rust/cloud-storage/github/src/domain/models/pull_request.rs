@@ -155,18 +155,16 @@ impl EnrichedGithubPullRequest {
     }
 }
 
-/// Request body for the internal pull request enrichment bridge.
+/// Request body for the authenticated pull request enrichment proxy.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct EnrichGithubPullRequestsRequest {
-    /// The Macro user ID whose GitHub access token should be used for enrichment.
-    pub macro_user_id: String,
-    /// The pull requests to enrich.
+pub struct EnrichGithubPullRequestsProxyRequest {
+    /// The pull requests to enrich for the authenticated user.
     pub pull_requests: Vec<GithubPullRequestRef>,
 }
 
-/// Response body for the internal pull request enrichment bridge.
+/// Response body for pull request enrichment.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]

@@ -26,8 +26,7 @@ use model_entity::Entity;
 use super::models::{
     BranchNameContext, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
     CreateTaskRequest, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
-    GithubPullRequest, GithubPullRequestsResponse, LocationQueryParams, TaskBranchName,
-    TeamTaskMetadata,
+    GithubPullRequestsResponse, LocationQueryParams, TaskBranchName, TeamTaskMetadata,
 };
 
 /// Repository for accessing document data from the database.
@@ -291,30 +290,6 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
         from_task_id: &str,
         to_task_id: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
-}
-
-/// Port for enriching task GitHub pull requests with user-specific GitHub data.
-pub trait GithubPullRequestEnricher: Send + Sync + 'static {
-    /// Enrich pull requests for the authenticated user.
-    fn enrich_pull_requests(
-        &self,
-        user_id: &MacroUserIdStr<'static>,
-        pull_requests: Vec<GithubPullRequest>,
-    ) -> impl Future<Output = Vec<GithubPullRequest>> + Send;
-}
-
-/// No-op GitHub pull request enricher for callers that do not need enrichment.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct NoopGithubPullRequestEnricher;
-
-impl GithubPullRequestEnricher for NoopGithubPullRequestEnricher {
-    fn enrich_pull_requests(
-        &self,
-        _user_id: &MacroUserIdStr<'static>,
-        pull_requests: Vec<GithubPullRequest>,
-    ) -> impl Future<Output = Vec<GithubPullRequest>> + Send {
-        std::future::ready(pull_requests)
-    }
 }
 
 /// Service interface for document operations.

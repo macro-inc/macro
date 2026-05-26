@@ -56,11 +56,10 @@ fn pull_request_status_maps_closed_merged_pr() {
 }
 
 #[test]
-fn pull_request_internal_models_serialize_with_camel_case_fields() {
+fn pull_request_proxy_request_serializes_with_only_pull_requests() {
     let reference = pull_request_reference();
-    let request = EnrichGithubPullRequestsRequest {
-        macro_user_id: "user_123".to_string(),
-        pull_requests: vec![reference.clone()],
+    let request = EnrichGithubPullRequestsProxyRequest {
+        pull_requests: vec![reference],
     };
 
     let request_json = serde_json::to_value(&request).unwrap();
@@ -68,7 +67,6 @@ fn pull_request_internal_models_serialize_with_camel_case_fields() {
     assert_eq!(
         request_json,
         serde_json::json!({
-            "macroUserId": "user_123",
             "pullRequests": [
                 {
                     "githubKey": "macro/app/pull/7",
@@ -81,11 +79,16 @@ fn pull_request_internal_models_serialize_with_camel_case_fields() {
             ]
         })
     );
+    assert!(request_json.get("macroUserId").is_none());
 
-    let decoded_request: EnrichGithubPullRequestsRequest =
+    let decoded_request: EnrichGithubPullRequestsProxyRequest =
         serde_json::from_value(request_json).unwrap();
     assert_eq!(decoded_request, request);
+}
 
+#[test]
+fn pull_request_response_serializes_with_camel_case_fields() {
+    let reference = pull_request_reference();
     let response = EnrichGithubPullRequestsResponse {
         pull_requests: vec![EnrichedGithubPullRequest {
             github_key: reference.github_key,

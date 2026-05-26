@@ -6,11 +6,10 @@ use crate::{
         DocumentStorageServiceCloudfrontSignerPrivateKeySecretName, GithubSyncAppPemSecretKey,
         GithubWebhookSecretKey, MetaAccessToken, MetaPixelId, MetaTestEventCode,
     },
-    service::{github_pull_request_enricher::GithubPullRequestEnricherAdapter, s3::S3},
+    service::s3::S3,
 };
 use analytics_client::{AnalyticsClient, AnalyticsClientConfig, MetaConfig};
 use anyhow::Context;
-use authentication_service_client::AuthServiceClient;
 use cal::{
     domain::service::{CalConfig, CalEventMeta, CalWebhookServiceImpl},
     inbound::cal_webhook_router::CalWebhookRouterState,
@@ -214,24 +213,6 @@ async fn main() -> anyhow::Result<()> {
         config.vars.sync_service_url.as_ref().to_string(),
     ));
 
-    let auth_service_secret_key = match config.environment {
-        Environment::Local => config
-            .vars
-            .authentication_service_secret_key
-            .as_ref()
-            .to_string(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.vars.authentication_service_secret_key)
-            .await
-            .context("unable to get authentication service secret")?
-            .to_string(),
-    };
-
-    let auth_service_client = AuthServiceClient::new(
-        auth_service_secret_key,
-        config.vars.authentication_service_url.as_ref().to_string(),
-    );
-
     let lexical_client = Arc::new(LexicalClient::new(
         internal_api_secret.as_ref().to_string(),
         config.vars.lexical_service_url.as_ref().to_string(),
@@ -377,21 +358,18 @@ async fn main() -> anyhow::Result<()> {
             entity_access_management::outbound::PgRepository::new(db.clone()),
         );
 
-    let github_pull_request_enricher = GithubPullRequestEnricherAdapter::new(auth_service_client);
-
-    let document_service = Arc::new(DocumentServiceImpl {
-        repo: document_repo,
+    let document_service = Arc::new(DocumentServiceImpl::new(
+        document_repo,
         cloudfront_config,
-        sync_service_client: sync_service_client.as_ref().clone(),
-        upload_url_service: s3_upload_adapter,
-        task_properties_service: TaskPropertiesAdapter {
+        sync_service_client.as_ref().clone(),
+        s3_upload_adapter,
+        TaskPropertiesAdapter {
             system_properties: system_properties_service.clone(),
             properties: properties_service.clone(),
         },
         connection_service,
-        entity_access_management_service: entity_access_management_service.clone(),
-        github_pull_request_enricher,
-    });
+        entity_access_management_service.clone(),
+    ));
 
     let github_webhook_secret = secretsmanager_client
         .get_maybe_secret_value(env, GithubWebhookSecretKey::new()?)
