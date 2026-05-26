@@ -976,9 +976,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
       if (!skipFiltersOnMount && props.initialClientFilters) {
         soup.predicates.set(props.initialClientFilters);
       }
-      if (props.initialGroupBy) {
+      // soup state is shared at the SplitPanel level, so a prior view in the
+      // same split (e.g. tasks) may have left grouping state behind. Always
+      // reset to this view's initial grouping, even when undefined.
+      batch(() => {
         soup.grouping.setActiveGroupId(props.initialGroupBy);
-      }
+        soup.grouping.collapseAll([]);
+      });
       // Set default tab for list views when no persisted state exists
       if (!skipFiltersOnMount && isListViewID(contentId)) {
         const defaultTab = VIEW_TAB_PRESETS[contentId].default;

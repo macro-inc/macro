@@ -8,11 +8,11 @@ export COMPOSE_PROJECT_NAME := "macro"
 create_networks:
   docker network create databases 2>/dev/null || true -- db network
   docker network create auth 2>/dev/null || true -- fusionauth network
-  docker volume create macro_postgres_data >/dev/null
-  docker volume create macro_redis_data >/dev/null
-  docker volume create macro_opensearch_data >/dev/null
-  docker volume create fusionauth_db_data >/dev/null
-  docker volume create fusionauth_config >/dev/null
+  docker volume create macro_postgres_data 2>/dev/null || true
+  docker volume create macro_redis_data 2>/dev/null || true
+  docker volume create macro_opensearch_data 2>/dev/null || true
+  docker volume create fusionauth_db_data 2>/dev/null || true
+  docker volume create fusionauth_config 2>/dev/null || true
   echo "docker networks and volumes created"
 
 fix_environment *ARGS:
@@ -51,7 +51,7 @@ edit_environment *ARGS:
 # This is used when initializing your databases
 run_dbs *ARGS:
   just create_networks
-  docker-compose -f docker-compose-databases.yml up postgres redis --wait {{ ARGS }}
+  docker compose -f docker-compose-databases.yml up postgres redis --wait {{ ARGS }}
 
 # Spins up main docker-compose
 docker_up *ARGS:
@@ -191,7 +191,7 @@ stop-local:
   docker compose down
 
 stop-databases:
-  docker-compose -f docker-compose-databases.yml down
+  docker compose -f docker-compose-databases.yml down
 
 # Import LocalStack recipes
 import 'local_stack.just'
@@ -203,13 +203,13 @@ setup_local_dbs:
   just rust/cloud-storage/macro_db_client/create_db
   just rust/cloud-storage/macro_db_client/migrate_db
   @echo "Local databases initialized"
-  docker-compose -f docker-compose-databases.yml stop
+  docker compose -f docker-compose-databases.yml stop
 
 # Setup FusionAuth: start containers, wait for healthy, run Pulumi config
 # stop container
 setup_fusionauth:
   just create_networks
-  just infra/stacks/fusionauth-instance/setup_fusionauth
+  just infra/stacks/fusionauth-instance/setup
 
 # Stop FusionAuth containers
 stop_fusionauth:

@@ -10,6 +10,9 @@ use crate::api::{
     stream::stop::{
         self as stream_stop, StopChatStreamError, StopChatStreamRequest, StopChatStreamResponse,
     },
+    structured_completion::{
+        self, StructuredCompletionError, StructuredCompletionRequest, StructuredCompletionResponse,
+    },
 };
 use crate::model::{
     response::{
@@ -80,6 +83,7 @@ use utoipa::OpenApi;
             chat_history_batch_messages::get_chat_history_batch_messages_handler,
             chat_message::send_chat_message,
             stream_stop::stop_chat_stream,
+            structured_completion::structured_completion,
             memory_api::get_memory_handler,
             mcp_api::list_servers,
             mcp_api::add_server,
@@ -163,6 +167,10 @@ use utoipa::OpenApi;
                 StopChatStreamError,
                 StreamError,
                 ToolSet,
+                StructuredCompletionRequest,
+                StructuredCompletionResponse,
+                StructuredCompletionError,
+                ai::structured_output_v2::DynamicSchema,
 
                 // Memory
                 MemoryResponse,

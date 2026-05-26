@@ -23,12 +23,14 @@ import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { InCallPanel } from '@channel/Call';
 import { useCallContextOptional } from '@channel/Call/CallContext';
+import { useHasPaidAccess } from '@core/auth';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { UserIcon } from '@core/component/UserIcon';
 import {
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_CALLS,
+  ENABLE_NEW_PRICING_OVERRIDE,
   ENABLE_TEAMS_OVERRIDE,
   ENABLE_DASHBOARD_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -395,12 +397,6 @@ const registerSidebarHotkeys = ({
   }
 };
 
-/** Persisted dismissal for the Premium upgrade promo card. */
-const [premiumCardDismissed, setPremiumCardDismissed] = makePersisted(
-  createSignal<boolean>(false),
-  { name: 'sidebar-premium-card-dismissed' }
-);
-
 /** Session-only signal so a hint shows after dismissal until the user acknowledges or the timer expires. */
 const [premiumHintVisible, setPremiumHintVisible] = createSignal(false);
 
@@ -699,6 +695,18 @@ export const AppSidebar = (props: AppSidebarProps) => {
     enabledOverride: ENABLE_DASHBOARD_OVERRIDE,
   });
 
+  const hasPaidAccess = useHasPaidAccess();
+
+  /** Persisted dismissal for the Premium upgrade promo card. */
+  const [premiumCardDismissed, setPremiumCardDismissed] = makePersisted(
+    createSignal<boolean>(false),
+    { name: 'sidebar-premium-card-dismissed' }
+  );
+
+  const newPricingFF = useFeatureFlag('enable-new-pricing', {
+    enabledOverride: ENABLE_NEW_PRICING_OVERRIDE,
+  });
+
   const showEnableNotifications = () =>
     notificationSettings.isSupported && notificationSettings.canPrompt();
 
@@ -942,7 +950,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <hr class="border-transparent mb-2" />
       </div>
 
-      <Show when={!isSlim() && !premiumCardDismissed()}>
+      <Show
+        when={
+          !hasPaidAccess() &&
+          !isSlim() &&
+          !premiumCardDismissed() &&
+          newPricingFF().enabled
+        }
+      >
         <div class="w-full px-2 mb-2">
           <SidebarPromoCard
             label="Upgrade to Premium"
@@ -965,7 +980,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
           />
         </div>
       </Show>
-      <Show when={!isSlim() && premiumHintVisible() && premiumCardDismissed()}>
+      <Show
+        when={
+          !hasPaidAccess() &&
+          !isSlim() &&
+          premiumHintVisible() &&
+          premiumCardDismissed() &&
+          newPricingFF().enabled
+        }
+      >
         <div class="w-full px-2 mb-2">
           <SidebarPromoHint
             title="Maybe later"

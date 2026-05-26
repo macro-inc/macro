@@ -6,10 +6,6 @@ export {
   useCallContextOptional,
 } from './CallContext';
 export type {
-  CallControlButtonSize,
-  CallControlButtonVariant,
-} from './CallControls/CallControlButton';
-export type {
   CallControlsProps,
   CallControlsVariant,
 } from './CallControls/CallControls';
