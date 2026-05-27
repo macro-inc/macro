@@ -556,6 +556,68 @@ export const ListEntitiesResponse = z.object({
           id: z.string().uuid(),
           type: z.literal('call'),
         }),
+        z.object({
+          eventType: z.string(),
+          id: z.string().uuid(),
+          source: z
+            .union([
+              z.any().superRefine((x, ctx) => {
+                const schemas = [
+                  z.object({
+                    id: z.string().uuid(),
+                    name: z.string(),
+                    type: z.literal('document'),
+                  }),
+                  z.object({
+                    id: z.string().uuid(),
+                    name: z.string(),
+                    type: z.literal('aiChat'),
+                  }),
+                  z.object({
+                    id: z.string().uuid(),
+                    name: z.string(),
+                    type: z.literal('project'),
+                  }),
+                  z.object({
+                    id: z.string().uuid(),
+                    subject: z.union([z.string(), z.null()]).optional(),
+                    type: z.literal('email'),
+                  }),
+                  z.object({
+                    id: z.string().uuid(),
+                    name: z.union([z.string(), z.null()]).optional(),
+                    type: z.literal('channel'),
+                  }),
+                  z.object({
+                    createdBy: z.string(),
+                    id: z.string().uuid(),
+                    type: z.literal('call'),
+                  }),
+                ];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+              z.null(),
+            ])
+            .optional(),
+          sourceEntityId: z.string(),
+          sourceEntityType: z.string(),
+          type: z.literal('notification'),
+        }),
       ];
       const errors = schemas.reduce<z.ZodError[]>(
         (errors, schema) =>

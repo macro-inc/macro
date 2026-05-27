@@ -118,6 +118,45 @@ export type EntityItem =
       createdBy: string;
       id: string;
       type: 'call';
+    }
+  | {
+      eventType: string;
+      id: string;
+      source?: NotificationSourceItem | null;
+      sourceEntityId: string;
+      sourceEntityType: string;
+      type: 'notification';
+    };
+export type NotificationSourceItem =
+  | {
+      id: string;
+      name: string;
+      type: 'document';
+    }
+  | {
+      id: string;
+      name: string;
+      type: 'aiChat';
+    }
+  | {
+      id: string;
+      name: string;
+      type: 'project';
+    }
+  | {
+      id: string;
+      subject?: string | null;
+      type: 'email';
+    }
+  | {
+      id: string;
+      name?: string | null;
+      type: 'channel';
+    }
+  | {
+      createdBy: string;
+      id: string;
+      type: 'call';
     };
 export type ToolEntityType =
   | 'document'
@@ -1163,7 +1202,7 @@ export interface ListCallRecordsResponse {
   records: CallRecordSummary[];
 }
 /**
- * Browse the user's workspace to see recent items they have access to. Returns documents, AI conversations, projects, emails, and chat channels. Use this to get an overview of what the user has been working on or to find items by type. For finding specific items by name or content, use the search tool instead.
+ * Browse the user's workspace to see recent items they have access to. Returns documents, AI conversations, projects, emails, chat channels, call records, and notifications. Use this to get an overview of what the user has been working on or to find items by type. For finding specific items by name or content, use the search tool instead.
  */
 export interface ListEntities {
   /**

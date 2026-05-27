@@ -4502,6 +4502,8 @@ export const getItemsSoupQueryParams = zod.object({
 
 export const getItemsSoupResponseItemsItemDataChannelOrgIdMin = 0;
 
+export const getItemsSoupResponseItemsItemDataSourceDataChannelOrgIdMin = 0;
+
 export const getItemsSoupResponse = zod.object({
   items: zod.array(
     zod
@@ -5730,6 +5732,1387 @@ export const getItemsSoupResponse = zod.object({
             ),
           tag: zod.enum(['call']),
         }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod.iso
+                .datetime({})
+                .describe('When the notification was created for this user.'),
+              deletedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('When the notification was deleted for this user.'),
+              done: zod
+                .boolean()
+                .describe('Whether the notification is marked as done.'),
+              eventType: zod
+                .string()
+                .describe(
+                  'The notification event type string (for example, `channel_mention`).'
+                ),
+              id: zod.uuid().describe('The notification ID.'),
+              metadata: zod.unknown().describe('Raw notification metadata.'),
+              ownerId: zod
+                .string()
+                .describe('The user who owns this notification.'),
+              senderId: zod
+                .string()
+                .nullish()
+                .describe('The user who triggered the notification.'),
+              sent: zod
+                .boolean()
+                .describe('Whether the notification has been sent.'),
+              source: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .union([
+                      zod.object({
+                        data: zod.object({
+                          branchedFromId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The id of the document this document branched from'
+                            ),
+                          branchedFromVersionId: zod
+                            .number()
+                            .nullish()
+                            .describe(
+                              'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'
+                            ),
+                          createdAt: zod.iso
+                            .datetime({})
+                            .describe('The time the document was created'),
+                          deletedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the document was deleted'),
+                          documentFamilyId: zod
+                            .number()
+                            .nullish()
+                            .describe(
+                              'The id of the document family this document belongs to'
+                            ),
+                          documentVersionId: zod
+                            .number()
+                            .describe(
+                              'The version of the document\nThis could be the document_instance_id or document_bom_id depending on the file type'
+                            ),
+                          fileType: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The file type of the document (e.g. pdf, docx)'
+                            ),
+                          id: zod.uuid().describe('The document id'),
+                          name: zod
+                            .string()
+                            .describe('The name of the document'),
+                          ownerId: zod
+                            .string()
+                            .describe('The owner of the document'),
+                          projectId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The id of the project that this document belongs to'
+                            ),
+                          properties: zod
+                            .array(
+                              zod
+                                .object({
+                                  definition: zod
+                                    .object({
+                                      created_at: zod.iso.datetime({}),
+                                      data_type: zod
+                                        .enum([
+                                          'BOOLEAN',
+                                          'DATE',
+                                          'NUMBER',
+                                          'STRING',
+                                          'SELECT_NUMBER',
+                                          'SELECT_STRING',
+                                          'ENTITY',
+                                          'LINK',
+                                        ])
+                                        .describe(
+                                          'Data type for property values, determining storage and validation.'
+                                        ),
+                                      display_name: zod.string(),
+                                      id: zod.uuid(),
+                                      is_metadata: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                        ),
+                                      is_multi_select: zod.boolean(),
+                                      is_system: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system property (stored in DB).'
+                                        ),
+                                      owner: zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['user']),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'User-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum(['organization']),
+                                            })
+                                            .describe(
+                                              'Organization-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum([
+                                                'user_and_organization',
+                                              ]),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'Both user and organization-scoped'
+                                            ),
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['system']),
+                                            })
+                                            .describe(
+                                              'System-owned property (no user or org owner)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                        ),
+                                      specific_entity_type: zod
+                                        .union([
+                                          zod.null(),
+                                          zod
+                                            .enum([
+                                              'CHANNEL',
+                                              'CHAT',
+                                              'COMPANY',
+                                              'DOCUMENT',
+                                              'PROJECT',
+                                              'TASK',
+                                              'THREAD',
+                                              'USER',
+                                            ])
+                                            .describe(
+                                              'Type of entity that can be referenced by entity properties.'
+                                            ),
+                                        ])
+                                        .optional(),
+                                      updated_at: zod.iso.datetime({}),
+                                    })
+                                    .describe(
+                                      'Property definition model (service representation).'
+                                    ),
+                                  value: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Boolean']),
+                                              value: zod
+                                                .boolean()
+                                                .describe(
+                                                  'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Number']),
+                                              value: zod
+                                                .number()
+                                                .describe(
+                                                  'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['String']),
+                                              value: zod
+                                                .string()
+                                                .describe(
+                                                  'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Date']),
+                                              value: zod.iso
+                                                .datetime({})
+                                                .describe(
+                                                  'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['SelectOption']),
+                                              value: zod
+                                                .array(zod.uuid())
+                                                .describe(
+                                                  'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum([
+                                                'EntityReference',
+                                              ]),
+                                              value: zod
+                                                .array(
+                                                  zod
+                                                    .object({
+                                                      entity_id: zod.string(),
+                                                      entity_type: zod
+                                                        .enum([
+                                                          'CHANNEL',
+                                                          'CHAT',
+                                                          'COMPANY',
+                                                          'DOCUMENT',
+                                                          'PROJECT',
+                                                          'TASK',
+                                                          'THREAD',
+                                                          'USER',
+                                                        ])
+                                                        .describe(
+                                                          'Type of entity that can be referenced by entity properties.'
+                                                        ),
+                                                      specific_message_id: zod
+                                                        .uuid()
+                                                        .nullish()
+                                                        .describe(
+                                                          'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                        ),
+                                                    })
+                                                    .describe(
+                                                      'Entity reference for entity-type property values.'
+                                                    )
+                                                )
+                                                .describe(
+                                                  'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Link']),
+                                              value: zod
+                                                .array(zod.string())
+                                                .describe(
+                                                  'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                })
+                                .describe(
+                                  'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                                )
+                            )
+                            .describe('Properties'),
+                          sha: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
+                            ),
+                          subType: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  is_completed: zod
+                                    .boolean()
+                                    .describe(
+                                      'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                                    ),
+                                  type: zod.enum(['task']),
+                                })
+                                .describe(
+                                  'A task document with its associated properties'
+                                )
+                                .describe(
+                                  'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
+                                ),
+                            ])
+                            .optional(),
+                          updatedAt: zod.iso
+                            .datetime({})
+                            .describe(
+                              'The time the document instance \/ document BOM was updated'
+                            ),
+                          viewedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the document was last viewed'),
+                        }),
+                        tag: zod.enum(['document']),
+                      }),
+                      zod.object({
+                        data: zod.object({
+                          createdAt: zod.iso
+                            .datetime({})
+                            .describe('The time the chat was created'),
+                          deletedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the chat was deleted'),
+                          id: zod.uuid().describe('The chat uuid'),
+                          isPersistent: zod
+                            .boolean()
+                            .describe('Whether the chat is persistent or not'),
+                          name: zod.string().describe('The name of the chat'),
+                          ownerId: zod
+                            .string()
+                            .describe('Who the chat belongs to'),
+                          projectId: zod
+                            .uuid()
+                            .nullish()
+                            .describe('The project id of the chat'),
+                          properties: zod
+                            .array(
+                              zod
+                                .object({
+                                  definition: zod
+                                    .object({
+                                      created_at: zod.iso.datetime({}),
+                                      data_type: zod
+                                        .enum([
+                                          'BOOLEAN',
+                                          'DATE',
+                                          'NUMBER',
+                                          'STRING',
+                                          'SELECT_NUMBER',
+                                          'SELECT_STRING',
+                                          'ENTITY',
+                                          'LINK',
+                                        ])
+                                        .describe(
+                                          'Data type for property values, determining storage and validation.'
+                                        ),
+                                      display_name: zod.string(),
+                                      id: zod.uuid(),
+                                      is_metadata: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                        ),
+                                      is_multi_select: zod.boolean(),
+                                      is_system: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system property (stored in DB).'
+                                        ),
+                                      owner: zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['user']),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'User-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum(['organization']),
+                                            })
+                                            .describe(
+                                              'Organization-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum([
+                                                'user_and_organization',
+                                              ]),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'Both user and organization-scoped'
+                                            ),
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['system']),
+                                            })
+                                            .describe(
+                                              'System-owned property (no user or org owner)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                        ),
+                                      specific_entity_type: zod
+                                        .union([
+                                          zod.null(),
+                                          zod
+                                            .enum([
+                                              'CHANNEL',
+                                              'CHAT',
+                                              'COMPANY',
+                                              'DOCUMENT',
+                                              'PROJECT',
+                                              'TASK',
+                                              'THREAD',
+                                              'USER',
+                                            ])
+                                            .describe(
+                                              'Type of entity that can be referenced by entity properties.'
+                                            ),
+                                        ])
+                                        .optional(),
+                                      updated_at: zod.iso.datetime({}),
+                                    })
+                                    .describe(
+                                      'Property definition model (service representation).'
+                                    ),
+                                  value: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Boolean']),
+                                              value: zod
+                                                .boolean()
+                                                .describe(
+                                                  'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Number']),
+                                              value: zod
+                                                .number()
+                                                .describe(
+                                                  'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['String']),
+                                              value: zod
+                                                .string()
+                                                .describe(
+                                                  'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Date']),
+                                              value: zod.iso
+                                                .datetime({})
+                                                .describe(
+                                                  'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['SelectOption']),
+                                              value: zod
+                                                .array(zod.uuid())
+                                                .describe(
+                                                  'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum([
+                                                'EntityReference',
+                                              ]),
+                                              value: zod
+                                                .array(
+                                                  zod
+                                                    .object({
+                                                      entity_id: zod.string(),
+                                                      entity_type: zod
+                                                        .enum([
+                                                          'CHANNEL',
+                                                          'CHAT',
+                                                          'COMPANY',
+                                                          'DOCUMENT',
+                                                          'PROJECT',
+                                                          'TASK',
+                                                          'THREAD',
+                                                          'USER',
+                                                        ])
+                                                        .describe(
+                                                          'Type of entity that can be referenced by entity properties.'
+                                                        ),
+                                                      specific_message_id: zod
+                                                        .uuid()
+                                                        .nullish()
+                                                        .describe(
+                                                          'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                        ),
+                                                    })
+                                                    .describe(
+                                                      'Entity reference for entity-type property values.'
+                                                    )
+                                                )
+                                                .describe(
+                                                  'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Link']),
+                                              value: zod
+                                                .array(zod.string())
+                                                .describe(
+                                                  'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                })
+                                .describe(
+                                  'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                                )
+                            )
+                            .describe('Properties'),
+                          updatedAt: zod.iso
+                            .datetime({})
+                            .describe('The time the chat was last updated'),
+                          viewedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the chat was last viewed'),
+                        }),
+                        tag: zod.enum(['chat']),
+                      }),
+                      zod.object({
+                        data: zod.object({
+                          createdAt: zod.iso
+                            .datetime({})
+                            .describe('The time the project was created'),
+                          deletedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the project was deleted'),
+                          id: zod.uuid().describe('The id of the project'),
+                          name: zod
+                            .string()
+                            .describe('The name of the project'),
+                          ownerId: zod
+                            .string()
+                            .describe('The user id of who created the project'),
+                          parentId: zod
+                            .uuid()
+                            .nullish()
+                            .describe('The parent project id'),
+                          properties: zod
+                            .array(
+                              zod
+                                .object({
+                                  definition: zod
+                                    .object({
+                                      created_at: zod.iso.datetime({}),
+                                      data_type: zod
+                                        .enum([
+                                          'BOOLEAN',
+                                          'DATE',
+                                          'NUMBER',
+                                          'STRING',
+                                          'SELECT_NUMBER',
+                                          'SELECT_STRING',
+                                          'ENTITY',
+                                          'LINK',
+                                        ])
+                                        .describe(
+                                          'Data type for property values, determining storage and validation.'
+                                        ),
+                                      display_name: zod.string(),
+                                      id: zod.uuid(),
+                                      is_metadata: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                        ),
+                                      is_multi_select: zod.boolean(),
+                                      is_system: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system property (stored in DB).'
+                                        ),
+                                      owner: zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['user']),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'User-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum(['organization']),
+                                            })
+                                            .describe(
+                                              'Organization-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum([
+                                                'user_and_organization',
+                                              ]),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'Both user and organization-scoped'
+                                            ),
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['system']),
+                                            })
+                                            .describe(
+                                              'System-owned property (no user or org owner)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                        ),
+                                      specific_entity_type: zod
+                                        .union([
+                                          zod.null(),
+                                          zod
+                                            .enum([
+                                              'CHANNEL',
+                                              'CHAT',
+                                              'COMPANY',
+                                              'DOCUMENT',
+                                              'PROJECT',
+                                              'TASK',
+                                              'THREAD',
+                                              'USER',
+                                            ])
+                                            .describe(
+                                              'Type of entity that can be referenced by entity properties.'
+                                            ),
+                                        ])
+                                        .optional(),
+                                      updated_at: zod.iso.datetime({}),
+                                    })
+                                    .describe(
+                                      'Property definition model (service representation).'
+                                    ),
+                                  value: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Boolean']),
+                                              value: zod
+                                                .boolean()
+                                                .describe(
+                                                  'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Number']),
+                                              value: zod
+                                                .number()
+                                                .describe(
+                                                  'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['String']),
+                                              value: zod
+                                                .string()
+                                                .describe(
+                                                  'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Date']),
+                                              value: zod.iso
+                                                .datetime({})
+                                                .describe(
+                                                  'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['SelectOption']),
+                                              value: zod
+                                                .array(zod.uuid())
+                                                .describe(
+                                                  'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum([
+                                                'EntityReference',
+                                              ]),
+                                              value: zod
+                                                .array(
+                                                  zod
+                                                    .object({
+                                                      entity_id: zod.string(),
+                                                      entity_type: zod
+                                                        .enum([
+                                                          'CHANNEL',
+                                                          'CHAT',
+                                                          'COMPANY',
+                                                          'DOCUMENT',
+                                                          'PROJECT',
+                                                          'TASK',
+                                                          'THREAD',
+                                                          'USER',
+                                                        ])
+                                                        .describe(
+                                                          'Type of entity that can be referenced by entity properties.'
+                                                        ),
+                                                      specific_message_id: zod
+                                                        .uuid()
+                                                        .nullish()
+                                                        .describe(
+                                                          'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                        ),
+                                                    })
+                                                    .describe(
+                                                      'Entity reference for entity-type property values.'
+                                                    )
+                                                )
+                                                .describe(
+                                                  'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Link']),
+                                              value: zod
+                                                .array(zod.string())
+                                                .describe(
+                                                  'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                })
+                                .describe(
+                                  'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                                )
+                            )
+                            .describe('Properties'),
+                          updatedAt: zod.iso
+                            .datetime({})
+                            .describe('The time the project was updated'),
+                          viewedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the document was last viewed'),
+                        }),
+                        tag: zod.enum(['project']),
+                      }),
+                      zod.object({
+                        data: zod
+                          .object({
+                            createdAt: zod.iso.datetime({}),
+                            id: zod.uuid(),
+                            inboxVisible: zod.boolean(),
+                            isDraft: zod.boolean(),
+                            isImportant: zod.boolean(),
+                            isRead: zod.boolean(),
+                            name: zod.string().nullish(),
+                            ownerId: zod.string(),
+                            projectId: zod.string().nullish(),
+                            providerId: zod.string().nullish(),
+                            senderEmail: zod.string().nullish(),
+                            senderName: zod.string().nullish(),
+                            senderPhotoUrl: zod.string().nullish(),
+                            snippet: zod.string().nullish(),
+                            sortTs: zod.iso.datetime({}),
+                            updatedAt: zod.iso.datetime({}),
+                            viewedAt: zod.iso.datetime({}).nullish(),
+                          })
+                          .and(
+                            zod.object({
+                              attachments: zod.array(
+                                zod.object({
+                                  contentId: zod.string().nullish(),
+                                  createdAt: zod.iso.datetime({}),
+                                  filename: zod.string().nullish(),
+                                  id: zod.uuid(),
+                                  messageId: zod.uuid(),
+                                  mimeType: zod.string().nullish(),
+                                  providerAttachmentId: zod.string().nullish(),
+                                  sizeBytes: zod.number().nullish(),
+                                })
+                              ),
+                              labels: zod.array(
+                                zod.object({
+                                  createdAt: zod.iso.datetime({}),
+                                  id: zod.uuid(),
+                                  labelListVisibility: zod.enum([
+                                    'labelShow',
+                                    'labelShowIfUnread',
+                                    'labelHide',
+                                  ]),
+                                  linkId: zod.uuid(),
+                                  messageListVisibility: zod.enum([
+                                    'show',
+                                    'hide',
+                                  ]),
+                                  name: zod.string(),
+                                  providerLabelId: zod.string(),
+                                  type: zod.enum(['system', 'user']),
+                                })
+                              ),
+                              participants: zod.array(
+                                zod.object({
+                                  emailAddress: zod.string().nullish(),
+                                  id: zod.uuid(),
+                                  linkId: zod.uuid(),
+                                  name: zod.string().nullish(),
+                                  sfsPhotoUrl: zod.string().nullish(),
+                                })
+                              ),
+                              properties: zod.array(
+                                zod
+                                  .object({
+                                    definition: zod
+                                      .object({
+                                        created_at: zod.iso.datetime({}),
+                                        data_type: zod
+                                          .enum([
+                                            'BOOLEAN',
+                                            'DATE',
+                                            'NUMBER',
+                                            'STRING',
+                                            'SELECT_NUMBER',
+                                            'SELECT_STRING',
+                                            'ENTITY',
+                                            'LINK',
+                                          ])
+                                          .describe(
+                                            'Data type for property values, determining storage and validation.'
+                                          ),
+                                        display_name: zod.string(),
+                                        id: zod.uuid(),
+                                        is_metadata: zod
+                                          .boolean()
+                                          .describe(
+                                            'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                          ),
+                                        is_multi_select: zod.boolean(),
+                                        is_system: zod
+                                          .boolean()
+                                          .describe(
+                                            'Flag to indicate if this is a system property (stored in DB).'
+                                          ),
+                                        owner: zod
+                                          .union([
+                                            zod
+                                              .object({
+                                                scope: zod.enum(['user']),
+                                                user_id: zod.string(),
+                                              })
+                                              .describe(
+                                                'User-scoped property only'
+                                              ),
+                                            zod
+                                              .object({
+                                                organization_id: zod.number(),
+                                                scope: zod.enum([
+                                                  'organization',
+                                                ]),
+                                              })
+                                              .describe(
+                                                'Organization-scoped property only'
+                                              ),
+                                            zod
+                                              .object({
+                                                organization_id: zod.number(),
+                                                scope: zod.enum([
+                                                  'user_and_organization',
+                                                ]),
+                                                user_id: zod.string(),
+                                              })
+                                              .describe(
+                                                'Both user and organization-scoped'
+                                              ),
+                                            zod
+                                              .object({
+                                                scope: zod.enum(['system']),
+                                              })
+                                              .describe(
+                                                'System-owned property (no user or org owner)'
+                                              ),
+                                          ])
+                                          .describe(
+                                            'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                          ),
+                                        specific_entity_type: zod
+                                          .union([
+                                            zod.null(),
+                                            zod
+                                              .enum([
+                                                'CHANNEL',
+                                                'CHAT',
+                                                'COMPANY',
+                                                'DOCUMENT',
+                                                'PROJECT',
+                                                'TASK',
+                                                'THREAD',
+                                                'USER',
+                                              ])
+                                              .describe(
+                                                'Type of entity that can be referenced by entity properties.'
+                                              ),
+                                          ])
+                                          .optional(),
+                                        updated_at: zod.iso.datetime({}),
+                                      })
+                                      .describe(
+                                        'Property definition model (service representation).'
+                                      ),
+                                    value: zod
+                                      .union([
+                                        zod.null(),
+                                        zod
+                                          .union([
+                                            zod
+                                              .object({
+                                                type: zod.enum(['Boolean']),
+                                                value: zod
+                                                  .boolean()
+                                                  .describe(
+                                                    'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum(['Number']),
+                                                value: zod
+                                                  .number()
+                                                  .describe(
+                                                    'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum(['String']),
+                                                value: zod
+                                                  .string()
+                                                  .describe(
+                                                    'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum(['Date']),
+                                                value: zod.iso
+                                                  .datetime({})
+                                                  .describe(
+                                                    'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum([
+                                                  'SelectOption',
+                                                ]),
+                                                value: zod
+                                                  .array(zod.uuid())
+                                                  .describe(
+                                                    'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum([
+                                                  'EntityReference',
+                                                ]),
+                                                value: zod
+                                                  .array(
+                                                    zod
+                                                      .object({
+                                                        entity_id: zod.string(),
+                                                        entity_type: zod
+                                                          .enum([
+                                                            'CHANNEL',
+                                                            'CHAT',
+                                                            'COMPANY',
+                                                            'DOCUMENT',
+                                                            'PROJECT',
+                                                            'TASK',
+                                                            'THREAD',
+                                                            'USER',
+                                                          ])
+                                                          .describe(
+                                                            'Type of entity that can be referenced by entity properties.'
+                                                          ),
+                                                        specific_message_id: zod
+                                                          .uuid()
+                                                          .nullish()
+                                                          .describe(
+                                                            'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                          ),
+                                                      })
+                                                      .describe(
+                                                        'Entity reference for entity-type property values.'
+                                                      )
+                                                  )
+                                                  .describe(
+                                                    'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum(['Link']),
+                                                value: zod
+                                                  .array(zod.string())
+                                                  .describe(
+                                                    'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                              ),
+                                          ])
+                                          .describe(
+                                            'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                          ),
+                                      ])
+                                      .optional(),
+                                  })
+                                  .describe(
+                                    'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                                  )
+                              ),
+                            })
+                          ),
+                        tag: zod.enum(['emailThread']),
+                      }),
+                      zod.object({
+                        data: zod
+                          .object({
+                            channel: zod.object({
+                              channel_type: zod.enum([
+                                'public',
+                                'organization',
+                                'private',
+                                'direct_message',
+                                'team',
+                              ]),
+                              created_at: zod.iso.datetime({}),
+                              id: zod.uuid(),
+                              name: zod.string().nullish(),
+                              org_id: zod
+                                .number()
+                                .min(
+                                  getItemsSoupResponseItemsItemDataSourceDataChannelOrgIdMin
+                                )
+                                .nullish(),
+                              owner_id: zod.string(),
+                              team_id: zod.uuid().nullish(),
+                              updated_at: zod.iso.datetime({}),
+                            }),
+                            participants: zod.array(
+                              zod.object({
+                                channel_id: zod.uuid(),
+                                joined_at: zod.iso.datetime({}),
+                                left_at: zod.iso.datetime({}).nullish(),
+                                role: zod
+                                  .enum(['owner', 'admin', 'member'])
+                                  .describe(
+                                    'The role a user has within a channel.'
+                                  ),
+                                user_id: zod.string(),
+                              })
+                            ),
+                          })
+                          .and(
+                            zod.object({
+                              latest_message: zod
+                                .union([
+                                  zod.null(),
+                                  zod.object({
+                                    content: zod.string(),
+                                    created_at: zod.iso.datetime({}),
+                                    deleted_at: zod.iso.datetime({}).nullish(),
+                                    mentions: zod
+                                      .array(zod.string())
+                                      .describe(
+                                        'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                                      ),
+                                    message_id: zod.uuid(),
+                                    sender_id: zod.string(),
+                                    thread_id: zod.uuid().nullish(),
+                                    updated_at: zod.iso.datetime({}),
+                                  }),
+                                ])
+                                .optional(),
+                              latest_non_thread_message: zod
+                                .union([
+                                  zod.null(),
+                                  zod.object({
+                                    content: zod.string(),
+                                    created_at: zod.iso.datetime({}),
+                                    deleted_at: zod.iso.datetime({}).nullish(),
+                                    mentions: zod
+                                      .array(zod.string())
+                                      .describe(
+                                        'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                                      ),
+                                    message_id: zod.uuid(),
+                                    sender_id: zod.string(),
+                                    thread_id: zod.uuid().nullish(),
+                                    updated_at: zod.iso.datetime({}),
+                                  }),
+                                ])
+                                .optional(),
+                            })
+                          )
+                          .and(
+                            zod.object({
+                              interacted_at: zod.iso.datetime({}).nullish(),
+                              viewed_at: zod.iso.datetime({}).nullish(),
+                            })
+                          ),
+                        tag: zod.enum(['channel']),
+                      }),
+                      zod.object({
+                        data: zod
+                          .object({
+                            attended: zod
+                              .boolean()
+                              .describe(
+                                'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` \/ `call_record_participants` table).'
+                              ),
+                            callId: zod.uuid().describe('The call identifier.'),
+                            channelId: zod
+                              .uuid()
+                              .describe('The channel this call belongs to.'),
+                            channelName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Resolved display name for the channel.'
+                              ),
+                            createdBy: zod
+                              .string()
+                              .describe('User who created the call.'),
+                            customName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'User-supplied or AI-generated display name for the call.'
+                              ),
+                            durationMs: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Call duration in milliseconds (None if still active).'
+                              ),
+                            endedAt: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe(
+                                'When the call ended (None if still active).'
+                              ),
+                            isActive: zod
+                              .boolean()
+                              .describe(
+                                'Whether the call is currently active.'
+                              ),
+                            participants: zod
+                              .array(
+                                zod
+                                  .object({
+                                    joinedAt: zod.iso
+                                      .datetime({})
+                                      .describe(
+                                        'When the user joined the call.'
+                                      ),
+                                    leftAt: zod.iso
+                                      .datetime({})
+                                      .nullish()
+                                      .describe(
+                                        'When the user left (None if still in an active call).'
+                                      ),
+                                    userId: zod
+                                      .string()
+                                      .describe('The user id.'),
+                                  })
+                                  .describe(
+                                    'A participant in a call record, as displayed in Soup.'
+                                  )
+                              )
+                              .describe('Participants in the call.'),
+                            startedAt: zod.iso
+                              .datetime({})
+                              .describe('When the call started.'),
+                            summary: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'AI-generated summary of the call. Only set on archived\n`call_records` once summarization has run; active calls always\nreturn `None`.'
+                              ),
+                          })
+                          .describe(
+                            'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'
+                          ),
+                        tag: zod.enum(['call']),
+                      }),
+                    ])
+                    .describe(
+                      'The enriched source entity for a [`SoupNotification`].'
+                    ),
+                ])
+                .optional(),
+              sourceEntityId: zod
+                .string()
+                .describe(
+                  'The ID of the source entity this notification is about.'
+                ),
+              sourceEntityType: zod
+                .enum([
+                  'CHANNEL',
+                  'CHAT',
+                  'COMPANY',
+                  'DOCUMENT',
+                  'PROJECT',
+                  'TASK',
+                  'THREAD',
+                  'USER',
+                ])
+                .describe(
+                  'Type of entity that can be referenced by entity properties.'
+                ),
+              updatedAt: zod.iso
+                .datetime({})
+                .describe(
+                  'When the notification was last updated for this user.'
+                ),
+              viewedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe(
+                  'When the notification was viewed\/seen by this user.'
+                ),
+            })
+            .describe('A notification in the Soup feed.'),
+          tag: zod.enum(['notification']),
+        }),
       ])
       .and(
         zod.object({
@@ -6202,6 +7585,8 @@ export const postItemsSoupBody = zod
   );
 
 export const postItemsSoupResponseItemsItemDataChannelOrgIdMin = 0;
+
+export const postItemsSoupResponseItemsItemDataSourceDataChannelOrgIdMin = 0;
 
 export const postItemsSoupResponse = zod.object({
   items: zod.array(
@@ -7431,6 +8816,1387 @@ export const postItemsSoupResponse = zod.object({
             ),
           tag: zod.enum(['call']),
         }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod.iso
+                .datetime({})
+                .describe('When the notification was created for this user.'),
+              deletedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('When the notification was deleted for this user.'),
+              done: zod
+                .boolean()
+                .describe('Whether the notification is marked as done.'),
+              eventType: zod
+                .string()
+                .describe(
+                  'The notification event type string (for example, `channel_mention`).'
+                ),
+              id: zod.uuid().describe('The notification ID.'),
+              metadata: zod.unknown().describe('Raw notification metadata.'),
+              ownerId: zod
+                .string()
+                .describe('The user who owns this notification.'),
+              senderId: zod
+                .string()
+                .nullish()
+                .describe('The user who triggered the notification.'),
+              sent: zod
+                .boolean()
+                .describe('Whether the notification has been sent.'),
+              source: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .union([
+                      zod.object({
+                        data: zod.object({
+                          branchedFromId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The id of the document this document branched from'
+                            ),
+                          branchedFromVersionId: zod
+                            .number()
+                            .nullish()
+                            .describe(
+                              'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'
+                            ),
+                          createdAt: zod.iso
+                            .datetime({})
+                            .describe('The time the document was created'),
+                          deletedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the document was deleted'),
+                          documentFamilyId: zod
+                            .number()
+                            .nullish()
+                            .describe(
+                              'The id of the document family this document belongs to'
+                            ),
+                          documentVersionId: zod
+                            .number()
+                            .describe(
+                              'The version of the document\nThis could be the document_instance_id or document_bom_id depending on the file type'
+                            ),
+                          fileType: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The file type of the document (e.g. pdf, docx)'
+                            ),
+                          id: zod.uuid().describe('The document id'),
+                          name: zod
+                            .string()
+                            .describe('The name of the document'),
+                          ownerId: zod
+                            .string()
+                            .describe('The owner of the document'),
+                          projectId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The id of the project that this document belongs to'
+                            ),
+                          properties: zod
+                            .array(
+                              zod
+                                .object({
+                                  definition: zod
+                                    .object({
+                                      created_at: zod.iso.datetime({}),
+                                      data_type: zod
+                                        .enum([
+                                          'BOOLEAN',
+                                          'DATE',
+                                          'NUMBER',
+                                          'STRING',
+                                          'SELECT_NUMBER',
+                                          'SELECT_STRING',
+                                          'ENTITY',
+                                          'LINK',
+                                        ])
+                                        .describe(
+                                          'Data type for property values, determining storage and validation.'
+                                        ),
+                                      display_name: zod.string(),
+                                      id: zod.uuid(),
+                                      is_metadata: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                        ),
+                                      is_multi_select: zod.boolean(),
+                                      is_system: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system property (stored in DB).'
+                                        ),
+                                      owner: zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['user']),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'User-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum(['organization']),
+                                            })
+                                            .describe(
+                                              'Organization-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum([
+                                                'user_and_organization',
+                                              ]),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'Both user and organization-scoped'
+                                            ),
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['system']),
+                                            })
+                                            .describe(
+                                              'System-owned property (no user or org owner)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                        ),
+                                      specific_entity_type: zod
+                                        .union([
+                                          zod.null(),
+                                          zod
+                                            .enum([
+                                              'CHANNEL',
+                                              'CHAT',
+                                              'COMPANY',
+                                              'DOCUMENT',
+                                              'PROJECT',
+                                              'TASK',
+                                              'THREAD',
+                                              'USER',
+                                            ])
+                                            .describe(
+                                              'Type of entity that can be referenced by entity properties.'
+                                            ),
+                                        ])
+                                        .optional(),
+                                      updated_at: zod.iso.datetime({}),
+                                    })
+                                    .describe(
+                                      'Property definition model (service representation).'
+                                    ),
+                                  value: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Boolean']),
+                                              value: zod
+                                                .boolean()
+                                                .describe(
+                                                  'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Number']),
+                                              value: zod
+                                                .number()
+                                                .describe(
+                                                  'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['String']),
+                                              value: zod
+                                                .string()
+                                                .describe(
+                                                  'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Date']),
+                                              value: zod.iso
+                                                .datetime({})
+                                                .describe(
+                                                  'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['SelectOption']),
+                                              value: zod
+                                                .array(zod.uuid())
+                                                .describe(
+                                                  'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum([
+                                                'EntityReference',
+                                              ]),
+                                              value: zod
+                                                .array(
+                                                  zod
+                                                    .object({
+                                                      entity_id: zod.string(),
+                                                      entity_type: zod
+                                                        .enum([
+                                                          'CHANNEL',
+                                                          'CHAT',
+                                                          'COMPANY',
+                                                          'DOCUMENT',
+                                                          'PROJECT',
+                                                          'TASK',
+                                                          'THREAD',
+                                                          'USER',
+                                                        ])
+                                                        .describe(
+                                                          'Type of entity that can be referenced by entity properties.'
+                                                        ),
+                                                      specific_message_id: zod
+                                                        .uuid()
+                                                        .nullish()
+                                                        .describe(
+                                                          'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                        ),
+                                                    })
+                                                    .describe(
+                                                      'Entity reference for entity-type property values.'
+                                                    )
+                                                )
+                                                .describe(
+                                                  'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Link']),
+                                              value: zod
+                                                .array(zod.string())
+                                                .describe(
+                                                  'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                })
+                                .describe(
+                                  'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                                )
+                            )
+                            .describe('Properties'),
+                          sha: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
+                            ),
+                          subType: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  is_completed: zod
+                                    .boolean()
+                                    .describe(
+                                      'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                                    ),
+                                  type: zod.enum(['task']),
+                                })
+                                .describe(
+                                  'A task document with its associated properties'
+                                )
+                                .describe(
+                                  'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
+                                ),
+                            ])
+                            .optional(),
+                          updatedAt: zod.iso
+                            .datetime({})
+                            .describe(
+                              'The time the document instance \/ document BOM was updated'
+                            ),
+                          viewedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the document was last viewed'),
+                        }),
+                        tag: zod.enum(['document']),
+                      }),
+                      zod.object({
+                        data: zod.object({
+                          createdAt: zod.iso
+                            .datetime({})
+                            .describe('The time the chat was created'),
+                          deletedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the chat was deleted'),
+                          id: zod.uuid().describe('The chat uuid'),
+                          isPersistent: zod
+                            .boolean()
+                            .describe('Whether the chat is persistent or not'),
+                          name: zod.string().describe('The name of the chat'),
+                          ownerId: zod
+                            .string()
+                            .describe('Who the chat belongs to'),
+                          projectId: zod
+                            .uuid()
+                            .nullish()
+                            .describe('The project id of the chat'),
+                          properties: zod
+                            .array(
+                              zod
+                                .object({
+                                  definition: zod
+                                    .object({
+                                      created_at: zod.iso.datetime({}),
+                                      data_type: zod
+                                        .enum([
+                                          'BOOLEAN',
+                                          'DATE',
+                                          'NUMBER',
+                                          'STRING',
+                                          'SELECT_NUMBER',
+                                          'SELECT_STRING',
+                                          'ENTITY',
+                                          'LINK',
+                                        ])
+                                        .describe(
+                                          'Data type for property values, determining storage and validation.'
+                                        ),
+                                      display_name: zod.string(),
+                                      id: zod.uuid(),
+                                      is_metadata: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                        ),
+                                      is_multi_select: zod.boolean(),
+                                      is_system: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system property (stored in DB).'
+                                        ),
+                                      owner: zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['user']),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'User-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum(['organization']),
+                                            })
+                                            .describe(
+                                              'Organization-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum([
+                                                'user_and_organization',
+                                              ]),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'Both user and organization-scoped'
+                                            ),
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['system']),
+                                            })
+                                            .describe(
+                                              'System-owned property (no user or org owner)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                        ),
+                                      specific_entity_type: zod
+                                        .union([
+                                          zod.null(),
+                                          zod
+                                            .enum([
+                                              'CHANNEL',
+                                              'CHAT',
+                                              'COMPANY',
+                                              'DOCUMENT',
+                                              'PROJECT',
+                                              'TASK',
+                                              'THREAD',
+                                              'USER',
+                                            ])
+                                            .describe(
+                                              'Type of entity that can be referenced by entity properties.'
+                                            ),
+                                        ])
+                                        .optional(),
+                                      updated_at: zod.iso.datetime({}),
+                                    })
+                                    .describe(
+                                      'Property definition model (service representation).'
+                                    ),
+                                  value: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Boolean']),
+                                              value: zod
+                                                .boolean()
+                                                .describe(
+                                                  'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Number']),
+                                              value: zod
+                                                .number()
+                                                .describe(
+                                                  'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['String']),
+                                              value: zod
+                                                .string()
+                                                .describe(
+                                                  'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Date']),
+                                              value: zod.iso
+                                                .datetime({})
+                                                .describe(
+                                                  'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['SelectOption']),
+                                              value: zod
+                                                .array(zod.uuid())
+                                                .describe(
+                                                  'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum([
+                                                'EntityReference',
+                                              ]),
+                                              value: zod
+                                                .array(
+                                                  zod
+                                                    .object({
+                                                      entity_id: zod.string(),
+                                                      entity_type: zod
+                                                        .enum([
+                                                          'CHANNEL',
+                                                          'CHAT',
+                                                          'COMPANY',
+                                                          'DOCUMENT',
+                                                          'PROJECT',
+                                                          'TASK',
+                                                          'THREAD',
+                                                          'USER',
+                                                        ])
+                                                        .describe(
+                                                          'Type of entity that can be referenced by entity properties.'
+                                                        ),
+                                                      specific_message_id: zod
+                                                        .uuid()
+                                                        .nullish()
+                                                        .describe(
+                                                          'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                        ),
+                                                    })
+                                                    .describe(
+                                                      'Entity reference for entity-type property values.'
+                                                    )
+                                                )
+                                                .describe(
+                                                  'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Link']),
+                                              value: zod
+                                                .array(zod.string())
+                                                .describe(
+                                                  'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                })
+                                .describe(
+                                  'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                                )
+                            )
+                            .describe('Properties'),
+                          updatedAt: zod.iso
+                            .datetime({})
+                            .describe('The time the chat was last updated'),
+                          viewedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the chat was last viewed'),
+                        }),
+                        tag: zod.enum(['chat']),
+                      }),
+                      zod.object({
+                        data: zod.object({
+                          createdAt: zod.iso
+                            .datetime({})
+                            .describe('The time the project was created'),
+                          deletedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the project was deleted'),
+                          id: zod.uuid().describe('The id of the project'),
+                          name: zod
+                            .string()
+                            .describe('The name of the project'),
+                          ownerId: zod
+                            .string()
+                            .describe('The user id of who created the project'),
+                          parentId: zod
+                            .uuid()
+                            .nullish()
+                            .describe('The parent project id'),
+                          properties: zod
+                            .array(
+                              zod
+                                .object({
+                                  definition: zod
+                                    .object({
+                                      created_at: zod.iso.datetime({}),
+                                      data_type: zod
+                                        .enum([
+                                          'BOOLEAN',
+                                          'DATE',
+                                          'NUMBER',
+                                          'STRING',
+                                          'SELECT_NUMBER',
+                                          'SELECT_STRING',
+                                          'ENTITY',
+                                          'LINK',
+                                        ])
+                                        .describe(
+                                          'Data type for property values, determining storage and validation.'
+                                        ),
+                                      display_name: zod.string(),
+                                      id: zod.uuid(),
+                                      is_metadata: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                        ),
+                                      is_multi_select: zod.boolean(),
+                                      is_system: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system property (stored in DB).'
+                                        ),
+                                      owner: zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['user']),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'User-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum(['organization']),
+                                            })
+                                            .describe(
+                                              'Organization-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum([
+                                                'user_and_organization',
+                                              ]),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'Both user and organization-scoped'
+                                            ),
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['system']),
+                                            })
+                                            .describe(
+                                              'System-owned property (no user or org owner)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                        ),
+                                      specific_entity_type: zod
+                                        .union([
+                                          zod.null(),
+                                          zod
+                                            .enum([
+                                              'CHANNEL',
+                                              'CHAT',
+                                              'COMPANY',
+                                              'DOCUMENT',
+                                              'PROJECT',
+                                              'TASK',
+                                              'THREAD',
+                                              'USER',
+                                            ])
+                                            .describe(
+                                              'Type of entity that can be referenced by entity properties.'
+                                            ),
+                                        ])
+                                        .optional(),
+                                      updated_at: zod.iso.datetime({}),
+                                    })
+                                    .describe(
+                                      'Property definition model (service representation).'
+                                    ),
+                                  value: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Boolean']),
+                                              value: zod
+                                                .boolean()
+                                                .describe(
+                                                  'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Number']),
+                                              value: zod
+                                                .number()
+                                                .describe(
+                                                  'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['String']),
+                                              value: zod
+                                                .string()
+                                                .describe(
+                                                  'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Date']),
+                                              value: zod.iso
+                                                .datetime({})
+                                                .describe(
+                                                  'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['SelectOption']),
+                                              value: zod
+                                                .array(zod.uuid())
+                                                .describe(
+                                                  'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum([
+                                                'EntityReference',
+                                              ]),
+                                              value: zod
+                                                .array(
+                                                  zod
+                                                    .object({
+                                                      entity_id: zod.string(),
+                                                      entity_type: zod
+                                                        .enum([
+                                                          'CHANNEL',
+                                                          'CHAT',
+                                                          'COMPANY',
+                                                          'DOCUMENT',
+                                                          'PROJECT',
+                                                          'TASK',
+                                                          'THREAD',
+                                                          'USER',
+                                                        ])
+                                                        .describe(
+                                                          'Type of entity that can be referenced by entity properties.'
+                                                        ),
+                                                      specific_message_id: zod
+                                                        .uuid()
+                                                        .nullish()
+                                                        .describe(
+                                                          'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                        ),
+                                                    })
+                                                    .describe(
+                                                      'Entity reference for entity-type property values.'
+                                                    )
+                                                )
+                                                .describe(
+                                                  'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Link']),
+                                              value: zod
+                                                .array(zod.string())
+                                                .describe(
+                                                  'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                })
+                                .describe(
+                                  'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                                )
+                            )
+                            .describe('Properties'),
+                          updatedAt: zod.iso
+                            .datetime({})
+                            .describe('The time the project was updated'),
+                          viewedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the document was last viewed'),
+                        }),
+                        tag: zod.enum(['project']),
+                      }),
+                      zod.object({
+                        data: zod
+                          .object({
+                            createdAt: zod.iso.datetime({}),
+                            id: zod.uuid(),
+                            inboxVisible: zod.boolean(),
+                            isDraft: zod.boolean(),
+                            isImportant: zod.boolean(),
+                            isRead: zod.boolean(),
+                            name: zod.string().nullish(),
+                            ownerId: zod.string(),
+                            projectId: zod.string().nullish(),
+                            providerId: zod.string().nullish(),
+                            senderEmail: zod.string().nullish(),
+                            senderName: zod.string().nullish(),
+                            senderPhotoUrl: zod.string().nullish(),
+                            snippet: zod.string().nullish(),
+                            sortTs: zod.iso.datetime({}),
+                            updatedAt: zod.iso.datetime({}),
+                            viewedAt: zod.iso.datetime({}).nullish(),
+                          })
+                          .and(
+                            zod.object({
+                              attachments: zod.array(
+                                zod.object({
+                                  contentId: zod.string().nullish(),
+                                  createdAt: zod.iso.datetime({}),
+                                  filename: zod.string().nullish(),
+                                  id: zod.uuid(),
+                                  messageId: zod.uuid(),
+                                  mimeType: zod.string().nullish(),
+                                  providerAttachmentId: zod.string().nullish(),
+                                  sizeBytes: zod.number().nullish(),
+                                })
+                              ),
+                              labels: zod.array(
+                                zod.object({
+                                  createdAt: zod.iso.datetime({}),
+                                  id: zod.uuid(),
+                                  labelListVisibility: zod.enum([
+                                    'labelShow',
+                                    'labelShowIfUnread',
+                                    'labelHide',
+                                  ]),
+                                  linkId: zod.uuid(),
+                                  messageListVisibility: zod.enum([
+                                    'show',
+                                    'hide',
+                                  ]),
+                                  name: zod.string(),
+                                  providerLabelId: zod.string(),
+                                  type: zod.enum(['system', 'user']),
+                                })
+                              ),
+                              participants: zod.array(
+                                zod.object({
+                                  emailAddress: zod.string().nullish(),
+                                  id: zod.uuid(),
+                                  linkId: zod.uuid(),
+                                  name: zod.string().nullish(),
+                                  sfsPhotoUrl: zod.string().nullish(),
+                                })
+                              ),
+                              properties: zod.array(
+                                zod
+                                  .object({
+                                    definition: zod
+                                      .object({
+                                        created_at: zod.iso.datetime({}),
+                                        data_type: zod
+                                          .enum([
+                                            'BOOLEAN',
+                                            'DATE',
+                                            'NUMBER',
+                                            'STRING',
+                                            'SELECT_NUMBER',
+                                            'SELECT_STRING',
+                                            'ENTITY',
+                                            'LINK',
+                                          ])
+                                          .describe(
+                                            'Data type for property values, determining storage and validation.'
+                                          ),
+                                        display_name: zod.string(),
+                                        id: zod.uuid(),
+                                        is_metadata: zod
+                                          .boolean()
+                                          .describe(
+                                            'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                          ),
+                                        is_multi_select: zod.boolean(),
+                                        is_system: zod
+                                          .boolean()
+                                          .describe(
+                                            'Flag to indicate if this is a system property (stored in DB).'
+                                          ),
+                                        owner: zod
+                                          .union([
+                                            zod
+                                              .object({
+                                                scope: zod.enum(['user']),
+                                                user_id: zod.string(),
+                                              })
+                                              .describe(
+                                                'User-scoped property only'
+                                              ),
+                                            zod
+                                              .object({
+                                                organization_id: zod.number(),
+                                                scope: zod.enum([
+                                                  'organization',
+                                                ]),
+                                              })
+                                              .describe(
+                                                'Organization-scoped property only'
+                                              ),
+                                            zod
+                                              .object({
+                                                organization_id: zod.number(),
+                                                scope: zod.enum([
+                                                  'user_and_organization',
+                                                ]),
+                                                user_id: zod.string(),
+                                              })
+                                              .describe(
+                                                'Both user and organization-scoped'
+                                              ),
+                                            zod
+                                              .object({
+                                                scope: zod.enum(['system']),
+                                              })
+                                              .describe(
+                                                'System-owned property (no user or org owner)'
+                                              ),
+                                          ])
+                                          .describe(
+                                            'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                          ),
+                                        specific_entity_type: zod
+                                          .union([
+                                            zod.null(),
+                                            zod
+                                              .enum([
+                                                'CHANNEL',
+                                                'CHAT',
+                                                'COMPANY',
+                                                'DOCUMENT',
+                                                'PROJECT',
+                                                'TASK',
+                                                'THREAD',
+                                                'USER',
+                                              ])
+                                              .describe(
+                                                'Type of entity that can be referenced by entity properties.'
+                                              ),
+                                          ])
+                                          .optional(),
+                                        updated_at: zod.iso.datetime({}),
+                                      })
+                                      .describe(
+                                        'Property definition model (service representation).'
+                                      ),
+                                    value: zod
+                                      .union([
+                                        zod.null(),
+                                        zod
+                                          .union([
+                                            zod
+                                              .object({
+                                                type: zod.enum(['Boolean']),
+                                                value: zod
+                                                  .boolean()
+                                                  .describe(
+                                                    'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum(['Number']),
+                                                value: zod
+                                                  .number()
+                                                  .describe(
+                                                    'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum(['String']),
+                                                value: zod
+                                                  .string()
+                                                  .describe(
+                                                    'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum(['Date']),
+                                                value: zod.iso
+                                                  .datetime({})
+                                                  .describe(
+                                                    'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum([
+                                                  'SelectOption',
+                                                ]),
+                                                value: zod
+                                                  .array(zod.uuid())
+                                                  .describe(
+                                                    'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum([
+                                                  'EntityReference',
+                                                ]),
+                                                value: zod
+                                                  .array(
+                                                    zod
+                                                      .object({
+                                                        entity_id: zod.string(),
+                                                        entity_type: zod
+                                                          .enum([
+                                                            'CHANNEL',
+                                                            'CHAT',
+                                                            'COMPANY',
+                                                            'DOCUMENT',
+                                                            'PROJECT',
+                                                            'TASK',
+                                                            'THREAD',
+                                                            'USER',
+                                                          ])
+                                                          .describe(
+                                                            'Type of entity that can be referenced by entity properties.'
+                                                          ),
+                                                        specific_message_id: zod
+                                                          .uuid()
+                                                          .nullish()
+                                                          .describe(
+                                                            'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                          ),
+                                                      })
+                                                      .describe(
+                                                        'Entity reference for entity-type property values.'
+                                                      )
+                                                  )
+                                                  .describe(
+                                                    'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum(['Link']),
+                                                value: zod
+                                                  .array(zod.string())
+                                                  .describe(
+                                                    'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                              ),
+                                          ])
+                                          .describe(
+                                            'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                          ),
+                                      ])
+                                      .optional(),
+                                  })
+                                  .describe(
+                                    'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                                  )
+                              ),
+                            })
+                          ),
+                        tag: zod.enum(['emailThread']),
+                      }),
+                      zod.object({
+                        data: zod
+                          .object({
+                            channel: zod.object({
+                              channel_type: zod.enum([
+                                'public',
+                                'organization',
+                                'private',
+                                'direct_message',
+                                'team',
+                              ]),
+                              created_at: zod.iso.datetime({}),
+                              id: zod.uuid(),
+                              name: zod.string().nullish(),
+                              org_id: zod
+                                .number()
+                                .min(
+                                  postItemsSoupResponseItemsItemDataSourceDataChannelOrgIdMin
+                                )
+                                .nullish(),
+                              owner_id: zod.string(),
+                              team_id: zod.uuid().nullish(),
+                              updated_at: zod.iso.datetime({}),
+                            }),
+                            participants: zod.array(
+                              zod.object({
+                                channel_id: zod.uuid(),
+                                joined_at: zod.iso.datetime({}),
+                                left_at: zod.iso.datetime({}).nullish(),
+                                role: zod
+                                  .enum(['owner', 'admin', 'member'])
+                                  .describe(
+                                    'The role a user has within a channel.'
+                                  ),
+                                user_id: zod.string(),
+                              })
+                            ),
+                          })
+                          .and(
+                            zod.object({
+                              latest_message: zod
+                                .union([
+                                  zod.null(),
+                                  zod.object({
+                                    content: zod.string(),
+                                    created_at: zod.iso.datetime({}),
+                                    deleted_at: zod.iso.datetime({}).nullish(),
+                                    mentions: zod
+                                      .array(zod.string())
+                                      .describe(
+                                        'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                                      ),
+                                    message_id: zod.uuid(),
+                                    sender_id: zod.string(),
+                                    thread_id: zod.uuid().nullish(),
+                                    updated_at: zod.iso.datetime({}),
+                                  }),
+                                ])
+                                .optional(),
+                              latest_non_thread_message: zod
+                                .union([
+                                  zod.null(),
+                                  zod.object({
+                                    content: zod.string(),
+                                    created_at: zod.iso.datetime({}),
+                                    deleted_at: zod.iso.datetime({}).nullish(),
+                                    mentions: zod
+                                      .array(zod.string())
+                                      .describe(
+                                        'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                                      ),
+                                    message_id: zod.uuid(),
+                                    sender_id: zod.string(),
+                                    thread_id: zod.uuid().nullish(),
+                                    updated_at: zod.iso.datetime({}),
+                                  }),
+                                ])
+                                .optional(),
+                            })
+                          )
+                          .and(
+                            zod.object({
+                              interacted_at: zod.iso.datetime({}).nullish(),
+                              viewed_at: zod.iso.datetime({}).nullish(),
+                            })
+                          ),
+                        tag: zod.enum(['channel']),
+                      }),
+                      zod.object({
+                        data: zod
+                          .object({
+                            attended: zod
+                              .boolean()
+                              .describe(
+                                'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` \/ `call_record_participants` table).'
+                              ),
+                            callId: zod.uuid().describe('The call identifier.'),
+                            channelId: zod
+                              .uuid()
+                              .describe('The channel this call belongs to.'),
+                            channelName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Resolved display name for the channel.'
+                              ),
+                            createdBy: zod
+                              .string()
+                              .describe('User who created the call.'),
+                            customName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'User-supplied or AI-generated display name for the call.'
+                              ),
+                            durationMs: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Call duration in milliseconds (None if still active).'
+                              ),
+                            endedAt: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe(
+                                'When the call ended (None if still active).'
+                              ),
+                            isActive: zod
+                              .boolean()
+                              .describe(
+                                'Whether the call is currently active.'
+                              ),
+                            participants: zod
+                              .array(
+                                zod
+                                  .object({
+                                    joinedAt: zod.iso
+                                      .datetime({})
+                                      .describe(
+                                        'When the user joined the call.'
+                                      ),
+                                    leftAt: zod.iso
+                                      .datetime({})
+                                      .nullish()
+                                      .describe(
+                                        'When the user left (None if still in an active call).'
+                                      ),
+                                    userId: zod
+                                      .string()
+                                      .describe('The user id.'),
+                                  })
+                                  .describe(
+                                    'A participant in a call record, as displayed in Soup.'
+                                  )
+                              )
+                              .describe('Participants in the call.'),
+                            startedAt: zod.iso
+                              .datetime({})
+                              .describe('When the call started.'),
+                            summary: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'AI-generated summary of the call. Only set on archived\n`call_records` once summarization has run; active calls always\nreturn `None`.'
+                              ),
+                          })
+                          .describe(
+                            'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'
+                          ),
+                        tag: zod.enum(['call']),
+                      }),
+                    ])
+                    .describe(
+                      'The enriched source entity for a [`SoupNotification`].'
+                    ),
+                ])
+                .optional(),
+              sourceEntityId: zod
+                .string()
+                .describe(
+                  'The ID of the source entity this notification is about.'
+                ),
+              sourceEntityType: zod
+                .enum([
+                  'CHANNEL',
+                  'CHAT',
+                  'COMPANY',
+                  'DOCUMENT',
+                  'PROJECT',
+                  'TASK',
+                  'THREAD',
+                  'USER',
+                ])
+                .describe(
+                  'Type of entity that can be referenced by entity properties.'
+                ),
+              updatedAt: zod.iso
+                .datetime({})
+                .describe(
+                  'When the notification was last updated for this user.'
+                ),
+              viewedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe(
+                  'When the notification was viewed\/seen by this user.'
+                ),
+            })
+            .describe('A notification in the Soup feed.'),
+          tag: zod.enum(['notification']),
+        }),
       ])
       .and(
         zod.object({
@@ -7534,6 +10300,8 @@ export const postItemsSoupAstBody = zod
   );
 
 export const postItemsSoupAstResponseItemsItemDataChannelOrgIdMin = 0;
+
+export const postItemsSoupAstResponseItemsItemDataSourceDataChannelOrgIdMin = 0;
 
 export const postItemsSoupAstResponse = zod.object({
   items: zod.array(
@@ -8762,6 +11530,1387 @@ export const postItemsSoupAstResponse = zod.object({
               'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'
             ),
           tag: zod.enum(['call']),
+        }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod.iso
+                .datetime({})
+                .describe('When the notification was created for this user.'),
+              deletedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('When the notification was deleted for this user.'),
+              done: zod
+                .boolean()
+                .describe('Whether the notification is marked as done.'),
+              eventType: zod
+                .string()
+                .describe(
+                  'The notification event type string (for example, `channel_mention`).'
+                ),
+              id: zod.uuid().describe('The notification ID.'),
+              metadata: zod.unknown().describe('Raw notification metadata.'),
+              ownerId: zod
+                .string()
+                .describe('The user who owns this notification.'),
+              senderId: zod
+                .string()
+                .nullish()
+                .describe('The user who triggered the notification.'),
+              sent: zod
+                .boolean()
+                .describe('Whether the notification has been sent.'),
+              source: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .union([
+                      zod.object({
+                        data: zod.object({
+                          branchedFromId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The id of the document this document branched from'
+                            ),
+                          branchedFromVersionId: zod
+                            .number()
+                            .nullish()
+                            .describe(
+                              'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'
+                            ),
+                          createdAt: zod.iso
+                            .datetime({})
+                            .describe('The time the document was created'),
+                          deletedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the document was deleted'),
+                          documentFamilyId: zod
+                            .number()
+                            .nullish()
+                            .describe(
+                              'The id of the document family this document belongs to'
+                            ),
+                          documentVersionId: zod
+                            .number()
+                            .describe(
+                              'The version of the document\nThis could be the document_instance_id or document_bom_id depending on the file type'
+                            ),
+                          fileType: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The file type of the document (e.g. pdf, docx)'
+                            ),
+                          id: zod.uuid().describe('The document id'),
+                          name: zod
+                            .string()
+                            .describe('The name of the document'),
+                          ownerId: zod
+                            .string()
+                            .describe('The owner of the document'),
+                          projectId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The id of the project that this document belongs to'
+                            ),
+                          properties: zod
+                            .array(
+                              zod
+                                .object({
+                                  definition: zod
+                                    .object({
+                                      created_at: zod.iso.datetime({}),
+                                      data_type: zod
+                                        .enum([
+                                          'BOOLEAN',
+                                          'DATE',
+                                          'NUMBER',
+                                          'STRING',
+                                          'SELECT_NUMBER',
+                                          'SELECT_STRING',
+                                          'ENTITY',
+                                          'LINK',
+                                        ])
+                                        .describe(
+                                          'Data type for property values, determining storage and validation.'
+                                        ),
+                                      display_name: zod.string(),
+                                      id: zod.uuid(),
+                                      is_metadata: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                        ),
+                                      is_multi_select: zod.boolean(),
+                                      is_system: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system property (stored in DB).'
+                                        ),
+                                      owner: zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['user']),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'User-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum(['organization']),
+                                            })
+                                            .describe(
+                                              'Organization-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum([
+                                                'user_and_organization',
+                                              ]),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'Both user and organization-scoped'
+                                            ),
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['system']),
+                                            })
+                                            .describe(
+                                              'System-owned property (no user or org owner)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                        ),
+                                      specific_entity_type: zod
+                                        .union([
+                                          zod.null(),
+                                          zod
+                                            .enum([
+                                              'CHANNEL',
+                                              'CHAT',
+                                              'COMPANY',
+                                              'DOCUMENT',
+                                              'PROJECT',
+                                              'TASK',
+                                              'THREAD',
+                                              'USER',
+                                            ])
+                                            .describe(
+                                              'Type of entity that can be referenced by entity properties.'
+                                            ),
+                                        ])
+                                        .optional(),
+                                      updated_at: zod.iso.datetime({}),
+                                    })
+                                    .describe(
+                                      'Property definition model (service representation).'
+                                    ),
+                                  value: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Boolean']),
+                                              value: zod
+                                                .boolean()
+                                                .describe(
+                                                  'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Number']),
+                                              value: zod
+                                                .number()
+                                                .describe(
+                                                  'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['String']),
+                                              value: zod
+                                                .string()
+                                                .describe(
+                                                  'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Date']),
+                                              value: zod.iso
+                                                .datetime({})
+                                                .describe(
+                                                  'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['SelectOption']),
+                                              value: zod
+                                                .array(zod.uuid())
+                                                .describe(
+                                                  'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum([
+                                                'EntityReference',
+                                              ]),
+                                              value: zod
+                                                .array(
+                                                  zod
+                                                    .object({
+                                                      entity_id: zod.string(),
+                                                      entity_type: zod
+                                                        .enum([
+                                                          'CHANNEL',
+                                                          'CHAT',
+                                                          'COMPANY',
+                                                          'DOCUMENT',
+                                                          'PROJECT',
+                                                          'TASK',
+                                                          'THREAD',
+                                                          'USER',
+                                                        ])
+                                                        .describe(
+                                                          'Type of entity that can be referenced by entity properties.'
+                                                        ),
+                                                      specific_message_id: zod
+                                                        .uuid()
+                                                        .nullish()
+                                                        .describe(
+                                                          'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                        ),
+                                                    })
+                                                    .describe(
+                                                      'Entity reference for entity-type property values.'
+                                                    )
+                                                )
+                                                .describe(
+                                                  'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Link']),
+                                              value: zod
+                                                .array(zod.string())
+                                                .describe(
+                                                  'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                })
+                                .describe(
+                                  'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                                )
+                            )
+                            .describe('Properties'),
+                          sha: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
+                            ),
+                          subType: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  is_completed: zod
+                                    .boolean()
+                                    .describe(
+                                      'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                                    ),
+                                  type: zod.enum(['task']),
+                                })
+                                .describe(
+                                  'A task document with its associated properties'
+                                )
+                                .describe(
+                                  'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
+                                ),
+                            ])
+                            .optional(),
+                          updatedAt: zod.iso
+                            .datetime({})
+                            .describe(
+                              'The time the document instance \/ document BOM was updated'
+                            ),
+                          viewedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the document was last viewed'),
+                        }),
+                        tag: zod.enum(['document']),
+                      }),
+                      zod.object({
+                        data: zod.object({
+                          createdAt: zod.iso
+                            .datetime({})
+                            .describe('The time the chat was created'),
+                          deletedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the chat was deleted'),
+                          id: zod.uuid().describe('The chat uuid'),
+                          isPersistent: zod
+                            .boolean()
+                            .describe('Whether the chat is persistent or not'),
+                          name: zod.string().describe('The name of the chat'),
+                          ownerId: zod
+                            .string()
+                            .describe('Who the chat belongs to'),
+                          projectId: zod
+                            .uuid()
+                            .nullish()
+                            .describe('The project id of the chat'),
+                          properties: zod
+                            .array(
+                              zod
+                                .object({
+                                  definition: zod
+                                    .object({
+                                      created_at: zod.iso.datetime({}),
+                                      data_type: zod
+                                        .enum([
+                                          'BOOLEAN',
+                                          'DATE',
+                                          'NUMBER',
+                                          'STRING',
+                                          'SELECT_NUMBER',
+                                          'SELECT_STRING',
+                                          'ENTITY',
+                                          'LINK',
+                                        ])
+                                        .describe(
+                                          'Data type for property values, determining storage and validation.'
+                                        ),
+                                      display_name: zod.string(),
+                                      id: zod.uuid(),
+                                      is_metadata: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                        ),
+                                      is_multi_select: zod.boolean(),
+                                      is_system: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system property (stored in DB).'
+                                        ),
+                                      owner: zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['user']),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'User-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum(['organization']),
+                                            })
+                                            .describe(
+                                              'Organization-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum([
+                                                'user_and_organization',
+                                              ]),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'Both user and organization-scoped'
+                                            ),
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['system']),
+                                            })
+                                            .describe(
+                                              'System-owned property (no user or org owner)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                        ),
+                                      specific_entity_type: zod
+                                        .union([
+                                          zod.null(),
+                                          zod
+                                            .enum([
+                                              'CHANNEL',
+                                              'CHAT',
+                                              'COMPANY',
+                                              'DOCUMENT',
+                                              'PROJECT',
+                                              'TASK',
+                                              'THREAD',
+                                              'USER',
+                                            ])
+                                            .describe(
+                                              'Type of entity that can be referenced by entity properties.'
+                                            ),
+                                        ])
+                                        .optional(),
+                                      updated_at: zod.iso.datetime({}),
+                                    })
+                                    .describe(
+                                      'Property definition model (service representation).'
+                                    ),
+                                  value: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Boolean']),
+                                              value: zod
+                                                .boolean()
+                                                .describe(
+                                                  'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Number']),
+                                              value: zod
+                                                .number()
+                                                .describe(
+                                                  'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['String']),
+                                              value: zod
+                                                .string()
+                                                .describe(
+                                                  'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Date']),
+                                              value: zod.iso
+                                                .datetime({})
+                                                .describe(
+                                                  'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['SelectOption']),
+                                              value: zod
+                                                .array(zod.uuid())
+                                                .describe(
+                                                  'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum([
+                                                'EntityReference',
+                                              ]),
+                                              value: zod
+                                                .array(
+                                                  zod
+                                                    .object({
+                                                      entity_id: zod.string(),
+                                                      entity_type: zod
+                                                        .enum([
+                                                          'CHANNEL',
+                                                          'CHAT',
+                                                          'COMPANY',
+                                                          'DOCUMENT',
+                                                          'PROJECT',
+                                                          'TASK',
+                                                          'THREAD',
+                                                          'USER',
+                                                        ])
+                                                        .describe(
+                                                          'Type of entity that can be referenced by entity properties.'
+                                                        ),
+                                                      specific_message_id: zod
+                                                        .uuid()
+                                                        .nullish()
+                                                        .describe(
+                                                          'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                        ),
+                                                    })
+                                                    .describe(
+                                                      'Entity reference for entity-type property values.'
+                                                    )
+                                                )
+                                                .describe(
+                                                  'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Link']),
+                                              value: zod
+                                                .array(zod.string())
+                                                .describe(
+                                                  'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                })
+                                .describe(
+                                  'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                                )
+                            )
+                            .describe('Properties'),
+                          updatedAt: zod.iso
+                            .datetime({})
+                            .describe('The time the chat was last updated'),
+                          viewedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the chat was last viewed'),
+                        }),
+                        tag: zod.enum(['chat']),
+                      }),
+                      zod.object({
+                        data: zod.object({
+                          createdAt: zod.iso
+                            .datetime({})
+                            .describe('The time the project was created'),
+                          deletedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the project was deleted'),
+                          id: zod.uuid().describe('The id of the project'),
+                          name: zod
+                            .string()
+                            .describe('The name of the project'),
+                          ownerId: zod
+                            .string()
+                            .describe('The user id of who created the project'),
+                          parentId: zod
+                            .uuid()
+                            .nullish()
+                            .describe('The parent project id'),
+                          properties: zod
+                            .array(
+                              zod
+                                .object({
+                                  definition: zod
+                                    .object({
+                                      created_at: zod.iso.datetime({}),
+                                      data_type: zod
+                                        .enum([
+                                          'BOOLEAN',
+                                          'DATE',
+                                          'NUMBER',
+                                          'STRING',
+                                          'SELECT_NUMBER',
+                                          'SELECT_STRING',
+                                          'ENTITY',
+                                          'LINK',
+                                        ])
+                                        .describe(
+                                          'Data type for property values, determining storage and validation.'
+                                        ),
+                                      display_name: zod.string(),
+                                      id: zod.uuid(),
+                                      is_metadata: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                        ),
+                                      is_multi_select: zod.boolean(),
+                                      is_system: zod
+                                        .boolean()
+                                        .describe(
+                                          'Flag to indicate if this is a system property (stored in DB).'
+                                        ),
+                                      owner: zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['user']),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'User-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum(['organization']),
+                                            })
+                                            .describe(
+                                              'Organization-scoped property only'
+                                            ),
+                                          zod
+                                            .object({
+                                              organization_id: zod.number(),
+                                              scope: zod.enum([
+                                                'user_and_organization',
+                                              ]),
+                                              user_id: zod.string(),
+                                            })
+                                            .describe(
+                                              'Both user and organization-scoped'
+                                            ),
+                                          zod
+                                            .object({
+                                              scope: zod.enum(['system']),
+                                            })
+                                            .describe(
+                                              'System-owned property (no user or org owner)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                        ),
+                                      specific_entity_type: zod
+                                        .union([
+                                          zod.null(),
+                                          zod
+                                            .enum([
+                                              'CHANNEL',
+                                              'CHAT',
+                                              'COMPANY',
+                                              'DOCUMENT',
+                                              'PROJECT',
+                                              'TASK',
+                                              'THREAD',
+                                              'USER',
+                                            ])
+                                            .describe(
+                                              'Type of entity that can be referenced by entity properties.'
+                                            ),
+                                        ])
+                                        .optional(),
+                                      updated_at: zod.iso.datetime({}),
+                                    })
+                                    .describe(
+                                      'Property definition model (service representation).'
+                                    ),
+                                  value: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Boolean']),
+                                              value: zod
+                                                .boolean()
+                                                .describe(
+                                                  'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Number']),
+                                              value: zod
+                                                .number()
+                                                .describe(
+                                                  'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['String']),
+                                              value: zod
+                                                .string()
+                                                .describe(
+                                                  'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Date']),
+                                              value: zod.iso
+                                                .datetime({})
+                                                .describe(
+                                                  'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['SelectOption']),
+                                              value: zod
+                                                .array(zod.uuid())
+                                                .describe(
+                                                  'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum([
+                                                'EntityReference',
+                                              ]),
+                                              value: zod
+                                                .array(
+                                                  zod
+                                                    .object({
+                                                      entity_id: zod.string(),
+                                                      entity_type: zod
+                                                        .enum([
+                                                          'CHANNEL',
+                                                          'CHAT',
+                                                          'COMPANY',
+                                                          'DOCUMENT',
+                                                          'PROJECT',
+                                                          'TASK',
+                                                          'THREAD',
+                                                          'USER',
+                                                        ])
+                                                        .describe(
+                                                          'Type of entity that can be referenced by entity properties.'
+                                                        ),
+                                                      specific_message_id: zod
+                                                        .uuid()
+                                                        .nullish()
+                                                        .describe(
+                                                          'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                        ),
+                                                    })
+                                                    .describe(
+                                                      'Entity reference for entity-type property values.'
+                                                    )
+                                                )
+                                                .describe(
+                                                  'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                            ),
+                                          zod
+                                            .object({
+                                              type: zod.enum(['Link']),
+                                              value: zod
+                                                .array(zod.string())
+                                                .describe(
+                                                  'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                                ),
+                                            })
+                                            .describe(
+                                              'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                            ),
+                                        ])
+                                        .describe(
+                                          'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                })
+                                .describe(
+                                  'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                                )
+                            )
+                            .describe('Properties'),
+                          updatedAt: zod.iso
+                            .datetime({})
+                            .describe('The time the project was updated'),
+                          viewedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('The time the document was last viewed'),
+                        }),
+                        tag: zod.enum(['project']),
+                      }),
+                      zod.object({
+                        data: zod
+                          .object({
+                            createdAt: zod.iso.datetime({}),
+                            id: zod.uuid(),
+                            inboxVisible: zod.boolean(),
+                            isDraft: zod.boolean(),
+                            isImportant: zod.boolean(),
+                            isRead: zod.boolean(),
+                            name: zod.string().nullish(),
+                            ownerId: zod.string(),
+                            projectId: zod.string().nullish(),
+                            providerId: zod.string().nullish(),
+                            senderEmail: zod.string().nullish(),
+                            senderName: zod.string().nullish(),
+                            senderPhotoUrl: zod.string().nullish(),
+                            snippet: zod.string().nullish(),
+                            sortTs: zod.iso.datetime({}),
+                            updatedAt: zod.iso.datetime({}),
+                            viewedAt: zod.iso.datetime({}).nullish(),
+                          })
+                          .and(
+                            zod.object({
+                              attachments: zod.array(
+                                zod.object({
+                                  contentId: zod.string().nullish(),
+                                  createdAt: zod.iso.datetime({}),
+                                  filename: zod.string().nullish(),
+                                  id: zod.uuid(),
+                                  messageId: zod.uuid(),
+                                  mimeType: zod.string().nullish(),
+                                  providerAttachmentId: zod.string().nullish(),
+                                  sizeBytes: zod.number().nullish(),
+                                })
+                              ),
+                              labels: zod.array(
+                                zod.object({
+                                  createdAt: zod.iso.datetime({}),
+                                  id: zod.uuid(),
+                                  labelListVisibility: zod.enum([
+                                    'labelShow',
+                                    'labelShowIfUnread',
+                                    'labelHide',
+                                  ]),
+                                  linkId: zod.uuid(),
+                                  messageListVisibility: zod.enum([
+                                    'show',
+                                    'hide',
+                                  ]),
+                                  name: zod.string(),
+                                  providerLabelId: zod.string(),
+                                  type: zod.enum(['system', 'user']),
+                                })
+                              ),
+                              participants: zod.array(
+                                zod.object({
+                                  emailAddress: zod.string().nullish(),
+                                  id: zod.uuid(),
+                                  linkId: zod.uuid(),
+                                  name: zod.string().nullish(),
+                                  sfsPhotoUrl: zod.string().nullish(),
+                                })
+                              ),
+                              properties: zod.array(
+                                zod
+                                  .object({
+                                    definition: zod
+                                      .object({
+                                        created_at: zod.iso.datetime({}),
+                                        data_type: zod
+                                          .enum([
+                                            'BOOLEAN',
+                                            'DATE',
+                                            'NUMBER',
+                                            'STRING',
+                                            'SELECT_NUMBER',
+                                            'SELECT_STRING',
+                                            'ENTITY',
+                                            'LINK',
+                                          ])
+                                          .describe(
+                                            'Data type for property values, determining storage and validation.'
+                                          ),
+                                        display_name: zod.string(),
+                                        id: zod.uuid(),
+                                        is_metadata: zod
+                                          .boolean()
+                                          .describe(
+                                            'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+                                          ),
+                                        is_multi_select: zod.boolean(),
+                                        is_system: zod
+                                          .boolean()
+                                          .describe(
+                                            'Flag to indicate if this is a system property (stored in DB).'
+                                          ),
+                                        owner: zod
+                                          .union([
+                                            zod
+                                              .object({
+                                                scope: zod.enum(['user']),
+                                                user_id: zod.string(),
+                                              })
+                                              .describe(
+                                                'User-scoped property only'
+                                              ),
+                                            zod
+                                              .object({
+                                                organization_id: zod.number(),
+                                                scope: zod.enum([
+                                                  'organization',
+                                                ]),
+                                              })
+                                              .describe(
+                                                'Organization-scoped property only'
+                                              ),
+                                            zod
+                                              .object({
+                                                organization_id: zod.number(),
+                                                scope: zod.enum([
+                                                  'user_and_organization',
+                                                ]),
+                                                user_id: zod.string(),
+                                              })
+                                              .describe(
+                                                'Both user and organization-scoped'
+                                              ),
+                                            zod
+                                              .object({
+                                                scope: zod.enum(['system']),
+                                              })
+                                              .describe(
+                                                'System-owned property (no user or org owner)'
+                                              ),
+                                          ])
+                                          .describe(
+                                            'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                          ),
+                                        specific_entity_type: zod
+                                          .union([
+                                            zod.null(),
+                                            zod
+                                              .enum([
+                                                'CHANNEL',
+                                                'CHAT',
+                                                'COMPANY',
+                                                'DOCUMENT',
+                                                'PROJECT',
+                                                'TASK',
+                                                'THREAD',
+                                                'USER',
+                                              ])
+                                              .describe(
+                                                'Type of entity that can be referenced by entity properties.'
+                                              ),
+                                          ])
+                                          .optional(),
+                                        updated_at: zod.iso.datetime({}),
+                                      })
+                                      .describe(
+                                        'Property definition model (service representation).'
+                                      ),
+                                    value: zod
+                                      .union([
+                                        zod.null(),
+                                        zod
+                                          .union([
+                                            zod
+                                              .object({
+                                                type: zod.enum(['Boolean']),
+                                                value: zod
+                                                  .boolean()
+                                                  .describe(
+                                                    'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum(['Number']),
+                                                value: zod
+                                                  .number()
+                                                  .describe(
+                                                    'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum(['String']),
+                                                value: zod
+                                                  .string()
+                                                  .describe(
+                                                    'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum(['Date']),
+                                                value: zod.iso
+                                                  .datetime({})
+                                                  .describe(
+                                                    'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum([
+                                                  'SelectOption',
+                                                ]),
+                                                value: zod
+                                                  .array(zod.uuid())
+                                                  .describe(
+                                                    'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum([
+                                                  'EntityReference',
+                                                ]),
+                                                value: zod
+                                                  .array(
+                                                    zod
+                                                      .object({
+                                                        entity_id: zod.string(),
+                                                        entity_type: zod
+                                                          .enum([
+                                                            'CHANNEL',
+                                                            'CHAT',
+                                                            'COMPANY',
+                                                            'DOCUMENT',
+                                                            'PROJECT',
+                                                            'TASK',
+                                                            'THREAD',
+                                                            'USER',
+                                                          ])
+                                                          .describe(
+                                                            'Type of entity that can be referenced by entity properties.'
+                                                          ),
+                                                        specific_message_id: zod
+                                                          .uuid()
+                                                          .nullish()
+                                                          .describe(
+                                                            'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                                          ),
+                                                      })
+                                                      .describe(
+                                                        'Entity reference for entity-type property values.'
+                                                      )
+                                                  )
+                                                  .describe(
+                                                    'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
+                                              ),
+                                            zod
+                                              .object({
+                                                type: zod.enum(['Link']),
+                                                value: zod
+                                                  .array(zod.string())
+                                                  .describe(
+                                                    'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                                  ),
+                                              })
+                                              .describe(
+                                                'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https:\/\/example.com\", \"https:\/\/other.com\"]} (length 0+)'
+                                              ),
+                                          ])
+                                          .describe(
+                                            'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to\/from JSONB in the database.'
+                                          ),
+                                      ])
+                                      .optional(),
+                                  })
+                                  .describe(
+                                    'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
+                                  )
+                              ),
+                            })
+                          ),
+                        tag: zod.enum(['emailThread']),
+                      }),
+                      zod.object({
+                        data: zod
+                          .object({
+                            channel: zod.object({
+                              channel_type: zod.enum([
+                                'public',
+                                'organization',
+                                'private',
+                                'direct_message',
+                                'team',
+                              ]),
+                              created_at: zod.iso.datetime({}),
+                              id: zod.uuid(),
+                              name: zod.string().nullish(),
+                              org_id: zod
+                                .number()
+                                .min(
+                                  postItemsSoupAstResponseItemsItemDataSourceDataChannelOrgIdMin
+                                )
+                                .nullish(),
+                              owner_id: zod.string(),
+                              team_id: zod.uuid().nullish(),
+                              updated_at: zod.iso.datetime({}),
+                            }),
+                            participants: zod.array(
+                              zod.object({
+                                channel_id: zod.uuid(),
+                                joined_at: zod.iso.datetime({}),
+                                left_at: zod.iso.datetime({}).nullish(),
+                                role: zod
+                                  .enum(['owner', 'admin', 'member'])
+                                  .describe(
+                                    'The role a user has within a channel.'
+                                  ),
+                                user_id: zod.string(),
+                              })
+                            ),
+                          })
+                          .and(
+                            zod.object({
+                              latest_message: zod
+                                .union([
+                                  zod.null(),
+                                  zod.object({
+                                    content: zod.string(),
+                                    created_at: zod.iso.datetime({}),
+                                    deleted_at: zod.iso.datetime({}).nullish(),
+                                    mentions: zod
+                                      .array(zod.string())
+                                      .describe(
+                                        'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                                      ),
+                                    message_id: zod.uuid(),
+                                    sender_id: zod.string(),
+                                    thread_id: zod.uuid().nullish(),
+                                    updated_at: zod.iso.datetime({}),
+                                  }),
+                                ])
+                                .optional(),
+                              latest_non_thread_message: zod
+                                .union([
+                                  zod.null(),
+                                  zod.object({
+                                    content: zod.string(),
+                                    created_at: zod.iso.datetime({}),
+                                    deleted_at: zod.iso.datetime({}).nullish(),
+                                    mentions: zod
+                                      .array(zod.string())
+                                      .describe(
+                                        'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                                      ),
+                                    message_id: zod.uuid(),
+                                    sender_id: zod.string(),
+                                    thread_id: zod.uuid().nullish(),
+                                    updated_at: zod.iso.datetime({}),
+                                  }),
+                                ])
+                                .optional(),
+                            })
+                          )
+                          .and(
+                            zod.object({
+                              interacted_at: zod.iso.datetime({}).nullish(),
+                              viewed_at: zod.iso.datetime({}).nullish(),
+                            })
+                          ),
+                        tag: zod.enum(['channel']),
+                      }),
+                      zod.object({
+                        data: zod
+                          .object({
+                            attended: zod
+                              .boolean()
+                              .describe(
+                                'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` \/ `call_record_participants` table).'
+                              ),
+                            callId: zod.uuid().describe('The call identifier.'),
+                            channelId: zod
+                              .uuid()
+                              .describe('The channel this call belongs to.'),
+                            channelName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Resolved display name for the channel.'
+                              ),
+                            createdBy: zod
+                              .string()
+                              .describe('User who created the call.'),
+                            customName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'User-supplied or AI-generated display name for the call.'
+                              ),
+                            durationMs: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Call duration in milliseconds (None if still active).'
+                              ),
+                            endedAt: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe(
+                                'When the call ended (None if still active).'
+                              ),
+                            isActive: zod
+                              .boolean()
+                              .describe(
+                                'Whether the call is currently active.'
+                              ),
+                            participants: zod
+                              .array(
+                                zod
+                                  .object({
+                                    joinedAt: zod.iso
+                                      .datetime({})
+                                      .describe(
+                                        'When the user joined the call.'
+                                      ),
+                                    leftAt: zod.iso
+                                      .datetime({})
+                                      .nullish()
+                                      .describe(
+                                        'When the user left (None if still in an active call).'
+                                      ),
+                                    userId: zod
+                                      .string()
+                                      .describe('The user id.'),
+                                  })
+                                  .describe(
+                                    'A participant in a call record, as displayed in Soup.'
+                                  )
+                              )
+                              .describe('Participants in the call.'),
+                            startedAt: zod.iso
+                              .datetime({})
+                              .describe('When the call started.'),
+                            summary: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'AI-generated summary of the call. Only set on archived\n`call_records` once summarization has run; active calls always\nreturn `None`.'
+                              ),
+                          })
+                          .describe(
+                            'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'
+                          ),
+                        tag: zod.enum(['call']),
+                      }),
+                    ])
+                    .describe(
+                      'The enriched source entity for a [`SoupNotification`].'
+                    ),
+                ])
+                .optional(),
+              sourceEntityId: zod
+                .string()
+                .describe(
+                  'The ID of the source entity this notification is about.'
+                ),
+              sourceEntityType: zod
+                .enum([
+                  'CHANNEL',
+                  'CHAT',
+                  'COMPANY',
+                  'DOCUMENT',
+                  'PROJECT',
+                  'TASK',
+                  'THREAD',
+                  'USER',
+                ])
+                .describe(
+                  'Type of entity that can be referenced by entity properties.'
+                ),
+              updatedAt: zod.iso
+                .datetime({})
+                .describe(
+                  'When the notification was last updated for this user.'
+                ),
+              viewedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe(
+                  'When the notification was viewed\/seen by this user.'
+                ),
+            })
+            .describe('A notification in the Soup feed.'),
+          tag: zod.enum(['notification']),
         }),
       ])
       .and(

@@ -12686,6 +12686,19 @@
                 "enum": ["call"]
               }
             }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupNotification"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["notification"]
+              }
+            }
           }
         ]
       },
@@ -12742,6 +12755,174 @@
       "SoupMessageListVisibility": {
         "type": "string",
         "enum": ["show", "hide"]
+      },
+      "SoupNotification": {
+        "type": "object",
+        "description": "A notification in the Soup feed.",
+        "required": [
+          "id",
+          "ownerId",
+          "eventType",
+          "sourceEntityType",
+          "sourceEntityId",
+          "sent",
+          "done",
+          "createdAt",
+          "updatedAt",
+          "metadata"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the notification was created for this user."
+          },
+          "deletedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the notification was deleted for this user."
+          },
+          "done": {
+            "type": "boolean",
+            "description": "Whether the notification is marked as done."
+          },
+          "eventType": {
+            "type": "string",
+            "description": "The notification event type string (for example, `channel_mention`)."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The notification ID."
+          },
+          "metadata": {
+            "description": "Raw notification metadata."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "The user who owns this notification."
+          },
+          "senderId": {
+            "type": ["string", "null"],
+            "description": "The user who triggered the notification."
+          },
+          "sent": {
+            "type": "boolean",
+            "description": "Whether the notification has been sent."
+          },
+          "source": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SoupNotificationSource",
+                "description": "The enriched source entity, when available."
+              }
+            ]
+          },
+          "sourceEntityId": {
+            "type": "string",
+            "description": "The ID of the source entity this notification is about."
+          },
+          "sourceEntityType": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "The type of source entity this notification is about."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the notification was last updated for this user."
+          },
+          "viewedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the notification was viewed/seen by this user."
+          }
+        }
+      },
+      "SoupNotificationSource": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupDocument"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["document"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupChat"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["chat"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupProject"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["project"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupEnrichedEmailThreadPreview"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["emailThread"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupChannel"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channel"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupCallRecord"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["call"]
+              }
+            }
+          }
+        ],
+        "description": "The enriched source entity for a [`SoupNotification`]."
       },
       "SoupPage": {
         "type": "object",
