@@ -28,17 +28,13 @@ jobs:
       has_lambdas: ${{ steps.generate-list.outputs.has_lambdas }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-
+        with:
+          fetch-depth: 1
       - name: Generate deploy list
         id: generate-list
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            SERVICES=$(jq -cn --arg service "${{ inputs.service }}" '[$service]')
-            echo "Manually selected service: $SERVICES"
-          else
-            SERVICES=$(jq -c '.services | keys_unsorted' .github/services-config.json)
-            echo "Automatic deploy selected all services: $SERVICES"
-          fi
+          SERVICES=$(jq -c '.services | keys_unsorted' .github/services-config.json)
+          echo "Automatic deploy selected all services: $SERVICES"
 
           lambda_matrix=$(jq -cn --argjson services "$SERVICES" --slurpfile config .github/services-config.json '$services as $services | $config[0] as $config | [$services[] as $service | ($config.services[$service].deploy_lambdas // [])[] | {service:$service, lambda:.}]')
           lambda_services=$(jq -cn --argjson matrix "$lambda_matrix" '[$matrix[].service] | unique')
