@@ -3,8 +3,8 @@
 use std::future::Future;
 
 use crate::domain::models::{
-    GithubError, GithubInstallationAccessToken, GithubKey, MacroTaskId, TeamTaskReference,
-    ValidatedGithubWebhookEvent,
+    GithubAppInstallationSource, GithubError, GithubInstallationAccessToken, GithubKey,
+    MacroTaskId, TeamTaskReference, ValidatedGithubWebhookEvent,
 };
 
 /// Repository for accessing github sync data from the database.
@@ -39,9 +39,9 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
 
     /// Resolves team-scoped task references for a GitHub App installation.
     ///
-    /// Implementations should use the installation's teams (via
-    /// `github_app_installation_team`) and the referenced team slug/task number
-    /// to find the backing Macro task document.
+    /// Implementations should use the installation's team sources from
+    /// `github_app_installation` (`source_type = 'team'`) and the referenced
+    /// team slug/task number to find the backing Macro task document.
     fn resolve_team_task_references(
         &self,
         installation_id: &str,
@@ -61,13 +61,12 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
         macro_id: &str,
     ) -> impl Future<Output = Result<Vec<uuid::Uuid>, Self::Err>> + Send;
 
-    /// Inserts associations between a GitHub App installation and the given teams.
+    /// Upserts associations between a GitHub App installation and its sources.
     /// Ignores conflicts (idempotent).
-    fn insert_installation_team_associations(
+    fn upsert_installation_sources(
         &self,
         installation_id: &str,
-        team_ids: &[uuid::Uuid],
-        installed_by: &str,
+        sources: &[GithubAppInstallationSource],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
