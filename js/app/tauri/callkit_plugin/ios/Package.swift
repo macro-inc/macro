@@ -16,7 +16,7 @@ let package = Package(
   ],
   dependencies: [
     .package(name: "Tauri", path: "../.tauri/tauri-api"),
-    .package(url: "https://github.com/livekit/client-sdk-swift.git", from: "2.0.0"),
+    .package(url: "https://github.com/livekit/client-sdk-swift.git", exact: "2.13.0"),
   ],
   targets: [
     .target(

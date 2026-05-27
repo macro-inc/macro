@@ -10,4 +10,6 @@ struct ActiveCallSnapshot {
     let callId: String
     var connectionState: String
     var isAudioMuted: Bool
+    var isVideoMuted: Bool
+    var videoOverlayMode: String
 }

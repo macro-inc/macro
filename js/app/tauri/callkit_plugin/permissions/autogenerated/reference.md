@@ -114,6 +114,84 @@ Denies the get_voip_token command without any pre-configured scope.
 <tr>
 <td>
 
+`call-kit:allow-set-video-enabled`
+
+</td>
+<td>
+
+Enables the set_video_enabled command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-set-video-enabled`
+
+</td>
+<td>
+
+Denies the set_video_enabled command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-set-video-overlay-mode`
+
+</td>
+<td>
+
+Enables the set_video_overlay_mode command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-set-video-overlay-mode`
+
+</td>
+<td>
+
+Denies the set_video_overlay_mode command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-switch-camera`
+
+</td>
+<td>
+
+Enables the switch_camera command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-switch-camera`
+
+</td>
+<td>
+
+Denies the switch_camera command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `call-kit:allow-watch-call-answered`
 
 </td>

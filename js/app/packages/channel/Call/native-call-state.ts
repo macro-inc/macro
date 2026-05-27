@@ -12,6 +12,9 @@ export type NativeCallSnapshot = {
   channelId: string;
   callId: string;
   connectionState: NativeCallConnectionState;
+  isAudioMuted: boolean;
+  isVideoMuted: boolean;
+  videoOverlayMode: 'hidden' | 'expanded' | 'minimized';
 };
 
 export const [nativeCallSnapshot, setNativeCallSnapshot] =

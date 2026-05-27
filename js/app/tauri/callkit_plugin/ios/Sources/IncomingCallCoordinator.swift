@@ -3,11 +3,13 @@ import CallKit
 import Foundation
 import PushKit
 
+private let enableNativeLiveKitAnswer = true
+
 /// PushKit + CallKit coordinator. Mutable state is main-queue only.
 final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistryDelegate, @unchecked Sendable {
     private let mediaSessionProvider: () -> NativeLiveKitCallSession
     private let onVoipTokenUpdated: (String) -> Void
-    private let onCallAnswered: (String) -> Void
+    private let onCallAnswered: (String, Bool) -> Void
     private let onCallEnded: (String) -> Void
 
     private var provider: CXProvider!
@@ -17,13 +19,14 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
     private var pendingCalls: [UUID: String] = [:]
     private var pendingCallTokens: [UUID: PendingCallToken] = [:]
     private var activeCallUUID: UUID?
+    private var activeNativeMediaUUID: UUID?
     private var cachedVoipToken: String?
-    private var pendingAnsweredChannelId: String?
+    private var pendingAnsweredCall: (channelId: String, nativeMedia: Bool)?
 
     init(
         mediaSession: @escaping () -> NativeLiveKitCallSession,
         onVoipTokenUpdated: @escaping (String) -> Void,
-        onCallAnswered: @escaping (String) -> Void,
+        onCallAnswered: @escaping (String, Bool) -> Void,
         onCallEnded: @escaping (String) -> Void
     ) {
         self.mediaSessionProvider = mediaSession
@@ -33,8 +36,9 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
     }
 
     func load() {
+        print("[CallKit] Loading PushKit/CallKit coordinator")
         let config = CXProviderConfiguration()
-        config.supportsVideo = false
+        config.supportsVideo = true
         config.maximumCallsPerCallGroup = 1
         config.supportedHandleTypes = [.generic]
 
@@ -44,24 +48,27 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         registry = PKPushRegistry(queue: .main)
         registry.delegate = self
         registry.desiredPushTypes = [.voIP]
+        print("[CallKit] PushKit registry configured for VoIP pushes")
     }
 
     func getVoipToken() -> String? {
         cachedVoipToken
     }
 
-    func drainPendingAnsweredChannelId() -> String? {
-        let channelId = pendingAnsweredChannelId
-        pendingAnsweredChannelId = nil
-        return channelId
+    func drainPendingAnsweredCall() -> (channelId: String, nativeMedia: Bool)? {
+        let answeredCall = pendingAnsweredCall
+        pendingAnsweredCall = nil
+        return answeredCall
     }
 
     func endActiveCall(completion: @escaping () -> Void) {
         guard let uuid = activeCallUUID else {
+            print("[CallKit] endActiveCall requested with no active CallKit UUID")
             completion()
             return
         }
 
+        print("[CallKit] endActiveCall requesting CXEndCallAction uuid=\(uuid.uuidString)")
         requestEndCall(uuid: uuid) { [weak self] error in
             guard let self else {
                 completion()
@@ -69,10 +76,14 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
             }
             self.onMain {
                 if error != nil {
+                    print("[CallKit] CXEndCallAction failed; clearing local state uuid=\(uuid.uuidString)")
+                    let shouldDisconnectNativeMedia = self.activeNativeMediaUUID == uuid
                     self.clearCallState(uuid: uuid)
-                    let mediaSession = self.mediaSessionProvider()
-                    Task {
-                        await mediaSession.disconnect()
+                    if shouldDisconnectNativeMedia {
+                        let mediaSession = self.mediaSessionProvider()
+                        Task {
+                            await mediaSession.disconnect()
+                        }
                     }
                 }
                 completion()
@@ -81,13 +92,18 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
     }
 
     func requestEndCall(uuid: UUID) {
+        print("[CallKit] requestEndCall uuid=\(uuid.uuidString)")
         requestEndCall(uuid: uuid) { [weak self] error in
             guard let self, error != nil else { return }
             self.onMain {
+                print("[CallKit] requestEndCall failed; disconnecting media session uuid=\(uuid.uuidString)")
+                let shouldDisconnectNativeMedia = self.activeNativeMediaUUID == uuid
                 self.clearCallState(uuid: uuid)
-                let mediaSession = self.mediaSessionProvider()
-                Task {
-                    await mediaSession.disconnect()
+                if shouldDisconnectNativeMedia {
+                    let mediaSession = self.mediaSessionProvider()
+                    Task {
+                        await mediaSession.disconnect()
+                    }
                 }
             }
         }
@@ -111,6 +127,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         guard type == .voIP else { return }
         let token = pushCredentials.token.map { String(format: "%02.2hhx", $0) }.joined()
         cachedVoipToken = token
+        print("[CallKit] VoIP token updated byteLength=\(pushCredentials.token.count)")
         onVoipTokenUpdated(token)
     }
 
@@ -131,6 +148,8 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         let callIdString = dict["callId"] as? String ?? ""
         let livekitServerUrl = dict["livekitServerUrl"] as? String
         let livekitToken = dict["livekitToken"] as? String
+        let hasNativeCredentials = livekitServerUrl != nil && livekitToken != nil
+        print("[CallKit] Received VoIP push callId=\(callIdString) channelId=\(channelId) hasNativeCredentials=\(hasNativeCredentials)")
 
         guard let uuid = UUID(uuidString: callIdString) else {
             // PushKit requires every VoIP push to be reported to CallKit.
@@ -149,6 +168,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
 
         // Copy keys before mutating; Dictionary.Keys is a live view.
         for staleUUID in Array(pendingCalls.keys) where staleUUID != uuid {
+            print("[CallKit] Marking stale pending call failed uuid=\(staleUUID.uuidString)")
             provider.reportCall(with: staleUUID, endedAt: nil, reason: .failed)
             pendingCalls.removeValue(forKey: staleUUID)
             pendingCallTokens.removeValue(forKey: staleUUID)
@@ -166,87 +186,129 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         let update = CXCallUpdate()
         update.remoteHandle = CXHandle(type: .generic, value: channelId)
         update.localizedCallerName = callerName
-        update.hasVideo = false
+        update.hasVideo = true
 
         // Must happen from the PushKit delegate; otherwise iOS can terminate us.
         provider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
             if error != nil {
+                print("[CallKit] reportNewIncomingCall failed uuid=\(uuid.uuidString) error=\(String(describing: error))")
                 self?.pendingCalls.removeValue(forKey: uuid)
                 self?.pendingCallTokens.removeValue(forKey: uuid)
                 if self?.activeCallUUID == uuid { self?.activeCallUUID = nil }
+            } else {
+                print("[CallKit] reportNewIncomingCall succeeded uuid=\(uuid.uuidString)")
             }
             completion()
         }
     }
 
     func providerDidReset(_ provider: CXProvider) {
+        print("[CallKit] CXProvider reset; clearing CallKit and media state")
         pendingCalls.removeAll()
         pendingCallTokens.removeAll()
         activeCallUUID = nil
-        pendingAnsweredChannelId = nil
-        let mediaSession = mediaSessionProvider()
-        Task {
-            await mediaSession.disconnect()
+        pendingAnsweredCall = nil
+        if activeNativeMediaUUID != nil {
+            activeNativeMediaUUID = nil
+            let mediaSession = mediaSessionProvider()
+            Task {
+                await mediaSession.disconnect()
+            }
         }
     }
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
+        print("[CallKit] CXAnswerCallAction received uuid=\(action.callUUID.uuidString)")
         guard let channelId = pendingCalls[action.callUUID] else {
+            print("[CallKit] Answer failed: no pending channel for uuid=\(action.callUUID.uuidString)")
             action.fail()
             return
         }
 
-        let mediaSession = mediaSessionProvider()
-        mediaSession.configureAudioSessionCategory()
-
-        pendingAnsweredChannelId = channelId
-        onCallAnswered(channelId)
-
         let answeredUUID = action.callUUID
-        if let pending = pendingCallTokens[answeredUUID] {
-            mediaSession.connect(
-                uuid: answeredUUID,
-                channelId: channelId,
-                serverUrl: pending.serverUrl,
-                token: pending.token
-            )
+        let pendingToken = pendingCallTokens[answeredUUID]
+        let shouldConnectNatively = enableNativeLiveKitAnswer && pendingToken != nil
+        if shouldConnectNatively {
+            activeNativeMediaUUID = answeredUUID
+            print("[CallKit] Scheduling native LiveKit connect for answered call uuid=\(answeredUUID.uuidString) channelId=\(channelId)")
+        } else if pendingCallTokens[answeredUUID] != nil {
+            print("[CallKit] Native LiveKit answer disabled; JS-driven join required uuid=\(answeredUUID.uuidString)")
         } else {
             print("[CallKit] No cached LiveKit token for answered call \(answeredUUID.uuidString); JS-driven join required")
         }
+
+        pendingAnsweredCall = (channelId: channelId, nativeMedia: shouldConnectNatively)
+        print("[CallKit] Emitting call answered event channelId=\(channelId) uuid=\(answeredUUID.uuidString) nativeMedia=\(shouldConnectNatively)")
+        onCallAnswered(channelId, shouldConnectNatively)
 
         // Keep activeCallUUID so JS can still request CXEndCallAction.
         pendingCalls.removeValue(forKey: answeredUUID)
         pendingCallTokens.removeValue(forKey: answeredUUID)
 
+        print("[CallKit] Fulfilling CXAnswerCallAction uuid=\(answeredUUID.uuidString)")
         action.fulfill()
+
+        if shouldConnectNatively, let pendingToken {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                print("[CallKit] Native LiveKit connect task started uuid=\(answeredUUID.uuidString)")
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                print("[CallKit] Creating media session for native LiveKit connect uuid=\(answeredUUID.uuidString)")
+                let mediaSession = self.mediaSessionProvider()
+                print("[CallKit] Deferring AVAudioSession category configuration until CallKit activation uuid=\(answeredUUID.uuidString)")
+                print("[CallKit] Starting native LiveKit connect uuid=\(answeredUUID.uuidString) channelId=\(channelId)")
+                mediaSession.connect(
+                    uuid: answeredUUID,
+                    channelId: channelId,
+                    serverUrl: pendingToken.serverUrl,
+                    token: pendingToken.token
+                )
+            }
+        }
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         let callId = action.callUUID.uuidString
+        print("[CallKit] CXEndCallAction received uuid=\(callId)")
         onCallEnded(callId)
 
-        let mediaSession = mediaSessionProvider()
-        Task {
-            await mediaSession.disconnect()
+        if activeNativeMediaUUID == action.callUUID {
+            let mediaSession = mediaSessionProvider()
+            Task {
+                await mediaSession.disconnect()
+            }
         }
 
         action.fulfill()
+        print("[CallKit] Fulfilled CXEndCallAction uuid=\(callId)")
         clearCallState(uuid: action.callUUID)
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+        guard activeNativeMediaUUID != nil else {
+            print("[CallKit] AVAudioSession activated by CallKit; no native media session active")
+            return
+        }
+        print("[CallKit] AVAudioSession activated by CallKit for native media")
         mediaSessionProvider().activateAudioEngine()
     }
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
+        guard activeNativeMediaUUID != nil else {
+            print("[CallKit] AVAudioSession deactivated by CallKit; no native media session active")
+            return
+        }
+        print("[CallKit] AVAudioSession deactivated by CallKit for native media")
         mediaSessionProvider().deactivateAudioEngine()
     }
 
     private func clearCallState(uuid: UUID) {
+        print("[CallKit] Clearing call state uuid=\(uuid.uuidString)")
         pendingCalls.removeValue(forKey: uuid)
         pendingCallTokens.removeValue(forKey: uuid)
         if activeCallUUID == uuid { activeCallUUID = nil }
-        pendingAnsweredChannelId = nil
+        if activeNativeMediaUUID == uuid { activeNativeMediaUUID = nil }
+        pendingAnsweredCall = nil
     }
 
     private func onMain(_ block: @escaping () -> Void) {

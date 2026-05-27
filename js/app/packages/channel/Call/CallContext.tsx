@@ -30,6 +30,10 @@ import {
   type NativeCallConnectionState,
   nativeCallSnapshot,
 } from './native-call-state';
+import {
+  setNativeCallKitVideoEnabled,
+  switchNativeCallKitCamera,
+} from './use-callkit';
 
 export type CallParticipantInfo = {
   identity: string;
@@ -885,6 +889,11 @@ function createCallState() {
   }
 
   async function switchVideoInput(deviceId: string) {
+    if (nativeCallSnapshot()) {
+      await switchNativeCallKitCamera();
+      return;
+    }
+
     const r = room();
     if (!r) return;
     try {
@@ -924,11 +933,15 @@ function createCallState() {
           'connectionState',
           NATIVE_TO_LIVEKIT_STATE[native.connectionState]
         );
+        setStore('isAudioMuted', native.isAudioMuted);
+        setStore('isVideoMuted', native.isVideoMuted);
       } else if (syncedFromNative) {
         syncedFromNative = false;
         setStore('activeChannelId', null);
         setStore('activeCallId', null);
         setStore('connectionState', ConnectionState.Disconnected);
+        setStore('isAudioMuted', false);
+        setStore('isVideoMuted', true);
         setStore('remoteParticipants', new Map());
       }
     });
@@ -1078,6 +1091,14 @@ function createCallState() {
   }
 
   async function toggleVideo() {
+    const native = nativeCallSnapshot();
+    if (native) {
+      const enabled = store.isVideoMuted;
+      await setNativeCallKitVideoEnabled(enabled);
+      setStore('isVideoMuted', !enabled);
+      return;
+    }
+
     const r = room();
     if (!r) return;
     const newMuted = !store.isVideoMuted;
