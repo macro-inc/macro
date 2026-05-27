@@ -147,7 +147,7 @@ pub async fn set_linked_email(
     link_id: &uuid::Uuid,
     linked_email: &str,
 ) -> anyhow::Result<()> {
-    sqlx::query!(
+    let result = sqlx::query!(
         r#"
             UPDATE in_progress_user_link
             SET linked_email = $1
@@ -158,6 +158,10 @@ pub async fn set_linked_email(
     )
     .execute(db)
     .await?;
+
+    if result.rows_affected() == 0 {
+        anyhow::bail!("in_progress_user_link not found for link_id={link_id}");
+    }
 
     Ok(())
 }
