@@ -43,8 +43,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
             return Ok(());
         }
 
-        self.upsert_pull_request_foreign_entities(event, &resolved_all.doc_ids)
-            .await;
+        self.upsert_pull_request_foreign_entities(event).await;
 
         let github_key = Self::github_key(event);
 
@@ -127,8 +126,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
             return Ok(());
         }
 
-        self.upsert_pull_request_foreign_entities(event, &resolved_all.doc_ids)
-            .await;
+        self.upsert_pull_request_foreign_entities(event).await;
 
         let github_key = Self::github_key(event);
 
@@ -239,8 +237,9 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
 
         // resolve_tasks validates each ID is an actual task document
         let resolved = self.resolve_tasks(&all_task_ids).await;
-        self.upsert_pull_request_foreign_entities(event, &resolved.doc_ids)
-            .await;
+        if !resolved.doc_ids.is_empty() {
+            self.upsert_pull_request_foreign_entities(event).await;
+        }
 
         // No bot comment on close
         let status = if is_merged {

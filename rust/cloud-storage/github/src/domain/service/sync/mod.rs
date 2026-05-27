@@ -29,7 +29,6 @@ use subtle::ConstantTimeEq;
 type HmacSha256 = Hmac<Sha256>;
 
 const GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE: &str = "github_pull_request";
-const GITHUB_PULL_REQUEST_STORED_FOR_AUTH_ENTITY: &str = "document";
 
 /// Github sync config
 #[derive(Debug)]
@@ -221,15 +220,33 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
         GithubPullRequestStatus::Open
     }
 
-    /// Create or refresh foreign entity rows for a pull request and its task documents.
-    #[tracing::instrument(skip(self, event, stored_for_ids))]
-    async fn upsert_pull_request_foreign_entities(
-        &self,
-        event: &ValidatedGithubWebhookEvent,
-        stored_for_ids: &[String],
-    ) {
-        if stored_for_ids.is_empty() {
-            tracing::trace!("no task documents resolved for PR foreign entity upsert");
+    /// Create or refresh foreign entity rows for a pull request, scoped to the
+    /// Macro source (team or user) associated with the GitHub App installation.
+    #[tracing::instrument(skip(self, event))]
+    async fn upsert_pull_request_foreign_entities(&self, event: &ValidatedGithubWebhookEvent) {
+        let Some(installation_id) = event.installation_id() else {
+            tracing::warn!("missing installation id, cannot upsert PR foreign entity");
+            return;
+        };
+        let installation_id = installation_id.to_string();
+
+        let stored_for_sources = match self.repo.get_installation_sources(&installation_id).await {
+            Ok(sources) => sources,
+            Err(error) => {
+                tracing::error!(
+                    error=?error,
+                    installation_id,
+                    "failed to fetch GitHub App installation sources for PR foreign entity"
+                );
+                return;
+            }
+        };
+
+        if stored_for_sources.is_empty() {
+            tracing::trace!(
+                installation_id,
+                "no GitHub App installation sources found for PR foreign entity upsert"
+            );
             return;
         }
 
@@ -261,15 +278,17 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
             }
         };
 
-        let mut seen_stored_for_ids = HashSet::new();
-        for stored_for_id in stored_for_ids {
-            if !seen_stored_for_ids.insert(stored_for_id.clone()) {
+        let mut seen_sources = HashSet::new();
+        for source in stored_for_sources {
+            let stored_for_id = source.source_id();
+            let stored_for_auth_entity = source.source_type().to_string();
+            if !seen_sources.insert((stored_for_id.clone(), stored_for_auth_entity.clone())) {
                 continue;
             }
 
             let existing_entity = existing.iter().find(|entity| {
-                entity.stored_for_id == stored_for_id.as_str()
-                    && entity.stored_for_auth_entity == GITHUB_PULL_REQUEST_STORED_FOR_AUTH_ENTITY
+                entity.stored_for_id.as_str() == stored_for_id.as_str()
+                    && entity.stored_for_auth_entity.as_str() == stored_for_auth_entity.as_str()
             });
 
             if let Some(entity) = existing_entity {
@@ -287,6 +306,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
                             error=?error,
                             foreign_entity_id=%pull_request.github_key,
                             stored_for_id=%stored_for_id,
+                            stored_for_auth_entity=%stored_for_auth_entity,
                             "failed to patch PR foreign entity"
                         );
                     })
@@ -300,7 +320,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
                     foreign_entity_source: GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE.to_string(),
                     metadata: metadata.clone(),
                     stored_for_id: stored_for_id.clone(),
-                    stored_for_auth_entity: GITHUB_PULL_REQUEST_STORED_FOR_AUTH_ENTITY.to_string(),
+                    stored_for_auth_entity: stored_for_auth_entity.clone(),
                 })
                 .await
                 .inspect_err(|error| {
@@ -308,6 +328,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
                         error=?error,
                         foreign_entity_id=%pull_request.github_key,
                         stored_for_id=%stored_for_id,
+                        stored_for_auth_entity=%stored_for_auth_entity,
                         "failed to create PR foreign entity"
                     );
                 })

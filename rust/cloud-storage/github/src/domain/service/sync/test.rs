@@ -261,6 +261,8 @@ struct StubSyncRepo {
     github_links: Mutex<HashMap<String, String>>,
     /// Maps macro_id -> team_ids for installation event lookups.
     user_teams: Mutex<HashMap<String, Vec<uuid::Uuid>>>,
+    /// Current github_app_installation source rows keyed by installation id.
+    installation_source_rows: Mutex<HashMap<String, HashSet<GithubAppInstallationSource>>>,
     /// Recorded installation source upserts: (installation_id, sources).
     installation_sources: Mutex<Vec<(String, Vec<GithubAppInstallationSource>)>>,
 }
@@ -272,6 +274,7 @@ impl StubSyncRepo {
             team_task_references: Mutex::new(HashMap::new()),
             github_links: Mutex::new(HashMap::new()),
             user_teams: Mutex::new(HashMap::new()),
+            installation_source_rows: Mutex::new(HashMap::new()),
             installation_sources: Mutex::new(Vec::new()),
         }
     }
@@ -307,6 +310,19 @@ impl StubSyncRepo {
             ),
             task_id,
         );
+        self
+    }
+
+    fn with_installation_sources(
+        self,
+        installation_id: &str,
+        sources: Vec<GithubAppInstallationSource>,
+    ) -> Self {
+        {
+            let mut rows = self.installation_source_rows.lock().unwrap();
+            let row_sources = rows.entry(installation_id.to_string()).or_default();
+            row_sources.extend(sources);
+        }
         self
     }
 
@@ -409,11 +425,29 @@ impl GithubSyncRepo for StubSyncRepo {
             .unwrap_or_default())
     }
 
+    async fn get_installation_sources(
+        &self,
+        installation_id: &str,
+    ) -> Result<Vec<GithubAppInstallationSource>, Self::Err> {
+        Ok(self
+            .installation_source_rows
+            .lock()
+            .unwrap()
+            .get(installation_id)
+            .map(|sources| sources.iter().cloned().collect())
+            .unwrap_or_default())
+    }
+
     async fn upsert_installation_sources(
         &self,
         installation_id: &str,
         sources: &[GithubAppInstallationSource],
     ) -> Result<(), Self::Err> {
+        {
+            let mut rows = self.installation_source_rows.lock().unwrap();
+            let row_sources = rows.entry(installation_id.to_string()).or_default();
+            row_sources.extend(sources.iter().cloned());
+        }
         self.installation_sources
             .lock()
             .unwrap()
@@ -655,7 +689,13 @@ fn make_sync_service_with_doc_service() -> (TestGithubSyncService, Arc<StubDocum
 }
 
 fn make_sync_service_with_foreign_entity_service() -> TestServiceWithForeignEntityService {
-    let service = make_sync_service();
+    let repo = StubSyncRepo::new().with_installation_sources(
+        "12345",
+        vec![GithubAppInstallationSource::Team(
+            "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap(),
+        )],
+    );
+    let service = make_sync_service_with_repo(repo);
     let foreign_entity_service = service.foreign_entity_service.clone();
 
     (service, foreign_entity_service)
@@ -1386,7 +1426,7 @@ async fn pr_merged_updates_status_even_when_already_tracked() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn pr_opened_upserts_foreign_entity_for_validated_task() {
+async fn pr_opened_upserts_foreign_entity_for_installation_source() {
     let (service, foreign_entity_service) = make_sync_service_with_foreign_entity_service();
     let event = ValidatedGithubWebhookEvent::new(
         "pull_request".to_string(),
@@ -1421,11 +1461,11 @@ async fn pr_opened_upserts_foreign_entity_for_validated_task() {
         foreign_entity.foreign_entity_source,
         GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE
     );
-    assert_eq!(foreign_entity.stored_for_id, KNOWN_TASK_UUID);
     assert_eq!(
-        foreign_entity.stored_for_auth_entity,
-        GITHUB_PULL_REQUEST_STORED_FOR_AUTH_ENTITY
+        foreign_entity.stored_for_id,
+        "dddddddd-dddd-dddd-dddd-dddddddddddd"
     );
+    assert_eq!(foreign_entity.stored_for_auth_entity, "team");
     assert_eq!(
         foreign_entity.metadata,
         expected_pull_request_metadata(
@@ -1437,6 +1477,46 @@ async fn pr_opened_upserts_foreign_entity_for_validated_task() {
     );
     assert_eq!(foreign_entity_service.create_calls().len(), 1);
     assert!(foreign_entity_service.patch_calls().is_empty());
+}
+
+#[tokio::test]
+async fn pr_opened_upserts_foreign_entity_for_user_installation_source() {
+    let repo = StubSyncRepo::new().with_installation_sources(
+        "77777",
+        vec![GithubAppInstallationSource::User(
+            "macro|solo@user.com".to_string(),
+        )],
+    );
+    let service = make_sync_service_with_repo(repo);
+    let foreign_entity_service = service.foreign_entity_service.clone();
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "state": "open",
+                "merged": false,
+                "additions": 10,
+                "deletions": 2
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 77777 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let foreign_entities = foreign_entity_service.foreign_entities();
+    assert_eq!(foreign_entities.len(), 1);
+    assert_eq!(foreign_entities[0].stored_for_id, "macro|solo@user.com");
+    assert_eq!(foreign_entities[0].stored_for_auth_entity, "user");
 }
 
 #[tokio::test]
