@@ -39,6 +39,33 @@ pub struct GithubInstallationAccessToken {
     pub expires_at: String,
 }
 
+/// Source that grants a GitHub App installation access to Macro sync data.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum GithubAppInstallationSource {
+    /// A Macro team source.
+    Team(uuid::Uuid),
+    /// A Macro user source.
+    User(String),
+}
+
+impl GithubAppInstallationSource {
+    /// Returns the value persisted in `github_app_installation.source_id`.
+    pub fn source_id(&self) -> String {
+        match self {
+            Self::Team(team_id) => team_id.to_string(),
+            Self::User(user_id) => user_id.clone(),
+        }
+    }
+
+    /// Returns the value persisted in `github_app_installation.source_type`.
+    pub fn source_type(&self) -> &'static str {
+        match self {
+            Self::Team(_) => "team",
+            Self::User(_) => "user",
+        }
+    }
+}
+
 /// A validated github webhook event
 #[derive(Debug)]
 pub struct ValidatedGithubWebhookEvent {

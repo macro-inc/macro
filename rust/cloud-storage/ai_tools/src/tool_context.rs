@@ -167,6 +167,16 @@ impl CallRtcClient for NoOpCallRtcClient {
         anyhow::bail!("call RTC client not configured")
     }
 
+    async fn build_voip_push_payloads<'a>(
+        &self,
+        _request: call::domain::models::VoipPushPayloadRequest<'a>,
+    ) -> Vec<(
+        MacroUserIdStr<'static>,
+        notification::domain::models::apple::VoipPushPayload,
+    )> {
+        Vec::new()
+    }
+
     async fn remove_participant<'a>(
         &self,
         _room_name: &str,

@@ -3,8 +3,8 @@ use std::sync::{Arc, Mutex};
 
 use crate::domain::{
     models::{
-        GithubError, GithubInstallationAccessToken, GithubKey, MacroTaskId, TeamTaskReference,
-        ValidatedGithubWebhookEvent,
+        GithubAppInstallationSource, GithubError, GithubInstallationAccessToken, GithubKey,
+        MacroTaskId, TeamTaskReference, ValidatedGithubWebhookEvent,
     },
     ports::{GithubSyncClient, GithubSyncRepo, GithubSyncService},
 };
@@ -256,8 +256,8 @@ struct StubSyncRepo {
     github_links: Mutex<HashMap<String, String>>,
     /// Maps macro_id -> team_ids for installation event lookups.
     user_teams: Mutex<HashMap<String, Vec<uuid::Uuid>>>,
-    /// Recorded installation-team association inserts: (installation_id, team_ids, installed_by).
-    installation_associations: Mutex<Vec<(String, Vec<uuid::Uuid>, String)>>,
+    /// Recorded installation source upserts: (installation_id, sources).
+    installation_sources: Mutex<Vec<(String, Vec<GithubAppInstallationSource>)>>,
 }
 
 impl StubSyncRepo {
@@ -267,7 +267,7 @@ impl StubSyncRepo {
             team_task_references: Mutex::new(HashMap::new()),
             github_links: Mutex::new(HashMap::new()),
             user_teams: Mutex::new(HashMap::new()),
-            installation_associations: Mutex::new(Vec::new()),
+            installation_sources: Mutex::new(Vec::new()),
         }
     }
 
@@ -305,8 +305,8 @@ impl StubSyncRepo {
         self
     }
 
-    fn installation_associations(&self) -> Vec<(String, Vec<uuid::Uuid>, String)> {
-        self.installation_associations.lock().unwrap().clone()
+    fn installation_sources(&self) -> Vec<(String, Vec<GithubAppInstallationSource>)> {
+        self.installation_sources.lock().unwrap().clone()
     }
 }
 
@@ -404,17 +404,15 @@ impl GithubSyncRepo for StubSyncRepo {
             .unwrap_or_default())
     }
 
-    async fn insert_installation_team_associations(
+    async fn upsert_installation_sources(
         &self,
         installation_id: &str,
-        team_ids: &[uuid::Uuid],
-        installed_by: &str,
+        sources: &[GithubAppInstallationSource],
     ) -> Result<(), Self::Err> {
-        self.installation_associations.lock().unwrap().push((
-            installation_id.to_string(),
-            team_ids.to_vec(),
-            installed_by.to_string(),
-        ));
+        self.installation_sources
+            .lock()
+            .unwrap()
+            .push((installation_id.to_string(), sources.to_vec()));
         Ok(())
     }
 }
@@ -1461,13 +1459,17 @@ async fn installation_created_associates_teams() {
 
     service.process_webhook_event(&event).await.unwrap();
 
-    let associations = service.repo.installation_associations();
-    assert_eq!(associations.len(), 1);
-    assert_eq!(associations[0].0, "99999");
-    assert_eq!(associations[0].1.len(), 2);
-    assert!(associations[0].1.contains(&team_a));
-    assert!(associations[0].1.contains(&team_b));
-    assert_eq!(associations[0].2, "macro|user@user.com");
+    let sources = service.repo.installation_sources();
+    assert_eq!(
+        sources,
+        vec![(
+            "99999".to_string(),
+            vec![
+                GithubAppInstallationSource::Team(team_a),
+                GithubAppInstallationSource::Team(team_b),
+            ],
+        )]
+    );
 }
 
 #[tokio::test]
@@ -1478,11 +1480,11 @@ async fn installation_created_no_github_link() {
     // No github link for sender — should succeed without inserting anything
     service.process_webhook_event(&event).await.unwrap();
 
-    assert!(service.repo.installation_associations().is_empty());
+    assert!(service.repo.installation_sources().is_empty());
 }
 
 #[tokio::test]
-async fn installation_created_no_teams() {
+async fn installation_created_no_teams_associates_user() {
     let repo = StubSyncRepo::new().with_github_link("12345", "macro|user@user.com");
     // user_teams is empty by default
 
@@ -1491,8 +1493,16 @@ async fn installation_created_no_teams() {
 
     service.process_webhook_event(&event).await.unwrap();
 
-    let associations = service.repo.installation_associations();
-    assert!(associations.is_empty());
+    let sources = service.repo.installation_sources();
+    assert_eq!(
+        sources,
+        vec![(
+            "11111".to_string(),
+            vec![GithubAppInstallationSource::User(
+                "macro|user@user.com".to_string(),
+            )],
+        )]
+    );
 }
 
 #[tokio::test]
@@ -1510,5 +1520,5 @@ async fn installation_deleted_is_skipped() {
     // Should not error — just skips
     service.process_webhook_event(&event).await.unwrap();
 
-    assert!(service.repo.installation_associations().is_empty());
+    assert!(service.repo.installation_sources().is_empty());
 }

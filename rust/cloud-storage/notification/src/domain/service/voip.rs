@@ -6,27 +6,28 @@
 #[cfg(test)]
 mod test;
 
+use futures::future;
+use macro_user_id::user_id::MacroUserIdStr;
+use rootcause::Report;
 use std::collections::HashSet;
 
-use macro_user_id::user_id::MacroUserIdStr;
-
+use crate::domain::models::VoipPushTarget;
 use crate::domain::models::apple::VoipPushPayload;
 use crate::domain::models::mobile::DeviceEndpoint;
 use crate::domain::ports::{NotificationRepository, VoipPushSender};
 use crate::outbound::mobile::MobilePushAdapter;
 use crate::outbound::mobile::MobilePushOps;
 
-/// Concrete implementation of [`VoipPushSender`].
-///
-/// Looks up VoIP device endpoints from the repository, then dispatches each
-/// push directly via SNS APNS_VOIP — no queue, no persistence.
+const VOIP_PUSH_DELIVERY_CONCURRENCY: usize = 32;
+
+/// Direct APNS_VOIP sender for CallKit pushes.
 pub struct VoipPushServiceImpl<R, P> {
     repository: R,
     mobile: MobilePushAdapter<P>,
 }
 
 impl<R, P> VoipPushServiceImpl<R, P> {
-    /// Create a new [`VoipPushServiceImpl`].
+    /// Builds a sender that resolves endpoints through the repository and delivers through SNS.
     pub fn new(repository: R, mobile: MobilePushAdapter<P>) -> Self {
         Self { repository, mobile }
     }
@@ -37,40 +38,68 @@ where
     R: NotificationRepository,
     P: MobilePushOps + Send + Sync + 'static,
 {
-    async fn send_voip_push(
+    async fn get_voip_push_targets(
         &self,
         recipient_ids: &[MacroUserIdStr<'_>],
-        payload: &VoipPushPayload,
-    ) -> HashSet<MacroUserIdStr<'static>> {
-        let device_map = match self.repository.get_device_endpoints(recipient_ids).await {
-            Ok(m) => m,
-            Err(e) => {
-                tracing::error!(error=?e, "voip push: failed to fetch device endpoints");
-                return HashSet::new();
-            }
-        };
+    ) -> Result<Vec<VoipPushTarget>, Report> {
+        let device_map = self.repository.get_device_endpoints(recipient_ids).await?;
 
-        let mut delivered_user_ids = HashSet::new();
-        for (user_id, endpoints) in &device_map {
-            for endpoint in endpoints {
-                let DeviceEndpoint::IosVoip(arn) = endpoint else {
-                    continue;
-                };
-                match self.mobile.send_voip_push(arn, payload).await {
-                    Ok(_) => {
-                        delivered_user_ids.insert(user_id.clone());
-                    }
-                    Err(e) => {
-                        tracing::error!(
-                            error=?e,
-                            user_id=%user_id,
-                            "voip push: SNS delivery failed"
-                        );
+        Ok(device_map
+            .into_iter()
+            .filter_map(|(recipient_id, endpoints)| {
+                let endpoint_arns: Vec<String> = endpoints
+                    .into_iter()
+                    .filter_map(|endpoint| match endpoint {
+                        DeviceEndpoint::IosVoip(arn) => Some(arn),
+                        _ => None,
+                    })
+                    .collect();
+
+                (!endpoint_arns.is_empty()).then_some(VoipPushTarget {
+                    recipient_id,
+                    endpoint_arns,
+                })
+            })
+            .collect())
+    }
+
+    async fn send_voip_pushes(
+        &self,
+        pushes: Vec<(VoipPushTarget, VoipPushPayload)>,
+    ) -> HashSet<MacroUserIdStr<'static>> {
+        let jobs: Vec<(MacroUserIdStr<'static>, String, VoipPushPayload)> = pushes
+            .into_iter()
+            .flat_map(|(target, payload)| {
+                let recipient_id = target.recipient_id;
+                target
+                    .endpoint_arns
+                    .into_iter()
+                    .map(move |arn| (recipient_id.clone(), arn, payload.clone()))
+            })
+            .collect();
+
+        let mut delivered = HashSet::new();
+        for batch in jobs.chunks(VOIP_PUSH_DELIVERY_CONCURRENCY) {
+            let results = future::join_all(batch.iter().map(|(user_id, arn, payload)| {
+                let user_id = user_id.clone();
+                async move {
+                    let mobile = &self.mobile;
+                    match mobile.send_voip_push(arn, payload).await {
+                        Ok(_) => Some(user_id),
+                        Err(e) => {
+                            tracing::error!(
+                                error=?e,
+                                "voip push: SNS delivery failed"
+                            );
+                            None
+                        }
                     }
                 }
-            }
+            }))
+            .await;
+            delivered.extend(results.into_iter().flatten());
         }
 
-        delivered_user_ids
+        delivered
     }
 }

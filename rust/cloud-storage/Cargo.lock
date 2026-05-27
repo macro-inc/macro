@@ -1861,6 +1861,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "filter_ast",
+ "futures",
  "item_filters",
  "livekit-api",
  "livekit-protocol",

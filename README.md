@@ -20,7 +20,8 @@
 
 # Why Macro
 
-Macro is a unified system for teams. We built it for our startup. Email, tasks, calls, messages, agents, docs, diagrams, (soon, crm) in one @linked together with team-level memory. Inspired by, and replaces — or integrates with — Slack, Linear, Notion, HubSpot, Superhuman, etc.
+Macro is a unified system for teams. We built it for our startup. Email, tasks, calls, messages, agents, docs, diagrams, (soon, crm) in one @linked together with team-level memory. Replaces Slack, Linear, Notion, HubSpot, and Superhuman. Or integrates with them.
+
 
 We built Macro because we wanted a single unified system. There are many good products, but nothing works together. So, we rebuilt everything from scratch, from first principles, in SolidJS and Rust, to work together as one. We've been dogfooding it for two years and now we've opened it up so you can use it too.
 
