@@ -82,21 +82,21 @@ use model::{
     annotations::AnnotationIncrementalUpdate,
     chat::Chat,
     document::{
-        BasicDocument, BomPart, DocumentMetadata, DocumentPermissionsToken, FileType, SaveBomPart,
         response::{
             GetDocumentListResult, GetDocumentResponse, GetDocumentResponseData,
             LocationResponseData,
         },
+        BasicDocument, BomPart, DocumentMetadata, DocumentPermissionsToken, FileType, SaveBomPart,
     },
     item::{CloudStorageItemType, Item, ItemWithUserAccessLevel},
-    pin::{PinnedItem, request::ReorderPinRequest},
+    pin::{request::ReorderPinRequest, PinnedItem},
     project::{
-        Project,
         request::{CreateProjectRequest, GetBatchProjectPreviewRequest, PatchProjectRequestV2},
         response::{
             CreateProjectResponse, GetBatchProjectPreviewResponse, GetProjectContentResponse,
             GetProjectResponse, GetProjectResponseData, GetProjectsResponse,
         },
+        Project,
     },
     response::{
         GenericErrorResponse, GenericResponse, GenericSuccessResponse, PresignedUrl,
@@ -117,8 +117,8 @@ use models_soup::email_thread::{
 use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
 use soup::inbound::axum_router::{
-    ApiGroupByField, ApiGroupMeta, GroupedSoupPage, PostGroupedSoupAstRequest,
-    PostSoupAstRequest, PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage,
+    ApiGroupByField, ApiGroupMeta, GroupedSoupPage, PostGroupedSoupAstRequest, PostSoupAstRequest,
+    PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage,
 };
 use utoipa::OpenApi;
 
