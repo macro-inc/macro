@@ -12,9 +12,12 @@ RUN apt-get update && apt-get install -y \
     clang \
     && rm -rf /var/lib/apt/lists/*
 
-# Install wasm32 target and worker-build once
+# Install wasm32 target and worker-build once.
+# Pinned: worker-build 0.8.3 raised its wasm-bindgen floor to 0.2.121, but the
+# locked dep graph here is on wasm-bindgen 0.2.118 (via worker 0.8.1 →
+# serde-wasm-bindgen → js-sys 0.3.95). Stay on 0.8.1 until worker is bumped.
 RUN rustup target add wasm32-unknown-unknown && \
-    cargo install worker-build@^0.8 --locked
+    cargo install worker-build@=0.8.1 --locked
 
 WORKDIR /app
 
