@@ -61,10 +61,14 @@ async fn link_user(
             )
         })?;
 
-    // Reject account-merge attempts: the new Gmail already maps to a separate macro user.
-    if macro_db_client::user::get::get_user_id_by_email(ctx.db.clone(), &user_info_email)
-        .await
-        .is_ok()
+    // Reject account-merge attempts: a different macro user already owns this email.
+    // Same-user re-linking (e.g. user adds their primary Gmail again) is allowed — init's
+    // idempotency check on email_links will short-circuit downstream.
+    if let Some(existing_macro_user_id) =
+        macro_db_client::user::get::get_macro_user_id_by_email(&ctx.db, &user_info_email)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        && existing_macro_user_id != macro_user_id
     {
         return Err((
             StatusCode::NOT_IMPLEMENTED,
