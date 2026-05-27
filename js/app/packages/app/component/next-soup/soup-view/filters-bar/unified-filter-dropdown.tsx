@@ -814,19 +814,17 @@ export const UnifiedFilterDropdown = (
     <Show when={categories().length > 0 || isTasksView() || isSearchView()}>
       <Dropdown open={open()} onOpenChange={setOpen}>
         <Show when={!props.hideTrigger}>
-          <Show
-            when={props.customTrigger}
-            fallback={
+          <Switch>
+            <Match when={props.customTrigger}>{props.customTrigger}</Match>
+            <Match when={true}>
               <Tooltip label="Filter" hotkey={TOKENS.soup.filter}>
                 <Dropdown.Trigger depth={2} class="bg-surface">
                   <SlidersHorizontalIcon />
                   <span>Filter</span>
                 </Dropdown.Trigger>
               </Tooltip>
-            }
-          >
-            {props.customTrigger}
-          </Show>
+            </Match>
+          </Switch>
         </Show>
 
         <Dropdown.Content>
