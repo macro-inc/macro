@@ -4,6 +4,9 @@
 mod test;
 
 use crate::domain::{
+    comment::{
+        CrmComment, CrmCommentEntityType, CrmCommentThread, CrmThread, DeleteCrmCommentResult,
+    },
     companies_repo::{CompaniesRepository, CrmCompanyListSort},
     model::{
         CrmAddressStatus, CrmCompany, CrmCompanyForSoup, CrmContact, CrmDomain, CrmDomainStatus,
@@ -11,7 +14,10 @@ use crate::domain::{
     },
 };
 use chrono::{DateTime, Utc};
+use serde_json::Value;
 use sqlx::PgPool;
+use std::collections::HashMap;
+use uuid::Uuid;
 
 /// PostgreSQL-backed [`CompaniesRepository`].
 #[derive(Clone)]
@@ -1143,4 +1149,440 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             })
             .collect())
     }
+
+    #[tracing::instrument(skip(self, thread_metadata, text, metadata), err, fields(entity_id = %entity_id))]
+    async fn create_crm_comment(
+        &self,
+        team_id: &uuid::Uuid,
+        entity_type: CrmCommentEntityType,
+        entity_id: &uuid::Uuid,
+        owner: &str,
+        thread_id: Option<uuid::Uuid>,
+        thread_metadata: Option<Value>,
+        text: &str,
+        metadata: Option<Value>,
+    ) -> Result<CrmCommentThread, CrmError> {
+        // Exactly one parent column is set; the CHECK constraint enforces it.
+        let (company_id, contact_id) = match entity_type {
+            CrmCommentEntityType::CrmCompany => (Some(*entity_id), None),
+            CrmCommentEntityType::CrmContact => (None, Some(*entity_id)),
+        };
+
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // Authorize: the entity must belong to the requesting team. Done
+        // in-tx so a concurrent teardown can't slip a delete past us.
+        if !entity_owned_by_team(&mut *tx, team_id, entity_type, entity_id).await? {
+            return Err(entity_not_found_err(entity_type));
+        }
+
+        // Resolve the target thread: reuse the supplied one (after checking
+        // it belongs to this entity and isn't deleted) or open a new one.
+        let thread_id = match thread_id {
+            Some(tid) => {
+                let belongs = sqlx::query_scalar!(
+                    r#"
+                    SELECT EXISTS (
+                        SELECT 1 FROM crm_thread
+                        WHERE id = $1
+                          AND deleted_at IS NULL
+                          AND (company_id = $2 OR contact_id = $3)
+                    ) AS "exists!"
+                    "#,
+                    tid,
+                    company_id,
+                    contact_id,
+                )
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+                if !belongs {
+                    return Err(CrmError::ThreadNotFound);
+                }
+                // Bump updated_at; replace metadata only when one is supplied.
+                sqlx::query!(
+                    r#"
+                    UPDATE crm_thread
+                    SET updated_at = now(), metadata = COALESCE($2, metadata)
+                    WHERE id = $1
+                    "#,
+                    tid,
+                    thread_metadata,
+                )
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+                tid
+            }
+            None => sqlx::query_scalar!(
+                r#"
+                INSERT INTO crm_thread (company_id, contact_id, owner, metadata)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id
+                "#,
+                company_id,
+                contact_id,
+                owner,
+                thread_metadata,
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?,
+        };
+
+        sqlx::query!(
+            r#"
+            INSERT INTO crm_comment (thread_id, owner, text, metadata)
+            VALUES ($1, $2, $3, $4)
+            "#,
+            thread_id,
+            owner,
+            text,
+            metadata,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // Re-read the full thread (with all comments) to return.
+        let row = sqlx::query!(
+            r#"
+            SELECT id, company_id, contact_id, owner, resolved, metadata,
+                   created_at, updated_at, deleted_at
+            FROM crm_thread
+            WHERE id = $1
+            "#,
+            thread_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        let thread = CrmThread {
+            thread_id: row.id,
+            entity_type,
+            entity_id: *entity_id,
+            owner: row.owner,
+            resolved: row.resolved,
+            metadata: row.metadata,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+        };
+        let comments = fetch_comments_for_threads(&self.pool, &[thread_id]).await?;
+        Ok(CrmCommentThread { thread, comments })
+    }
+
+    #[tracing::instrument(skip(self), err, fields(entity_id = %entity_id))]
+    async fn get_crm_comment_threads(
+        &self,
+        team_id: &uuid::Uuid,
+        entity_type: CrmCommentEntityType,
+        entity_id: &uuid::Uuid,
+    ) -> Result<Vec<CrmCommentThread>, CrmError> {
+        if !entity_owned_by_team(&self.pool, team_id, entity_type, entity_id).await? {
+            return Err(entity_not_found_err(entity_type));
+        }
+
+        let (company_id, contact_id) = match entity_type {
+            CrmCommentEntityType::CrmCompany => (Some(*entity_id), None),
+            CrmCommentEntityType::CrmContact => (None, Some(*entity_id)),
+        };
+
+        let thread_rows = sqlx::query!(
+            r#"
+            SELECT id, owner, resolved, metadata, created_at, updated_at, deleted_at
+            FROM crm_thread
+            WHERE (company_id = $1 OR contact_id = $2)
+              AND deleted_at IS NULL
+            ORDER BY created_at ASC, id ASC
+            "#,
+            company_id,
+            contact_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        let threads: Vec<CrmThread> = thread_rows
+            .into_iter()
+            .map(|row| CrmThread {
+                thread_id: row.id,
+                entity_type,
+                entity_id: *entity_id,
+                owner: row.owner,
+                resolved: row.resolved,
+                metadata: row.metadata,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                deleted_at: row.deleted_at,
+            })
+            .collect();
+
+        let thread_ids: Vec<Uuid> = threads.iter().map(|t| t.thread_id).collect();
+        let comments = fetch_comments_for_threads(&self.pool, &thread_ids).await?;
+
+        let mut by_thread: HashMap<Uuid, Vec<CrmComment>> = HashMap::new();
+        for comment in comments {
+            by_thread
+                .entry(comment.thread_id)
+                .or_default()
+                .push(comment);
+        }
+
+        Ok(threads
+            .into_iter()
+            .map(|thread| {
+                let comments = by_thread.remove(&thread.thread_id).unwrap_or_default();
+                CrmCommentThread { thread, comments }
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(skip(self, text), err, fields(comment_id = %comment_id))]
+    async fn edit_crm_comment(
+        &self,
+        team_id: &uuid::Uuid,
+        comment_id: &uuid::Uuid,
+        text: &str,
+    ) -> Result<CrmComment, CrmError> {
+        // Update only when the comment's thread resolves to a company or
+        // contact owned by the team, so cross-team edits 404.
+        let row = sqlx::query!(
+            r#"
+            UPDATE crm_comment c
+            SET text = $3, updated_at = now()
+            FROM crm_thread t
+            WHERE c.id = $1
+              AND c.thread_id = t.id
+              AND c.deleted_at IS NULL
+              AND (
+                EXISTS (
+                    SELECT 1 FROM crm_companies co
+                    WHERE co.id = t.company_id AND co.team_id = $2
+                )
+                OR EXISTS (
+                    SELECT 1 FROM crm_contacts ct
+                    JOIN crm_companies co2 ON co2.id = ct.company_id
+                    WHERE ct.id = t.contact_id AND co2.team_id = $2
+                )
+              )
+            RETURNING c.id, c.thread_id, c."order", c.owner, c.sender, c.text,
+                      c.metadata, c.created_at, c.updated_at, c.deleted_at
+            "#,
+            comment_id,
+            team_id,
+            text,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        match row {
+            Some(row) => Ok(CrmComment {
+                comment_id: row.id,
+                thread_id: row.thread_id,
+                order: row.order,
+                owner: row.owner,
+                sender: row.sender,
+                text: row.text,
+                metadata: row.metadata,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                deleted_at: row.deleted_at,
+            }),
+            None => Err(CrmError::CommentNotFound),
+        }
+    }
+
+    #[tracing::instrument(skip(self), err, fields(comment_id = %comment_id))]
+    async fn delete_crm_comment(
+        &self,
+        team_id: &uuid::Uuid,
+        comment_id: &uuid::Uuid,
+    ) -> Result<DeleteCrmCommentResult, CrmError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // Resolve the thread and authorize in one shot; absent / cross-team
+        // comments are reported as not found.
+        let thread_id = sqlx::query_scalar!(
+            r#"
+            SELECT t.id
+            FROM crm_comment c
+            JOIN crm_thread t ON t.id = c.thread_id
+            WHERE c.id = $1
+              AND c.deleted_at IS NULL
+              AND (
+                EXISTS (
+                    SELECT 1 FROM crm_companies co
+                    WHERE co.id = t.company_id AND co.team_id = $2
+                )
+                OR EXISTS (
+                    SELECT 1 FROM crm_contacts ct
+                    JOIN crm_companies co2 ON co2.id = ct.company_id
+                    WHERE ct.id = t.contact_id AND co2.team_id = $2
+                )
+              )
+            "#,
+            comment_id,
+            team_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        let Some(thread_id) = thread_id else {
+            return Err(CrmError::CommentNotFound);
+        };
+
+        sqlx::query!(
+            r#"UPDATE crm_comment SET deleted_at = now(), updated_at = now() WHERE id = $1"#,
+            comment_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // If that was the thread's last live comment, soft-delete the now-empty thread.
+        let has_remaining = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM crm_comment
+                WHERE thread_id = $1 AND deleted_at IS NULL
+            ) AS "exists!"
+            "#,
+            thread_id,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        let thread_deleted = !has_remaining;
+        if thread_deleted {
+            sqlx::query!(
+                r#"UPDATE crm_thread SET deleted_at = now(), updated_at = now() WHERE id = $1"#,
+                thread_id,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(DeleteCrmCommentResult {
+            comment_id: *comment_id,
+            thread_id,
+            thread_deleted,
+        })
+    }
+}
+
+/// Maps a CRM entity type to the team-scoped not-found error used when the
+/// entity isn't owned by the requesting team.
+fn entity_not_found_err(entity_type: CrmCommentEntityType) -> CrmError {
+    match entity_type {
+        CrmCommentEntityType::CrmCompany => CrmError::CompanyNotFoundForTeam,
+        CrmCommentEntityType::CrmContact => CrmError::ContactNotFoundForTeam,
+    }
+}
+
+/// Returns whether `(entity_type, entity_id)` is owned by `team_id` — for a
+/// contact, ownership is resolved through its company. Generic over the
+/// executor so callers can check inside or outside a transaction.
+async fn entity_owned_by_team<'e, E>(
+    executor: E,
+    team_id: &uuid::Uuid,
+    entity_type: CrmCommentEntityType,
+    entity_id: &uuid::Uuid,
+) -> Result<bool, CrmError>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    let owned = match entity_type {
+        CrmCommentEntityType::CrmCompany => {
+            sqlx::query_scalar!(
+                r#"
+            SELECT EXISTS (
+                SELECT 1 FROM crm_companies WHERE id = $1 AND team_id = $2
+            ) AS "exists!"
+            "#,
+                entity_id,
+                team_id,
+            )
+            .fetch_one(executor)
+            .await
+        }
+        CrmCommentEntityType::CrmContact => {
+            sqlx::query_scalar!(
+                r#"
+            SELECT EXISTS (
+                SELECT 1 FROM crm_contacts c
+                JOIN crm_companies co ON co.id = c.company_id
+                WHERE c.id = $1 AND co.team_id = $2
+            ) AS "exists!"
+            "#,
+                entity_id,
+                team_id,
+            )
+            .fetch_one(executor)
+            .await
+        }
+    }
+    .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+    Ok(owned)
+}
+
+/// Fetches all non-deleted comments for the given threads, oldest-first,
+/// for grouping under their threads by the caller.
+async fn fetch_comments_for_threads(
+    pool: &PgPool,
+    thread_ids: &[Uuid],
+) -> Result<Vec<CrmComment>, CrmError> {
+    if thread_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let rows = sqlx::query!(
+        r#"
+        SELECT id, thread_id, "order", owner, sender, text, metadata,
+               created_at, updated_at, deleted_at
+        FROM crm_comment
+        WHERE thread_id = ANY($1) AND deleted_at IS NULL
+        ORDER BY created_at ASC, id ASC
+        "#,
+        thread_ids,
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| CrmComment {
+            comment_id: row.id,
+            thread_id: row.thread_id,
+            order: row.order,
+            owner: row.owner,
+            sender: row.sender,
+            text: row.text,
+            metadata: row.metadata,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+        })
+        .collect())
 }

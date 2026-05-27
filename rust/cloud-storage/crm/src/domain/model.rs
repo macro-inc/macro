@@ -168,6 +168,16 @@ pub enum CrmError {
     /// Contact id is not owned by the requesting team.
     #[error("crm contact not found for team")]
     ContactNotFoundForTeam,
+    /// Comment thread id does not exist, is deleted, or does not belong
+    /// to the addressed entity / team.
+    #[error("crm comment thread not found")]
+    ThreadNotFound,
+    /// Comment id does not exist or does not belong to the team.
+    #[error("crm comment not found for team")]
+    CommentNotFound,
+    /// Request rejected for a client-side reason (e.g. blank comment text).
+    #[error("{0}")]
+    InvalidRequest(String),
     /// Tried to mutate a CRM company in a way that contradicts its
     /// `hidden = true` state — currently raised when attempting to
     /// re-enable `email_sync` on a hidden company.

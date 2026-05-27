@@ -1753,6 +1753,287 @@
         }
       }
     },
+    "/crm/comment/{comment_id}": {
+      "delete": {
+        "tags": ["crm::inbound::axum_router::comments"],
+        "summary": "Soft-delete a CRM comment, scoped to the requesting user's team. When it\nwas the thread's last live comment, the thread is soft-deleted too\n(reported via `threadDeleted`).",
+        "operationId": "delete_crm_comment",
+        "parameters": [
+          {
+            "name": "comment_id",
+            "in": "path",
+            "description": "The CRM comment to delete",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteCrmCommentResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["crm::inbound::axum_router::comments"],
+        "summary": "Edit a CRM comment's text, scoped to the requesting user's team via the\ncomment's thread → entity → company. Returns the updated comment.",
+        "operationId": "edit_crm_comment",
+        "parameters": [
+          {
+            "name": "comment_id",
+            "in": "path",
+            "description": "The CRM comment to edit",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditCrmCommentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmComment"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/comments/{entity_type}/{entity_id}": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::comments"],
+        "summary": "List the comment threads on a CRM company or contact, scoped to the\nrequesting user's team. Returns 404 when the entity isn't owned by the\nteam; an owned entity with no threads returns `200 []`.",
+        "operationId": "list_crm_comments",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Which CRM entity kind the threads hang off",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CrmCommentEntityType"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "The CRM company or contact id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CrmCommentThread"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["crm::inbound::axum_router::comments"],
+        "summary": "Create a comment on a CRM company or contact — a new thread, or a reply\nwhen `threadId` is supplied. Returns the full thread (with all comments)\nafter the insert. Team-scoped; 404 when the entity isn't owned by the\nteam or `threadId` doesn't belong to it.",
+        "operationId": "create_crm_comment",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Which CRM entity kind the thread hangs off",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CrmCommentEntityType"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "The CRM company or contact id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCrmCommentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmCommentThread"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/companies/{company_id}/contacts": {
       "get": {
         "tags": ["crm::inbound::axum_router::list_company_contacts"],
@@ -7859,6 +8140,28 @@
           }
         ]
       },
+      "CreateCrmCommentRequest": {
+        "type": "object",
+        "description": "Request body for `POST /crm/comments/{entity_type}/{entity_id}`.",
+        "required": ["text"],
+        "properties": {
+          "metadata": {
+            "description": "Arbitrary client metadata for the comment."
+          },
+          "text": {
+            "type": "string",
+            "description": "The comment body (markdown)."
+          },
+          "threadId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Existing thread to append to. Omit to start a new thread on the\naddressed entity."
+          },
+          "threadMetadata": {
+            "description": "Metadata to set on a newly created thread (ignored when replying\nwithout a value)."
+          }
+        }
+      },
       "CreateDocumentRequest": {
         "type": "object",
         "required": ["sha", "documentName"],
@@ -8150,6 +8453,88 @@
           }
         }
       },
+      "CrmComment": {
+        "type": "object",
+        "description": "A single comment within a [`CrmThread`].",
+        "required": [
+          "commentId",
+          "threadId",
+          "owner",
+          "text",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "commentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The comment id."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the comment was created."
+          },
+          "deletedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the comment was soft-deleted, if ever."
+          },
+          "metadata": {
+            "description": "Arbitrary client metadata."
+          },
+          "order": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Optional explicit ordering within the thread; the frontend falls\nback to `createdAt` when absent."
+          },
+          "owner": {
+            "type": "string",
+            "description": "Macro user id of the comment author."
+          },
+          "sender": {
+            "type": ["string", "null"],
+            "description": "Macro user id of the actual sender, when distinct from `owner`."
+          },
+          "text": {
+            "type": "string",
+            "description": "The comment body (markdown)."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the thread this comment belongs to."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the comment was last updated."
+          }
+        }
+      },
+      "CrmCommentEntityType": {
+        "type": "string",
+        "description": "Which CRM entity a comment thread is attached to. Serializes to\n`crm_company` / `crm_contact` — matching the `entityType` the frontend\nuses elsewhere when building entity URLs — and is parsed from the\n`{entity_type}` path segment on the comment routes.",
+        "enum": ["crm_company", "crm_contact"]
+      },
+      "CrmCommentThread": {
+        "type": "object",
+        "description": "A [`CrmThread`] with its comments nested under it — the unit the\nfrontend renders.",
+        "required": ["thread", "comments"],
+        "properties": {
+          "comments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmComment"
+            },
+            "description": "The thread's comments, oldest first."
+          },
+          "thread": {
+            "$ref": "#/components/schemas/CrmThread",
+            "description": "The thread."
+          }
+        }
+      },
       "CrmCompanyFilters": {
         "type": "object",
         "description": "The crm company filters used to narrow which CRM companies appear in soup.",
@@ -8213,6 +8598,61 @@
             "type": "string",
             "format": "date-time",
             "description": "When the contact record was last updated."
+          }
+        }
+      },
+      "CrmThread": {
+        "type": "object",
+        "description": "A CRM comment thread: the parent record one or more comments hang off.",
+        "required": [
+          "threadId",
+          "entityType",
+          "entityId",
+          "owner",
+          "resolved",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the thread was created."
+          },
+          "deletedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the thread was soft-deleted, if ever."
+          },
+          "entityId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the CRM company or contact this thread belongs to."
+          },
+          "entityType": {
+            "$ref": "#/components/schemas/CrmCommentEntityType",
+            "description": "Which CRM entity kind this thread belongs to."
+          },
+          "metadata": {
+            "description": "Arbitrary client metadata."
+          },
+          "owner": {
+            "type": "string",
+            "description": "Macro user id of the thread creator."
+          },
+          "resolved": {
+            "type": "boolean",
+            "description": "Whether the thread is resolved."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread id."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the thread was last updated."
           }
         }
       },
@@ -8293,6 +8733,27 @@
           },
           "thread": {
             "$ref": "#/components/schemas/DeleteThreadInfo"
+          }
+        }
+      },
+      "DeleteCrmCommentResult": {
+        "type": "object",
+        "description": "Outcome of soft-deleting a CRM comment: reports whether the parent thread\nwas soft-deleted too (it is when the deleted comment was its last live one).",
+        "required": ["commentId", "threadId", "threadDeleted"],
+        "properties": {
+          "commentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The deleted comment's id."
+          },
+          "threadDeleted": {
+            "type": "boolean",
+            "description": "Whether the thread itself was soft-deleted because no live comments\nremained."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread the comment belonged to."
           }
         }
       },
@@ -9061,6 +9522,17 @@
             }
           }
         ]
+      },
+      "EditCrmCommentRequest": {
+        "type": "object",
+        "description": "Request body for `PATCH /crm/comments/comment/{comment_id}`.",
+        "required": ["text"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The new comment body (markdown)."
+          }
+        }
       },
       "EditDocumentResponse": {
         "type": "object",

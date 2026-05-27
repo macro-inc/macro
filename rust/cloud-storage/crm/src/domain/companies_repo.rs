@@ -1,9 +1,13 @@
 //! Port for persistence operations on CRM companies.
 
+use crate::domain::comment::{
+    CrmComment, CrmCommentEntityType, CrmCommentThread, DeleteCrmCommentResult,
+};
 use crate::domain::model::{
     CrmCompany, CrmCompanyForSoup, CrmContact, CrmError, CrmScopePrecheck, DomainMetadata,
 };
 use chrono::{DateTime, Utc};
+use serde_json::Value;
 
 /// Sort order for [`CompaniesRepository::list_companies_for_soup`].
 /// Both variants tiebreak on `id DESC` for deterministic pagination.
@@ -307,4 +311,63 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         company_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
+
+    /// Create a CRM comment. With `thread_id = None` a new thread is opened
+    /// on `(entity_type, entity_id)` and the comment becomes its root; with
+    /// `Some`, the comment is appended to that existing thread (whose
+    /// `updated_at` is bumped). Scoped to `team_id` via the entity's
+    /// company: returns [`CrmError::CompanyNotFoundForTeam`] /
+    /// [`CrmError::ContactNotFoundForTeam`] when the entity isn't owned by
+    /// the team, or [`CrmError::ThreadNotFound`] when a supplied `thread_id`
+    /// is deleted or doesn't belong to that entity. Returns the full thread
+    /// (with all its comments) after the insert.
+    #[allow(clippy::too_many_arguments)]
+    fn create_crm_comment(
+        &self,
+        team_id: &uuid::Uuid,
+        entity_type: CrmCommentEntityType,
+        entity_id: &uuid::Uuid,
+        owner: &str,
+        thread_id: Option<uuid::Uuid>,
+        thread_metadata: Option<Value>,
+        text: &str,
+        metadata: Option<Value>,
+    ) -> impl Future<Output = Result<CrmCommentThread, CrmError>> + Send;
+
+    /// List the non-deleted comment threads on `(entity_type, entity_id)`,
+    /// each with its comments nested oldest-first; threads are ordered
+    /// oldest-first by creation. Scoped to `team_id` via the entity's
+    /// company — returns [`CrmError::CompanyNotFoundForTeam`] /
+    /// [`CrmError::ContactNotFoundForTeam`] when the entity isn't owned by
+    /// the team (so existence doesn't leak across teams); an owned entity
+    /// with no threads returns `Ok(vec![])`.
+    fn get_crm_comment_threads(
+        &self,
+        team_id: &uuid::Uuid,
+        entity_type: CrmCommentEntityType,
+        entity_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Vec<CrmCommentThread>, CrmError>> + Send;
+
+    /// Edit a CRM comment's `text`, scoped to `team_id` via the comment's
+    /// thread → entity → company. Returns the updated comment, or
+    /// [`CrmError::CommentNotFound`] when it doesn't exist or isn't owned by
+    /// the team.
+    fn edit_crm_comment(
+        &self,
+        team_id: &uuid::Uuid,
+        comment_id: &uuid::Uuid,
+        text: &str,
+    ) -> impl Future<Output = Result<CrmComment, CrmError>> + Send;
+
+    /// Soft-delete a CRM comment (sets `deleted_at`), scoped to `team_id`.
+    /// When it was the thread's last live comment, the thread is
+    /// soft-deleted too (reported via
+    /// [`DeleteCrmCommentResult::thread_deleted`]). Returns
+    /// [`CrmError::CommentNotFound`] when the comment doesn't exist, is
+    /// already deleted, or isn't owned by the team.
+    fn delete_crm_comment(
+        &self,
+        team_id: &uuid::Uuid,
+        comment_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<DeleteCrmCommentResult, CrmError>> + Send;
 }

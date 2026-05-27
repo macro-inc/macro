@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    UPDATE crm_thread\n                    SET updated_at = now(), metadata = COALESCE($2, metadata)\n                    WHERE id = $1\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "504e516996c2c65d7b2d7c47bdc5fbab6644ddd99a4913bc05ffd713f0c4ad5b"
+}
