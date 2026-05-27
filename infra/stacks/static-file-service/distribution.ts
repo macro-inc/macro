@@ -86,6 +86,14 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
     const responseHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy(
       'corp-policy',
       {
+        corsConfig: {
+          accessControlAllowCredentials: false,
+          accessControlAllowHeaders: { items: ['*'] },
+          accessControlAllowMethods: { items: ['GET', 'HEAD', 'OPTIONS'] },
+          accessControlAllowOrigins: { items: ['*'] },
+          accessControlMaxAgeSec: 3000,
+          originOverride: true,
+        },
         securityHeadersConfig: {
           contentSecurityPolicy: {
             contentSecurityPolicy:
