@@ -1,3 +1,4 @@
+import { isPlatform, isTauri } from '@core/util/platform';
 import {
   isKrispNoiseFilterSupported,
   KrispNoiseFilter,
@@ -17,6 +18,7 @@ import {
 } from 'livekit-client';
 import {
   createContext,
+  createEffect,
   createSignal,
   onCleanup,
   type ParentProps,
@@ -24,6 +26,10 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { CallAudioSink } from './CallAudioSink';
+import {
+  type NativeCallConnectionState,
+  nativeCallSnapshot,
+} from './native-call-state';
 
 export type CallParticipantInfo = {
   identity: string;
@@ -186,6 +192,15 @@ async function applyNativeAudioProcessingToMicTrack(
     console.error('failed to update native mic audio processing', e);
   }
 }
+
+// Swift exposes a transient `disconnecting` state that livekit-client lacks.
+const NATIVE_TO_LIVEKIT_STATE = {
+  disconnected: ConnectionState.Disconnected,
+  connecting: ConnectionState.Connecting,
+  connected: ConnectionState.Connected,
+  reconnecting: ConnectionState.Reconnecting,
+  disconnecting: ConnectionState.Disconnected,
+} satisfies Record<NativeCallConnectionState, ConnectionState>;
 
 type CallStoreState = {
   connectionState: ConnectionState;
@@ -895,6 +910,29 @@ function createCallState() {
     enumerateDevices();
   };
   navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange);
+
+  // Native iOS calls have no JS Room, so mirror only their identity/state.
+  if (isTauri() && isPlatform('ios')) {
+    let syncedFromNative = false;
+    createEffect(() => {
+      const native = nativeCallSnapshot();
+      if (native) {
+        syncedFromNative = true;
+        setStore('activeChannelId', native.channelId);
+        setStore('activeCallId', native.callId);
+        setStore(
+          'connectionState',
+          NATIVE_TO_LIVEKIT_STATE[native.connectionState]
+        );
+      } else if (syncedFromNative) {
+        syncedFromNative = false;
+        setStore('activeChannelId', null);
+        setStore('activeCallId', null);
+        setStore('connectionState', ConnectionState.Disconnected);
+        setStore('remoteParticipants', new Map());
+      }
+    });
+  }
 
   // --- mutations ---
 

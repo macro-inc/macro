@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-get-pending-answered-call"
+description = "Enables the get_pending_answered_call command without any pre-configured scope."
+commands.allow = ["get_pending_answered_call"]
+
+[[permission]]
+identifier = "deny-get-pending-answered-call"
+description = "Denies the get_pending_answered_call command without any pre-configured scope."
+commands.deny = ["get_pending_answered_call"]

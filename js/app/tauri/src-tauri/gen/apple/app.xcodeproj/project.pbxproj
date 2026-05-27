@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		000BA690171274E27D141C64 /* LiveKitWebRTC.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DD73201A818A095107FE6434 /* LiveKitWebRTC.framework */; };
+		04575F0B0FE73C3CCA029725 /* LiveKitWebRTC.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = DD73201A818A095107FE6434 /* LiveKitWebRTC.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		0C402D4823536E37A0672131 /* RustLiveKitUniFFI.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 347E82F251FEE2F51ECAAC3A /* RustLiveKitUniFFI.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		299814393FFBF154FAD94CA8 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F3673D372C5ABDD1AD6E7067 /* QuartzCore.framework */; };
 		2FBDFDC47F5358109C23AF80 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F2F6B23901C11426024E1D4E /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3036F7131E55779ABF15BD58 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 02B7F8347F94B067E6B27396 /* LaunchScreen.storyboard */; };
@@ -22,6 +25,7 @@
 		9D59FB167BB4E699DA17D1E9 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 04B56F58E2E44DDE1D67E7B7 /* MetalKit.framework */; };
 		C6BD59C055C986EA4A77FDA2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AF1DE57E7D9CF13BB2E0E038 /* Assets.xcassets */; };
 		C869023DDFE275D42F3FBF29 /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 39EEC6A55698228E08917A52 /* libapp.a */; };
+		CC0D267705E636BFA0DB3D39 /* RustLiveKitUniFFI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 347E82F251FEE2F51ECAAC3A /* RustLiveKitUniFFI.framework */; };
 		E68F6CFDAED6503ABB4044A5 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CE1209BFDECB28E00189B168 /* Metal.framework */; };
 /* End PBXBuildFile section */
 
@@ -55,6 +59,18 @@
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		EB4A763BCCEDBF459BD2855C /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				04575F0B0FE73C3CCA029725 /* LiveKitWebRTC.framework in Embed Frameworks */,
+				0C402D4823536E37A0672131 /* RustLiveKitUniFFI.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -69,6 +85,7 @@
 		17B52554D60D361AFE791C3E /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
 		1E81BD6B453D87B7F7B1597B /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		306B9C1792E7B1C53FA262A6 /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
+		347E82F251FEE2F51ECAAC3A /* RustLiveKitUniFFI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = RustLiveKitUniFFI.framework; path = "Externals/arm64/$(CONFIGURATION)/RustLiveKitUniFFI.framework"; sourceTree = "<group>"; };
 		3842AE2A64FB9933D0400EA4 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
 		39EEC6A55698228E08917A52 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		4E0D7F48FDCCC9975129FB20 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
@@ -82,6 +99,7 @@
 		CE1209BFDECB28E00189B168 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		D8F57162F5CC7AEDD55F173D /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		DCE4B06F002B1CDA6E6F3C2A /* tauri_protocol.rs */ = {isa = PBXFileReference; path = tauri_protocol.rs; sourceTree = "<group>"; };
+		DD73201A818A095107FE6434 /* LiveKitWebRTC.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = LiveKitWebRTC.framework; path = "Externals/arm64/$(CONFIGURATION)/LiveKitWebRTC.framework"; sourceTree = "<group>"; };
 		DE016BCDACB745FDB90321AF /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		E008C8DABBF95A4BBAE08B15 /* share_target.rs */ = {isa = PBXFileReference; path = share_target.rs; sourceTree = "<group>"; };
 		F2F6B23901C11426024E1D4E /* ShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -96,6 +114,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				C869023DDFE275D42F3FBF29 /* libapp.a in Frameworks */,
+				000BA690171274E27D141C64 /* LiveKitWebRTC.framework in Frameworks */,
+				CC0D267705E636BFA0DB3D39 /* RustLiveKitUniFFI.framework in Frameworks */,
 				31585529C029A01BE249A285 /* CoreGraphics.framework in Frameworks */,
 				E68F6CFDAED6503ABB4044A5 /* Metal.framework in Frameworks */,
 				9D59FB167BB4E699DA17D1E9 /* MetalKit.framework in Frameworks */,
@@ -114,9 +134,11 @@
 			children = (
 				1E81BD6B453D87B7F7B1597B /* CoreGraphics.framework */,
 				39EEC6A55698228E08917A52 /* libapp.a */,
+				DD73201A818A095107FE6434 /* LiveKitWebRTC.framework */,
 				CE1209BFDECB28E00189B168 /* Metal.framework */,
 				04B56F58E2E44DDE1D67E7B7 /* MetalKit.framework */,
 				F3673D372C5ABDD1AD6E7067 /* QuartzCore.framework */,
+				347E82F251FEE2F51ECAAC3A /* RustLiveKitUniFFI.framework */,
 				9FACFFCB6E3743955F72464C /* Security.framework */,
 				0E2B15F176E4B041AE33EEEA /* UIKit.framework */,
 				D8F57162F5CC7AEDD55F173D /* WebKit.framework */,
@@ -234,18 +256,25 @@
 			path = app;
 			sourceTree = "<group>";
 		};
-		"TEMP_E7B71914-BE81-4A93-AD09-CC8988C6EBE3" /* arm64 */ = {
+		"TEMP_7F49C4DC-CDE0-4304-A084-A4F83A1B522A" /* debug */ = {
 			isa = PBXGroup;
 			children = (
 			);
-			path = arm64;
+			path = debug;
 			sourceTree = "<group>";
 		};
-		"TEMP_FDEDC763-2672-41E7-B94A-E03693807B94" /* x86_64 */ = {
+		"TEMP_A5801FCB-3278-4FC0-9ADF-A27F18916932" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = x86_64;
+			sourceTree = "<group>";
+		};
+		"TEMP_F8011730-5B39-483E-9887-5ACC76663506" /* arm64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = arm64;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -294,6 +323,7 @@
 				2FBCB8C3ED193E9C4A9FDB59 /* Resources */,
 				4825CF6C55516D374210C8E1 /* Frameworks */,
 				84895F3D2512B6F87AA9E1B3 /* Embed Foundation Extensions */,
+				EB4A763BCCEDBF459BD2855C /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -382,6 +412,8 @@
 			outputPaths = (
 				"$(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a",
 				"$(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a",
+				"$(SRCROOT)/Externals/arm64/${CONFIGURATION}/LiveKitWebRTC.framework",
+				"$(SRCROOT)/Externals/arm64/${CONFIGURATION}/RustLiveKitUniFFI.framework",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -467,11 +499,15 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = TY74Q77JBD;
 				ENABLE_BITCODE = NO;
+				ENABLE_DEBUG_DYLIB = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\".\"",
+					"\"Externals/arm64/$(CONFIGURATION)\"",
 				);
+				"FRAMEWORK_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION)";
+				"FRAMEWORK_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION)";
 				INFOPLIST_FILE = app_iOS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -581,11 +617,15 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = TY74Q77JBD;
 				ENABLE_BITCODE = NO;
+				ENABLE_DEBUG_DYLIB = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\".\"",
+					"\"Externals/arm64/$(CONFIGURATION)\"",
 				);
+				"FRAMEWORK_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION)";
+				"FRAMEWORK_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION)";
 				INFOPLIST_FILE = app_iOS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

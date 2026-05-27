@@ -15,9 +15,11 @@
     "log:default",
     "auth:allow-authenticate",
     "device-info:default",
-    "pasteboard:allow-stage-pasteboard-image",
-    "photo-library:allow-pick-photo-library-images",
     "call-kit:allow-get-voip-token",
-    "call-kit:allow-end-active-call"
+    "call-kit:allow-end-active-call",
+    "call-kit:allow-get-pending-answered-call",
+    "call-kit:allow-watch-call-answered",
+    "call-kit:allow-watch-call-ended",
+    "call-kit:allow-get-active-call-state"
   ]
 }

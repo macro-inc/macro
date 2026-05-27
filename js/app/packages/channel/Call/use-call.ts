@@ -6,6 +6,7 @@ import { useMutation } from '@tanstack/solid-query';
 import { DisconnectReason, RoomEvent } from 'livekit-client';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { useCallContext } from './CallContext';
+import { nativeCallSnapshot } from './native-call-state';
 import { endCallKitCall, registerCallKitCallEndedHandler } from './use-callkit';
 
 type UseCallOptions = {
@@ -153,6 +154,18 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
       };
 
       const doConnect = async () => {
+        // CallKit answers already joined natively; avoid a duplicate JS participant.
+        const native = nativeCallSnapshot();
+        if (
+          native &&
+          native.channelId === id &&
+          native.connectionState !== 'disconnected' &&
+          native.connectionState !== 'disconnecting'
+        ) {
+          callCtx.rollbackOptimisticJoin();
+          return;
+        }
+
         // Call the join API directly so a timed-out join attempt cannot leave
         // `useJoinCallMutation` stuck pending and block the next retry.
         const [tokenResponse] = await Promise.all([
