@@ -456,7 +456,6 @@ export * from './groupedParamsGroupKey';
 export * from './groupedParamsLimit';
 export * from './groupedParamsSortMethod';
 export * from './groupedSoupPage';
-export * from './groupedSoupPageGroups';
 export * from './groupedSoupPageItems';
 export * from './groupedSoupPageNextCursor';
 export * from './groupedSoupSort';

@@ -8947,10 +8947,7 @@ export const postItemsSoupAstGroupedResponse = zod
             'API representation of group metadata.\n\nItems belonging to this group are referenced by `item_ids`, each of which\nlooks up an entry in `GroupedSoupPage.items` (a normalized pool).'
           )
       )
-      .nullish()
-      .describe(
-        'Group metadata - present when group_by is specified in the request'
-      ),
+      .describe('Ordered group metadata for this grouped response.'),
     items: zod
       .record(
         zod.string(),

@@ -10576,14 +10576,14 @@
       "GroupedSoupPage": {
         "type": "object",
         "description": "Response for grouped soup queries.\n\nItems are returned as a pool keyed by id; each `ApiGroupMeta.item_ids`\ndescribes the ordered membership of one group.",
-        "required": ["items"],
+        "required": ["items", "groups"],
         "properties": {
           "groups": {
-            "type": ["array", "null"],
+            "type": "array",
             "items": {
               "$ref": "#/components/schemas/ApiGroupMeta"
             },
-            "description": "Group metadata - present when group_by is specified in the request"
+            "description": "Ordered group metadata for this grouped response."
           },
           "items": {
             "type": "object",

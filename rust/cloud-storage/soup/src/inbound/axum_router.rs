@@ -266,9 +266,8 @@ pub struct GroupedSoupPage {
     pub items: HashMap<Uuid, SoupApiItem>,
     /// Cursor to load the next page (global pagination)
     pub next_cursor: Option<String>,
-    /// Group metadata - present when group_by is specified in the request
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub groups: Option<Vec<ApiGroupMeta>>,
+    /// Ordered group metadata for this grouped response.
+    pub groups: Vec<ApiGroupMeta>,
 }
 
 pub struct SoupRouterState<T, U, EAS> {
@@ -432,13 +431,11 @@ where
                 .map(|(id, item)| (id, SoupApiItem::from_frecency_soup_item(item)))
                 .collect(),
             next_cursor: response.page_cursor,
-            groups: Some(
-                response
-                    .groups
-                    .into_iter()
-                    .map(ApiGroupMeta::from)
-                    .collect(),
-            ),
+            groups: response
+                .groups
+                .into_iter()
+                .map(ApiGroupMeta::from)
+                .collect(),
         }))
     }
 }
