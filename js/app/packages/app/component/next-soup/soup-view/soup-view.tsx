@@ -660,11 +660,17 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const previewPanel = useMaybePreviewPanel();
 
-  // Auto focus the soup on mount except when it's in a preview panel
+  // Auto focus the soup on mount except when it's in a preview panel.
+  // .focus() is deferred so the synchronous focusin handler in @core/hotkey
+  // doesn't run inside this effect's tracking scope and re-invalidate it via
+  // its own setActiveScope write — which would re-fire .focus() and overflow
+  // the stack while an upstream context menu is still mounted.
   createEffect(() => {
     if (previewPanel) return;
 
-    soupViewRef()?.focus();
+    const ref = soupViewRef();
+    if (!ref) return;
+    queueMicrotask(() => ref.focus());
   });
 
   const [attachHotkeys, soupViewScope] = useHotkeyDOMScope('soup-view');
