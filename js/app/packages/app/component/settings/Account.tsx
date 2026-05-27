@@ -47,11 +47,8 @@ import PaywallComponent from '../paywall/PaywallComponent';
 import PaywallTeamMemberView from '../paywall/PaywallTeamMemberView';
 import PaywallTeamOwnerView from '../paywall/PaywallTeamOwnerView';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
-import {
-  connectAdditionalGmailInbox,
-  useEmailLinks,
-  useEmailLinksStatus,
-} from '@core/email-link';
+import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
+import { useInitGmailLink } from '@queries/auth';
 import {
   type SupportedNotificationSettings,
   useNotificationSettings,
@@ -154,12 +151,15 @@ export function Account() {
 
   const emailActive = useEmailLinksStatus();
 
+  const initGmailLink = useInitGmailLink();
   const handleAddInbox = async () => {
     const callbackUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}inbox-link-callback`;
-    await connectAdditionalGmailInbox(callbackUrl).match(
-      () => {},
-      () => toast.failure('Failed to start Gmail link flow')
-    );
+    const result = await initGmailLink.mutateAsync(callbackUrl);
+    if (result.isOk()) {
+      window.location.href = result.value.authorization_url;
+    } else {
+      toast.failure('Failed to start Gmail link flow');
+    }
   };
 
   const [githubLinkExists, { refetch: refetchGithubLink }] = createResource(async () => {

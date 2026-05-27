@@ -8,11 +8,10 @@ import { openEmailAuthPopup } from '@core/auth/email';
 
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
-import { authServiceClient } from '@service-auth/client';
 import { emailClient } from '@service-email/client';
 import type { ListLinksResponse } from '@service-email/generated/schemas';
 import type { UseQueryResult } from '@tanstack/solid-query';
-import { err, errAsync, okAsync, ResultAsync } from 'neverthrow';
+import { err, okAsync, ResultAsync } from 'neverthrow';
 import { createMemo, createSignal } from 'solid-js';
 
 const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
@@ -67,26 +66,6 @@ function initEmailLink(args?: {
             }
       );
     }
-    return okAsync(undefined);
-  });
-}
-
-/**
- * Kicks off the "add another Gmail inbox" flow for an already-authenticated user.
- * Asks auth service for the Google OAuth URL and redirects the browser there. Google
- * sends the user back to `callbackUrl` with `?link_id=<uuid>` appended; the callback
- * page is responsible for invoking `initEmailLink({ linkId })`.
- */
-export function connectAdditionalGmailInbox(
-  callbackUrl: string
-): ResultAsync<void, 'failed-to-init-gmail-link'> {
-  return ResultAsync.fromSafePromise(
-    authServiceClient.initGmailLink(callbackUrl)
-  ).andThen((result) => {
-    if (result.isErr()) {
-      return errAsync('failed-to-init-gmail-link' as const);
-    }
-    window.location.href = result.value.authorization_url;
     return okAsync(undefined);
   });
 }
