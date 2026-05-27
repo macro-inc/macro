@@ -73,7 +73,7 @@ function ChannelCard(props: {
 
   return (
     <button
-      class="group flex h-36 min-w-0 flex-col justify-between rounded-2xl border border-edge-muted bg-hover/60 p-4 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent"
+      class="group flex h-36 min-w-0 flex-col justify-between rounded-2xl border border-edge-muted bg-hover/60 p-3 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent"
       onClick={(event) => props.onOpen(props.channel.id, event)}
     >
       <div class="flex items-start justify-between gap-3">
@@ -253,7 +253,7 @@ export function RecentChannelsSection() {
           fallback={
             <For each={[0, 1, 2, 3, 4, 5, 6]}>
               {() => (
-                <div class="h-36 rounded-2xl border border-edge-muted bg-hover/60 p-4">
+                <div class="h-36 rounded-2xl border border-edge-muted bg-hover/60 p-3">
                   <div class="size-9 rounded-xl bg-surface" />
                   <div class="flex flex-col gap-2 pt-6">
                     <div class="h-3 w-3/4 rounded-full bg-ink/10" />
@@ -271,7 +271,7 @@ export function RecentChannelsSection() {
               )}
             </For>
             <button
-              class="group flex h-36 min-w-0 flex-col justify-end rounded-2xl border border-edge-muted bg-hover/60 p-4 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent"
+              class="group flex h-36 min-w-0 flex-col justify-end rounded-2xl border border-edge-muted bg-hover/60 p-3 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent"
               onClick={openChannelsView}
             >
               <div class="flex items-center justify-between gap-3">

@@ -10,9 +10,9 @@ export function Dashboard() {
       <div class="px-6 pb-10 sm:px-8">
         <div class="grid w-full gap-x-8 gap-y-10 xl:grid-cols-[minmax(0,1fr)_24rem]">
           <div class="space-y-10">
-            <RecentChannelsSection />
-
             <QuickLinksSection />
+
+            <RecentChannelsSection />
 
             <div class="grid gap-8 lg:grid-cols-2">
               <section>
