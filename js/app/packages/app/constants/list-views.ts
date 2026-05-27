@@ -1,5 +1,6 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
+import { match } from 'ts-pattern';
 
 export const LIST_VIEWS = [
   'inbox',
@@ -52,28 +53,23 @@ export const isListViewID = (id: string | null | undefined): id is ListView => {
 export const soupItemMatchesListView = (
   item: SoupApiItem,
   view: ListView | undefined
-): boolean => {
-  switch (view) {
-    case 'agents':
-      return item.tag === 'chat';
-    case 'mail':
-      return item.tag === 'emailThread';
-    case 'documents':
-      return item.tag === 'document' && item.data.subType?.type !== 'task';
-    case 'tasks':
-      return item.tag === 'document' && item.data.subType?.type === 'task';
-    case 'channels':
-      return item.tag === 'channel';
-    case 'calls':
-      return item.tag === 'call';
-    case 'folders':
-      return item.tag === 'project';
-    case 'inbox':
-    case 'search':
-    case undefined:
-      return true;
-  }
-};
+): boolean =>
+  match(view)
+    .with('agents', () => item.tag === 'chat')
+    .with('mail', () => item.tag === 'emailThread')
+    .with(
+      'documents',
+      () => item.tag === 'document' && item.data.subType?.type !== 'task'
+    )
+    .with(
+      'tasks',
+      () => item.tag === 'document' && item.data.subType?.type === 'task'
+    )
+    .with('channels', () => item.tag === 'channel')
+    .with('calls', () => item.tag === 'call')
+    .with('folders', () => item.tag === 'project')
+    .with('inbox', 'search', undefined, () => true)
+    .exhaustive();
 
 const BLOCK_LIST_VIEW_MAP = {
   channel: 'channels',

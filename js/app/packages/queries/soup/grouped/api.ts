@@ -1,6 +1,7 @@
 import type { ApiGroupMeta } from '@service-storage/generated/schemas/apiGroupMeta';
 import type { GroupedSoupPage as WireGroupedSoupPage } from '@service-storage/generated/schemas/groupedSoupPage';
 import type { SoupApiItem } from '@service-storage/generated/schemas/soupApiItem';
+import { match } from 'ts-pattern';
 import {
   GROUP_BY_TYPES,
   type GroupByField,
@@ -88,13 +89,12 @@ export function resolveGroupMetaForKey(
 ): ResolvedGroupMeta | undefined {
   if (!groupBy) return;
 
-  switch (groupBy.type) {
-    case 'entity_type': {
+  return match(groupBy)
+    .with({ type: 'entity_type' }, () => {
       const meta = ENTITY_TYPE_META[key] ?? { label: 'Other', displayOrder: 6 };
       return { key, label: meta.label, displayOrder: meta.displayOrder };
-    }
-
-    case 'project':
+    })
+    .with({ type: 'project' }, () => {
       if (key === NOT_SET_GROUP_KEY) {
         return {
           key,
@@ -103,13 +103,16 @@ export function resolveGroupMetaForKey(
         };
       }
       return;
-
-    case 'property': {
+    })
+    .with({ type: 'property' }, (propertyGroupBy) => {
       if (key === NOT_SET_GROUP_KEY) {
         return { key, label: 'Not Set', displayOrder: Number.MAX_SAFE_INTEGER };
       }
 
-      const propertyValueType = getGroupedPropertyValueType(item, groupBy);
+      const propertyValueType = getGroupedPropertyValueType(
+        item,
+        propertyGroupBy
+      );
       if (propertyValueType === 'SelectOption') {
         return {
           key,
@@ -118,11 +121,9 @@ export function resolveGroupMetaForKey(
         };
       }
       return;
-    }
-
-    case 'date':
-      return;
-  }
+    })
+    .with({ type: 'date' }, () => undefined)
+    .exhaustive();
 }
 
 function getGroupedPropertyValueType(
@@ -155,17 +156,14 @@ export function computeGroupKeysForItem(
 ) {
   if (!groupBy) return;
 
-  switch (groupBy.type) {
-    case 'entity_type':
-      return [item.tag];
-
-    case 'project': {
+  return match(groupBy)
+    .with({ type: 'entity_type' }, () => [item.tag])
+    .with({ type: 'project' }, () => {
       if (item.tag === 'channel' || item.tag === 'call') return;
       const projectId = (item.data as { projectId?: string | null }).projectId;
       return [projectId ?? NOT_SET_GROUP_KEY];
-    }
-
-    case 'property': {
+    })
+    .with({ type: 'property' }, (propertyGroupBy) => {
       if (item.tag === 'channel' || item.tag === 'call') return;
 
       const properties = (
@@ -178,7 +176,7 @@ export function computeGroupKeysForItem(
       const prop = properties.find(
         (p) =>
           (p.definition as Record<string, unknown> | undefined)?.id ===
-          groupBy.propertyDefinitionId
+          propertyGroupBy.propertyDefinitionId
       );
       if (!prop) return [NOT_SET_GROUP_KEY];
 
@@ -201,9 +199,7 @@ export function computeGroupKeysForItem(
           : [NOT_SET_GROUP_KEY];
       }
       return;
-    }
-
-    case 'date':
-      return;
-  }
+    })
+    .with({ type: 'date' }, () => undefined)
+    .exhaustive();
 }
