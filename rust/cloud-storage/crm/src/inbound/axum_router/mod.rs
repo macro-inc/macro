@@ -9,6 +9,9 @@ pub mod set_company_hidden;
 /// Toggle the `hidden` flag on a `crm_contacts` row.
 pub mod set_contact_hidden;
 
+/// List the non-hidden contacts of a `crm_companies` row.
+pub mod list_company_contacts;
+
 use std::sync::Arc;
 
 use axum::{
@@ -16,7 +19,7 @@ use axum::{
     extract::FromRef,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::put,
+    routing::{get, put},
 };
 use entity_access::domain::ports::EntityAccessService;
 use model_error_response::ErrorResponse;
@@ -62,6 +65,10 @@ where
         .route(
             "/companies/{company_id}/hidden",
             put(set_company_hidden::handler::<C, Eas>),
+        )
+        .route(
+            "/companies/{company_id}/contacts",
+            get(list_company_contacts::handler::<C, Eas>),
         )
         .route(
             "/contacts/{contact_id}/hidden",

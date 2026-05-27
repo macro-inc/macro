@@ -1716,3 +1716,110 @@ async fn list_for_soup_does_not_leak_other_team_rows(pool: PgPool) -> anyhow::Re
     assert_eq!(ids, vec![b_only]);
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_contacts_returns_visible_ordered_alphabetically(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+
+    // Named contacts sort by name; a name-less contact sorts by email.
+    // `anna smith` is lowercased to confirm the sort is case-insensitive.
+    let zoe = insert_contact_with_source(&pool, company_id, "zoe@acme.com", link_id).await?;
+    let mike = insert_contact_with_source(&pool, company_id, "mike@acme.com", link_id).await?;
+    let carol = insert_contact_with_source(&pool, company_id, "carol@acme.com", link_id).await?;
+    sqlx::query(r#"UPDATE crm_contacts SET name = 'Zoe Adams' WHERE id = $1"#)
+        .bind(zoe)
+        .execute(&pool)
+        .await?;
+    sqlx::query(r#"UPDATE crm_contacts SET name = 'anna smith' WHERE id = $1"#)
+        .bind(carol)
+        .execute(&pool)
+        .await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let contacts = repo
+        .list_contacts_for_company(&team_id, &company_id)
+        .await?;
+    let ids: Vec<Uuid> = contacts.iter().map(|c| c.id).collect();
+    // "anna smith" (carol) < "mike@acme.com" (mike) < "zoe adams" (zoe)
+    assert_eq!(ids, vec![carol, mike, zoe]);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_contacts_excludes_hidden(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+    let visible = insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+    let hidden = insert_contact_with_source(&pool, company_id, "bob@acme.com", link_id).await?;
+    sqlx::query(r#"UPDATE crm_contacts SET hidden = TRUE WHERE id = $1"#)
+        .bind(hidden)
+        .execute(&pool)
+        .await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let contacts = repo
+        .list_contacts_for_company(&team_id, &company_id)
+        .await?;
+    let ids: Vec<Uuid> = contacts.iter().map(|c| c.id).collect();
+    assert_eq!(ids, vec![visible]);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_contacts_owned_company_with_no_contacts_returns_empty(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let contacts = repo
+        .list_contacts_for_company(&team_id, &company_id)
+        .await?;
+    assert!(contacts.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_contacts_unknown_company_returns_not_found(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let result = repo
+        .list_contacts_for_company(&team_id, &Uuid::now_v7())
+        .await;
+    assert!(matches!(
+        result,
+        Err(crate::domain::model::CrmError::CompanyNotFoundForTeam)
+    ));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_contacts_does_not_leak_across_teams(pool: PgPool) -> anyhow::Result<()> {
+    let team_a = Uuid::now_v7();
+    let team_b = Uuid::now_v7();
+    seed_team(&pool, team_a, "macro|a@test.com").await?;
+    seed_team(&pool, team_b, "macro|b@test.com").await?;
+    let company_a = insert_company(&pool, team_a, true, &["acme.com"]).await?;
+    let link_a = insert_email_link(&pool, "macro|a@test.com", "a@macro.test").await?;
+    insert_contact_with_source(&pool, company_a, "alice@acme.com", link_a).await?;
+
+    // Team B asking for team A's company must 404, not see an empty list.
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let result = repo.list_contacts_for_company(&team_b, &company_a).await;
+    assert!(matches!(
+        result,
+        Err(crate::domain::model::CrmError::CompanyNotFoundForTeam)
+    ));
+    Ok(())
+}

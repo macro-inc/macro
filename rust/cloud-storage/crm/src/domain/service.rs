@@ -4,7 +4,7 @@ use crate::domain::{
     companies_repo::{CompaniesRepository, CrmCompanyListSort},
     company_metadata_resolver::CompanyMetadataResolver,
     generic_email_domains::is_generic_email_domain,
-    model::{CrmCompany, CrmCompanyForSoup, CrmError, CrmScopePrecheck},
+    model::{CrmCompany, CrmCompanyForSoup, CrmContact, CrmError, CrmScopePrecheck},
 };
 use chrono::{DateTime, Utc};
 
@@ -186,6 +186,14 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         sort: CrmCompanyListSort,
         limit: i64,
     ) -> impl Future<Output = Result<Vec<CrmCompanyForSoup>, CrmError>> + Send;
+
+    /// List a company's non-hidden contacts, scoped to `team_id`. See
+    /// [`CompaniesRepository::list_contacts_for_company`].
+    fn list_contacts_for_company(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
 }
 
 /// Implementation of [`CrmService`] backed by a [`CompaniesRepository`]
@@ -445,6 +453,17 @@ where
             .list_companies_for_soup(team_id, company_ids, sort, limit)
             .await
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_contacts_for_company(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+    ) -> Result<Vec<CrmContact>, CrmError> {
+        self.companies_repository
+            .list_contacts_for_company(team_id, company_id)
+            .await
+    }
 }
 
 /// No-op [`CrmService`] for binaries that need to satisfy the bound
@@ -541,6 +560,14 @@ impl CrmService for NoOpCrmService {
         _sort: CrmCompanyListSort,
         _limit: i64,
     ) -> Result<Vec<CrmCompanyForSoup>, CrmError> {
+        Ok(Vec::new())
+    }
+
+    async fn list_contacts_for_company(
+        &self,
+        _team_id: &uuid::Uuid,
+        _company_id: &uuid::Uuid,
+    ) -> Result<Vec<CrmContact>, CrmError> {
         Ok(Vec::new())
     }
 }

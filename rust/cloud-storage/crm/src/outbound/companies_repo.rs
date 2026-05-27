@@ -6,8 +6,8 @@ mod test;
 use crate::domain::{
     companies_repo::{CompaniesRepository, CrmCompanyListSort},
     model::{
-        CrmAddressStatus, CrmCompany, CrmCompanyForSoup, CrmDomain, CrmDomainStatus, CrmError,
-        CrmScopePrecheck, DomainMetadata,
+        CrmAddressStatus, CrmCompany, CrmCompanyForSoup, CrmContact, CrmDomain, CrmDomainStatus,
+        CrmError, CrmScopePrecheck, DomainMetadata,
     },
 };
 use chrono::{DateTime, Utc};
@@ -1077,5 +1077,70 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         }
 
         Ok(result)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_contacts_for_company(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+    ) -> Result<Vec<CrmContact>, CrmError> {
+        // Authorize first: a company id that isn't the team's must be
+        // indistinguishable from one that doesn't exist, so we 404
+        // rather than returning an empty list (which would confirm the
+        // id belongs to another team).
+        let owns_company = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM crm_companies
+                WHERE id = $1 AND team_id = $2
+            ) AS "exists!"
+            "#,
+            company_id,
+            team_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        if !owns_company {
+            return Err(CrmError::CompanyNotFoundForTeam);
+        }
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                id,
+                company_id,
+                email,
+                name,
+                first_interaction,
+                last_interaction,
+                created_at,
+                updated_at
+            FROM crm_contacts
+            WHERE company_id = $1
+              AND hidden = FALSE
+            ORDER BY LOWER(COALESCE(name, email)) ASC, id DESC
+            "#,
+            company_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| CrmContact {
+                id: row.id,
+                company_id: row.company_id,
+                email: row.email,
+                name: row.name,
+                first_interaction: row.first_interaction,
+                last_interaction: row.last_interaction,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            })
+            .collect())
     }
 }

@@ -1,7 +1,7 @@
 //! Port for persistence operations on CRM companies.
 
 use crate::domain::model::{
-    CrmCompany, CrmCompanyForSoup, CrmError, CrmScopePrecheck, DomainMetadata,
+    CrmCompany, CrmCompanyForSoup, CrmContact, CrmError, CrmScopePrecheck, DomainMetadata,
 };
 use chrono::{DateTime, Utc};
 
@@ -293,4 +293,18 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         sort: CrmCompanyListSort,
         limit: i64,
     ) -> impl Future<Output = Result<Vec<CrmCompanyForSoup>, CrmError>> + Send;
+
+    /// Lists the non-hidden contacts of `company_id`, scoped to
+    /// `team_id` via the contact's company. Returns
+    /// [`CrmError::CompanyNotFoundForTeam`] when the company doesn't
+    /// exist or isn't owned by the team (so existence doesn't leak
+    /// across teams); an owned company with no visible contacts
+    /// returns `Ok(vec![])`. Ordered alphabetically (case-insensitive)
+    /// by display name, falling back to email when the contact has no
+    /// name; ties break on `id DESC`.
+    fn list_contacts_for_company(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
 }
