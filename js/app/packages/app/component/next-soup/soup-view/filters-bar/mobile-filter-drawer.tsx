@@ -27,11 +27,12 @@ import ChevronDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import CircleDashedIcon from '@phosphor/circle-dashed.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
+import XIcon from '@phosphor/x.svg';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { useContacts } from '@queries/contacts/contacts';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import { ActiveFilterChips } from './active-filter-chips';
+import { ConsolidatedFilterChip } from './consolidated-filter-chip';
 import {
   buildContactLabel,
   type FilterOption,
@@ -60,13 +61,8 @@ function scrollAccordionItemToTop(
 }
 
 export const MobileFilterDrawer = () => {
-  const {
-    activeFiltersList,
-    removeFilter,
-    replaceFilter,
-    resetToTabDefaults,
-    isOptionActive,
-  } = useFilterRefinements();
+  const { consolidatedFiltersList, resetToTabDefaults } =
+    useFilterRefinements();
 
   const { soup, queryFilters, assigneeFilter, setAssigneeFilter } =
     useSoupView();
@@ -188,7 +184,7 @@ export const MobileFilterDrawer = () => {
     );
   });
 
-  const activeCount = () => activeFiltersList().length;
+  const activeCount = () => consolidatedFiltersList().length;
 
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
 
@@ -464,16 +460,27 @@ export const MobileFilterDrawer = () => {
 
             {/* Active filter chips footer */}
             <Show when={activeCount() > 0}>
-              <div class="shrink-0 border-t border-edge-muted py-2">
-                <ActiveFilterChips
-                  filters={activeFiltersList()}
-                  onRemove={removeFilter}
-                  onReplace={replaceFilter}
-                  onClearAll={resetToTabDefaults}
-                  isOptionActive={isOptionActive}
-                  chipClass="min-h-11 bg-surface border-none rounded-lg"
-                  hideCategoryLabel
-                />
+              <div class="shrink-0 border-t border-edge-muted p-2">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <For each={consolidatedFiltersList()}>
+                    {(filter) => (
+                      <ConsolidatedFilterChip
+                        filter={filter}
+                        hideCategoryLabel
+                        mobile
+                      />
+                    )}
+                  </For>
+                  <Button
+                    onClick={() => resetToTabDefaults()}
+                    variant="base"
+                    size="sm"
+                    class="min-h-10 rounded-lg bg-active!"
+                  >
+                    <XIcon class="size-3!" />
+                    Clear all
+                  </Button>
+                </div>
               </div>
             </Show>
           </MobileDrawer.Content>

@@ -57,17 +57,20 @@ interface ConsolidatedFilterChipProps {
   filter: ConsolidatedFilter;
   class?: string;
   hideCategoryLabel?: boolean;
+  mobile?: boolean;
 }
 
-const ChipDivider = () => (
-  <div class="w-px self-stretch bg-edge-muted shrink-0" />
+const ChipDivider = (props: { mobile?: boolean }) => (
+  <Show when={!props.mobile}>
+    <div class="w-px self-stretch bg-edge-muted shrink-0" />
+  </Show>
 );
 
 const SingleValueDisplay = (props: { value: FilterValue }) => (
   <span class="inline-flex h-full items-center gap-1.5">
     <Show when={props.value.icon}>
       {(icon) => (
-        <span class="size-3 flex items-center justify-center shrink-0">
+        <span class="size-4 flex items-center justify-center shrink-0">
           {icon()()}
         </span>
       )}
@@ -87,7 +90,7 @@ const MultiValueDisplay = (props: { values: FilterValue[] }) => {
     >
       <Show when={first()?.icon}>
         {(icon) => (
-          <span class="size-3 flex items-center justify-center shrink-0">
+          <span class="size-4 flex items-center justify-center shrink-0">
             {icon()()}
           </span>
         )}
@@ -116,7 +119,7 @@ const PeopleMultiValueDisplay = (props: { values: FilterValue[] }) => {
     >
       <Show when={first()?.icon}>
         {(icon) => (
-          <span class="size-3 flex items-center justify-center shrink-0">
+          <span class="size-4 flex items-center justify-center shrink-0">
             {icon()()}
           </span>
         )}
@@ -226,6 +229,7 @@ const ValueDropdownContent = (props: { filter: ConsolidatedFilter }) => {
 const SearchableValueSegment = (props: {
   filter: ConsolidatedFilter;
   class?: string;
+  mobile?: boolean;
 }) => {
   const options: Accessor<SearchableOption[]> = () =>
     props.filter.searchableOptions?.() ?? [];
@@ -255,7 +259,9 @@ const SearchableValueSegment = (props: {
       <Combobox.Trigger
         class={cn(
           'inline-flex h-full items-center gap-1.5 px-2',
-          'hover:bg-hover active:bg-active',
+          props.mobile
+            ? 'bg-active hover:bg-active active:bg-active px-3'
+            : 'hover:bg-hover active:bg-active',
           props.class
         )}
       >
@@ -271,6 +277,7 @@ const SearchableValueSegment = (props: {
 const StandardValueSegment = (props: {
   filter: ConsolidatedFilter;
   class?: string;
+  mobile?: boolean;
 }) => {
   const [open, setOpen] = createSignal(false);
   const hasOptions = () =>
@@ -283,7 +290,11 @@ const StandardValueSegment = (props: {
       when={hasOptions()}
       fallback={
         <span
-          class={cn('inline-flex items-center gap-1.5 px-2.5', props.class)}
+          class={cn(
+            'inline-flex items-center gap-1.5 px-2.5',
+            props.mobile && 'bg-active px-3',
+            props.class
+          )}
         >
           <ValueDisplay
             values={props.filter.values}
@@ -297,7 +308,9 @@ const StandardValueSegment = (props: {
           variant="ghost"
           class={cn(
             'inline-flex items-center gap-1.5 px-2.5 h-auto!',
-            'hover:bg-ink/5 active:bg-ink/8 rounded-none',
+            props.mobile
+              ? 'bg-active hover:bg-active active:bg-active rounded-none px-3'
+              : 'hover:bg-ink/5 active:bg-ink/8 rounded-none',
             props.class
           )}
         >
@@ -319,8 +332,10 @@ export const ConsolidatedFilterChip = (props: ConsolidatedFilterChipProps) => {
     <Layer depth={2}>
       <div
         class={cn(
-          'h-7 flex items-stretch text-xs whitespace-nowrap rounded-md',
+          props.mobile ? 'h-10' : 'h-7',
+          'flex items-stretch text-xs whitespace-nowrap rounded-md',
           'bg-surface text-ink border border-edge-muted overflow-clip',
+          props.mobile && 'bg-active border-none rounded-lg',
           props.class
         )}
       >
@@ -336,23 +351,29 @@ export const ConsolidatedFilterChip = (props: ConsolidatedFilterChipProps) => {
             <span>{props.filter.categoryLabel}</span>
           </span>
 
-          <ChipDivider />
+          <ChipDivider mobile={props.mobile} />
         </Show>
 
         {/* Value segment */}
         <Switch>
           <Match when={isSearchable()}>
-            <SearchableValueSegment filter={props.filter} />
+            <SearchableValueSegment
+              filter={props.filter}
+              mobile={props.mobile}
+            />
           </Match>
           <Match when={!isSearchable()}>
-            <StandardValueSegment filter={props.filter} />
+            <StandardValueSegment filter={props.filter} mobile={props.mobile} />
           </Match>
         </Switch>
 
-        <ChipDivider />
+        <ChipDivider mobile={props.mobile} />
 
         <Button
-          class="rounded-none h-full not-disabled:hover:text-failure"
+          class={cn(
+            'rounded-none h-full not-disabled:hover:text-failure',
+            props.mobile && 'bg-active border-none'
+          )}
           size="icon-sm"
           onClick={(e) => {
             e.stopPropagation();
