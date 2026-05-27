@@ -1,6 +1,5 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import { INSERT_MEDIA_COMMAND } from '@core/component/LexicalMarkdown/plugins';
-import { DropdownMenuContent } from '@core/component/Menu';
 import {
   blockAcceptsFileExtension,
   blockNameToFileExtensions,
@@ -8,12 +7,11 @@ import {
 } from '@core/constant/allBlocks';
 import { fileDrop } from '@core/directive/fileDrop';
 import { fileSelector } from '@core/directive/fileSelector';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import ImageIcon from '@phosphor/image.svg';
 import UploadSimple from '@phosphor-icons/core/bold/upload-simple-bold.svg?component-solid';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import { useHistoryQuery } from '@queries/history/history';
-import { Button } from '@ui';
+import { Dropdown } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -119,26 +117,24 @@ export function MediaSelector(props: MediaSelectorProps) {
 
   return (
     // TODO bring up to menu best practices, ie. fully focusable menu items, etc.
-    <DropdownMenu open={menuOpen()} onOpenChange={setMenuOpen}>
-      <DropdownMenu.Trigger class="dropdown-menu__trigger">
-        <Button
-          label="Insert Media File"
-          variant="ghost"
-          size="icon-md"
-          disabled={props?.buttonIsDisabled?.() ?? false}
-          tabIndex={-1}
-        >
-          <ImageIcon />
-          <CaretDown />
-        </Button>
-      </DropdownMenu.Trigger>
+    <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
+      <Dropdown.Trigger
+        label="Insert Media File"
+        variant="ghost"
+        size="icon-md"
+        disabled={props?.buttonIsDisabled?.() ?? false}
+        tabIndex={-1}
+      >
+        <ImageIcon />
+        <CaretDown />
+      </Dropdown.Trigger>
       <Show when={!props?.buttonIsDisabled?.()}>
-        <DropdownMenu.Portal>
-          <DropdownMenuContent
-            onCloseAutoFocus={() => {
-              editor()?.focus();
-            }}
-          >
+        <Dropdown.Content
+          onCloseAutoFocus={() => {
+            editor()?.focus();
+          }}
+        >
+          <Dropdown.Group>
             <div class="w-72 text-ink bg-surface">
               <div
                 class="w-72 flex rounded select-none items-center"
@@ -173,9 +169,9 @@ export function MediaSelector(props: MediaSelectorProps) {
                 </For>
               </div>
             </div>
-          </DropdownMenuContent>
-        </DropdownMenu.Portal>
+          </Dropdown.Group>
+        </Dropdown.Content>
       </Show>
-    </DropdownMenu>
+    </Dropdown>
   );
 }

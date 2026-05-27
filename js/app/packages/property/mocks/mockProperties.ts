@@ -1,11 +1,5 @@
-import {
-  PROPERTY_OPTION_IDS,
-  SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
-import type {
-  Property,
-  PropertyOption,
-} from '@core/component/Properties/types';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
+import type { Property, PropertyOption } from '@property/types';
 
 const EPOCH = new Date(0).toISOString();
 const now = new Date();
@@ -79,7 +73,7 @@ const priorityOptions: PropertyOption[] = [
   {
     id: PROPERTY_OPTION_IDS.PRIORITY.URGENT,
     property_definition_id: SYSTEM_PROPERTY_IDS.PRIORITY,
-    value: { type: 'string', value: 'Urgent' },
+    value: { type: 'string', value: 'Critical' },
     display_order: 3,
     created_at: EPOCH,
     updated_at: EPOCH,

@@ -158,6 +158,7 @@ use utoipa::OpenApi;
         documents::location::get_location_handler,
         documents_hex::inbound::axum_router::get_location::get_location_v3_handler,
         documents_hex::inbound::axum_router::get_branch_name::get_branch_name_handler,
+        documents_hex::inbound::axum_router::get_github_pull_requests::get_github_pull_requests_handler,
         documents_hex::inbound::axum_router::get_short_id::get_short_id_handler,
         documents::simple_save::handler,
         documents::initialize_user_documents::handler,
@@ -251,7 +252,12 @@ use utoipa::OpenApi;
         github::inbound::github_sync_router::install_sync_handler,
 
         // /internal/sync_service
-        sync_service_hex::inbound::axum_router::bulk_wakeup_handler
+        sync_service_hex::inbound::axum_router::bulk_wakeup_handler,
+
+        // /crm
+        crm::inbound::axum_router::set_email_sync::handler,
+        crm::inbound::axum_router::set_company_hidden::handler,
+        crm::inbound::axum_router::set_contact_hidden::handler,
     ),
     components(
         schemas(
@@ -429,10 +435,17 @@ use utoipa::OpenApi;
             ExcludeDefaultViewRequest,
             BranchNameResponse,
             ShortIdResponse,
+            documents_hex::domain::models::GithubPullRequest,
+            documents_hex::domain::models::GithubPullRequestsResponse,
 
             // Sync service
             sync_service_hex::domain::models::BulkWakeupRequest,
             sync_service_hex::domain::models::BulkWakeupResponse,
+
+            // CRM
+            crm::inbound::axum_router::set_email_sync::SetEmailSyncRequest,
+            crm::inbound::axum_router::set_company_hidden::SetCompanyHiddenRequest,
+            crm::inbound::axum_router::set_contact_hidden::SetContactHiddenRequest,
         ),
     ),
     tags(

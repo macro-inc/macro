@@ -1,7 +1,7 @@
 //! SetEntityProperty tool for updating property values on entities.
 
 use crate::domain::service::PropertiesService;
-use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use models_properties::EntityType;

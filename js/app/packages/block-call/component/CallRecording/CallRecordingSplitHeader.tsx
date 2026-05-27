@@ -8,11 +8,13 @@ import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
 } from '@app/component/ResponsiveBlockToolbar';
+import { SidePanel } from '@app/component/side-panel';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
+import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useCall } from '@channel/Call/use-call';
 import { useBlockId } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
@@ -120,6 +122,9 @@ export function CallRecordingSplitHeader(props: {
         itemType="call"
         name={callName()}
       />
+      <SplitToolbarLeft>
+        <SidePanel.NarrowTabs />
+      </SplitToolbarLeft>
     </>
   );
 }

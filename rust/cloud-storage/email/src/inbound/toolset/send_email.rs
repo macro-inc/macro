@@ -4,7 +4,7 @@ use crate::domain::{
     models::{ContactInfo, CreateDraftInput},
     ports::{EmailService, GmailTokenProvider},
 };
-use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;

@@ -1,34 +1,34 @@
-import { DropdownMenu as KDropdownMenu } from '@kobalte/core/dropdown-menu';
 import CaretDown from '@phosphor/caret-down.svg';
-import { cn, Layer } from '@ui';
-import { createMemo, For, type JSX, splitProps } from 'solid-js';
+import CheckIcon from '@phosphor/check.svg';
+import { cn, Dropdown, Layer } from '@ui';
+import { createMemo, For, type JSX, Show, splitProps } from 'solid-js';
 
 export type TabItem = {
-  value: string;
   label: string | JSX.Element;
+  value: string;
 };
 
 export type TabsInsetDropdownProps = {
-  list: TabItem[];
-  value?: string;
-  defaultValue?: string;
-  onChange?: (value: string) => void;
-  disabled?: boolean;
-  class?: string;
-  depth?: 0 | 1 | 2 | 3 | 4 | 5;
   placeholder?: string | JSX.Element;
+  onChange?: (value: string) => void;
+  depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  defaultValue?: string;
+  disabled?: boolean;
+  list: TabItem[];
+  class?: string;
+  value?: string;
 };
 
 export const TabsInsetDropdown = (props: TabsInsetDropdownProps) => {
   const [local] = splitProps(props, [
-    'list',
-    'value',
     'defaultValue',
+    'placeholder',
     'onChange',
     'disabled',
     'class',
     'depth',
-    'placeholder',
+    'value',
+    'list',
   ]);
 
   const current = createMemo(() => {
@@ -37,51 +37,45 @@ export const TabsInsetDropdown = (props: TabsInsetDropdownProps) => {
   });
 
   return (
-    <KDropdownMenu placement="bottom-start" gutter={4}>
-      <Layer depth={local.depth ?? 0}>
-        <KDropdownMenu.Trigger
-          disabled={local.disabled}
-          class={cn(
-            'relative flex items-center bg-surface rounded-lg p-0.5 ring ring-edge-muted cursor-default outline-none disabled:opacity-50',
-            local.class
-          )}
-        >
-          <Layer depth={2}>
-            <span class="flex items-center px-2.5 py-1 text-xs font-medium ring ring-edge-muted ring-inset rounded-md bg-surface text-ink shadow-sm">
-              {current()?.label ?? local.placeholder ?? ''}
-            </span>
-          </Layer>
-          <span class="flex items-center justify-center px-1.5 text-ink-extra-muted">
-            <CaretDown class="size-3" />
+    <Dropdown placement="bottom-start">
+      <Dropdown.Trigger
+        class={cn(
+          'not-disabled:hover:bg-surface active:bg-surface focus-visible:bg-surface',
+          'h-auto p-0.5 rounded-lg border-0 ring ring-edge-muted bg-surface',
+          local.class
+        )}
+        disabled={local.disabled}
+        depth={local.depth ?? 0}
+      >
+        <Layer depth={2}>
+          <span class="flex items-center px-2.5 py-1 text-xs font-medium ring ring-edge-muted ring-inset rounded-md bg-surface text-ink shadow-sm">
+            {current()?.label ?? local.placeholder ?? ''}
           </span>
-        </KDropdownMenu.Trigger>
-      </Layer>
-      <KDropdownMenu.Portal>
-        <Layer depth={local.depth ?? 2}>
-          <KDropdownMenu.Content class="z-action-menu flex flex-col bg-surface rounded-lg p-0.5 ring ring-edge-muted shadow-lg min-w-32 outline-none">
-            <For each={local.list}>
-              {(item) => {
-                const isActive = () => current()?.value === item.value;
-                return (
-                  <Layer depth={2}>
-                    <KDropdownMenu.Item
-                      class={cn(
-                        'flex items-center px-2.5 py-2 text-xs font-medium ring-inset rounded-md text-ink-extra-muted hover:bg-hover hover:text-ink focus:bg-hover focus:text-ink outline-none',
-                        {
-                          'text-red font-bold': isActive(),
-                        }
-                      )}
-                      onSelect={() => local.onChange?.(item.value)}
-                    >
-                      {item.label}
-                    </KDropdownMenu.Item>
-                  </Layer>
-                );
-              }}
-            </For>
-          </KDropdownMenu.Content>
         </Layer>
-      </KDropdownMenu.Portal>
-    </KDropdownMenu>
+        <span class="flex items-center justify-center px-1.5 text-ink-extra-muted">
+          <CaretDown class="size-3" />
+        </span>
+      </Dropdown.Trigger>
+      <Dropdown.Content depth={local.depth ?? 2}>
+        <Dropdown.Group>
+          <For each={local.list}>
+            {(item) => {
+              const isActive = () => current()?.value === item.value;
+              return (
+                <Dropdown.Item
+                  class={cn(isActive() && 'text-ink font-semibold')}
+                  onSelect={() => local.onChange?.(item.value)}
+                >
+                  <span class="flex-1 truncate">{item.label}</span>
+                  <Show when={isActive()}>
+                    <CheckIcon class="size-3.5 text-accent" />
+                  </Show>
+                </Dropdown.Item>
+              );
+            }}
+          </For>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 };

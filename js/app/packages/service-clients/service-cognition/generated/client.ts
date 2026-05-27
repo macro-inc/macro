@@ -20,7 +20,6 @@ import type {
   GetChatPermissionsResponse,
   GetChatResponse,
   GetChatsForAttachmentResponse,
-  GetModelsResponse,
   HttpSendChatMessageRequest,
   McpAuthCallbackParams,
   MemoryErrorBody,
@@ -35,6 +34,9 @@ import type {
   StopChatStreamRequest,
   StopChatStreamResponse,
   StringIDResponse,
+  StructuredCompletionError,
+  StructuredCompletionRequest,
+  StructuredCompletionResponse,
   UpdateServerRequest,
   UpdateToolCallRequest,
   UpdateToolResponseRequest,
@@ -1416,42 +1418,6 @@ export const getMemoryHandler = async (
   } as getMemoryHandlerResponse;
 };
 
-/**
- * @summary Gets all available models
- */
-export type getModelsHandlerResponse200 = {
-  data: GetModelsResponse;
-  status: 200;
-};
-
-export type getModelsHandlerResponseSuccess = getModelsHandlerResponse200 & {
-  headers: Headers;
-};
-
-export type getModelsHandlerResponse = getModelsHandlerResponseSuccess;
-
-export const getGetModelsHandlerUrl = () => {
-  return `/models`;
-};
-
-export const getModelsHandler = async (
-  options?: RequestInit
-): Promise<getModelsHandlerResponse> => {
-  const res = await fetch(getGetModelsHandlerUrl(), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getModelsHandlerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getModelsHandlerResponse;
-};
-
 export type getBatchPreviewResponse200 = {
   data: GetBatchPreviewResponse;
   status: 200;
@@ -1627,4 +1593,73 @@ export const stopChatStream = async (
     status: res.status,
     headers: res.headers,
   } as stopChatStreamResponse;
+};
+
+export type structuredCompletionResponse200 = {
+  data: StructuredCompletionResponse;
+  status: 200;
+};
+
+export type structuredCompletionResponse400 = {
+  data: StructuredCompletionError;
+  status: 400;
+};
+
+export type structuredCompletionResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type structuredCompletionResponse402 = {
+  data: void;
+  status: 402;
+};
+
+export type structuredCompletionResponse500 = {
+  data: StructuredCompletionError;
+  status: 500;
+};
+
+export type structuredCompletionResponseSuccess =
+  structuredCompletionResponse200 & {
+    headers: Headers;
+  };
+export type structuredCompletionResponseError = (
+  | structuredCompletionResponse400
+  | structuredCompletionResponse401
+  | structuredCompletionResponse402
+  | structuredCompletionResponse500
+) & {
+  headers: Headers;
+};
+
+export type structuredCompletionResponse =
+  | structuredCompletionResponseSuccess
+  | structuredCompletionResponseError;
+
+export const getStructuredCompletionUrl = () => {
+  return `/structured-completion`;
+};
+
+export const structuredCompletion = async (
+  structuredCompletionRequest: StructuredCompletionRequest,
+  options?: RequestInit
+): Promise<structuredCompletionResponse> => {
+  const res = await fetch(getStructuredCompletionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(structuredCompletionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: structuredCompletionResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as structuredCompletionResponse;
 };

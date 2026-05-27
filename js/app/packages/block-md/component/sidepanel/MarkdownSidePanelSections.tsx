@@ -10,43 +10,50 @@ import {
   REMOVE_PINNED_PROPERTY_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
 import { Notifications } from '@core/component/Notifications';
-import { Modals } from '@core/component/Properties/component/modal';
-import { PanelContainer } from '@core/component/Properties/component/panel';
-import { getDefaultPinnedProperties } from '@core/component/Properties/constants';
-import {
-  PropertiesProvider,
-  type PropertySaveHandler,
-  usePropertiesContext,
-} from '@core/component/Properties/context/PropertiesContext';
-import { useEntityProperties } from '@core/component/Properties/hooks';
-import type {
-  Property,
-  PropertyApiValues,
-} from '@core/component/Properties/types';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
 import type { Entity, EntityType } from '@core/types';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
-
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import GithubIcon from '@icon/mcp-github.svg';
 import { useNotificationsForEntity } from '@notifications';
+import ClockIcon from '@phosphor/clock.svg';
 import Plus from '@phosphor/plus.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
+import { Property as PropertyNS } from '@property';
+import { Modals } from '@property/component/modal';
+import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
+import {
+  getDefaultPinnedProperties,
+  SYSTEM_PROPERTY_IDS,
+} from '@property/constants';
+import {
+  PropertiesProvider,
+  type PropertySaveHandler,
+  usePropertiesContext,
+} from '@property/context/PropertiesContext';
+import { useEntityProperties } from '@property/hooks';
+import type { Property, PropertyApiValues } from '@property/types';
+import { hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
+import { useDocumentGithubPullRequestsQuery } from '@queries/storage/github-pull-requests';
 import { commsServiceClient } from '@service-comms/client';
 import type { EntityType as PropertiesEntityType } from '@service-properties/generated/schemas/entityType';
 import { blockNameToItemType } from '@service-storage/client';
+import type { GithubPullRequest } from '@service-storage/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
+import { cn } from '@ui/utils/classname';
 import {
   createEffect,
   createMemo,
   createResource,
   createSignal,
+  For,
+  Match,
   onCleanup,
   Show,
-  Suspense,
+  Switch,
 } from 'solid-js';
 import { mdStore } from '../../signal/markdownBlockData';
 
@@ -93,6 +100,7 @@ export function MarkdownSidePanelSections(
           <StatsSectionContent />
         </SidePanel.Section>
       </Show>
+      <GithubSectionConditional documentId={blockId} isTask={isTask()} />
       <NotificationsSectionConditional entity={entity()} />
       <ReferencesSectionConditional documentId={blockId} />
     </>
@@ -109,26 +117,16 @@ function DetailsSectionContent() {
   const metadata = createMemo(() => query.data);
 
   return (
-    <Suspense fallback={<DetailsLoading />}>
-      <DetailsGrid
-        owner={() => metadata()?.owner}
-        folder={() => {
-          const id = metadata()?.projectId;
-          const name = metadata()?.projectName;
-          return id && name ? { id, name } : undefined;
-        }}
-        createdAt={() => metadata()?.createdAt}
-        updatedAt={() => metadata()?.updatedAt}
-      />
-    </Suspense>
-  );
-}
-
-function DetailsLoading() {
-  return (
-    <div class="flex justify-center items-center py-8">
-      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-ink-muted" />
-    </div>
+    <DetailsGrid
+      owner={() => metadata()?.owner}
+      folder={() => {
+        const id = metadata()?.projectId;
+        const name = metadata()?.projectName;
+        return id && name ? { id, name } : undefined;
+      }}
+      createdAt={() => metadata()?.createdAt}
+      updatedAt={() => metadata()?.updatedAt}
+    />
   );
 }
 
@@ -139,48 +137,36 @@ function DetailsGrid(props: {
   updatedAt: () => DateValue | null | undefined;
 }) {
   return (
-    <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-2 items-center text-xs">
+    <SidePanel.Grid>
       <Show when={props.owner()}>
         {(ownerId) => (
-          <DetailsRow label="Owner">
+          <SidePanel.Row label="Owner">
             <OwnerValue ownerId={ownerId()} />
-          </DetailsRow>
+          </SidePanel.Row>
         )}
       </Show>
       <Show when={props.folder()}>
         {(folder) => (
-          <DetailsRow label="Folder">
+          <SidePanel.Row label="Folder">
             <FolderLink projectId={folder().id} projectName={folder().name} />
-          </DetailsRow>
+          </SidePanel.Row>
         )}
       </Show>
       <Show when={props.createdAt()}>
         {(created) => (
-          <DetailsRow label="Created">
-            <span>{formatDate(created(), { showTime: true })}</span>
-          </DetailsRow>
+          <SidePanel.Row label="Created">
+            <DateValueDisplay value={created()} />
+          </SidePanel.Row>
         )}
       </Show>
       <Show when={props.updatedAt()}>
         {(updated) => (
-          <DetailsRow label="Last updated">
-            <span>{formatDate(updated(), { showTime: true })}</span>
-          </DetailsRow>
+          <SidePanel.Row label="Last updated">
+            <DateValueDisplay value={updated()} />
+          </SidePanel.Row>
         )}
       </Show>
-    </div>
-  );
-}
-
-function DetailsRow(props: {
-  label: string;
-  children: import('solid-js').JSX.Element;
-}) {
-  return (
-    <>
-      <span class="text-ink-muted">{props.label}</span>
-      <div class="flex items-center gap-2 min-w-0">{props.children}</div>
-    </>
+    </SidePanel.Grid>
   );
 }
 
@@ -207,12 +193,21 @@ function FolderLink(props: { projectId: string; projectName: string }) {
 function OwnerValue(props: { ownerId: string }) {
   const [displayName] = useDisplayName(tryMacroId(props.ownerId));
   return (
-    <div class="rounded-full flex gap-1 items-center px-1">
-      <div class="flex">
-        <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />
-      </div>
+    <SidePanel.Pill>
+      <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />
       <span class="truncate">{displayName()}</span>
-    </div>
+    </SidePanel.Pill>
+  );
+}
+
+function DateValueDisplay(props: { value: DateValue }) {
+  return (
+    <SidePanel.Pill>
+      <ClockIcon class="size-3 shrink-0" />
+      <span class="truncate">
+        {formatDate(props.value, { showTime: true })}
+      </span>
+    </SidePanel.Pill>
   );
 }
 
@@ -258,27 +253,6 @@ function PropertiesSectionContent(props: {
     onCleanup(unregister);
   });
 
-  const docMetadataQuery = useDocumentMetadataQuery(() => blockId);
-  const createdByProperty = createMemo<Property | null>(() => {
-    if (entityType !== 'TASK') return null;
-    const ownerId = docMetadataQuery.data?.owner;
-    if (!ownerId) return null;
-    const now = new Date();
-    return {
-      propertyId: `${blockId}-created-by`,
-      propertyDefinitionId: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
-      displayName: 'Created By',
-      isMultiSelect: false,
-      isMetadata: true,
-      owner: { scope: 'system' },
-      specificEntityType: 'USER',
-      createdAt: now,
-      updatedAt: now,
-      valueType: 'ENTITY',
-      value: [{ entity_id: ownerId, entity_type: 'USER' }],
-    };
-  });
-
   const filteredPinnedProperties = createMemo(() => {
     const allProps = properties();
     const pinnedIds = pinnedPropertyIds();
@@ -291,8 +265,7 @@ function PropertiesSectionContent(props: {
           pinnedIds.includes(prop.propertyId))
     );
 
-    const createdBy = createdByProperty();
-    return createdBy ? [createdBy, ...pinned] : pinned;
+    return sortPinnedProperties(pinned);
   });
 
   const [pendingPinDefIds, setPendingPinDefIds] = createSignal<Set<string>>(
@@ -367,46 +340,38 @@ function PropertiesSectionContent(props: {
         <div class="text-failure-ink text-center py-4 text-xs">{error()}</div>
       }
     >
-      <Suspense>
-        <div class="text-xs">
-          <PropertiesProvider
-            entityType={entityType}
-            canEdit={props.canEdit}
-            documentName={props.documentName}
-            properties={filteredPinnedProperties}
-            onRefresh={refetch}
-            onPropertyAdded={handlePropertyAdded}
-            onPropertyDeleted={handlePropertyDeleted}
-            onPropertyPinned={handlePropertyPinned}
-            onPropertyUnpinned={handlePropertyUnpinned}
-            pinnedPropertyIds={pinnedPropertyIds}
-            saveHandler={saveHandler}
-          >
-            <Show when={isLoading()}>
-              <div class="flex items-center justify-center py-8">
-                <div class="w-5 h-5 animate-spin">
-                  <LoadingSpinner />
-                </div>
-              </div>
-            </Show>
+      <div class="text-xs">
+        <PropertiesProvider
+          entityType={entityType}
+          canEdit={props.canEdit}
+          documentName={props.documentName}
+          properties={filteredPinnedProperties}
+          onRefresh={refetch}
+          onPropertyAdded={handlePropertyAdded}
+          onPropertyDeleted={handlePropertyDeleted}
+          onPropertyPinned={handlePropertyPinned}
+          onPropertyUnpinned={handlePropertyUnpinned}
+          pinnedPropertyIds={pinnedPropertyIds}
+          saveHandler={saveHandler}
+        >
+          <Show when={isLoading()}>
+            <SidePanel.Loading />
+          </Show>
 
-            <Show when={filteredPinnedProperties().length > 0}>
-              <PanelContainer
-                properties={filteredPinnedProperties}
-                isLoading={isLoading}
-                error={error}
-              />
-            </Show>
+          <Show when={filteredPinnedProperties().length > 0}>
+            <SidePanel.Grid class="py-2">
+              <For each={filteredPinnedProperties()}>
+                {(property) => <SidePanelPropertyRow property={property} />}
+              </For>
+            </SidePanel.Grid>
+          </Show>
 
-            <Show when={props.canEdit}>
-              <div class="py-2">
-                <AddPinnedPropertyButton />
-              </div>
-            </Show>
-            <Modals />
-          </PropertiesProvider>
-        </div>
-      </Suspense>
+          <Show when={props.canEdit}>
+            <AddPinnedPropertyButton />
+          </Show>
+          <Modals />
+        </PropertiesProvider>
+      </div>
     </Show>
   );
 }
@@ -415,12 +380,184 @@ function AddPinnedPropertyButton() {
   const { openPropertySelector } = usePropertiesContext();
   return (
     <button
-      class="flex items-center gap-1 opacity-75 hover:opacity-50 transition-opacity"
       onClick={openPropertySelector}
+      class={cn(
+        'inline-flex items-center gap-1.5 m-px ring ring-edge-muted bg-surface',
+        'px-2 py-1 leading-tight rounded-full text-ink-muted',
+        'hover:bg-hover hover:text-ink transition-colors'
+      )}
     >
-      <Plus class="w-3 h-3 mr-2" />
-      <span class="text-ink-muted">Add property</span>
+      <Plus class="size-3" />
+      <span>Add property</span>
     </button>
+  );
+}
+
+// Side-panel ordering: Status, Priority, Assignees pinned to the top so the
+// most-frequently scanned task properties always sit in the same place; the
+// remaining properties keep their incoming order below.
+const PINNED_ORDER: readonly string[] = [
+  SYSTEM_PROPERTY_IDS.STATUS,
+  SYSTEM_PROPERTY_IDS.PRIORITY,
+  SYSTEM_PROPERTY_IDS.ASSIGNEES,
+];
+
+function sortPinnedProperties<T extends Property>(properties: T[]): T[] {
+  const rank = (id: string) => {
+    const i = PINNED_ORDER.indexOf(id);
+    return i === -1 ? PINNED_ORDER.length : i;
+  };
+  return [...properties].sort(
+    (a, b) => rank(a.propertyDefinitionId) - rank(b.propertyDefinitionId)
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pinned property rows — sidepanel-specific. Rendered into a two-column grid:
+// the displayName label sits in the left column, the value pill in the right.
+// Pills have no ring in this layout (the grid handles spacing/alignment).
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SidePanelPropertyRow(props: { property: Property }) {
+  const ctx = usePropertiesContext();
+  const blockId = useBlockId();
+  const t = () => props.property.valueType;
+  const isMulti = () => !!props.property.isMultiSelect;
+
+  const isMultiValueRow = () =>
+    isMulti() &&
+    (t() === 'SELECT_STRING' || t() === 'SELECT_NUMBER' || t() === 'ENTITY');
+  const isInputType = () =>
+    t() === 'STRING' || t() === 'NUMBER' || t() === 'LINK' || t() === 'BOOLEAN';
+
+  return (
+    <>
+      <span
+        class="text-ink-muted truncate self-center"
+        title={props.property.displayName}
+      >
+        {props.property.displayName}
+      </span>
+      <div class="min-w-0 self-center">
+        <PropertyNS.Root
+          property={props.property}
+          canEdit={ctx.canEdit}
+          onSave={ctx.saveHandler.saveProperty}
+          onRefresh={ctx.onRefresh}
+        >
+          <Switch fallback={<SinglePill property={props.property} />}>
+            <Match when={isInputType()}>
+              <InputValue />
+            </Match>
+            <Match when={isMultiValueRow()}>
+              <MultiValue property={props.property} />
+            </Match>
+          </Switch>
+          <PropertyNS.PopoverEditor
+            entitySelfFilter={{ entityType: ctx.entityType, blockId }}
+          />
+        </PropertyNS.Root>
+      </div>
+    </>
+  );
+}
+
+function SinglePill(props: { property: Property }) {
+  const ctx = usePropertiesContext();
+  const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
+  const empty = () => !hasValue(props.property);
+
+  return (
+    <PropertyNS.Tooltip property={props.property}>
+      <PropertyNS.EditTrigger
+        class={cn(SidePanel.pillClass, 'w-fit', {
+          'hover:bg-hover': !isReadOnly(),
+        })}
+      >
+        <Show when={!empty()} fallback={<SidePanel.EmptyPill />}>
+          <PropertyNS.Icon property={props.property} class="size-3 shrink-0" />
+          <PropertyNS.Text property={props.property} />
+        </Show>
+        <PropertyNS.Caret />
+      </PropertyNS.EditTrigger>
+    </PropertyNS.Tooltip>
+  );
+}
+
+function UserStackPill(props: { property: Property }) {
+  const ctx = usePropertiesContext();
+  const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
+  const empty = () => !hasValue(props.property);
+
+  return (
+    <PropertyNS.Tooltip property={props.property}>
+      <PropertyNS.EditTrigger
+        class={cn(SidePanel.pillClass, 'w-fit', {
+          'hover:bg-hover': !isReadOnly(),
+        })}
+      >
+        <Show when={!empty()} fallback={<SidePanel.EmptyPill />}>
+          <PropertyNS.UserStack property={props.property} maxUsers={3} />
+          <PropertyNS.Text property={props.property} />
+        </Show>
+        <PropertyNS.Caret />
+      </PropertyNS.EditTrigger>
+    </PropertyNS.Tooltip>
+  );
+}
+
+function MultiValue(props: { property: Property }) {
+  const ctx = usePropertiesContext();
+  const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
+  const isEntity = () => props.property.valueType === 'ENTITY';
+  const isUserEntity = () =>
+    isEntity() && props.property.specificEntityType === 'USER';
+
+  return (
+    <Show
+      when={!isUserEntity()}
+      fallback={<UserStackPill property={props.property} />}
+    >
+      <PropertyNS.Tooltip property={props.property}>
+        <Show when={!isEntity()} fallback={<PropertyNS.Display />}>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <PropertyNS.Chips
+              property={props.property}
+              renderChip={(chip) => (
+                <span
+                  class={cn(SidePanel.pillClass, 'text-xs max-w-35 bg-hover')}
+                >
+                  <PropertyValueIcon
+                    optionId={chip.key}
+                    class="size-3 shrink-0"
+                  />
+                  <span class="truncate">{chip.label}</span>
+                </span>
+              )}
+            />
+            <Show when={!isReadOnly()}>
+              <PropertyNS.EditTrigger
+                class={cn(
+                  'inline-flex items-center justify-center size-5 rounded-full',
+                  'text-ink-muted hover:bg-hover hover:text-ink transition-colors'
+                )}
+                aria-label={`Add ${props.property.displayName}`}
+              >
+                <Plus class="size-3" />
+              </PropertyNS.EditTrigger>
+            </Show>
+          </div>
+        </Show>
+      </PropertyNS.Tooltip>
+    </Show>
+  );
+}
+
+function InputValue() {
+  return (
+    <div class="min-w-0 w-full">
+      <PropertyNS.Display />
+    </div>
   );
 }
 
@@ -472,33 +609,21 @@ function NotificationsSectionConditional(props: { entity: Entity }) {
     () => notifications().filter((n) => !n.viewed_at).length
   );
 
-  const title = () => (
-    <>
-      Notifications
-      <Show when={unreadCount() > 0}>
-        {' '}
-        <span class="text-ink-extra-muted">({unreadCount()})</span>
-      </Show>
-    </>
-  );
-
   return (
     <Show when={count() > 0}>
-      <SidePanel.Section id="notifications" title={title()} order={40}>
-        <Suspense
-          fallback={
-            <div class="flex justify-center py-8">
-              <div class="animate-spin rounded-full size-6 border-b-2 border-ink-muted" />
-            </div>
-          }
-        >
-          <div class="text-xs">
-            <Notifications
-              entity={props.entity}
-              notificationSource={notificationSource}
-            />
-          </div>
-        </Suspense>
+      <SidePanel.Section
+        id="notifications"
+        title={
+          <SidePanel.CountTitle label="Notifications" count={unreadCount()} />
+        }
+        order={40}
+      >
+        <div class="text-xs">
+          <Notifications
+            entity={props.entity}
+            notificationSource={notificationSource}
+          />
+        </div>
       </SidePanel.Section>
     </Show>
   );
@@ -528,30 +653,81 @@ function ReferencesSectionConditional(props: { documentId: string }) {
 
   const count = createMemo(() => references()?.length ?? 0);
 
-  const title = () => (
-    <>
-      References
-      <Show when={count() > 0}>
-        {' '}
-        <span class="text-ink-extra-muted">({count()})</span>
-      </Show>
-    </>
+  return (
+    <Show when={count() > 0}>
+      <SidePanel.Section
+        id="references"
+        title={<SidePanel.CountTitle label="References" count={count()} />}
+        order={50}
+      >
+        <div class="text-xs">
+          <References documentId={props.documentId} />
+        </div>
+      </SidePanel.Section>
+    </Show>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GitHub Section (conditional)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function GithubSectionConditional(props: {
+  documentId: string;
+  isTask: boolean;
+}) {
+  const query = useDocumentGithubPullRequestsQuery(
+    props.documentId,
+    props.isTask
+  );
+
+  const pullRequests = createMemo((): GithubPullRequest[] => {
+    if (!props.isTask || query.isLoading || query.isError) return [];
+    return query.data?.pullRequests ?? [];
+  });
+  const count = createMemo(() => pullRequests().length);
 
   return (
     <Show when={count() > 0}>
-      <SidePanel.Section id="references" title={title()} order={50}>
-        <Suspense
-          fallback={
-            <div class="flex justify-center py-8">
-              <div class="animate-spin rounded-full size-6 border-b-2 border-ink-muted" />
+      <SidePanel.Section
+        id="github"
+        title={<SidePanel.CountTitle label="GitHub" count={count()} />}
+        order={35}
+      >
+        <SidePanel.Grid>
+          <SidePanel.Row label={count() === 1 ? 'PR' : 'PRs'}>
+            <div class="flex min-w-0 flex-wrap items-center gap-x-1">
+              <For each={pullRequests()}>
+                {(pr, i) => (
+                  <>
+                    <Show when={i() > 0}>
+                      <span class="text-ink-extra-muted">,</span>
+                    </Show>
+                    <a
+                      href={pr.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="inline-flex min-w-0 items-center gap-1 text-ink hover:text-ink"
+                      title={
+                        pr.name?.trim()
+                          ? `${pr.name.trim()} ${pr.displayName}`
+                          : pr.displayName
+                      }
+                    >
+                      <GithubIcon
+                        class="size-3 shrink-0 text-ink-extra-muted"
+                        aria-hidden="true"
+                      />
+                      <span class="truncate underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current">
+                        {pr.displayName}
+                      </span>
+                    </a>
+                  </>
+                )}
+              </For>
             </div>
-          }
-        >
-          <div class="text-xs">
-            <References documentId={props.documentId} />
-          </div>
-        </Suspense>
+          </SidePanel.Row>
+        </SidePanel.Grid>
       </SidePanel.Section>
     </Show>
   );

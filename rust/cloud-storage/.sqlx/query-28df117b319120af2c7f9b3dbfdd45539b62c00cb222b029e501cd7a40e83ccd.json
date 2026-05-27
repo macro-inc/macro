@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT github_key\n            FROM github_pr_tasks\n            WHERE task_id = $1\n            ORDER BY created_at ASC, github_key ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "github_key",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "28df117b319120af2c7f9b3dbfdd45539b62c00cb222b029e501cd7a40e83ccd"
+}

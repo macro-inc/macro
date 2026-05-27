@@ -1,5 +1,5 @@
-use ai::types::AssistantMessagePart;
-use ai::types::Model;
+use agent::AgentModel;
+use agent::types::AssistantMessagePart;
 use model_entity::Entity;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -26,7 +26,7 @@ pub struct SendChatMessagePayload {
     /// Id of the chat the message belongs to
     pub chat_id: String,
     /// the chate model to respond with
-    pub model: Model,
+    pub model: AgentModel,
     /// Additional system instructions appended to the base system prompt
     #[serde(skip_serializing_if = "Option::is_none")]
     pub additional_instructions: Option<String>,
@@ -121,8 +121,8 @@ pub enum ChatStream {
     /// Notifies the client that the available models have changed
     ModelSelectionChanged {
         chat_id: String,
-        available_models: Vec<Model>,
-        new_model: Option<Model>,
+        available_models: Vec<AgentModel>,
+        new_model: Option<AgentModel>,
     },
 
     TokenCountChanged {
@@ -174,7 +174,10 @@ pub enum ChatStream {
 #[serde(rename_all = "snake_case", tag = "stream_error")]
 pub enum StreamError {
     #[error("provider error")]
-    ProviderError { stream_id: String, model: Model },
+    ProviderError {
+        stream_id: String,
+        model: AgentModel,
+    },
 
     #[error("model context overflow")]
     ModelContextOverflow { stream_id: String },

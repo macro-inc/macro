@@ -1,0 +1,2 @@
+ALTER TABLE call_records
+    ADD COLUMN IF NOT EXISTS share_with_team BOOLEAN NOT NULL DEFAULT TRUE;

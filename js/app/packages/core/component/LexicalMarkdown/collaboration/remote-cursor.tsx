@@ -17,7 +17,6 @@ import {
   type JSXElement,
   on,
   type Setter,
-  Show,
 } from 'solid-js';
 import { For, Portal } from 'solid-js/web';
 import type { FloatingStyle } from '../plugins/find-and-replace';
@@ -317,23 +316,23 @@ function RemoteCursorsOverlay(props: RemoteCursorsOverlayProps) {
                   }}
                 </For>
               </Portal>
-              <Show when={shouldShow()}>
-                <div
-                  class={cn(
-                    'm-0 text-transparent absolute pointer-events-none w-auto! p-2 flex items-center'
-                  )}
-                  style={{
-                    ...startStyle,
-                    top: `-${userTagHeight + 2}px`,
-                    left: startStyle.width,
-                    height: `${userTagHeight}px`,
-                    'background-color': tagName,
-                    color: textColor,
-                  }}
-                >
-                  <p class="text-xs font-mono">{userName}</p>
-                </div>
-              </Show>
+              <div
+                class={cn(
+                  'hidden m-0 text-transparent absolute pointer-events-none px-2 rounded-xs items-center',
+                  shouldShow() && 'flex'
+                )}
+                style={{
+                  transform: startStyle?.transform,
+                  top: `-${userTagHeight + 2}px`,
+                  left: startStyle.width,
+                  'background-color': tagName,
+                  color: textColor,
+                  height: `${userTagHeight}px`,
+                  width: 'fit-content',
+                }}
+              >
+                <p class="text-xs">{userName}</p>
+              </div>
             </>
           );
         }}

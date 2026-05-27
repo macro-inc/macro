@@ -100,6 +100,7 @@ pub async fn delete_from_sfs(
 }
 
 /// Deletes the mapping row from email_sfs_mappings by destination URL.
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn delete_mapping_from_db(db: &PgPool, destination_url: &str) -> anyhow::Result<bool> {
     let result = sqlx::query("DELETE FROM public.email_sfs_mappings WHERE destination = $1")
         .bind(destination_url)
@@ -112,6 +113,7 @@ pub async fn delete_mapping_from_db(db: &PgPool, destination_url: &str) -> anyho
 
 /// Deletes multiple mapping rows from email_sfs_mappings by destination URLs.
 /// Returns the number of rows deleted.
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn bulk_delete_mappings_from_db(
     db: &PgPool,
     destination_urls: &[String],

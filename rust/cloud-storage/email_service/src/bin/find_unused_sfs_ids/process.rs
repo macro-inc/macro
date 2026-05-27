@@ -14,6 +14,7 @@ const UUID_LENGTH: usize = 36;
 
 /// Streams mapping destinations from the database, extracts UUIDs, and writes them to a file.
 /// Returns the number of UUIDs written.
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn stream_mapping_uuids_to_file(db: &PgPool, file_path: &Path) -> anyhow::Result<usize> {
     let file = File::create(file_path)
         .with_context(|| format!("Failed to create file: {}", file_path.display()))?;

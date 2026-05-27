@@ -1,5 +1,5 @@
-import type { Property } from '@core/component/Properties/types';
 import { applyDurationToDate } from '@core/util/dateSearch/dateParser';
+import type { Property } from '@property/types';
 import type {
   ChannelEntity,
   ChatEntity,

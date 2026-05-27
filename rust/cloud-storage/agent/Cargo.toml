@@ -1,0 +1,27 @@
+[package]
+edition = "2024"
+name = "agent"
+publish = false
+version = "0.1.0"
+
+[features]
+debug-messages = []
+
+[dependencies]
+anyhow = { workspace = true }
+async-openai = { workspace = true }
+async-stream = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+rig-core = "0.37"
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+utoipa = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+ai_toolset = { path = "../ai_toolset" }
+attachment = { path = "../attachment" }
+macro_user_id = { path = "../macro_user_id" }

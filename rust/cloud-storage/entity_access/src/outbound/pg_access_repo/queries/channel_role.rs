@@ -33,6 +33,7 @@ fn parse_role(s: &str) -> ParticipantRole {
 /// - Organization channels: default to Member only if user's org matches
 /// - Private/DM: require explicit participation
 #[tracing::instrument(err, skip(pool))]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn get_channel_role(
     pool: &PgPool,
     channel_id: &Uuid,

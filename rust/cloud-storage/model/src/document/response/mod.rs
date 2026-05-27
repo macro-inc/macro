@@ -209,6 +209,9 @@ pub struct CreateDocumentRequest {
     pub job_id: Option<String>,
     //// Optional project id to be used to what project the document belongs to.
     pub project_id: Option<uuid::Uuid>,
+    /// Team to assign the task number within when creating a task document. If omitted,
+    /// the service may infer it only when the creator belongs to exactly one team.
+    pub team_id: Option<uuid::Uuid>,
     /// Internal only field that links the document created to the specified email attachment by
     /// creating a row in the document_email table.
     pub email_attachment_id: Option<Uuid>,

@@ -2,7 +2,7 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { Popover } from '@kobalte/core/popover';
-import UserCircle from '@phosphor/user-circle.svg';
+import UsersThree from '@phosphor/users-three.svg';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { cn, Surface } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -143,14 +143,14 @@ export function InCallParticipantsListPopover(
         as="button"
         type="button"
         class={cn(
-          'inline-flex items-center justify-center rounded-full bg-transparent p-0 transition-colors hover:bg-accent/15 text-accent',
+          'inline-flex items-center justify-center rounded-md bg-transparent p-0.5 transition-colors text-ink-muted hover:text-ink hover:bg-ink-muted/[0.06]',
           props.class
         )}
         aria-haspopup="dialog"
         aria-expanded={open()}
         aria-label="Everyone in call"
       >
-        <UserCircle class="block size-4" />
+        <UsersThree class="block size-4" />
       </Popover.Trigger>
 
       <Popover.Portal>

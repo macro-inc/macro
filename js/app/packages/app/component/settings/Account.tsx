@@ -11,12 +11,15 @@ import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
 } from '@core/constant/allBlocks';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   DEV_MODE_ENV,
   ENABLE_AUTO_UPDATE_UI,
   ENABLE_EMAIL,
   ENABLE_PROFILE_PICTURES,
+  ENABLE_NEW_PRICING_OVERRIDE,
 } from '@core/constant/featureFlags';
+import { useUserTeamsQuery } from '@queries/team';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { fileSelector } from '@core/directive/fileSelector';
 import {
@@ -33,11 +36,15 @@ import {
   createResource,
   createSignal,
   type JSX,
+  Match,
   Show,
+  Switch,
 } from 'solid-js';
 import { usePermissions } from '@core/context/user';
 import { useSettingsState } from '@core/constant/SettingsState';
 import PaywallComponent from '../paywall/PaywallComponent';
+import PaywallTeamMemberView from '../paywall/PaywallTeamMemberView';
+import PaywallTeamOwnerView from '../paywall/PaywallTeamOwnerView';
 import {
     useEmailLinks,
   useEmailLinksStatus,
@@ -120,6 +127,20 @@ export function Account() {
 
   const { disconnect: disconnectEmail } = useEmailLinks();
 
+  const userTeamsQuery = useUserTeamsQuery();
+  const ownedTeam = createMemo(() => {
+    const teams = userTeamsQuery.data;
+    const uid = userId();
+    if (!teams || !uid) return undefined;
+    return teams.find((t) => t.owner_id === uid);
+  });
+  const isNonOwnerTeamMember = createMemo(() => {
+    const teams = userTeamsQuery.data;
+    const uid = userId();
+    if (!teams || !uid) return false;
+    return teams.some((t) => t.owner_id !== uid);
+  });
+
   const userName = useUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<
     string | undefined
@@ -187,11 +208,34 @@ export function Account() {
           <Panel.Toolbar class="h-full w-full">
             <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
               <div class="px-4 py-2 w-full">
-                <PaywallComponent
-                  hideCloseButton
-                  cb={() => {}}
-                  handleGuest={() => toggleSettings()}
-                />
+                <ShowFeatureFlag
+                  key="enable-new-pricing"
+                  enabledOverride={ENABLE_NEW_PRICING_OVERRIDE}
+                  fallback={
+                    <PaywallComponent
+                      hideCloseButton
+                      cb={() => {}}
+                      handleGuest={() => toggleSettings()}
+                    />
+                  }
+                >
+                  <Switch
+                    fallback={
+                      <PaywallComponent
+                        hideCloseButton
+                        cb={() => {}}
+                        handleGuest={() => toggleSettings()}
+                      />
+                    }
+                  >
+                    <Match when={ownedTeam()}>
+                      {(team) => <PaywallTeamOwnerView team={team()} />}
+                    </Match>
+                    <Match when={isNonOwnerTeamMember()}>
+                      <PaywallTeamMemberView />
+                    </Match>
+                  </Switch>
+                </ShowFeatureFlag>
               </div>
             </Show>
           </Panel.Toolbar>
@@ -542,7 +586,7 @@ function NameInput(props: {
   };
 
   return (
-    <div class="ph-no-capture group relative flex items-center gap-1 rounded-sm h-7 mobile:h-9 px-2 border text-xs bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink">
+    <div class="ph-no-capture group relative flex items-center gap-1 rounded-lg h-7 mobile:h-9 px-2 border text-xs bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent">
       <input
         type="text"
         class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-xs placeholder:text-ink-extra-muted"
@@ -550,8 +594,8 @@ function NameInput(props: {
         onInput={(e) => setInputValue(e.currentTarget.value)}
         onFocus={() => setIsFocused(true)}
         onBlur={() => {
-          setIsFocused(false);
           commit();
+          setIsFocused(false);
         }}
         onKeyDown={handleKeyDown}
         placeholder={props.placeholder}

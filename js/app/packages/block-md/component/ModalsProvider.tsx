@@ -12,7 +12,6 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { blockNameToItemType } from '@service-storage/client';
 import { createSignal, type ParentProps } from 'solid-js';
 import { HistoryDrawer } from './History';
-import { MarkdownPropertiesDrawer } from './MarkdownPropertiesModal';
 
 export function ModalsProvider(props: ParentProps) {
   const blockId = useBlockId();
@@ -40,7 +39,6 @@ export function ModalsProvider(props: ParentProps) {
       />
       <ReferencesDrawer documentId={blockId} documentName={name()} />
       <HistoryDrawer documentId={blockId} />
-      <MarkdownPropertiesDrawer documentId={blockId} />
       <DetailsDrawer documentId={blockId} />
       <ShareBlockModal />
     </ShareDialogContext.Provider>

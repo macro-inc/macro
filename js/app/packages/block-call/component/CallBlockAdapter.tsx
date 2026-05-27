@@ -1,3 +1,4 @@
+import { SidePanel } from '@app/component/side-panel';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-call/constants';
 import { useBlockId } from '@core/block';
@@ -11,6 +12,7 @@ import { createSignal, Match, Switch } from 'solid-js';
 import { CallRecordingBody } from './CallRecording/CallRecordingBody';
 import { CallRecordingSplitHeaderLoading } from './CallRecording/CallRecordingSplitHeader';
 import { ModalsProvider } from './ModalsProvider';
+import { CallSidePanelSections } from './sidepanel/CallSidePanelSections';
 
 function isUnauthorized(error: Error | null): boolean {
   if (error instanceof ThrownResultError) {
@@ -64,10 +66,15 @@ export function CallBlockAdapter(props: CallBlockProps) {
         <Switch>
           <Match when={callRecord.data}>
             {(data) => (
-              <CallRecordingBody
-                data={data}
-                transcriptTarget={transcriptTarget}
-              />
+              <SidePanel.Layout>
+                <CallSidePanelSections record={data} />
+                <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
+                  <CallRecordingBody
+                    data={data}
+                    transcriptTarget={transcriptTarget}
+                  />
+                </div>
+              </SidePanel.Layout>
             )}
           </Match>
           <Match when={callRecord.isLoading}>

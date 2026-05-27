@@ -1,6 +1,6 @@
 //! Query to update a chat message's content.
 
-use ai::types::ChatMessageContent;
+use agent::types::ChatMessageContent;
 use sqlx::PgPool;
 
 /// Update the content of a specific message, scoped to the chat.

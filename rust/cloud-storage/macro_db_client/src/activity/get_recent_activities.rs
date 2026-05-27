@@ -9,6 +9,7 @@ use sqlx::{Pool, Postgres, Row};
 use system_properties::{StatusOption, SystemPropertyKey};
 
 #[tracing::instrument(skip(db))]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn get_recent_activities(
     db: Pool<Postgres>,
     user_id: &str,

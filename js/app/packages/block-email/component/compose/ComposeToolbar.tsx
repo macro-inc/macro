@@ -2,19 +2,17 @@ import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHe
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
 import { FormatButtons } from '@channel/Input/FormatButtons';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import { fileSelector } from '@core/directive/fileSelector';
 import { isMobile } from '@core/mobile/isMobile';
 import { plural } from '@core/util/string';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import PaperclipIcon from '@phosphor/paperclip.svg?component-solid';
 import TextAa from '@phosphor/text-aa.svg';
 import Trash from '@phosphor/trash.svg';
 import DotsThreeIcon from '@phosphor-icons/core/bold/dots-three-bold.svg?component-solid';
 import PaperclipHorizontalIcon from '@phosphor-icons/core/regular/paperclip-horizontal.svg?component-solid';
-import { Button, SendButton, Tooltip } from '@ui';
+import { Button, Dropdown, SendButton, Tooltip } from '@ui';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,
@@ -226,20 +224,18 @@ function MobileToolbar(props: {
             tooltip="Send email"
           />
         </Tooltip>
-        <DropdownMenu placement="bottom-end">
-          <DropdownMenu.Trigger as={Button} class="aspect-square p-1">
+        <Dropdown placement="bottom-end">
+          <Dropdown.Trigger class="aspect-square p-1">
             <DotsThreeIcon class="h-4.5" />
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenuContent>
-              <MenuItem
-                text="Delete Draft"
-                disabled={!ctx.hasDraft()}
-                onClick={ctx.onDelete}
-              />
-            </DropdownMenuContent>
-          </DropdownMenu.Portal>
-        </DropdownMenu>
+          </Dropdown.Trigger>
+          <Dropdown.Content>
+            <Dropdown.Group>
+              <Dropdown.Item disabled={!ctx.hasDraft()} onSelect={ctx.onDelete}>
+                <span class="flex-1 truncate">Delete Draft</span>
+              </Dropdown.Item>
+            </Dropdown.Group>
+          </Dropdown.Content>
+        </Dropdown>
       </div>
     </SplitHeaderRight>
   );

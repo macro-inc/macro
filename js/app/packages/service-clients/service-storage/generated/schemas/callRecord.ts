@@ -50,6 +50,8 @@ this value when present, falling back to `started_at` otherwise. */
   recordingUrl?: CallRecordRecordingUrl;
   /** The RTC room name. */
   roomName: string;
+  /** Whether the call is shared with the creator's team. */
+  shareWithTeam: boolean;
   /** When the call started (created_at for active, started_at for archived). */
   startedAt: string;
   /** AI-generated summary of the call. Only set on archived `call_records`

@@ -174,6 +174,20 @@ impl TeamRepositoryImpl {
         .execute(&mut *transaction)
         .await?;
 
+        // Seed the team's CRM settings row. `crm_enabled` defaults to
+        // FALSE — toggled on later via `PATCH /team/crm`. Created in
+        // the same tx as the team itself so the row always exists for
+        // any team that exists.
+        sqlx::query!(
+            r#"
+            INSERT INTO team_crm_settings (team_id)
+            VALUES ($1)
+            "#,
+            &team.id,
+        )
+        .execute(&mut *transaction)
+        .await?;
+
         transaction.commit().await?;
 
         Ok(team)
@@ -263,6 +277,7 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn has_user_trialed(&self, user_id: &MacroUserIdStr<'_>) -> Result<bool, TeamError> {
         let has_trialed = sqlx::query_scalar::<_, bool>(
             r#"
@@ -306,6 +321,22 @@ impl TeamRepository for TeamRepositoryImpl {
         };
 
         Ok(team_subscription_id)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_payment_status(&self, team_id: &uuid::Uuid) -> Result<bool, TeamError> {
+        let paying = sqlx::query_scalar!(
+            r#"
+            SELECT paying
+            FROM team
+            WHERE id = $1
+            "#,
+            team_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(paying)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -489,6 +520,7 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn remove_user_from_team(
         &self,
         team_id: &uuid::Uuid,
@@ -614,6 +646,31 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn update_team_payment_status(
+        &self,
+        team_id: &uuid::Uuid,
+        paying: bool,
+    ) -> Result<(), TeamError> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE team
+            SET paying = $2
+            WHERE id = $1
+            "#,
+            team_id,
+            paying,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(TeamError::TeamDoesNotExist);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn delete_team(&self, team_id: &uuid::Uuid) -> Result<(), TeamError> {
         sqlx::query!(
             r#"
@@ -672,6 +729,7 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn accept_team_invite(
         &self,
         team_invite_id: &uuid::Uuid,
@@ -764,6 +822,7 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn rollback_accept_team_invite(
         &self,
         accepted_invite: &AcceptedTeamInvite<'_>,
@@ -814,6 +873,7 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn rollback_remove_user_from_team(
         &self,
         removed_member: &TeamMember<'_>,
@@ -1112,6 +1172,7 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn patch_team(
         &self,
         team_id: &uuid::Uuid,

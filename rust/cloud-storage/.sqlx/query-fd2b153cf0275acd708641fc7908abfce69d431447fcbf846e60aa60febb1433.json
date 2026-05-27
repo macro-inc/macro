@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO foreign_entity (\n                id,\n                foreign_entity_id,\n                foreign_entity_source,\n                metadata,\n                stored_for_id,\n                stored_for_auth_entity\n            )\n            VALUES ($1, $2, $3, $4, $5, $6)\n            RETURNING\n                id as \"id!: Uuid\",\n                foreign_entity_id as \"foreign_entity_id!: String\",\n                foreign_entity_source as \"foreign_entity_source!: String\",\n                metadata as \"metadata!: serde_json::Value\",\n                stored_for_id as \"stored_for_id!: String\",\n                stored_for_auth_entity as \"stored_for_auth_entity!: String\",\n                created_at as \"created_at!: DateTime<Utc>\",\n                updated_at as \"updated_at!: DateTime<Utc>\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "foreign_entity_id!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "foreign_entity_source!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "metadata!: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "stored_for_id!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "stored_for_auth_entity!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at!: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at!: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "fd2b153cf0275acd708641fc7908abfce69d431447fcbf846e60aa60febb1433"
+}

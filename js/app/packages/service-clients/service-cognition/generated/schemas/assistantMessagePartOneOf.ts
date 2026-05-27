@@ -6,7 +6,11 @@
  */
 import type { AssistantMessagePartOneOfType } from './assistantMessagePartOneOfType';
 
+/**
+ * Plain text produced by the model.
+ */
 export type AssistantMessagePartOneOf = {
+  /** The text content. */
   text: string;
   type: AssistantMessagePartOneOfType;
 };

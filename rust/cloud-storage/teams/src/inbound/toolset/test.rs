@@ -1,6 +1,6 @@
 use super::list_team_members::ListTeamMembers;
-use ai::generate_tool_input_schema;
-use ai::tool::types::tool_object::validate_tool_schema;
+use ai_toolset::generate_tool_input_schema;
+use ai_toolset::tool_object::validate_tool_schema;
 
 #[test]
 fn test_list_team_members_schema_validation() {

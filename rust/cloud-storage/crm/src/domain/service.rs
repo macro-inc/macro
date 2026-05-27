@@ -4,8 +4,9 @@ use crate::domain::{
     companies_repo::CompaniesRepository,
     company_metadata_resolver::CompanyMetadataResolver,
     generic_email_domains::is_generic_email_domain,
-    model::{CrmCompany, CrmError},
+    model::{CrmCompany, CrmError, CrmScopePrecheck},
 };
+use chrono::{DateTime, Utc};
 
 /// The CrmService exposes operations over CRM records (companies, their
 /// domains and contacts).
@@ -22,15 +23,21 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// Idempotently records that `email` was seen from the mailbox
     /// identified by `link_id`, for the team `team_id`. Upserts
     /// `crm_companies` (+ `crm_domains`), `crm_contacts`, and
-    /// `crm_contact_sources` in a single transaction. If the team has
-    /// opted the contact's domain out (`crm_companies.email_sync = false`)
-    /// the call is a no-op.
+    /// `crm_contact_sources` in a single transaction. The call is a
+    /// no-op when either killswitch is engaged: the team-level
+    /// `team_crm_settings.crm_enabled = false`, or the per-domain
+    /// `crm_companies.email_sync = false` for the contact's domain.
     ///
     /// `name` is the display name observed for `email` on this user's
     /// link — typically `email_contacts.name`, which the caller looks up
     /// before invoking. The first non-NULL name wins for the
     /// `crm_contacts` row; later populates from other team members can't
     /// overwrite it. Pass `None` when no display name is available.
+    ///
+    /// `user_email` is the email address registered against `link_id`
+    /// (i.e. the user's own mailbox). When the contact's domain matches
+    /// the user's, the call is a no-op: intra-company correspondence
+    /// would just fill the team's CRM with the team itself.
     ///
     /// Before the populate transaction, this method ensures
     /// `crm_domain_directory` has an entry for the email's domain — if
@@ -40,12 +47,39 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// failure — that's the negative cache). The directory write is its
     /// own transaction so the populate tx never holds locks across an
     /// HTTP fetch.
+    ///
+    /// `first_at` / `last_at` are the contact's known activity range
+    /// for this populate. Per-message paths pass the message's
+    /// `internal_date_ts` as both (single message = single endpoint).
+    /// The historical seed (`populate_crm_for_user`) pre-aggregates
+    /// MIN/MAX over the contact's matching messages and passes the
+    /// real range, so a single populate per contact stamps the CRM
+    /// rows with the full span. Callers without a real timestamp pass
+    /// `Utc::now()`. `created_at` / `updated_at` keep their
+    /// row-lifecycle semantics (DEFAULT `now()` /
+    /// `set_crm_updated_at` trigger).
+    ///
+    /// `is_sent` flags whether the populating message was sent by the
+    /// user. The write matrix:
+    ///
+    /// | `is_sent` | No `crm_companies` row | Existing `crm_companies` row (`email_sync=true`) |
+    /// |---|---|---|
+    /// | `true`  | INSERT company + contact + source; `first_interaction = $first_at`, `last_interaction = $last_at`. | UPDATE company `first=LEAST(stored, $first_at), last=GREATEST(stored, $last_at)` + upsert contact (same merge) + upsert source. |
+    /// | `false` | **No-op** — no domain-metadata resolve, no inserts. | UPDATE company `last=GREATEST(stored, $last_at)` only (do NOT touch `first_interaction`) + upsert contact (INSERT sets both endpoints; ON CONFLICT bumps `last` only) + upsert source. |
+    ///
+    /// The `email_sync=false` per-domain killswitch short-circuits in
+    /// both directions.
+    #[allow(clippy::too_many_arguments)]
     fn populate_contact(
         &self,
         team_id: &uuid::Uuid,
         link_id: &uuid::Uuid,
+        user_email: &str,
         email: &str,
         name: Option<&str>,
+        first_at: DateTime<Utc>,
+        last_at: DateTime<Utc>,
+        is_sent: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
     /// Reverses [`populate_contact`] for one `(link_id, email)`. Drops the
@@ -97,6 +131,51 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         &self,
         macro_id: &str,
     ) -> impl Future<Output = Result<Option<uuid::Uuid>, CrmError>> + Send;
+
+    /// Toggle `email_sync` for `(company_id, team_id)`. Disable cascades
+    /// to contacts and contact_sources; see
+    /// [`crate::domain::companies_repo::CompaniesRepository::set_email_sync`].
+    /// Authorization is the caller's responsibility.
+    fn set_email_sync(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        email_sync: bool,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Toggle the `hidden` flag on a CRM company for `(company_id,
+    /// team_id)`. Hiding (`true`) also forces `email_sync = false` and
+    /// tears down contacts/sources atomically; see
+    /// [`crate::domain::companies_repo::CompaniesRepository::set_company_hidden`].
+    /// Un-hiding (`false`) leaves `email_sync` as-is — the team must
+    /// re-enable sync explicitly. Authorization is the caller's
+    /// responsibility.
+    fn set_company_hidden(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        hidden: bool,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Toggle the `hidden` flag on a CRM contact, scoped to `team_id`
+    /// via the contact's company. Hiding is a display-only opt-out and
+    /// does not affect populate/depopulate. Authorization is the
+    /// caller's responsibility.
+    fn set_contact_hidden(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        hidden: bool,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Batched authorization probe for a CRM-scoped email query. See
+    /// [`CompaniesRepository::crm_scope_precheck`].
+    fn crm_scope_precheck(
+        &self,
+        team_id: &uuid::Uuid,
+        domains: &[String],
+        addresses: &[String],
+    ) -> impl Future<Output = Result<CrmScopePrecheck, CrmError>> + Send;
 }
 
 /// Implementation of [`CrmService`] backed by a [`CompaniesRepository`]
@@ -159,12 +238,17 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::too_many_arguments)]
     async fn populate_contact(
         &self,
         team_id: &uuid::Uuid,
         link_id: &uuid::Uuid,
+        user_email: &str,
         email: &str,
         name: Option<&str>,
+        first_at: DateTime<Utc>,
+        last_at: DateTime<Utc>,
+        is_sent: bool,
     ) -> Result<(), CrmError> {
         let email = email.trim();
         let Some((local_part, domain)) = email.split_once('@') else {
@@ -181,6 +265,25 @@ where
             return Err(CrmError::StorageLayerError(anyhow::anyhow!(
                 "email {email} has an empty domain"
             )));
+        }
+
+        // Skip when the contact lives on the user's own domain —
+        // colleagues at the user's company shouldn't show up in their
+        // team's CRM. Malformed user emails fall through to the regular
+        // populate path; the link's email is treated as the source of
+        // truth elsewhere, so we don't want a bad value here to error
+        // out an otherwise valid contact populate.
+        if let Some((user_local_part, user_domain)) = user_email.trim().split_once('@')
+            && !user_local_part.is_empty()
+            && !user_domain.is_empty()
+            && !user_domain.contains('@')
+            && user_domain.eq_ignore_ascii_case(domain)
+        {
+            tracing::debug!(
+                domain,
+                "Skipping CRM populate for contact on the user's own domain"
+            );
+            return Ok(());
         }
 
         // Skip personal / free-mail-provider domains (gmail, yahoo,
@@ -200,11 +303,19 @@ where
         // its own transaction, idempotent under concurrent populates
         // for the same domain (first-write-wins via the unique index
         // on `LOWER(domain)`).
-        if self
-            .companies_repository
-            .lookup_domain_metadata(domain)
-            .await?
-            .is_none()
+        //
+        // Skip the resolve when `is_sent=false`: a received-direction
+        // populate never inserts a new `crm_companies` row, so we don't
+        // need to seed metadata. If the domain is already tracked the
+        // directory entry was written when its first sent message
+        // populated; if it isn't tracked, this call will no-op in the
+        // repo anyway.
+        if is_sent
+            && self
+                .companies_repository
+                .lookup_domain_metadata(domain)
+                .await?
+                .is_none()
         {
             let metadata = self.metadata_resolver.resolve(domain).await;
             self.companies_repository
@@ -213,7 +324,9 @@ where
         }
 
         self.companies_repository
-            .populate_contact(team_id, link_id, domain, email, name)
+            .populate_contact(
+                team_id, link_id, domain, email, name, first_at, last_at, is_sent,
+            )
             .await
     }
 
@@ -259,6 +372,54 @@ where
     async fn get_team_id_for_user(&self, macro_id: &str) -> Result<Option<uuid::Uuid>, CrmError> {
         self.companies_repository
             .get_team_id_for_user(macro_id)
+            .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn set_email_sync(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        email_sync: bool,
+    ) -> Result<(), CrmError> {
+        self.companies_repository
+            .set_email_sync(team_id, company_id, email_sync)
+            .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn set_company_hidden(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        hidden: bool,
+    ) -> Result<(), CrmError> {
+        self.companies_repository
+            .set_company_hidden(team_id, company_id, hidden)
+            .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn set_contact_hidden(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        hidden: bool,
+    ) -> Result<(), CrmError> {
+        self.companies_repository
+            .set_contact_hidden(team_id, contact_id, hidden)
+            .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn crm_scope_precheck(
+        &self,
+        team_id: &uuid::Uuid,
+        domains: &[String],
+        addresses: &[String],
+    ) -> Result<CrmScopePrecheck, CrmError> {
+        self.companies_repository
+            .crm_scope_precheck(team_id, domains, addresses)
             .await
     }
 }

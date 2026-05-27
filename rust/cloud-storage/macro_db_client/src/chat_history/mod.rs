@@ -14,6 +14,7 @@ struct ChatHistoryRow {
 }
 
 /// Get chat history for a single chat by ID
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn get_chat_history<'e, E>(db: E, chat_id: &str) -> Result<ChatHistory, Error>
 where
     E: Executor<'e, Database = Postgres>,
@@ -41,6 +42,7 @@ where
 }
 
 /// Get chat history for messages by their IDs
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn get_chat_history_for_messages<'e, E>(
     db: E,
     message_ids: &[String],

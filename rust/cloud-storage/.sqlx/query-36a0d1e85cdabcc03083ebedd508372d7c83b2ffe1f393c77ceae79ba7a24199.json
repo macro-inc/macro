@@ -1,0 +1,51 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            c.\"id\" as \"chat_id\",\n            m.id as \"message_id\",\n            c.\"userId\" as \"user_id\",\n            m.\"createdAt\" as \"created_at\",\n            m.\"updatedAt\" as \"updated_at\"\n        FROM\n            \"ChatMessage\" m\n        JOIN\n            \"Chat\" c on c.\"id\" = m.\"chatId\"\n        WHERE\n            (\n                $2::bool IS NULL\n                OR ($2 AND c.\"deletedAt\" IS NOT NULL)\n                OR (NOT $2 AND c.\"deletedAt\" IS NULL)\n            )\n            AND ($3::timestamptz IS NULL OR m.\"updatedAt\" >= $3)\n            AND ($4::timestamptz IS NULL OR m.\"updatedAt\" < $4)\n            AND (\n                $5::timestamptz IS NULL\n                OR (m.\"updatedAt\", m.id) > ($5, $6::text)\n            )\n        ORDER BY m.\"updatedAt\" ASC, m.id ASC\n        LIMIT $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "chat_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Bool",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "36a0d1e85cdabcc03083ebedd508372d7c83b2ffe1f393c77ceae79ba7a24199"
+}

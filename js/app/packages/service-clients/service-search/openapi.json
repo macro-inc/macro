@@ -1112,6 +1112,20 @@
             },
             "description": "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
           },
+          "crm_addresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM-scoped address filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\nfully-qualified addresses. Each address is authorized against\n`crm_contacts` + `crm_companies` (contact must not be hidden, company\nmust not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_domains`."
+          },
+          "crm_domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM-scoped domain filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\ndomains (in any of sender/cc/bcc/recipient). Each domain is authorized\nagainst `crm_domains` + `crm_companies` (must exist for the caller's\nteam, company must not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_addresses`."
+          },
           "email_thread_ids": {
             "type": "array",
             "items": {
@@ -1165,10 +1179,6 @@
           "shared": {
             "$ref": "#/components/schemas/SharedEmailFilter",
             "description": "Controls whether shared email threads are included in results.\nDefaults to \"exclude\" (only the user's own threads)."
-          },
-          "team_scope": {
-            "type": "boolean",
-            "description": "When true, expand visibility to every teammate's mailbox: results may\ninclude emails the requesting user is not a participant on, as long as\nat least one of their teammates is. Requires every sender/cc/bcc/recipient\nvalue to be a fully-qualified email address or a domain (no partial\nsubstring matches)."
           }
         }
       },

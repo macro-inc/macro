@@ -1,7 +1,4 @@
-import {
-  PROPERTY_OPTION_IDS,
-  SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { SoupProperty } from '@service-storage/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import type { TaskEntityWithProperties } from '../src/types/entity';

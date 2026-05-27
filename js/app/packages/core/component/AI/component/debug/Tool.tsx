@@ -25,7 +25,7 @@ function ToolCall() {
     {
       type: 'toolCall',
       tool: {
-        name: 'web_search',
+        name: 'ContentSearch',
         data: {
           query: 'Weather in nyc now',
         },
@@ -48,7 +48,7 @@ function ToolResponse() {
     {
       type: 'toolCall',
       tool: {
-        name: 'web_search',
+        name: 'ContentSearch',
         data: {
           query: 'Weather in nyc now',
         },
@@ -67,7 +67,7 @@ function ToolResponse() {
             },
           ],
         },
-        name: 'web_search',
+        name: 'ContentSearch',
       },
     },
     {
@@ -91,7 +91,7 @@ function ToolResponsStreamEnd() {
     {
       type: 'toolCall',
       tool: {
-        name: 'web_search',
+        name: 'ContentSearch',
         data: {
           query: 'Weather in nyc now',
         },
@@ -110,7 +110,7 @@ function ToolResponsStreamEnd() {
             },
           ],
         },
-        name: 'web_search',
+        name: 'ContentSearch',
       },
     },
     {

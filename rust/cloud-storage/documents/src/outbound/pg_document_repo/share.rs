@@ -2,30 +2,13 @@ use entity_access_db_utils::AccessLevel;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-/// Share a document with all members of the given user's team.
+/// Share a document with the given team.
 #[tracing::instrument(err, skip(pool))]
 pub async fn share_with_team(
     pool: &PgPool,
-    user_id: &str,
+    team_id: &Uuid,
     document_id: &str,
 ) -> Result<(), sqlx::Error> {
-    // Find the team_id for the given user.
-    let team_id: Option<Uuid> = sqlx::query_scalar!(
-        r#"
-        SELECT team_id
-        FROM team_user
-        WHERE user_id = $1
-        LIMIT 1
-        "#,
-        user_id,
-    )
-    .fetch_optional(pool)
-    .await?;
-
-    let Some(team_id) = team_id else {
-        return Ok(());
-    };
-
     let document_uuid = macro_uuid::string_to_uuid(document_id)
         .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
 

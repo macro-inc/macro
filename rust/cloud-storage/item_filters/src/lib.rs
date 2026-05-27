@@ -247,13 +247,23 @@ pub struct EmailFilters {
     #[serde(default, skip_serializing_if = "SharedEmailFilter::is_default")]
     pub shared: SharedEmailFilter,
 
-    /// When true, expand visibility to every teammate's mailbox: results may
-    /// include emails the requesting user is not a participant on, as long as
-    /// at least one of their teammates is. Requires every sender/cc/bcc/recipient
-    /// value to be a fully-qualified email address or a domain (no partial
-    /// substring matches).
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub team_scope: bool,
+    /// CRM-scoped domain filter. When non-empty, expands visibility to every
+    /// teammate's mailbox and restricts to threads involving any of these
+    /// domains (in any of sender/cc/bcc/recipient). Each domain is authorized
+    /// against `crm_domains` + `crm_companies` (must exist for the caller's
+    /// team, company must not be hidden, `email_sync` must be true).
+    /// Mutually exclusive with `crm_addresses`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub crm_domains: Vec<String>,
+
+    /// CRM-scoped address filter. When non-empty, expands visibility to every
+    /// teammate's mailbox and restricts to threads involving any of these
+    /// fully-qualified addresses. Each address is authorized against
+    /// `crm_contacts` + `crm_companies` (contact must not be hidden, company
+    /// must not be hidden, `email_sync` must be true).
+    /// Mutually exclusive with `crm_domains`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub crm_addresses: Vec<String>,
 
     /// When `Some(true)`, only include threads that have at least one message
     /// with an iCalendar attachment (`.ics` filename or `application/ics` mime
@@ -276,7 +286,8 @@ impl IsEmpty for EmailFilters {
             include_labels,
             exclude_labels,
             shared,
-            team_scope,
+            crm_domains,
+            crm_addresses,
             calendar_only,
         } = self;
         senders.is_empty()
@@ -290,7 +301,8 @@ impl IsEmpty for EmailFilters {
             && include_labels.is_empty()
             && exclude_labels.is_empty()
             && shared.is_default()
-            && !team_scope
+            && crm_domains.is_empty()
+            && crm_addresses.is_empty()
             && !calendar_only.unwrap_or(false)
     }
 }

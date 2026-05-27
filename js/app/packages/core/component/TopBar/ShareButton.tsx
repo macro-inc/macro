@@ -13,7 +13,6 @@ import {
   useBlockName,
 } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { DropdownMenuContent } from '@core/component/Menu';
 import { type TabItem, Tabs } from '@core/component/Tabs';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
@@ -42,7 +41,6 @@ import IconEye from '@icon/wide-eye.svg';
 import UserCircle from '@icon/wide-user-circle.svg';
 import WideUsers from '@icon/wide-users.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import ChevronDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import IconLink from '@phosphor/link.svg';
@@ -59,7 +57,15 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { Button, ButtonGroup, cn, Panel, ToggleSwitch, Tooltip } from '@ui';
+import {
+  Button,
+  ButtonGroup,
+  cn,
+  Dropdown,
+  Panel,
+  ToggleSwitch,
+  Tooltip,
+} from '@ui';
 import type { Result } from 'neverthrow';
 import {
   type Accessor,
@@ -1398,9 +1404,11 @@ export function ShareOptions(props: {
   };
 
   return (
-    <DropdownMenu open={isOpen()} onOpenChange={setIsOpen}>
-      <DropdownMenu.Trigger
+    <Dropdown open={isOpen()} onOpenChange={setIsOpen}>
+      <Dropdown.Trigger
+        variant="ghost"
         disabled={props.disabled}
+        class={`min-w-16.75 py-1 pl-2 pr-1 rounded-xs flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
         on:keydown={(e: KeyboardEvent) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.stopPropagation();
@@ -1409,21 +1417,12 @@ export function ShareOptions(props: {
           }
         }}
       >
-        <Button
-          disabled={props.disabled}
-          class={`min-w-16.75 py-1 pl-2 pr-1 rounded-xs flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
-          variant="ghost"
-        >
-          {currentValueText()}
-          <ChevronDownIcon class="size-4 text-ink-extra-muted/50" />
-        </Button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenuContent>
-          <DropdownMenu.RadioGroup
-            value={currentValue()}
-            onChange={handleChange}
-          >
+        {currentValueText()}
+        <ChevronDownIcon class="size-4 text-ink-extra-muted/50" />
+      </Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.RadioGroup value={currentValue()} onChange={handleChange}>
+          <Dropdown.Group>
             <For each={options().filter((o) => o.value !== 'none')}>
               {(option) => {
                 const Icon =
@@ -1431,39 +1430,34 @@ export function ShareOptions(props: {
                     option.value as keyof typeof PERMISSION_ICONS
                   ];
                 return (
-                  <DropdownMenu.RadioItem
-                    value={option.value}
-                    class="flex items-center gap-2 w-full py-1 px-2 text-sm font-medium rounded-xs hover:bg-hover hover-transition-bg outline-none focus:bg-active data-highlighted:bg-active"
-                  >
+                  <Dropdown.RadioItem value={option.value}>
                     <div class="size-4 shrink-0">
                       {Icon && <Icon class="size-full" />}
                     </div>
-                    <div class="flex-1 truncate">{option.label}</div>
-                    <Show when={currentValue() === option.value}>
-                      <CheckIcon class="size-3 text-accent" />
-                    </Show>
-                  </DropdownMenu.RadioItem>
+                    <span class="flex-1 truncate">{option.label}</span>
+                    <Dropdown.ItemIndicator>
+                      <CheckIcon class="size-3.5 text-accent" />
+                    </Dropdown.ItemIndicator>
+                  </Dropdown.RadioItem>
                 );
               }}
             </For>
-            <Show when={!props.hideNoAccess}>
-              <div class="my-1 border-t border-edge-muted w-full" />
-              <DropdownMenu.RadioItem
-                value="none"
-                class="flex items-center gap-2 w-full py-1 px-2 text-sm font-medium rounded-xs hover:bg-hover hover-transition-bg outline-none focus:bg-active data-highlighted:bg-active"
-              >
+          </Dropdown.Group>
+          <Show when={!props.hideNoAccess}>
+            <Dropdown.Group>
+              <Dropdown.RadioItem value="none">
                 <div class="size-4 shrink-0">
                   <IconX class="size-full" />
                 </div>
-                <div class="flex-1 truncate">{accessLevelText(null)}</div>
-                <Show when={currentValue() === 'none'}>
-                  <CheckIcon class="size-3 text-accent" />
-                </Show>
-              </DropdownMenu.RadioItem>
-            </Show>
-          </DropdownMenu.RadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+                <span class="flex-1 truncate">{accessLevelText(null)}</span>
+                <Dropdown.ItemIndicator>
+                  <CheckIcon class="size-3.5 text-accent" />
+                </Dropdown.ItemIndicator>
+              </Dropdown.RadioItem>
+            </Dropdown.Group>
+          </Show>
+        </Dropdown.RadioGroup>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }

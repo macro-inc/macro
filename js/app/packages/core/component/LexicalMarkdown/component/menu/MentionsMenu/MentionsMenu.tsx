@@ -210,14 +210,15 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
 
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
+    const users = usersAndGroups() ?? [];
     const combined: MentionItem[] = [
-      ...(usersAndGroups() ?? []),
+      ...users,
       ...(docs() ?? []),
       ...(channels() ?? []),
       ...(emails() ?? []),
       ...(dates() ?? []),
     ];
-    return sortMobileMentions(combined, searchTerm());
+    return sortMobileMentions(combined, searchTerm(), users);
   });
 
   const bucketConfigs = createLazyMemo((): BucketConfig[] => {
@@ -509,7 +510,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         >
           <Surface
             depth={2}
-            class="pt-2 pb-1.5 shadow-lg shadow-drop-shadow rounded-lg"
+            class="pt-2 pb-1.5 shadow-lg shadow-drop-shadow rounded-xl"
           >
             <Show
               when={controller.viewAllMode()}

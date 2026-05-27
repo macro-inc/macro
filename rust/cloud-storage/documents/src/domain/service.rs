@@ -34,11 +34,13 @@ use crate::domain::models::{
     ASSIGNEES_PROPERTY_ID, NOT_STARTED_STATUS_OPTION_ID, PropertyInput, STATUS_PROPERTY_ID,
 };
 
+use super::branch_name::{build_task_branch_name, user_branch_prefix};
 use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
     CreateTaskRequest, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
-    FileTypeUpdate, LocationQueryParams,
+    FileTypeUpdate, GithubPullRequestsResponse, LocationQueryParams, TaskBranchName,
+    TeamTaskMetadata,
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
@@ -56,14 +58,20 @@ pub struct DocumentServiceImpl<
     C: ConnectionService,
     Eam: EntityAccessManagementService,
 > {
-    repo: R,
-    cloudfront_config: CloudFrontConfig,
-    sync_service_client: sync_service_client::SyncServiceClient,
-    upload_url_service: U,
-    task_properties_service: T,
-    connection_service: C,
-    #[allow(dead_code)]
-    entity_access_management_service: Eam,
+    /// Document repository
+    pub repo: R,
+    /// Cloudfront config
+    pub cloudfront_config: CloudFrontConfig,
+    /// Sync service client
+    pub sync_service_client: sync_service_client::SyncServiceClient,
+    /// Upload service
+    pub upload_url_service: U,
+    /// Task properties service
+    pub task_properties_service: T,
+    /// Connection service
+    pub connection_service: C,
+    /// entity access management service
+    pub entity_access_management_service: Eam,
 }
 
 fn ready_content_for_file_type(file_type: Option<FileType>) -> DocumentContent {
@@ -105,6 +113,12 @@ fn pending_content_for_file_type(file_type: Option<FileType>) -> DocumentContent
     }
 }
 
+fn short_id_for_entity_id(entity_id: &str) -> Result<String, DocumentError> {
+    let uuid = macro_uuid::string_to_uuid(entity_id)
+        .map_err(|e| DocumentError::BadRequest(format!("invalid entity_id: {e}")))?;
+    Ok(macro_uuid::ShortUuidConverter::default().from_uuid(&uuid))
+}
+
 impl<
     R: DocumentRepo,
     U: PresignedUploadUrlPort,
@@ -113,7 +127,7 @@ impl<
     Eam: EntityAccessManagementService,
 > DocumentServiceImpl<R, U, T, C, Eam>
 {
-    /// Create a new document service.
+    /// Create a document service with its repository and external service ports.
     pub fn new(
         repo: R,
         cloudfront_config: CloudFrontConfig,
@@ -376,6 +390,16 @@ impl<
             tracing::error!(error=?e, document_id=?document_id, "failed to clean up document");
         }
     }
+
+    async fn team_task_metadata_for_document(
+        &self,
+        document_id: &str,
+    ) -> Result<Option<TeamTaskMetadata>, DocumentError> {
+        self.repo
+            .get_team_task_metadata(document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
 }
 
 #[cfg(feature = "document_create")]
@@ -484,9 +508,11 @@ impl<
             .as_deref()
             .and_then(|file_type| FileType::from_str(file_type).ok());
         let content = self.content_for_document(&document_id, file_type).await?;
+        let team_task_metadata = self.team_task_metadata_for_document(&document_id).await?;
 
         Ok(GetDocumentResponseData {
-            document_metadata: DocumentMetadataWithContent::new(document_metadata, content),
+            document_metadata: DocumentMetadataWithContent::new(document_metadata, content)
+                .with_team_task_metadata(team_task_metadata),
             user_access_level: *access_level,
             view_location,
         })
@@ -662,11 +688,69 @@ impl<
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<String, DocumentError> {
-        let entity_id = &entity_access_receipt.entity().entity_id;
-        let uuid = macro_uuid::string_to_uuid(entity_id)
-            .map_err(|e| DocumentError::BadRequest(format!("invalid entity_id: {e}")))?;
-        let short_id = macro_uuid::ShortUuidConverter::default().from_uuid(&uuid);
-        Ok(short_id)
+        short_id_for_entity_id(&entity_access_receipt.entity().entity_id)
+    }
+
+    async fn get_task_branch_name(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_name: String,
+    ) -> Result<TaskBranchName, DocumentError> {
+        let document_id = &entity_access_receipt.entity().entity_id;
+        let short_id = short_id_for_entity_id(document_id)?;
+        let (user_prefix, team_slug, team_task_id) = match entity_access_receipt.auth() {
+            EntityAccessAuth::Authenticated(user_id) => {
+                let context = self
+                    .repo
+                    .get_branch_name_context(document_id, user_id.as_ref())
+                    .await
+                    .map_err(|e| DocumentError::Internal(e.into()))?;
+                (
+                    user_branch_prefix(context.github_username.as_deref(), &context.user_email),
+                    context.team_slug,
+                    context.team_task_id,
+                )
+            }
+            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => {
+                ("macro".to_string(), None, None)
+            }
+        };
+
+        let branch_name = build_task_branch_name(
+            &user_prefix,
+            team_slug.as_deref(),
+            team_task_id,
+            &short_id,
+            &document_name,
+        );
+
+        Ok(TaskBranchName {
+            short_id,
+            branch_name,
+        })
+    }
+
+    #[tracing::instrument(err, skip(self, document_context))]
+    async fn get_task_github_pull_requests(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_context: &DocumentBasic,
+    ) -> Result<GithubPullRequestsResponse, DocumentError> {
+        if document_context.sub_type != Some(DocumentSubType::Task) {
+            return Err(DocumentError::BadRequest(
+                "document is not a task".to_string(),
+            ));
+        }
+
+        let document_id = &entity_access_receipt.entity().entity_id;
+        let short_id = short_id_for_entity_id(document_id)?;
+        let github_keys = self
+            .repo
+            .get_task_github_pull_request_keys(&short_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+
+        Ok(GithubPullRequestsResponse::from_github_keys(github_keys))
     }
 
     #[tracing::instrument(err, skip(self, document_context))]
@@ -800,12 +884,15 @@ impl<
                 })?;
         }
 
+        let team_task_metadata = self.team_task_metadata_for_document(&document_id).await?;
+
         Ok(CreateDocumentResponseData {
             document_response: DocumentResponse {
                 document_metadata: DocumentResponseMetadataWithContent::new(
                     document_response_metadata,
                     initial_content,
-                ),
+                )
+                .with_team_task_metadata(team_task_metadata),
                 presigned_url: Some(presigned_url),
             },
             content_type: mime_type,
@@ -1004,6 +1091,20 @@ impl<
         // Clean the document name
         let document_name = FileType::clean_document_name(&document_name).unwrap_or(document_name);
 
+        let copy_team_id = if original_metadata.sub_type == Some(DocumentSubType::Task) {
+            let team_id = self
+                .repo
+                .get_team_ids_for_user(user_id.as_ref())
+                .await
+                .map_err(|e| DocumentError::Internal(e.into()))?;
+
+            let team_id = team_id.first();
+
+            team_id.copied()
+        } else {
+            None
+        };
+
         // Create the copy in the database
         let new_metadata = self
             .repo
@@ -1012,6 +1113,7 @@ impl<
                 user_id: user_id.clone(),
                 document_name,
                 file_type,
+                team_id: copy_team_id,
             })
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
@@ -1156,11 +1258,16 @@ impl<
                 DocumentError::Internal(anyhow!("unable to convert document metadata"))
             })?;
 
+        let team_task_metadata = self
+            .team_task_metadata_for_document(&new_document_id)
+            .await?;
+
         Ok(DocumentResponse {
             document_metadata: DocumentResponseMetadataWithContent::new(
                 document_response_metadata,
                 content,
-            ),
+            )
+            .with_team_task_metadata(team_task_metadata),
             presigned_url: None,
         })
     }
@@ -1201,10 +1308,12 @@ impl<
         document_id: &str,
         request: &CreateTaskRequest,
     ) -> Result<(), DocumentError> {
-        if request.share_with_team {
+        if request.share_with_team
+            && let Some(team_id) = request.team_id
+        {
             let _ = self
                 .repo
-                .share_with_team(user_id.as_ref(), document_id)
+                .share_with_team(&team_id, document_id)
                 .await
                 .inspect_err(|e| {
                     tracing::error!(error=?e, "failed to share task with team");

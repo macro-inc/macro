@@ -3,16 +3,14 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { LiveIndicators } from '@core/component/LiveIndicators';
 import MacroBrandLoader from '@icon/macro-brand-loader.svg';
 import MacroGridLoader from '@icon/macro-grid-noise-loader.svg';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import Acorn from '@phosphor-icons/core/regular/acorn.svg?component-solid';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import Subtract from '@phosphor-icons/core/regular/subtract.svg?component-solid';
 import TrashSimple from '@phosphor-icons/core/regular/trash-simple.svg?component-solid';
 import type { ItemType } from '@service-storage/client';
-import { Button } from '@ui';
+import { Button, Dropdown } from '@ui';
 import { type Component, createSignal, For, Index } from 'solid-js';
 import { ItemPreview } from '../component/ItemPreview';
-import { DropdownMenuContent, MenuItem } from '../component/Menu';
 import { Permissions } from '../component/SharePermissions';
 import { Bar } from '../component/TopBar/Bar';
 import { Center } from '../component/TopBar/Center';
@@ -137,25 +135,29 @@ const App: Component = () => {
         </div>
       </div>
       <div class="flex flex-row flex-wrap justify-center gap-4">
-        <DropdownMenu>
-          <DropdownMenu.Trigger>
-            <Button variant="base" tabIndex={-1}>
-              Open
-            </Button>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenuContent>
-              <MenuItem text="This Menu Item" />
-              <MenuItem text="This Menu Item" />
-              <MenuItem text="This Menu Item" icon={TrashSimple} />
-              <MenuItem
-                text="This Menu Item"
-                icon={TrashSimple}
-                iconClass="text-failure"
-              />
-            </DropdownMenuContent>
-          </DropdownMenu.Portal>
-        </DropdownMenu>
+        <Dropdown>
+          <Dropdown.Trigger variant="base" tabIndex={-1}>
+            Open
+          </Dropdown.Trigger>
+          <Dropdown.Content>
+            <Dropdown.Group>
+              <Dropdown.Item>
+                <span class="flex-1 truncate">This Menu Item</span>
+              </Dropdown.Item>
+              <Dropdown.Item>
+                <span class="flex-1 truncate">This Menu Item</span>
+              </Dropdown.Item>
+              <Dropdown.Item>
+                <TrashSimple class="size-4 shrink-0" />
+                <span class="flex-1 truncate">This Menu Item</span>
+              </Dropdown.Item>
+              <Dropdown.Item>
+                <TrashSimple class="size-4 shrink-0 text-failure" />
+                <span class="flex-1 truncate">This Menu Item</span>
+              </Dropdown.Item>
+            </Dropdown.Group>
+          </Dropdown.Content>
+        </Dropdown>
       </div>
       <div class="w-full flex flex-wrap gap-2 justify-center">
         <For each={BlockRegistry}>

@@ -98,6 +98,44 @@ async fn test_get_team_subscription_id(pool: Pool<Postgres>) -> anyhow::Result<(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
+async fn test_get_team_payment_status(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    let paying = team_repo.get_team_payment_status(&team_id).await?;
+    assert!(!paying);
+
+    sqlx::query!(
+        r#"
+        UPDATE team
+        SET paying = TRUE
+        WHERE id = $1
+        "#,
+        &team_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let paying = team_repo.get_team_payment_status(&team_id).await?;
+    assert!(paying);
+
+    let missing_team_id = macro_uuid::string_to_uuid("63333333-3333-3333-3333-333333333333")?;
+    let err = team_repo
+        .get_team_payment_status(&missing_team_id)
+        .await
+        .err()
+        .unwrap();
+
+    assert!(err.to_string().contains("does not exist"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
 async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
@@ -584,6 +622,59 @@ async fn test_update_team_subscription(pool: Pool<Postgres>) -> anyhow::Result<(
     .await?;
 
     assert_eq!(team.subscription_id, "sub_1");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_update_team_payment_status(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    team_repo.update_team_payment_status(&team_id, true).await?;
+
+    let row = sqlx::query!(
+        r#"
+        SELECT paying
+        FROM team
+        WHERE id = $1
+        "#,
+        &team_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert!(row.paying);
+
+    team_repo
+        .update_team_payment_status(&team_id, false)
+        .await?;
+
+    let row = sqlx::query!(
+        r#"
+        SELECT paying
+        FROM team
+        WHERE id = $1
+        "#,
+        &team_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert!(!row.paying);
+
+    let missing_team_id = macro_uuid::string_to_uuid("63333333-3333-3333-3333-333333333333")?;
+    let err = team_repo
+        .update_team_payment_status(&missing_team_id, true)
+        .await
+        .err()
+        .unwrap();
+
+    assert!(err.to_string().contains("does not exist"));
 
     Ok(())
 }

@@ -4,10 +4,19 @@ import {
   InviteModal,
   setInviteModalOpen,
 } from '@app/component/app-sidebar/invite-modal';
+import {
+  SidebarPromoCard,
+  SidebarPromoHint,
+} from '@app/component/app-sidebar/sidebar-promo';
 import { CommandState } from '@app/component/command';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
 import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import type {
+  ReferredFrom,
+  SplitContent,
+  SplitHandle,
+} from '@app/component/split-layout/layoutManager';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import {
   LIST_VIEW_ID,
@@ -19,12 +28,14 @@ import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { InCallPanel } from '@channel/Call';
 import { useCallContextOptional } from '@channel/Call/CallContext';
-import { ContextMenuContent, MenuItem } from '@core/component/Menu';
+import { useHasPaidAccess } from '@core/auth';
+import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { UserIcon } from '@core/component/UserIcon';
 import {
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_CALLS,
+  ENABLE_NEW_PRICING_OVERRIDE,
   ENABLE_TEAMS_OVERRIDE,
 } from '@core/constant/featureFlags';
 import {
@@ -40,10 +51,10 @@ import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import LogoIcon from '@icon/macro-logo.svg';
-import SquareSidebarIcon from '@icon/square-sidebar.svg';
+import { AnimatedSquareCommandKIcon } from '@icon/square-command-k';
+import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
-import CommandKIcon from '@icon/wide-command-k.svg';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedFolderIcon } from '@icon/wide-folder';
@@ -64,6 +75,7 @@ import PlugIcon from '@phosphor/plug.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { debounce } from '@solid-primitives/scheduled';
+import { makePersisted } from '@solid-primitives/storage';
 import { useLocation } from '@solidjs/router';
 import { Button, cn, Dropdown, Hotkey } from '@ui';
 import {
@@ -252,6 +264,45 @@ type SidebarHotkeyDeps = {
   openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'];
 };
 
+type OpenWithSplitFn = ReturnType<typeof useSplitLayout>['openWithSplit'];
+
+const isComponentEntry =
+  (id: ListView) =>
+  (entry: SplitContent): boolean =>
+    entry.type === 'component' && entry.id === id;
+
+/**
+ * Navigate to a sidebar view, preserving prior state when possible.
+ *
+ * If the active split's history already contains an entry for this view, jump
+ * back to it so search text, filters, preview state, etc. are restored from
+ * that entry. Otherwise push a fresh entry. Holding shift bypasses the lookup
+ * and forces a new entry / new split.
+ */
+function navigateToSidebarView(args: {
+  viewId: ListView;
+  shiftKey: boolean;
+  activeSplit: SplitHandle | undefined;
+  openWithSplit: OpenWithSplitFn;
+  referredFrom?: ReferredFrom;
+}): SplitHandle | undefined {
+  const { viewId, shiftKey, activeSplit, openWithSplit, referredFrom } = args;
+
+  if (!shiftKey && activeSplit?.goToEntry(isComponentEntry(viewId))) {
+    return activeSplit;
+  }
+
+  return openWithSplit(
+    { type: 'component', id: viewId },
+    {
+      preferNewSplit: shiftKey,
+      mergeHistory: false,
+      allowDuplicate: true,
+      referredFrom,
+    }
+  );
+}
+
 const registerSidebarHotkeys = ({
   links,
   isSlim,
@@ -360,17 +411,12 @@ const registerSidebarHotkeys = ({
         }
       }
 
-      const handle = openWithSplit(
-        {
-          type: 'component',
-          id: link.id,
-        },
-        {
-          preferNewSplit: e?.shiftKey,
-          mergeHistory: false,
-          allowDuplicate: true,
-        }
-      );
+      const handle = navigateToSidebarView({
+        viewId: link.id,
+        shiftKey: !!e?.shiftKey,
+        activeSplit: globalSplitManager()?.activeSplit(),
+        openWithSplit,
+      });
       if (link.id === 'search' && handle) {
         requestSearchFocus(handle.id);
       }
@@ -387,6 +433,9 @@ const registerSidebarHotkeys = ({
     });
   }
 };
+
+/** Session-only signal so a hint shows after dismissal until the user acknowledges or the timer expires. */
+const [premiumHintVisible, setPremiumHintVisible] = createSignal(false);
 
 type SidebarActionButtonProps = {
   icon: Component<{ triggerAnimation?: boolean; class?: string }>;
@@ -438,7 +487,6 @@ const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
 type SettingsMenuItem = {
   tab: SettingsTab;
   label: string;
-  description: string;
   icon: Component<{ class?: string }>;
 };
 
@@ -446,19 +494,16 @@ const SETTINGS_MENU_TOP_ITEMS: SettingsMenuItem[] = [
   {
     tab: 'Mobile App',
     label: 'App',
-    description: 'Get the mobile app',
     icon: DeviceMobileIcon,
   },
   {
     tab: 'Agent',
     label: 'MCPs',
-    description: 'Agent connectors and MCP servers',
     icon: PlugIcon,
   },
   {
     tab: 'Team',
     label: 'Team',
-    description: 'Members and invites',
     icon: UsersThreeIcon,
   },
 ];
@@ -467,19 +512,16 @@ const SETTINGS_MENU_BOTTOM_ITEMS: SettingsMenuItem[] = [
   {
     tab: 'Shortcuts',
     label: 'Shortcuts',
-    description: 'Keyboard shortcuts',
     icon: KeyboardIcon,
   },
   {
     tab: 'Appearance',
     label: 'Appearance',
-    description: 'Theme and UI customization',
     icon: PaintBucketIcon,
   },
   {
     tab: 'Account',
     label: 'Account',
-    description: 'Profile, email, and subscription',
     icon: UserIconPhosphor,
   },
 ];
@@ -565,6 +607,36 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
   );
 };
 
+/**
+ * Compact icon-only button for the sidebar header row. Encapsulates the hover
+ * signal so animated icons play on hover, mirroring `SidebarActionButton`.
+ */
+const SidebarHeaderIconButton = (props: {
+  icon: Component<{ triggerAnimation?: boolean; class?: string }>;
+  label: string;
+  hotkey?: HotkeyToken | HotkeyToken[];
+  disabled?: boolean;
+  onClick: (event: MouseEvent) => void;
+  onMouseDown?: (event: MouseEvent) => void;
+}) => {
+  const [hovering, setHovering] = createSignal(false);
+  return (
+    <Button
+      class="rounded-md p-1 text-ink-extra-muted [&_svg]:size-4"
+      size="icon-sm"
+      label={props.label}
+      hotkey={props.hotkey}
+      disabled={props.disabled}
+      onClick={props.onClick}
+      onMouseDown={props.onMouseDown}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+    >
+      <Dynamic component={props.icon} triggerAnimation={hovering()} />
+    </Button>
+  );
+};
+
 type SidebarSettingsWidgetProps = {
   isSlim: () => boolean;
   onSelect: (tab: SettingsTab) => void;
@@ -618,12 +690,12 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
         </span>
         <CaretUpIcon class="size-3 text-ink-extra-muted shrink-0 group-data-[slim=true]/sidebar:hidden" />
       </Dropdown.Trigger>
-      <Dropdown.Content depth={3} class="min-w-56">
+      <Dropdown.Content>
         <Dropdown.Group>
           <For each={topItems()}>
             {(item) => (
               <Dropdown.Item
-                class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
+                class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
                 onSelect={() => props.onSelect(item.tab)}
               >
                 <span class="size-5 flex items-center justify-center">
@@ -632,22 +704,16 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
                     class="size-4 shrink-0 text-ink-extra-muted"
                   />
                 </span>
-                <div class="flex flex-col min-w-0">
-                  <span class="text-ink">{item.label}</span>
-                  <span class="text-xxs text-ink-extra-muted leading-tight">
-                    {item.description}
-                  </span>
-                </div>
+                <span class="text-ink">{item.label}</span>
               </Dropdown.Item>
             )}
           </For>
-          <Show when={topItems().length > 0 && bottomItems().length > 0}>
-            <Dropdown.Separator />
-          </Show>
+        </Dropdown.Group>
+        <Dropdown.Group>
           <For each={bottomItems()}>
             {(item) => (
               <Dropdown.Item
-                class="flex items-start gap-2 px-2.5 py-2.5 text-sm cursor-default outline-none text-ink-muted"
+                class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
                 onSelect={() => props.onSelect(item.tab)}
               >
                 <span class="size-5 flex items-center justify-center">
@@ -656,12 +722,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
                     class="size-4 shrink-0 text-ink-extra-muted"
                   />
                 </span>
-                <div class="flex flex-col min-w-0">
-                  <span class="text-ink">{item.label}</span>
-                  <span class="text-xxs text-ink-extra-muted leading-tight">
-                    {item.description}
-                  </span>
-                </div>
+                <span class="text-ink">{item.label}</span>
               </Dropdown.Item>
             )}
           </For>
@@ -687,6 +748,18 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const isTabAvailable = useIsSettingsTabAvailable();
   const notificationSettings = useNotificationSettings();
   const callCtx = useCallContextOptional();
+
+  const hasPaidAccess = useHasPaidAccess();
+
+  /** Persisted dismissal for the Premium upgrade promo card. */
+  const [premiumCardDismissed, setPremiumCardDismissed] = makePersisted(
+    createSignal<boolean>(false),
+    { name: 'sidebar-premium-card-dismissed' }
+  );
+
+  const newPricingFF = useFeatureFlag('enable-new-pricing', {
+    enabledOverride: ENABLE_NEW_PRICING_OVERRIDE,
+  });
 
   const showEnableNotifications = () =>
     notificationSettings.isSupported && notificationSettings.canPrompt();
@@ -826,34 +899,32 @@ export const AppSidebar = (props: AppSidebarProps) => {
             <div class="flex items-center gap-1 mr-1">
               <Show when={showEnableNotifications()}>
                 <Button
-                  class="size-7 rounded-xs p-1 [&_svg]:size-4"
+                  class="rounded-md p-1 text-ink-extra-muted"
+                  size="icon-sm"
                   label="Enable Notifications"
                   onClick={handleEnableNotifications}
                 >
-                  <BellIcon class="size-4" />
+                  <BellIcon />
                 </Button>
               </Show>
-              <Button
-                class="size-7 rounded-xs p-1 [&_svg]:size-4"
+              <SidebarHeaderIconButton
+                label="Command"
+                hotkey={TOKENS.global.commandMenu}
+                onClick={handleCommandPaletteClick}
+                icon={AnimatedSquareCommandKIcon}
+              />
+              <SidebarHeaderIconButton
                 label="New Split"
                 hotkey={TOKENS.global.createNewSplit}
                 disabled={!canCreateNewSplit()}
                 onClick={handleNewSplitClick}
-              >
-                <AnimatedNewSplitIcon />
-              </Button>
-              <Button
-                class="size-7 rounded-xs p-1 [&_svg]:size-4"
-                label="Command"
-                hotkey={TOKENS.global.commandMenu}
-                onClick={handleCommandPaletteClick}
-              >
-                <CommandKIcon />
-              </Button>
+                icon={AnimatedNewSplitIcon}
+              />
             </div>
           </Show>
-          <Button
-            class="size-7 rounded-xs p-1 [&_svg]:size-4"
+          <SidebarHeaderIconButton
+            label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
+            hotkey={TOKENS.global.toggleSidebar}
             onMouseDown={(e) => {
               if (e.button !== 0) return;
               e.preventDefault();
@@ -862,11 +933,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
               handleSidebarOpenChange(!isExpanded());
               globalSplitManager()?.returnFocus();
             }}
-            label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
-            hotkey={TOKENS.global.toggleSidebar}
-          >
-            <SquareSidebarIcon />
-          </Button>
+            icon={AnimatedSquareSidebarIcon}
+          />
         </div>
       </div>
 
@@ -921,6 +989,58 @@ export const AppSidebar = (props: AppSidebarProps) => {
       <div class={cn('px-2 w-full', !callCtx?.isInCall() && 'mt-auto')}>
         <hr class="border-transparent mb-2" />
       </div>
+
+      <Show
+        when={
+          !hasPaidAccess() &&
+          !isSlim() &&
+          !premiumCardDismissed() &&
+          newPricingFF().enabled
+        }
+      >
+        <div class="w-full px-2 mb-2">
+          <SidebarPromoCard
+            label="Upgrade to Premium"
+            description="Unlock MCP integrations, better AI models, and team collaboration."
+            onDismiss={() => {
+              setPremiumCardDismissed(true);
+              setPremiumHintVisible(true);
+            }}
+            primaryAction={{
+              label: 'Upgrade',
+              onClick: () => openSettingsTab('Account'),
+            }}
+            secondaryAction={{
+              label: 'Later',
+              onClick: () => {
+                setPremiumCardDismissed(true);
+                setPremiumHintVisible(true);
+              },
+            }}
+          />
+        </div>
+      </Show>
+      <Show
+        when={
+          !hasPaidAccess() &&
+          !isSlim() &&
+          premiumHintVisible() &&
+          premiumCardDismissed() &&
+          newPricingFF().enabled
+        }
+      >
+        <div class="w-full px-2 mb-2">
+          <SidebarPromoHint
+            title="Maybe later"
+            message="You can upgrade anytime from Account settings."
+            onDone={() => setPremiumHintVisible(false)}
+            secondaryAction={{
+              label: 'Take me there',
+              onClick: () => openSettingsTab('Account'),
+            }}
+          />
+        </div>
+      </Show>
 
       <div class="w-full px-2 flex flex-col gap-1 mb-1">
         <Show when={isTabAvailable('Mobile App')}>
@@ -1063,10 +1183,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
               currentContent?.id === props.id;
 
             if (!isSameContent || e.shiftKey) {
-              currentContentHandle = layout.openWithSplit(content(), {
-                preferNewSplit: e.shiftKey,
-                mergeHistory: false,
-                allowDuplicate: true,
+              currentContentHandle = navigateToSidebarView({
+                viewId: props.id,
+                shiftKey: e.shiftKey,
+                activeSplit: currentContentHandle,
+                openWithSplit: layout.openWithSplit,
                 referredFrom: 'sidebar',
               });
             }

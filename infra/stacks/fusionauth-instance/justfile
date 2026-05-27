@@ -2,9 +2,9 @@
 # single-instance by design; do not derive resource names from the directory.
 export COMPOSE_PROJECT_NAME := "macro"
 
-# Gets the .env variables for the FusionAuth docker-compose.
+# Gets the .env variables for the FusionAuth docker compose.
 get_fusionauth_env:
-  @echo "Getting fusionauth .env file for docker-compose"
+  @echo "Getting fusionauth .env file for docker compose"
   curl -o .env https://raw.githubusercontent.com/FusionAuth/fusionauth-containers/452efcac5c60f6a3a734947b1a8eefaae6f811fa/docker/fusionauth/.env
 
 # Starts up the local FusionAuth instance. This should only be used during setup/testing.
@@ -12,14 +12,14 @@ start *ARGS:
   @echo "Starting fusionauth"
   test -f .env || just get_fusionauth_env
   docker network create auth 2>/dev/null || true
-  docker volume create fusionauth_db_data >/dev/null
-  docker volume create fusionauth_config >/dev/null
-  docker-compose up {{ ARGS }}
+  docker volume create fusionauth_db_data 2>/dev/null || true
+  docker volume create fusionauth_config 2>/dev/null || true
+  docker compose up {{ ARGS }}
 
 # Stops the local FusionAuth instance. This should only be used for setup/testing.
 stop *ARGS:
   @echo "Stopping fusionauth"
-  docker-compose stop {{ ARGS }}
+  docker compose stop {{ ARGS }}
 
 # Destroys the local pulumi stack.
 destroy_local_stack:
@@ -30,7 +30,7 @@ destroy_local_stack:
 # Destroys the local FusionAuth instance and pulumi stack.
 destroy:
   just destroy_local_stack || true
-  docker-compose down -v
+  docker compose down -v
 
 # Creates the local pulumi stack and updates FusionAuth with components.
 setup_local_stack:

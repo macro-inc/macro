@@ -18,6 +18,7 @@ pub async fn update_project_modified_date(
 }
 
 #[tracing::instrument(skip(transaction))]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn edit_project_v2(
     transaction: &mut sqlx::Transaction<'_, Postgres>,
     user_id: &str,

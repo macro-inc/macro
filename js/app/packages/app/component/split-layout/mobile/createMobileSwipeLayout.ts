@@ -23,11 +23,18 @@ export type MobileSwipeLayout = {
    * Called by MobileSwipeBackContainer after its animation finishes.
    */
   completeSwipeBack: () => void;
+  /** Completes a prepared forward navigation after the swipe-in animation. */
+  completeNavigateForward: () => void;
   /**
    * Register an animated trigger provided by MobileSwipeBackContainer.
    * When set, swipeBack() will animate before completing.
    */
   setAnimatedTrigger: (trigger: (() => void) | undefined) => void;
+  /**
+   * Register an animated forward-navigation trigger. The next split is already
+   * prepared in the background slot when this trigger runs.
+   */
+  setForwardNavigationTrigger: (trigger: (() => void) | undefined) => void;
   /**
    * Initiate a swipe-back — animated if container has registered a trigger,
    * otherwise completes immediately. Called by the split header back button.
@@ -52,9 +59,12 @@ export function createMobileSwipeLayout(
   const toggleFgSlot = () => setFgIsSlotA((prev) => !prev);
 
   let animatedTrigger: (() => void) | undefined;
+  let forwardNavigationTrigger: (() => void) | undefined;
 
   const fgSplitId = () => (fgIsSlotA() ? slotASplitId() : slotBSplitId());
   const bgSplitId = () => (fgIsSlotA() ? slotBSplitId() : slotASplitId());
+  const sameContent = (a: SplitContent, b: SplitContent) =>
+    a.type === b.type && a.id === b.id;
 
   // The BG split is always exactly bgSplitId() — derive exclusion directly from
   // the slot signals rather than maintaining a separate set.
@@ -88,6 +98,20 @@ export function createMobileSwipeLayout(
     const fgHandle = currentFgId
       ? splitManager.getSplit(currentFgId)
       : undefined;
+    const bgHandle = currentBgId
+      ? splitManager.getSplit(currentBgId)
+      : undefined;
+
+    // If the target is already mounted in BG, promote it instead of recreating it.
+    if (bgHandle && sameContent(bgHandle.content(), content)) {
+      if (forwardNavigationTrigger) {
+        forwardNavigationTrigger();
+      } else {
+        completeNavigateForward();
+      }
+      return;
+    }
+
     const newFgInitialHistory = fgHandle?.history() ?? [];
 
     // Batch to ensure reactive dependencies never see intermediate state.
@@ -99,11 +123,26 @@ export function createMobileSwipeLayout(
       const newFgHandle = splitManager.createNewSplit({
         content,
         initialHistory: newFgInitialHistory,
-        activate: true,
+        activate: false,
         referredFrom,
       });
 
       setNewFgSlotId(newFgHandle.id);
+    });
+
+    if (forwardNavigationTrigger) {
+      forwardNavigationTrigger();
+    } else {
+      completeNavigateForward();
+    }
+  }
+
+  function completeNavigateForward() {
+    const preparedFgId = bgSplitId();
+    if (!preparedFgId) return;
+
+    batch(() => {
+      splitManager.activateSplit(preparedFgId);
       toggleFgSlot();
     });
   }
@@ -150,6 +189,10 @@ export function createMobileSwipeLayout(
     animatedTrigger = trigger;
   }
 
+  function setForwardNavigationTrigger(trigger: (() => void) | undefined) {
+    forwardNavigationTrigger = trigger;
+  }
+
   function swipeBack() {
     if (!canGoBack()) return;
     if (animatedTrigger) {
@@ -165,7 +208,9 @@ export function createMobileSwipeLayout(
     fgIsSlotA,
     canGoBack,
     completeSwipeBack,
+    completeNavigateForward,
     setAnimatedTrigger,
+    setForwardNavigationTrigger,
     swipeBack,
   };
 }

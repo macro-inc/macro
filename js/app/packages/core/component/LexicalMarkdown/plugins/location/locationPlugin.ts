@@ -3,7 +3,9 @@ import { mergeRegister } from '@lexical/utils';
 import { $getId, type NodeIdMappings } from '@lexical-core';
 import {
   $getNodeByKey,
+  $getRoot,
   $getSelection,
+  $isElementNode,
   $isRangeSelection,
   type BaseSelection,
   COMMAND_PRIORITY_LOW,
@@ -199,6 +201,40 @@ type LocationPluginProps = {
   };
 };
 
+/**
+ * Resolve a node id to its current node key. The cached id→key mapping can be
+ * stale at the moment these commands are dispatched (e.g. right after document
+ * load or a collab reconcile, before nodeIdPlugin's transforms have caught up),
+ * so when the cached lookup misses we scan the live editor state and refresh
+ * the cache. The scan is breadth-first because search results target top-level
+ * children of root, so we usually find the match before descending.
+ */
+function $resolveNodeKeyForId(
+  id: string,
+  mapping: NodeIdMappings
+): NodeKey | null {
+  const cachedKey = mapping.idToNodeKeyMap.get(id);
+  if (cachedKey !== undefined && $getNodeByKey(cachedKey) !== null) {
+    return cachedKey;
+  }
+
+  const queue: LexicalNode[] = [$getRoot()];
+  for (let i = 0; i < queue.length; i++) {
+    const node = queue[i];
+    if ($getId(node) === id) {
+      const key = node.getKey();
+      mapping.idToNodeKeyMap.set(id, key);
+      mapping.nodeKeyToIdMap.set(key, id);
+      return key;
+    }
+    if ($isElementNode(node)) {
+      queue.push(...node.getChildren());
+    }
+  }
+
+  return null;
+}
+
 function registerLocationPlugin(
   editor: LexicalEditor,
   props: LocationPluginProps
@@ -216,8 +252,10 @@ function registerLocationPlugin(
           return true;
         }
 
-        const focusNodeKey = props.mapping.idToNodeKeyMap.get(payload.focus.id);
-
+        const focusNodeKey = $resolveNodeKeyForId(
+          payload.focus.id,
+          props.mapping
+        );
         if (!focusNodeKey) return false;
         const focusNode = $getNodeByKey(focusNodeKey);
         if (!focusNode) return false;
@@ -245,20 +283,38 @@ function registerLocationPlugin(
     editor.registerCommand(
       GO_TO_NODE_ID_COMMAND,
       (id) => {
-        const nodeKey = props.mapping.idToNodeKeyMap.get(id);
-        if (nodeKey === undefined) return false;
+        const nodeKey = $resolveNodeKeyForId(id, props.mapping);
+        if (nodeKey === null) return false;
 
-        const node = $getNodeByKey(nodeKey);
-        if (node === undefined) return false;
+        const scrollAndHighlight = (elem: HTMLElement) => {
+          elem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          elem.classList.add('highlighted');
+          setTimeout(() => {
+            elem.classList.remove('highlighted');
+          }, 2000);
+        };
 
         const elem = editor.getElementByKey(nodeKey);
-        if (elem === null) return false;
+        if (elem !== null) {
+          scrollAndHighlight(elem);
+          return true;
+        }
 
-        elem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        elem.classList.add('highlighted');
-        setTimeout(() => {
-          elem.classList.remove('highlighted');
-        }, 2000);
+        // The node exists in the editor state, but its DOM element hasn't been
+        // reconciled yet (common on initial document load). Wait for the next
+        // editor update and retry the scroll once the element is available.
+        let unsub: (() => void) | undefined;
+        const safetyTimeout = setTimeout(() => {
+          unsub?.();
+        }, 5000);
+        unsub = editor.registerUpdateListener(() => {
+          const retried = editor.getElementByKey(nodeKey);
+          if (retried !== null) {
+            scrollAndHighlight(retried);
+            clearTimeout(safetyTimeout);
+            unsub?.();
+          }
+        });
         return true;
       },
       COMMAND_PRIORITY_LOW

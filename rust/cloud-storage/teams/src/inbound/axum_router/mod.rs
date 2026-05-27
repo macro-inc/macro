@@ -20,6 +20,8 @@ pub mod invite_to_team;
 pub mod join_team;
 /// Update a team.
 pub mod patch_team;
+/// Enable / disable CRM for a team.
+pub mod patch_team_crm_settings;
 /// Reject a team invitation.
 pub mod reject_invitation;
 /// Remove a user from a team.
@@ -87,6 +89,7 @@ where
         .route("/", get(get_team::handler::<T, Eas>))
         .route("/", patch(patch_team::handler::<T, Eas>))
         .route("/", delete(delete_team::handler::<T, Eas>))
+        .route("/crm", patch(patch_team_crm_settings::handler::<T, Eas>))
         .route("/invites", get(get_team_invites::handler::<T, Eas>))
         .route("/invite", post(invite_to_team::handler::<T, Eas>))
         .route(

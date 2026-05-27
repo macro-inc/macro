@@ -1753,6 +1753,208 @@
         }
       }
     },
+    "/crm/companies/{company_id}/email-sync": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::set_email_sync"],
+        "summary": "Toggle `email_sync` on a CRM company. `false` disables CRM email\nsharing for the company and permanently removes its existing CRM\ncontacts and contact sources.",
+        "operationId": "set_email_sync",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The CRM company to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetEmailSyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Company is hidden; un-hide before enabling email sync",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/companies/{company_id}/hidden": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::set_company_hidden"],
+        "summary": "Toggle `hidden` on a CRM company. Hiding also disables `email_sync`\nand cascades to clearing the company's contacts and contact sources.",
+        "operationId": "set_company_hidden",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The CRM company to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCompanyHiddenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/contacts/{contact_id}/hidden": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::set_contact_hidden"],
+        "summary": "Toggle `hidden` on a CRM contact. Hiding is a display-only opt-out\nscoped to the team that owns the contact's company.",
+        "operationId": "set_contact_hidden",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The CRM contact to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetContactHiddenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents": {
       "get": {
         "tags": ["document"],
@@ -2041,6 +2243,16 @@
                     "documentId": {
                       "type": "string",
                       "description": "The document ID of the created task."
+                    },
+                    "teamId": {
+                      "type": ["string", "null"],
+                      "format": "uuid",
+                      "description": "The team this task number is scoped to."
+                    },
+                    "teamTaskId": {
+                      "type": ["integer", "null"],
+                      "format": "int32",
+                      "description": "The task number assigned within the team."
                     }
                   }
                 }
@@ -2927,6 +3139,77 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/github_prs": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Handler for `GET /documents/{document_id}/github_prs`.",
+        "description": "Returns GitHub pull requests associated with a task document.\nReturns 400 if the document is not a task.",
+        "operationId": "get_document_github_pull_requests",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GithubPullRequestsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -6281,6 +6564,46 @@
           }
         }
       },
+      "ApiEntityFilterAst": {
+        "type": "object",
+        "properties": {
+          "callf": {
+            "description": "the filters that should be applied to the call entity"
+          },
+          "cf": {
+            "description": "the filters that should be applied to the chat entity"
+          },
+          "chanf": {
+            "description": "the filters that should be applied to the channel entity"
+          },
+          "df": {
+            "description": "the filters that should be applied to the document entity"
+          },
+          "eca": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM-scoped address filter (wire key: `eca`). Symmetric counterpart\nto `ecd` for fully-qualified email addresses."
+          },
+          "ecd": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM-scoped domain filter (wire key: `ecd`). Parallel to the\nfreeform `ef` AST. Expanded by the router into an any-direction\nOR sub-tree AND-merged into `ef`, plus a `CrmScope` tag stamped\non the resulting [`item_filters::ast::EmailFilterAst::crm_scope`].\nDrives the per-team CRM authorization pre-check and candidate-set\nwidening downstream. Mutually exclusive with `eca`."
+          },
+          "ef": {
+            "description": "the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` / `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors."
+          },
+          "pf": {
+            "description": "the filters that should be applied to the project entity"
+          },
+          "propf": {
+            "description": "the filters that should be applied based on entity properties"
+          }
+        }
+      },
       "ApiMessageAttachment": {
         "type": "object",
         "description": "An attachment on a message.",
@@ -6655,6 +6978,7 @@
           "roomName",
           "createdBy",
           "startedAt",
+          "shareWithTeam",
           "isActive",
           "participants",
           "transcript"
@@ -6719,6 +7043,10 @@
           "roomName": {
             "type": "string",
             "description": "The RTC room name."
+          },
+          "shareWithTeam": {
+            "type": "boolean",
+            "description": "Whether the call is shared with the creator's team."
           },
           "startedAt": {
             "type": "string",
@@ -7528,6 +7856,11 @@
           "skipHistory": {
             "type": "boolean",
             "description": "Whether to add a viewed_at record for this document upon creation."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team to assign the task number within when creating a task document. If omitted,\nthe service may infer it only when the creator belongs to exactly one team."
           }
         }
       },
@@ -7653,6 +7986,11 @@
           "taskName": {
             "type": "string",
             "description": "The name of the task."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team to assign the task number within. If omitted, it is inferred only\nwhen the creator belongs to exactly one team."
           }
         }
       },
@@ -7664,6 +8002,16 @@
           "documentId": {
             "type": "string",
             "description": "The document ID of the created task."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The team this task number is scoped to."
+          },
+          "teamTaskId": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "The task number assigned within the team."
           }
         }
       },
@@ -8136,6 +8484,16 @@
               "content": {
                 "$ref": "#/components/schemas/DocumentContent",
                 "description": "Content lifecycle and location metadata."
+              },
+              "teamId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The team this task number is scoped to, for task documents."
+              },
+              "teamTaskId": {
+                "type": ["integer", "null"],
+                "format": "int32",
+                "description": "The task number assigned within the team, for task documents."
               }
             }
           }
@@ -8411,6 +8769,16 @@
               "content": {
                 "$ref": "#/components/schemas/DocumentContent",
                 "description": "Content lifecycle and location metadata."
+              },
+              "teamId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The team this task number is scoped to, for task documents."
+              },
+              "teamTaskId": {
+                "type": ["integer", "null"],
+                "format": "int32",
+                "description": "The task number assigned within the team, for task documents."
               }
             }
           }
@@ -8707,6 +9075,20 @@
             },
             "description": "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
           },
+          "crm_addresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM-scoped address filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\nfully-qualified addresses. Each address is authorized against\n`crm_contacts` + `crm_companies` (contact must not be hidden, company\nmust not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_domains`."
+          },
+          "crm_domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM-scoped domain filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\ndomains (in any of sender/cc/bcc/recipient). Each domain is authorized\nagainst `crm_domains` + `crm_companies` (must exist for the caller's\nteam, company must not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_addresses`."
+          },
           "email_thread_ids": {
             "type": "array",
             "items": {
@@ -8760,43 +9142,12 @@
           "shared": {
             "$ref": "#/components/schemas/SharedEmailFilter",
             "description": "Controls whether shared email threads are included in results.\nDefaults to \"exclude\" (only the user's own threads)."
-          },
-          "team_scope": {
-            "type": "boolean",
-            "description": "When true, expand visibility to every teammate's mailbox: results may\ninclude emails the requesting user is not a participant on, as long as\nat least one of their teammates is. Requires every sender/cc/bcc/recipient\nvalue to be a fully-qualified email address or a domain (no partial\nsubstring matches)."
           }
         }
       },
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
-      },
-      "EntityFilterAst": {
-        "type": "object",
-        "description": "Describes a bundle of filters that should be applied across different entity types",
-        "properties": {
-          "callf": {
-            "description": "the filters that should be applied to the call entity"
-          },
-          "cf": {
-            "description": "the filters that should be applied to the chat entity"
-          },
-          "chanf": {
-            "description": "the filters that should be applied to the channel entity"
-          },
-          "df": {
-            "description": "the filters that should be applied to the document entity"
-          },
-          "ef": {
-            "description": "the filters that should be applied to the email entity"
-          },
-          "pf": {
-            "description": "the filters that should be applied to the project entity"
-          },
-          "propf": {
-            "description": "the filters that should be applied based on entity properties"
-          }
-        }
       },
       "EntityFilters": {
         "type": "object",
@@ -9964,6 +10315,80 @@
           }
         }
       },
+      "GithubPullRequest": {
+        "type": "object",
+        "description": "Display-ready data for a GitHub pull request associated with a task.",
+        "required": [
+          "githubKey",
+          "owner",
+          "repo",
+          "number",
+          "url",
+          "displayName"
+        ],
+        "properties": {
+          "additions": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The number of added lines in the pull request, when enrichment data is available.",
+            "minimum": 0
+          },
+          "deletions": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The number of deleted lines in the pull request, when enrichment data is available.",
+            "minimum": 0
+          },
+          "displayName": {
+            "type": "string",
+            "description": "A compact label suitable for display in the UI."
+          },
+          "githubKey": {
+            "type": "string",
+            "description": "The stored GitHub association key, in `owner/repo/pull/number` format."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The GitHub pull request title, when enrichment data is available."
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The GitHub pull request number.",
+            "minimum": 0
+          },
+          "owner": {
+            "type": "string",
+            "description": "The GitHub repository owner or organization."
+          },
+          "repo": {
+            "type": "string",
+            "description": "The GitHub repository name."
+          },
+          "status": {
+            "type": ["string", "null"],
+            "description": "The GitHub pull request status, when enrichment data is available."
+          },
+          "url": {
+            "type": "string",
+            "description": "The public GitHub URL for the pull request."
+          }
+        }
+      },
+      "GithubPullRequestsResponse": {
+        "type": "object",
+        "description": "Response containing all GitHub pull requests associated with a task.",
+        "required": ["pullRequests"],
+        "properties": {
+          "pullRequests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequest"
+            },
+            "description": "Parsed pull requests, in repository query order."
+          }
+        }
+      },
       "HashMap": {
         "type": "object",
         "additionalProperties": {
@@ -10781,7 +11206,7 @@
       "PostSoupAstRequest": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/EntityFilterAst"
+            "$ref": "#/components/schemas/ApiEntityFilterAst"
           },
           {
             "$ref": "#/components/schemas/Params"
@@ -11447,6 +11872,39 @@
           "presignedUrl": {
             "type": ["string", "null"],
             "description": "If the document is an editable file, we provide a presigned url to save the updated file to."
+          }
+        }
+      },
+      "SetCompanyHiddenRequest": {
+        "type": "object",
+        "description": "Request body for `PUT /companies/{company_id}/hidden`.",
+        "required": ["hidden"],
+        "properties": {
+          "hidden": {
+            "type": "boolean",
+            "description": "New value for `crm_companies.hidden`. Setting to `true` hides\nthe company from CRM listings AND disables `email_sync` (which\npermanently deletes the company's contacts and contact sources).\nSetting to `false` un-hides the company; `email_sync` is left\nuntouched and the team must re-enable it explicitly."
+          }
+        }
+      },
+      "SetContactHiddenRequest": {
+        "type": "object",
+        "description": "Request body for `PUT /contacts/{contact_id}/hidden`.",
+        "required": ["hidden"],
+        "properties": {
+          "hidden": {
+            "type": "boolean",
+            "description": "New value for `crm_contacts.hidden`. `true` hides the contact\nfrom CRM listings for the team; `false` un-hides it. Display-only\n— does not affect populate/depopulate."
+          }
+        }
+      },
+      "SetEmailSyncRequest": {
+        "type": "object",
+        "description": "Request body for `PUT /crm/companies/{company_id}/email-sync`.",
+        "required": ["email_sync"],
+        "properties": {
+          "email_sync": {
+            "type": "boolean",
+            "description": "New value for `crm_companies.email_sync`. Setting to `false`\npermanently deletes the company's CRM contacts and contact sources."
           }
         }
       },

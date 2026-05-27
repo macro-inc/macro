@@ -83,7 +83,7 @@ export function MentionsMenuItem(props: {
       }}
       on:mousemove={() => props.setIndex(props.index)}
       class={cn('group flex items-center p-1.5 mx-1.5 rounded-md', {
-        'bg-hover': props.selected,
+        'bg-ink/5': props.selected,
       })}
     >
       <div class="mr-2 flex items-center">{icon()}</div>

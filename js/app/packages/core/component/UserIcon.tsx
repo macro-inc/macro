@@ -8,7 +8,6 @@ import {
   useDisplayName,
   useDisplayNameParts,
 } from '@core/user';
-
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
 import { Avatar, type AvatarSize } from '@ui';
@@ -261,6 +260,7 @@ function UserAvatarWithTooltip(props: {
       onOpenChange={setOpen}
       triggerAs="div"
       triggerClass={props.triggerClass}
+      triggerTabIndex={-1}
       trigger={props.avatar}
       content={props.renderContent(() => setOpen(false))}
     />

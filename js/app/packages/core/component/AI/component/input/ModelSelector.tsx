@@ -5,12 +5,11 @@ import {
   Model,
 } from '@core/component/AI/constant';
 import type { TModel } from '@core/component/AI/types';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
-import { Button } from '@ui';
+import { Dropdown } from '@ui';
 import type { Accessor } from 'solid-js';
 import { For } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 
 type ModelSelectorProps = {
   selectedModel?: TModel;
@@ -26,19 +25,14 @@ export function ModelSelector(props: ModelSelectorProps) {
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenu.Trigger>
-        {(() => {
-          const Icon = MODEL_PROVIDER_ICON[model()];
-          return (
-            <Button variant="ghost">
-              <Icon /> {MODEL_PRETTYNAME[model()]} <CaretDown />
-            </Button>
-          );
-        })()}
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenuContent>
+    <Dropdown>
+      <Dropdown.Trigger variant="ghost">
+        <Dynamic component={MODEL_PROVIDER_ICON[model()]} />
+        {MODEL_PRETTYNAME[model()]}
+        <CaretDown />
+      </Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.Group>
           <For
             each={
               props.availableModels
@@ -46,18 +40,18 @@ export function ModelSelector(props: ModelSelectorProps) {
                 : (Object.values(Model) as Model[])
             }
           >
-            {(model) => (
-              <MenuItem
-                icon={MODEL_PROVIDER_ICON[model]}
-                text={MODEL_PRETTYNAME[model]}
-                onClick={() => {
-                  setSelected(model);
-                }}
-              />
+            {(m) => (
+              <Dropdown.Item onSelect={() => setSelected(m)}>
+                <Dynamic
+                  component={MODEL_PROVIDER_ICON[m]}
+                  class="size-4 shrink-0"
+                />
+                <span class="flex-1 truncate">{MODEL_PRETTYNAME[m]}</span>
+              </Dropdown.Item>
             )}
           </For>
-        </DropdownMenuContent>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }

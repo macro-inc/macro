@@ -20,7 +20,7 @@ import type {
   EntityFilters,
   UnifiedSearchRequest,
 } from '@service-search/generated/models';
-import { type Accessor, createMemo, createSignal, on } from 'solid-js';
+import { type Accessor, createMemo, on, type Setter } from 'solid-js';
 
 function filterDataToQueryFilters(data: QueryState): EntityFilters {
   const filters: EntityFilters = {};
@@ -124,8 +124,12 @@ interface CreateSearchStateArgs {
   assignees: Accessor<string[]>;
   disableLocalSearch?: boolean;
   searchPaused?: Accessor<boolean>;
-  /** Pre-populate searchText so the service request fires on mount (skips the debounce wait for the initial value). */
-  initialText?: string;
+  /**
+   * Reactive search text. Owned by the caller so it can be wired to
+   * per-entry navigation state and survive back/forward.
+   */
+  searchText: Accessor<string>;
+  setSearchText: Setter<string>;
 }
 
 export const createSearchState = ({
@@ -134,10 +138,9 @@ export const createSearchState = ({
   assignees,
   disableLocalSearch,
   searchPaused,
-  initialText,
+  searchText,
+  setSearchText,
 }: CreateSearchStateArgs) => {
-  const [searchText, setSearchText] = createSignal(initialText ?? '');
-
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
 

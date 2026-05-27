@@ -1,5 +1,6 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
+import { ThinkingBlock } from '@core/component/AI/component/message/ThinkingBlock';
 import { RenderTool } from '@core/component/AI/component/tool/handler';
 import { McpToolCall } from '@core/component/AI/component/tool/McpToolCall';
 import { useChatContext } from '@core/component/AI/context';
@@ -288,6 +289,12 @@ function AssistantMessageParts(props: {
     );
   });
 
+  const isThinkingDone = createMemo(() => {
+    if (!props.isStreaming) return true;
+    const p = parts();
+    return p.some((part) => part.type !== 'thinking');
+  });
+
   const keyedParts = createMemo(() => {
     const counts = new Map<AssistantMessagePart['type'], number>();
     const partsByKey = new Map<string, AssistantMessagePart>();
@@ -376,6 +383,22 @@ function AssistantMessageParts(props: {
                     <ChatMessageMarkdown
                       text={text()}
                       generating={() => props.isStreaming}
+                    />
+                  </Show>
+                );
+              })()}
+            </Match>
+            <Match when={type() === 'thinking'}>
+              {(() => {
+                const thinking = () => {
+                  const p = currentPart();
+                  return p?.type === 'thinking' ? p.thinking : '';
+                };
+                return (
+                  <Show when={thinking().trim().length > 0}>
+                    <ThinkingBlock
+                      thinking={thinking()}
+                      isStreaming={!isThinkingDone()}
                     />
                   </Show>
                 );

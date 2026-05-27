@@ -8,8 +8,8 @@ import * as schemas from './schemas';
 import type * as types from './types';
 
 type ToolParserMap = {
-  bash_code_execution: {
-    call: types.BashCodeExecutionToolCall;
+  BashCodeExecution: {
+    call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
   };
   ContentSearch: {
@@ -33,6 +33,7 @@ type ToolParserMap = {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
+  ListLabels: { call: types.ListLabels; response: types.ListLabelsResponse };
   ListNotifications: {
     call: types.ListNotifications;
     response: types.ListNotificationsResponse;
@@ -79,24 +80,21 @@ type ToolParserMap = {
     response: types.SetEntityPropertyResponse;
   };
   Subagent: { call: types.Subagent; response: types.SubagentResponse };
-  text_editor_code_execution: {
-    call: types.TextEditorCodeExecutionToolCall;
+  TextEditorCodeExecution: {
+    call: types.TextEditorCodeExecution;
     response: types.TextEditorCodeExecutionResponse;
   };
   UpdateThreadLabels: {
     call: types.UpdateThreadLabels;
     response: types.UpdateThreadLabelsResponse;
   };
-  web_fetch: { call: types.WebFetchToolCall; response: types.WebFetchResponse };
-  web_search: {
-    call: types.WebSearchToolCall;
-    response: types.WebSearchResponse;
-  };
+  WebFetch: { call: types.WebFetch; response: types.WebFetchResponse };
+  WebSearch: { call: types.WebSearch; response: types.WebSearchResponse };
 };
 
 const toolParserMap = {
-  bash_code_execution: {
-    call: schemas.BashCodeExecutionToolCall,
+  BashCodeExecution: {
+    call: schemas.BashCodeExecution,
     response: schemas.BashCodeExecutionResponse,
   },
   ContentSearch: {
@@ -119,6 +117,10 @@ const toolParserMap = {
   ListEntities: {
     call: schemas.ListEntities,
     response: schemas.ListEntitiesResponse,
+  },
+  ListLabels: {
+    call: schemas.ListLabels,
+    response: schemas.ListLabelsResponse,
   },
   ListNotifications: {
     call: schemas.ListNotifications,
@@ -172,22 +174,16 @@ const toolParserMap = {
     response: schemas.SetEntityPropertyResponse,
   },
   Subagent: { call: schemas.Subagent, response: schemas.SubagentResponse },
-  text_editor_code_execution: {
-    call: schemas.TextEditorCodeExecutionToolCall,
+  TextEditorCodeExecution: {
+    call: schemas.TextEditorCodeExecution,
     response: schemas.TextEditorCodeExecutionResponse,
   },
   UpdateThreadLabels: {
     call: schemas.UpdateThreadLabels,
     response: schemas.UpdateThreadLabelsResponse,
   },
-  web_fetch: {
-    call: schemas.WebFetchToolCall,
-    response: schemas.WebFetchResponse,
-  },
-  web_search: {
-    call: schemas.WebSearchToolCall,
-    response: schemas.WebSearchResponse,
-  },
+  WebFetch: { call: schemas.WebFetch, response: schemas.WebFetchResponse },
+  WebSearch: { call: schemas.WebSearch, response: schemas.WebSearchResponse },
 };
 
 export type ToolName = keyof ToolParserMap;
@@ -199,8 +195,8 @@ type NamedRawTool = {
 };
 
 type ToolDataMap = {
-  bash_code_execution: {
-    call: types.BashCodeExecutionToolCall;
+  BashCodeExecution: {
+    call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
   };
   ContentSearch: {
@@ -224,6 +220,7 @@ type ToolDataMap = {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
+  ListLabels: { call: types.ListLabels; response: types.ListLabelsResponse };
   ListNotifications: {
     call: types.ListNotifications;
     response: types.ListNotificationsResponse;
@@ -270,19 +267,16 @@ type ToolDataMap = {
     response: types.SetEntityPropertyResponse;
   };
   Subagent: { call: types.Subagent; response: types.SubagentResponse };
-  text_editor_code_execution: {
-    call: types.TextEditorCodeExecutionToolCall;
+  TextEditorCodeExecution: {
+    call: types.TextEditorCodeExecution;
     response: types.TextEditorCodeExecutionResponse;
   };
   UpdateThreadLabels: {
     call: types.UpdateThreadLabels;
     response: types.UpdateThreadLabelsResponse;
   };
-  web_fetch: { call: types.WebFetchToolCall; response: types.WebFetchResponse };
-  web_search: {
-    call: types.WebSearchToolCall;
-    response: types.WebSearchResponse;
-  };
+  WebFetch: { call: types.WebFetch; response: types.WebFetchResponse };
+  WebSearch: { call: types.WebSearch; response: types.WebSearchResponse };
 };
 
 export type NamedTool<

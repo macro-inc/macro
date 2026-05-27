@@ -209,6 +209,12 @@
       "@notifications/*": [
         "./packages/notifications/*"
       ],
+      "@animate": [
+        "./packages/animate/index.ts"
+      ],
+      "@animate/*": [
+        "./packages/animate/*"
+      ],
       "@app/*": [
         "./packages/app/*"
       ],

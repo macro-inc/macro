@@ -1,9 +1,8 @@
 import { truncateLabel } from '@core/util/string';
 import { Combobox } from '@kobalte/core/combobox';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import CheckIcon from '@phosphor/check.svg';
 import XIcon from '@phosphor/x.svg';
-import { Button, cn, Layer } from '@ui';
+import { Button, cn, Dropdown, Layer } from '@ui';
 import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 import type { SearchableOption } from './search-filter-controls';
 import { SearchableMultiSelect } from './searchable-multi-select';
@@ -202,57 +201,43 @@ const FilterChip = (props: {
             </span>
           }
         >
-          <DropdownMenu open={open()} onOpenChange={setOpen} gutter={4}>
-            <DropdownMenu.Trigger class="inline-flex items-center gap-1.5 px-2 leading-none not-disabled:hover:bg-ink/10 not-disabled:active:bg-ink/12">
+          <Dropdown open={open()} onOpenChange={setOpen}>
+            <Dropdown.Trigger
+              variant="ghost"
+              class="inline-flex items-center gap-1.5 px-2 leading-none not-disabled:hover:bg-ink/10 not-disabled:active:bg-ink/12"
+            >
               <ChipContent
                 filter={props.filter}
                 hideCategoryLabel={props.hideCategoryLabel}
               />
-            </DropdownMenu.Trigger>
-
-            <DropdownMenu.Portal>
-              <Layer depth={2}>
-                <DropdownMenu.Content class="z-action-menu bg-surface ring-1 ring-edge-muted rounded-sm shadow-xl min-w-40 p-1">
-                  <For each={props.filter.categoryOptions}>
-                    {(option) => {
-                      const active = () =>
-                        props.filter.isOptionActive
-                          ? props.filter.isOptionActive(option.id)
-                          : props.isOptionActive(option.id);
-                      const isSingleSelect = () =>
-                        props.filter.multiple === false;
-                      return (
-                        <DropdownMenu.Item
-                          class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-highlighted:bg-ink/5 cursor-default"
-                          onSelect={() => {
-                            if (active()) return;
-                            if (props.filter.onReplace) {
-                              props.filter.onReplace(option.id);
-                            } else {
-                              props.onReplace(option.id);
-                            }
-                          }}
-                        >
-                          <Show
-                            when={isSingleSelect()}
-                            fallback={
-                              <span
-                                class={cn(
-                                  'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
-                                  active()
-                                    ? 'bg-accent border-accent'
-                                    : 'border-edge'
-                                )}
-                              >
-                                <Show when={active()}>
-                                  <CheckIcon class="size-2.5 text-surface" />
-                                </Show>
-                              </span>
-                            }
-                          >
+            </Dropdown.Trigger>
+            <Dropdown.Content>
+              <Dropdown.Group>
+                <For each={props.filter.categoryOptions}>
+                  {(option) => {
+                    const active = () =>
+                      props.filter.isOptionActive
+                        ? props.filter.isOptionActive(option.id)
+                        : props.isOptionActive(option.id);
+                    const isSingleSelect = () =>
+                      props.filter.multiple === false;
+                    return (
+                      <Dropdown.Item
+                        onSelect={() => {
+                          if (active()) return;
+                          if (props.filter.onReplace) {
+                            props.filter.onReplace(option.id);
+                          } else {
+                            props.onReplace(option.id);
+                          }
+                        }}
+                      >
+                        <Show
+                          when={isSingleSelect()}
+                          fallback={
                             <span
                               class={cn(
-                                'size-4 flex items-center justify-center shrink-0 rounded-full border transition-colors',
+                                'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
                                 active()
                                   ? 'bg-accent border-accent'
                                   : 'border-edge'
@@ -262,32 +247,45 @@ const FilterChip = (props: {
                                 <CheckIcon class="size-2.5 text-surface" />
                               </Show>
                             </span>
-                          </Show>
-
-                          <Show when={option.icon}>
-                            {(icon) => (
-                              <span class="size-4 flex items-center justify-center shrink-0">
-                                {icon()()}
-                              </span>
-                            )}
-                          </Show>
-
+                          }
+                        >
                           <span
                             class={cn(
-                              'flex-1 truncate',
-                              active() ? 'text-ink' : 'text-ink-muted'
+                              'size-4 flex items-center justify-center shrink-0 rounded-full border transition-colors',
+                              active()
+                                ? 'bg-accent border-accent'
+                                : 'border-edge'
                             )}
                           >
-                            {option.label}
+                            <Show when={active()}>
+                              <CheckIcon class="size-2.5 text-surface" />
+                            </Show>
                           </span>
-                        </DropdownMenu.Item>
-                      );
-                    }}
-                  </For>
-                </DropdownMenu.Content>
-              </Layer>
-            </DropdownMenu.Portal>
-          </DropdownMenu>
+                        </Show>
+
+                        <Show when={option.icon}>
+                          {(icon) => (
+                            <span class="size-4 flex items-center justify-center shrink-0">
+                              {icon()()}
+                            </span>
+                          )}
+                        </Show>
+
+                        <span
+                          class={cn(
+                            'flex-1 truncate',
+                            active() ? 'text-ink' : 'text-ink-muted'
+                          )}
+                        >
+                          {option.label}
+                        </span>
+                      </Dropdown.Item>
+                    );
+                  }}
+                </For>
+              </Dropdown.Group>
+            </Dropdown.Content>
+          </Dropdown>
         </Show>
 
         <ChipRemoveButton onRemove={props.onRemove} />

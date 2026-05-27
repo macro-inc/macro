@@ -50,12 +50,24 @@ pub enum EmailErr {
     /// Invalid email filter input.
     #[error("{0}")]
     InvalidEmailFilter(String),
-    /// A team-scoped query referenced an email domain that is either not
-    /// tracked as a CRM organization for the team, or whose organization
-    /// has `email_sync` disabled. Without email_sync, the team has not
-    /// opted into sharing emails for that organization across members.
-    #[error(
-        "Domain {0} is not authorized for team-scoped email queries (no matching CRM organization, or organization has email_sync disabled)"
-    )]
-    DomainNotPermittedForTeamScope(String),
+    /// The caller's team has `team_crm_settings.crm_enabled = false` (or no
+    /// row at all), so no CRM-scoped query is allowed.
+    #[error("CRM is disabled for this team")]
+    CrmDisabledForTeam,
+    /// A CRM-scoped query referenced a domain that does not have a matching
+    /// `crm_domains` row for the caller's team.
+    #[error("CRM domain {0} not found for this team")]
+    CrmDomainNotFound(String),
+    /// A CRM-scoped query referenced a domain whose company is hidden or
+    /// has `email_sync = false`.
+    #[error("CRM domain {0} is not permitted for CRM-scoped queries")]
+    CrmDomainNotPermitted(String),
+    /// A CRM-scoped query referenced an address with no matching
+    /// `crm_contacts` row for the caller's team.
+    #[error("CRM address {0} not found for this CRM scope")]
+    CrmAddressNotFound(String),
+    /// A CRM-scoped query referenced an address whose contact or company
+    /// is hidden, or whose company has `email_sync = false`.
+    #[error("CRM address {0} is not permitted for CRM-scoped queries")]
+    CrmAddressNotPermitted(String),
 }

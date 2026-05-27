@@ -17,8 +17,15 @@ pub struct CrmCompany {
     pub team_id: uuid::Uuid,
     /// Whether email sync is enabled for this company
     pub email_sync: bool,
+    /// Whether the company is hidden from CRM listings for the owning
+    /// team. Display-only opt-out; setting it to `true` also forces
+    /// `email_sync = false` (see
+    /// [`crate::domain::service::CrmService::set_company_hidden`]).
+    pub hidden: bool,
     /// When the company was created
     pub created_at: DateTime<Utc>,
+    /// When the company was last updated
+    pub updated_at: DateTime<Utc>,
     /// All domains associated with this company
     pub domains: Vec<CrmDomain>,
 }
@@ -57,10 +64,79 @@ pub struct CrmDomain {
     pub created_at: DateTime<Utc>,
 }
 
+/// Result of [`crate::domain::companies_repo::CompaniesRepository::crm_scope_precheck`].
+///
+/// Carries the per-input authorization status the caller (`EmailService`)
+/// needs to either accept or reject a CRM-scoped query before it runs.
+#[derive(Debug, Clone)]
+pub struct CrmScopePrecheck {
+    /// `team_crm_settings.crm_enabled` for the requesting team. `false`
+    /// when the team's row exists with `crm_enabled = false`, *or* when no
+    /// row exists at all (older teams predating `team_crm_settings`).
+    pub crm_enabled: bool,
+    /// One row per requested domain, in the same order as the input list.
+    /// **Exception:** when `crm_enabled = false`, this vec is empty —
+    /// the email service short-circuits on the killswitch before
+    /// consulting per-input rows, so the per-domain probes are skipped
+    /// and callers must not assume length parity with the input list
+    /// without first checking `crm_enabled`.
+    pub domains: Vec<CrmDomainStatus>,
+    /// One row per requested address, in the same order as the input
+    /// list. Same `crm_enabled = false` exception as [`Self::domains`].
+    pub addresses: Vec<CrmAddressStatus>,
+}
+
+/// Per-domain authorization status. See [`CrmScopePrecheck`].
+#[derive(Debug, Clone)]
+pub struct CrmDomainStatus {
+    /// The domain as supplied (lowercased).
+    pub domain: String,
+    /// Whether a `crm_domains` row exists for this `(team_id, domain)`.
+    pub exists: bool,
+    /// `crm_companies.hidden` for the company owning the matched
+    /// `crm_domains` row. `false` when `!exists`.
+    pub company_hidden: bool,
+    /// `crm_companies.email_sync` for the company owning the matched
+    /// `crm_domains` row. `false` when `!exists`.
+    pub email_sync: bool,
+}
+
+/// Per-address authorization status. See [`CrmScopePrecheck`].
+#[derive(Debug, Clone)]
+pub struct CrmAddressStatus {
+    /// The address as supplied (lowercased).
+    pub address: String,
+    /// Whether a `crm_contacts` row exists whose company belongs to the
+    /// requesting team. Cross-team contacts (same email under a different
+    /// team's company) are reported as `exists = false` so existence
+    /// doesn't leak across teams.
+    pub exists: bool,
+    /// `crm_contacts.hidden` for the matched contact. `false` when `!exists`.
+    pub contact_hidden: bool,
+    /// `crm_companies.hidden` for the matched contact's company. `false` when `!exists`.
+    pub company_hidden: bool,
+    /// `crm_companies.email_sync` for the matched contact's company. `false` when `!exists`.
+    pub email_sync: bool,
+}
+
 /// Errors that can occur in the CRM domain.
 #[derive(Debug, thiserror::Error)]
 pub enum CrmError {
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),
+    /// Company id is not owned by the requesting team.
+    #[error("crm company not found for team")]
+    CompanyNotFoundForTeam,
+    /// Contact id is not owned by the requesting team.
+    #[error("crm contact not found for team")]
+    ContactNotFoundForTeam,
+    /// Tried to mutate a CRM company in a way that contradicts its
+    /// `hidden = true` state — currently raised when attempting to
+    /// re-enable `email_sync` on a hidden company.
+    #[error("crm company is hidden")]
+    CompanyHidden,
+    /// Entity access receipt did not contain a valid team UUID.
+    #[error("invalid team id in entity access receipt")]
+    InvalidTeamId,
 }

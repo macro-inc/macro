@@ -13,6 +13,17 @@ impl GithubAccessToken {
     pub fn new(token: String) -> Self {
         Self(token)
     }
+
+    /// Returns the token string without exposing ownership of the secret.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsRef<str> for GithubAccessToken {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
 }
 
 /// A GitHub link record (as stored in the database)

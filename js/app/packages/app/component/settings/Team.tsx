@@ -52,7 +52,15 @@ import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInvi
 import { formatRelativeTimestamp } from '@entity';
 import { useHasPaidAccess } from '@core/auth/license';
 import { usePaywallState } from '@core/constant/PaywallState';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { z } from 'zod';
+import { getTeamSlugError, normalizeTeamSlugInput } from './teamSlug';
+
+function useRequiresPaidUpgrade() {
+  const hasPaidAccess = useHasPaidAccess();
+  const newPricingFlag = useFeatureFlag('enable-new-pricing');
+  return createMemo(() => newPricingFlag().enabled && !hasPaidAccess());
+}
 
 const roleOrder: Record<string, number> = {
   [TeamRole.owner]: 0,
@@ -140,10 +148,10 @@ function InviteEntryRow(props: {
           onBlur={() => props.onBlur()}
           placeholder="Enter email address"
           class={cn(
-            'flex-1 min-w-0 px-3 py-2 text-sm border rounded-xs bg-surface text-ink placeholder:text-ink/30 outline-none',
+            'flex-1 min-w-0 px-3 py-2 text-sm border rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none',
             props.error
               ? 'border-failure focus:border-failure'
-              : 'border-edge-muted focus:border-accent/50'
+              : 'border-edge-muted focus:border-accent'
           )}
         />
         <Show when={props.showRemove}>
@@ -151,7 +159,7 @@ function InviteEntryRow(props: {
             <Button
               variant="base"
               size="icon-sm"
-              class="rounded-xs shrink-0 focus:border-accent/50"
+              class="rounded-xs shrink-0 focus:border-accent"
               tabIndex={0}
               onClick={props.onRemove}
             >
@@ -266,7 +274,7 @@ function InviteEmailsInput(props: {
       </Show>
       <Button
         variant="base"
-        class="rounded-xs w-full justify-center focus:border-accent/50"
+        class="rounded-xs w-full justify-center focus:border-accent"
         tabIndex={0}
         disabled={!canAddRow()}
         onClick={addRow}
@@ -420,6 +428,8 @@ function UserInviteRow(props: {
   onDecline: () => void;
   isAccepting: boolean;
   isDeclining: boolean;
+  requiresUpgrade: boolean;
+  onUpgrade: () => void;
 }) {
   return (
     <div class="flex items-center justify-between py-3 border-b border-edge-muted last:border-b-0 gap-3">
@@ -450,7 +460,12 @@ function UserInviteRow(props: {
           variant="active"
           class="px-2 py-1 rounded-xs"
           disabled={props.isAccepting || props.isDeclining}
-          onClick={props.onAccept}
+          tooltip={
+            props.requiresUpgrade
+              ? 'Joining a team requires a paid plan'
+              : undefined
+          }
+          onClick={props.requiresUpgrade ? props.onUpgrade : props.onAccept}
         >
           <Show when={props.isAccepting} fallback="Join">
             <SpinnerIcon class="size-4 animate-spin" />
@@ -465,6 +480,8 @@ function TeamInvites() {
   const userInvitesQuery = useUserInvitesQuery();
   const joinTeamMutation = useJoinTeamMutation();
   const rejectMutation = useRejectInvitationMutation();
+  const requiresUpgrade = useRequiresPaidUpgrade();
+  const { showPaywall } = usePaywallState();
 
   const invites = () => userInvitesQuery.data?.invites ?? [];
 
@@ -499,6 +516,8 @@ function TeamInvites() {
                       }
                       isAccepting={isAccepting(invite.id)}
                       isDeclining={isDeclining(invite.id)}
+                      requiresUpgrade={requiresUpgrade()}
+                      onUpgrade={() => showPaywall()}
                     />
                   )}
                 </For>
@@ -534,6 +553,7 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
   );
 
   const createTeamMutation = useCreateTeamWithInvitesMutation();
+  const requiresUpgrade = useRequiresPaidUpgrade();
 
   const charCountColor = () => {
     const len = teamName().trim().length;
@@ -617,27 +637,29 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
             onBlur={() => validateTeamName()}
             placeholder="My Team"
             class={cn(
-              'w-full px-3 py-2 text-sm border rounded-xs bg-surface text-ink placeholder:text-ink/30 outline-none',
+              'w-full px-3 py-2 text-sm border rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none',
               teamNameError()
               ? 'border-failure focus:border-failure'
-              : 'border-edge-muted focus:border-accent/50'
+              : 'border-edge-muted focus:border-accent'
             )}
             />
             <Show when={teamNameError()}>
               <p class="text-xs text-failure-ink">{teamNameError()}</p>
             </Show>
           </div>
-          <div class="flex flex-col gap-1">
-            <label class="text-sm text-ink-muted">
-              Invite members (optional)
-            </label>
-            <InviteEmailsInput
-            invites={invites()}
-            onChange={setInvites}
-            errors={inviteErrors()}
-            onErrorsChange={setInviteErrors}
-            />
-          </div>
+          <Show when={!requiresUpgrade()}>
+            <div class="flex flex-col gap-1">
+              <label class="text-sm text-ink-muted">
+                Invite members (optional)
+              </label>
+              <InviteEmailsInput
+              invites={invites()}
+              onChange={setInvites}
+              errors={inviteErrors()}
+              onErrorsChange={setInviteErrors}
+              />
+            </div>
+          </Show>
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"
@@ -733,6 +755,7 @@ function EmptyTeamState() {
 function TeamManagement(props: {
   teamId: string;
   teamName: string;
+  teamSlug: string;
   ownerId: string;
 }) {
   const userId = useUserId();
@@ -745,6 +768,8 @@ function TeamManagement(props: {
   const patchTeamMutation = usePatchTeamMutation();
   const inviteToTeamMutation = useInviteToTeamMutation();
   const deleteTeamMutation = useDeleteTeamMutation();
+  const requiresUpgrade = useRequiresPaidUpgrade();
+  const { showPaywall } = usePaywallState();
 
   const [showDeleteTeamModal, setShowDeleteTeamModal] = createSignal(false);
   const [deleteConfirmation, setDeleteConfirmation] = createSignal('');
@@ -761,6 +786,12 @@ function TeamManagement(props: {
   const [editingTeamName, setEditingTeamName] = createSignal<
     string | undefined
   >(undefined);
+  const [editingTeamSlug, setEditingTeamSlug] = createSignal<
+    string | undefined
+  >(undefined);
+  const [teamSlugError, setTeamSlugError] = createSignal<string | undefined>(
+    undefined
+  );
 
   const [memberListWrapperRef, setMemberListWrapperRef] =
     createSignal<HTMLDivElement>();
@@ -797,6 +828,36 @@ function TeamManagement(props: {
     return editing !== undefined && editing.trim() !== props.teamName;
   };
 
+  const teamSlugValue = () => editingTeamSlug() ?? props.teamSlug;
+  const hasTeamSlugInputChanged = () => {
+    const editing = editingTeamSlug();
+    return editing !== undefined && editing !== props.teamSlug;
+  };
+  const hasTeamSlugChanged = () => {
+    const editing = editingTeamSlug();
+    return (
+      editing !== undefined &&
+      normalizeTeamSlugInput(editing) !== props.teamSlug
+    );
+  };
+  const normalizedTeamSlugPreview = () => {
+    const editing = editingTeamSlug();
+    if (editing === undefined || !hasTeamSlugChanged()) return undefined;
+    if (getTeamSlugError(editing)) return undefined;
+
+    const normalized = normalizeTeamSlugInput(editing);
+    return normalized === editing ? undefined : normalized;
+  };
+  const canSaveTeamSlug = () => {
+    const editing = editingTeamSlug();
+    return (
+      editing !== undefined &&
+      hasTeamSlugChanged() &&
+      !patchTeamMutation.isPending &&
+      getTeamSlugError(editing) === undefined
+    );
+  };
+
   const members = createMemo(() => {
     const unsorted = teamQuery.data?.members ?? [];
     return [...unsorted].sort((a, b) => {
@@ -824,6 +885,38 @@ function TeamManagement(props: {
 
   const handleCancelTeamNameEdit = () => {
     setEditingTeamName(undefined);
+  };
+
+  const validateTeamSlug = (slug: string) => {
+    const error = getTeamSlugError(slug);
+    setTeamSlugError(error);
+    return error === undefined;
+  };
+
+  const handleTeamSlugChange = (slug: string) => {
+    setEditingTeamSlug(slug);
+    validateTeamSlug(slug);
+  };
+
+  const handleSaveTeamSlug = () => {
+    const editedSlug = editingTeamSlug();
+    if (!props.teamId || editedSlug === undefined) return;
+    if (!validateTeamSlug(editedSlug) || !hasTeamSlugChanged()) return;
+
+    patchTeamMutation.mutate(
+      { teamId: props.teamId, request: { slug: editedSlug } },
+      {
+        onSuccess: () => {
+          setEditingTeamSlug(undefined);
+          setTeamSlugError(undefined);
+        },
+      }
+    );
+  };
+
+  const handleCancelTeamSlugEdit = () => {
+    setEditingTeamSlug(undefined);
+    setTeamSlugError(undefined);
   };
 
   const handleDeleteTeam = () => {
@@ -909,7 +1002,16 @@ function TeamManagement(props: {
                 variant="base"
                 size="sm"
                 class="rounded-xs"
-                onClick={() => setShowInviteModal(true)}
+                tooltip={
+                  requiresUpgrade()
+                    ? 'Inviting members requires a paid plan'
+                    : undefined
+                }
+                onClick={() =>
+                  requiresUpgrade()
+                    ? showPaywall()
+                    : setShowInviteModal(true)
+                }
               >
                 <PlusIcon class="size-4" />
                 Invite
@@ -929,7 +1031,7 @@ function TeamManagement(props: {
 
         <Panel.Body>
          <div class="flex h-full flex-col">
-          <div class="flex items-center px-2 h-15.25 border-b border-edge-muted shrink-0">
+          <div class="flex flex-col gap-2 px-2 py-2 border-b border-edge-muted shrink-0">
             <div class="flex items-center justify-between w-full border border-edge rounded-sm px-4 py-2">
               <span class="text-sm text-ink-muted">Name</span>
               <Show
@@ -972,6 +1074,76 @@ function TeamManagement(props: {
                           class="rounded-xs"
                           disabled={patchTeamMutation.isPending}
                           onClick={handleCancelTeamNameEdit}
+                        >
+                          <XIcon class="size-4" />
+                        </Button>
+                      </Tooltip>
+                    </div>
+                  </Show>
+                </div>
+              </Show>
+            </div>
+            <div class="flex items-center justify-between w-full border border-edge rounded-sm px-4 py-2 gap-3">
+              <span class="text-sm text-ink-muted">Slug</span>
+              <Show
+                when={isOwner()}
+                fallback={
+                  <span class="text-sm text-ink">{props.teamSlug}</span>
+                }
+              >
+                <div class="flex items-center gap-2 min-w-0">
+                  <div class="flex flex-col items-end gap-1 min-w-0">
+                    <input
+                      type="text"
+                      value={teamSlugValue()}
+                      onInput={(e) =>
+                        handleTeamSlugChange(e.currentTarget.value)
+                      }
+                      onBlur={() => {
+                        const editing = editingTeamSlug();
+                        if (editing !== undefined) {
+                          validateTeamSlug(editing);
+                        }
+                      }}
+                      placeholder="Enter team slug"
+                      class="text-sm bg-surface border-none outline-none text-ink text-right w-48"
+                    />
+                    <Show when={teamSlugError()}>
+                      <p class="text-xs text-failure-ink text-right">
+                        {teamSlugError()}
+                      </p>
+                    </Show>
+                    <Show when={normalizedTeamSlugPreview()}>
+                      <p class="text-xs text-ink-muted text-right">
+                        Will save as {normalizedTeamSlugPreview()}
+                      </p>
+                    </Show>
+                  </div>
+                  <Show when={hasTeamSlugInputChanged()}>
+                    <div class="flex items-center gap-1 shrink-0">
+                      <Tooltip label="Save">
+                        <Button
+                          variant="active"
+                          size="icon-sm"
+                          class="rounded-xs"
+                          disabled={!canSaveTeamSlug()}
+                          onClick={handleSaveTeamSlug}
+                        >
+                          <Show
+                            when={patchTeamMutation.isPending}
+                            fallback={<CheckIcon class="size-4" />}
+                          >
+                            <SpinnerIcon class="size-4 animate-spin" />
+                          </Show>
+                        </Button>
+                      </Tooltip>
+                      <Tooltip label="Cancel">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          class="rounded-xs"
+                          disabled={patchTeamMutation.isPending}
+                          onClick={handleCancelTeamSlugEdit}
                         >
                           <XIcon class="size-4" />
                         </Button>
@@ -1084,7 +1256,7 @@ function TeamManagement(props: {
               value={deleteConfirmation()}
               onInput={(e) => setDeleteConfirmation(e.currentTarget.value)}
               placeholder={deleteConfirmationPhrase()}
-              class="w-full px-3 py-2 text-sm border border-edge-muted rounded-xs bg-surface text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
+              class="w-full px-3 py-2 text-sm border border-edge-muted rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none focus:border-accent"
             />
             <div class="flex justify-end gap-1 pt-2">
               <Button
@@ -1294,6 +1466,7 @@ function TeamContent() {
           <TeamManagement
             teamId={t.id}
             teamName={t.name}
+            teamSlug={t.slug}
             ownerId={t.owner_id}
           />
         )}

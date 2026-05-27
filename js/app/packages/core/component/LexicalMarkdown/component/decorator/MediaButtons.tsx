@@ -1,20 +1,11 @@
-import {
-  DropdownMenuContent,
-  MenuItem,
-  MenuSeparator,
-} from '@core/component/Menu';
-import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
 import { Dialog } from '@kobalte/core/dialog';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import NewTab from '@phosphor/arrow-square-out.svg';
 import ArrowsOut from '@phosphor/arrows-out-simple.svg';
 import ThreeDotsIcon from '@phosphor/dots-three.svg';
 import Trash from '@phosphor/trash.svg';
-import { Button, Layer } from '@ui';
+import { Button, Dropdown, Layer } from '@ui';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
-
-false && clickOutside;
 
 const COLLAPSE_WIDTH = 120;
 
@@ -101,67 +92,58 @@ export function MediaButtons(props: MediaButtonsProps) {
           <ButtonContent />
         </Show>
         <Show when={collapsed()}>
-          <DropdownMenu
+          <Dropdown
             open={menuOpen()}
             onOpenChange={setMenuOpen}
             placement="bottom-end"
           >
-            <DropdownMenu.Trigger
-              as={Button}
+            <Dropdown.Trigger
               size="icon-sm"
               variant="ghost"
               tooltip="More options"
             >
               <ThreeDotsIcon />
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenuContent>
-                <div
-                  use:clickOutside={(e) => {
-                    const target = e.target as HTMLElement;
-                    const menu = target.closest('.submenu');
-                    if (!menu) {
+            </Dropdown.Trigger>
+            <Dropdown.Content>
+              <Dropdown.Group>
+                <Show when={props.enlarge}>
+                  <Dropdown.Item
+                    onSelect={() => {
+                      props.enlarge?.();
                       setMenuOpen(false);
-                    }
-                  }}
-                  class="w-full"
-                >
-                  <Show when={props.enlarge}>
-                    <MenuItem
-                      text="View full screen"
-                      icon={ArrowsOut}
-                      onClick={() => {
-                        props.enlarge?.();
-                        setMenuOpen(false);
-                      }}
-                    />
-                  </Show>
-                  <Show when={props.newTab && !isMobile()}>
-                    <MenuItem
-                      text="Open in new tab"
-                      icon={NewTab}
-                      onClick={() => {
-                        props.newTab?.();
-                        setMenuOpen(false);
-                      }}
-                    />
-                  </Show>
-                  <Show when={props.delete}>
-                    <MenuSeparator />
-                    <MenuItem
-                      text="Remove"
-                      icon={Trash}
-                      iconClass="text-failure"
-                      onClick={() => {
-                        props.delete?.();
-                        setMenuOpen(false);
-                      }}
-                    />
-                  </Show>
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu.Portal>
-          </DropdownMenu>
+                    }}
+                  >
+                    <ArrowsOut class="size-4 shrink-0" />
+                    <span class="flex-1 truncate">View full screen</span>
+                  </Dropdown.Item>
+                </Show>
+                <Show when={props.newTab && !isMobile()}>
+                  <Dropdown.Item
+                    onSelect={() => {
+                      props.newTab?.();
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <NewTab class="size-4 shrink-0" />
+                    <span class="flex-1 truncate">Open in new tab</span>
+                  </Dropdown.Item>
+                </Show>
+              </Dropdown.Group>
+              <Show when={props.delete}>
+                <Dropdown.Group>
+                  <Dropdown.Item
+                    onSelect={() => {
+                      props.delete?.();
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <Trash class="size-4 shrink-0 text-failure" />
+                    <span class="flex-1 truncate">Remove</span>
+                  </Dropdown.Item>
+                </Dropdown.Group>
+              </Show>
+            </Dropdown.Content>
+          </Dropdown>
         </Show>
       </div>
     </Layer>

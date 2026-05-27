@@ -152,14 +152,10 @@ function InlineTextEditorResult(props: {
 }
 
 const handler = createToolRenderer({
-  name: 'text_editor_code_execution',
-  handleCall: async (ctx) => {
-    if (ctx.tool.data.command === 'create' && ctx.tool.data.file_text) {
-      toolFileDataMap[ctx.tool.id] = {
-        path: ctx.tool.data.path,
-        fileText: ctx.tool.data.file_text,
-      };
-    }
+  name: 'TextEditorCodeExecution',
+  handleCall: async (_ctx) => {
+    // The new tool shape has a single `input` string field;
+    // file-creation side effects are no longer possible from the call data alone.
   },
   handleResponse: async (ctx) => {
     const { content } = ctx.tool.data;

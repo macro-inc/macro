@@ -9,11 +9,6 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
-import {
-  PROPERTY_OPTION_IDS,
-  SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -22,6 +17,8 @@ import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import CircleDashedIcon from '@phosphor/circle-dashed.svg';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
+import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useContacts } from '@queries/contacts/contacts';
 import { cn, Dropdown, Tooltip } from '@ui';
 import {
@@ -418,14 +415,16 @@ const SearchableFilterSubmenu = (props: {
       </Dropdown.SubTrigger>
 
       <Dropdown.SubContent class="w-65 max-w-[90vw]">
-        <SearchableMultiSelectInline
-          options={props.options}
-          activeIds={props.activeIds}
-          onChange={props.onChange}
-          placeholder={props.placeholder}
-          inputRef={setInputRef}
-          onRequestClose={() => setIsOpen(false)}
-        />
+        <Dropdown.Group class="p-0 gap-0">
+          <SearchableMultiSelectInline
+            onRequestClose={() => setIsOpen(false)}
+            placeholder={props.placeholder}
+            activeIds={props.activeIds}
+            onChange={props.onChange}
+            options={props.options}
+            inputRef={setInputRef}
+          />
+        </Dropdown.Group>
       </Dropdown.SubContent>
     </Dropdown.Sub>
   );
@@ -444,7 +443,7 @@ function SingleValueSubmenu<T>(props: {
         <span class="text-ink">{props.label}</span>
         <CaretRightIcon class="size-3 text-ink-muted" />
       </Dropdown.SubTrigger>
-      <Dropdown.SubContent class="min-w-40">
+      <Dropdown.SubContent>
         <Dropdown.Group>
           <For each={props.options}>
             {(option) => {
@@ -638,7 +637,7 @@ const SearchIndexSubRow = (props: {
       <SearchIndexRowLabel option={props.option} active={props.active} />
       <CaretRightIcon class="size-3 text-ink-muted" />
     </Dropdown.SubTrigger>
-    <Dropdown.SubContent class="min-w-45">
+    <Dropdown.SubContent>
       <Dropdown.Group>{props.children}</Dropdown.Group>
     </Dropdown.SubContent>
   </Dropdown.Sub>
@@ -795,7 +794,7 @@ export const UnifiedFilterDropdown = () => {
           </Dropdown.Trigger>
         </Tooltip>
 
-        <Dropdown.Content class="min-w-45">
+        <Dropdown.Content>
           <Dropdown.Group>
             <Show
               when={
@@ -811,7 +810,7 @@ export const UnifiedFilterDropdown = () => {
                           <CaretRightIcon class="size-3 text-ink-muted" />
                         </Dropdown.SubTrigger>
 
-                        <Dropdown.SubContent class="min-w-40">
+                        <Dropdown.SubContent>
                           <Dropdown.Group>
                             <For each={category.options}>
                               {(option) => {

@@ -12,7 +12,7 @@ use crate::domain::{
     models::Link,
     ports::{EmailService, GmailTokenProvider},
 };
-use ai::tool::{AsyncToolCollection, ToolCallError};
+use ai_toolset::{AsyncToolCollection, ToolCallError};
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
@@ -109,4 +109,5 @@ where
     AsyncToolCollection::new()
         .add_tool::<UpdateThreadLabels, EmailToolContext<T, G, E>>()
         .add_tool::<GetThread, EmailToolContext<T, G, E>>()
+        .add_tool::<ListLabels, EmailToolContext<T, G, E>>()
 }

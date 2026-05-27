@@ -259,6 +259,7 @@ pub async fn insert_label(
 }
 
 /// inserts the labels of an email into the database in a batch
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn insert_message_labels(
     tx: &mut sqlx::PgConnection,
     link_id: Uuid,

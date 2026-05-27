@@ -92,7 +92,7 @@ function BashResult(props: { result: BashCodeExecutionResult }) {
 }
 
 const handler = createToolRenderer({
-  name: 'bash_code_execution',
+  name: 'BashCodeExecution',
   render: (ctx) => {
     const [isExpanded, setIsExpanded] = createSignal(false);
 
@@ -104,7 +104,7 @@ const handler = createToolRenderer({
         response={
           isExpanded() ? (
             <div class="flex flex-col gap-2">
-              <CodeFence content={ctx.tool.data.command} collapsible={false} />
+              <CodeFence content={ctx.tool.data.input} collapsible={false} />
               <Show when={ctx.response}>
                 {(response) => {
                   const isError =

@@ -966,6 +966,9 @@ export const getCallRecordResponse = zod
       .nullish()
       .describe('Presigned URL for the call recording, if available.'),
     roomName: zod.string().describe('The RTC room name.'),
+    shareWithTeam: zod
+      .boolean()
+      .describe("Whether the call is shared with the creator's team."),
     startedAt: zod.iso
       .datetime({})
       .describe(
@@ -1794,6 +1797,63 @@ export const getChannelParticipantsResponse = zod.array(
 );
 
 /**
+ * @summary Toggle `email_sync` on a CRM company. `false` disables CRM email
+sharing for the company and permanently removes its existing CRM
+contacts and contact sources.
+ */
+export const setEmailSyncParams = zod.object({
+  company_id: zod.uuid().describe('The CRM company to update'),
+});
+
+export const setEmailSyncBody = zod
+  .object({
+    email_sync: zod
+      .boolean()
+      .describe(
+        "New value for `crm_companies.email_sync`. Setting to `false`\npermanently deletes the company's CRM contacts and contact sources."
+      ),
+  })
+  .describe(
+    'Request body for `PUT \/crm\/companies\/{company_id}\/email-sync`.'
+  );
+
+/**
+ * @summary Toggle `hidden` on a CRM company. Hiding also disables `email_sync`
+and cascades to clearing the company's contacts and contact sources.
+ */
+export const setCompanyHiddenParams = zod.object({
+  company_id: zod.uuid().describe('The CRM company to update'),
+});
+
+export const setCompanyHiddenBody = zod
+  .object({
+    hidden: zod
+      .boolean()
+      .describe(
+        "New value for `crm_companies.hidden`. Setting to `true` hides\nthe company from CRM listings AND disables `email_sync` (which\npermanently deletes the company's contacts and contact sources).\nSetting to `false` un-hides the company; `email_sync` is left\nuntouched and the team must re-enable it explicitly."
+      ),
+  })
+  .describe('Request body for `PUT \/companies\/{company_id}\/hidden`.');
+
+/**
+ * @summary Toggle `hidden` on a CRM contact. Hiding is a display-only opt-out
+scoped to the team that owns the contact's company.
+ */
+export const setContactHiddenParams = zod.object({
+  contact_id: zod.uuid().describe('The CRM contact to update'),
+});
+
+export const setContactHiddenBody = zod
+  .object({
+    hidden: zod
+      .boolean()
+      .describe(
+        'New value for `crm_contacts.hidden`. `true` hides the contact\nfrom CRM listings for the team; `false` un-hides it. Display-only\n— does not affect populate\/depopulate.'
+      ),
+  })
+  .describe('Request body for `PUT \/contacts\/{contact_id}\/hidden`.');
+
+/**
  * @summary Gets the users documents to populate their recent document list
  */
 export const getUserDocumentsHandlerQueryParams = zod.object({
@@ -1985,6 +2045,12 @@ export const createDocumentBody = zod.object({
     .describe(
       'Whether to add a viewed_at record for this document upon creation.'
     ),
+  teamId: zod
+    .uuid()
+    .nullish()
+    .describe(
+      'Team to assign the task number within when creating a task document. If omitted,\nthe service may infer it only when the creator belongs to exactly one team.'
+    ),
 });
 
 export const createDocumentResponse = zod.object({
@@ -2096,6 +2162,18 @@ export const createDocumentResponse = zod.object({
                   ),
               })
               .describe('API-visible content lifecycle and location metadata.'),
+            teamId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'The team this task number is scoped to, for task documents.'
+              ),
+            teamTaskId: zod
+              .number()
+              .nullish()
+              .describe(
+                'The task number assigned within the team, for task documents.'
+              ),
           })
         )
         .describe(
@@ -2315,12 +2393,26 @@ export const createTaskHandlerBody = zod
         'Whether to share the task with your team or not\nDefaults to true'
       ),
     taskName: zod.string().describe('The name of the task.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Team to assign the task number within. If omitted, it is inferred only\nwhen the creator belongs to exactly one team.'
+      ),
   })
   .describe('Request body for creating a task.');
 
 export const createTaskHandlerResponse = zod
   .object({
     documentId: zod.string().describe('The document ID of the created task.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('The team this task number is scoped to.'),
+    teamTaskId: zod
+      .number()
+      .nullish()
+      .describe('The task number assigned within the team.'),
   })
   .describe('Response for creating a task.');
 
@@ -3482,6 +3574,18 @@ export const copyDocumentResponse = zod
                 .describe(
                   'API-visible content lifecycle and location metadata.'
                 ),
+              teamId: zod
+                .uuid()
+                .nullish()
+                .describe(
+                  'The team this task number is scoped to, for task documents.'
+                ),
+              teamTaskId: zod
+                .number()
+                .nullish()
+                .describe(
+                  'The task number assigned within the team, for task documents.'
+                ),
             })
           )
           .describe(
@@ -3512,6 +3616,89 @@ export const exportDocumentResponse = zod.object({
     .string()
     .describe('The presigned url to download the raw content of the document'),
 });
+
+/**
+ * Returns GitHub pull requests associated with a task document.
+Returns 400 if the document is not a task.
+ * @summary Handler for `GET /documents/{document_id}/github_prs`.
+ */
+export const getDocumentGithubPullRequestsParams = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+export const getDocumentGithubPullRequestsResponsePullRequestsItemAdditionsMin = 0;
+
+export const getDocumentGithubPullRequestsResponsePullRequestsItemDeletionsMin = 0;
+
+export const getDocumentGithubPullRequestsResponsePullRequestsItemNumberMin = 0;
+
+export const getDocumentGithubPullRequestsResponse = zod
+  .object({
+    pullRequests: zod
+      .array(
+        zod
+          .object({
+            additions: zod
+              .number()
+              .min(
+                getDocumentGithubPullRequestsResponsePullRequestsItemAdditionsMin
+              )
+              .nullish()
+              .describe(
+                'The number of added lines in the pull request, when enrichment data is available.'
+              ),
+            deletions: zod
+              .number()
+              .min(
+                getDocumentGithubPullRequestsResponsePullRequestsItemDeletionsMin
+              )
+              .nullish()
+              .describe(
+                'The number of deleted lines in the pull request, when enrichment data is available.'
+              ),
+            displayName: zod
+              .string()
+              .describe('A compact label suitable for display in the UI.'),
+            githubKey: zod
+              .string()
+              .describe(
+                'The stored GitHub association key, in `owner\/repo\/pull\/number` format.'
+              ),
+            name: zod
+              .string()
+              .nullish()
+              .describe(
+                'The GitHub pull request title, when enrichment data is available.'
+              ),
+            number: zod
+              .number()
+              .min(
+                getDocumentGithubPullRequestsResponsePullRequestsItemNumberMin
+              )
+              .describe('The GitHub pull request number.'),
+            owner: zod
+              .string()
+              .describe('The GitHub repository owner or organization.'),
+            repo: zod.string().describe('The GitHub repository name.'),
+            status: zod
+              .string()
+              .nullish()
+              .describe(
+                'The GitHub pull request status, when enrichment data is available.'
+              ),
+            url: zod
+              .string()
+              .describe('The public GitHub URL for the pull request.'),
+          })
+          .describe(
+            'Display-ready data for a GitHub pull request associated with a task.'
+          )
+      )
+      .describe('Parsed pull requests, in repository query order.'),
+  })
+  .describe(
+    'Response containing all GitHub pull requests associated with a task.'
+  );
 
 /**
  * @summary Gets the presigned url(s) for the document. aka location
@@ -5814,6 +6001,18 @@ export const postItemsSoupBody = zod
           .describe(
             "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
           ),
+        crm_addresses: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            "CRM-scoped address filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\nfully-qualified addresses. Each address is authorized against\n`crm_contacts` + `crm_companies` (contact must not be hidden, company\nmust not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_domains`."
+          ),
+        crm_domains: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            "CRM-scoped domain filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\ndomains (in any of sender\/cc\/bcc\/recipient). Each domain is authorized\nagainst `crm_domains` + `crm_companies` (must exist for the caller's\nteam, company must not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_addresses`."
+          ),
         email_thread_ids: zod
           .array(zod.string())
           .optional()
@@ -5878,12 +6077,6 @@ export const postItemsSoupBody = zod
           .optional()
           .describe(
             'Controls whether shared email threads are included in results.'
-          ),
-        team_scope: zod
-          .boolean()
-          .optional()
-          .describe(
-            "When true, expand visibility to every teammate's mailbox: results may\ninclude emails the requesting user is not a participant on, as long as\nat least one of their teammates is. Requires every sender\/cc\/bcc\/recipient\nvalue to be a fully-qualified email address or a domain (no partial\nsubstring matches)."
           ),
       })
       .optional()
@@ -7275,10 +7468,24 @@ export const postItemsSoupAstBody = zod
       .unknown()
       .optional()
       .describe('the filters that should be applied to the document entity'),
+    eca: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'CRM-scoped address filter (wire key: `eca`). Symmetric counterpart\nto `ecd` for fully-qualified email addresses.'
+      ),
+    ecd: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'CRM-scoped domain filter (wire key: `ecd`). Parallel to the\nfreeform `ef` AST. Expanded by the router into an any-direction\nOR sub-tree AND-merged into `ef`, plus a `CrmScope` tag stamped\non the resulting [`item_filters::ast::EmailFilterAst::crm_scope`].\nDrives the per-team CRM authorization pre-check and candidate-set\nwidening downstream. Mutually exclusive with `eca`.'
+      ),
     ef: zod
       .unknown()
       .optional()
-      .describe('the filters that should be applied to the email entity'),
+      .describe(
+        'the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` \/ `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors.'
+      ),
     pf: zod
       .unknown()
       .optional()
@@ -7290,9 +7497,6 @@ export const postItemsSoupAstBody = zod
         'the filters that should be applied based on entity properties'
       ),
   })
-  .describe(
-    'Describes a bundle of filters that should be applied across different entity types'
-  )
   .and(
     zod.object({
       expand: zod

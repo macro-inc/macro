@@ -6,10 +6,13 @@ import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 
 const handler = createToolRenderer({
-  name: 'web_search',
+  name: 'WebSearch',
   render: (ctx) => {
     const [isExpanded, setIsExpanded] = createSignal(false);
-    const results = () => ctx.response?.data.content ?? [];
+    const results = () => {
+      const content = ctx.response?.data.content;
+      return Array.isArray(content) ? content : [];
+    };
     const hitCount = () => results().length;
     const hasResults = () => hitCount() > 0;
     const statusText = () => {
@@ -45,7 +48,7 @@ const handler = createToolRenderer({
           <div class="flex min-w-0 flex-1 items-center gap-2">
             <span>
               Searched for{' '}
-              <span class="text-accent">{ctx.tool.data.query}</span>
+              <span class="text-accent">{ctx.tool.data.input}</span>
             </span>
           </div>
           <div class="flex shrink-0 items-center gap-1">

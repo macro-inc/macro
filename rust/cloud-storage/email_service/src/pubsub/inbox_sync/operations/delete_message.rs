@@ -37,12 +37,14 @@ pub async fn delete_message(
         }
     };
 
-    // For sent messages, snapshot the recipients before deletion so we can
-    // tear down the CRM source rows we created in `populate_crm_contact` /
-    // `upsert_message`. Received messages don't contribute to CRM, so the
-    // snapshot is skipped for them. Generic addresses are dropped here for
-    // parity with the producer side.
-    let recipient_emails: Vec<String> = if message.is_sent {
+    // Snapshot the addresses that may have contributed CRM source rows
+    // for this message so we can tear them down. Both directions can
+    // create sources (per the populate path): sent messages →
+    // to/cc/bcc recipients, received messages → from (sender). Drafts
+    // never reach CRM populate, so they don't need depopulate either.
+    let crm_emails: Vec<String> = if message.is_draft {
+        Vec::new()
+    } else if message.is_sent {
         let recipients =
             email_db_client::contacts::get::fetch_db_recipients(&ctx.db, message.db_id)
                 .await
@@ -61,7 +63,18 @@ pub async fn delete_message(
             .filter_map(|(contact, _)| contact.email_address)
             .collect()
     } else {
-        Vec::new()
+        // Received: the sender is the external party that may have a
+        // CRM source row tied to this link.
+        let sender =
+            email_db_client::contacts::get::get_sender_by_message_id(&ctx.db, message.db_id)
+                .await
+                .map_err(|e| {
+                    ProcessingError::Retryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e.context("Failed to fetch sender for deleted message".to_string()),
+                    })
+                })?;
+        sender.into_iter().filter_map(|c| c.email_address).collect()
     };
 
     // Enqueue CRM teardown BEFORE the delete commits, so a transient
@@ -69,12 +82,12 @@ pub async fn delete_message(
     // message row is already gone (SQS retry would then short-circuit
     // at the `None` arm above and never re-enqueue). If enqueue
     // succeeds but the delete below fails, the depopulate consumer's
-    // `link_has_sent_message_to` pre-check sees the message still in
+    // `link_has_any_message_with` pre-check sees the message still in
     // place and acks without touching CRM — so the ordering is safe in
     // both directions.
-    if !recipient_emails.is_empty() {
+    if !crm_emails.is_empty() {
         let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
-        enqueue_depopulate_crm_contacts(ctx, link.id, &self_email, recipient_emails).await?;
+        enqueue_depopulate_crm_contacts(ctx, link.id, &self_email, crm_emails).await?;
     }
 
     let mut tx = ctx.db.begin().await.map_err(|e| {

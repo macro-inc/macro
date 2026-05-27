@@ -243,6 +243,7 @@ pub async fn copy_pdf_parts(
 }
 
 /// Creates bom parts for a document bom.
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn create_bom_parts(
     transaction: &mut Transaction<'_, Postgres>,
     document_bom_id: i64,

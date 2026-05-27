@@ -4,19 +4,16 @@ import {
   useBlockAliasedName,
   useBlockId,
 } from '@core/block';
-import { Modals } from '@core/component/Properties/component/modal';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import { useCanEdit } from '@core/signal/permissions';
+import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import { Modals } from '@property/component/modal';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
-} from '@core/component/Properties/context/PropertiesContext';
-import { useEntityProperties } from '@core/component/Properties/hooks';
-import type {
-  Property,
-  PropertyApiValues,
-} from '@core/component/Properties/types';
-import { useCanEdit } from '@core/signal/permissions';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+} from '@property/context/PropertiesContext';
+import { useEntityProperties } from '@property/hooks';
+import type { Property, PropertyApiValues } from '@property/types';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createMemo, For, Show, Suspense } from 'solid-js';
@@ -80,11 +77,9 @@ export function InlineTaskProperties() {
           onPropertyDeleted={refetch}
           saveHandler={saveHandler}
         >
-          <div class="flex flex-row flex-wrap items-center gap-2 text-sm mb-6">
-            <For each={inlineProperties()}>
-              {(property) => <InlinePropertyValue property={property} />}
-            </For>
-          </div>
+          <For each={inlineProperties()}>
+            {(property) => <InlinePropertyValue property={property} />}
+          </For>
           <Modals />
         </PropertiesProvider>
       </Show>

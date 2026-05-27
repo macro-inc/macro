@@ -237,6 +237,25 @@ export function getTopLevelMessageDeletedAt(
     ?.deleted_at;
 }
 
+/**
+ * Returns true if the top-level message has any thread replies, based on the
+ * latest reply_count visible in either the paginated channel cache or the
+ * by-ids cache.
+ */
+export function topLevelMessageHasReplies(
+  channelId: string,
+  messageId: string
+): boolean {
+  const paginatedReplyCount =
+    findTopLevelMessageSnapshotInChannelMessages(channelId, messageId)?.message
+      .thread.reply_count ?? 0;
+  const byIdsReplyCount =
+    findTopLevelMessageInChannelMessagesByIds(channelId, messageId)?.thread
+      .reply_count ?? 0;
+
+  return paginatedReplyCount > 0 || byIdsReplyCount > 0;
+}
+
 /** Captures rollback snapshots for a target before optimistic delete. */
 export function captureDeleteSnapshotForTarget(
   channelId: string,

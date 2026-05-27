@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            LOWER(c.email_address)   AS \"email!\",\n            c.name                   AS \"name\",\n            MIN(m.internal_date_ts)  AS \"first_at!\",\n            MAX(m.internal_date_ts)  AS \"last_at!\"\n        FROM email_messages m\n        JOIN email_message_recipients r ON r.message_id = m.id\n        JOIN email_contacts c ON c.id = r.contact_id\n        WHERE m.link_id = $1\n          AND m.is_sent = true\n          AND m.internal_date_ts IS NOT NULL\n        GROUP BY LOWER(c.email_address), c.name\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "first_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "last_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "4c9cd8085118a9ee2076c12a09f4e41c9e9d93550acd5c691de63e313a5c9b54"
+}

@@ -11,6 +11,8 @@ pub struct AuthServiceClient {
 
 pub static INTERNAL_AUTH_HEADER_KEY: &str = "x-internal-auth-key";
 
+const REQUEST_TIMEOUT_SECONDS: u64 = 15;
+
 impl AuthServiceClient {
     pub fn new(internal_auth_key: String, url: String) -> Self {
         let mut headers = reqwest::header::HeaderMap::new();
@@ -18,6 +20,7 @@ impl AuthServiceClient {
 
         let client = reqwest::Client::builder()
             .default_headers(headers)
+            .timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECONDS))
             .build()
             .unwrap();
 

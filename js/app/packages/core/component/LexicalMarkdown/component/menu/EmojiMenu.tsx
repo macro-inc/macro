@@ -51,7 +51,7 @@ function EmojiItem(props: {
     <div
       on:mouseover={() => props.setIndex(props.index)}
       class={cn('group flex items-center px-1.5 py-1 rounded-md', {
-        'bg-hover': props.selected,
+        'bg-ink/5': props.selected,
       })}
       on:mouseup={(e) => {
         e.preventDefault();
@@ -257,7 +257,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
         >
           <Surface
             depth={2}
-            class="py-1.5 shadow-lg shadow-drop-shadow rounded-lg"
+            class="py-1.5 shadow-lg shadow-drop-shadow rounded-xl"
           >
             <div class="flex flex-col px-1.5 w-full">
               <Show

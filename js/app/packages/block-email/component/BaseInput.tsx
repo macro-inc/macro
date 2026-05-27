@@ -22,7 +22,7 @@ import {
   getDragDropPosition,
 } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
+
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
@@ -37,7 +37,7 @@ import { trackMention } from '@core/signal/mention';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { plural } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+
 import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import { $generateHtmlFromNodes } from '@lexical/html';
 import {
@@ -79,7 +79,16 @@ import type {
   ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
-import { Button, cn, HoverCard, Scroll, SendButton, Tooltip } from '@ui';
+import {
+  Button,
+  cn,
+  Dropdown,
+  HoverCard,
+  Scroll,
+  SendButton,
+  Surface,
+  Tooltip,
+} from '@ui';
 import {
   defaultSelectionData,
   lazyRegister,
@@ -872,6 +881,7 @@ export function BaseInput(props: {
     useHotkeyDOMScope('compose-message');
   let composeContainerRef: HTMLDivElement | undefined;
   useTouchOutsideToDismissKeyboard(() => composeContainerRef);
+  const [isFocused, setIsFocused] = createSignal(false);
 
   const sendEmail = async (markDone = false) => {
     if (sendMutation.isPending || uploadAttachmentMutation.isPending) return;
@@ -1312,41 +1322,48 @@ export function BaseInput(props: {
   const hasBodyText = () => bodyMacro().trim().length > 0;
 
   return (
-    <div
+    <Surface
+      class="relative flex flex-col flex-1 rounded-xl max-w-full"
+      onFocusOut={(e) => {
+        const next = e.relatedTarget as Node | null;
+        if (next && e.currentTarget.contains(next)) return;
+        setIsFocused(false);
+      }}
+      onFocusIn={() => setIsFocused(true)}
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative bg-surface flex flex-col flex-1 border border-ink-muted/8 rounded-xl max-w-full"
+      active={isFocused()}
+      depth={2}
+      solid
     >
       {/* Top Bar */}
       <div class="relative flex items-start gap-2 px-3 pt-1.5 pb-0.5">
-        <DropdownMenu>
-          <DropdownMenu.Trigger>
-            <div class="px-1">
-              <Button class="p-0 pr-1 gap-0">
-                <Switch>
-                  <Match when={effectiveReplyType() === 'reply'}>
-                    <Reply class="h-7 p-1" />
-                  </Match>
+        <Dropdown>
+          <Dropdown.Trigger>
+            <Switch>
+              <Match when={effectiveReplyType() === 'reply'}>
+                <Reply class="size-4 shrink-0" />
+                <span>Reply</span>
+              </Match>
 
-                  <Match when={effectiveReplyType() === 'reply-all'}>
-                    <ReplyAll class="h-7 p-1" />
-                  </Match>
-                  <Match when={effectiveReplyType() === 'forward'}>
-                    <Forward class="h-7 p-1" />
-                  </Match>
-                </Switch>
-                <ChevronDown class="size-3" />
-              </Button>
-            </div>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenuContent>
-              <MenuItem
-                icon={Reply}
-                text="Reply"
-                onClick={() => form().setReplyType('reply')}
-              />
+              <Match when={effectiveReplyType() === 'reply-all'}>
+                <ReplyAll class="size-4 shrink-0" />
+                <span>Reply All</span>
+              </Match>
+              <Match when={effectiveReplyType() === 'forward'}>
+                <Forward class="size-4 shrink-0" />
+                <span>Forward</span>
+              </Match>
+            </Switch>
+            <ChevronDown class="size-3" />
+          </Dropdown.Trigger>
+          <Dropdown.Content>
+            <Dropdown.Group>
+              <Dropdown.Item onSelect={() => form().setReplyType('reply')}>
+                <Reply class="size-4 shrink-0" />
+                <span class="flex-1 truncate">Reply</span>
+              </Dropdown.Item>
               <Show
                 when={
                   (props.replyingTo()?.to.length ?? 0) +
@@ -1354,20 +1371,20 @@ export function BaseInput(props: {
                   1
                 }
               >
-                <MenuItem
-                  icon={ReplyAll}
-                  text="Reply All"
-                  onClick={() => form().setReplyType('reply-all')}
-                />
+                <Dropdown.Item
+                  onSelect={() => form().setReplyType('reply-all')}
+                >
+                  <ReplyAll class="size-4 shrink-0" />
+                  <span class="flex-1 truncate">Reply All</span>
+                </Dropdown.Item>
               </Show>
-              <MenuItem
-                icon={Forward}
-                text="Forward"
-                onClick={() => form().setReplyType('forward')}
-              />
-            </DropdownMenuContent>
-          </DropdownMenu.Portal>
-        </DropdownMenu>
+              <Dropdown.Item onSelect={() => form().setReplyType('forward')}>
+                <Forward class="size-4 shrink-0" />
+                <span class="flex-1 truncate">Forward</span>
+              </Dropdown.Item>
+            </Dropdown.Group>
+          </Dropdown.Content>
+        </Dropdown>
         <Show
           when={showExpandedRecipients()}
           fallback={
@@ -1761,6 +1778,6 @@ export function BaseInput(props: {
           />
         </div>
       </div>
-    </div>
+    </Surface>
   );
 }

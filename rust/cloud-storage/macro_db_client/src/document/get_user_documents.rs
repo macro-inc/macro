@@ -50,6 +50,7 @@ pub async fn get_user_document_ids(
 }
 
 #[tracing::instrument(skip(db))]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn get_user_documents(
     db: &Pool<Postgres>,
     user_id: &str,

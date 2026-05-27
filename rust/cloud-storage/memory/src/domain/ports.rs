@@ -1,4 +1,4 @@
-use ai::types::AiError;
+use agent::AgentError;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -7,7 +7,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum MemoryError {
     #[error(transparent)]
-    AiError(#[from] AiError),
+    AgentError(#[from] AgentError),
     #[error("Nothing was generated")]
     NoGeneration,
     #[error("memory rejected by judge: {0}")]
