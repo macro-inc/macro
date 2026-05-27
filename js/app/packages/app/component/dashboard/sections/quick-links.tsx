@@ -1,3 +1,4 @@
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedEmailIcon } from '@icon/wide-email';
@@ -7,9 +8,10 @@ import { AnimatedInboxIcon } from '@icon/wide-inbox';
 import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
+import { notificationIsRead } from '@notifications/notification-helpers';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import { Hotkey } from '@ui';
-import { createSignal, type Component } from 'solid-js';
+import { type Component, createMemo, createSignal } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 function QuickLinkButton(props: {
@@ -69,6 +71,43 @@ function QuickLinkButton(props: {
 }
 
 export function QuickLinksSection() {
+  const notificationSource = useGlobalNotificationSource();
+
+  const unreadNotifications = createMemo(() =>
+    notificationSource
+      .notifications()
+      .filter(
+        (notification) =>
+          !notification.done && !notificationIsRead(notification)
+      )
+  );
+
+  const unreadCountFor = (predicate: (entityType: string) => boolean) =>
+    createMemo(
+      () =>
+        unreadNotifications().filter((notification) =>
+          predicate(notification.entity_type)
+        ).length
+    );
+
+  const inboxNotificationCount = createMemo(() => unreadNotifications().length);
+
+  const emailNotificationCount = unreadCountFor(
+    (entityType) => entityType === 'email' || entityType === 'email_thread'
+  );
+
+  const taskNotificationCount = createMemo(
+    () =>
+      unreadNotifications().filter(
+        (notification) =>
+          notification.notification_metadata.tag === 'task_assigned'
+      ).length
+  );
+
+  const channelNotificationCount = unreadCountFor(
+    (entityType) => entityType === 'channel'
+  );
+
   return (
     <section>
       <div class="grid grid-cols-4 gap-2 xl:grid-cols-8">
@@ -76,7 +115,7 @@ export function QuickLinksSection() {
           label="Inbox"
           icon={AnimatedInboxIcon}
           hotkey="i"
-          notificationCount={12}
+          notificationCount={inboxNotificationCount()}
         />
         <QuickLinkButton
           label="Search"
@@ -94,7 +133,7 @@ export function QuickLinksSection() {
           label="Email"
           icon={AnimatedEmailIcon}
           hotkey="e"
-          notificationCount={4}
+          notificationCount={emailNotificationCount()}
         />
         <QuickLinkButton
           label="Docs"
@@ -107,13 +146,13 @@ export function QuickLinksSection() {
           icon={AnimatedTaskIcon}
           color="task"
           hotkey="t"
-          notificationCount={3}
+          notificationCount={taskNotificationCount()}
         />
         <QuickLinkButton
           label="Channels"
           icon={AnimatedChannelIcon}
           hotkey="c"
-          notificationCount={6}
+          notificationCount={channelNotificationCount()}
         />
         <QuickLinkButton
           label="Folders"
