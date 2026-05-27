@@ -2,14 +2,18 @@
 export AWS_PAGER := ""
 
 # Start LocalStack for local AWS emulation
+# Pinned to v4 — `latest` requires LOCALSTACK_AUTH_TOKEN for all features.
 start_localstack:
   docker rm -f localstack 2>/dev/null || true
   docker run -d --name localstack \
     --network databases \
     -p 4566:4566 \
     -e SERVICES=sqs,dynamodb,s3 \
-    localstack/localstack
+    localstack/localstack:4
   @echo "LocalStack started"
+  @echo "Waiting for LocalStack to be ready..."
+  @until curl -fsS http://localhost:4566/_localstack/health >/dev/null 2>&1; do sleep 1; done
+  @echo "LocalStack ready"
 
 # Create SQS queues in LocalStack
 create_local_queues:
@@ -117,7 +121,6 @@ configure_document_upload_finalizer_notifications:
 # Full LocalStack setup
 setup_localstack:
   just start_localstack
-  sleep 2
   just create_local_queues
   just create_local_tables
   just create_local_buckets
