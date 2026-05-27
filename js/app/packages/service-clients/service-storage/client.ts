@@ -76,6 +76,8 @@ import type { GetDocumentProcessingResultResponse } from './generated/schemas/ge
 import type { GetDocumentResponseData } from './generated/schemas/getDocumentResponseData';
 import type { GetDocumentSearchResponse } from './generated/schemas/getDocumentSearchResponse';
 import type { GetInstructionsDocumentResponse } from './generated/schemas/getInstructionsDocumentResponse';
+import type { GetMessageWithContextParams } from './generated/schemas/getMessageWithContextParams';
+import type { GetMessageWithContextResponse } from './generated/schemas/getMessageWithContextResponse';
 import type { GetOrCreateChannelResponse } from './generated/schemas/getOrCreateChannelResponse';
 import type { GetOrCreateDmRequest } from './generated/schemas/getOrCreateDmRequest';
 import type { GetOrCreatePrivateRequest } from './generated/schemas/getOrCreatePrivateRequest';
@@ -158,6 +160,7 @@ export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 
 export type { ApiChannelAttachment } from './generated/schemas/apiChannelAttachment';
 export type { ApiChannelAttachmentsPage as ChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
+export type { ApiChannelContextMessage } from './generated/schemas/apiChannelContextMessage';
 export type { ApiChannelMessage } from './generated/schemas/apiChannelMessage';
 export type { ApiChannelMessagesPage as ChannelMessagesPage } from './generated/schemas/apiChannelMessagesPage';
 export type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
@@ -591,6 +594,24 @@ export const storageServiceClient = {
       await dssFetch<ApiResolvedChannelMessage>(
         `/channels/${channel_id}/messages/${message_id}/resolve`,
         { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async getMessageWithContext(
+    args: WithChannelId &
+      WithMessageId &
+      GetMessageWithContextParams & { signal?: AbortSignal }
+  ) {
+    const { channel_id, message_id, before, after, signal } = args;
+    const params = new URLSearchParams();
+    if (before !== undefined) params.append('before', before.toString());
+    if (after !== undefined) params.append('after', after.toString());
+    const query = params.toString();
+    return (
+      await dssFetch<GetMessageWithContextResponse>(
+        `/channels/${channel_id}/messages/${message_id}/context${query ? `?${query}` : ''}`,
+        { method: 'GET', signal }
       )
     ).map((result) => result);
   },

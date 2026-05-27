@@ -1897,6 +1897,64 @@ export const postChannelMessagesResponse = zod
   .describe('Paginated response of channel messages.');
 
 /**
+ * @summary Handler for `GET /channels/{channel_id}/messages/{message_id}/context`.
+ */
+export const getMessageWithContextParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+  message_id: zod.uuid().describe('Message ID to get context around'),
+});
+
+export const getMessageWithContextQueryParams = zod.object({
+  before: zod
+    .number()
+    .optional()
+    .describe('Number of older messages to include'),
+  after: zod
+    .number()
+    .optional()
+    .describe('Number of newer messages to include'),
+});
+
+export const getMessageWithContextResponse = zod
+  .object({
+    messages: zod
+      .array(
+        zod
+          .object({
+            channel_id: zod.uuid().describe('Channel id.'),
+            content: zod.string().describe('Message content.'),
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the message was created.'),
+            deleted_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the message was soft-deleted.'),
+            edited_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the message was edited.'),
+            id: zod.uuid().describe('Message id.'),
+            sender_id: zod.string().describe('Sender user id.'),
+            thread_id: zod
+              .uuid()
+              .nullish()
+              .describe('Parent thread id for replies.'),
+            updated_at: zod.iso
+              .datetime({})
+              .describe('When the message was last updated.'),
+          })
+          .describe(
+            'A channel message returned by the message-context endpoint.'
+          )
+      )
+      .describe(
+        'Messages around the requested message in chronological order.'
+      ),
+  })
+  .describe('Response from the message-context endpoint.');
+
+/**
  * @summary Handler for `GET /channels/{channel_id}/messages/{message_id}/replies`.
  */
 export const getThreadRepliesParams = zod.object({

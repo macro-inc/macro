@@ -2349,6 +2349,97 @@
         }
       }
     },
+    "/channels/{channel_id}/messages/{message_id}/context": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/{channel_id}/messages/{message_id}/context`.",
+        "operationId": "get_message_with_context",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "description": "Message ID to get context around",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "Number of older messages to include",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Number of newer messages to include",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetMessageWithContextResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel_id}/messages/{message_id}/replies": {
       "get": {
         "tags": ["channels::inbound::axum_router"],
@@ -7586,6 +7677,63 @@
           }
         }
       },
+      "ApiChannelContextMessage": {
+        "type": "object",
+        "description": "A channel message returned by the message-context endpoint.",
+        "required": [
+          "id",
+          "channel_id",
+          "sender_id",
+          "content",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "content": {
+            "type": "string",
+            "description": "Message content."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the message was created."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the message was soft-deleted."
+          },
+          "edited_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the message was edited."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message id."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Sender user id."
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Parent thread id for replies."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the message was last updated."
+          }
+        }
+      },
       "ApiChannelMessage": {
         "type": "object",
         "description": "A top-level channel message with thread info.",
@@ -11426,6 +11574,20 @@
         "properties": {
           "documentId": {
             "type": "string"
+          }
+        }
+      },
+      "GetMessageWithContextResponse": {
+        "type": "object",
+        "description": "Response from the message-context endpoint.",
+        "required": ["messages"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiChannelContextMessage"
+            },
+            "description": "Messages around the requested message in chronological order."
           }
         }
       },
