@@ -13,6 +13,8 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     private var connectTask: Task<Void, Never>?
     private var activeCallUUID: UUID?
     private var activeCall: ActiveCallSnapshot?
+    private var pinnedRemoteVideoParticipantId: String?
+    private var speakingRemoteParticipantIds: [String] = []
     private var didPrepareAudio = false
     private var isCallKitAudioActive = false
     private let audioEngineLogger = CallKitAudioEngineLogger()
@@ -38,6 +40,9 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         }
         videoOverlay.onEndCall = { [weak self] in
             self?.endCallFromOverlay()
+        }
+        videoOverlay.onSelectRemoteParticipant = { [weak self] participantId in
+            self?.togglePinnedRemoteVideoParticipant(participantId)
         }
         print("[CallKit] NativeLiveKitCallSession initialized")
     }
@@ -125,6 +130,8 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             isVideoMuted: true,
             videoOverlayMode: "hidden"
         )
+        pinnedRemoteVideoParticipantId = nil
+        speakingRemoteParticipantIds = []
         videoOverlay.setAudioMuted(false)
         videoOverlay.setLocalVideoEnabled(false)
         emitSnapshot()
@@ -134,6 +141,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         room = newRoom
 
         connectTask = Task { [weak self, oldRoom, weak newRoom] in
+            guard let self else { return }
             if let oldRoom {
                 print("[CallKit] Disconnecting previous LiveKit room before new connect uuid=\(uuid.uuidString)")
                 await oldRoom.disconnect()
@@ -143,9 +151,9 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             do {
                 print("[CallKit] Connecting LiveKit room uuid=\(uuid.uuidString)")
                 try await newRoom.connect(url: serverUrl, token: token)
-                print("[CallKit] LiveKit room connected uuid=\(uuid.uuidString) roomSid=\(describeOptional(newRoom.sid)) remoteCount=\(newRoom.remoteParticipants.count)")
-                self?.videoOverlay.presentForActiveCallIfNeeded()
-                self?.attachBestRemoteVideoTrack(from: newRoom)
+                print("[CallKit] LiveKit room connected uuid=\(uuid.uuidString) roomSid=\(self.describeOptional(newRoom.sid)) remoteCount=\(newRoom.remoteParticipants.count)")
+                self.videoOverlay.presentForActiveCallIfNeeded()
+                self.rebuildRemoteVideoLayout(from: newRoom)
             } catch is CancellationError {
                 print("[CallKit] LiveKit connect task cancelled uuid=\(uuid.uuidString)")
                 return
@@ -159,28 +167,28 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             }
 
             do {
-                guard await self?.ensureMicrophonePermission(uuid: uuid) ?? false else {
-                    self?.updateAudioMuted(true, room: newRoom, uuid: uuid)
+                guard await self.ensureMicrophonePermission(uuid: uuid) else {
+                    self.updateAudioMuted(true, room: newRoom, uuid: uuid)
                     return
                 }
 
-                print("[CallKit] Enabling LiveKit microphone uuid=\(uuid.uuidString) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) callKitAudioActive=\(self?.isCallKitAudioActive ?? false) \(describeAudioSession())")
+                print("[CallKit] Enabling LiveKit microphone uuid=\(uuid.uuidString) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) callKitAudioActive=\(self.isCallKitAudioActive) \(self.describeAudioSession())")
                 let microphoneWarning = Task {
                     try? await Task.sleep(nanoseconds: 5_000_000_000)
                     if !Task.isCancelled {
-                        print("[CallKit] Still waiting for LiveKit microphone enable uuid=\(uuid.uuidString) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
+                        print("[CallKit] Still waiting for LiveKit microphone enable uuid=\(uuid.uuidString) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
                     }
                 }
                 defer { microphoneWarning.cancel() }
                 try await newRoom.localParticipant.setMicrophone(enabled: true)
-                self?.updateAudioMuted(false, room: newRoom, uuid: uuid)
-                print("[CallKit] LiveKit microphone enabled uuid=\(uuid.uuidString) engineRunning=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
+                self.updateAudioMuted(false, room: newRoom, uuid: uuid)
+                print("[CallKit] LiveKit microphone enabled uuid=\(uuid.uuidString) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
             } catch is CancellationError {
                 print("[CallKit] LiveKit microphone enable cancelled uuid=\(uuid.uuidString)")
                 return
             } catch {
-                print("[CallKit] Failed to enable LiveKit microphone; keeping room connected uuid=\(uuid.uuidString) error=\(error) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) callKitAudioActive=\(self?.isCallKitAudioActive ?? false) \(describeAudioSession())")
-                self?.updateAudioMuted(true, room: newRoom, uuid: uuid)
+                print("[CallKit] Failed to enable LiveKit microphone; keeping room connected uuid=\(uuid.uuidString) error=\(error) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) callKitAudioActive=\(self.isCallKitAudioActive) \(self.describeAudioSession())")
+                self.updateAudioMuted(true, room: newRoom, uuid: uuid)
             }
         }
     }
@@ -194,6 +202,8 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             self.room = nil
             self.activeCallUUID = nil
             self.activeCall = nil
+            self.pinnedRemoteVideoParticipantId = nil
+            self.speakingRemoteParticipantIds = []
             self.emitSnapshot()
             self.videoOverlay.reset()
             return r
@@ -301,6 +311,14 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         requestSystemEndCall(uuid)
     }
 
+    private func togglePinnedRemoteVideoParticipant(_ participantId: String) {
+        pinnedRemoteVideoParticipantId = pinnedRemoteVideoParticipantId == participantId ? nil : participantId
+        print("[CallKit] Native video overlay pinned remote participant=\(pinnedRemoteVideoParticipantId ?? "nil")")
+        if let room {
+            rebuildRemoteVideoLayout(from: room)
+        }
+    }
+
     func switchCamera() {
         guard let room, let uuid = activeCallUUID else {
             print("[CallKit] switchCamera ignored; no active native room")
@@ -368,10 +386,25 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
 
     func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
         print("[CallKit] LiveKit remote participant connected participantSid=\(describeOptional(participant.sid)) remoteCount=\(room.remoteParticipants.count)")
+        rebuildRemoteVideoLayout(from: room)
     }
 
     func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
         print("[CallKit] LiveKit remote participant disconnected participantSid=\(describeOptional(participant.sid)) remoteCount=\(room.remoteParticipants.count)")
+        let id = participantId(participant)
+        if pinnedRemoteVideoParticipantId == id {
+            pinnedRemoteVideoParticipantId = nil
+        }
+        speakingRemoteParticipantIds.removeAll { $0 == id }
+        rebuildRemoteVideoLayout(from: room)
+    }
+
+    func room(_ room: Room, didUpdateSpeakingParticipants participants: [Participant]) {
+        speakingRemoteParticipantIds = participants
+            .filter { $0 is RemoteParticipant }
+            .map { participantId($0) }
+        print("[CallKit] LiveKit speaking participants updated ids=\(speakingRemoteParticipantIds)")
+        rebuildRemoteVideoLayout(from: room)
     }
 
     func room(_ room: Room, participant: Participant, didUpdateState state: ParticipantState) {
@@ -404,20 +437,23 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
 
     func room(_ room: Room, participant: RemoteParticipant, didPublishTrack publication: RemoteTrackPublication) {
         print("[CallKit] LiveKit remote track published participantSid=\(describeOptional(participant.sid)) \(describe(publication))")
+        if publication.kind == .video {
+            rebuildRemoteVideoLayout(from: room)
+        }
     }
 
     func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
         print("[CallKit] LiveKit remote track subscribed participantSid=\(describeOptional(participant.sid)) \(describe(publication))")
-        if let track = publication.track as? VideoTrack, publication.source == .camera {
-            videoOverlay.setRemoteVideoTrack(track)
+        if publication.track is VideoTrack, isRemoteVideoSource(publication.source) {
+            rebuildRemoteVideoLayout(from: room)
             setVideoOverlayMode(.expanded)
         }
     }
 
     func room(_ room: Room, participant: RemoteParticipant, didUnsubscribeTrack publication: RemoteTrackPublication) {
         print("[CallKit] LiveKit remote track unsubscribed participantSid=\(describeOptional(participant.sid)) \(describe(publication))")
-        if publication.source == .camera {
-            attachBestRemoteVideoTrack(from: room)
+        if isRemoteVideoSource(publication.source) {
+            rebuildRemoteVideoLayout(from: room)
         }
     }
 
@@ -432,6 +468,9 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         didUpdateIsMuted isMuted: Bool
     ) {
         print("[CallKit] LiveKit track mute updated participantSid=\(describeOptional(participant.sid)) \(describe(trackPublication)) muted=\(isMuted)")
+        if participant is RemoteParticipant, trackPublication.kind == .video {
+            rebuildRemoteVideoLayout(from: room)
+        }
     }
 
     private func describe(_ state: ConnectionState) -> String {
@@ -449,16 +488,68 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         "trackSid=\(publication.sid) source=\(publication.source) kind=\(publication.kind) muted=\(publication.isMuted)"
     }
 
-    private func attachBestRemoteVideoTrack(from room: Room) {
-        for participant in room.remoteParticipants.values {
-            if let track = participant.firstCameraVideoTrack {
-                videoOverlay.setRemoteVideoTrack(track)
-                print("[CallKit] Attached existing remote camera track participantSid=\(describeOptional(participant.sid))")
-                return
+    private func rebuildRemoteVideoLayout(from room: Room) {
+        let participants = room.remoteParticipants.values.compactMap { participant -> NativeVideoParticipant? in
+            let id = participantId(participant)
+            if let track = participant.firstScreenShareVideoTrack {
+                return NativeVideoParticipant(
+                    id: id,
+                    title: displayTitle(participant),
+                    track: track,
+                    isSpeaking: speakingRemoteParticipantIds.contains(id),
+                    isPinned: pinnedRemoteVideoParticipantId == id,
+                    isScreenShare: true
+                )
             }
+
+            guard let track = participant.firstCameraVideoTrack else {
+                return nil
+            }
+
+            return NativeVideoParticipant(
+                id: id,
+                title: displayTitle(participant),
+                track: track,
+                isSpeaking: speakingRemoteParticipantIds.contains(id),
+                isPinned: pinnedRemoteVideoParticipantId == id,
+                isScreenShare: false
+            )
         }
-        videoOverlay.setRemoteVideoTrack(nil)
-        print("[CallKit] No remote camera track available")
+
+        if let pinnedId = pinnedRemoteVideoParticipantId,
+           !participants.contains(where: { $0.id == pinnedId }) {
+            pinnedRemoteVideoParticipantId = nil
+        }
+
+        let primary = participants.first(where: { $0.isScreenShare })
+            ?? participants.first(where: { $0.id == pinnedRemoteVideoParticipantId })
+            ?? speakingRemoteParticipantIds.compactMap { speakingId in
+                participants.first(where: { $0.id == speakingId })
+            }.first
+            ?? participants.first
+
+        videoOverlay.setRemoteVideoParticipants(participants, primaryId: primary?.id)
+        print("[CallKit] Rebuilt remote video layout participants=\(participants.count) primary=\(primary?.id ?? "nil") pinned=\(pinnedRemoteVideoParticipantId ?? "nil")")
+    }
+
+    private func isRemoteVideoSource(_ source: Track.Source) -> Bool {
+        source == .camera || source == .screenShareVideo
+    }
+
+    private func participantId(_ participant: Participant) -> String {
+        participant.sid?.stringValue
+            ?? participant.identity?.stringValue
+            ?? "\(ObjectIdentifier(participant).hashValue)"
+    }
+
+    private func displayTitle(_ participant: Participant) -> String {
+        if let name = participant.name, !name.isEmpty {
+            return name
+        }
+        if let identity = participant.identity?.stringValue, !identity.isEmpty {
+            return identity
+        }
+        return "Participant"
     }
 
     private func ensureMicrophonePermission(uuid: UUID) async -> Bool {
