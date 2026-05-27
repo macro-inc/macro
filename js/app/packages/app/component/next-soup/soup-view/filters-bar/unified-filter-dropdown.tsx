@@ -9,6 +9,7 @@ import {
   type PropertyFilter,
   queryStateFrom,
 } from '@app/component/next-soup/filters/filter-store';
+import { mergeQuery } from '@app/component/next-soup/filters/filter-store/query-store';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
@@ -49,7 +50,6 @@ import {
   useSearchIndexController,
 } from './search-filter-controls';
 import { SearchableMultiSelectInline } from './searchable-multi-select';
-import { mergeQuery } from '@app/component/next-soup/filters/filter-store/query-store';
 
 const TypeIndicator = (props: { active: boolean }) => (
   <span
