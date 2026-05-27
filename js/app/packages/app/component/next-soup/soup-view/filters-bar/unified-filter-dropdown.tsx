@@ -1,9 +1,14 @@
+import { getViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
 import type { FilterID } from '@app/component/next-soup/filters';
 import {
   type FilterContext,
   NO_ASSIGNEE,
 } from '@app/component/next-soup/filters/configs/';
-import type { PropertyFilter } from '@app/component/next-soup/filters/filter-store';
+import {
+  defineQueryFilters,
+  type PropertyFilter,
+  queryStateFrom,
+} from '@app/component/next-soup/filters/filter-store';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
@@ -44,6 +49,7 @@ import {
   useSearchIndexController,
 } from './search-filter-controls';
 import { SearchableMultiSelectInline } from './searchable-multi-select';
+import { mergeQuery } from '@app/component/next-soup/filters/filter-store/query-store';
 
 const TypeIndicator = (props: { active: boolean }) => (
   <span
@@ -120,6 +126,14 @@ const INBOX_FILTER_CATEGORIES: FilterCategory[] = [
     multiple: true,
   },
 ];
+
+const isInboxTypeFilterId = (id: string) => {
+  for (const category of INBOX_FILTER_CATEGORIES) {
+    if (category.options.find((o) => o.id === id)) return true;
+  }
+
+  return false;
+};
 
 const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
   {
@@ -646,7 +660,7 @@ const SearchIndexSubRow = (props: {
 export const UnifiedFilterDropdown = () => {
   const [open, setOpen] = createSignal(false);
   const panel = useSplitPanelOrThrow();
-  const { soup, queryFilters, assigneeFilter, setAssigneeFilter } =
+  const { soup, queryFilters, assigneeFilter, setAssigneeFilter, activeTab } =
     useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
@@ -682,6 +696,27 @@ export const UnifiedFilterDropdown = () => {
     };
     const query =
       typeof filter.query === 'function' ? filter.query(ctx) : filter.query;
+
+    if (currentView() === 'inbox' && isInboxTypeFilterId(optionId)) {
+      const baseQuery = getViewPreset('inbox', activeTab())?.filters;
+
+      if (!baseQuery) {
+        return;
+      }
+
+      let nextQueryState = baseQuery;
+
+      if (!wasActive) {
+        nextQueryState = mergeQuery(
+          queryStateFrom(baseQuery),
+          defineQueryFilters({}, { skipTargetsFrom: query })
+        );
+      }
+
+      queryFilters.replace(nextQueryState);
+
+      return;
+    }
 
     if (wasActive) {
       queryFilters.remove(query);
