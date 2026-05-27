@@ -4,6 +4,7 @@ pub mod comms;
 pub mod document;
 pub mod email_thread;
 pub mod item;
+pub mod notification;
 pub mod project;
 pub mod properties;
 

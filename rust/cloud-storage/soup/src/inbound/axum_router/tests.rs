@@ -11,10 +11,16 @@ use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use http_body_util::BodyExt;
 use item_filters::EntityFilters;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
+use model_entity::EntityType;
 use model_user::UserContext;
 use models_pagination::{
     CursorVal, Frecency, FrecencyValue, Identify, PaginateOn, Query, SimpleSortMethod, SortOn,
     TypeEraseCursor,
+};
+use models_soup::{
+    document::SoupDocument,
+    item::SoupItem,
+    notification::{SoupNotification, SoupNotificationSource},
 };
 use serde::Serialize;
 use serde_json::json;
@@ -27,8 +33,8 @@ use item_filters::ast::EntityFilterAst;
 use crate::{
     domain::{
         models::{
-            FrecencyQueryInner, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
-            SimpleQueryInner, SoupErr, SoupQuery, SoupRequest, SoupType,
+            FrecencyQueryInner, FrecencySoupItem, GroupedSortRequest, GroupedSoupItem,
+            IntoSoupReqAst, SimpleQueryInner, SoupErr, SoupQuery, SoupRequest, SoupType,
         },
         ports::{SoupOutput, SoupService},
     },
@@ -116,6 +122,103 @@ impl SoupService for MockSoup {
     ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
         Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
     }
+}
+
+struct NotificationResponseSoup;
+
+impl NotificationResponseSoup {
+    fn notification_item() -> SoupItem {
+        let source_id = notification_source_id();
+        let timestamp = Utc::now();
+
+        SoupItem::Notification(SoupNotification {
+            id: Uuid::from_u128(2),
+            owner_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+            event_type: "document_updated".to_string(),
+            source_entity_type: EntityType::Document,
+            source_entity_id: source_id.to_string(),
+            sent: true,
+            done: false,
+            created_at: timestamp,
+            viewed_at: None,
+            updated_at: timestamp,
+            deleted_at: None,
+            metadata: json!({ "reason": "mention" }),
+            sender_id: Some(MacroUserIdStr::parse_from_str("macro|sender@example.com").unwrap()),
+            source: Some(SoupNotificationSource::Document(Self::source_document(
+                source_id, timestamp,
+            ))),
+        })
+    }
+
+    fn source_document(id: Uuid, timestamp: chrono::DateTime<Utc>) -> SoupDocument {
+        SoupDocument {
+            id,
+            document_version_id: 1,
+            owner_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+            name: "Notification source".to_string(),
+            file_type: Some("pdf".to_string()),
+            sha: None,
+            project_id: None,
+            branched_from_id: None,
+            branched_from_version_id: None,
+            document_family_id: None,
+            created_at: timestamp,
+            updated_at: timestamp,
+            viewed_at: None,
+            sub_type: None,
+            deleted_at: None,
+            properties: Vec::new(),
+        }
+    }
+}
+
+impl SoupService for NotificationResponseSoup {
+    async fn get_user_soup<T>(
+        &self,
+        req: SoupRequest<T>,
+        _team_receipt: Option<
+            entity_access::domain::models::EntityAccessReceipt<
+                entity_access::domain::models::MemberTeamRole,
+            >,
+        >,
+    ) -> Result<SoupOutput<T>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        let filter = req.filters().clone();
+        let sort_method = match &req.cursor {
+            SoupQuery::Simple(SimpleQueryInner(query)) => *query.sort_method(),
+            SoupQuery::Frecency(_) => {
+                return Err(SoupErr::SoupDbErr(anyhow::anyhow!(
+                    "NotificationResponseSoup only supports simple sort requests"
+                )));
+            }
+        };
+
+        let item = FrecencySoupItem {
+            item: Self::notification_item(),
+            frecency_score: None,
+        };
+        let page = std::iter::once(item)
+            .paginate_on(req.limit.into(), sort_method)
+            .filter_on(filter)
+            .into_page();
+
+        Ok(either::Either::Left(page))
+    }
+
+    async fn get_user_soup_grouped(
+        &self,
+        _req: GroupedSortRequest<'_>,
+    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
+        Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+    }
+}
+
+fn notification_source_id() -> Uuid {
+    Uuid::from_u128(1)
 }
 
 struct MockEmail;
@@ -392,6 +495,48 @@ async fn it_should_deserialize_empty_filter() {
         json!({
             "message": "An internal server error has occurred"
         })
+    );
+}
+
+#[tokio::test]
+async fn it_serializes_notification_with_enriched_source() {
+    let router = soup_router(SoupRouterState::new(
+        NotificationResponseSoup,
+        MockEmail,
+        Arc::new(MockEntityAccess),
+    ))
+    .layer(Extension(UserContext {
+        user_id: "macro|test@example.com".to_string(),
+        fusion_user_id: "1234".to_string(),
+        permissions: None,
+        organization_id: None,
+    }));
+
+    let request = Request::builder()
+        .uri("/soup")
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(bytes.as_ref()).unwrap();
+    let item = json["items"]
+        .as_array()
+        .and_then(|items| items.first())
+        .expect("response should include one soup item");
+    let source_id = notification_source_id().to_string();
+
+    assert_eq!(item["tag"].as_str(), Some("notification"));
+    assert_eq!(
+        item["data"]["sourceEntityId"].as_str(),
+        Some(source_id.as_str())
+    );
+    assert_eq!(item["data"]["source"]["tag"].as_str(), Some("document"));
+    assert_eq!(
+        item["data"]["source"]["data"]["id"].as_str(),
+        Some(source_id.as_str())
     );
 }
 

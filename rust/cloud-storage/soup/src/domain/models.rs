@@ -43,6 +43,17 @@ pub struct SimpleSortRequest<'a> {
     pub(crate) user_id: MacroUserIdStr<'a>,
 }
 
+/// Parameters for active user notification soup queries.
+#[derive(Debug)]
+pub struct NotificationSortRequest<'a> {
+    /// the limit of the number of items to return
+    pub(crate) limit: u16,
+    /// the [Query] the client passes (if any)
+    pub(crate) cursor: Query<Uuid, SimpleSortMethod, ()>,
+    /// the id of the user
+    pub(crate) user_id: MacroUserIdStr<'a>,
+}
+
 /// Parameters for grouped soup queries.
 #[derive(Debug)]
 pub struct GroupedSortRequest<'a> {
@@ -370,6 +381,32 @@ impl SoupRequest<Option<EntityFilterAst>> {
             }?,
         })
     }
+
+    pub(crate) fn build_notification_request(&self) -> Option<NotificationSortRequest<'_>> {
+        let cursor = match &self.cursor {
+            SoupQuery::Simple(SimpleQueryInner(Query::Sort(sort_method, None))) => {
+                Query::Sort(*sort_method, ())
+            }
+            SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
+                id,
+                limit,
+                val,
+                filter: None,
+            }))) => Query::Cursor(CursorWithValAndFilter {
+                id: *id,
+                limit: *limit,
+                val: val.clone(),
+                filter: (),
+            }),
+            SoupQuery::Simple(_) | SoupQuery::Frecency(_) => return None,
+        };
+
+        Some(NotificationSortRequest {
+            limit: self.limit,
+            cursor,
+            user_id: self.user.clone(),
+        })
+    }
 }
 
 /// a [SoupItem] with an associated frecency score
@@ -386,7 +423,7 @@ impl Identify for FrecencySoupItem {
     type Id = String;
 
     fn id(&self) -> Self::Id {
-        self.item.entity().entity_id.to_string()
+        self.item.id().to_string()
     }
 }
 

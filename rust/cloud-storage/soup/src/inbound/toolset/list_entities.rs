@@ -17,7 +17,7 @@ use item_filters::{
     },
 };
 use models_pagination::{SimpleSortMethod, TypeEraseCursor};
-use models_soup::item::SoupItem;
+use models_soup::{item::SoupItem, notification::SoupNotificationSource};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -93,6 +93,63 @@ pub enum EntityItem {
     Channel { id: Uuid, name: Option<String> },
     #[serde(rename_all = "camelCase")]
     Call { id: Uuid, created_by: String },
+    #[serde(rename_all = "camelCase")]
+    Notification {
+        id: Uuid,
+        event_type: String,
+        source_entity_type: String,
+        source_entity_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<NotificationSourceItem>,
+    },
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum NotificationSourceItem {
+    #[serde(rename_all = "camelCase")]
+    Document { id: Uuid, name: String },
+    #[serde(rename_all = "camelCase")]
+    AiChat { id: Uuid, name: String },
+    #[serde(rename_all = "camelCase")]
+    Project { id: Uuid, name: String },
+    #[serde(rename_all = "camelCase")]
+    Email { id: Uuid, subject: Option<String> },
+    #[serde(rename_all = "camelCase")]
+    Channel { id: Uuid, name: Option<String> },
+    #[serde(rename_all = "camelCase")]
+    Call { id: Uuid, created_by: String },
+}
+
+impl From<SoupNotificationSource> for NotificationSourceItem {
+    fn from(source: SoupNotificationSource) -> Self {
+        match source {
+            SoupNotificationSource::Document(doc) => NotificationSourceItem::Document {
+                id: doc.id,
+                name: doc.name,
+            },
+            SoupNotificationSource::Chat(chat) => NotificationSourceItem::AiChat {
+                id: chat.id,
+                name: chat.name,
+            },
+            SoupNotificationSource::Project(project) => NotificationSourceItem::Project {
+                id: project.id,
+                name: project.name,
+            },
+            SoupNotificationSource::EmailThread(thread) => NotificationSourceItem::Email {
+                id: thread.thread.id,
+                subject: thread.thread.name,
+            },
+            SoupNotificationSource::Channel(channel) => NotificationSourceItem::Channel {
+                id: channel.channel.channel.id.0,
+                name: channel.channel.channel.name.clone(),
+            },
+            SoupNotificationSource::Call(record) => NotificationSourceItem::Call {
+                id: record.call_id,
+                created_by: record.created_by,
+            },
+        }
+    }
 }
 
 impl From<SoupItem> for EntityItem {
@@ -122,6 +179,13 @@ impl From<SoupItem> for EntityItem {
                 id: record.call_id,
                 created_by: record.created_by,
             },
+            SoupItem::Notification(notification) => EntityItem::Notification {
+                id: notification.id,
+                event_type: notification.event_type,
+                source_entity_type: notification.source_entity_type.to_string(),
+                source_entity_id: notification.source_entity_id,
+                source: notification.source.map(NotificationSourceItem::from),
+            },
         }
     }
 }
@@ -137,7 +201,7 @@ pub struct ListEntitiesResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ListEntities",
-    description = "Browse the user's workspace to see recent items they have access to. Returns documents, AI conversations, projects, emails, and chat channels. Use this to get an overview of what the user has been working on or to find items by type. For finding specific items by name or content, use the search tool instead."
+    description = "Browse the user's workspace to see recent items they have access to. Returns documents, AI conversations, projects, emails, chat channels, call records, and notifications. Use this to get an overview of what the user has been working on or to find items by type. For finding specific items by name or content, use the search tool instead."
 )]
 pub struct ListEntities {
     #[schemars(
@@ -401,6 +465,7 @@ pub(super) fn build_summary(
     let mut emails = 0;
     let mut channels = 0;
     let mut call_records = 0;
+    let mut notifications = 0;
 
     for item in items {
         match item {
@@ -410,6 +475,7 @@ pub(super) fn build_summary(
             EntityItem::Email { .. } => emails += 1,
             EntityItem::Channel { .. } => channels += 1,
             EntityItem::Call { .. } => call_records += 1,
+            EntityItem::Notification { .. } => notifications += 1,
         }
     }
 
@@ -448,6 +514,12 @@ pub(super) fn build_summary(
         parts.push(format!(
             "{call_records} call record{}",
             if call_records == 1 { "" } else { "s" }
+        ));
+    }
+    if notifications > 0 {
+        parts.push(format!(
+            "{notifications} notification{}",
+            if notifications == 1 { "" } else { "s" }
         ));
     }
 

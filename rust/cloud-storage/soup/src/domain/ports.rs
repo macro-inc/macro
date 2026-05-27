@@ -1,6 +1,6 @@
 use crate::domain::models::{
     AdvancedSortParams, FrecencySoupItem, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
-    SimpleSortRequest, SoupErr, SoupRequest,
+    NotificationSortRequest, SimpleSortRequest, SoupErr, SoupRequest,
 };
 use either::Either;
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
@@ -19,6 +19,11 @@ pub trait SoupRepo: Send + Sync + 'static {
     fn unexpanded_generic_cursor_soup<'a>(
         &self,
         req: SimpleSortRequest<'a>,
+    ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send;
+
+    fn user_notifications<'a>(
+        &self,
+        req: NotificationSortRequest<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send;
 
     fn expanded_soup_by_ids<'a>(

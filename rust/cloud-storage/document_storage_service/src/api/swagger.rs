@@ -115,6 +115,7 @@ use models_soup::email_thread::{
     SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
 };
 use models_soup::item::SoupItem;
+use models_soup::notification::{SoupNotification, SoupNotificationSource};
 use models_soup::project::SoupProject;
 use soup::inbound::axum_router::{PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage};
 use utoipa::OpenApi;
@@ -332,6 +333,8 @@ use utoipa::OpenApi;
             ExportDocumentResponse,
             SyncServiceVersionID,
             SoupItem,
+            SoupNotification,
+            SoupNotificationSource,
             SoupApiItem,
             SoupDocument,
             SoupChat,

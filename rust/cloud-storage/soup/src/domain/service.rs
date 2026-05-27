@@ -1,8 +1,8 @@
 use crate::domain::{
     models::{
         AdvancedSortParams, FrecencyQueryInner, FrecencySoupItem, GroupedSortRequest,
-        GroupedSoupItem, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery, SimpleSortRequest,
-        SoupErr, SoupQuery, SoupRequest, SoupType,
+        GroupedSoupItem, IntoSoupReqAst, NotificationSortRequest, SimpleQueryInner,
+        SimpleSortQuery, SimpleSortRequest, SoupErr, SoupQuery, SoupRequest, SoupType,
     },
     ports::{SoupOutput, SoupRepo, SoupService},
 };
@@ -12,16 +12,20 @@ use cowlike::CowLike;
 use doppleganger::Mirror;
 use either::Either;
 use email::domain::{
-    models::{EnrichedEmailThreadPreview, GetEmailsRequest},
+    models::{EnrichedEmailThreadPreview, GetEmailsRequest, PreviewView, PreviewViewStandardLabel},
     ports::EmailPreviewServiceReadOnly,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
+use filter_ast::Expr;
 use frecency::domain::{
     models::{AggregateId, FrecencyPageRequest, JoinFrecency},
     ports::FrecencyQueryService,
 };
-use item_filters::ast::EntityFilterAst;
+use item_filters::ast::{
+    EntityFilterAst, call::CallLiteral, channel::ChannelLiteral, email::EmailLiteral,
+};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::{Entity, EntityType};
 use models_pagination::{
     Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod, SortOn,
 };
@@ -33,13 +37,138 @@ use models_soup::{
         SoupLabel,
     },
     item::SoupItem,
+    notification::{SoupNotification, SoupNotificationSource},
 };
 use serde::Serialize;
-use std::cmp::Ordering;
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use uuid::Uuid;
 
 #[cfg(test)]
 mod tests;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct NotificationSourceKey {
+    entity_type: EntityType,
+    entity_id: String,
+}
+
+impl NotificationSourceKey {
+    fn from_parts(entity_type: EntityType, entity_id: &str) -> Self {
+        let entity_id = Uuid::parse_str(entity_id)
+            .map(|id| id.to_string())
+            .unwrap_or_else(|_| entity_id.to_string());
+
+        Self {
+            entity_type,
+            entity_id,
+        }
+    }
+
+    fn from_uuid(entity_type: EntityType, entity_id: Uuid) -> Self {
+        Self {
+            entity_type,
+            entity_id: entity_id.to_string(),
+        }
+    }
+
+    fn from_notification(notification: &SoupNotification) -> Self {
+        Self::from_parts(
+            notification.source_entity_type,
+            &notification.source_entity_id,
+        )
+    }
+
+    fn entity(&self) -> Entity<'static> {
+        self.entity_type.with_entity_string(self.entity_id.clone())
+    }
+
+    fn uuid(&self) -> Option<Uuid> {
+        match Uuid::parse_str(&self.entity_id) {
+            Ok(id) => Some(id),
+            Err(error) => {
+                tracing::warn!(
+                    ?self,
+                    ?error,
+                    "skipping notification source with invalid UUID"
+                );
+                None
+            }
+        }
+    }
+}
+
+fn collect_notification_source_keys(items: &[FrecencySoupItem]) -> Vec<NotificationSourceKey> {
+    let mut seen = HashSet::new();
+    let mut source_keys = Vec::new();
+
+    for item in items {
+        let SoupItem::Notification(notification) = &item.item else {
+            continue;
+        };
+
+        let source_key = NotificationSourceKey::from_notification(notification);
+        if seen.insert(source_key.clone()) {
+            source_keys.push(source_key);
+        }
+    }
+
+    source_keys
+}
+
+fn source_uuids(source_keys: &[NotificationSourceKey], entity_type: EntityType) -> Vec<Uuid> {
+    source_keys
+        .iter()
+        .filter(|source_key| source_key.entity_type == entity_type)
+        .filter_map(NotificationSourceKey::uuid)
+        .collect()
+}
+
+fn uuid_literal_tree<T>(
+    ids: &[Uuid],
+    mut to_literal: impl FnMut(Uuid) -> T,
+) -> Option<Arc<Expr<T>>> {
+    ids.iter()
+        .copied()
+        .map(|id| Expr::Literal(to_literal(id)))
+        .reduce(Expr::or)
+        .map(Arc::new)
+}
+
+fn notification_source_from_soup_item(
+    item: SoupItem,
+) -> Option<(NotificationSourceKey, SoupNotificationSource)> {
+    match item {
+        SoupItem::Document(document) => Some((
+            NotificationSourceKey::from_uuid(EntityType::Document, document.id),
+            SoupNotificationSource::Document(document),
+        )),
+        SoupItem::Chat(chat) => Some((
+            NotificationSourceKey::from_uuid(EntityType::Chat, chat.id),
+            SoupNotificationSource::Chat(chat),
+        )),
+        SoupItem::Project(project) => Some((
+            NotificationSourceKey::from_uuid(EntityType::Project, project.id),
+            SoupNotificationSource::Project(project),
+        )),
+        SoupItem::EmailThread(email_thread) => Some((
+            NotificationSourceKey::from_uuid(EntityType::EmailThread, email_thread.thread.id),
+            SoupNotificationSource::EmailThread(email_thread),
+        )),
+        SoupItem::Channel(channel) => Some((
+            NotificationSourceKey::from_uuid(EntityType::Channel, channel.channel.channel.id.0),
+            SoupNotificationSource::Channel(channel),
+        )),
+        SoupItem::Call(record) => Some((
+            NotificationSourceKey::from_uuid(EntityType::Call, record.call_id),
+            SoupNotificationSource::Call(record),
+        )),
+        SoupItem::Notification(_) => None,
+    }
+}
 
 /// struct which handles the actual implementation of soup with abstracted interfaces for mocking
 pub struct SoupImpl<T, U, V, C, K> {
@@ -103,6 +232,29 @@ where
             item,
             frecency_score: None,
         }))
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn handle_notification_request(
+        &self,
+        req: Option<NotificationSortRequest<'_>>,
+    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+        let Some(req) = req else {
+            return Ok(Either::Left(None.into_iter()));
+        };
+
+        let res = self
+            .soup_storage
+            .user_notifications(req)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        Ok(Either::Right(res.into_iter().map(|item| {
+            FrecencySoupItem {
+                item,
+                frecency_score: None,
+            }
+        })))
     }
 
     #[tracing::instrument(err, skip(self, req))]
@@ -396,6 +548,204 @@ where
                 })?,
         ))
     }
+
+    #[tracing::instrument(err, skip(self, items))]
+    async fn enrich_notification_sources(
+        &self,
+        items: &mut [FrecencySoupItem],
+        soup_type: SoupType,
+        user: MacroUserIdStr<'static>,
+        link_id: Option<Uuid>,
+    ) -> Result<(), SoupErr> {
+        let source_keys = collect_notification_source_keys(items);
+        if source_keys.is_empty() {
+            return Ok(());
+        }
+
+        let mut sources = HashMap::new();
+        self.fetch_soup_notification_sources(&source_keys, soup_type, user.copied(), &mut sources)
+            .await?;
+        self.fetch_email_notification_sources(&source_keys, &user, link_id, &mut sources)
+            .await?;
+        self.fetch_channel_notification_sources(&source_keys, &user, &mut sources)
+            .await?;
+        self.fetch_call_notification_sources(&source_keys, &user, &mut sources)
+            .await?;
+
+        for item in items {
+            let SoupItem::Notification(notification) = &mut item.item else {
+                continue;
+            };
+
+            let source_key = NotificationSourceKey::from_notification(notification);
+            notification.source = sources.get(&source_key).cloned();
+        }
+
+        Ok(())
+    }
+
+    async fn fetch_soup_notification_sources(
+        &self,
+        source_keys: &[NotificationSourceKey],
+        soup_type: SoupType,
+        user: MacroUserIdStr<'_>,
+        sources: &mut HashMap<NotificationSourceKey, SoupNotificationSource>,
+    ) -> Result<(), SoupErr> {
+        let mut source_entities = Vec::new();
+        let mut expanded_project_entities = Vec::new();
+
+        for source_key in source_keys {
+            match source_key.entity_type {
+                EntityType::Document | EntityType::Chat => {
+                    source_entities.push(source_key.entity());
+                }
+                EntityType::Project if matches!(soup_type, SoupType::Expanded) => {
+                    expanded_project_entities.push(source_key.entity());
+                }
+                EntityType::Project => {
+                    source_entities.push(source_key.entity());
+                }
+                EntityType::User
+                | EntityType::Channel
+                | EntityType::EmailThread
+                | EntityType::Team
+                | EntityType::Call
+                | EntityType::StaticFile => {}
+            }
+        }
+
+        let mut items = Vec::new();
+        if !source_entities.is_empty() {
+            items.extend(
+                self.handle_soup_by_ids(
+                    soup_type,
+                    AdvancedSortParams {
+                        entities: &source_entities,
+                        user_id: user.copied(),
+                    },
+                )
+                .await
+                .map_err(anyhow::Error::from)?,
+            );
+        }
+
+        if !expanded_project_entities.is_empty() {
+            items.extend(
+                self.handle_soup_by_ids(
+                    SoupType::UnExpanded,
+                    AdvancedSortParams {
+                        entities: &expanded_project_entities,
+                        user_id: user.copied(),
+                    },
+                )
+                .await
+                .map_err(anyhow::Error::from)?,
+            );
+        }
+
+        for item in items {
+            if let Some((source_key, source)) = notification_source_from_soup_item(item) {
+                sources.insert(source_key, source);
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn fetch_email_notification_sources(
+        &self,
+        source_keys: &[NotificationSourceKey],
+        user: &MacroUserIdStr<'static>,
+        link_id: Option<Uuid>,
+        sources: &mut HashMap<NotificationSourceKey, SoupNotificationSource>,
+    ) -> Result<(), SoupErr> {
+        let Some(link_id) = link_id else {
+            return Ok(());
+        };
+
+        let email_thread_ids = source_uuids(source_keys, EntityType::EmailThread);
+        let Some(email_filter) = uuid_literal_tree(&email_thread_ids, EmailLiteral::ThreadId)
+        else {
+            return Ok(());
+        };
+
+        let email_items = self
+            .handle_email_request(Some(GetEmailsRequest {
+                view: PreviewView::StandardLabel(PreviewViewStandardLabel::All),
+                link_id,
+                macro_id: user.clone(),
+                limit: Some(email_thread_ids.len() as u32),
+                query: Query::Sort(SimpleSortMethod::UpdatedAt, Some(email_filter)),
+                team_receipt: None,
+                crm_scope: None,
+            }))
+            .await?;
+
+        for item in email_items {
+            if let Some((source_key, source)) = notification_source_from_soup_item(item.item) {
+                sources.insert(source_key, source);
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn fetch_channel_notification_sources(
+        &self,
+        source_keys: &[NotificationSourceKey],
+        user: &MacroUserIdStr<'static>,
+        sources: &mut HashMap<NotificationSourceKey, SoupNotificationSource>,
+    ) -> Result<(), SoupErr> {
+        let channel_ids = source_uuids(source_keys, EntityType::Channel);
+        let Some(channel_filter) = uuid_literal_tree(&channel_ids, ChannelLiteral::ChannelId)
+        else {
+            return Ok(());
+        };
+
+        let channel_items = self
+            .handle_comms_request(Some(GetChannelsRequest {
+                macro_id: user.clone(),
+                limit: Some(channel_ids.len() as u32),
+                query: Query::Sort(SimpleSortMethod::UpdatedAt, Some(channel_filter)),
+            }))
+            .await?;
+
+        for item in channel_items {
+            if let Some((source_key, source)) = notification_source_from_soup_item(item.item) {
+                sources.insert(source_key, source);
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn fetch_call_notification_sources(
+        &self,
+        source_keys: &[NotificationSourceKey],
+        user: &MacroUserIdStr<'static>,
+        sources: &mut HashMap<NotificationSourceKey, SoupNotificationSource>,
+    ) -> Result<(), SoupErr> {
+        let call_ids = source_uuids(source_keys, EntityType::Call);
+        let Some(call_filter) = uuid_literal_tree(&call_ids, CallLiteral::CallId) else {
+            return Ok(());
+        };
+
+        let call_items = self
+            .handle_call_request(Some(GetCallRecordsRequest {
+                user_id: user.clone(),
+                limit: call_ids.len() as u32,
+                query: Query::Sort(SimpleSortMethod::UpdatedAt, Some(call_filter)),
+            }))
+            .await?;
+
+        for item in call_items {
+            if let Some((source_key, source)) = notification_source_from_soup_item(item.item) {
+                sources.insert(source_key, source);
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl<T, U, V, C, K> SoupService for SoupImpl<T, U, V, C, K>
@@ -424,17 +774,27 @@ where
         let email_request = req.build_email_request(team_receipt);
         let comms_request = req.build_comms_request();
         let call_request = req.build_call_request();
+        let notification_request: Option<NotificationSortRequest<'static>> = req
+            .build_notification_request()
+            .map(|request| NotificationSortRequest {
+                limit,
+                cursor: request.cursor,
+                user_id: request.user_id.into_owned(),
+            });
+        let soup_type = req.soup_type;
+        let user = req.user.clone();
+        let link_id = req.link_id;
 
         match req.cursor {
             SoupQuery::Simple(SimpleQueryInner(cursor)) => {
                 let sort_method = *cursor.sort_method();
 
                 let main_soup_fut = self.handle_simple_request(
-                    req.soup_type,
+                    soup_type,
                     SimpleSortRequest {
                         limit,
                         cursor: SimpleSortQuery::from_entity_cursor(cursor),
-                        user_id: req.user.copied(),
+                        user_id: user.copied(),
                     },
                 );
 
@@ -444,17 +804,28 @@ where
 
                 let call_soup_fut = self.handle_call_request(call_request);
 
-                let (main_soup, email_soup, comms_soup, call_soup) =
-                    tokio::join!(main_soup_fut, email_soup_fut, comms_soup_fut, call_soup_fut);
+                let notification_soup_fut = self.handle_notification_request(notification_request);
 
-                let page = main_soup?
+                let (main_soup, email_soup, comms_soup, call_soup, notification_soup) = tokio::join!(
+                    main_soup_fut,
+                    email_soup_fut,
+                    comms_soup_fut,
+                    call_soup_fut,
+                    notification_soup_fut,
+                );
+
+                let mut page = main_soup?
                     .chain(email_soup?)
                     .chain(comms_soup?)
                     .chain(call_soup?)
+                    .chain(notification_soup?)
                     .paginate_on(limit.into(), sort_method)
                     .filter_on(entity_filter.clone())
                     .sort_desc()
                     .into_page();
+
+                self.enrich_notification_sources(&mut page.items, soup_type, user.clone(), link_id)
+                    .await?;
 
                 // Email queries use CROSS JOIN LATERAL which can filter out
                 // threads after the initial LIMIT, making the standard
@@ -477,7 +848,7 @@ where
                 Ok(Either::Left(page))
             }
             SoupQuery::Frecency(FrecencyQueryInner(cursor)) => Ok(Either::Right(
-                self.handle_advanced_sort(cursor, req.soup_type, req.user, limit)
+                self.handle_advanced_sort(cursor, soup_type, user, limit)
                     .await?
                     .paginate_on(limit.into(), Frecency)
                     .filter_on(entity_filter)

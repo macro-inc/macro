@@ -1,6 +1,7 @@
 use crate::call_record::SoupCallRecord;
 use crate::document::SoupDocument;
 use crate::email_thread::SoupEnrichedEmailThreadPreview;
+use crate::notification::SoupNotification;
 use crate::project::SoupProject;
 use crate::{chat::SoupChat, comms::SoupChannel};
 use chrono::{DateTime, Utc};
@@ -20,6 +21,7 @@ pub enum SoupItem {
     EmailThread(SoupEnrichedEmailThreadPreview),
     Channel(SoupChannel),
     Call(SoupCallRecord),
+    Notification(Box<SoupNotification>),
 }
 
 impl SoupItem {
@@ -44,6 +46,7 @@ impl SoupItem {
             SoupItem::Call(record) => {
                 EntityType::Call.with_entity_string(record.call_id.to_string())
             }
+            SoupItem::Notification(notification) => notification.source_entity_owned(),
         }
     }
 
@@ -55,6 +58,7 @@ impl SoupItem {
             SoupItem::EmailThread(soup_thread) => soup_thread.thread.updated_at,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.updated_at,
             SoupItem::Call(record) => record.ended_at.unwrap_or(record.started_at),
+            SoupItem::Notification(notification) => notification.updated_at,
         }
     }
 }
@@ -114,6 +118,7 @@ impl SoupItem {
                 .unwrap_or(soup_channel.channel.channel.updated_at),
             (SoupItem::Call(record), SimpleSortMethod::CreatedAt) => record.started_at,
             (SoupItem::Call(record), _) => record.ended_at.unwrap_or(record.started_at),
+            (SoupItem::Notification(notification), _) => notification.created_at,
         }
     }
 }
@@ -129,6 +134,7 @@ impl Identify for SoupItem {
             SoupItem::EmailThread(thread) => thread.thread.id,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.id.0,
             SoupItem::Call(record) => record.call_id,
+            SoupItem::Notification(notification) => notification.id,
         }
     }
 }
@@ -170,6 +176,7 @@ impl SoupItem {
             )),
             SoupItem::Channel(_) => None,
             SoupItem::Call(_) => None,
+            SoupItem::Notification(notification) => notification.to_entity_reference(),
         }
     }
 }

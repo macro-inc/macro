@@ -16,6 +16,7 @@ use models_pagination::{
     TypeEraseCursor,
 };
 use models_soup::document::{SoupDocument, SoupDocumentSubType};
+use models_soup::notification::{SoupNotification, SoupNotificationSource};
 use ordered_float::OrderedFloat;
 use rootcause::Report;
 use uuid::Uuid;
@@ -134,6 +135,37 @@ fn soup_document_with_is_completed(
     }
 }
 
+fn soup_notification(
+    id: Uuid,
+    source_entity_type: EntityType,
+    source_entity_id: Uuid,
+    created_at: DateTime<Utc>,
+) -> SoupNotification {
+    SoupNotification {
+        id,
+        owner_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        event_type: "test_event".to_string(),
+        source_entity_type,
+        source_entity_id: source_entity_id.to_string(),
+        sent: true,
+        done: false,
+        created_at,
+        viewed_at: None,
+        updated_at: created_at,
+        deleted_at: None,
+        metadata: serde_json::json!({}),
+        sender_id: None,
+        source: None,
+    }
+}
+
+fn expect_empty_notifications(soup_mock: &mut MockSoupRepo) {
+    soup_mock
+        .expect_user_notifications()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+}
+
 #[tokio::test]
 async fn it_should_not_query_frecency() {
     let mut soup_mock = MockSoupRepo::new();
@@ -167,6 +199,8 @@ async fn it_should_not_query_frecency() {
     soup_mock
         .expect_populate_properties()
         .returning(|_| Box::pin(async { Ok(()) }));
+
+    expect_empty_notifications(&mut soup_mock);
 
     let res = SoupImpl::new(
         soup_mock,
@@ -765,6 +799,8 @@ async fn cursor_should_return_simple_sort() {
         .expect_populate_properties()
         .returning(|_| Box::pin(async { Ok(()) }));
 
+    expect_empty_notifications(&mut soup_mock);
+
     let res = SoupImpl::new(
         soup_mock,
         FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
@@ -800,6 +836,174 @@ async fn cursor_should_return_simple_sort() {
         let date: DateTime<Utc> = Default::default();
         assert_eq!(last_val, date);
     })
+}
+
+#[tokio::test]
+async fn notification_enrichment_should_run_after_page_selection() {
+    let source_id = Uuid::from_u128(10_000);
+    let mut soup_mock = MockSoupRepo::new();
+
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| {
+            let items = (1..=20)
+                .map(|id| {
+                    soup_document_uuid_with_updated(
+                        Uuid::from_u128(id),
+                        DateTime::default() + Days::new(100 + id as u64),
+                    )
+                })
+                .map(SoupItem::Document)
+                .collect();
+
+            Box::pin(async move { Ok(items) })
+        });
+
+    soup_mock
+        .expect_user_notifications()
+        .times(1)
+        .returning(move |_params| {
+            let notification = soup_notification(
+                Uuid::from_u128(20_000),
+                EntityType::Document,
+                source_id,
+                DateTime::default() + Days::new(1),
+            );
+
+            Box::pin(async move { Ok(vec![SoupItem::Notification(notification)]) })
+        });
+
+    soup_mock.expect_unexpanded_soup_by_ids().times(0);
+
+    let res = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        NoopCommsService,
+        NoopCallRecordQueryService,
+    )
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: None,
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::UpdatedAt,
+                EntityFilters::default(),
+            ),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .unwrap_left();
+
+    assert_eq!(res.items.len(), 20);
+    assert!(
+        res.items
+            .iter()
+            .all(|item| !matches!(item.item, SoupItem::Notification(_)))
+    );
+}
+
+#[tokio::test]
+async fn notification_enrichment_should_deduplicate_duplicate_sources() {
+    let source_id = Uuid::from_u128(42_000);
+    let source_id_string = source_id.to_string();
+    let mut soup_mock = MockSoupRepo::new();
+
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    soup_mock
+        .expect_user_notifications()
+        .times(1)
+        .returning(move |_params| {
+            let notifications = vec![
+                SoupItem::Notification(soup_notification(
+                    Uuid::from_u128(42_001),
+                    EntityType::Document,
+                    source_id,
+                    DateTime::default() + Days::new(10),
+                )),
+                SoupItem::Notification(soup_notification(
+                    Uuid::from_u128(42_002),
+                    EntityType::Document,
+                    source_id,
+                    DateTime::default() + Days::new(9),
+                )),
+            ];
+
+            Box::pin(async move { Ok(notifications) })
+        });
+
+    soup_mock
+        .expect_unexpanded_soup_by_ids()
+        .withf(move |params| {
+            assert_eq!(params.user_id.as_ref(), "macro|test@example.com");
+            assert_eq!(params.entities.len(), 1);
+            assert_eq!(params.entities[0].entity_type, EntityType::Document);
+            assert_eq!(
+                params.entities[0].entity_id.as_ref(),
+                source_id_string.as_str()
+            );
+            true
+        })
+        .times(1)
+        .returning(|params| {
+            let source_id = Uuid::parse_str(params.entities[0].entity_id.as_ref()).unwrap();
+            let res = Ok(vec![SoupItem::Document(soup_document_uuid_with_updated(
+                source_id,
+                DateTime::default(),
+            ))]);
+
+            Box::pin(async move { res })
+        });
+
+    let res = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        NoopCommsService,
+        NoopCallRecordQueryService,
+    )
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: None,
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::UpdatedAt,
+                EntityFilters::default(),
+            ),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .unwrap_left();
+
+    assert_eq!(res.items.len(), 2);
+    for item in &res.items {
+        let SoupItem::Notification(notification) = &item.item else {
+            panic!("expected notification item");
+        };
+        let Some(SoupNotificationSource::Document(document)) = &notification.source else {
+            panic!("expected enriched document source");
+        };
+        assert_eq!(document.id, source_id);
+    }
 }
 
 #[tokio::test]
@@ -895,6 +1099,8 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
         .expect_populate_properties()
         .returning(|_| Box::pin(async { Ok(()) }));
 
+    expect_empty_notifications(&mut soup_mock);
+
     let res = SoupImpl::new(
         soup_mock,
         FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
@@ -945,6 +1151,8 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
         .expect_populate_properties()
         .returning(|_| Box::pin(async { Ok(()) }));
 
+    expect_empty_notifications(&mut soup_mock);
+
     let res = SoupImpl::new(
         soup_mock,
         FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
@@ -994,6 +1202,8 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
     soup_mock
         .expect_populate_properties()
         .returning(|_| Box::pin(async { Ok(()) }));
+
+    expect_empty_notifications(&mut soup_mock);
 
     let res = SoupImpl::new(
         soup_mock,
@@ -1056,6 +1266,8 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
     soup_mock
         .expect_populate_properties()
         .returning(|_| Box::pin(async { Ok(()) }));
+
+    expect_empty_notifications(&mut soup_mock);
 
     let res = SoupImpl::new(
         soup_mock,

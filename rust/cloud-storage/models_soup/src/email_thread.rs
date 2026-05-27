@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::SoupProperty;
 
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Debug, Clone, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[dg(backward = email::domain::models::Contact)]
@@ -19,7 +19,7 @@ pub struct SoupContact {
     pub sfs_photo_url: Option<String>,
 }
 
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Debug, Clone, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[dg(backward = email::domain::models::Label)]
@@ -35,7 +35,7 @@ pub struct SoupLabel {
     pub type_: SoupLabelType,
 }
 
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Debug, Clone, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[dg(backward = email::domain::models::MessageListVisibility)]
@@ -45,7 +45,7 @@ pub enum SoupMessageListVisibility {
     Hide,
 }
 
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Debug, Clone, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[dg(backward = email::domain::models::LabelListVisibility)]
@@ -56,7 +56,7 @@ pub enum SoupLabelListVisibility {
     LabelHide,
 }
 
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Debug, Clone, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[dg(backward = email::domain::models::LabelType)]
@@ -66,7 +66,7 @@ pub enum SoupLabelType {
     User,
 }
 
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Debug, Clone, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[dg(backward = email::domain::models::Attachment)]
@@ -82,7 +82,7 @@ pub struct SoupAttachment {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Debug, Clone, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[dg(backward = email::domain::models::EmailThreadPreview)]
@@ -108,7 +108,7 @@ pub struct SoupEmailThreadPreview {
     pub project_id: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SoupEnrichedEmailThreadPreview {

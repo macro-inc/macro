@@ -1,8 +1,8 @@
 use crate::{
     domain::{
         models::{
-            AdvancedSortParams, GroupedSortRequest, GroupedSoupItem, SimpleSortQuery,
-            SimpleSortRequest,
+            AdvancedSortParams, GroupedSortRequest, GroupedSoupItem, NotificationSortRequest,
+            SimpleSortQuery, SimpleSortRequest,
         },
         ports::SoupRepo,
     },
@@ -17,6 +17,7 @@ use system_properties::SystemPropertyKey;
 
 mod expanded;
 pub mod grouping;
+mod notification;
 mod unexpanded;
 
 pub struct PgSoupRepo {
@@ -109,6 +110,13 @@ impl SoupRepo for PgSoupRepo {
         }
     }
 
+    fn user_notifications<'a>(
+        &self,
+        req: NotificationSortRequest<'a>,
+    ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
+        notification::user_notifications(&self.pool.0, req)
+    }
+
     fn expanded_soup_by_ids<'a>(
         &self,
         req: AdvancedSortParams<'a>,
@@ -198,7 +206,7 @@ pub(crate) async fn populate_properties(
             SoupItem::Project(x) => properties_map.get(&x.id.to_string()),
             SoupItem::EmailThread(x) => properties_map.get(&x.thread.id.to_string()),
             SoupItem::Chat(x) => properties_map.get(&x.id.to_string()),
-            SoupItem::Channel(_) | SoupItem::Call(_) => None,
+            SoupItem::Channel(_) | SoupItem::Call(_) | SoupItem::Notification(_) => None,
         };
         if let Some(props) = props {
             let soup_props: Vec<SoupProperty> =
@@ -208,7 +216,7 @@ pub(crate) async fn populate_properties(
                 SoupItem::Project(x) => x.properties = soup_props,
                 SoupItem::EmailThread(x) => x.properties = soup_props,
                 SoupItem::Chat(x) => x.properties = soup_props,
-                SoupItem::Channel(_) | SoupItem::Call(_) => {}
+                SoupItem::Channel(_) | SoupItem::Call(_) | SoupItem::Notification(_) => {}
             }
         }
     }

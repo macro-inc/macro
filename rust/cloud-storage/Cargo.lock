@@ -7289,6 +7289,7 @@ dependencies = [
  "models_pagination",
  "models_properties",
  "serde",
+ "serde_json",
  "strum",
  "utoipa",
  "uuid",
