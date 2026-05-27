@@ -282,10 +282,6 @@ export class McpServer extends pulumi.ComponentResource {
       },
       {
         parent: this,
-        customTimeouts: {
-          create: '5m',
-          update: '5m',
-        },
       }
     );
 

@@ -599,10 +599,6 @@ export class StaticFileService extends pulumi.ComponentResource {
       {
         parent: this,
         dependsOn: [sqsPolicy, queueQueue],
-        customTimeouts: {
-          create: '5m',
-          update: '5m',
-        },
       }
     );
 

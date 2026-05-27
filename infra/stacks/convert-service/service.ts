@@ -273,10 +273,6 @@ export class ConvertService extends pulumi.ComponentResource {
       },
       {
         parent: this,
-        customTimeouts: {
-          create: '5m',
-          update: '5m',
-        },
       }
     );
     this.service = service;

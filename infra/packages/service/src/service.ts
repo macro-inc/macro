@@ -128,10 +128,6 @@ export class Service extends pulumi.ComponentResource {
           loadBalancer.targetGroup,
           ...args.iamPolicies,
         ],
-        customTimeouts: {
-          create: '5m',
-          update: '5m',
-        },
       }
     );
 

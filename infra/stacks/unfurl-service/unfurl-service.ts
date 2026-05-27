@@ -199,10 +199,6 @@ export class UnfurlService extends pulumi.ComponentResource {
       },
       {
         parent: this,
-        customTimeouts: {
-          create: '5m',
-          update: '5m',
-        },
       }
     );
 
