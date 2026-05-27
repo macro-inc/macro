@@ -1,9 +1,34 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 
 use crate::{
     AuthedClient, Result,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
+
+/// Structured shape of FusionAuth validation error responses.
+/// See https://fusionauth.io/docs/v1/tech/apis/errors
+#[derive(serde::Deserialize, Debug, Default)]
+struct FusionAuthErrorBody {
+    #[serde(default, rename = "fieldErrors")]
+    field_errors: HashMap<String, Vec<FusionAuthFieldError>>,
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct FusionAuthFieldError {
+    code: String,
+}
+
+impl FusionAuthErrorBody {
+    /// Returns true if any field error carries the FusionAuth `[alreadyLinked]` code,
+    /// regardless of which field triggered it.
+    fn is_already_linked(&self) -> bool {
+        self.field_errors
+            .values()
+            .flatten()
+            .any(|e| e.code.starts_with("[alreadyLinked]"))
+    }
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -143,9 +168,11 @@ pub(crate) async fn link_user(
                 })
             })?;
 
-            // FA returns this when the (user_id, identity_provider_user_id) pair is
-            // already linked. Treat as a typed variant so callers can no-op on it.
-            if body.contains("[alreadyLinked]identityProviderUserId") {
+            if serde_json::from_str::<FusionAuthErrorBody>(&body)
+                .ok()
+                .as_ref()
+                .is_some_and(FusionAuthErrorBody::is_already_linked)
+            {
                 tracing::info!(body=%body, "fusionauth idp link already exists");
                 return Err(FusionAuthClientError::IdentityProviderLinkAlreadyExists);
             }
