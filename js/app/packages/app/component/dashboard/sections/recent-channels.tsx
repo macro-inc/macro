@@ -103,7 +103,14 @@ function ChannelCard(props: {
         </Show>
       </div>
 
-      <div class="flex min-w-0 flex-col gap-1">
+      <div class="relative flex min-w-0 flex-col gap-1">
+        <div class="pointer-events-none absolute bottom-0 right-0 opacity-0 transition group-hover:opacity-100">
+          <Layer depth={3} class="rounded-xl">
+            <div class="flex size-8 items-center justify-center rounded-xl bg-hover text-ink-muted transition group-hover:text-ink">
+              <ArrowRightIcon class="size-4" />
+            </div>
+          </Layer>
+        </div>
         <Show when={senderLabel()}>
           {(label) => (
             <div class="flex items-center gap-1.5 text-xxs font-medium text-ink-muted">
