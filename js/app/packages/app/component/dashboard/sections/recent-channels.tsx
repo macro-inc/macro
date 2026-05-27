@@ -61,7 +61,7 @@ function initials(name: string) {
 
 function ChannelCard(props: {
   channel: ChannelCardData;
-  onOpen: (channelId: string) => void;
+  onOpen: (channelId: string, event: MouseEvent) => void;
 }) {
   const [senderName] = useDisplayName(props.channel.latestSenderId as any);
   const senderLabel = () =>
@@ -74,7 +74,7 @@ function ChannelCard(props: {
   return (
     <button
       class="group flex h-36 min-w-0 flex-col justify-between rounded-2xl border border-edge-muted bg-hover/60 p-4 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent"
-      onClick={() => props.onOpen(props.channel.id)}
+      onClick={(event) => props.onOpen(props.channel.id, event)}
     >
       <div class="flex items-start justify-between gap-3">
         <div class="flex min-w-0 items-center gap-3">
@@ -209,8 +209,26 @@ export function RecentChannelsSection() {
     })
   );
 
-  const openChannel = (channelId: string) => {
-    splitLayout.replaceOrInsertSplit({ type: 'channel', id: channelId }, 'dashboard');
+  const openChannel = (channelId: string, event: MouseEvent) => {
+    splitLayout.openWithSplit(
+      { type: 'channel' as const, id: channelId },
+      {
+        activate: true,
+        preferNewSplit: event.shiftKey,
+        referredFrom: 'dashboard',
+      }
+    );
+  };
+
+  const openChannelsView = (event: MouseEvent) => {
+    splitLayout.openWithSplit(
+      { type: 'component' as const, id: 'channels' },
+      {
+        activate: true,
+        preferNewSplit: event.shiftKey,
+        referredFrom: 'dashboard',
+      }
+    );
   };
 
   return (
@@ -245,7 +263,10 @@ export function RecentChannelsSection() {
                 <ChannelCard channel={channel} onOpen={openChannel} />
               )}
             </For>
-            <button class="group flex h-36 min-w-0 flex-col justify-end rounded-2xl border border-edge-muted bg-hover/60 p-4 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent">
+            <button
+              class="group flex h-36 min-w-0 flex-col justify-end rounded-2xl border border-edge-muted bg-hover/60 p-4 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent"
+              onClick={openChannelsView}
+            >
               <div class="flex items-center justify-between gap-3">
                 <div>
                   <h3 class="text-xs font-semibold text-ink">View all</h3>
