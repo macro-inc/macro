@@ -9,19 +9,27 @@ mod handle_pr;
 
 use crate::domain::{
     models::{
-        GithubError, GithubInstallationAccessToken, GithubKey, GithubWebhookEventType, MacroTaskId,
-        TeamTaskReference, ValidatedGithubWebhookEvent,
+        EnrichedGithubPullRequest, GithubError, GithubInstallationAccessToken, GithubKey,
+        GithubPullRequestStatus, GithubWebhookEventType, MacroTaskId, TeamTaskReference,
+        ValidatedGithubWebhookEvent,
     },
     ports::{GithubSyncClient, GithubSyncRepo, GithubSyncService},
 };
 use documents::domain::{models::DocumentError, ports::DocumentService};
 use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
+use foreign_entity::domain::{
+    models::{CreateForeignEntity, PatchForeignEntity},
+    ports::ForeignEntityService,
+};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use std::{collections::HashSet, sync::Arc};
 use subtle::ConstantTimeEq;
 
 type HmacSha256 = Hmac<Sha256>;
+
+const GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE: &str = "github_pull_request";
+const GITHUB_PULL_REQUEST_STORED_FOR_AUTH_ENTITY: &str = "document";
 
 /// Github sync config
 #[derive(Debug)]
@@ -37,19 +45,34 @@ pub struct GithubSyncConfig {
 }
 
 /// The concrete github sync service implementation.
-pub struct GithubSyncServiceImpl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> {
+pub struct GithubSyncServiceImpl<
+    D: DocumentService,
+    R: GithubSyncRepo,
+    C: GithubSyncClient,
+    F: ForeignEntityService,
+> {
     config: GithubSyncConfig,
     document_service: Arc<D>,
+    foreign_entity_service: Arc<F>,
     repo: R,
     pub(crate) client: C,
 }
 
-impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServiceImpl<D, R, C> {
+impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntityService>
+    GithubSyncServiceImpl<D, R, C, F>
+{
     /// Create a new github sync service.
-    pub fn new(config: GithubSyncConfig, document_service: Arc<D>, repo: R, client: C) -> Self {
+    pub fn new(
+        config: GithubSyncConfig,
+        document_service: Arc<D>,
+        foreign_entity_service: Arc<F>,
+        repo: R,
+        client: C,
+    ) -> Self {
         Self {
             config,
             document_service,
+            foreign_entity_service,
             repo,
             client,
         }
@@ -74,7 +97,9 @@ struct ResolvedTasks {
     validated_task_ids: Vec<MacroTaskId>,
 }
 
-impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServiceImpl<D, R, C> {
+impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntityService>
+    GithubSyncServiceImpl<D, R, C, F>
+{
     /// Extract PR metadata and generate an installation access token.
     /// Returns `None` if any required field is missing or token generation fails.
     #[tracing::instrument(skip(self, event))]
@@ -129,6 +154,164 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
         match (event.repo_owner(), event.repo_name(), event.pull_number()) {
             (Some(o), Some(r), Some(p)) => Some(GithubKey::new(o, r, p)),
             _ => None,
+        }
+    }
+
+    /// Build pull request metadata for storage as a foreign entity.
+    fn enriched_pull_request_from_event(
+        event: &ValidatedGithubWebhookEvent,
+    ) -> Option<EnrichedGithubPullRequest> {
+        let (owner, repo, number) =
+            match (event.repo_owner(), event.repo_name(), event.pull_number()) {
+                (Some(owner), Some(repo), Some(number)) => (owner, repo, number),
+                _ => return None,
+            };
+
+        let github_key = GithubKey::new(owner, repo, number);
+        let pull_request = event.payload.get("pull_request");
+        let url = pull_request
+            .and_then(|pr| pr.get("html_url"))
+            .and_then(|value| value.as_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("https://github.com/{owner}/{repo}/pull/{number}"));
+
+        Some(EnrichedGithubPullRequest {
+            github_key: github_key.as_ref().to_string(),
+            owner: owner.to_string(),
+            repo: repo.to_string(),
+            number,
+            url,
+            display_name: format!("{owner}/{repo}#{number}"),
+            name: pull_request
+                .and_then(|pr| pr.get("title"))
+                .and_then(|value| value.as_str())
+                .map(str::to_string),
+            status: Some(Self::pull_request_status_from_event(event)),
+            additions: pull_request
+                .and_then(|pr| pr.get("additions"))
+                .and_then(|value| value.as_u64()),
+            deletions: pull_request
+                .and_then(|pr| pr.get("deletions"))
+                .and_then(|value| value.as_u64()),
+        })
+    }
+
+    /// Derive a normalized pull request status from the webhook payload.
+    fn pull_request_status_from_event(
+        event: &ValidatedGithubWebhookEvent,
+    ) -> GithubPullRequestStatus {
+        let pull_request = event.payload.get("pull_request");
+        let has_merged_at = pull_request
+            .and_then(|pr| pr.get("merged_at"))
+            .and_then(|value| value.as_str())
+            .is_some_and(|merged_at| !merged_at.is_empty());
+
+        if event.is_merged() || has_merged_at {
+            return GithubPullRequestStatus::Merged;
+        }
+
+        let state = pull_request
+            .and_then(|pr| pr.get("state"))
+            .and_then(|value| value.as_str());
+
+        if state == Some("closed") || event.action() == Some("closed") {
+            return GithubPullRequestStatus::Closed;
+        }
+
+        GithubPullRequestStatus::Open
+    }
+
+    /// Create or refresh foreign entity rows for a pull request and its task documents.
+    #[tracing::instrument(skip(self, event, stored_for_ids))]
+    async fn upsert_pull_request_foreign_entities(
+        &self,
+        event: &ValidatedGithubWebhookEvent,
+        stored_for_ids: &[String],
+    ) {
+        if stored_for_ids.is_empty() {
+            tracing::trace!("no task documents resolved for PR foreign entity upsert");
+            return;
+        }
+
+        let Some(pull_request) = Self::enriched_pull_request_from_event(event) else {
+            tracing::warn!("missing PR metadata, cannot upsert foreign entity");
+            return;
+        };
+
+        let metadata = match serde_json::to_value(&pull_request) {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                tracing::error!(error=?error, "failed to serialize PR foreign entity metadata");
+                return;
+            }
+        };
+
+        let existing = match self
+            .foreign_entity_service
+            .get_foreign_entities_by_foreign_entity_id(
+                &pull_request.github_key,
+                Some(GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE),
+            )
+            .await
+        {
+            Ok(existing) => existing,
+            Err(error) => {
+                tracing::error!(error=?error, "failed to fetch existing PR foreign entities");
+                return;
+            }
+        };
+
+        let mut seen_stored_for_ids = HashSet::new();
+        for stored_for_id in stored_for_ids {
+            if !seen_stored_for_ids.insert(stored_for_id.clone()) {
+                continue;
+            }
+
+            let existing_entity = existing.iter().find(|entity| {
+                entity.stored_for_id == stored_for_id.as_str()
+                    && entity.stored_for_auth_entity == GITHUB_PULL_REQUEST_STORED_FOR_AUTH_ENTITY
+            });
+
+            if let Some(entity) = existing_entity {
+                self.foreign_entity_service
+                    .patch_foreign_entity(
+                        entity.id,
+                        PatchForeignEntity {
+                            metadata: Some(metadata.clone()),
+                            ..PatchForeignEntity::default()
+                        },
+                    )
+                    .await
+                    .inspect_err(|error| {
+                        tracing::error!(
+                            error=?error,
+                            foreign_entity_id=%pull_request.github_key,
+                            stored_for_id=%stored_for_id,
+                            "failed to patch PR foreign entity"
+                        );
+                    })
+                    .ok();
+                continue;
+            }
+
+            self.foreign_entity_service
+                .create_foreign_entity(CreateForeignEntity {
+                    foreign_entity_id: pull_request.github_key.clone(),
+                    foreign_entity_source: GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE.to_string(),
+                    metadata: metadata.clone(),
+                    stored_for_id: stored_for_id.clone(),
+                    stored_for_auth_entity: GITHUB_PULL_REQUEST_STORED_FOR_AUTH_ENTITY.to_string(),
+                })
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(
+                        error=?error,
+                        foreign_entity_id=%pull_request.github_key,
+                        stored_for_id=%stored_for_id,
+                        "failed to create PR foreign entity"
+                    );
+                })
+                .ok();
         }
     }
 
@@ -325,8 +508,8 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
     }
 }
 
-impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncService
-    for GithubSyncServiceImpl<D, R, C>
+impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntityService>
+    GithubSyncService for GithubSyncServiceImpl<D, R, C, F>
 {
     #[tracing::instrument(skip(self, body), err)]
     async fn validate_webhook_event(

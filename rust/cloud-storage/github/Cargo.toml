@@ -19,7 +19,13 @@ outbound = [
   "ports",
 ]
 ports = []
-sync = ["dep:documents", "dep:entity_access", "dep:reqwest", "ports"]
+sync = [
+  "dep:documents",
+  "dep:entity_access",
+  "dep:foreign_entity",
+  "dep:reqwest",
+  "ports",
+]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -28,6 +34,9 @@ documents = { path = "../documents", default-features = false, features = [
   "ports",
 ], optional = true }
 entity_access = { path = "../entity_access", default-features = false, features = [
+  "ports",
+], optional = true }
+foreign_entity = { path = "../foreign_entity", default-features = false, features = [
   "ports",
 ], optional = true }
 hex = { workspace = true }
