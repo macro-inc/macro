@@ -569,9 +569,10 @@ describe('insertSoupEntity — grouped cache', () => {
 
     insertSoupEntity(mockTaskItem('a-new', 'in_progress'));
 
-    const cached = testQueryClient.getQueryData<
-      InfiniteData<SoupAstItemsGroupedPage, unknown>
-    >(key)!;
+    const cached =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
     const page = cached.pages[0];
 
     // Pool gained the new item.
@@ -594,9 +595,10 @@ describe('insertSoupEntity — grouped cache', () => {
     const tx = insertSoupEntity(mockTaskItem('a-new', 'in_progress'));
     tx.rollback();
 
-    const restored = testQueryClient.getQueryData<
-      InfiniteData<SoupAstItemsGroupedPage, unknown>
-    >(key)!;
+    const restored =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
     expect(restored.pages[0].items['a-new']).toBeUndefined();
     expect(restored.pages[0].groups[0].itemIds).toEqual(['a-1']);
     expect(restored.pages[0].groups[0].totalCount).toBe(1);
@@ -618,9 +620,10 @@ describe('removeSoupEntities — grouped cache', () => {
 
     removeSoupEntities(new Set(['a-1']));
 
-    const cached = testQueryClient.getQueryData<
-      InfiniteData<SoupAstItemsGroupedPage, unknown>
-    >(key)!;
+    const cached =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
     const page = cached.pages[0];
     expect(page.items['a-1']).toBeUndefined();
     expect(page.items['a-2']).toBeDefined();
@@ -643,9 +646,10 @@ describe('removeSoupEntities — grouped cache', () => {
     const tx = removeSoupEntities(new Set(['a-1']));
     tx.rollback();
 
-    const restored = testQueryClient.getQueryData<
-      InfiniteData<SoupAstItemsGroupedPage, unknown>
-    >(key)!;
+    const restored =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
     expect(restored.pages[0].items['a-1']).toBeDefined();
     expect(restored.pages[0].groups[0].itemIds).toEqual(['a-1']);
     expect(restored.pages[0].groups[0].totalCount).toBe(1);
@@ -671,13 +675,16 @@ describe('optimisticUpdateSoupEntity — cross-group move', () => {
     mockNormalizer.getObjectById.mockReturnValue(merged);
     // The cache itself also reflects the merge — apply via setQueryData so
     // TanStack Query sees the new reference rather than mutating in place.
-    const cached = testQueryClient.getQueryData<
+    const cached =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
+    testQueryClient.setQueryData<
       InfiniteData<SoupAstItemsGroupedPage, unknown>
-    >(key)!;
-    testQueryClient.setQueryData<InfiniteData<SoupAstItemsGroupedPage, unknown>>(key, {
+    >(key, {
       ...cached,
       pages: cached.pages.map((p, i) =>
-        i === 0 ? { ...p, items: { ...p.items, 'a-1': merged } } : p,
+        i === 0 ? { ...p, items: { ...p.items, 'a-1': merged } } : p
       ),
     });
 
@@ -687,9 +694,10 @@ describe('optimisticUpdateSoupEntity — cross-group move', () => {
       frecency_score: 1,
     } as unknown as Parameters<typeof optimisticUpdateSoupEntity>[0]);
 
-    const after = testQueryClient.getQueryData<
-      InfiniteData<SoupAstItemsGroupedPage, unknown>
-    >(key)!;
+    const after =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
     const page = after.pages[0];
 
     expect(page.items['a-1']).toBeDefined();
@@ -708,7 +716,7 @@ describe('optimisticUpdateSoupEntity — cross-group move', () => {
     const key = seedGroupedAstQuery(mockGroupedParentCache(items, groups));
 
     mockNormalizer.getObjectById.mockReturnValue(
-      mockTaskItem('a-1', 'in_progress'),
+      mockTaskItem('a-1', 'in_progress')
     );
 
     optimisticUpdateSoupEntity({
@@ -717,9 +725,10 @@ describe('optimisticUpdateSoupEntity — cross-group move', () => {
       frecency_score: 1,
     } as unknown as Parameters<typeof optimisticUpdateSoupEntity>[0]);
 
-    const after = testQueryClient.getQueryData<
-      InfiniteData<SoupAstItemsGroupedPage, unknown>
-    >(key)!;
+    const after =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
     expect(after.pages[0].groups[0].itemIds).toEqual(['a-1']);
     expect(after.pages[0].groups[0].totalCount).toBe(1);
   });

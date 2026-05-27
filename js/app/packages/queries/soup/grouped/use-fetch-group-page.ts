@@ -6,11 +6,7 @@ import {
   useMutationState,
   useQueryClient,
 } from '@tanstack/solid-query';
-import type {
-  SoupAstBody,
-  SoupAstItemsPage,
-  SoupAstParams,
-} from '../items';
+import type { SoupAstBody, SoupAstItemsPage, SoupAstParams } from '../items';
 import { soupKeys } from '../keys';
 import { parseGroupedSoupPage, serializeGroupByField } from './api';
 import type { GroupByField, GroupedSoupPage } from './types';
@@ -35,7 +31,7 @@ type FetchSnapshot = {
 function appendGroupPage(
   prev: InfiniteData<SoupAstItemsPage, string | null> | undefined,
   groupKey: string,
-  response: GroupedSoupPage,
+  response: GroupedSoupPage
 ) {
   if (!prev?.pages.length) return prev;
 
@@ -81,7 +77,7 @@ export const useFetchGroupPage = () => {
             group_key: vars.groupKey,
           },
           body: { ...vars.soupBody, ...vars.soupParams },
-        }),
+        })
       );
       return parseGroupedSoupPage(response);
     },

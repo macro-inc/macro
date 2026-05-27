@@ -8800,10 +8800,24 @@ export const postItemsSoupAstGroupedBody = zod
       .unknown()
       .optional()
       .describe('the filters that should be applied to the document entity'),
+    eca: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'CRM-scoped address filter (wire key: `eca`). Symmetric counterpart\nto `ecd` for fully-qualified email addresses.'
+      ),
+    ecd: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'CRM-scoped domain filter (wire key: `ecd`). Parallel to the\nfreeform `ef` AST. Expanded by the router into an any-direction\nOR sub-tree AND-merged into `ef`, plus a `CrmScope` tag stamped\non the resulting [`item_filters::ast::EmailFilterAst::crm_scope`].\nDrives the per-team CRM authorization pre-check and candidate-set\nwidening downstream. Mutually exclusive with `eca`.'
+      ),
     ef: zod
       .unknown()
       .optional()
-      .describe('the filters that should be applied to the email entity'),
+      .describe(
+        'the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` \/ `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors.'
+      ),
     pf: zod
       .unknown()
       .optional()
@@ -8815,9 +8829,6 @@ export const postItemsSoupAstGroupedBody = zod
         'the filters that should be applied based on entity properties'
       ),
   })
-  .describe(
-    'Describes a bundle of filters that should be applied across different entity types'
-  )
   .and(
     zod
       .object({

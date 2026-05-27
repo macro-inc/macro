@@ -283,7 +283,7 @@ export const storageServiceClient = {
       {
         method: 'POST',
         body: JSON.stringify(body),
-      },
+      }
     );
   },
 

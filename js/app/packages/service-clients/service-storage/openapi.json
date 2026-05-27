@@ -6614,7 +6614,47 @@
           }
         }
       },
-"ApiGroupByField": {
+      "ApiEntityFilterAst": {
+        "type": "object",
+        "properties": {
+          "callf": {
+            "description": "the filters that should be applied to the call entity"
+          },
+          "cf": {
+            "description": "the filters that should be applied to the chat entity"
+          },
+          "chanf": {
+            "description": "the filters that should be applied to the channel entity"
+          },
+          "df": {
+            "description": "the filters that should be applied to the document entity"
+          },
+          "eca": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM-scoped address filter (wire key: `eca`). Symmetric counterpart\nto `ecd` for fully-qualified email addresses."
+          },
+          "ecd": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM-scoped domain filter (wire key: `ecd`). Parallel to the\nfreeform `ef` AST. Expanded by the router into an any-direction\nOR sub-tree AND-merged into `ef`, plus a `CrmScope` tag stamped\non the resulting [`item_filters::ast::EmailFilterAst::crm_scope`].\nDrives the per-team CRM authorization pre-check and candidate-set\nwidening downstream. Mutually exclusive with `eca`."
+          },
+          "ef": {
+            "description": "the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` / `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors."
+          },
+          "pf": {
+            "description": "the filters that should be applied to the project entity"
+          },
+          "propf": {
+            "description": "the filters that should be applied based on entity properties"
+          }
+        }
+      },
+      "ApiGroupByField": {
         "oneOf": [
           {
             "type": "string",
@@ -6699,46 +6739,6 @@
             "format": "int32",
             "description": "Total count of items in this group across all pages",
             "minimum": 0
-          }
-        }
-      },
-      "ApiEntityFilterAst": {
-        "type": "object",
-        "properties": {
-          "callf": {
-            "description": "the filters that should be applied to the call entity"
-          },
-          "cf": {
-            "description": "the filters that should be applied to the chat entity"
-          },
-          "chanf": {
-            "description": "the filters that should be applied to the channel entity"
-          },
-          "df": {
-            "description": "the filters that should be applied to the document entity"
-          },
-          "eca": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "CRM-scoped address filter (wire key: `eca`). Symmetric counterpart\nto `ecd` for fully-qualified email addresses."
-          },
-          "ecd": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "CRM-scoped domain filter (wire key: `ecd`). Parallel to the\nfreeform `ef` AST. Expanded by the router into an any-direction\nOR sub-tree AND-merged into `ef`, plus a `CrmScope` tag stamped\non the resulting [`item_filters::ast::EmailFilterAst::crm_scope`].\nDrives the per-team CRM authorization pre-check and candidate-set\nwidening downstream. Mutually exclusive with `eca`."
-          },
-          "ef": {
-            "description": "the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` / `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors."
-          },
-          "pf": {
-            "description": "the filters that should be applied to the project entity"
-          },
-          "propf": {
-            "description": "the filters that should be applied based on entity properties"
           }
         }
       },
@@ -10467,72 +10467,6 @@
           }
         }
       },
-"GroupedParams": {
-        "type": "object",
-        "description": "Parameters for grouped soup queries.",
-        "required": ["group_by"],
-        "properties": {
-          "group_by": {
-            "$ref": "#/components/schemas/ApiGroupByField",
-            "description": "Field to group results by (required)."
-          },
-          "group_key": {
-            "type": ["string", "null"],
-            "description": "Filter to a specific group key (for \"load more in group X\")."
-          },
-          "limit": {
-            "type": ["integer", "null"],
-            "format": "int32",
-            "description": "Limit the number of items returned. Defaults to 20. Max 500.",
-            "minimum": 0
-          },
-          "sort_method": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/GroupedSoupSort",
-                "description": "Sort method. Defaults to viewed_updated."
-              }
-            ]
-          }
-        }
-      },
-      "GroupedSoupPage": {
-        "type": "object",
-        "description": "Response for grouped soup queries.\n\nItems are returned as a pool keyed by id; each `ApiGroupMeta.item_ids`\ndescribes the ordered membership of one group.",
-        "required": ["items"],
-        "properties": {
-          "groups": {
-            "type": ["array", "null"],
-            "items": {
-              "$ref": "#/components/schemas/ApiGroupMeta"
-            },
-            "description": "Group metadata - present when group_by is specified in the request"
-          },
-          "items": {
-            "type": "object",
-            "description": "Items in this page, keyed by id. Ordering lives in `groups[].item_ids`.",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/SoupApiItem"
-            },
-            "propertyNames": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          "next_cursor": {
-            "type": ["string", "null"],
-            "description": "Cursor to load the next page (global pagination)"
-          }
-        }
-      },
-      "GroupedSoupSort": {
-        "type": "string",
-        "description": "Sort method for grouped queries (frecency not supported).",
-        "enum": ["viewed_at", "created_at", "updated_at", "viewed_updated"]
-      },
       "GithubPullRequest": {
         "type": "object",
         "description": "Display-ready data for a GitHub pull request associated with a task.",
@@ -10606,6 +10540,72 @@
             "description": "Parsed pull requests, in repository query order."
           }
         }
+      },
+      "GroupedParams": {
+        "type": "object",
+        "description": "Parameters for grouped soup queries.",
+        "required": ["group_by"],
+        "properties": {
+          "group_by": {
+            "$ref": "#/components/schemas/ApiGroupByField",
+            "description": "Field to group results by (required)."
+          },
+          "group_key": {
+            "type": ["string", "null"],
+            "description": "Filter to a specific group key (for \"load more in group X\")."
+          },
+          "limit": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Limit the number of items returned. Defaults to 20. Max 500.",
+            "minimum": 0
+          },
+          "sort_method": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GroupedSoupSort",
+                "description": "Sort method. Defaults to viewed_updated."
+              }
+            ]
+          }
+        }
+      },
+      "GroupedSoupPage": {
+        "type": "object",
+        "description": "Response for grouped soup queries.\n\nItems are returned as a pool keyed by id; each `ApiGroupMeta.item_ids`\ndescribes the ordered membership of one group.",
+        "required": ["items"],
+        "properties": {
+          "groups": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ApiGroupMeta"
+            },
+            "description": "Group metadata - present when group_by is specified in the request"
+          },
+          "items": {
+            "type": "object",
+            "description": "Items in this page, keyed by id. Ordering lives in `groups[].item_ids`.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SoupApiItem"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Cursor to load the next page (global pagination)"
+          }
+        }
+      },
+      "GroupedSoupSort": {
+        "type": "string",
+        "description": "Sort method for grouped queries (frecency not supported).",
+        "enum": ["viewed_at", "created_at", "updated_at", "viewed_updated"]
       },
       "HashMap": {
         "type": "object",
@@ -11424,7 +11424,7 @@
       "PostGroupedSoupAstRequest": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/EntityFilterAst",
+            "$ref": "#/components/schemas/ApiEntityFilterAst",
             "description": "Filters to apply (AST format)"
           },
           {
