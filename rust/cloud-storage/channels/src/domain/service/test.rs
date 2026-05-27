@@ -496,6 +496,7 @@ impl ChannelRepo for FakeMutationRepo {
 
     async fn patch_message(
         &self,
+        _channel_id: Uuid,
         _message_id: Uuid,
         content: String,
     ) -> Result<MutatedMessage, Self::Err> {
@@ -506,12 +507,20 @@ impl ChannelRepo for FakeMutationRepo {
         Ok(state.message.clone())
     }
 
-    async fn delete_message(&self, _message_id: Uuid) -> Result<MutatedMessage, Self::Err> {
+    async fn delete_message(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<MutatedMessage, Self::Err> {
         Ok(self.state.lock().unwrap().message.clone())
     }
 
-    async fn get_message_owner(&self, _message_id: Uuid) -> Result<String, Self::Err> {
-        Ok(self.state.lock().unwrap().owner.clone())
+    async fn get_message_owner(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<Option<String>, Self::Err> {
+        Ok(Some(self.state.lock().unwrap().owner.clone()))
     }
 
     async fn get_participants(
@@ -535,6 +544,7 @@ impl ChannelRepo for FakeMutationRepo {
 
     async fn add_reaction(
         &self,
+        _channel_id: Uuid,
         _message_id: Uuid,
         _emoji: String,
         _user_id: String,
@@ -544,6 +554,7 @@ impl ChannelRepo for FakeMutationRepo {
 
     async fn remove_reaction(
         &self,
+        _channel_id: Uuid,
         _message_id: Uuid,
         _emoji: String,
         _user_id: String,
@@ -553,6 +564,7 @@ impl ChannelRepo for FakeMutationRepo {
 
     async fn get_message_reactions(
         &self,
+        _channel_id: Uuid,
         _message_id: Uuid,
     ) -> Result<Vec<CountedReaction>, Self::Err> {
         Ok(vec![CountedReaction {

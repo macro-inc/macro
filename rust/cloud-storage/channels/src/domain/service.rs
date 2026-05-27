@@ -511,9 +511,10 @@ where
     ) -> Result<(), ChannelMutationErr> {
         let owner = self
             .repo
-            .get_message_owner(message_id)
+            .get_message_owner(channel_id, message_id)
             .await
-            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+            .ok_or_else(|| ChannelMutationErr::NotFound("message not found".to_string()))?;
         if owner != actor.as_ref() && !is_admin_or_owner(actor_role) {
             return Err(ChannelMutationErr::Unauthorized(
                 "user is not authorized to edit this message".to_string(),
@@ -540,7 +541,7 @@ where
         if let Some(content) = req.content.clone() {
             let message = self
                 .repo
-                .patch_message(message_id, content)
+                .patch_message(channel_id, message_id, content)
                 .await
                 .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
 
@@ -623,9 +624,10 @@ where
     ) -> Result<(), ChannelMutationErr> {
         let owner = self
             .repo
-            .get_message_owner(message_id)
+            .get_message_owner(channel_id, message_id)
             .await
-            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+            .ok_or_else(|| ChannelMutationErr::NotFound("message not found".to_string()))?;
         if owner != actor.as_ref() && !is_admin_or_owner(actor_role) {
             return Err(ChannelMutationErr::Unauthorized(
                 "user is not authorized to delete this message".to_string(),
@@ -634,7 +636,7 @@ where
 
         let message = self
             .repo
-            .delete_message(message_id)
+            .delete_message(channel_id, message_id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         let participants = self
@@ -661,15 +663,30 @@ where
     ) -> Result<(), ChannelMutationErr> {
         let message_id = Uuid::parse_str(&req.message_id)
             .map_err(|err| ChannelMutationErr::BadRequest(err.to_string()))?;
+        self.repo
+            .get_message_owner(channel_id, message_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+            .ok_or_else(|| ChannelMutationErr::NotFound("message not found".to_string()))?;
         match req.action {
             ReactionAction::Add => {
                 self.repo
-                    .add_reaction(message_id, req.emoji, actor.as_ref().to_string())
+                    .add_reaction(
+                        channel_id,
+                        message_id,
+                        req.emoji,
+                        actor.as_ref().to_string(),
+                    )
                     .await
             }
             ReactionAction::Remove => {
                 self.repo
-                    .remove_reaction(message_id, req.emoji, actor.as_ref().to_string())
+                    .remove_reaction(
+                        channel_id,
+                        message_id,
+                        req.emoji,
+                        actor.as_ref().to_string(),
+                    )
                     .await
             }
         }
@@ -677,7 +694,7 @@ where
 
         let reactions = self
             .repo
-            .get_message_reactions(message_id)
+            .get_message_reactions(channel_id, message_id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         let participants = self

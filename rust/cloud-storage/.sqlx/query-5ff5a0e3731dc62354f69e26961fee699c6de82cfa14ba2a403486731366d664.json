@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT emoji, user_id, created_at\n            FROM comms_reactions\n            WHERE message_id = $1\n            ",
+  "query": "\n            SELECT r.emoji, r.user_id, r.created_at\n            FROM comms_reactions r\n            JOIN comms_messages m ON m.id = r.message_id\n            WHERE r.message_id = $1 AND m.channel_id = $2\n            ",
   "describe": {
     "columns": [
       {
@@ -21,6 +21,7 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Uuid"
       ]
     },
@@ -30,5 +31,5 @@
       false
     ]
   },
-  "hash": "46a755bd958454ae48e5a4f865c547457d087e2ecadaf3499befa66cecfabffe"
+  "hash": "5ff5a0e3731dc62354f69e26961fee699c6de82cfa14ba2a403486731366d664"
 }

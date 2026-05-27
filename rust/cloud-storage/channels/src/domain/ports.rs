@@ -237,24 +237,27 @@ pub trait ChannelRepo: Send + Sync + 'static {
         attachments: Vec<MutatedAttachment>,
     ) -> impl Future<Output = Result<MutatedMessage, Self::Err>> + Send;
 
-    /// Patch message content.
+    /// Patch message content within a channel.
     fn patch_message(
         &self,
+        channel_id: Uuid,
         message_id: Uuid,
         content: String,
     ) -> impl Future<Output = Result<MutatedMessage, Self::Err>> + Send;
 
-    /// Delete a message.
+    /// Delete a message within a channel.
     fn delete_message(
         &self,
+        channel_id: Uuid,
         message_id: Uuid,
     ) -> impl Future<Output = Result<MutatedMessage, Self::Err>> + Send;
 
-    /// Fetch the owner of a message.
+    /// Fetch the owner of a message within a channel.
     fn get_message_owner(
         &self,
+        channel_id: Uuid,
         message_id: Uuid,
-    ) -> impl Future<Output = Result<String, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 
     /// Fetch active participants.
     fn get_participants(
@@ -275,25 +278,28 @@ pub trait ChannelRepo: Send + Sync + 'static {
         channel_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Add a reaction.
+    /// Add a reaction to a message within a channel.
     fn add_reaction(
         &self,
+        channel_id: Uuid,
         message_id: Uuid,
         emoji: String,
         user_id: String,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Remove a reaction.
+    /// Remove a reaction from a message within a channel.
     fn remove_reaction(
         &self,
+        channel_id: Uuid,
         message_id: Uuid,
         emoji: String,
         user_id: String,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Get grouped reactions for a message.
+    /// Get grouped reactions for a message within a channel.
     fn get_message_reactions(
         &self,
+        channel_id: Uuid,
         message_id: Uuid,
     ) -> impl Future<Output = Result<Vec<CountedReaction>, Self::Err>> + Send;
 }

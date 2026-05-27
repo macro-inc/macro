@@ -363,21 +363,26 @@ where
     Ok(result.rows_affected())
 }
 
-async fn get_message_owner(pool: &PgPool, message_id: Uuid) -> anyhow::Result<String> {
+async fn get_message_owner(
+    pool: &PgPool,
+    channel_id: Uuid,
+    message_id: Uuid,
+) -> anyhow::Result<Option<String>> {
     let row = sqlx::query_as!(
         SenderIdRow,
         r#"
         SELECT sender_id AS "sender_id: MacroUserIdStr"
         FROM comms_messages
-        WHERE id = $1
+        WHERE id = $1 AND channel_id = $2
         ORDER BY created_at ASC
         "#,
         message_id,
+        channel_id,
     )
-    .fetch_one(pool)
+    .fetch_optional(pool)
     .await
     .context("unable to get message owner")?;
-    Ok(row.sender_id.to_string())
+    Ok(row.map(|row| row.sender_id.to_string()))
 }
 
 async fn get_channel_participants_for_thread_id(
@@ -1775,6 +1780,7 @@ impl ChannelRepo for PgChannelsRepo {
 
     async fn patch_message(
         &self,
+        channel_id: Uuid,
         message_id: Uuid,
         content: String,
     ) -> Result<MutatedMessage, Self::Err> {
@@ -1783,7 +1789,7 @@ impl ChannelRepo for PgChannelsRepo {
             r#"
             UPDATE comms_messages
             SET content = $1, updated_at = NOW(), edited_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND channel_id = $3
             RETURNING
                 id,
                 channel_id,
@@ -1797,19 +1803,24 @@ impl ChannelRepo for PgChannelsRepo {
             "#,
             content,
             message_id,
+            channel_id,
         )
         .fetch_one(&self.pool)
         .await
         .context("unable to update message")?;
         Ok(row.into())
     }
-    async fn delete_message(&self, message_id: Uuid) -> Result<MutatedMessage, Self::Err> {
+    async fn delete_message(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> Result<MutatedMessage, Self::Err> {
         let row = sqlx::query_as!(
             MutatedMessageRow,
             r#"
             UPDATE comms_messages
             SET content = '', updated_at = NOW(), deleted_at = NOW()
-            WHERE id = $1
+            WHERE id = $1 AND channel_id = $2
             RETURNING
                 id,
                 channel_id,
@@ -1822,6 +1833,7 @@ impl ChannelRepo for PgChannelsRepo {
                 deleted_at::timestamptz AS "deleted_at?"
             "#,
             message_id,
+            channel_id,
         )
         .fetch_one(&self.pool)
         .await
@@ -1829,8 +1841,12 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(row.into())
     }
 
-    async fn get_message_owner(&self, message_id: Uuid) -> Result<String, Self::Err> {
-        get_message_owner(&self.pool, message_id).await
+    async fn get_message_owner(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> Result<Option<String>, Self::Err> {
+        get_message_owner(&self.pool, channel_id, message_id).await
     }
 
     async fn get_participants(
@@ -1893,59 +1909,94 @@ impl ChannelRepo for PgChannelsRepo {
 
     async fn add_reaction(
         &self,
+        channel_id: Uuid,
         message_id: Uuid,
         emoji: String,
         user_id: String,
     ) -> Result<(), Self::Err> {
-        sqlx::query!(
+        let row = sqlx::query_as!(
+            ExistsRow,
             r#"
-            INSERT INTO comms_reactions (message_id, emoji, user_id)
-            VALUES ($1, $2, $3)
-            ON CONFLICT DO NOTHING
+            WITH message AS (
+                SELECT id
+                FROM comms_messages
+                WHERE id = $2 AND channel_id = $1
+            ),
+            inserted AS (
+                INSERT INTO comms_reactions (message_id, emoji, user_id)
+                SELECT id, $3, $4
+                FROM message
+                ON CONFLICT DO NOTHING
+            )
+            SELECT EXISTS (SELECT 1 FROM message) AS "exists!"
             "#,
+            channel_id,
             message_id,
             emoji,
             user_id,
         )
-        .execute(&self.pool)
+        .fetch_one(&self.pool)
         .await
         .context("failed to add reaction")?;
+        if !row.exists {
+            anyhow::bail!("message not found in channel");
+        }
         Ok(())
     }
 
     async fn remove_reaction(
         &self,
+        channel_id: Uuid,
         message_id: Uuid,
         emoji: String,
         user_id: String,
     ) -> Result<(), Self::Err> {
-        sqlx::query!(
+        let row = sqlx::query_as!(
+            ExistsRow,
             r#"
-            DELETE FROM comms_reactions
-            WHERE message_id = $1 AND emoji = $2 AND user_id = $3
+            WITH message AS (
+                SELECT id
+                FROM comms_messages
+                WHERE id = $2 AND channel_id = $1
+            ),
+            deleted AS (
+                DELETE FROM comms_reactions r
+                USING message m
+                WHERE r.message_id = m.id
+                  AND r.emoji = $3
+                  AND r.user_id = $4
+            )
+            SELECT EXISTS (SELECT 1 FROM message) AS "exists!"
             "#,
+            channel_id,
             message_id,
             emoji,
             user_id,
         )
-        .execute(&self.pool)
+        .fetch_one(&self.pool)
         .await
         .context("failed to remove reaction")?;
+        if !row.exists {
+            anyhow::bail!("message not found in channel");
+        }
         Ok(())
     }
 
     async fn get_message_reactions(
         &self,
+        channel_id: Uuid,
         message_id: Uuid,
     ) -> Result<Vec<CountedReaction>, Self::Err> {
         let reactions = sqlx::query_as!(
             ReactionWithCreatedAtRow,
             r#"
-            SELECT emoji, user_id, created_at
-            FROM comms_reactions
-            WHERE message_id = $1
+            SELECT r.emoji, r.user_id, r.created_at
+            FROM comms_reactions r
+            JOIN comms_messages m ON m.id = r.message_id
+            WHERE r.message_id = $1 AND m.channel_id = $2
             "#,
             message_id,
+            channel_id,
         )
         .fetch_all(&self.pool)
         .await
