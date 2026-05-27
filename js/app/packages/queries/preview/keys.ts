@@ -5,8 +5,8 @@ export const previewKeys = createQueryKeys('preview', {
     return {
       queryKey: [itemId],
       contextQueries: {
-        channelMessage: (messageId: string) => {
-          return { queryKey: [messageId] };
+        channelMessage: (channelId: string, messageId: string) => {
+          return { queryKey: [channelId, messageId] };
         },
       },
     };

@@ -119,8 +119,8 @@ export const TASK_STATUS_FILTERS = [
   taskCanceledFilter,
 ] as const;
 
-const taskCriticalFilter = priorityFilter(
-  'task-critical',
+const taskUrgentFilter = priorityFilter(
+  'task-urgent',
   PROPERTY_OPTION_IDS.PRIORITY.URGENT,
   isUrgentPriority
 );
@@ -176,7 +176,7 @@ const taskNoPriorityFilter = config({
 });
 
 export const TASK_PRIORITY_FILTERS = [
-  taskCriticalFilter,
+  taskUrgentFilter,
   taskHighPriorityFilter,
   taskMediumPriorityFilter,
   taskLowPriorityFilter,

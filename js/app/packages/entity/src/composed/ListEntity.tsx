@@ -3,6 +3,7 @@ import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { stackNotifications } from '@notifications';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
@@ -202,8 +203,9 @@ export function ListEntity(props: ListEntityProps) {
           'bg-accent/8': props.checked,
           'ring ring-accent/16 ring-inset': props.checked && props.highlighted,
           'ring ring-edge bg-active/60 ring-inset':
-            props.highlighted && !props.checked,
-          'hover:bg-active/30': !props.highlighted && !props.checked,
+            props.highlighted && !props.checked && !isTouchDevice(),
+          'hover:bg-active/30':
+            !props.highlighted && !props.checked && !isTouchDevice(),
         }
       )}
       onMouseMove={props.onMouseMove}

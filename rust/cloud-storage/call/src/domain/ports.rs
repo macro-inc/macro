@@ -10,6 +10,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use item_filters::ast::{LiteralTree, call::CallLiteral};
+use notification::domain::models::apple::VoipPushPayload;
 
 use crate::domain::models::{
     CustomSpeakerAssignment, EditCallRecordRequest, EditCallTranscriptRequest,
@@ -20,7 +21,7 @@ use super::models::{
     CallRecordPreview, CallRecordTranscriptSegment, CallTokenResponse,
     CallTranscriptCustomSpeakerResult, CallWebhookEvent, EgressS3Config, EnrichedCallTranscript,
     GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
-    LeaveCallResponse, TranscriptSegmentRequest,
+    LeaveCallResponse, TranscriptSegmentRequest, VoipPushPayloadRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -439,6 +440,12 @@ pub trait CallRtcClient: Send + Sync + 'static {
         room_name: &str,
         participant_identity: MacroUserIdStr<'a>,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Build VoIP payloads for native incoming-call delivery.
+    fn build_voip_push_payloads<'a>(
+        &self,
+        request: VoipPushPayloadRequest<'a>,
+    ) -> impl Future<Output = Vec<(MacroUserIdStr<'static>, VoipPushPayload)>> + Send;
 
     /// Remove a participant from a room.
     fn remove_participant<'a>(

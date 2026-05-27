@@ -29,6 +29,7 @@ import {
 } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
+import { isPlatform } from '@core/util/platform';
 
 import {
   chatRuleset,
@@ -312,7 +313,12 @@ export function ChannelCompose() {
                     <Input.Footer>
                       <Input.Actions>
                         <Input.Actions.Left>
-                          <Input.AttachFilesAction />
+                          <Show
+                            when={!isPlatform('ios')}
+                            fallback={<Input.AttachNativeMediaAction />}
+                          >
+                            <Input.AttachFilesAction />
+                          </Show>
                           <Input.ToggleFormatAction />
                         </Input.Actions.Left>
                         <Input.Actions.Right>

@@ -1,16 +1,134 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::sync::Mutex;
 
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use notification::domain::models::apple::VoipPushPayload;
+use uuid::Uuid;
+
+use crate::domain::models::{CallError, CallWebhookEvent, EgressS3Config, VoipPushPayloadRequest};
+use crate::domain::ports::CallRtcClient;
 
 use super::{exclude_voip_recipients, extract_recording_key};
 
 #[cfg(feature = "outbound")]
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-#[cfg(feature = "outbound")]
-use uuid::Uuid;
 
 fn user(email: &'static str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email(email).unwrap()
+}
+
+struct MockRtcClient {
+    tokens: Mutex<HashMap<String, anyhow::Result<String>>>,
+    generate_calls: Mutex<Vec<(String, String)>>,
+}
+
+impl MockRtcClient {
+    fn new() -> Self {
+        Self {
+            tokens: Mutex::new(HashMap::new()),
+            generate_calls: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn set_token(&self, identity: &str, token: anyhow::Result<String>) {
+        self.tokens
+            .lock()
+            .unwrap()
+            .insert(identity.to_string(), token);
+    }
+
+    fn calls(&self) -> Vec<(String, String)> {
+        self.generate_calls.lock().unwrap().clone()
+    }
+}
+
+impl CallRtcClient for MockRtcClient {
+    async fn create_room(&self, _room_name: &str) -> anyhow::Result<()> {
+        unreachable!("create_room not exercised by these tests")
+    }
+
+    async fn delete_room(&self, _room_name: &str) -> anyhow::Result<()> {
+        unreachable!("delete_room not exercised by these tests")
+    }
+
+    async fn generate_token<'a>(
+        &self,
+        room_name: &str,
+        participant_identity: MacroUserIdStr<'a>,
+    ) -> anyhow::Result<String> {
+        let key = participant_identity.as_ref().to_string();
+        self.generate_calls
+            .lock()
+            .unwrap()
+            .push((room_name.to_string(), key.clone()));
+        let mut tokens = self.tokens.lock().unwrap();
+        tokens
+            .remove(&key)
+            .unwrap_or_else(|| Ok(format!("default-token-{key}")))
+    }
+
+    async fn build_voip_push_payloads<'a>(
+        &self,
+        request: VoipPushPayloadRequest<'a>,
+    ) -> Vec<(MacroUserIdStr<'static>, VoipPushPayload)> {
+        let mut payloads = Vec::new();
+        for recipient_id in request.recipients {
+            let livekit_token = match self
+                .generate_token(request.room_name, recipient_id.clone())
+                .await
+            {
+                Ok(livekit_token) => livekit_token,
+                Err(_) => continue,
+            };
+            payloads.push((
+                recipient_id.clone(),
+                VoipPushPayload {
+                    aps: Default::default(),
+                    call_id: request.call_id.to_string(),
+                    channel_id: request.channel_id.to_string(),
+                    channel_name: request.channel_name.to_string(),
+                    caller_name: request.caller_name.to_string(),
+                    livekit_server_url: Some(request.livekit_server_url.to_string()),
+                    livekit_token: Some(livekit_token),
+                },
+            ));
+        }
+
+        payloads
+    }
+
+    async fn remove_participant<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+    ) -> anyhow::Result<()> {
+        unreachable!("remove_participant not exercised by these tests")
+    }
+
+    async fn start_room_composite_egress(
+        &self,
+        _room_name: &str,
+        _s3_config: &EgressS3Config,
+    ) -> anyhow::Result<String> {
+        unreachable!("start_room_composite_egress not exercised by these tests")
+    }
+
+    async fn stop_egress(&self, _egress_id: &str) -> anyhow::Result<()> {
+        unreachable!("stop_egress not exercised by these tests")
+    }
+
+    fn receive_webhook(
+        &self,
+        _body: &str,
+        _auth_token: &str,
+    ) -> Result<CallWebhookEvent, CallError> {
+        unreachable!("receive_webhook not exercised by these tests")
+    }
+
+    async fn dispatch_transcription_agent(&self, _room_name: &str) -> anyhow::Result<()> {
+        unreachable!("dispatch_transcription_agent not exercised by these tests")
+    }
 }
 
 #[cfg(feature = "outbound")]
@@ -121,6 +239,97 @@ fn exclude_voip_recipients_returns_empty_when_all_users_received_voip() {
     let filtered = exclude_voip_recipients(recipients, &voip_recipients);
 
     assert!(filtered.is_empty());
+}
+
+#[tokio::test]
+async fn build_voip_push_payloads_mints_a_distinct_token_per_recipient() {
+    let alice = user("alice@example.com").into_owned();
+    let bob = user("bob@example.com").into_owned();
+    let mock = MockRtcClient::new();
+    mock.set_token(alice.as_ref(), Ok("token-alice".to_string()));
+    mock.set_token(bob.as_ref(), Ok("token-bob".to_string()));
+
+    let recipients = vec![alice.clone(), bob.clone()];
+    let payloads = mock
+        .build_voip_push_payloads(VoipPushPayloadRequest {
+            recipients: &recipients,
+            room_name: "room-1",
+            call_id: Uuid::nil(),
+            channel_id: "channel-1",
+            channel_name: "general",
+            caller_name: "Carla",
+            livekit_server_url: "wss://lk.example",
+        })
+        .await;
+
+    assert_eq!(payloads.len(), 2);
+    let by_id: HashMap<String, String> = payloads
+        .into_iter()
+        .map(|(id, p)| {
+            (
+                id.as_ref().to_string(),
+                p.livekit_token.expect("livekit_token populated on success"),
+            )
+        })
+        .collect();
+    assert_eq!(by_id.get(alice.as_ref()).unwrap(), "token-alice");
+    assert_eq!(by_id.get(bob.as_ref()).unwrap(), "token-bob");
+    assert_eq!(mock.calls().len(), 2);
+    for (room, _) in mock.calls() {
+        assert_eq!(room, "room-1");
+    }
+}
+
+#[tokio::test]
+async fn build_voip_push_payloads_drops_recipients_whose_token_mint_fails() {
+    let alice = user("alice@example.com").into_owned();
+    let bob = user("bob@example.com").into_owned();
+    let mock = MockRtcClient::new();
+    mock.set_token(alice.as_ref(), Ok("token-alice".to_string()));
+    mock.set_token(bob.as_ref(), Err(anyhow::anyhow!("livekit unreachable")));
+
+    let recipients = vec![alice.clone(), bob.clone()];
+    let payloads = mock
+        .build_voip_push_payloads(VoipPushPayloadRequest {
+            recipients: &recipients,
+            room_name: "room-1",
+            call_id: Uuid::nil(),
+            channel_id: "channel-1",
+            channel_name: "general",
+            caller_name: "Carla",
+            livekit_server_url: "wss://lk.example",
+        })
+        .await;
+
+    assert_eq!(
+        payloads.len(),
+        1,
+        "bob's failed token mint should not block alice's payload"
+    );
+    let (id, payload) = &payloads[0];
+    assert_eq!(id.as_ref(), alice.as_ref());
+    assert_eq!(payload.livekit_token.as_deref(), Some("token-alice"));
+}
+
+#[tokio::test]
+async fn build_voip_push_payloads_returns_empty_for_no_recipients() {
+    let mock = MockRtcClient::new();
+    let recipients: Vec<MacroUserIdStr<'static>> = Vec::new();
+
+    let payloads = mock
+        .build_voip_push_payloads(VoipPushPayloadRequest {
+            recipients: &recipients,
+            room_name: "room-1",
+            call_id: Uuid::nil(),
+            channel_id: "channel-1",
+            channel_name: "general",
+            caller_name: "Carla",
+            livekit_server_url: "wss://lk.example",
+        })
+        .await;
+
+    assert!(payloads.is_empty());
+    assert!(mock.calls().is_empty());
 }
 
 #[cfg(feature = "outbound")]

@@ -6,7 +6,7 @@ mod read_chat;
 mod test;
 
 use crate::domain::ports::ChatService;
-use ai::tool::AsyncToolCollection;
+use ai_toolset::AsyncToolCollection;
 use entity_access::domain::ports::EntityAccessService;
 use read_chat::ReadChat;
 use std::sync::Arc;

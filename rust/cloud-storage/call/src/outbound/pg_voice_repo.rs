@@ -47,6 +47,7 @@ impl PgVoiceRepo {
 impl VoiceRepository for PgVoiceRepo {
     type Err = sqlx::Error;
 
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn upsert_voice(&self, embedding: &[f32]) -> Result<Uuid, Self::Err> {
         let id = macro_uuid::generate_uuid_v7();
         let lock_key = embedding_advisory_lock_key(embedding);

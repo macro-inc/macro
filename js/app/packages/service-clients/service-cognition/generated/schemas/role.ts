@@ -5,6 +5,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * The role of a message participant.
+ */
 export type Role = (typeof Role)[keyof typeof Role];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare

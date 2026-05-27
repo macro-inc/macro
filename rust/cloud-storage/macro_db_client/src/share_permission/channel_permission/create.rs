@@ -5,6 +5,7 @@ use sqlx::{Executor, Postgres, Transaction};
 use super::ChannelSharePermissionParamaters;
 
 #[tracing::instrument(skip(transaction, channel_share_permissions))]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn create_channel_share_permissions(
     transaction: &mut Transaction<'_, Postgres>,
     share_permission_id: &str,

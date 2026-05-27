@@ -1340,17 +1340,20 @@ export function BaseInput(props: {
       {/* Top Bar */}
       <div class="relative flex items-start gap-2 px-3 pt-1.5 pb-0.5">
         <Dropdown>
-          <Dropdown.Trigger class="p-0 pr-1 gap-0">
+          <Dropdown.Trigger>
             <Switch>
               <Match when={effectiveReplyType() === 'reply'}>
-                <Reply class="h-7 p-1" />
+                <Reply class="size-4 shrink-0" />
+                <span>Reply</span>
               </Match>
 
               <Match when={effectiveReplyType() === 'reply-all'}>
-                <ReplyAll class="h-7 p-1" />
+                <ReplyAll class="size-4 shrink-0" />
+                <span>Reply All</span>
               </Match>
               <Match when={effectiveReplyType() === 'forward'}>
-                <Forward class="h-7 p-1" />
+                <Forward class="size-4 shrink-0" />
+                <span>Forward</span>
               </Match>
             </Switch>
             <ChevronDown class="size-3" />

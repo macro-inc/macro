@@ -19,7 +19,7 @@ use crate::{
         markdown_init::LexicalSyncMarkdownInitializer,
     },
 };
-use ai::tool::AsyncToolCollection;
+use ai_toolset::AsyncToolCollection;
 use entity_access::domain::ports::EntityAccessService;
 use lexical_client::LexicalClient;
 use std::sync::Arc;

@@ -3,7 +3,10 @@ import { TabsInset } from '@core/component/TabsInset';
 import { isMobile } from '@core/mobile/isMobile';
 import { Accordion } from '@kobalte/core/accordion';
 import CaretRight from '@phosphor/caret-right.svg';
+import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
+import LoadingSpinner from '@phosphor/spinner.svg';
 import { Panel, Scroll } from '@ui';
+import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
   children,
@@ -247,7 +250,7 @@ function Section(
               </Accordion.Trigger>
             </Accordion.Header>
             <Accordion.Content class="group/content overflow-hidden data-expanded:animate-accordion-down data-closed:animate-accordion-up">
-              <Suspense fallback={<div class="h-4" />}>
+              <Suspense fallback={<Loading />}>
                 <div class="px-2 pb-2 text-sm opacity-0 group-data-expanded/content:opacity-100 transition-opacity duration-150 ease-out">
                   {props.children}
                 </div>
@@ -308,17 +311,108 @@ function _useHasSidePanel(): boolean {
 }
 
 /**
- * A simple flex row for side panel content.
- * Children are rendered on the left, label on the right.
+ * Two-column label/value grid. The left column width is driven by the
+ * `--sidepanel-label-width` CSS variable so multiple grids in the same panel
+ * align their labels; rows have a fixed 2rem height for vertical rhythm.
+ *
+ * Use with `<SidePanel.Row>` children.
  */
-function Row(props: ParentProps<{ label: JSX.Element }>) {
+function Grid(props: ParentProps<{ class?: string }>) {
   return (
-    <div class="flex flex-row items-center gap-2 text-xs">
+    <div
+      class={cn(
+        'grid grid-cols-[var(--sidepanel-label-width,auto)_1fr] gap-x-3 items-center text-xs auto-rows-[1.75rem]',
+        props.class
+      )}
+    >
       {props.children}
-      <span class="text-ink-muted">{props.label}</span>
     </div>
   );
 }
 
-export const SidePanel = { Layout, Section, Row, NarrowTabs };
+/**
+ * A label/value row inside a `<SidePanel.Grid>`. Renders two siblings into the
+ * parent grid: a muted, truncating label on the left and the value on the
+ * right.
+ */
+function Row(props: ParentProps<{ label: JSX.Element }>) {
+  return (
+    <>
+      <span
+        class="text-ink-muted truncate self-center"
+        title={typeof props.label === 'string' ? props.label : undefined}
+      >
+        {props.label}
+      </span>
+      <div class="flex items-center gap-2 min-w-0 self-center">
+        {props.children}
+      </div>
+    </>
+  );
+}
+
+/**
+ * Shared pill className used for value cells in the side panel. Exported as a
+ * string so callers can compose it onto their own trigger (e.g. a Property
+ * EditTrigger, an anchor, a button) without nesting elements.
+ */
+const pillClass = cn(
+  'inline-flex items-center gap-1.5 min-w-0 max-w-full',
+  'px-2 py-1 leading-tight text-left rounded-full'
+);
+
+/** Static pill wrapper. For interactive triggers, use `pillClass` directly. */
+function Pill(props: ParentProps<{ class?: string }>) {
+  return (
+    <div class={cn(pillClass, 'w-fit', props.class)}>{props.children}</div>
+  );
+}
+
+/** Empty-state indicator used inside value pills. */
+function EmptyPill() {
+  return <CircleDashedEmpty class="size-3 shrink-0 opacity-50" />;
+}
+
+/**
+ * Canonical loading fallback for side panel sections. Sized to roughly match
+ * a one-row section so its appearance doesn't shift the panel layout.
+ */
+function Loading() {
+  return (
+    <div class="flex items-center justify-center py-8">
+      <div class="size-5 animate-spin text-ink-muted">
+        <LoadingSpinner />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Section title with a muted count suffix. Renders `Label (n)` when `count > 0`,
+ * otherwise just the label.
+ */
+function CountTitle(props: { label: JSX.Element; count: number }) {
+  return (
+    <>
+      {props.label}
+      <Show when={props.count > 0}>
+        {' '}
+        <span class="text-ink-extra-muted">({props.count})</span>
+      </Show>
+    </>
+  );
+}
+
+export const SidePanel = {
+  Layout,
+  Section,
+  Grid,
+  Row,
+  Pill,
+  pillClass,
+  EmptyPill,
+  Loading,
+  CountTitle,
+  NarrowTabs,
+};
 export { useSidePanel };

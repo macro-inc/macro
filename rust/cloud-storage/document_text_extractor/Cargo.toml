@@ -10,7 +10,7 @@ local-extract = []
 macos = []
 
 [dependencies]
-ai = { path = "../ai" }
+agent = { path = "../agent" }
 anyhow = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }

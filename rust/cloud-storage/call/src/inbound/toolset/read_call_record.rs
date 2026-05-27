@@ -1,7 +1,7 @@
 //! ReadCallRecord tool for fetching a single call's transcript.
 
 use crate::domain::ports::{CallRecordQueryService, CallService};
-use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use entity_access::domain::{

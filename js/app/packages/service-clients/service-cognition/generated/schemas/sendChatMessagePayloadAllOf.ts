@@ -5,7 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
-import type { Model } from './model';
+import type { AgentModel } from './agentModel';
 import type { SendChatMessagePayloadAllOfAdditionalInstructions } from './sendChatMessagePayloadAllOfAdditionalInstructions';
 import type { SendChatMessagePayloadAllOfAttachments } from './sendChatMessagePayloadAllOfAttachments';
 import type { ToolSet } from './toolSet';
@@ -20,7 +20,7 @@ export type SendChatMessagePayloadAllOf = {
   /** The content of the message */
   content: string;
   /** the chate model to respond with */
-  model: Model;
+  model: AgentModel;
   /** Stream ID for tracking the response */
   stream_id: string;
   /** Which toolset to use. Defaults to `all` */

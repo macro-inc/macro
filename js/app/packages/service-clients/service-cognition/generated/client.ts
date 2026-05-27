@@ -20,7 +20,6 @@ import type {
   GetChatPermissionsResponse,
   GetChatResponse,
   GetChatsForAttachmentResponse,
-  GetModelsResponse,
   HttpSendChatMessageRequest,
   McpAuthCallbackParams,
   MemoryErrorBody,
@@ -1417,42 +1416,6 @@ export const getMemoryHandler = async (
     status: res.status,
     headers: res.headers,
   } as getMemoryHandlerResponse;
-};
-
-/**
- * @summary Gets all available models
- */
-export type getModelsHandlerResponse200 = {
-  data: GetModelsResponse;
-  status: 200;
-};
-
-export type getModelsHandlerResponseSuccess = getModelsHandlerResponse200 & {
-  headers: Headers;
-};
-
-export type getModelsHandlerResponse = getModelsHandlerResponseSuccess;
-
-export const getGetModelsHandlerUrl = () => {
-  return `/models`;
-};
-
-export const getModelsHandler = async (
-  options?: RequestInit
-): Promise<getModelsHandlerResponse> => {
-  const res = await fetch(getGetModelsHandlerUrl(), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getModelsHandlerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getModelsHandlerResponse;
 };
 
 export type getBatchPreviewResponse200 = {

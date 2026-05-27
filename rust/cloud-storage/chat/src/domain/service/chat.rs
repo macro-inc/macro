@@ -4,7 +4,7 @@ use crate::domain::{
     models::{ChatErr, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs, Result},
     ports::{ChatRepo, ChatService},
 };
-use ai::types::{AssistantMessagePart, ChatMessageContent};
+use agent::types::{AssistantMessagePart, ChatMessageContent};
 use ai_toolset::{AsyncToolCollection, RequestContext, tool_object::UserToolResponse};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,

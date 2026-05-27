@@ -1,8 +1,10 @@
 import type { DateValue } from '@core/util/date';
 import type { SubType } from '@entity';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
-import type { Message } from '@service-comms/generated/models';
-import type { ItemType } from '@service-storage/client';
+import type {
+  ApiChannelContextMessage,
+  ItemType,
+} from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 
 type AccessType = 'access' | 'no_access' | 'does_not_exist';
@@ -52,7 +54,7 @@ type PreviewDocumentAccess = {
   channelType?: never;
 } & BasePreviewItem<'document'>;
 
-export type MessageContext = Message;
+export type MessageContext = ApiChannelContextMessage;
 
 export type PreviewChannelAccess = {
   access: Extract<AccessType, 'access'>;

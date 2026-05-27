@@ -324,6 +324,7 @@ async fn build_tool_context(
         channel_tool_context: ai_tools::build_channel_tool_context(db.clone()),
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         schedule_tool_context: NoOpScheduleContext,
+        anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
     };
 
     tracing::info!("initialized tool context");

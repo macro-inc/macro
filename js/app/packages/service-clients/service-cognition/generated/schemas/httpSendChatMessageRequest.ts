@@ -4,10 +4,11 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+
+import type { AgentModel } from './agentModel';
 import type { HttpSendChatMessageRequestAdditionalInstructions } from './httpSendChatMessageRequestAdditionalInstructions';
 import type { HttpSendChatMessageRequestAttachments } from './httpSendChatMessageRequestAttachments';
 import type { HttpSendChatMessageRequestChatId } from './httpSendChatMessageRequestChatId';
-import type { Model } from './model';
 import type { ToolSet } from './toolSet';
 
 /**
@@ -24,7 +25,7 @@ export interface HttpSendChatMessageRequest {
   /** The content of the message */
   content: string;
   /** The model to respond with */
-  model: Model;
+  model: AgentModel;
   /** Which toolset to use. Defaults to `all` */
   toolset?: ToolSet;
 }

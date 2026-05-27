@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE comms_messages\n            SET content = $1, updated_at = NOW(), edited_at = NOW()\n            WHERE id = $2 AND channel_id = $3\n            RETURNING\n                id,\n                channel_id,\n                sender_id AS \"sender_id: MacroUserIdStr\",\n                content,\n                created_at,\n                updated_at,\n                thread_id,\n                edited_at::timestamptz AS \"edited_at?\",\n                deleted_at::timestamptz AS \"deleted_at?\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "sender_id: MacroUserIdStr",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "edited_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "deleted_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "7e64280ac5918582d61bf6573e0f9b83180c03d2f0d5a9c8574217f9dbd02cbe"
+}

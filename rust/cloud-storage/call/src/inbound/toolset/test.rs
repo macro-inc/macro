@@ -1,7 +1,7 @@
 use super::list_call_records::ListCallRecords;
 use super::read_call_record::ReadCallRecord;
-use ai::generate_tool_input_schema;
-use ai::tool::types::tool_object::validate_tool_schema;
+use ai_toolset::generate_tool_input_schema;
+use ai_toolset::tool_object::validate_tool_schema;
 
 #[test]
 fn test_list_call_records_schema_validation() {

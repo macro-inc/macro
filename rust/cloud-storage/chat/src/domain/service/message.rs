@@ -1,6 +1,6 @@
 //! Default [`MessageService`] implementation.
 
-use ai::types::ChatMessageContent;
+use agent::types::ChatMessageContent;
 use attachment::{Attachable, AttachmentService, FormattedParts};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::{AttachmentType, NewChatMessage};
@@ -135,7 +135,7 @@ impl<R: MessageRepo, A: AttachmentService> MessageService for MessageServiceImpl
         let messages = self.repo.get_messages(chat_id).await?;
         let mut chain = Vec::new();
         for msg in &messages {
-            if msg.role != ai::types::Role::User || msg.attachments.is_empty() {
+            if msg.role != agent::types::Role::User || msg.attachments.is_empty() {
                 continue;
             }
             match self.repo.get_resolved_message(&msg.id).await {

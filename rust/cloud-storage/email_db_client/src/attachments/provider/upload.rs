@@ -18,6 +18,7 @@ use sqlx::{Pool, Postgres, Row};
 /// sent a message to in the past. but those attachments are fetched once backfill is complete, in
 /// a different call.
 #[tracing::instrument(skip(db), err)]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn thread_document_atts_for_backfill(
     db: &Pool<Postgres>,
     thread_id: Uuid,
@@ -83,6 +84,7 @@ pub async fn thread_document_atts_for_backfill(
 /// fetch videos and images from a thread for insertion into sfs. we insert them into
 /// sfs so we can display thumbnails for them in the FE.
 #[tracing::instrument(skip(db), err)]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn thread_media_atts_for_backfill(
     db: &Pool<Postgres>,
     thread_id: Uuid,
@@ -133,6 +135,7 @@ pub async fn thread_media_atts_for_backfill(
 /// fetch_attachment_threads_for_backfill, but the BackfillAttachment job has logic to ensure
 /// duplicate attachments are not inserted by checking the DocumentEmail table.
 #[tracing::instrument(skip(db), err)]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn fetch_job_attachments_for_backfill(
     db: &Pool<Postgres>,
     link_id: Uuid,
@@ -234,6 +237,7 @@ pub async fn fetch_job_attachments_for_backfill(
 /// and fetch_job_attachments_for_backfill respectively, except they also verify the attachment
 /// doesn't already exist in document_email table.
 #[tracing::instrument(skip(db), err)]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn new_email_document_atts(
     db: &Pool<Postgres>,
     link_id: Uuid,
@@ -413,6 +417,7 @@ pub async fn new_email_document_atts(
 /// The query atomically claims attachments (sets upload_claimed_at) to prevent duplicate
 /// uploads from concurrent workers processing the same message.
 #[tracing::instrument(skip(db), err)]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn new_email_media_atts(
     db: &Pool<Postgres>,
     link_id: Uuid,

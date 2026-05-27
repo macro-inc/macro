@@ -1,6 +1,6 @@
 // biohazard
-use ai::types::ChatMessageContent;
-use ai::types::Role;
+use agent::types::ChatMessageContent;
+use agent::types::Role;
 use anyhow::{Error, Result};
 use model::chat::{AttachmentType, Chat, ChatAttachment, ChatMessageWithAttachments};
 use model_entity::{Entity, EntityType};

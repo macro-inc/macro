@@ -41,7 +41,7 @@ VALUES
     ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'::uuid, '11111111-1111-1111-1111-111111111111', 7);
 
 INSERT INTO
-    public.github_app_installation_team (id, team_id, installed_by)
+    public.github_app_installation (id, source_id, source_type)
 VALUES
-    ('12345', 'dddddddd-dddd-dddd-dddd-dddddddddddd'::uuid, 'macro|user@user.com'),
-    ('12345', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'::uuid, 'macro|user@user.com');
+    ('12345', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'team'::github_app_installation_source_type),
+    ('12345', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'team'::github_app_installation_source_type);

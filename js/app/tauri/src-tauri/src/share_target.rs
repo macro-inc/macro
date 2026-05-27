@@ -43,8 +43,6 @@ pub(crate) struct StagedSharedFile {
 }
 
 pub(crate) trait ShareTargetPlatform {
-    fn cleanup_stale_staged_shared_files(app: &AppHandle);
-
     fn get_pending_share_filenames(app: AppHandle, state: &PendingShareFilesState) -> Vec<String>;
 
     fn pop_shared_files(
@@ -54,13 +52,6 @@ pub(crate) trait ShareTargetPlatform {
     ) -> Vec<StagedSharedFile>;
 
     fn clear_shared_files(app: AppHandle, tokens: Vec<String>) -> Result<(), String>;
-
-    async fn upload_shared_file_to_presigned_url(
-        app: AppHandle,
-        token: String,
-        upload_url: String,
-        mime_type: String,
-    ) -> Result<(), String>;
 
     async fn read_shared_file_text(app: AppHandle, token: String) -> Result<String, String>;
 
@@ -77,10 +68,6 @@ fn remaining_pending_share_filenames(
         .filter(|name| !consumed_filenames.contains(name))
         .cloned()
         .collect()
-}
-
-pub(crate) fn cleanup_stale_staged_shared_files(app: &AppHandle) {
-    ShareTargetPlatformImpl::cleanup_stale_staged_shared_files(app);
 }
 
 #[tauri::command]
@@ -109,19 +96,6 @@ pub(crate) fn pop_shared_files(
 #[tauri::command]
 pub(crate) fn clear_shared_files(app: AppHandle, tokens: Vec<String>) -> Result<(), String> {
     ShareTargetPlatformImpl::clear_shared_files(app, tokens)
-}
-
-/// Tauri command: upload a staged shared file directly to a presigned URL
-/// without copying the file through JS memory.
-#[tauri::command]
-pub(crate) async fn upload_shared_file_to_presigned_url(
-    app: AppHandle,
-    token: String,
-    upload_url: String,
-    mime_type: String,
-) -> Result<(), String> {
-    ShareTargetPlatformImpl::upload_shared_file_to_presigned_url(app, token, upload_url, mime_type)
-        .await
 }
 
 #[tauri::command]

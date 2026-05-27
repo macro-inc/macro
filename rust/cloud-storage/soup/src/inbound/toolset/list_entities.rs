@@ -4,7 +4,7 @@ use crate::domain::{
     models::{FrecencySoupItem, SoupQuery, SoupRequest, SoupType},
     ports::SoupService,
 };
-use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use email::domain::{models::PreviewView, ports::EmailService};
 use filter_ast::Expr;
@@ -34,8 +34,8 @@ const MAX_RESULT_LIMIT: u16 = 500;
 #[derive(Debug, Clone, Copy, Default, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SortBy {
-    #[default]
     RecentlyViewed,
+    #[default]
     RecentlyUpdated,
     RecentlyCreated,
 }
@@ -147,7 +147,7 @@ pub struct ListEntities {
     pub include_types: Option<Vec<ItemType>>,
 
     #[schemars(
-        description = "How to sort results: recently_viewed (default), recently_updated, or recently_created. Use recently_updated for updated_at-style soup results."
+        description = "How to sort results: recently_viewed, recently_updated (default to this), or recently_created. Use recently_updated for updated_at-style soup results."
     )]
     #[serde(default)]
     pub sort_by: SortBy,
@@ -207,9 +207,14 @@ pub struct ListEntities {
     #[serde(default, rename = "propf")]
     pub properties_filter: LiteralTree<PropertiesLiteral>,
 
-    #[schemars(
-        description = "Email view to use for email results: inbox (default), sent, drafts, starred, all, important, other, or user:<label>."
-    )]
+    #[schemars(description = "\
+Which mailbox view to hydrate previews from for email results. Valid values: inbox \
+(default), sent, drafts, starred, all, important, other, or user:<label>.\n\
+\n\
+When the user asks about signal or important emails, use emailView=\"inbox\" together \
+with emailPreset=\"signal\" — do not set emailView=\"important\" in that case. Only \
+override the default when the user explicitly asks for a specific mailbox or label view \
+(e.g. \"sent\", \"drafts\", \"my Foo label\").")]
     #[serde(default, rename = "emailView")]
     pub email_view: Option<String>,
 

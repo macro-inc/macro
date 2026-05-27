@@ -596,7 +596,10 @@ export class StaticFileService extends pulumi.ComponentResource {
         desiredCount: 1,
         tags: this.tags,
       },
-      { parent: this, dependsOn: [sqsPolicy, queueQueue] }
+      {
+        parent: this,
+        dependsOn: [sqsPolicy, queueQueue],
+      }
     );
 
     this.service = service;

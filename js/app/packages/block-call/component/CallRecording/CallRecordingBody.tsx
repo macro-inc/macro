@@ -1,12 +1,5 @@
-import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import ShareNetwork from '@phosphor/share-network.svg';
-import {
-  useSetCallRecordShareWithTeamMutation,
-  useToggleShareWithTeamMutation,
-} from '@queries/call/call';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
-import { cn, ToggleSwitch, Tooltip } from '@ui';
 import { format } from 'date-fns';
 import type { Accessor } from 'solid-js';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
@@ -26,75 +19,6 @@ import {
   seekDedupeKey,
   shouldCoalesceSeekGenerationBump,
 } from './call-recording-utils';
-
-function CallRecordingShareWithTeam(props: { record: Accessor<CallRecord> }) {
-  const record = props.record;
-  const callCtx = useCallContextOptional();
-  const toggleActiveShare = useToggleShareWithTeamMutation();
-  const setArchivedShare = useSetCallRecordShareWithTeamMutation();
-
-  const isShared = createMemo(() => record().shareWithTeam);
-  // Call blocks do not currently hydrate document edit permissions; rely on
-  // the call mutation endpoints to enforce access instead of disabling this.
-  const isDisabled = createMemo(
-    () => toggleActiveShare.isPending || setArchivedShare.isPending
-  );
-
-  const handleChange = async (checked: boolean) => {
-    const current = record();
-    try {
-      const newValue = current.isActive
-        ? await toggleActiveShare.mutateAsync(current.callId)
-        : (
-            await setArchivedShare.mutateAsync({
-              callId: current.callId,
-              shareWithTeam: checked,
-            })
-          ).shareWithTeam;
-
-      if (callCtx?.activeCallId() === current.callId) {
-        callCtx.setSharedWithTeam(newValue);
-      }
-    } catch (error) {
-      console.error('failed to update call record team sharing', error);
-    }
-  };
-
-  return (
-    <section class="rounded border border-edge-muted/50 bg-surface/60 px-4 py-3">
-      <div class="flex items-center justify-between gap-4">
-        <Tooltip
-          placement="top"
-          label="When on, all team members can view and search this call's transcript and AI summary."
-        >
-          <div class="flex min-w-0 items-start gap-3">
-            <ShareNetwork
-              class={cn(
-                'mt-0.5 size-4 shrink-0',
-                isShared() ? 'text-ink' : 'text-ink-muted'
-              )}
-              aria-hidden
-            />
-            <div class="min-w-0">
-              <div class="text-sm font-medium text-ink">
-                {isShared() ? 'Shared with team' : 'Share with team'}
-              </div>
-              <p class="mt-1 text-xs leading-5 text-ink-muted">
-                When on, all team members can view and search this call's
-                transcript and AI summary.
-              </p>
-            </div>
-          </div>
-        </Tooltip>
-        <ToggleSwitch
-          checked={isShared()}
-          disabled={isDisabled()}
-          onChange={(checked) => void handleChange(checked)}
-        />
-      </div>
-    </section>
-  );
-}
 
 export function CallRecordingBody(props: {
   data: Accessor<CallRecord>;
@@ -209,71 +133,71 @@ export function CallRecordingBody(props: {
   return (
     <>
       <CallRecordingSplitHeader record={record} />
-      <div
-        class="relative flex-1 min-h-0 overflow-y-auto scrollbar-hidden"
-        ref={setScrollRef}
-      >
-        <div class="mx-auto max-w-3xl min-w-0 px-6 pt-10 pb-16">
-          <div class="flex flex-col gap-10">
-            <header>
-              <h1 class="text-4xl font-semibold text-ink text-balance">
-                {callTitle()}
-              </h1>
-              <div class="mt-3 flex flex-wrap items-center gap-x-2 text-sm text-ink-muted">
-                <Show when={formattedDate()}>
-                  {(date) => <span>{date()}</span>}
-                </Show>
-                <Show when={formattedDuration()}>
-                  {(dur) => (
-                    <>
-                      <span class="text-ink-extra-muted">&middot;</span>
-                      <span>{dur()}</span>
-                    </>
-                  )}
-                </Show>
-                <Show when={record().isActive}>
-                  <span class="text-success font-medium">In progress</span>
-                </Show>
-              </div>
-            </header>
+      <div class="relative flex-1 min-h-0 overflow-hidden">
+        <div
+          class="h-full min-h-0 overflow-y-auto scrollbar-hidden"
+          ref={setScrollRef}
+        >
+          <div class="mx-auto max-w-3xl min-w-0 px-6 pt-10 pb-16">
+            <div class="flex flex-col gap-10">
+              <header>
+                <h1 class="text-2xl font-semibold text-ink text-balance">
+                  {callTitle()}
+                </h1>
+                <div class="mt-3 flex flex-wrap items-center gap-x-2 text-sm text-ink-muted">
+                  <Show when={formattedDate()}>
+                    {(date) => <span>{date()}</span>}
+                  </Show>
+                  <Show when={formattedDuration()}>
+                    {(dur) => (
+                      <>
+                        <span class="text-ink-extra-muted">&middot;</span>
+                        <span>{dur()}</span>
+                      </>
+                    )}
+                  </Show>
+                  <Show when={record().isActive}>
+                    <span class="text-success font-medium">In progress</span>
+                  </Show>
+                </div>
+              </header>
 
-            <CallRecordingShareWithTeam record={record} />
+              <CallRecordingParticipantsSection record={record} />
 
-            <CallRecordingParticipantsSection record={record} />
+              <CallRecordingSummarySection record={record} />
 
-            <CallRecordingSummarySection record={record} />
+              <Show when={record().recordingUrl}>
+                {(url) => (
+                  <section class="flex flex-col gap-3">
+                    <h3 class="text-sm font-semibold text-ink">Recording</h3>
+                    <div class="overflow-hidden rounded border border-edge-muted/50">
+                      <CallRecordingVideo
+                        url={url()}
+                        onTimeUpdate={handleTimeUpdate}
+                        setVideoRef={setVideoRef}
+                      />
+                    </div>
+                  </section>
+                )}
+              </Show>
 
-            <Show when={record().recordingUrl}>
-              {(url) => (
+              <Show when={hasTranscripts()}>
                 <section class="flex flex-col gap-3">
-                  <h3 class="text-sm font-semibold text-ink">Recording</h3>
-                  <div class="overflow-hidden rounded border border-edge-muted/50">
-                    <CallRecordingVideo
-                      url={url()}
-                      onTimeUpdate={handleTimeUpdate}
-                      setVideoRef={setVideoRef}
+                  <h3 class="text-sm font-semibold text-ink">Transcript</h3>
+                  <div class="flex flex-col max-h-[min(600px,60vh)] overflow-hidden rounded border border-edge-muted/50">
+                    <CallTranscript
+                      transcript={record().transcript}
+                      channelId={record().channelId}
+                      timelineStartMs={timelineStartMs()}
+                      activeSequenceNum={activeSequenceNum()}
+                      videoSeekGeneration={videoSeekGeneration()}
+                      onSeekToSeconds={seekToSeconds}
+                      hideHeader
                     />
                   </div>
                 </section>
-              )}
-            </Show>
-
-            <Show when={hasTranscripts()}>
-              <section class="flex flex-col gap-3">
-                <h3 class="text-sm font-semibold text-ink">Transcript</h3>
-                <div class="flex flex-col max-h-[min(600px,60vh)] overflow-hidden rounded border border-edge-muted/50">
-                  <CallTranscript
-                    transcript={record().transcript}
-                    channelId={record().channelId}
-                    timelineStartMs={timelineStartMs()}
-                    activeSequenceNum={activeSequenceNum()}
-                    videoSeekGeneration={videoSeekGeneration()}
-                    onSeekToSeconds={seekToSeconds}
-                    hideHeader
-                  />
-                </div>
-              </section>
-            </Show>
+              </Show>
+            </div>
           </div>
         </div>
         <CustomScrollbar scrollContainer={scrollRef} />

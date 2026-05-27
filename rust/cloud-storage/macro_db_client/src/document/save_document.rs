@@ -371,6 +371,7 @@ DELETE FROM "PdfHighlightAnchor" WHERE "documentId" = $1;
     Ok(())
 }
 
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn try_insert_comment_data(
     transaction: &mut Transaction<'_, Postgres>,
     document: &DocumentBasic,
@@ -405,6 +406,7 @@ pub async fn try_insert_comment_data(
 
 /// Inserts the bom parts into the database for a docx document
 #[tracing::instrument(skip(transaction, document_bom_parts))]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn insert_bom_parts(
     transaction: &mut Transaction<'_, Postgres>,
     document_id: &str,

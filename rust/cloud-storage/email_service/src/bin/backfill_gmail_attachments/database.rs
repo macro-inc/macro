@@ -166,6 +166,7 @@ pub async fn create_db_pool(database_url: &str, min_connections: u32) -> anyhow:
 
 /// Fetches attachments from the database that match one of several conditions.
 /// Uses a combined query for conditions 1-4, and a separate query for condition 5.
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn fetch_unique_attachments(
     db: &PgPool,
     link_id: Uuid,

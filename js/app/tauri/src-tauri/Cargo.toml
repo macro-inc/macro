@@ -28,6 +28,7 @@ mime_guess = "2"
 rootcause = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+staged_upload_constants = { path = "../staged_upload_constants" }
 tracing-oslog = { version = "0.3" }
 
 nom = "8.0.0"
@@ -71,6 +72,8 @@ tauri-plugin-haptics = "2"
 [target.'cfg(target_os = "ios")'.dependencies]
 tauri-plugin-call-kit = { path = "../callkit_plugin" }
 tauri-plugin-input-accessory = { path = "../input_accessory_plugin" }
+tauri-plugin-pasteboard = { path = "../pasteboard_plugin" }
+tauri-plugin-photo-library = { path = "../photo_library_plugin" }
 # Used to call NSFileManager from Rust to get the App Group container path.
 # This version is already in the dependency tree via wry/tao.
 objc2 = "0.5"

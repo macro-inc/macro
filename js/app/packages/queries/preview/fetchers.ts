@@ -49,10 +49,14 @@ async function fetchChannelPreviews(
 }
 
 export async function fetchMessageContext(
-  messageId: string
+  channelId: string,
+  messageId: string,
+  signal?: AbortSignal
 ): Promise<MessageContext | null> {
-  const msgResult = await commsServiceClient.getMessageWithContext({
+  const msgResult = await storageServiceClient.getMessageWithContext({
+    channel_id: channelId,
     message_id: messageId,
+    signal,
   });
 
   if (msgResult.isErr()) {

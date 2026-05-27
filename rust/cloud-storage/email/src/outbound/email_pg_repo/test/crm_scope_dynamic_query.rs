@@ -733,6 +733,7 @@ async fn crm_scope_pagination_across_team_links(pool: Pool<Postgres>) -> anyhow:
         scripts("email_dynamic_query_crm_scope")
     )
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn crm_scope_collapses_to_empty_when_killswitch_off(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {

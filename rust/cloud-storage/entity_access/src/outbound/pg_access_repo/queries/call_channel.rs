@@ -16,6 +16,7 @@ pub struct CallChannelRow {
 ///
 /// Checks both active calls and archived call records.
 #[tracing::instrument(err, skip(pool))]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn get_call_channel(
     pool: &PgPool,
     call_id: &Uuid,
@@ -42,6 +43,7 @@ pub async fn get_call_channel(
 /// Checks both active calls and archived call records.
 /// Active calls are checked first.
 #[tracing::instrument(err, skip(pool))]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn get_call_channel_by_channel_id(
     pool: &PgPool,
     channel_id: &Uuid,

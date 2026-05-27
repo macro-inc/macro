@@ -1,3 +1,7 @@
+import {
+  recoverMobileClipboardImageEntries,
+  shouldUseMobileClipboardImageRecovery,
+} from '@core/mobile/mobileClipboardImageRecovery';
 import { extractFileSystemEntries } from '@core/util/dataTransfer';
 import { mergeRegister } from '@lexical/utils';
 import {
@@ -28,6 +32,21 @@ function registerFilePastePlugin(
 
         const { fileEntries, directoryEntries } =
           extractFileSystemEntries(data);
+
+        if (
+          directoryEntries.length === 0 &&
+          shouldUseMobileClipboardImageRecovery(data)
+        ) {
+          event.preventDefault();
+          void recoverMobileClipboardImageEntries().then((entries) => {
+            if (entries.length > 0) {
+              props.onPasteFilesAndDirs(entries, []);
+            } else if (fileEntries.length > 0) {
+              props.onPasteFilesAndDirs(fileEntries, []);
+            }
+          });
+          return true;
+        }
 
         if (fileEntries.length === 0 && directoryEntries.length === 0) {
           return false;

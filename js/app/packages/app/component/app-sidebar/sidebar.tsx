@@ -12,6 +12,11 @@ import { CommandState } from '@app/component/command';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
 import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import type {
+  ReferredFrom,
+  SplitContent,
+  SplitHandle,
+} from '@app/component/split-layout/layoutManager';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import {
   LIST_VIEW_ID,
@@ -47,10 +52,10 @@ import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import LogoIcon from '@icon/macro-logo.svg';
-import SquareSidebarIcon from '@icon/square-sidebar.svg';
+import { AnimatedSquareCommandKIcon } from '@icon/square-command-k';
+import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
-import CommandKIcon from '@icon/wide-command-k.svg';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedFolderIcon } from '@icon/wide-folder';
@@ -261,6 +266,45 @@ type SidebarHotkeyDeps = {
   openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'];
 };
 
+type OpenWithSplitFn = ReturnType<typeof useSplitLayout>['openWithSplit'];
+
+const isComponentEntry =
+  (id: ListView) =>
+  (entry: SplitContent): boolean =>
+    entry.type === 'component' && entry.id === id;
+
+/**
+ * Navigate to a sidebar view, preserving prior state when possible.
+ *
+ * If the active split's history already contains an entry for this view, jump
+ * back to it so search text, filters, preview state, etc. are restored from
+ * that entry. Otherwise push a fresh entry. Holding shift bypasses the lookup
+ * and forces a new entry / new split.
+ */
+function navigateToSidebarView(args: {
+  viewId: ListView;
+  shiftKey: boolean;
+  activeSplit: SplitHandle | undefined;
+  openWithSplit: OpenWithSplitFn;
+  referredFrom?: ReferredFrom;
+}): SplitHandle | undefined {
+  const { viewId, shiftKey, activeSplit, openWithSplit, referredFrom } = args;
+
+  if (!shiftKey && activeSplit?.goToEntry(isComponentEntry(viewId))) {
+    return activeSplit;
+  }
+
+  return openWithSplit(
+    { type: 'component', id: viewId },
+    {
+      preferNewSplit: shiftKey,
+      mergeHistory: false,
+      allowDuplicate: true,
+      referredFrom,
+    }
+  );
+}
+
 const registerSidebarHotkeys = ({
   links,
   isSlim,
@@ -369,17 +413,12 @@ const registerSidebarHotkeys = ({
         }
       }
 
-      const handle = openWithSplit(
-        {
-          type: 'component',
-          id: link.id,
-        },
-        {
-          preferNewSplit: e?.shiftKey,
-          mergeHistory: false,
-          allowDuplicate: true,
-        }
-      );
+      const handle = navigateToSidebarView({
+        viewId: link.id,
+        shiftKey: !!e?.shiftKey,
+        activeSplit: globalSplitManager()?.activeSplit(),
+        openWithSplit,
+      });
       if (link.id === 'search' && handle) {
         requestSearchFocus(handle.id);
       }
@@ -566,6 +605,36 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
           </div>
         )}
       </Show>
+    </Button>
+  );
+};
+
+/**
+ * Compact icon-only button for the sidebar header row. Encapsulates the hover
+ * signal so animated icons play on hover, mirroring `SidebarActionButton`.
+ */
+const SidebarHeaderIconButton = (props: {
+  icon: Component<{ triggerAnimation?: boolean; class?: string }>;
+  label: string;
+  hotkey?: HotkeyToken | HotkeyToken[];
+  disabled?: boolean;
+  onClick: (event: MouseEvent) => void;
+  onMouseDown?: (event: MouseEvent) => void;
+}) => {
+  const [hovering, setHovering] = createSignal(false);
+  return (
+    <Button
+      class="rounded-md p-1 text-ink-extra-muted [&_svg]:size-4"
+      size="icon-sm"
+      label={props.label}
+      hotkey={props.hotkey}
+      disabled={props.disabled}
+      onClick={props.onClick}
+      onMouseDown={props.onMouseDown}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+    >
+      <Dynamic component={props.icon} triggerAnimation={hovering()} />
     </Button>
   );
 };
@@ -858,30 +927,24 @@ export const AppSidebar = (props: AppSidebarProps) => {
                   <BellIcon />
                 </Button>
               </Show>
-              <Button
-                class="rounded-md p-1 text-ink-extra-muted"
-                size="icon-sm"
+              <SidebarHeaderIconButton
                 label="Command"
                 hotkey={TOKENS.global.commandMenu}
                 onClick={handleCommandPaletteClick}
-              >
-                <CommandKIcon />
-              </Button>
-              <Button
-                class="rounded-md p-1 text-ink-extra-muted"
-                size="icon-sm"
+                icon={AnimatedSquareCommandKIcon}
+              />
+              <SidebarHeaderIconButton
                 label="New Split"
                 hotkey={TOKENS.global.createNewSplit}
                 disabled={!canCreateNewSplit()}
                 onClick={handleNewSplitClick}
-              >
-                <AnimatedNewSplitIcon class="size-4" />
-              </Button>
+                icon={AnimatedNewSplitIcon}
+              />
             </div>
           </Show>
-          <Button
-            class="rounded-md p-1 text-ink-extra-muted [&_svg]:size-4"
-            size="icon-sm"
+          <SidebarHeaderIconButton
+            label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
+            hotkey={TOKENS.global.toggleSidebar}
             onMouseDown={(e) => {
               if (e.button !== 0) return;
               e.preventDefault();
@@ -890,11 +953,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
               handleSidebarOpenChange(!isExpanded());
               globalSplitManager()?.returnFocus();
             }}
-            label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
-            hotkey={TOKENS.global.toggleSidebar}
-          >
-            <SquareSidebarIcon />
-          </Button>
+            icon={AnimatedSquareSidebarIcon}
+          />
         </div>
       </div>
 
@@ -1143,10 +1203,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
               currentContent?.id === props.id;
 
             if (!isSameContent || e.shiftKey) {
-              currentContentHandle = layout.openWithSplit(content(), {
-                preferNewSplit: e.shiftKey,
-                mergeHistory: false,
-                allowDuplicate: true,
+              currentContentHandle = navigateToSidebarView({
+                viewId: props.id,
+                shiftKey: e.shiftKey,
+                activeSplit: currentContentHandle,
+                openWithSplit: layout.openWithSplit,
                 referredFrom: 'sidebar',
               });
             }

@@ -137,6 +137,12 @@ const propertyToAst = (p: PropertyFilter): BackendAst =>
 const propertyEquals = (a: PropertyFilter, b: PropertyFilter): boolean =>
   a.propertyId === b.propertyId && a.type === b.type && a.value === b.value;
 
+export const queryStateFrom = (query: Query): QueryState => ({
+  include: { ...(query.include ?? {}) },
+  exclude: { ...(query.exclude ?? {}) },
+  emailView: query.emailView,
+});
+
 export function compileToAst(state: QueryState): TargetAstMap {
   const byTarget: Record<QueryTarget, BackendAst[]> = {
     df: [],
@@ -282,37 +288,50 @@ const ID_FIELD_NAMES: Partial<Record<QueryTarget, FieldName>> = {
 
 type DefineQueryFiltersOptions = {
   skipTargets?: QueryTarget[];
+  skipTargetsFrom?: Query;
+};
+
+const extractQueryTargets = (query: Query): QueryTarget[] => {
+  const targets = new Set<QueryTarget>();
+
+  for (const field of Object.keys(query.include ?? {})) {
+    if (field in FIELD_CONFIG) {
+      targets.add(FIELD_CONFIG[field as CompiledFieldName].target);
+    }
+    if (field in DATE_RANGE_FIELDS) {
+      targets.add(DATE_RANGE_FIELDS[field].target);
+    }
+  }
+
+  for (const field of Object.keys(query.exclude ?? {})) {
+    if (field in FIELD_CONFIG) {
+      targets.add(FIELD_CONFIG[field as CompiledFieldName].target);
+    }
+    if (field in DATE_RANGE_FIELDS) {
+      targets.add(DATE_RANGE_FIELDS[field].target);
+    }
+  }
+
+  return [...targets];
 };
 
 export function defineQueryFilters(
   input: Query,
   options: DefineQueryFiltersOptions = {}
 ): Query {
-  const { skipTargets = [] } = options;
-  const referencedTargets = new Set<QueryTarget>(skipTargets);
-
-  for (const field of Object.keys(input.include ?? {})) {
-    if (field in FIELD_CONFIG) {
-      referencedTargets.add(FIELD_CONFIG[field as CompiledFieldName].target);
-    }
-    if (field in DATE_RANGE_FIELDS) {
-      referencedTargets.add(DATE_RANGE_FIELDS[field].target);
-    }
-  }
-
-  for (const field of Object.keys(input.exclude ?? {})) {
-    if (field in FIELD_CONFIG) {
-      referencedTargets.add(FIELD_CONFIG[field as CompiledFieldName].target);
-    }
-    if (field in DATE_RANGE_FIELDS) {
-      referencedTargets.add(DATE_RANGE_FIELDS[field].target);
-    }
-  }
+  const referencedTargets = new Set<QueryTarget>([
+    ...(options.skipTargets ?? []),
+    ...(options.skipTargetsFrom
+      ? extractQueryTargets(options.skipTargetsFrom)
+      : []),
+    ...extractQueryTargets(input),
+  ]);
 
   const include: FieldFilters = { ...input.include };
 
   for (const [target, idFieldName] of Object.entries(ID_FIELD_NAMES)) {
     if (referencedTargets.has(target as QueryTarget)) continue;
+
     if (idFieldName) {
       (include as Record<string, unknown[]>)[idFieldName] = [NIL_UUID];
     }

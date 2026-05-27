@@ -365,6 +365,16 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
     referredFrom?: ReferredFrom;
   }) => void;
   removeFromHistory: (predicate: (content: SplitContent) => boolean) => void;
+  /**
+   * Jump to the most-recent prior history entry matching `predicate` (or
+   * forward to the closest match if none earlier). Captures current entry
+   * state first, like back/forward. Returns true if a match was found and
+   * navigated to; false if no match (history left unchanged).
+   *
+   * Use for "open this view if it's already in my history, otherwise fall
+   * back to a fresh push" patterns (e.g. sidebar nav).
+   */
+  goToEntry: (predicate: (content: SplitContent) => boolean) => boolean;
   toggleSpotlight: (force?: boolean) => void;
   setDisplayName: (name: string) => void;
   canGoForward: () => boolean;
@@ -743,6 +753,48 @@ export function createSplitLayout(
     reattach(split, next, undefined, 'replace');
   }
 
+  function goToEntry(
+    id: SplitId,
+    predicate: (content: SplitContent) => boolean
+  ): boolean {
+    const i = splitIndexById(id);
+    if (i < 0) {
+      console.error(`Split with id ${id} not found`);
+      return false;
+    }
+    const split = state.splits[i];
+    const items = split.history.items;
+    const currentIdx = split.history.index;
+    if (items.length === 0) return false;
+
+    // Prefer the closest match looking backwards (more common case — the
+    // user just came from there). Fall back to looking forward.
+    let targetIdx = -1;
+    for (let j = currentIdx - 1; j >= 0; j--) {
+      if (predicate(items[j])) {
+        targetIdx = j;
+        break;
+      }
+    }
+    if (targetIdx === -1) {
+      for (let j = currentIdx + 1; j < items.length; j++) {
+        if (predicate(items[j])) {
+          targetIdx = j;
+          break;
+        }
+      }
+    }
+    if (targetIdx === -1 || targetIdx === currentIdx) return false;
+
+    captureCurrentEntryState(split);
+    const target = split.history.goToIndex(targetIdx);
+    if (!target) return false;
+    const cause: NavigationCause =
+      targetIdx < currentIdx ? 'history-back' : 'history-forward';
+    reattach(split, target, undefined, cause);
+    return true;
+  }
+
   /**
    * Replace the content of a split with the provided content. If mergeHistory is true, the current history index will be replaced with the new content.
    */
@@ -867,6 +919,8 @@ export function createSplitLayout(
       removeFromHistory: (predicate: (content: SplitContent) => boolean) => {
         removeFromHistory(currentSplit.id, predicate);
       },
+      goToEntry: (predicate: (content: SplitContent) => boolean) =>
+        goToEntry(currentSplit.id, predicate),
       previousContent: () => {
         const s = findSplitById(currentSplit.id);
         if (!s) return null;
