@@ -19,8 +19,8 @@ import { useEntryState } from '@app/component/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import {
   isListViewID,
-  soupItemMatchesListView,
   type ListView,
+  soupItemMatchesListView,
 } from '@app/constants/list-views';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
