@@ -18,6 +18,7 @@ use crate::api::{
         login::{self},
     },
 };
+use fusionauth::error::FusionAuthClientError;
 use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
 
 async fn link_user(
@@ -76,7 +77,8 @@ async fn link_user(
         ));
     }
 
-    ctx.auth_client
+    match ctx
+        .auth_client
         .link_user(LinkUserRequest {
             identity_provider_link: IdentityProviderLink {
                 display_name: user_info_email.clone(),
@@ -87,12 +89,24 @@ async fn link_user(
             },
         })
         .await
-        .map_err(|e| {
-            (
+    {
+        Ok(()) => {}
+        // Same Google identity already linked to this FA user → init's idempotency
+        // check on email_links will short-circuit downstream. No-op.
+        Err(FusionAuthClientError::IdentityProviderLinkAlreadyExists) => {
+            tracing::info!(
+                fusion_user_id = %macro_user_id,
+                linked_email = %user_info_email,
+                "idp link already exists, skipping creation"
+            );
+        }
+        Err(e) => {
+            return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("unable to link user {e}"),
-            )
-        })?;
+            ));
+        }
+    }
 
     // Stash the linked email on the in_progress_user_link row so /email/init can pick it up.
     // The row is consumed and deleted by /email/init once the email_links record is created.

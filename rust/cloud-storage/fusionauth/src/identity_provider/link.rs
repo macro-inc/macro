@@ -143,6 +143,13 @@ pub(crate) async fn link_user(
                 })
             })?;
 
+            // FA returns this when the (user_id, identity_provider_user_id) pair is
+            // already linked. Treat as a typed variant so callers can no-op on it.
+            if body.contains("[alreadyLinked]identityProviderUserId") {
+                tracing::info!(body=%body, "fusionauth idp link already exists");
+                return Err(FusionAuthClientError::IdentityProviderLinkAlreadyExists);
+            }
+
             tracing::error!(body=%body, "unexpected response from fusionauth");
 
             Err(FusionAuthClientError::Generic(GenericErrorResponse {
