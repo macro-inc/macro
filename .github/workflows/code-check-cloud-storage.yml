@@ -166,7 +166,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: linux-extra-beefy
     env:
-      RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=mold"
+      RUSTFLAGS: "-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold"
       RUSTDOCFLAGS: "-Dwarnings"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -190,7 +190,7 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: cd rust/cloud-storage && cargo clippy --all-features
+        run: cd rust/cloud-storage && cargo clippy --workspace --all-features
       - name: show sccache stats
         if: always()
         env:
