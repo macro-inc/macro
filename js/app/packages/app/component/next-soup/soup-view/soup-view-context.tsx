@@ -31,11 +31,11 @@ import {
 } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import { useQueryClient } from '@queries/client';
-import { useFetchGroupPage } from '@queries/soup/grouped/use-fetch-group-page';
 import type {
   GroupMeta as ApiGroupMeta,
   GroupByField,
 } from '@queries/soup/grouped/types';
+import { useFetchGroupPage } from '@queries/soup/grouped/use-fetch-group-page';
 import type { SoupParams } from '@queries/soup/items';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
