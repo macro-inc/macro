@@ -5,15 +5,20 @@ import {
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { UserIcon } from '@core/component/UserIcon';
-import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import { compareDateDesc, formatDate } from '@core/util/date';
-import { createTheme, theme as markdownTheme } from '@core/component/LexicalMarkdown/theme';
+import { formatDate } from '@core/util/date';
+import {
+  createTheme,
+  theme as markdownTheme,
+} from '@core/component/LexicalMarkdown/theme';
 import { useDisplayName } from '@core/user/displayName';
+import type { ChannelEntity } from '@entity';
+import { useSoupItemsQuery } from '@queries/soup/items';
 import { ChannelType } from '@service-comms/generated/models/channelType';
 import BuildingIcon from '@phosphor/building.svg';
+import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import UsersIcon from '@phosphor/users.svg';
-import { Avatar, Button, Tooltip } from '@ui';
+import { Avatar, Layer, Tooltip } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 
 const compactMarkdownTheme = createTheme(
@@ -38,13 +43,20 @@ type ChannelCardData = {
   participantCount: number;
 };
 
+function channelDisplayName(name: string | null | undefined) {
+  const trimmed = name?.trim().replace(/^#+/, '').trim();
+  return trimmed || 'Untitled channel';
+}
+
 function initials(name: string) {
-  return name
+  const letters = channelDisplayName(name)
+    .replace(/[,_./\\-]+/g, ' ')
     .split(/\s+/)
-    .filter(Boolean)
+    .flatMap((part) => part.match(/[a-zA-Z0-9]/)?.[0] ?? [])
     .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join('');
+    .map((letter) => letter.toUpperCase());
+
+  return letters.join('') || '?';
 }
 
 function ChannelCard(props: {
@@ -127,7 +139,6 @@ function ChannelCard(props: {
 }
 
 export function RecentChannelsSection() {
-  const channelsContext = useChannelsContext();
   const notificationSource = useGlobalNotificationSource();
   const currentUserId = useUserId();
   const splitLayout = useSplitLayout();
@@ -150,37 +161,52 @@ export function RecentChannelsSection() {
     return counts;
   });
 
-  const channels = createMemo<ChannelCardData[]>(() =>
-    channelsContext
-      .channels()
-      .filter((channel) => channel.channel_type !== ChannelType.direct_message)
-      .sort((a, b) =>
-        compareDateDesc(
-          a.interacted_at ?? a.latest_message?.created_at ?? a.updated_at,
-          b.interacted_at ?? b.latest_message?.created_at ?? b.updated_at
-        )
-      )
-      .slice(0, 4)
-      .map((channel) => {
-        const latest = channel.latest_message;
-        const latestFromMe = latest?.sender_id === currentUserId();
-        const latestText = latest?.content?.trim();
+  const channelsQuery = useSoupItemsQuery(
+    () => ({
+      params: { limit: 6, sort_method: 'viewed_updated' },
+      body: {
+        call_filters: { call_ids: ['00000000-0000-0000-0000-000000000000'] },
+        chat_filters: { chat_ids: ['00000000-0000-0000-0000-000000000000'] },
+        document_filters: {
+          document_ids: ['00000000-0000-0000-0000-000000000000'],
+        },
+        email_filters: {
+          email_thread_ids: ['00000000-0000-0000-0000-000000000000'],
+        },
+        project_filters: {
+          project_ids: ['00000000-0000-0000-0000-000000000000'],
+        },
+        channel_filters: {
+          channel_types: ['public', 'organization', 'private', 'team'],
+        },
+      },
+    }),
+    () => ({ staleTime: 5 * 60 * 1000 })
+  );
 
-        return {
-          id: channel.id,
-          name: channel.name ?? 'Untitled channel',
-          type: channel.channel_type,
-          latest: latestText ?? 'No recent messages',
-          latestFromMe,
-          latestSenderId: latest?.sender_id,
-          updatedAt: formatDate(
-            channel.interacted_at ?? latest?.created_at ?? channel.updated_at,
-            { shortWeekday: true }
-          ),
-          unreadCount: unreadByChannelId().get(channel.id) ?? 0,
-          participantCount: channel.participants.length,
-        };
-      })
+  const channels = createMemo<ChannelCardData[]>(() =>
+    ((channelsQuery.data ?? []).filter(
+      (entity): entity is ChannelEntity => entity.type === 'channel'
+    ) as ChannelEntity[]).map((channel) => {
+      const latest = channel.latestMessage;
+      const latestFromMe = latest?.senderId === currentUserId();
+      const latestText = latest?.content?.trim();
+
+      return {
+        id: channel.id,
+        name: channelDisplayName(channel.name),
+        type: channel.channelType,
+        latest: latestText ?? 'No recent messages',
+        latestFromMe,
+        latestSenderId: latest?.senderId,
+        updatedAt: formatDate(
+          channel.interactedAt ?? latest?.createdAt ?? channel.updatedAt,
+          { shortWeekday: true }
+        ),
+        unreadCount: unreadByChannelId().get(channel.id) ?? 0,
+        participantCount: channel.participantIds?.length ?? 0,
+      };
+    })
   );
 
   const openChannel = (channelId: string) => {
@@ -193,16 +219,14 @@ export function RecentChannelsSection() {
         <h2 class="text-lg font-semibold tracking-tight text-ink">
           Recent channels
         </h2>
-        <Button variant="ghost" size="sm" class="rounded-lg">
-          View all
-        </Button>
+
       </div>
 
-      <div class="grid max-w-5xl grid-cols-4 gap-3">
+      <div class="grid w-full grid-cols-7 gap-3">
         <Show
-          when={!channelsContext.isLoading()}
+          when={!channelsQuery.isLoading}
           fallback={
-            <For each={[0, 1, 2, 3]}>
+            <For each={[0, 1, 2, 3, 4, 5, 6]}>
               {() => (
                 <div class="h-36 rounded-2xl border border-edge-muted bg-hover/60 p-4">
                   <div class="size-9 rounded-xl bg-surface" />
@@ -221,6 +245,21 @@ export function RecentChannelsSection() {
                 <ChannelCard channel={channel} onOpen={openChannel} />
               )}
             </For>
+            <button class="group flex h-36 min-w-0 flex-col justify-end rounded-2xl border border-edge-muted bg-hover/60 p-4 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <h3 class="text-xs font-semibold text-ink">View all</h3>
+                  <p class="mt-1 text-xxs text-ink-extra-muted">
+                    Open channels
+                  </p>
+                </div>
+                <Layer depth={3} class="rounded-xl">
+                  <div class="flex size-10 items-center justify-center rounded-xl bg-hover text-ink-muted transition group-hover:text-ink">
+                    <ArrowRightIcon class="size-5" />
+                  </div>
+                </Layer>
+              </div>
+            </button>
           </StaticMarkdownContext>
         </Show>
       </div>
