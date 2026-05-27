@@ -5,7 +5,7 @@ publish = false
 version = "0.1.0"
 
 [features]
-ai_tools = ["dep:ai", "dep:async-trait", "dep:schemars", "ports"]
+ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "ports"]
 default = ["ai_tools", "inbound", "outbound", "ports"]
 inbound = [
   "dep:axum",
@@ -16,10 +16,11 @@ inbound = [
   "ports",
 ]
 outbound = [
-  "dep:ai",
+  "dep:agent",
   "dep:aws-sdk-s3",
   "comms/outbound",
   "dep:entity_access_db_utils",
+  "dep:futures",
   "dep:livekit-api",
   "dep:livekit-protocol",
   "dep:macro_aws_config",
@@ -27,10 +28,11 @@ outbound = [
   "dep:sqlx",
   "ports",
 ]
-ports = ["dep:entity_access", "dep:futures", "dep:tokio"]
+ports = ["dep:entity_access", "dep:tokio"]
 
 [dependencies]
-ai = { path = "../ai", optional = true }
+agent = { path = "../agent", optional = true }
+ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
 aws-sdk-s3 = { workspace = true, optional = true }
