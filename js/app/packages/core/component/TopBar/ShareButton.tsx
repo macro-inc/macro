@@ -511,10 +511,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                       setPermissions={props.setPublicPermissions}
                     />
                   </span>
-                  <Button
-                    variant="base"
-                    onClick={props.copyPublicLink}
-                  >
+                  <Button variant="base" onClick={props.copyPublicLink}>
                     <CopyIcon class="size-4" />
                     <span>Copy Link</span>
                   </Button>
@@ -1164,10 +1161,7 @@ export function ShareModal(props: ShareModalProps) {
                   <Show when={publicAccessLevel() != null}>
                     <Panel.Body class="text-ink">
                       <div class="flex items-center p-4 justify-between">
-                        <Button
-                          variant="base"
-                          onClick={copyPublicLink}
-                        >
+                        <Button variant="base" onClick={copyPublicLink}>
                           <CopyIcon class="size-4" />
                           <span class="hidden sm:inline">Copy Link</span>
                         </Button>
