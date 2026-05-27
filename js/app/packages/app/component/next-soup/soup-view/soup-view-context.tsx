@@ -26,15 +26,12 @@ import {
 } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import { useQueryClient } from '@queries/client';
+import { useFetchGroupPage } from '@queries/soup/grouped/use-fetch-group-page';
 import type {
   GroupMeta as ApiGroupMeta,
   GroupByField,
 } from '@queries/soup/grouped/types';
-import type {
-  SoupAstBody,
-  SoupAstParams,
-  SoupParams,
-} from '@queries/soup/items';
+import type { SoupParams } from '@queries/soup/items';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
 import type { SoupPage } from '@service-storage/generated/schemas';
@@ -81,8 +78,8 @@ interface SoupViewContextValues {
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
   groupByField: Accessor<GroupByField | undefined>;
-  soupParams: Accessor<SoupAstParams>;
-  soupBody: Accessor<SoupAstBody>;
+  fetchNextGroupPage: (groupKey: string, cursor: string) => Promise<void>;
+  isFetchingGroupPage: (groupKey: string) => boolean;
 }
 
 const SoupViewContext = createContext<SoupViewContextValues>();
@@ -248,6 +245,20 @@ export const SoupViewContextProvider: FlowComponent<
 
   // soupBody is derived from the query filter store's compiled AST
   const soupBody = createMemo(() => queryFilters.compile());
+
+  const groupPageFetcher = useFetchGroupPage();
+
+  const fetchNextGroupPage = async (groupKey: string, cursor: string) => {
+    const field = groupByField();
+    if (!field) return;
+    await groupPageFetcher.fetch({
+      groupKey,
+      cursor,
+      field,
+      soupParams: soupParams(),
+      soupBody: soupBody(),
+    });
+  };
 
   const [searchText, setSearchText] = useEntryState<string>('search.text', {
     default: props.initialSearchText ?? '',
@@ -508,8 +519,8 @@ export const SoupViewContextProvider: FlowComponent<
     activeTab,
     setActiveTab,
     groupByField,
-    soupParams,
-    soupBody,
+    fetchNextGroupPage,
+    isFetchingGroupPage: groupPageFetcher.isPending,
   };
 
   return (

@@ -37,7 +37,7 @@ type UseSoupViewHotkeysOptions = {
   currentView: Accessor<ListView | undefined>;
   activeTab: Accessor<string | undefined>;
   applyTabPreset: (view: ListView, tabId: string) => void;
-  loadMoreGroup: (groupKey: string, cursor: string) => Promise<void>;
+  fetchNextGroupPage: (groupKey: string, cursor: string) => Promise<void>;
 };
 
 export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
@@ -50,7 +50,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     currentView,
     activeTab,
     applyTabPreset,
-    loadMoreGroup,
+    fetchNextGroupPage,
   } = options;
 
   const analytics = useAnalytics();
@@ -159,7 +159,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
         const cursor = focusedRow.group.nextCursor;
         if (!cursor) return true;
         const currentIndex = focusedRow.index;
-        loadMoreGroup(focusedRow.group.key, cursor).then(() => {
+        fetchNextGroupPage(focusedRow.group.key, cursor).then(() => {
           soup.navigate.toIndex(currentIndex);
           virtualizerHandle()?.scrollToIndex(currentIndex, {
             align: 'nearest',

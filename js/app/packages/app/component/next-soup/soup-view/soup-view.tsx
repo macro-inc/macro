@@ -100,7 +100,6 @@ import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
-import { useFetchGroupPage } from '@queries/soup/grouped/use-fetch-group-page';
 import {
   invalidateSoupEntity,
   refetchSoupEntity,
@@ -600,13 +599,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
     isLocalSearchSettling,
     activeTab,
     setActiveTab,
-    assigneeFilter,
-    setAssigneeFilter,
-    groupByField,
-    soupParams,
-    soupBody,
+    fetchNextGroupPage,
+    isFetchingGroupPage,
   } = useSoupView();
-  const pageFetcher = useFetchGroupPage();
   const { hasActiveRefinements, resetToTabDefaults } = useFilterRefinements();
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -719,17 +714,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     currentView,
     activeTab,
     applyTabPreset,
-    loadMoreGroup: async (groupKey, cursor) => {
-      const field = groupByField();
-      if (!field) return;
-      await pageFetcher.fetch({
-        groupKey,
-        cursor,
-        field,
-        soupParams: soupParams(),
-        soupBody: soupBody(),
-      });
-    },
+    fetchNextGroupPage,
   });
 
   // Create markDone action for swipe/click handlers
@@ -1213,9 +1198,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                         >
                                           <Show
                                             when={
-                                              !pageFetcher.isPending(
-                                                group().key
-                                              )
+                                              !isFetchingGroupPage(group().key)
                                             }
                                             fallback={
                                               <Button
@@ -1244,17 +1227,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                                   highlighted(),
                                               })}
                                               onClick={() => {
-                                                const field = groupByField();
                                                 const cursor =
                                                   group().nextCursor;
-                                                if (!field || !cursor) return;
-                                                pageFetcher.fetch({
-                                                  groupKey: group().key,
-                                                  cursor,
-                                                  field,
-                                                  soupParams: soupParams(),
-                                                  soupBody: soupBody(),
-                                                });
+                                                if (!cursor) return;
+                                                fetchNextGroupPage(
+                                                  group().key,
+                                                  cursor
+                                                );
                                               }}
                                             >
                                               <CaretDownIcon class="size-2.5" />
