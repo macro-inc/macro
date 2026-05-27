@@ -63,10 +63,10 @@ use crate::{
     },
 };
 use channels::inbound::axum_router::{
-    ApiChannelAttachment, ApiChannelAttachmentsPage, ApiChannelMessage, ApiChannelMessageKind,
-    ApiChannelMessagesPage, ApiChannelParticipant, ApiCountedReaction, ApiMessageAttachment,
-    ApiParticipantRole, ApiResolvedChannelMessage, ApiThreadInfo, ApiThreadReply,
-    ChannelMessageFilters,
+    ApiChannelAttachment, ApiChannelAttachmentsPage, ApiChannelContextMessage, ApiChannelMessage,
+    ApiChannelMessageKind, ApiChannelMessagesPage, ApiChannelParticipant, ApiCountedReaction,
+    ApiMessageAttachment, ApiParticipantRole, ApiResolvedChannelMessage, ApiThreadInfo,
+    ApiThreadReply, ChannelMessageFilters, GetMessageWithContextResponse,
 };
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
@@ -210,6 +210,7 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::get_channel_messages_handler,
         channels::inbound::axum_router::post_channel_messages_handler,
         channels::inbound::axum_router::get_thread_replies_handler,
+        channels::inbound::axum_router::get_message_with_context_handler,
         channels::inbound::axum_router::resolve_channel_message_handler,
         channels::inbound::axum_router::get_channel_attachments_handler,
         channels::inbound::axum_router::get_channel_participants_handler,
@@ -365,6 +366,8 @@ use utoipa::OpenApi;
             // Channels
             ApiChannelMessagesPage,
             ApiChannelMessage,
+            GetMessageWithContextResponse,
+            ApiChannelContextMessage,
             ApiThreadInfo,
             ApiThreadReply,
             ApiChannelMessageKind,

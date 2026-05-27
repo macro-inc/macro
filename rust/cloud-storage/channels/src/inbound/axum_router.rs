@@ -8,9 +8,9 @@ pub use crate::domain::models::{
     PostReactionRequest, PostTypingRequest, RemoveParticipantsRequest,
 };
 use crate::domain::models::{
-    ChannelAttachment, ChannelAttachmentType, ChannelMessage, ChannelMessageKind,
-    ChannelParticipant, CountedReaction, MessageAttachment, MessagePageDirection, ParticipantRole,
-    ResolvedChannelMessage, ThreadInfo, ThreadReply,
+    ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelMessage,
+    ChannelMessageKind, ChannelParticipant, CountedReaction, MessageAttachment,
+    MessagePageDirection, ParticipantRole, ResolvedChannelMessage, ThreadInfo, ThreadReply,
 };
 pub use crate::domain::models::{ChannelMessageFilters, NotificationFilters};
 use crate::domain::ports::{
@@ -153,6 +153,17 @@ pub struct ThreadRepliesPath {
     message_id: Uuid,
 }
 
+/// Query parameters for the message context endpoint.
+#[derive(Debug, Default, Deserialize)]
+pub struct MessageContextParams {
+    /// Number of older messages to include.
+    #[serde(default)]
+    before: i64,
+    /// Number of newer messages to include.
+    #[serde(default)]
+    after: i64,
+}
+
 /// Path params for channel-level endpoints.
 #[derive(Debug, Deserialize)]
 pub struct ChannelPath {
@@ -264,6 +275,10 @@ where
         .route(
             "/{channel_id}/messages/{message_id}/replies",
             get(get_thread_replies_handler::<S, Svc>),
+        )
+        .route(
+            "/{channel_id}/messages/{message_id}/context",
+            get(get_message_with_context_handler::<S, Svc>),
         )
         .route(
             "/{channel_id}/messages/{message_id}/resolve",
@@ -921,6 +936,61 @@ pub async fn get_thread_replies_handler<S: ChannelService, Svc: EntityAccessServ
     ))
 }
 
+/// Handler for `GET /channels/{channel_id}/messages/{message_id}/context`.
+#[utoipa::path(
+    get,
+    operation_id = "get_message_with_context",
+    path = "/channels/{channel_id}/messages/{message_id}/context",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID"),
+        ("message_id" = Uuid, Path, description = "Message ID to get context around"),
+        ("before" = Option<i64>, Query, description = "Number of older messages to include"),
+        ("after" = Option<i64>, Query, description = "Number of newer messages to include")
+    ),
+    responses(
+        (status = 200, body = GetMessageWithContextResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(
+    err,
+    skip_all,
+    fields(
+        channel_id = tracing::field::Empty,
+        message_id = tracing::field::Empty,
+        before = tracing::field::Empty,
+        after = tracing::field::Empty
+    )
+)]
+pub async fn get_message_with_context_handler<S: ChannelService, Svc: EntityAccessService>(
+    State(state): State<ChannelsRouterState<S, Svc>>,
+    _access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
+    Path(path): Path<ThreadRepliesPath>,
+    Query(params): Query<MessageContextParams>,
+) -> Result<Json<GetMessageWithContextResponse>, ChannelsHandlerErr> {
+    let channel_id = path.channel_id;
+    let message_id = path.message_id;
+    let span = tracing::Span::current();
+    span.record("channel_id", tracing::field::display(channel_id));
+    span.record("message_id", tracing::field::display(message_id));
+    span.record("before", params.before);
+    span.record("after", params.after);
+
+    let messages = state
+        .service
+        .get_message_context(channel_id, message_id, params.before, params.after)
+        .await?;
+
+    Ok(Json(GetMessageWithContextResponse {
+        messages: messages
+            .into_iter()
+            .map(ApiChannelContextMessage::from)
+            .collect(),
+    }))
+}
+
 /// Handler for `GET /channels/{channel_id}/messages/{message_id}/resolve`.
 #[utoipa::path(
     get,
@@ -1108,6 +1178,52 @@ impl From<ChannelMessage> for ApiChannelMessage {
                 .into_iter()
                 .map(ApiMessageAttachment::from)
                 .collect(),
+        }
+    }
+}
+
+/// Response from the message-context endpoint.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct GetMessageWithContextResponse {
+    /// Messages around the requested message in chronological order.
+    messages: Vec<ApiChannelContextMessage>,
+}
+
+/// A channel message returned by the message-context endpoint.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ApiChannelContextMessage {
+    /// Message id.
+    id: Uuid,
+    /// Channel id.
+    channel_id: Uuid,
+    /// Parent thread id for replies.
+    thread_id: Option<Uuid>,
+    /// Sender user id.
+    sender_id: String,
+    /// Message content.
+    content: String,
+    /// When the message was created.
+    created_at: DateTime<Utc>,
+    /// When the message was last updated.
+    updated_at: DateTime<Utc>,
+    /// When the message was edited.
+    edited_at: Option<DateTime<Utc>>,
+    /// When the message was soft-deleted.
+    deleted_at: Option<DateTime<Utc>>,
+}
+
+impl From<ChannelContextMessage> for ApiChannelContextMessage {
+    fn from(message: ChannelContextMessage) -> Self {
+        Self {
+            id: message.id,
+            channel_id: message.channel_id,
+            thread_id: message.thread_id,
+            sender_id: message.sender_id,
+            content: message.content,
+            created_at: message.created_at,
+            updated_at: message.updated_at,
+            edited_at: message.edited_at,
+            deleted_at: message.deleted_at,
         }
     }
 }

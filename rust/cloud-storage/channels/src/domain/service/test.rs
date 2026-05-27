@@ -2,12 +2,13 @@ use super::*;
 use crate::domain::{
     events::ChannelEvent,
     models::{
-        ChannelAttachment, ChannelAttachmentType, ChannelInfo, ChannelMessageFilters,
-        ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction, MessageAttachment,
-        MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
-        ParticipantRole, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
-        PostReactionRequest, ReactionAction, ReferencedShareItem, ReferencedShareItemType,
-        ResolvedChannelMessage, SimpleMention, ThreadData, ThreadReplyRow, TopLevelMessageRow,
+        ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelInfo,
+        ChannelMessageFilters, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
+        MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
+        NewChannelAttachment, ParticipantRole, PatchChannelRequest, PatchMessageRequest,
+        PostMessageRequest, PostReactionRequest, ReactionAction, ReferencedShareItem,
+        ReferencedShareItemType, ResolvedChannelMessage, SimpleMention, ThreadData, ThreadReplyRow,
+        TopLevelMessageRow,
     },
     ports::{
         ChannelEventDispatcher, ChannelReferenceSharePermissions, ChannelRepo, MockChannelRepo,
@@ -300,6 +301,16 @@ impl ChannelRepo for FakeMutationRepo {
         _channel_id: Uuid,
     ) -> Result<Vec<ChannelParticipant>, Self::Err> {
         Ok(self.state.lock().unwrap().participants.clone())
+    }
+
+    async fn get_messages_with_context(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _before: i64,
+        _after: i64,
+    ) -> Result<Vec<ChannelContextMessage>, Self::Err> {
+        Ok(vec![])
     }
 
     async fn resolve_top_level_parent(

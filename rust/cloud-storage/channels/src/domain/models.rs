@@ -296,6 +296,29 @@ pub struct ChannelParticipant {
     pub left_at: Option<DateTime<Utc>>,
 }
 
+/// A channel message returned by the message-context endpoint.
+#[derive(Debug, Clone)]
+pub struct ChannelContextMessage {
+    /// Message id.
+    pub id: Uuid,
+    /// Channel id.
+    pub channel_id: Uuid,
+    /// Parent thread id for replies.
+    pub thread_id: Option<Uuid>,
+    /// User who sent the message.
+    pub sender_id: String,
+    /// Message content.
+    pub content: String,
+    /// When the message was created.
+    pub created_at: DateTime<Utc>,
+    /// When the message was last updated.
+    pub updated_at: DateTime<Utc>,
+    /// When the message was edited.
+    pub edited_at: Option<DateTime<Utc>>,
+    /// When the message was soft-deleted.
+    pub deleted_at: Option<DateTime<Utc>>,
+}
+
 /// Raw row returned from the top-level messages query.
 #[derive(Debug, Clone)]
 pub struct TopLevelMessageRow {

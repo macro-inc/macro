@@ -3,11 +3,12 @@ mod tests;
 
 use crate::domain::{
     models::{
-        ChannelAttachment, ChannelAttachmentType, ChannelInfo, ChannelMessageFilters,
-        ChannelMessageKind, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
-        CreateChannelRequest, MessageAttachment, MessagePageDirection, MutatedAttachment,
-        MutatedMessage, NewChannelAttachment, ParticipantRole, PatchChannelRequest,
-        ResolvedChannelMessage, SimpleMention, ThreadData, ThreadReplyRow, TopLevelMessageRow,
+        ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelInfo,
+        ChannelMessageFilters, ChannelMessageKind, ChannelMetadata, ChannelParticipant,
+        ChannelType, CountedReaction, CreateChannelRequest, MessageAttachment,
+        MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
+        ParticipantRole, PatchChannelRequest, ResolvedChannelMessage, SimpleMention, ThreadData,
+        ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
@@ -120,6 +121,36 @@ struct ChannelAttachmentRow {
     width: Option<i32>,
     height: Option<i32>,
     created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Intermediate row for message context queries.
+#[derive(Debug, sqlx::FromRow)]
+struct ContextMessageRow {
+    id: Uuid,
+    channel_id: Uuid,
+    thread_id: Option<Uuid>,
+    sender_id: String,
+    content: String,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+    edited_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl From<ContextMessageRow> for ChannelContextMessage {
+    fn from(row: ContextMessageRow) -> Self {
+        Self {
+            id: row.id,
+            channel_id: row.channel_id,
+            thread_id: row.thread_id,
+            sender_id: row.sender_id,
+            content: row.content,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            edited_at: row.edited_at,
+            deleted_at: row.deleted_at,
+        }
+    }
 }
 
 /// Intermediate row for channel participants.
@@ -1097,6 +1128,109 @@ impl ChannelRepo for PgChannelsRepo {
                 joined_at: row.joined_at,
                 left_at: row.left_at,
             })
+            .collect())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_messages_with_context(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+        before: i64,
+        after: i64,
+    ) -> Result<Vec<ChannelContextMessage>, Self::Err> {
+        let before = before.max(0);
+        let after = after.max(0);
+
+        let target = sqlx::query_as!(
+            ContextMessageRow,
+            r#"
+            SELECT
+                id,
+                channel_id,
+                thread_id,
+                sender_id,
+                content,
+                created_at,
+                updated_at,
+                edited_at::timestamptz AS "edited_at?",
+                deleted_at::timestamptz AS "deleted_at?"
+            FROM comms_messages
+            WHERE id = $1 AND channel_id = $2
+            "#,
+            message_id,
+            channel_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some(target) = target else {
+            return Ok(Vec::new());
+        };
+
+        let mut before_messages = sqlx::query_as!(
+            ContextMessageRow,
+            r#"
+            SELECT
+                id,
+                channel_id,
+                thread_id,
+                sender_id,
+                content,
+                created_at,
+                updated_at,
+                edited_at::timestamptz AS "edited_at?",
+                deleted_at::timestamptz AS "deleted_at?"
+            FROM comms_messages
+            WHERE channel_id = $1
+              AND (created_at, id) < ($2, $3)
+            ORDER BY created_at DESC, id DESC
+            LIMIT $4
+            "#,
+            channel_id,
+            target.created_at,
+            target.id,
+            before,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        before_messages.reverse();
+
+        let after_messages = sqlx::query_as!(
+            ContextMessageRow,
+            r#"
+            SELECT
+                id,
+                channel_id,
+                thread_id,
+                sender_id,
+                content,
+                created_at,
+                updated_at,
+                edited_at::timestamptz AS "edited_at?",
+                deleted_at::timestamptz AS "deleted_at?"
+            FROM comms_messages
+            WHERE channel_id = $1
+              AND (created_at, id) > ($2, $3)
+            ORDER BY created_at ASC, id ASC
+            LIMIT $4
+            "#,
+            channel_id,
+            target.created_at,
+            target.id,
+            after,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut messages = Vec::with_capacity(before_messages.len() + 1 + after_messages.len());
+        messages.extend(before_messages);
+        messages.push(target);
+        messages.extend(after_messages);
+
+        Ok(messages
+            .into_iter()
+            .map(ChannelContextMessage::from)
             .collect())
     }
 
