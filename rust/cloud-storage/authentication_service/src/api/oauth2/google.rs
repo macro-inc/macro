@@ -131,18 +131,37 @@ pub(in crate::api::oauth2) async fn handler(
     // if the link id is provided, this user is already logged in to an account. therefore, we
     // don't need to handle completing the login through fusionauth
     if let Some(link_id) = state.link_id.as_ref() {
-        link_user(ctx, &state.identity_provider_id, code, link_id)
+        let link_result = link_user(ctx, &state.identity_provider_id, code, link_id).await;
+
+        if link_result.is_err() {
+            // The OAuth callback failed; the in_progress_user_link row will never be
+            // consumed by /email/init (no redirect carrying link_id is emitted on
+            // error). Best-effort delete so a failed attempt doesn't burn one of
+            // the user's 5 in-flight link slots.
+            macro_db_client::in_progress_user_link::delete_in_progress_user_link(
+                &ctx.db, link_id,
+            )
             .await
-            .map_err(|(status_code, error)| {
-                tracing::error!(error=?error, "unable to link user");
-                (
-                    status_code,
-                    Json(ErrorResponse {
-                        message: error.into(),
-                    }),
-                )
-                    .into_response()
-            })?;
+            .inspect_err(|e| {
+                tracing::warn!(
+                    error=?e,
+                    ?link_id,
+                    "failed to clean up in_progress_user_link after link_user error"
+                );
+            })
+            .ok();
+        }
+
+        link_result.map_err(|(status_code, error)| {
+            tracing::error!(error=?error, "unable to link user");
+            (
+                status_code,
+                Json(ErrorResponse {
+                    message: error.into(),
+                }),
+            )
+                .into_response()
+        })?;
 
         if let Some(original_url) = &state.original_url {
             let decoded = urlencoding::decode(original_url).map_err(|e| {
