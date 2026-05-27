@@ -332,7 +332,7 @@ function ToolCallResponseRender() {
         {
           type: 'toolCall',
           tool: {
-            name: 'web_search',
+            name: 'ContentSearch',
             data: {
               query: 'most important headlines today',
             },
@@ -341,7 +341,7 @@ function ToolCallResponseRender() {
         {
           type: 'toolResponse',
           tool: {
-            name: 'web_search',
+            name: 'ContentSearch',
             data: {
               content: [
                 {

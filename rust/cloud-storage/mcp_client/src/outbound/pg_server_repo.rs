@@ -3,7 +3,7 @@ use crate::domain::{
     ports::McpServerStore,
 };
 use aes_gcm::{
-    Aes256Gcm, Key, Nonce,
+    Aes256Gcm,
     aead::{Aead, AeadCore, KeyInit, OsRng},
 };
 use macro_user_id::cowlike::CowLike;
@@ -31,7 +31,7 @@ impl PgServerRepo {
     fn encrypt(&self, creds: &StoredCredentials) -> Result<Vec<u8>, sqlx::Error> {
         let plaintext =
             serde_json::to_vec(creds).map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
-        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(self.encryption_key.as_bytes()));
+        let cipher = Aes256Gcm::new(self.encryption_key.as_bytes().into());
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
         let ciphertext = cipher
             .encrypt(&nonce, plaintext.as_ref())
@@ -50,9 +50,11 @@ impl PgServerRepo {
             ));
         }
         let (nonce_bytes, ciphertext) = data.split_at(NONCE_LEN);
-        let nonce = Nonce::from_slice(nonce_bytes);
-        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(self.encryption_key.as_bytes()));
-        let plaintext = cipher.decrypt(nonce, ciphertext).map_err(|e| {
+        let nonce: &[u8; NONCE_LEN] = nonce_bytes
+            .try_into()
+            .map_err(|_| sqlx::Error::Decode("invalid nonce length".into()))?;
+        let cipher = Aes256Gcm::new(self.encryption_key.as_bytes().into());
+        let plaintext = cipher.decrypt(nonce.into(), ciphertext).map_err(|e| {
             sqlx::Error::Decode(format!("credential decryption failed: {e}").into())
         })?;
         serde_json::from_slice(&plaintext).map_err(|e| sqlx::Error::Decode(Box::new(e)))

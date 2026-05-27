@@ -7,6 +7,7 @@ version = "0.2.0"
 [features]
 default = ["openai"]
 openai = ["dep:async-openai"]
+toolset = ["dep:ai_toolset", "dep:async-trait", "dep:anyhow"]
 
 [dev-dependencies]
 rand = { workspace = true }
@@ -28,3 +29,6 @@ async-openai = { workspace = true, optional = true}
 chrono.workspace = true
 lazy_static = {workspace = true}
 regex = { workspace = true }
+ai_toolset = { path = "../ai_toolset", optional = true }
+async-trait = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }

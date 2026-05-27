@@ -3,7 +3,7 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
-import { buildPostMessageRequest } from '@channel/Input/message-payload';
+import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
 import {
   makeAttachmentTrackerPersistenceKey,
   makeInputValuePersistenceKey,
@@ -361,16 +361,17 @@ export function Channel(props: ChannelProps) {
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
     const senderId = userId();
     if (!senderId) return;
+    const payload = buildPostMessageSendPayload({
+      snapshot,
+      participantIds: participants.ids(),
+    });
 
     sendMessageMutation.mutate(
       {
         channelID: props.channelId,
         senderId,
         optimisticId: crypto.randomUUID(),
-        message: buildPostMessageRequest({
-          snapshot,
-          participantIds: participants.ids(),
-        }),
+        ...payload,
       },
       {
         onError: () => {

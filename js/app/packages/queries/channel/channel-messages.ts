@@ -3,8 +3,8 @@ import {
   type ApiChannelMessage,
   type ApiThreadReply,
   type ChannelMessagesPage,
-  commsServiceClient,
-} from '@service-comms/client';
+  storageServiceClient,
+} from '@service-storage/client';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import {
@@ -70,7 +70,7 @@ export function channelMessagesQueryOptions(
     }) => {
       return await throwOnErr(
         async () =>
-          await commsServiceClient.getChannelMessages({
+          await storageServiceClient.getChannelMessages({
             channel_id: channelId,
             limit: pageParam ? 100 : 50,
             next_cursor: pageParam?.next_cursor ?? null,
@@ -125,7 +125,7 @@ export function useChannelMessagesByIdsQuery(
         .queryKey,
       queryFn: async (): Promise<ApiChannelMessage[]> => {
         const page = await throwOnErr(() =>
-          commsServiceClient.postChannelMessages({
+          storageServiceClient.postChannelMessages({
             channel_id: resolvedChannelId,
             filters: { message_ids: resolvedMessageIds },
           })

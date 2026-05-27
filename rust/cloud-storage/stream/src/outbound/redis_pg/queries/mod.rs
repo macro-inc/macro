@@ -6,6 +6,7 @@ use sqlx::PgPool;
 
 /// Insert a new active stream entry, ignoring conflicts.
 #[tracing::instrument(err, skip(pool))]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub(crate) async fn insert_active_stream(
     pool: &PgPool,
     stream_id: &StreamId,
@@ -22,6 +23,7 @@ pub(crate) async fn insert_active_stream(
 
 /// Delete an active stream entry.
 #[tracing::instrument(err, skip(pool))]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub(crate) async fn delete_active_stream(
     pool: &PgPool,
     stream_id: &StreamId,
@@ -35,6 +37,7 @@ pub(crate) async fn delete_active_stream(
 }
 
 /// Get all stream keys for a given entity.
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub(crate) async fn get_active_stream_keys(
     pool: &PgPool,
     entity_id: &str,

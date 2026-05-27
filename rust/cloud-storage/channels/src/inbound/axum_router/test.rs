@@ -1,10 +1,14 @@
 use super::*;
 use crate::domain::models::{
     ChannelAttachment, ChannelMessage, ChannelMessageFilters, ChannelParticipant,
-    MessagePageDirection, ParticipantRole,
+    DeleteMessageQuery, GetOrCreateChannelResponse, GetOrCreateDmRequest,
+    GetOrCreatePrivateRequest, MessagePageDirection, ParticipantRole, PatchChannelRequest,
+    PatchMessageRequest, PostMessageRequest, PostMessageResponse, PostReactionRequest,
+    PostTypingRequest, RemoveParticipantsRequest,
 };
 use crate::domain::ports::{
-    ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMessagesService,
+    ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMutationErr,
+    ChannelService,
 };
 use axum::{
     Extension, Router,
@@ -23,6 +27,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use model_user::UserContext;
 use models_pagination::{Base64Str, CreatedAt, Cursor, CursorVal, PaginateOn, Query};
+use std::sync::{Arc, Mutex};
 use tower::util::ServiceExt;
 
 // --- Access service implementations for tests ---
@@ -172,7 +177,7 @@ impl EntityAccessService for TestAccessService {
 
 struct MockService;
 
-impl ChannelMessagesService for MockService {
+impl ChannelService for MockService {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -240,7 +245,7 @@ impl ChannelMessagesService for MockService {
 
 struct ErrorService;
 
-impl ChannelMessagesService for ErrorService {
+impl ChannelService for ErrorService {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -290,7 +295,7 @@ impl ChannelMessagesService for ErrorService {
 
 struct ParticipantsService;
 
-impl ChannelMessagesService for ParticipantsService {
+impl ChannelService for ParticipantsService {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -371,6 +376,207 @@ impl ChannelMessagesService for ParticipantsService {
     }
 }
 
+#[derive(Clone, Default)]
+struct RecordingMutationService {
+    posts: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid, PostMessageRequest)>>>,
+}
+
+impl ChannelService for RecordingMutationService {
+    async fn get_channel_messages(
+        &self,
+        _channel_id: Uuid,
+        _query: models_pagination::Query<Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
+        _limit: u16,
+        _filters: &ChannelMessageFilters,
+        _notification_user_id: Option<MacroUserIdStr<'static>>,
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
+    }
+
+    async fn get_channel_attachments(
+        &self,
+        _channel_id: Uuid,
+        _query: models_pagination::Query<Uuid, CreatedAt, ()>,
+        _limit: u16,
+        _attachment_type: Option<ChannelAttachmentType>,
+    ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
+        Ok(Vec::<ChannelAttachment>::new()
+            .into_iter()
+            .paginate_on(50, CreatedAt)
+            .filter_on(())
+            .into_page())
+    }
+
+    async fn get_channel_participants(
+        &self,
+        _channel_id: Uuid,
+    ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn get_channel_messages_around(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _limit: u16,
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
+    }
+
+    async fn get_thread_replies(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn create_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _actor_org_id: Option<i64>,
+        _req: CreateChannelRequest,
+    ) -> Result<CreateChannelResponse, ChannelMutationErr> {
+        Ok(CreateChannelResponse {
+            id: Uuid::new_v4().to_string(),
+        })
+    }
+
+    async fn get_or_create_dm(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _req: GetOrCreateDmRequest,
+    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound("unused".to_string()))
+    }
+
+    async fn get_or_create_private(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _req: GetOrCreatePrivateRequest,
+    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound("unused".to_string()))
+    }
+
+    async fn patch_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _req: PatchChannelRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn delete_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn post_message(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: PostMessageRequest,
+    ) -> Result<PostMessageResponse, ChannelMutationErr> {
+        self.posts.lock().unwrap().push((actor, channel_id, req));
+        Ok(PostMessageResponse {
+            id: Uuid::new_v4().to_string(),
+            nonce: Some("n1".to_string()),
+        })
+    }
+
+    async fn patch_message(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _actor_role: ParticipantRole,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _req: PatchMessageRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn delete_message(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _actor_role: ParticipantRole,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _query: DeleteMessageQuery,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn post_reaction(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _req: PostReactionRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn post_typing(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _req: PostTypingRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn add_participants(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _req: AddParticipantsRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn remove_participants(
+        &self,
+        _channel_id: Uuid,
+        _req: RemoveParticipantsRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn join_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn leave_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+}
+
 fn user_extension() -> Extension<UserContext> {
     Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -410,6 +616,45 @@ fn not_found_router() -> Router {
         TestAccessService::not_found(),
     ))
     .layer(user_extension())
+}
+
+#[tokio::test]
+async fn post_message_route_uses_entity_access_and_mutation_service() {
+    let mutation_service = RecordingMutationService::default();
+    let posts = mutation_service.posts.clone();
+    let router = channels_router(ChannelsRouterState::new(
+        mutation_service,
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+    let channel_id = Uuid::new_v4();
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/{channel_id}/message"))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::json!({
+                "content": "hello",
+                "mentions": [],
+                "thread_id": null,
+                "attachments": [],
+                "nonce": "n1"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(json["nonce"], "n1");
+
+    let posts = posts.lock().unwrap();
+    assert_eq!(posts.len(), 1);
+    assert_eq!(posts[0].0.as_ref(), "macro|test@example.com");
+    assert_eq!(posts[0].1, channel_id);
+    assert_eq!(posts[0].2.content, "hello");
 }
 
 #[tokio::test]
@@ -594,7 +839,7 @@ async fn participants_returns_500_on_service_error() {
 
 struct NotFoundService;
 
-impl ChannelMessagesService for NotFoundService {
+impl ChannelService for NotFoundService {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -657,7 +902,7 @@ struct AroundHasItemsService {
     has_more_newer: bool,
 }
 
-impl ChannelMessagesService for AroundHasItemsService {
+impl ChannelService for AroundHasItemsService {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -857,7 +1102,7 @@ impl CapturingService {
     }
 }
 
-impl ChannelMessagesService for std::sync::Arc<CapturingService> {
+impl ChannelService for std::sync::Arc<CapturingService> {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,

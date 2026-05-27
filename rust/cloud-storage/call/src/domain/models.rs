@@ -53,6 +53,24 @@ pub struct CallTokenResponse {
     pub server_url: String,
 }
 
+/// Inputs required by the RTC adapter to produce native VoIP invite payloads.
+pub struct VoipPushPayloadRequest<'a> {
+    /// Users with resolved PushKit endpoints that should receive native VoIP invites.
+    pub recipients: &'a [MacroUserIdStr<'static>],
+    /// RTC room name the recipient will join.
+    pub room_name: &'a str,
+    /// Call record ID exposed to the client.
+    pub call_id: Uuid,
+    /// Channel ID associated with the call.
+    pub channel_id: &'a str,
+    /// Channel display name shown in the native incoming-call UI.
+    pub channel_name: &'a str,
+    /// Caller display name shown in the native incoming-call UI.
+    pub caller_name: &'a str,
+    /// RTC server URL the native client should connect to.
+    pub livekit_server_url: &'a str,
+}
+
 /// Response for the leave/end call operation.
 #[derive(Debug, serde::Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]

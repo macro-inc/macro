@@ -7,13 +7,13 @@ import { z } from 'zod';
 export type Model = (typeof Model)[keyof typeof Model];
 
 export const Model = {
+  'claude-opus-4-7': 'claude-opus-4-7',
   'claude-haiku-4-5': 'claude-haiku-4-5',
-  'claude-opus-4-6': 'claude-opus-4-6',
 } as const;
 
 export const AllModels: Model[] = [
+  'claude-opus-4-7',
   'claude-haiku-4-5',
-  'claude-opus-4-6',
 ] as const;
 const values: [Model, ...Model[]] = [
   Object.values(Model)[0],

@@ -1,4 +1,4 @@
-use ai::types::ChatMessageContent;
+use agent::types::ChatMessageContent;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

@@ -133,69 +133,71 @@ export function CallRecordingBody(props: {
   return (
     <>
       <CallRecordingSplitHeader record={record} />
-      <div
-        class="relative flex-1 min-h-0 overflow-y-auto scrollbar-hidden"
-        ref={setScrollRef}
-      >
-        <div class="mx-auto max-w-3xl min-w-0 px-6 pt-10 pb-16">
-          <div class="flex flex-col gap-10">
-            <header>
-              <h1 class="text-2xl font-semibold text-ink text-balance">
-                {callTitle()}
-              </h1>
-              <div class="mt-3 flex flex-wrap items-center gap-x-2 text-sm text-ink-muted">
-                <Show when={formattedDate()}>
-                  {(date) => <span>{date()}</span>}
-                </Show>
-                <Show when={formattedDuration()}>
-                  {(dur) => (
-                    <>
-                      <span class="text-ink-extra-muted">&middot;</span>
-                      <span>{dur()}</span>
-                    </>
-                  )}
-                </Show>
-                <Show when={record().isActive}>
-                  <span class="text-success font-medium">In progress</span>
-                </Show>
-              </div>
-            </header>
+      <div class="relative flex-1 min-h-0 overflow-hidden">
+        <div
+          class="h-full min-h-0 overflow-y-auto scrollbar-hidden"
+          ref={setScrollRef}
+        >
+          <div class="mx-auto max-w-3xl min-w-0 px-6 pt-10 pb-16">
+            <div class="flex flex-col gap-10">
+              <header>
+                <h1 class="text-2xl font-semibold text-ink text-balance">
+                  {callTitle()}
+                </h1>
+                <div class="mt-3 flex flex-wrap items-center gap-x-2 text-sm text-ink-muted">
+                  <Show when={formattedDate()}>
+                    {(date) => <span>{date()}</span>}
+                  </Show>
+                  <Show when={formattedDuration()}>
+                    {(dur) => (
+                      <>
+                        <span class="text-ink-extra-muted">&middot;</span>
+                        <span>{dur()}</span>
+                      </>
+                    )}
+                  </Show>
+                  <Show when={record().isActive}>
+                    <span class="text-success font-medium">In progress</span>
+                  </Show>
+                </div>
+              </header>
 
-            <CallRecordingParticipantsSection record={record} />
+              <CallRecordingParticipantsSection record={record} />
 
-            <CallRecordingSummarySection record={record} />
+              <CallRecordingSummarySection record={record} />
 
-            <Show when={record().recordingUrl}>
-              {(url) => (
+              <Show when={record().recordingUrl}>
+                {(url) => (
+                  <section class="flex flex-col gap-3">
+                    <h3 class="text-sm font-semibold text-ink">Recording</h3>
+                    <div class="overflow-hidden rounded border border-edge-muted/50">
+                      <CallRecordingVideo
+                        url={url()}
+                        onTimeUpdate={handleTimeUpdate}
+                        setVideoRef={setVideoRef}
+                      />
+                    </div>
+                  </section>
+                )}
+              </Show>
+
+              <Show when={hasTranscripts()}>
                 <section class="flex flex-col gap-3">
-                  <h3 class="text-sm font-semibold text-ink">Recording</h3>
-                  <div class="overflow-hidden rounded border border-edge-muted/50">
-                    <CallRecordingVideo
-                      url={url()}
-                      onTimeUpdate={handleTimeUpdate}
-                      setVideoRef={setVideoRef}
+                  <h3 class="text-sm font-semibold text-ink">Transcript</h3>
+                  <div class="flex flex-col max-h-[min(600px,60vh)] overflow-hidden rounded border border-edge-muted/50">
+                    <CallTranscript
+                      transcript={record().transcript}
+                      channelId={record().channelId}
+                      timelineStartMs={timelineStartMs()}
+                      activeSequenceNum={activeSequenceNum()}
+                      videoSeekGeneration={videoSeekGeneration()}
+                      onSeekToSeconds={seekToSeconds}
+                      hideHeader
                     />
                   </div>
                 </section>
-              )}
-            </Show>
-
-            <Show when={hasTranscripts()}>
-              <section class="flex flex-col gap-3">
-                <h3 class="text-sm font-semibold text-ink">Transcript</h3>
-                <div class="flex flex-col max-h-[min(600px,60vh)] overflow-hidden rounded border border-edge-muted/50">
-                  <CallTranscript
-                    transcript={record().transcript}
-                    channelId={record().channelId}
-                    timelineStartMs={timelineStartMs()}
-                    activeSequenceNum={activeSequenceNum()}
-                    videoSeekGeneration={videoSeekGeneration()}
-                    onSeekToSeconds={seekToSeconds}
-                    hideHeader
-                  />
-                </div>
-              </section>
-            </Show>
+              </Show>
+            </div>
           </div>
         </div>
         <CustomScrollbar scrollContainer={scrollRef} />

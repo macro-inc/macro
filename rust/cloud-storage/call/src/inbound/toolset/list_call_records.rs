@@ -6,7 +6,7 @@ use crate::domain::{
     models::GetCallRecordsRequest,
     ports::{CallRecordQueryService, CallService},
 };
-use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use entity_access::domain::ports::EntityAccessService;

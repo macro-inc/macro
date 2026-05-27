@@ -150,6 +150,7 @@ async fn test_get_thread_label_messages_wrong_link(pool: Pool<Postgres>) -> anyh
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_insert_message_labels_batch(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool.clone());
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
@@ -177,6 +178,7 @@ async fn test_insert_message_labels_batch(pool: Pool<Postgres>) -> anyhow::Resul
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_insert_message_labels_batch_idempotent(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool.clone());
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
@@ -222,6 +224,7 @@ async fn test_insert_message_labels_batch_empty(pool: Pool<Postgres>) -> anyhow:
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_delete_message_labels_batch(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool.clone());
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
@@ -281,6 +284,7 @@ async fn test_delete_message_labels_batch_empty(pool: Pool<Postgres>) -> anyhow:
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_update_message_read_status_batch_mark_read(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
@@ -310,6 +314,7 @@ async fn test_update_message_read_status_batch_mark_read(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_update_message_read_status_batch_wrong_link(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
@@ -350,6 +355,7 @@ async fn test_update_message_read_status_batch_empty(pool: Pool<Postgres>) -> an
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_update_message_starred_status_batch_star(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool.clone());
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
@@ -374,6 +380,7 @@ async fn test_update_message_starred_status_batch_star(pool: Pool<Postgres>) -> 
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_update_message_starred_status_batch_unstar(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
@@ -401,6 +408,7 @@ async fn test_update_message_starred_status_batch_unstar(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_update_message_starred_status_batch_wrong_link(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {

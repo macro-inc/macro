@@ -13,6 +13,7 @@ use uuid::Uuid;
 use crate::config::Config;
 
 /// Fetches all message IDs from the database.
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn fetch_all_message_ids(db: &PgPool) -> anyhow::Result<Vec<Uuid>> {
     let rows: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM public.email_messages")
         .fetch_all(db)
@@ -84,6 +85,7 @@ pub struct MessageBody {
 }
 
 /// Fetches message bodies in batch for the given message IDs.
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn fetch_message_bodies_batch(
     db: &PgPool,
     message_ids: &[Uuid],

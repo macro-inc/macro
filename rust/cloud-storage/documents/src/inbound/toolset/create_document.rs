@@ -6,7 +6,7 @@ use crate::domain::create::{NewDocumentMetadata, NewPlainTextDocument};
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
 use crate::domain::ports::create::DocumentCreationService;
-use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use anyhow::Context;
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;

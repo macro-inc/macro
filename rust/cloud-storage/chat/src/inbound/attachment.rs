@@ -97,9 +97,9 @@ fn format_message(msg: &ChatMessageWithAttachments) -> Option<AttachmentPart<'st
         return None;
     }
     let role = match msg.role {
-        ai::types::Role::User => "user",
-        ai::types::Role::Assistant => "assistant",
-        ai::types::Role::System => "system",
+        agent::types::Role::User => "user",
+        agent::types::Role::Assistant => "assistant",
+        agent::types::Role::System => "system",
     };
     let formatted = XmlTag {
         name: "message",

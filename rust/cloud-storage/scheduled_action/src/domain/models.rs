@@ -1,4 +1,4 @@
-use ai::types::Model;
+use agent::AgentModel;
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
@@ -57,7 +57,7 @@ pub enum ActionKind {
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct AgentTask {
-    pub model: Model,
+    pub model: AgentModel,
     pub prompt: String,
     pub user_prompt: String,
 }

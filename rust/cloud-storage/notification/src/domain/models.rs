@@ -35,6 +35,15 @@ pub struct NotificationIdAndCollapseKey {
     pub apns_collapse_key: String,
 }
 
+/// Recipient/endpoints pair resolved before LiveKit token minting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VoipPushTarget {
+    /// Recipient whose VoIP-capable endpoints were resolved.
+    pub recipient_id: MacroUserIdStr<'static>,
+    /// SNS endpoints registered for APNS_VOIP delivery.
+    pub endpoint_arns: Vec<String>,
+}
+
 /// A compact patch describing user notification status fields that changed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationStatusPatch {

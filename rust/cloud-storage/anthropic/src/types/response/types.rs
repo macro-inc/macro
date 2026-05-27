@@ -1,4 +1,9 @@
 use crate::types::request::Role;
+use crate::types::response::code_execution::{
+    BashCodeExecutionResponse, TextEditorCodeExecutionResponse,
+};
+use crate::types::response::web_fetch::WebFetchResponse;
+use crate::types::response::web_search::WebSearchResponse;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -8,8 +13,12 @@ pub enum ResponseContentKind {
     Thinking(ThinkingResponse),
     ToolUse(ToolUse),
     ServerToolUse(ServerToolUse),
-    // there are many more options that could be implemented here
-    // https://docs.claude.com/en/api/messages#responsewebfetchtoolresultblock
+    WebSearchToolResult(WebSearchResponse),
+    WebFetchToolResult(WebFetchResponse),
+    BashCodeExecutionToolResult(BashCodeExecutionResponse),
+    TextEditorCodeExecutionToolResult(TextEditorCodeExecutionResponse),
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -46,6 +55,7 @@ pub struct RedactedThinking {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct TextResponse {
+    #[serde(default)]
     citations: Vec<serde_json::Value>,
     text: String,
 }

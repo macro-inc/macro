@@ -3,6 +3,7 @@
 //! Wraps the `livekit-api` crate to provide room management, token generation,
 //! egress recording, and webhook validation.
 
+use futures::future;
 use livekit_api::access_token::{AccessToken, TokenVerifier, VideoGrants};
 use livekit_api::services::agent_dispatch::AgentDispatchClient;
 use livekit_api::services::egress::{EgressClient, EgressOutput, RoomCompositeOptions};
@@ -13,9 +14,12 @@ use livekit_protocol::{
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use notification::domain::models::apple::VoipPushPayload;
 
-use crate::domain::models::{CallError, CallWebhookEvent, EgressS3Config};
+use crate::domain::models::{CallError, CallWebhookEvent, EgressS3Config, VoipPushPayloadRequest};
 use crate::domain::ports::CallRtcClient;
+
+const VOIP_TOKEN_MINT_CONCURRENCY: usize = 16;
 
 /// LiveKit implementation of [`CallRtcClient`].
 pub struct LivekitRtcClient {
@@ -96,8 +100,11 @@ impl CallRtcClient for LivekitRtcClient {
         room_name: &str,
         participant_identity: MacroUserIdStr<'_>,
     ) -> anyhow::Result<String> {
+        // Pinned so VoIP-delivered tokens survive push delay and lock-screen ringing.
+        // TODO(call-phase-2): add token refresh before supporting calls over 6h.
         let token = AccessToken::with_api_key(&self.api_key, &self.api_secret)
             .with_identity(participant_identity.as_ref())
+            .with_ttl(std::time::Duration::from_secs(6 * 3600))
             .with_grants(VideoGrants {
                 room_join: true,
                 room: room_name.to_string(),
@@ -108,6 +115,61 @@ impl CallRtcClient for LivekitRtcClient {
             })
             .to_jwt()?;
         Ok(token)
+    }
+
+    #[tracing::instrument(
+        skip(self, request),
+        fields(
+            recipient_count = request.recipients.len(),
+            room_name = request.room_name,
+            call_id = %request.call_id,
+            channel_id = request.channel_id,
+        )
+    )]
+    async fn build_voip_push_payloads<'a>(
+        &self,
+        request: VoipPushPayloadRequest<'a>,
+    ) -> Vec<(MacroUserIdStr<'static>, VoipPushPayload)> {
+        let room_name = request.room_name;
+        let call_id = request.call_id;
+        let channel_id = request.channel_id;
+        let channel_name = request.channel_name;
+        let caller_name = request.caller_name;
+        let livekit_server_url = request.livekit_server_url;
+
+        let mut payloads = Vec::new();
+        for batch in request.recipients.chunks(VOIP_TOKEN_MINT_CONCURRENCY) {
+            let results = future::join_all(batch.iter().map(|recipient_id| {
+                let recipient_id = recipient_id.clone();
+                async move {
+                    match self.generate_token(room_name, recipient_id.clone()).await {
+                        Ok(livekit_token) => Some((
+                            recipient_id,
+                            VoipPushPayload {
+                                aps: Default::default(),
+                                call_id: call_id.to_string(),
+                                channel_id: channel_id.to_string(),
+                                channel_name: channel_name.to_string(),
+                                caller_name: caller_name.to_string(),
+                                livekit_server_url: Some(livekit_server_url.to_string()),
+                                livekit_token: Some(livekit_token),
+                            },
+                        )),
+                        Err(e) => {
+                            tracing::error!(
+                                error=?e,
+                                "failed to mint LiveKit token for VoIP push"
+                            );
+                            None
+                        }
+                    }
+                }
+            }))
+            .await;
+            payloads.extend(results.into_iter().flatten());
+        }
+
+        payloads
     }
 
     #[tracing::instrument(err, skip(self))]

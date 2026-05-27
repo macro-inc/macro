@@ -879,6 +879,7 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn get_transcript_voice_id_for_speaker(
         &self,
         call_id: &Uuid,
@@ -907,6 +908,7 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn get_call_record_by_call_id(
         &self,
         call_id: &Uuid,

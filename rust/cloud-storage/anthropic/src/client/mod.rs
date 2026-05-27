@@ -65,6 +65,41 @@ impl Client {
 }
 
 impl Client {
+    pub(crate) async fn post<I, O>(&self, path: &str, request: I) -> Result<O, AnthropicError>
+    where
+        I: Serialize + std::fmt::Debug,
+        O: DeserializeOwned,
+    {
+        let response = self
+            .http_client
+            .post(format!("{}{}", self.config.api_base, path))
+            .headers(self.config.headers.clone())
+            .json(&request)
+            .send()
+            .await?;
+
+        let status = response.status();
+        let body = response.text().await.map_err(AnthropicError::Reqwest)?;
+
+        if !status.is_success() {
+            return match serde_json::from_str::<ApiError>(&body) {
+                Ok(api_error) => Err(AnthropicError::ApiError {
+                    api_error,
+                    status_code: status,
+                }),
+                Err(e) => {
+                    tracing::error!(%body, "failed to parse API error response");
+                    Err(AnthropicError::JsonDeserialize(e))
+                }
+            };
+        }
+
+        serde_json::from_str::<O>(&body).map_err(|e| {
+            tracing::error!(%body, "failed to deserialize response");
+            AnthropicError::JsonDeserialize(e)
+        })
+    }
+
     pub(crate) async fn post_stream<I, O>(
         &self,
         path: &str,

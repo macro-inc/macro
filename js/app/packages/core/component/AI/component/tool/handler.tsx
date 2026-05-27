@@ -54,7 +54,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ListTeamMembers: listTeamMembersHandler,
   MarkNotificationsDone: markNotificationsDoneHandler,
   MarkNotificationsSeen: markNotificationsSeenHandler,
-  bash_code_execution: bashCodeExecutionHandler,
+  BashCodeExecution: bashCodeExecutionHandler,
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
   GetThread: getThreadHandler,
@@ -70,10 +70,10 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   SendEmail: sendEmailHandler,
   SetEntityProperty: setEntityPropertyHandler,
   Subagent: subagentHandler,
-  text_editor_code_execution: textEditorCodeExecutionHandler,
+  TextEditorCodeExecution: textEditorCodeExecutionHandler,
   UpdateThreadLabels: updateThreadLabelsHandler,
-  web_fetch: webFetchHandler,
-  web_search: webSearchHandler,
+  WebFetch: webFetchHandler,
+  WebSearch: webSearchHandler,
 };
 
 type ToolProps = {

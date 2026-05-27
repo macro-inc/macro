@@ -7,7 +7,7 @@ mod set_entity_property;
 mod test;
 
 use crate::domain::service::PropertiesService;
-use ai::tool::AsyncToolCollection;
+use ai_toolset::AsyncToolCollection;
 use std::sync::Arc;
 
 pub use get_entity_properties::{GetEntityProperties, GetEntityPropertiesResponse};

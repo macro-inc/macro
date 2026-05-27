@@ -185,6 +185,8 @@ export type ReadThreadReadContent =
  * A single search result from web search
  */
 export type SearchResult = {
+  encrypted_content?: string | null;
+  page_age?: string | null;
   title: string;
   type: 'web_search_result';
   url: string;
@@ -291,7 +293,20 @@ export type WebFetchErrorCode =
   | 'unsupported_content_type'
   | 'max_uses_exceeded'
   | 'unavailable';
+/**
+ * Content of a web search response — either search results or an error.
+ */
+export type WebSearchContent = SearchResult[] | WebSearchToolError;
 
+/**
+ * Execute a bash command in a sandboxed environment using Claude's built-in code execution tool.
+ */
+export interface BashCodeExecution {
+  /**
+   * The bash command or instruction to execute.
+   */
+  input: string;
+}
 /**
  * Successful bash code execution result
  */
@@ -334,15 +349,6 @@ export interface BashCodeExecutionToolError {
 export interface BashCodeExecutionResponse {
   content: BashCodeExecutionContent;
   tool_use_id: string;
-}
-/**
- * The expected shape of the streamed JSON following a `server_tool_use` for bash_code_execution
- */
-export interface BashCodeExecutionToolCall {
-  /**
-   * The bash command to execute
-   */
-  command: string;
 }
 export interface CallRecordMetadata {
   attended: boolean;
@@ -2338,6 +2344,15 @@ export interface SubagentResponse {
   result: string;
 }
 /**
+ * Use a text editor in a sandboxed environment using Claude's built-in code execution tool.
+ */
+export interface TextEditorCodeExecution {
+  /**
+   * The text editing instruction.
+   */
+  input: string;
+}
+/**
  * Result from text editor operations (view, create, str_replace)
  * Fields are optional as different operations return different fields
  */
@@ -2401,31 +2416,6 @@ export interface TextEditorCodeExecutionResponse {
   tool_use_id: string;
 }
 /**
- * The expected shape of the streamed JSON following a `server_tool_use` for text_editor_code_execution
- */
-export interface TextEditorCodeExecutionToolCall {
-  /**
-   * The command to execute: "view", "create", or "str_replace"
-   */
-  command: string;
-  /**
-   * File content for create operations
-   */
-  file_text?: string | null;
-  /**
-   * Replacement string for str_replace operations
-   */
-  new_str?: string | null;
-  /**
-   * String to find for str_replace operations
-   */
-  old_str?: string | null;
-  /**
-   * Path to the file
-   */
-  path: string;
-}
-/**
  * Add or remove a single label from every message in a Gmail thread. In Gmail, nearly all inbox operations are just label add/remove operations, so this tool is the primitive for archiving, marking read/unread, starring, trashing, marking important/spam, and applying or removing custom labels.
  *
  * Workflow: call ListLabels first to discover the UUID `id` for the label name you need, then call this tool with that `label_id` plus the thread's `thread_id` and `add=true` (apply) or `add=false` (remove). Each call modifies one label — to do multiple changes on the same thread (e.g. archive AND mark read), call this tool once per label.
@@ -2475,6 +2465,15 @@ export interface UpdateThreadLabelsResponse {
   summary: string;
 }
 /**
+ * Fetch the contents of a web page using Claude's built-in web fetch tool.
+ */
+export interface WebFetch {
+  /**
+   * The URL to fetch or an instruction describing what to fetch.
+   */
+  input: string;
+}
+/**
  * Successful web fetch result containing the fetched content
  */
 export interface WebFetchResult {
@@ -2516,25 +2515,25 @@ export interface WebFetchResponse {
   tool_use_id: string;
 }
 /**
- * The expected shape of the streamed JSON following a `server_tool_use` in content_block_start event
+ * Search the web for information using Claude's built-in web search tool.
  */
-export interface WebFetchToolCall {
-  url: string;
+export interface WebSearch {
+  /**
+   * The search query or instruction.
+   */
+  input: string;
+}
+/**
+ * Error returned when web search fails
+ */
+export interface WebSearchToolError {
+  error_code: string;
+  type: string;
 }
 /**
  * Web search response content returned by Claude when using the web_search tool
  */
 export interface WebSearchResponse {
-  /**
-   * The search query that was executed
-   * Array of search results
-   */
-  content: SearchResult[];
+  content: WebSearchContent;
   tool_use_id: string;
-}
-/**
- * This is the expected shape of the streamed json following a `server_tool_use` in content_block_start event
- */
-export interface WebSearchToolCall {
-  query: string;
 }

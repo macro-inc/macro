@@ -575,6 +575,7 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn mark_document_uploaded(&self, document_id: &str) -> Result<(), Self::Err> {
         let result = sqlx::query(
             r#"
@@ -598,6 +599,7 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn get_persisted_document_content(
         &self,
         document_id: &str,
@@ -624,6 +626,7 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self, content))]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn set_document_content(
         &self,
         document_id: &str,

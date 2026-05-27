@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 ai_tools = [
-  "dep:ai",
+  "dep:ai_toolset",
   "dep:async-trait",
   "dep:entity_access",
   "dep:schemars",
@@ -23,20 +23,48 @@ inbound = [
   "models_pagination/axum",
   "ports",
 ]
-outbound = ["ports"]
+outbound = [
+  "ports",
+  "dep:connection_gateway_client",
+  "dep:contacts",
+  "dep:entity_access",
+  "entity_access/ports",
+  "dep:entity_access_db_utils",
+  "dep:macro_uuid",
+  "dep:model-entity",
+  "dep:model_notifications",
+  "dep:models_permissions",
+  "dep:notification_hex",
+  "dep:serde_json",
+  "dep:share_permission_db_utils",
+  "dep:sqs_client",
+  "dep:sqlx",
+  "macro_user_id/sqlx",
+]
 ports = ["dep:tokio"]
 
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
+connection_gateway_client = { path = "../connection_gateway_client", optional = true }
+contacts = { path = "../contacts", default-features = false, features = ["outbound"], optional = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid", optional = true }
+model-entity = { path = "../model-entity", optional = true }
+model_notifications = { path = "../model_notifications", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
+models_permissions = { path = "../models_permissions", optional = true }
+notification_hex = { path = "../notification", package = "notification", optional = true }
 serde = { workspace = true }
-sqlx = { workspace = true }
+serde_json = { workspace = true, optional = true }
+share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
+sqlx = { workspace = true, optional = true }
+sqs_client = { path = "../sqs_client", default-features = false, features = ["search"], optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"], optional = true }
 tracing = { workspace = true }
@@ -44,7 +72,7 @@ utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 
 # AI Tool dependencies
-ai = { path = "../ai", optional = true }
+ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 

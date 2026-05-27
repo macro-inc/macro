@@ -6,9 +6,15 @@
  */
 import type { AssistantMessagePartOneOfOnezeroType } from './assistantMessagePartOneOfOnezeroType';
 
+/**
+ * An error response from a tool call.
+ */
 export type AssistantMessagePartOneOfOnezero = {
+  /** Human-readable error description. */
   description: string;
+  /** Corresponding call id. */
   id: string;
+  /** Tool name. */
   name: string;
   type: AssistantMessagePartOneOfOnezeroType;
 };

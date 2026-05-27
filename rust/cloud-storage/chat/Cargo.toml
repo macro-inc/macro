@@ -23,7 +23,7 @@ ports = []
 
 [dependencies]
 # Domain (always included)
-ai = { path = "../ai" }
+agent = { path = "../agent" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
 attachment = { path = "../attachment" }

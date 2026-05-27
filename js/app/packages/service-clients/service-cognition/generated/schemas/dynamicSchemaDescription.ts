@@ -5,4 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Optional description of what the schema represents.
+ */
 export type DynamicSchemaDescription = string | null;

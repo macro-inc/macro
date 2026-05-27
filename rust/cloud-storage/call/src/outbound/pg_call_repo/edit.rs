@@ -224,6 +224,7 @@ pub(super) async fn set_custom_speakers(
 }
 
 /// Update the SharePermission row (isPublic, publicAccessLevel).
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn update_share_permission_row(
     transaction: &mut Transaction<'_, Postgres>,
     share_permission_id: &str,

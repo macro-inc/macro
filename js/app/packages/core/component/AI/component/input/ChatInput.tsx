@@ -167,9 +167,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       disabled={!canSendMessage()}
       hidden={isMobile() && isEmptyInput()}
       onClick={() =>
-        sendMessage(
-          isTouchDevice() ? { modelOverride: 'claude-opus-4-6' } : undefined
-        )
+        sendMessage(isTouchDevice() ? { modelOverride: 'smart' } : undefined)
       }
     />
   );

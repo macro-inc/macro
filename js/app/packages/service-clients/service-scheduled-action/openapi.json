@@ -415,12 +415,17 @@
         "type": "string",
         "enum": ["Agent"]
       },
+      "AgentModel": {
+        "type": "string",
+        "description": "Model to use for completions.\n\nUnrecognized model strings (including retired Google/OpenAI variants\nfrom older data) deserialize to `Retired` via the manual\n`Deserialize` impl.",
+        "enum": ["smart", "fast", "opus4_7", "sonnet4_6", "haiku4_5", "retired"]
+      },
       "AgentTask": {
         "type": "object",
         "required": ["model", "prompt", "user_prompt"],
         "properties": {
           "model": {
-            "$ref": "#/components/schemas/Model"
+            "$ref": "#/components/schemas/AgentModel"
           },
           "prompt": {
             "type": "string"
@@ -471,30 +476,6 @@
             "type": ["string", "null"]
           }
         }
-      },
-      "Model": {
-        "type": "string",
-        "enum": [
-          "gemini-2.5-pro",
-          "gemini-2.0-flash-001",
-          "gemini-2.0-flash-lite-001",
-          "gemini-pro-1.5",
-          "gpt-5",
-          "gpt-4.1",
-          "gpt-4o",
-          "gpt-4o-mini",
-          "o1",
-          "gpt-4o-search-preview",
-          "o3",
-          "claude-3-5-sonnet",
-          "claude-3-7-sonnet",
-          "claude-sonnet-4",
-          "claude-sonnet-4-5",
-          "claude-sonnet-4-6",
-          "claude-haiku-4-5",
-          "claude-opus-4-5",
-          "claude-opus-4-6"
-        ]
       },
       "Schedule": {
         "type": "string"

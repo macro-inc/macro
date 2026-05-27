@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [features]
 schema = ["dep:utoipa"]
+sqlx = ["dep:sqlx"]
 
 [dependencies]
 cowlike = { path = "../cowlike" }
@@ -14,4 +15,5 @@ nom = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+sqlx = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }

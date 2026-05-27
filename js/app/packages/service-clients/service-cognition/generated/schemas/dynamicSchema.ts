@@ -6,8 +6,14 @@
  */
 import type { DynamicSchemaDescription } from './dynamicSchemaDescription';
 
+/**
+ * Schema definition for dynamic structured completions.
+ */
 export interface DynamicSchema {
+  /** Optional description of what the schema represents. */
   description?: DynamicSchemaDescription;
+  /** Name of the schema. */
   name: string;
+  /** The JSON schema to validate against. */
   schema: unknown;
 }

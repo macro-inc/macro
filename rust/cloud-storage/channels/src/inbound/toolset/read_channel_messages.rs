@@ -6,8 +6,8 @@ use super::types::{
     clamp_max_chars, content_truncation_omissions,
 };
 use crate::domain::models::{ChannelMessageFilters, MessagePageDirection};
-use crate::domain::ports::{ChannelMessagesQueryResult, ChannelMessagesService};
-use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use crate::domain::ports::{ChannelMessagesQueryResult, ChannelService};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use entity_access::domain::ports::EntityAccessService;
@@ -163,7 +163,7 @@ pub struct ReadChannelMessagesResponse {
 #[async_trait]
 impl<Svc, AccessSvc> AsyncTool<ChannelToolContext<Svc, AccessSvc>> for ReadChannelMessages
 where
-    Svc: ChannelMessagesService,
+    Svc: ChannelService,
     AccessSvc: EntityAccessService,
 {
     type Output = ReadChannelMessagesResponse;

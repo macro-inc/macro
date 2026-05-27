@@ -6,9 +6,15 @@
  */
 import type { AssistantMessagePartOneOfThreeType } from './assistantMessagePartOneOfThreeType';
 
+/**
+ * A native tool call issued by the model.
+ */
 export type AssistantMessagePartOneOfThree = {
+  /** Provider-assigned call id. */
   id: string;
+  /** Tool arguments as JSON. */
   json: unknown;
+  /** Tool name. */
   name: string;
   type: AssistantMessagePartOneOfThreeType;
 };

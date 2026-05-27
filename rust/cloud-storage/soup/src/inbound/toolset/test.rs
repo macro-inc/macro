@@ -1,8 +1,8 @@
 use super::list_entities::build_summary;
 #[allow(unused_imports)]
 use super::*;
-use ai::generate_tool_input_schema;
-use ai::tool::types::tool_object::validate_tool_schema;
+use ai_toolset::generate_tool_input_schema;
+use ai_toolset::tool_object::validate_tool_schema;
 use non_empty::IsEmpty;
 use uuid::Uuid;
 
@@ -137,7 +137,7 @@ fn print_input_schema() {
 #[test]
 #[ignore = "prints the output schema"]
 fn print_output_schema() {
-    let generator = ai::tool::minimized_output_schema_generator();
+    let generator = ai_toolset::tool_object::minimized_output_schema_generator();
     let schema = generator.into_root_schema_for::<ListEntitiesResponse>();
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }

@@ -1,13 +1,25 @@
 use super::*;
 use crate::domain::{
+    events::ChannelEvent,
     models::{
-        ChannelMessageFilters, CountedReaction, MessageAttachment, MessagePageDirection,
-        ThreadData, ThreadReplyRow, TopLevelMessageRow,
+        ChannelAttachment, ChannelAttachmentType, ChannelInfo, ChannelMessageFilters,
+        ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction, MessageAttachment,
+        MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
+        ParticipantRole, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
+        PostReactionRequest, ReactionAction, ReferencedShareItem, ReferencedShareItemType,
+        ResolvedChannelMessage, SimpleMention, ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
-    ports::{MockChannelMessagesRepo, TopLevelMessagesQueryResult},
+    ports::{
+        ChannelEventDispatcher, ChannelReferenceSharePermissions, ChannelRepo, MockChannelRepo,
+        TopLevelMessagesQueryResult,
+    },
 };
 use chrono::Utc;
-use std::collections::HashMap;
+use macro_user_id::user_id::MacroUserIdStr;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 fn make_row(id: Uuid, minutes_ago: i64) -> TopLevelMessageRow {
     let now = Utc::now();
@@ -23,8 +35,8 @@ fn make_row(id: Uuid, minutes_ago: i64) -> TopLevelMessageRow {
     }
 }
 
-fn empty_repo() -> MockChannelMessagesRepo {
-    let mut repo = MockChannelMessagesRepo::new();
+fn empty_repo() -> MockChannelRepo {
+    let mut repo = MockChannelRepo::new();
     repo.expect_get_top_level_messages()
         .returning(|_, _, _, _, _, _| {
             Box::pin(async {
@@ -55,7 +67,7 @@ fn empty_repo() -> MockChannelMessagesRepo {
 
 #[tokio::test]
 async fn returns_empty_page_for_no_messages() {
-    let svc = ChannelMessagesServiceImpl::new(empty_repo());
+    let svc = ChannelServiceImpl::new(empty_repo());
     let result = svc
         .get_channel_messages(
             Uuid::nil(),
@@ -90,7 +102,7 @@ async fn returns_messages_with_thread_info() {
         edited_at: None,
     };
 
-    let mut repo = MockChannelMessagesRepo::new();
+    let mut repo = MockChannelRepo::new();
 
     let row_clone = row.clone();
     repo.expect_get_top_level_messages()
@@ -144,7 +156,7 @@ async fn returns_messages_with_thread_info() {
         Box::pin(async move { Ok(map) })
     });
 
-    let svc = ChannelMessagesServiceImpl::new(repo);
+    let svc = ChannelServiceImpl::new(repo);
     let result = svc
         .get_channel_messages(
             Uuid::nil(),
@@ -167,9 +179,600 @@ async fn returns_messages_with_thread_info() {
     assert!(page.next_cursor.is_none());
 }
 
+#[derive(Clone)]
+struct FakeMutationRepo {
+    state: Arc<Mutex<FakeMutationRepoState>>,
+}
+
+struct FakeMutationRepoState {
+    channel_id: Uuid,
+    message: MutatedMessage,
+    owner: String,
+    participants: Vec<ChannelParticipant>,
+    thread_participants: Vec<MacroUserIdStr<'static>>,
+    attachments: Vec<MutatedAttachment>,
+    patched_content: Option<String>,
+    activity_upserts: usize,
+}
+
+impl FakeMutationRepo {
+    fn new(channel_id: Uuid, sender: &str) -> Self {
+        let now = Utc::now();
+        let message = MutatedMessage {
+            id: Uuid::new_v4(),
+            channel_id,
+            thread_id: None,
+            sender_id: MacroUserIdStr::try_from(sender.to_string()).unwrap(),
+            content: "hello".to_string(),
+            created_at: now,
+            updated_at: now,
+            edited_at: None,
+            deleted_at: None,
+        };
+        Self {
+            state: Arc::new(Mutex::new(FakeMutationRepoState {
+                channel_id,
+                owner: sender.to_string(),
+                message,
+                participants: vec![
+                    ChannelParticipant {
+                        channel_id,
+                        user_id: sender.to_string(),
+                        role: ParticipantRole::Owner,
+                        joined_at: now,
+                        left_at: None,
+                    },
+                    ChannelParticipant {
+                        channel_id,
+                        user_id: "macro|recipient@test.com".to_string(),
+                        role: ParticipantRole::Member,
+                        joined_at: now,
+                        left_at: None,
+                    },
+                ],
+                thread_participants: vec![
+                    MacroUserIdStr::try_from("macro|thread@test.com".to_string()).unwrap(),
+                ],
+                attachments: vec![],
+                patched_content: None,
+                activity_upserts: 0,
+            })),
+        }
+    }
+}
+
+impl ChannelRepo for FakeMutationRepo {
+    type Err = anyhow::Error;
+
+    async fn get_top_level_messages(
+        &self,
+        _channel_id: Uuid,
+        _query: &Query<Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
+        _limit: u16,
+        _filters: &ChannelMessageFilters,
+        _notification_user_id: Option<MacroUserIdStr<'static>>,
+    ) -> Result<TopLevelMessagesQueryResult, Self::Err> {
+        Ok(TopLevelMessagesQueryResult {
+            rows: vec![],
+            has_more_newer: false,
+        })
+    }
+
+    async fn get_thread_data(
+        &self,
+        _parent_ids: &[Uuid],
+        _preview_count: u16,
+    ) -> Result<HashMap<Uuid, ThreadData>, Self::Err> {
+        Ok(HashMap::new())
+    }
+
+    async fn get_thread_replies(&self, _parent_id: Uuid) -> Result<Vec<ThreadReplyRow>, Self::Err> {
+        Ok(vec![])
+    }
+
+    async fn get_reactions_batch(
+        &self,
+        _message_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<CountedReaction>>, Self::Err> {
+        Ok(HashMap::new())
+    }
+
+    async fn get_attachments_batch(
+        &self,
+        _message_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<MessageAttachment>>, Self::Err> {
+        Ok(HashMap::new())
+    }
+
+    async fn get_channel_attachments(
+        &self,
+        _channel_id: Uuid,
+        _query: &Query<Uuid, CreatedAt, ()>,
+        _limit: u16,
+        _attachment_type: Option<ChannelAttachmentType>,
+    ) -> Result<Vec<ChannelAttachment>, Self::Err> {
+        Ok(vec![])
+    }
+
+    async fn get_channel_participants(
+        &self,
+        _channel_id: Uuid,
+    ) -> Result<Vec<ChannelParticipant>, Self::Err> {
+        Ok(self.state.lock().unwrap().participants.clone())
+    }
+
+    async fn resolve_top_level_parent(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<Option<TopLevelMessageRow>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn resolve_message(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<Option<ResolvedChannelMessage>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn get_top_level_messages_around(
+        &self,
+        _channel_id: Uuid,
+        _anchor_created_at: chrono::DateTime<chrono::Utc>,
+        _anchor_id: Uuid,
+        _limit: u16,
+    ) -> Result<(Vec<TopLevelMessageRow>, Vec<TopLevelMessageRow>), Self::Err> {
+        Ok((vec![], vec![]))
+    }
+
+    async fn get_channel_info(&self, channel_id: Uuid) -> Result<ChannelInfo, Self::Err> {
+        Ok(ChannelInfo {
+            id: channel_id,
+            name: Some("Project".to_string()),
+            channel_type: ChannelType::Private,
+            org_id: None,
+            team_id: None,
+        })
+    }
+
+    async fn get_channel_metadata(
+        &self,
+        _channel_id: Uuid,
+        _viewer_user_id: MacroUserIdStr<'static>,
+    ) -> Result<ChannelMetadata, Self::Err> {
+        Ok(ChannelMetadata {
+            channel_type: ChannelType::Private,
+            channel_name: "Project".to_string(),
+        })
+    }
+
+    async fn user_has_team(&self, _user_id: String, _team_id: Uuid) -> Result<bool, Self::Err> {
+        Ok(true)
+    }
+
+    async fn create_channel(
+        &self,
+        _owner_id: String,
+        _org_id: Option<i64>,
+        _req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<Uuid, Self::Err> {
+        Ok(self.state.lock().unwrap().channel_id)
+    }
+
+    async fn maybe_get_dm(
+        &self,
+        _user_id: String,
+        _recipient_id: String,
+    ) -> Result<Option<Uuid>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn maybe_get_private_channel(
+        &self,
+        _participants: Vec<String>,
+    ) -> Result<Option<Uuid>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn patch_channel(
+        &self,
+        _channel_id: Uuid,
+        _user_id: String,
+        _req: PatchChannelRequest,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn delete_channel(&self, _channel_id: Uuid, _user_id: String) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn add_participant(
+        &self,
+        _channel_id: Uuid,
+        _user_id: String,
+        _role: ParticipantRole,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn remove_participant(
+        &self,
+        _channel_id: Uuid,
+        _user_id: String,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn create_message(
+        &self,
+        channel_id: Uuid,
+        sender_id: String,
+        content: String,
+        thread_id: Option<Uuid>,
+    ) -> Result<MutatedMessage, Self::Err> {
+        let mut state = self.state.lock().unwrap();
+        state.message.channel_id = channel_id;
+        state.message.sender_id = MacroUserIdStr::try_from(sender_id).unwrap();
+        state.message.content = content;
+        state.message.thread_id = thread_id;
+        Ok(state.message.clone())
+    }
+
+    async fn touch_channel_updated_at(&self, _channel_id: Uuid) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn create_message_mentions(
+        &self,
+        _message_id: Uuid,
+        _mentions: Vec<SimpleMention>,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn sync_message_mentions(
+        &self,
+        _message_id: Uuid,
+        _mentions: Vec<SimpleMention>,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn add_attachments(
+        &self,
+        message_id: Uuid,
+        channel_id: Uuid,
+        attachments: Vec<NewChannelAttachment>,
+    ) -> Result<Vec<MutatedAttachment>, Self::Err> {
+        let now = Utc::now();
+        let created = attachments
+            .into_iter()
+            .map(|a| MutatedAttachment {
+                id: Uuid::new_v4(),
+                channel_id,
+                message_id,
+                entity_type: a.entity_type,
+                entity_id: a.entity_id,
+                width: a.width,
+                height: a.height,
+                created_at: now,
+            })
+            .collect::<Vec<_>>();
+        self.state.lock().unwrap().attachments = created.clone();
+        Ok(created)
+    }
+
+    async fn get_message_attachments(
+        &self,
+        _message_id: Uuid,
+    ) -> Result<Vec<MutatedAttachment>, Self::Err> {
+        Ok(self.state.lock().unwrap().attachments.clone())
+    }
+
+    async fn delete_attachments(&self, _attachment_ids: Vec<Uuid>) -> Result<(), Self::Err> {
+        self.state.lock().unwrap().attachments.clear();
+        Ok(())
+    }
+
+    async fn delete_entity_mentions_for_entities(
+        &self,
+        _entity_ids: Vec<String>,
+        _source_entity_id: String,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn patch_message_attachments(
+        &self,
+        _message_id: Uuid,
+        _attachments: Vec<MutatedAttachment>,
+    ) -> Result<MutatedMessage, Self::Err> {
+        Ok(self.state.lock().unwrap().message.clone())
+    }
+
+    async fn patch_message(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        content: String,
+    ) -> Result<MutatedMessage, Self::Err> {
+        let mut state = self.state.lock().unwrap();
+        state.patched_content = Some(content.clone());
+        state.message.content = content;
+        state.message.edited_at = Some(Utc::now());
+        Ok(state.message.clone())
+    }
+
+    async fn delete_message(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<MutatedMessage, Self::Err> {
+        Ok(self.state.lock().unwrap().message.clone())
+    }
+
+    async fn get_message_owner(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<Option<String>, Self::Err> {
+        Ok(Some(self.state.lock().unwrap().owner.clone()))
+    }
+
+    async fn get_participants(
+        &self,
+        _channel_id: Uuid,
+    ) -> Result<Vec<ChannelParticipant>, Self::Err> {
+        Ok(self.state.lock().unwrap().participants.clone())
+    }
+
+    async fn get_thread_participants(
+        &self,
+        _thread_id: Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
+        Ok(self.state.lock().unwrap().thread_participants.clone())
+    }
+
+    async fn upsert_activity(&self, _user_id: String, _channel_id: Uuid) -> Result<(), Self::Err> {
+        self.state.lock().unwrap().activity_upserts += 1;
+        Ok(())
+    }
+
+    async fn add_reaction(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _emoji: String,
+        _user_id: String,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn remove_reaction(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _emoji: String,
+        _user_id: String,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn get_message_reactions(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<Vec<CountedReaction>, Self::Err> {
+        Ok(vec![CountedReaction {
+            emoji: "👍".to_string(),
+            users: vec!["macro|sender@test.com".to_string()],
+        }])
+    }
+}
+
+#[derive(Clone, Default)]
+struct FakeEvents {
+    events: Arc<Mutex<Vec<ChannelEvent>>>,
+}
+
+impl ChannelEventDispatcher for FakeEvents {
+    fn dispatch(&self, event: ChannelEvent) {
+        self.events.lock().unwrap().push(event);
+    }
+}
+
+#[derive(Clone, Default)]
+struct FakeReferenceSharing {
+    items: Arc<Mutex<Vec<ReferencedShareItem>>>,
+}
+
+impl ChannelReferenceSharePermissions for FakeReferenceSharing {
+    type Err = anyhow::Error;
+
+    async fn update_channel_share_permissions_for_referenced_items(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        items: Vec<ReferencedShareItem>,
+    ) -> Result<(), Self::Err> {
+        self.items.lock().unwrap().extend(items);
+        Ok(())
+    }
+}
+
+fn mutation_service(
+    repo: FakeMutationRepo,
+    events: FakeEvents,
+    share: FakeReferenceSharing,
+) -> ChannelServiceImpl<FakeMutationRepo, FakeEvents, FakeReferenceSharing> {
+    ChannelServiceImpl::with_dependencies(repo, events, share)
+}
+
+fn macro_id(user_id: &str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from(user_id.to_string()).unwrap()
+}
+
+#[tokio::test]
+async fn post_message_emits_message_posted_event_and_updates_share_permissions() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let events = FakeEvents::default();
+    let share = FakeReferenceSharing::default();
+    let svc = mutation_service(repo.clone(), events.clone(), share.clone());
+
+    let res = svc
+        .post_message(
+            macro_id("macro|sender@test.com"),
+            channel_id,
+            PostMessageRequest {
+                content: "hello world".to_string(),
+                mentions: vec![SimpleMention {
+                    entity_type: "document".to_string(),
+                    entity_id: "doc-1".to_string(),
+                }],
+                thread_id: None,
+                attachments: vec![NewChannelAttachment {
+                    entity_type: "chat".to_string(),
+                    entity_id: "chat-1".to_string(),
+                    width: None,
+                    height: None,
+                }],
+                nonce: Some("nonce-1".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+
+    let emitted = events.events.lock().unwrap();
+    assert_eq!(emitted.len(), 1);
+    let ChannelEvent::MessagePosted {
+        metadata,
+        participants,
+        message,
+        has_attachments,
+        attachments,
+        nonce,
+        ..
+    } = &emitted[0]
+    else {
+        panic!("expected MessagePosted event, got {:?}", emitted[0]);
+    };
+    assert_eq!(metadata.channel_name, "Project");
+    assert_eq!(message.id.to_string(), res.id);
+    assert_eq!(nonce.as_deref(), Some("nonce-1"));
+    assert!(*has_attachments);
+    assert_eq!(attachments.len(), 1);
+    assert!(
+        participants
+            .iter()
+            .any(|participant| participant.user_id == "macro|recipient@test.com")
+    );
+    drop(emitted);
+
+    let shared = share.items.lock().unwrap();
+    assert!(shared.contains(&ReferencedShareItem::new(
+        "chat-1",
+        ReferencedShareItemType::Chat
+    )));
+    assert!(shared.contains(&ReferencedShareItem::new(
+        "doc-1",
+        ReferencedShareItemType::Document
+    )));
+}
+
+#[tokio::test]
+async fn patch_message_content_emits_message_changed_event_to_thread_participants() {
+    let channel_id = Uuid::new_v4();
+    let thread_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    repo.state.lock().unwrap().message.thread_id = Some(thread_id);
+    let message_id = repo.state.lock().unwrap().message.id;
+    let events = FakeEvents::default();
+    let svc = mutation_service(
+        repo.clone(),
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.patch_message(
+        macro_id("macro|sender@test.com"),
+        ParticipantRole::Member,
+        channel_id,
+        message_id,
+        PatchMessageRequest {
+            content: Some("edited".to_string()),
+            mentions: None,
+            attachment_ids_to_delete: None,
+            attachments_to_add: None,
+            nonce: Some("edit-nonce".to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
+    let emitted = events.events.lock().unwrap();
+    assert_eq!(emitted.len(), 1);
+    let ChannelEvent::MessageChanged {
+        channel_id: emitted_channel_id,
+        message,
+        recipients,
+        nonce,
+    } = &emitted[0]
+    else {
+        panic!("expected MessageChanged event, got {:?}", emitted[0]);
+    };
+    assert_eq!(*emitted_channel_id, channel_id);
+    assert_eq!(message.id, message_id);
+    assert_eq!(message.content, "edited");
+    assert_eq!(nonce.as_deref(), Some("edit-nonce"));
+    assert_eq!(recipients.len(), 1);
+    assert_eq!(recipients[0].as_ref(), "macro|thread@test.com");
+}
+
+#[tokio::test]
+async fn reaction_mutation_emits_grouped_reaction_event() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let message_id = repo.state.lock().unwrap().message.id;
+    let events = FakeEvents::default();
+    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+    svc.post_reaction(
+        macro_id("macro|sender@test.com"),
+        channel_id,
+        PostReactionRequest {
+            emoji: "👍".to_string(),
+            message_id: message_id.to_string(),
+            action: ReactionAction::Add,
+            nonce: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let emitted = events.events.lock().unwrap();
+    assert_eq!(emitted.len(), 1);
+    let ChannelEvent::ReactionChanged {
+        channel_id: emitted_channel_id,
+        message_id: emitted_message_id,
+        reactions,
+        ..
+    } = &emitted[0]
+    else {
+        panic!("expected ReactionChanged event, got {:?}", emitted[0]);
+    };
+    assert_eq!(*emitted_channel_id, channel_id);
+    assert_eq!(*emitted_message_id, message_id);
+    assert_eq!(reactions[0].emoji, "👍");
+}
+
 #[tokio::test]
 async fn clamps_limit() {
-    let mut repo = MockChannelMessagesRepo::new();
+    let mut repo = MockChannelRepo::new();
     repo.expect_get_top_level_messages()
         .withf(|_, _, _, limit, _, _| *limit == 100)
         .returning(|_, _, _, _, _, _| {
@@ -187,7 +790,7 @@ async fn clamps_limit() {
     repo.expect_get_attachments_batch()
         .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
 
-    let svc = ChannelMessagesServiceImpl::new(repo);
+    let svc = ChannelServiceImpl::new(repo);
     let result = svc
         .get_channel_messages(
             Uuid::nil(),
@@ -206,7 +809,7 @@ async fn clamps_limit() {
 
 #[tokio::test]
 async fn returns_empty_attachments_page() {
-    let svc = ChannelMessagesServiceImpl::new(empty_repo());
+    let svc = ChannelServiceImpl::new(empty_repo());
     let page = svc
         .get_channel_attachments(Uuid::nil(), Query::Sort(CreatedAt, ()), 50, None)
         .await
@@ -218,7 +821,7 @@ async fn returns_empty_attachments_page() {
 
 #[tokio::test]
 async fn returns_empty_participants_list() {
-    let svc = ChannelMessagesServiceImpl::new(empty_repo());
+    let svc = ChannelServiceImpl::new(empty_repo());
     let participants = svc.get_channel_participants(Uuid::nil()).await.unwrap();
 
     assert!(participants.is_empty());
@@ -313,7 +916,7 @@ fn center_window_limit_one() {
 
 #[tokio::test]
 async fn around_message_not_found() {
-    let svc = ChannelMessagesServiceImpl::new(empty_repo());
+    let svc = ChannelServiceImpl::new(empty_repo());
     let message_id = Uuid::new_v4();
 
     let err = svc
@@ -333,7 +936,7 @@ async fn around_deleted_top_level_without_active_replies_is_not_found() {
     let mut anchor = make_row(message_id, 0);
     anchor.deleted_at = Some(Utc::now());
 
-    let mut repo = MockChannelMessagesRepo::new();
+    let mut repo = MockChannelRepo::new();
     repo.expect_resolve_top_level_parent()
         .returning(move |_, _| {
             let anchor = anchor.clone();
@@ -342,7 +945,7 @@ async fn around_deleted_top_level_without_active_replies_is_not_found() {
     repo.expect_get_thread_data()
         .returning(|_, _| Box::pin(async { Ok(HashMap::new()) }));
 
-    let svc = ChannelMessagesServiceImpl::new(repo);
+    let svc = ChannelServiceImpl::new(repo);
     let err = svc
         .get_channel_messages_around(Uuid::nil(), message_id, 50)
         .await
@@ -361,7 +964,7 @@ async fn around_reply_to_deleted_top_level_with_active_replies_still_works() {
     anchor.deleted_at = Some(Utc::now());
 
     let anchor_clone = anchor.clone();
-    let mut repo = MockChannelMessagesRepo::new();
+    let mut repo = MockChannelRepo::new();
 
     repo.expect_resolve_top_level_parent()
         .returning(move |_, _| {
@@ -388,7 +991,7 @@ async fn around_reply_to_deleted_top_level_with_active_replies_still_works() {
     repo.expect_get_attachments_batch()
         .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
 
-    let svc = ChannelMessagesServiceImpl::new(repo);
+    let svc = ChannelServiceImpl::new(repo);
     let result = svc
         .get_channel_messages_around(Uuid::nil(), reply_id, 50)
         .await
@@ -409,7 +1012,7 @@ async fn around_resolves_and_hydrates() {
     let before_clone = before_row.clone();
     let after_clone = after_row.clone();
 
-    let mut repo = MockChannelMessagesRepo::new();
+    let mut repo = MockChannelRepo::new();
 
     repo.expect_resolve_top_level_parent()
         .returning(move |_, _| {
@@ -429,7 +1032,7 @@ async fn around_resolves_and_hydrates() {
     repo.expect_get_attachments_batch()
         .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
 
-    let svc = ChannelMessagesServiceImpl::new(repo);
+    let svc = ChannelServiceImpl::new(repo);
     let result = svc
         .get_channel_messages_around(Uuid::nil(), anchor.id, 50)
         .await
@@ -446,7 +1049,7 @@ async fn around_resolves_and_hydrates() {
 
 #[tokio::test]
 async fn thread_replies_message_not_found() {
-    let svc = ChannelMessagesServiceImpl::new(empty_repo());
+    let svc = ChannelServiceImpl::new(empty_repo());
     let message_id = Uuid::new_v4();
 
     let err = svc
@@ -486,7 +1089,7 @@ async fn thread_replies_resolve_and_hydrate() {
     let reply_1_clone = reply_1.clone();
     let reply_2_clone = reply_2.clone();
 
-    let mut repo = MockChannelMessagesRepo::new();
+    let mut repo = MockChannelRepo::new();
 
     repo.expect_resolve_top_level_parent()
         .returning(move |_, _| {
@@ -524,7 +1127,7 @@ async fn thread_replies_resolve_and_hydrate() {
         Box::pin(async move { Ok(map) })
     });
 
-    let svc = ChannelMessagesServiceImpl::new(repo);
+    let svc = ChannelServiceImpl::new(repo);
     let replies = svc
         .get_thread_replies(Uuid::nil(), reply_1.id)
         .await

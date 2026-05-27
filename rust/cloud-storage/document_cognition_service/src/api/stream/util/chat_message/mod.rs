@@ -7,9 +7,9 @@ use crate::{
     model::stream::SendChatMessagePayload,
 };
 
-use ai::types::Model;
-use ai::types::Role;
-use ai::types::{ChatMessage, ChatMessageContent};
+use agent::AgentModel;
+use agent::types::Role;
+use agent::types::{ChatMessage, ChatMessageContent};
 use anyhow::{Context, Result};
 use chat::domain::models::ResolvedMessageContent;
 use chat::domain::ports::MessageService;
@@ -23,7 +23,7 @@ pub async fn store_incoming_message(
     ctx: Arc<ApiContext>,
     user_id: &str,
     chat: &ChatResponse,
-    model: Model,
+    model: AgentModel,
     incoming_message: &SendChatMessagePayload,
 ) -> Result<ResolvedMessageContent> {
     let created_at = chrono::Utc::now();
@@ -83,7 +83,7 @@ pub async fn store_conversation_messages(
     user_id: &str,
     chat_id: &str,
     messages: Vec<ChatMessage>,
-    model: Model,
+    model: AgentModel,
     first_message_id: Option<String>,
 ) -> Result<Vec<String>> {
     if messages.is_empty() {

@@ -1,8 +1,8 @@
 use crate::domain::models::{
     ChannelMessageFilters, MessagePageDirection, NotificationFilters, ParticipantRole,
 };
-use crate::domain::ports::ChannelMessagesRepo;
-use crate::outbound::pg_channels_repo::PgChannelMessagesRepo;
+use crate::domain::ports::ChannelRepo;
+use crate::outbound::pg_channels_repo::PgChannelsRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Cursor, CursorVal, Query};
@@ -32,8 +32,8 @@ const DELETED_MSG_ATTACHMENT: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0
 const USER_A: &str = "macro|user-a@test.com";
 const USER_B: &str = "macro|user-b@test.com";
 
-fn repo(pool: Pool<Postgres>) -> PgChannelMessagesRepo {
-    PgChannelMessagesRepo::new(pool)
+fn repo(pool: Pool<Postgres>) -> PgChannelsRepo {
+    PgChannelsRepo::new(pool)
 }
 
 fn macro_user_id(user_id: &str) -> MacroUserIdStr<'static> {

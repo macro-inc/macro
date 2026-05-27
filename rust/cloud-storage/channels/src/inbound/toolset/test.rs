@@ -1,6 +1,6 @@
 use super::{ReadChannelMessageContext, ReadChannelMessages, ReadChannelThread};
-use ai::tool::tool_object::validate_tool_schema;
-use ai::{generate_tool_input_schema, generate_tool_output_schema};
+use ai_toolset::tool_object::validate_tool_schema;
+use ai_toolset::{generate_tool_input_schema, generate_tool_output_schema};
 
 #[test]
 fn read_channel_messages_schema_is_valid() {
