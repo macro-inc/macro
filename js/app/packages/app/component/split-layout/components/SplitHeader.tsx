@@ -11,6 +11,7 @@ import CaretLeft from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import EyeIcon from '@phosphor/eye.svg';
 import EyeSlashIcon from '@phosphor/eye-slash.svg';
+import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { Button, cn } from '@ui';
 import {
@@ -159,6 +160,11 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
   }
 
+  const isDashboard = createMemo(() => {
+    const content = panel.handle.content();
+    return content.type === 'component' && content.id === 'dashboard';
+  });
+
   return (
     <div
       class={cn(
@@ -201,7 +207,17 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           ref={(ref) => {
             panel.layoutRefs.headerRight = ref;
           }}
-        />
+        >
+          <Show when={isDashboard()}>
+            <label class="relative hidden h-8 w-64 items-center sm:flex">
+              <MagnifyingGlassIcon class="pointer-events-none absolute left-2.5 size-4 text-ink-extra-muted" />
+              <input
+                class="h-full w-full rounded-lg border border-edge-muted bg-surface pl-8 pr-3 text-sm text-ink outline-none placeholder:text-ink-extra-muted focus:border-accent"
+                placeholder="Search dashboard"
+              />
+            </label>
+          </Show>
+        </div>
       </div>
     </div>
   );
