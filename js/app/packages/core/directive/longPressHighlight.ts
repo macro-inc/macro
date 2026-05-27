@@ -1,12 +1,13 @@
 import { type Accessor, onCleanup } from 'solid-js';
 import { touchHandler } from './touchHandler';
 
+const LONG_PRESS_ENTER_DELAY_MS = 100;
+const LONG_PRESS_EXIT_DELAY_MS = 50;
+
 interface LongPressHighlightOptions {
   onLongPress?: () => void;
-  /** Delay (ms) before adding the `long-press-animation` class on touch start. If touch ends before this delay, no exit animation plays. Default: 100 */
-  enterDelay?: number;
-  /** Delay (ms) before removing the `long-press-animation` class after a long press. Default: 50 */
-  exitDelay?: number;
+  /** CSS class added while the touch highlight is active. */
+  className: string;
 }
 
 declare module 'solid-js' {
@@ -18,18 +19,37 @@ declare module 'solid-js' {
 }
 
 /**
- * Wraps touchHandler to manage the `long-press-animation` CSS class lifecycle on an element.
- * Pair with the corresponding CSS animation on `.long-press-animation`.
+ * Wraps touchHandler to manage a touch highlight CSS class lifecycle on an element.
+ * Pair with a corresponding CSS animation for the configured className.
  */
 export function longPressHighlight(
   element: HTMLElement,
   options: Accessor<LongPressHighlightOptions>
 ) {
   let enterTimer: number | undefined;
+  let exitTimer: number | undefined;
+  let activeClassName: string | undefined;
+
+  const highlightClassName = () => options().className;
+
+  const cancelExit = () => {
+    if (exitTimer !== undefined) {
+      clearTimeout(exitTimer);
+      exitTimer = undefined;
+    }
+  };
 
   const startAnimation = () => {
     enterTimer = undefined;
-    element.classList.add('long-press-animation');
+    cancelExit();
+
+    const className = highlightClassName();
+    if (activeClassName && activeClassName !== className) {
+      element.classList.remove(activeClassName);
+    }
+
+    activeClassName = className;
+    element.classList.add(className);
   };
 
   const cancelEnter = () => {
@@ -40,15 +60,23 @@ export function longPressHighlight(
   };
 
   const endAnimation = () => {
-    element.classList.remove('long-press-animation');
+    cancelExit();
+    if (activeClassName) {
+      element.classList.remove(activeClassName);
+      activeClassName = undefined;
+      return;
+    }
+    element.classList.remove(highlightClassName());
+  };
+
+  const scheduleEndAnimation = (delay: number) => {
+    cancelExit();
+    exitTimer = window.setTimeout(endAnimation, delay);
   };
 
   touchHandler(element, () => ({
     onTouchStart: () => {
-      enterTimer = window.setTimeout(
-        startAnimation,
-        options().enterDelay ?? 100
-      );
+      enterTimer = window.setTimeout(startAnimation, LONG_PRESS_ENTER_DELAY_MS);
     },
     onLongPress: () => {
       options().onLongPress?.();
@@ -62,10 +90,13 @@ export function longPressHighlight(
       if (!longpress) {
         endAnimation();
       } else {
-        setTimeout(endAnimation, options().exitDelay ?? 50);
+        scheduleEndAnimation(LONG_PRESS_EXIT_DELAY_MS);
       }
     },
   }));
 
-  onCleanup(cancelEnter);
+  onCleanup(() => {
+    cancelEnter();
+    endAnimation();
+  });
 }

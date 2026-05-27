@@ -16,6 +16,7 @@ pub async fn create_db_pool(database_url: &str, min_connections: u32) -> anyhow:
 }
 
 /// fetch the user's image and video attachments, ordered from oldest to newest
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn fetch_sfs_attachments(
     db: &sqlx::Pool<sqlx::Postgres>,
     macro_id: &str,

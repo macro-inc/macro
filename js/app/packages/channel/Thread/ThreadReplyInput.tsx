@@ -10,7 +10,7 @@ import { type Accessor, createSignal, onCleanup, type Setter } from 'solid-js';
 import { createEntityDropZone } from '../Channel/create-entity-drop-zone';
 import type { InputHandle, InputSnapshot } from '../Input';
 import { ChannelInput, createInputAttachmentTracker } from '../Input';
-import { buildPostMessageRequest } from '../Input/message-payload';
+import { buildPostMessageSendPayload } from '../Input/message-payload';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { ThreadReplyInputConnector } from './ThreadReplyInputConnector';
 import { replyInputOffsetX } from './utils/thread-rail-geometry';
@@ -101,17 +101,18 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
               onSend={(snapshot) => {
                 const senderId = userId();
                 if (!senderId) return;
+                const payload = buildPostMessageSendPayload({
+                  snapshot,
+                  threadId: props.messageId,
+                  participantIds: participants.ids(),
+                });
 
                 sendMessageMutation.mutate(
                   {
                     channelID: props.channelId,
                     senderId,
                     optimisticId: crypto.randomUUID(),
-                    message: buildPostMessageRequest({
-                      snapshot,
-                      threadId: props.messageId,
-                      participantIds: participants.ids(),
-                    }),
+                    ...payload,
                   },
                   {
                     onSuccess: () => {

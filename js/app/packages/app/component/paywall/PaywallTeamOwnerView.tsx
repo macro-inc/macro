@@ -33,7 +33,7 @@ const PaywallTeamOwnerView = (props: PaywallTeamOwnerViewProps) => {
           <div class="font-semibold text-ink text-base sm:text-lg">
             {props.team.name}
           </div>
-          <SubscriptionTier class="w-7 shrink-0" total={1} tier="premium" />
+          <SubscriptionTier class="w-7 shrink-0" tier="premium" />
         </div>
         <div class="flex items-baseline gap-0.5">
           <span class="text-3xl font-bold text-ink">${totalPrice()}</span>

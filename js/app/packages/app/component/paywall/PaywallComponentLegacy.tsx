@@ -171,7 +171,6 @@ const PaywallComponentLegacy = (props: PaywallProps) => {
                     </div>
                     <SubscriptionTier
                       class="w-7 shrink-0"
-                      total={3}
                       tier={
                         selectedTier() === plan.tier ? plan.tier : undefined
                       }

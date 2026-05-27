@@ -5,12 +5,14 @@ use crate::LocalE2eConfig;
 
 const DEFAULT_DOCUMENT_STORAGE_URL: &str = "http://localhost:8086";
 const DEFAULT_CONNECTION_GATEWAY_WS_URL: &str = "ws://localhost:8082/";
+const DEFAULT_NOTIFICATION_URL: &str = "http://localhost:8089";
 
 /// Host URLs for services used by local E2E tests.
 #[derive(Clone, Debug)]
 pub struct LocalE2eServices {
     document_storage_url: String,
     connection_gateway_ws_url: String,
+    notification_url: String,
 }
 
 impl LocalE2eServices {
@@ -25,6 +27,11 @@ impl LocalE2eServices {
             .get("LOCAL_E2E_CONNECTION_GATEWAY_WS_URL")
             .unwrap_or(DEFAULT_CONNECTION_GATEWAY_WS_URL)
             .to_owned();
+        let notification_url = trim_trailing_slash(
+            config
+                .get("LOCAL_E2E_NOTIFICATION_URL")
+                .unwrap_or(DEFAULT_NOTIFICATION_URL),
+        );
 
         validate_local_service_url(
             &document_storage_url,
@@ -36,10 +43,16 @@ impl LocalE2eServices {
             "connection gateway websocket",
             &["ws", "wss"],
         )?;
+        validate_local_service_url(
+            &notification_url,
+            "notification service",
+            &["http", "https"],
+        )?;
 
         Ok(Self {
             document_storage_url,
             connection_gateway_ws_url,
+            notification_url,
         })
     }
 
@@ -54,10 +67,62 @@ impl LocalE2eServices {
         &self.document_storage_url
     }
 
-    /// URL for posting a channel message through document storage's comms API.
+    /// Base URL for notification service HTTP endpoints.
+    pub fn notification_url(&self) -> &str {
+        &self.notification_url
+    }
+
+    /// URL for listing user notifications through notification service.
+    pub fn user_notifications_url(&self) -> String {
+        format!("{}/v1/user_notifications", self.notification_url)
+    }
+
+    /// URL for creating channels through document storage's channels hex API.
+    pub fn create_channel_url(&self) -> String {
+        format!("{}/channels", self.document_storage_url)
+    }
+
+    /// URL for get-or-create direct message channel mutations.
+    pub fn get_or_create_dm_url(&self) -> String {
+        format!("{}/channels/get_or_create_dm", self.document_storage_url)
+    }
+
+    /// URL for get-or-create private channel mutations.
+    pub fn get_or_create_private_url(&self) -> String {
+        format!(
+            "{}/channels/get_or_create_private",
+            self.document_storage_url
+        )
+    }
+
+    /// URL for posting a channel message through document storage's channels hex API.
     pub fn post_channel_message_url(&self, channel_id: &str) -> String {
         format!(
-            "{}/comms/channels/{}/message",
+            "{}/channels/{}/message",
+            self.document_storage_url, channel_id
+        )
+    }
+
+    /// URL for patching or deleting a channel message through document storage's channels hex API.
+    pub fn channel_message_url(&self, channel_id: &str, message_id: &str) -> String {
+        format!(
+            "{}/channels/{}/message/{}",
+            self.document_storage_url, channel_id, message_id
+        )
+    }
+
+    /// URL for posting a channel reaction through document storage's channels hex API.
+    pub fn post_channel_reaction_url(&self, channel_id: &str) -> String {
+        format!(
+            "{}/channels/{}/reaction",
+            self.document_storage_url, channel_id
+        )
+    }
+
+    /// URL for posting a channel typing update through document storage's channels hex API.
+    pub fn post_channel_typing_url(&self, channel_id: &str) -> String {
+        format!(
+            "{}/channels/{}/typing",
             self.document_storage_url, channel_id
         )
     }
@@ -66,6 +131,32 @@ impl LocalE2eServices {
     pub fn get_channel_url(&self, channel_id: &str) -> String {
         format!(
             "{}/comms/channels/{}",
+            self.document_storage_url, channel_id
+        )
+    }
+
+    /// URL for patching or deleting a channel through document storage's channels hex API.
+    pub fn channel_url(&self, channel_id: &str) -> String {
+        format!("{}/channels/{}", self.document_storage_url, channel_id)
+    }
+
+    /// URL for mutating channel participants through document storage's channels hex API.
+    pub fn channel_participants_url(&self, channel_id: &str) -> String {
+        format!(
+            "{}/channels/{}/participants",
+            self.document_storage_url, channel_id
+        )
+    }
+
+    /// URL for joining a channel through document storage's channels hex API.
+    pub fn join_channel_url(&self, channel_id: &str) -> String {
+        format!("{}/channels/{}/join", self.document_storage_url, channel_id)
+    }
+
+    /// URL for leaving a channel through document storage's channels hex API.
+    pub fn leave_channel_url(&self, channel_id: &str) -> String {
+        format!(
+            "{}/channels/{}/leave",
             self.document_storage_url, channel_id
         )
     }

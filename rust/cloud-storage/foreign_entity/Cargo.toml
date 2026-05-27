@@ -1,0 +1,27 @@
+[package]
+edition = "2024"
+name = "foreign_entity"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["outbound", "ports", "service"]
+outbound = ["dep:sqlx", "ports"]
+ports = ["dep:tokio"]
+service = ["ports"]
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+macro_uuid = { path = "../macro_uuid" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

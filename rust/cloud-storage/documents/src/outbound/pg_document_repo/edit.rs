@@ -8,6 +8,7 @@ use sqlx::{Postgres, Transaction};
 /// Update document metadata (name, projectId, fileType, updatedAt).
 ///
 /// `file_type`: None = no change, Some(None) = set to NULL, Some(Some(ft)) = set to ft.
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub(super) async fn update_document_metadata(
     transaction: &mut Transaction<'_, Postgres>,
     document_id: &str,
@@ -98,6 +99,7 @@ pub(super) async fn update_share_permission(
 }
 
 /// Update the SharePermission row (isPublic, publicAccessLevel).
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn update_share_permission_row(
     transaction: &mut Transaction<'_, Postgres>,
     share_permission_id: &str,

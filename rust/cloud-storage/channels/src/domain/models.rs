@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -186,7 +187,7 @@ pub struct ThreadReply {
 }
 
 /// A reaction emoji with the list of users who reacted.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CountedReaction {
     /// The emoji string.
     pub emoji: String,
@@ -252,7 +253,12 @@ impl SortOn<CreatedAt> for ChannelAttachment {
 }
 
 /// Role of a channel participant.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(
+    feature = "outbound",
+    sqlx(type_name = "comms_participant_role", rename_all = "lowercase")
+)]
 pub enum ParticipantRole {
     /// Channel owner.
     Owner,
@@ -339,4 +345,373 @@ pub struct ThreadReplyRow {
     pub updated_at: DateTime<Utc>,
     /// Edited timestamp.
     pub edited_at: Option<DateTime<Utc>>,
+}
+
+/// Type of channel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(
+    feature = "outbound",
+    sqlx(type_name = "comms_channel_type", rename_all = "snake_case")
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelType {
+    /// Public channel.
+    Public,
+    /// Organization-wide channel.
+    Organization,
+    /// Private group channel.
+    Private,
+    /// One-to-one direct message channel.
+    DirectMessage,
+    /// Team channel.
+    Team,
+}
+
+/// Result of a get-or-create channel operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum GetOrCreateAction {
+    /// An existing channel was returned.
+    Get,
+    /// A new channel was created.
+    Create,
+}
+
+/// Typing indicator action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum TypingAction {
+    /// User started typing.
+    Start,
+    /// User stopped typing.
+    Stop,
+}
+
+/// Reaction mutation action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub enum ReactionAction {
+    /// Add a reaction.
+    Add,
+    /// Remove a reaction.
+    Remove,
+}
+
+/// Request to create a channel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct CreateChannelRequest {
+    /// Optional channel name.
+    pub name: Option<String>,
+    /// Channel type.
+    pub channel_type: ChannelType,
+    /// Team id for team channels.
+    pub team_id: Option<Uuid>,
+    /// Participants to add, excluding the owner.
+    pub participants: Vec<String>,
+}
+
+/// Response returned after creating a channel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct CreateChannelResponse {
+    /// Created channel id.
+    pub id: String,
+}
+
+/// Request to get or create a direct message channel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct GetOrCreateDmRequest {
+    /// Recipient user id.
+    pub recipient_id: String,
+}
+
+/// Request to get or create a private channel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct GetOrCreatePrivateRequest {
+    /// Recipient user ids.
+    pub recipients: Vec<String>,
+}
+
+/// Response for get-or-create channel operations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct GetOrCreateChannelResponse {
+    /// Channel id.
+    pub channel_id: String,
+    /// Whether the channel was fetched or created.
+    pub action: GetOrCreateAction,
+}
+
+/// Request to patch a channel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PatchChannelRequest {
+    /// New channel name.
+    pub channel_name: Option<String>,
+}
+
+/// New attachment to add to a channel message.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct NewChannelAttachment {
+    /// Attachment entity type.
+    pub entity_type: String,
+    /// Attachment entity id.
+    pub entity_id: String,
+    /// Optional rendered width.
+    pub width: Option<i32>,
+    /// Optional rendered height.
+    pub height: Option<i32>,
+}
+
+/// Simple entity mention attached to a message.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct SimpleMention {
+    /// Mentioned entity type.
+    pub entity_type: String,
+    /// Mentioned entity id.
+    pub entity_id: String,
+}
+
+/// Shareable entity type referenced by a channel message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ReferencedShareItemType {
+    /// Document entity.
+    Document,
+    /// Chat entity.
+    Chat,
+    /// Project entity.
+    Project,
+    /// Email thread entity.
+    EmailThread,
+    /// Call entity.
+    Call,
+}
+
+impl ReferencedShareItemType {
+    /// Parse a raw entity type from the transport/storage representation.
+    pub fn from_raw(raw: &str) -> Option<Self> {
+        match raw {
+            "document" => Some(Self::Document),
+            "chat" => Some(Self::Chat),
+            "project" => Some(Self::Project),
+            "thread" => Some(Self::EmailThread),
+            "call" => Some(Self::Call),
+            _ => None,
+        }
+    }
+
+    /// Return the storage representation of this item type.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Document => "document",
+            Self::Chat => "chat",
+            Self::Project => "project",
+            Self::EmailThread => "thread",
+            Self::Call => "call",
+        }
+    }
+}
+
+/// Shareable item referenced by a channel message.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ReferencedShareItem {
+    entity_id: String,
+    entity_type: ReferencedShareItemType,
+}
+
+impl ReferencedShareItem {
+    /// Build a typed referenced share item.
+    pub fn new(entity_id: impl Into<String>, entity_type: ReferencedShareItemType) -> Self {
+        Self {
+            entity_id: entity_id.into(),
+            entity_type,
+        }
+    }
+
+    /// Build a typed referenced share item from raw entity data.
+    pub fn from_raw(entity_id: impl Into<String>, entity_type: &str) -> Option<Self> {
+        Some(Self::new(
+            entity_id,
+            ReferencedShareItemType::from_raw(entity_type)?,
+        ))
+    }
+
+    /// Referenced entity id.
+    pub fn entity_id(&self) -> &str {
+        &self.entity_id
+    }
+
+    /// Referenced entity type.
+    pub fn entity_type(&self) -> ReferencedShareItemType {
+        self.entity_type
+    }
+}
+
+/// Request to send a channel message.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PostMessageRequest {
+    /// Message body.
+    pub content: String,
+    /// Message mentions.
+    pub mentions: Vec<SimpleMention>,
+    /// Optional thread parent id.
+    pub thread_id: Option<Uuid>,
+    /// Attachments to add after message creation.
+    pub attachments: Vec<NewChannelAttachment>,
+    /// Optional optimistic-update nonce.
+    pub nonce: Option<String>,
+}
+
+/// Response returned after sending a message.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PostMessageResponse {
+    /// Created message id.
+    pub id: String,
+    /// Optional optimistic-update nonce.
+    pub nonce: Option<String>,
+}
+
+/// Request to patch a channel message.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PatchMessageRequest {
+    /// Optional replacement message body.
+    pub content: Option<String>,
+    /// Optional replacement mentions.
+    pub mentions: Option<Vec<SimpleMention>>,
+    /// Attachment ids to remove.
+    pub attachment_ids_to_delete: Option<Vec<String>>,
+    /// Attachments to add.
+    pub attachments_to_add: Option<Vec<NewChannelAttachment>>,
+    /// Optional optimistic-update nonce.
+    pub nonce: Option<String>,
+}
+
+/// Query parameters for deleting a message.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct DeleteMessageQuery {
+    /// Optional optimistic-update nonce.
+    pub nonce: Option<String>,
+}
+
+/// Request to mutate a reaction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PostReactionRequest {
+    /// Reaction emoji.
+    pub emoji: String,
+    /// Message id to react to.
+    pub message_id: String,
+    /// Reaction action.
+    pub action: ReactionAction,
+    /// Optional optimistic-update nonce.
+    pub nonce: Option<String>,
+}
+
+/// Request to emit a typing event.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PostTypingRequest {
+    /// Typing action.
+    pub action: TypingAction,
+    /// Optional thread id.
+    pub thread_id: Option<String>,
+    /// Optional optimistic-update nonce.
+    pub nonce: Option<String>,
+}
+
+/// Request to add participants.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct AddParticipantsRequest {
+    /// User ids to add.
+    pub participants: Vec<String>,
+}
+
+/// Request to remove participants.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct RemoveParticipantsRequest {
+    /// User ids to remove.
+    pub participants: Vec<String>,
+}
+
+/// Channel metadata needed for notifications.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChannelMetadata {
+    /// Channel type.
+    pub channel_type: ChannelType,
+    /// Resolved display name.
+    pub channel_name: String,
+}
+
+/// Persisted channel message returned by mutation operations.
+#[derive(Debug, Clone, Serialize)]
+pub struct MutatedMessage {
+    /// Message id.
+    pub id: Uuid,
+    /// Channel id.
+    pub channel_id: Uuid,
+    /// Thread parent id.
+    pub thread_id: Option<Uuid>,
+    /// Sender user id.
+    pub sender_id: MacroUserIdStr<'static>,
+    /// Message body.
+    pub content: String,
+    /// Created timestamp.
+    pub created_at: DateTime<Utc>,
+    /// Updated timestamp.
+    pub updated_at: DateTime<Utc>,
+    /// Edited timestamp.
+    pub edited_at: Option<DateTime<Utc>>,
+    /// Deleted timestamp.
+    pub deleted_at: Option<DateTime<Utc>>,
+}
+
+/// Persisted attachment returned by mutation operations.
+#[derive(Debug, Clone, Serialize)]
+pub struct MutatedAttachment {
+    /// Attachment id.
+    pub id: Uuid,
+    /// Channel id.
+    pub channel_id: Uuid,
+    /// Message id.
+    pub message_id: Uuid,
+    /// Attachment entity type.
+    pub entity_type: String,
+    /// Attachment entity id.
+    pub entity_id: String,
+    /// Optional rendered width.
+    pub width: Option<i32>,
+    /// Optional rendered height.
+    pub height: Option<i32>,
+    /// Created timestamp.
+    pub created_at: DateTime<Utc>,
+}
+
+/// Channel info row used by mutation logic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChannelInfo {
+    /// Channel id.
+    pub id: Uuid,
+    /// Stored channel name.
+    pub name: Option<String>,
+    /// Channel type.
+    pub channel_type: ChannelType,
+    /// Organization id.
+    pub org_id: Option<i64>,
+    /// Team id.
+    pub team_id: Option<Uuid>,
 }

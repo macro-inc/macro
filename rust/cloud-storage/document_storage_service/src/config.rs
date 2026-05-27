@@ -47,6 +47,7 @@ env_var! {
         pub DocumentStorageServiceCloudfrontSignerPublicKeyId,
         pub RedisUri,
         pub NotificationQueue,
+        pub NotificationIngressQueue,
         pub SearchEventQueue,
         pub ConnectionGatewayUrl,
         pub BulkUploadRequestsTable,

@@ -27,7 +27,7 @@ anyhow = { workspace = true }
 macro_uuid = { path = "../macro_uuid"}
 chrono = { workspace = true}
 chrono-tz = { version = "0.10.4", features = ["serde"] }
-ai = { path = "../ai" }
+agent = { path = "../agent" }
 tokio = { workspace = true }
 futures = { workspace = true }
 tracing = { workspace = true }

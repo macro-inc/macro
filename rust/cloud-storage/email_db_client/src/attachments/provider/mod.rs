@@ -13,6 +13,7 @@ use std::collections::HashMap;
 
 /// inserts the metadata for attachments of an email into the database in a batch
 #[tracing::instrument(skip(tx, attachments, message_id), err)]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn insert_attachments(
     tx: &mut sqlx::PgConnection,
     message_id: Uuid,

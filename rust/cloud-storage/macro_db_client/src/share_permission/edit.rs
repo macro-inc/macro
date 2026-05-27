@@ -6,6 +6,7 @@ use sqlx::{Postgres, Transaction};
 use super::channel_permission::edit::edit_channel_share_permission;
 
 #[tracing::instrument(skip(transaction))]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn edit_share_permission(
     transaction: &mut Transaction<'_, Postgres>,
     entity_id: &uuid::Uuid,

@@ -1,6 +1,6 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { AllModels } from '@service-cognition/generated/schemas';
+import { AgentModel } from '@service-cognition/generated/schemas';
 import type { Entity } from '@service-cognition/generated/schemas/entity';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { ok } from 'neverthrow';
@@ -38,7 +38,7 @@ export const definition = defineBlock({
 
       return ok({
         ...chat,
-        allModels: AllModels, // TODO maybe limit people with something more swag based on acoun
+        allModels: Object.values(AgentModel),
         documentMetadata: {
           documentId: chat.chat.id,
           documentName: chat.chat.name,

@@ -4,17 +4,17 @@ import { createToolRenderer } from './ToolRenderer';
 
 // Runtime type for successful web fetch (schema differs from generated types)
 const handler = createToolRenderer({
-  name: 'web_fetch',
+  name: 'WebFetch',
   render: (ctx) => (
     <BaseTool icon={Globe} renderContext={ctx.renderContext} type="call">
       Fetched{' '}
       <a
-        href={ctx.tool.data.url}
+        href={ctx.tool.data.input}
         target="_blank"
         rel="noopener noreferrer"
         class="italic text-accent hover:underline"
       >
-        {ctx.tool.data.url}
+        {ctx.tool.data.input}
       </a>
     </BaseTool>
   ),

@@ -66,6 +66,7 @@ async fn main() -> anyhow::Result<()> {
 /// `(Option<Uuid>, i64)` — the maximum `UserItemAccess.id` processed in this
 /// batch (NULL when empty = termination), and the number of source rows
 /// considered in the batch.
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn run_keyset(
     db: &Pool<Postgres>,
     label: &str,

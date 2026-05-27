@@ -51,10 +51,10 @@ import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import LogoIcon from '@icon/macro-logo.svg';
-import SquareSidebarIcon from '@icon/square-sidebar.svg';
+import { AnimatedSquareCommandKIcon } from '@icon/square-command-k';
+import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
-import CommandKIcon from '@icon/wide-command-k.svg';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedFolderIcon } from '@icon/wide-folder';
@@ -607,6 +607,36 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
   );
 };
 
+/**
+ * Compact icon-only button for the sidebar header row. Encapsulates the hover
+ * signal so animated icons play on hover, mirroring `SidebarActionButton`.
+ */
+const SidebarHeaderIconButton = (props: {
+  icon: Component<{ triggerAnimation?: boolean; class?: string }>;
+  label: string;
+  hotkey?: HotkeyToken | HotkeyToken[];
+  disabled?: boolean;
+  onClick: (event: MouseEvent) => void;
+  onMouseDown?: (event: MouseEvent) => void;
+}) => {
+  const [hovering, setHovering] = createSignal(false);
+  return (
+    <Button
+      class="rounded-md p-1 text-ink-extra-muted [&_svg]:size-4"
+      size="icon-sm"
+      label={props.label}
+      hotkey={props.hotkey}
+      disabled={props.disabled}
+      onClick={props.onClick}
+      onMouseDown={props.onMouseDown}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+    >
+      <Dynamic component={props.icon} triggerAnimation={hovering()} />
+    </Button>
+  );
+};
+
 type SidebarSettingsWidgetProps = {
   isSlim: () => boolean;
   onSelect: (tab: SettingsTab) => void;
@@ -877,30 +907,24 @@ export const AppSidebar = (props: AppSidebarProps) => {
                   <BellIcon />
                 </Button>
               </Show>
-              <Button
-                class="rounded-md p-1 text-ink-extra-muted"
-                size="icon-sm"
+              <SidebarHeaderIconButton
                 label="Command"
                 hotkey={TOKENS.global.commandMenu}
                 onClick={handleCommandPaletteClick}
-              >
-                <CommandKIcon />
-              </Button>
-              <Button
-                class="rounded-md p-1 text-ink-extra-muted"
-                size="icon-sm"
+                icon={AnimatedSquareCommandKIcon}
+              />
+              <SidebarHeaderIconButton
                 label="New Split"
                 hotkey={TOKENS.global.createNewSplit}
                 disabled={!canCreateNewSplit()}
                 onClick={handleNewSplitClick}
-              >
-                <AnimatedNewSplitIcon class="size-4" />
-              </Button>
+                icon={AnimatedNewSplitIcon}
+              />
             </div>
           </Show>
-          <Button
-            class="rounded-md p-1 text-ink-extra-muted [&_svg]:size-4"
-            size="icon-sm"
+          <SidebarHeaderIconButton
+            label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
+            hotkey={TOKENS.global.toggleSidebar}
             onMouseDown={(e) => {
               if (e.button !== 0) return;
               e.preventDefault();
@@ -909,11 +933,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
               handleSidebarOpenChange(!isExpanded());
               globalSplitManager()?.returnFocus();
             }}
-            label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
-            hotkey={TOKENS.global.toggleSidebar}
-          >
-            <SquareSidebarIcon />
-          </Button>
+            icon={AnimatedSquareSidebarIcon}
+          />
         </div>
       </div>
 

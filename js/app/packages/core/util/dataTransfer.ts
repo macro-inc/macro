@@ -57,7 +57,7 @@ function partitionEntries(
   return { fileEntries, directoryEntries };
 }
 
-function createSyntheticFileEntry(file: File): FileSystemFileEntry {
+export function createSyntheticFileEntry(file: File): FileSystemFileEntry {
   return {
     isFile: true,
     isDirectory: false,

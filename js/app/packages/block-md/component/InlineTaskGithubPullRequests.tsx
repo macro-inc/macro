@@ -6,96 +6,39 @@ import { Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, type JSX, Show } from 'solid-js';
 
-const GITHUB_PULL_REQUEST_LINK_CLASS = cn(
-  'inline-flex max-w-full min-w-0 items-stretch overflow-hidden rounded-lg',
-  'border border-edge-muted bg-surface text-ink-muted shadow-sm',
-  'leading-tight hover:bg-hover hover:text-ink',
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20'
+const PILL_CLASS = cn(
+  'inline-flex items-center gap-1.5 min-w-0 ring ring-edge-muted',
+  'px-2 py-1 leading-tight text-left rounded-full',
+  'bg-surface text-ink-muted hover:bg-hover hover:text-ink',
+  'focus-visible:outline-none focus-visible:ring-accent/20'
 );
 
-const GITHUB_PULL_REQUEST_SECTION_CLASS =
-  'flex min-w-0 items-center gap-1.5 px-2 py-1.5';
-
-const GITHUB_PULL_REQUEST_DIVIDER_CLASS =
-  'w-px shrink-0 self-stretch bg-edge-muted';
-
-function pullRequestName(pullRequest: GithubPullRequest): string | undefined {
-  return pullRequest.name?.trim() || undefined;
+function pullRequestName(pr: GithubPullRequest): string | undefined {
+  return pr.name?.trim() || undefined;
 }
 
-function pullRequestLabel(pullRequest: GithubPullRequest): string {
-  const name = pullRequestName(pullRequest);
-  return name ? `${name} ${pullRequest.displayName}` : pullRequest.displayName;
+function pullRequestLabel(pr: GithubPullRequest): string {
+  const name = pullRequestName(pr);
+  return name ? `${name} ${pr.displayName}` : pr.displayName;
 }
 
-function hasLineChanges(pullRequest: GithubPullRequest): boolean {
-  return pullRequest.additions != null || pullRequest.deletions != null;
+function hasLineChanges(pr: GithubPullRequest): boolean {
+  return pr.additions != null || pr.deletions != null;
 }
 
 function formatLineCount(value: number | null | undefined): string {
   return (value ?? 0).toLocaleString();
 }
 
-function lineChangesLabel(pullRequest: GithubPullRequest): string | undefined {
-  if (!hasLineChanges(pullRequest)) return undefined;
-
-  return `+${formatLineCount(pullRequest.additions)} / -${formatLineCount(
-    pullRequest.deletions
-  )}`;
+function lineChangesLabel(pr: GithubPullRequest): string | undefined {
+  if (!hasLineChanges(pr)) return undefined;
+  return `+${formatLineCount(pr.additions)} / -${formatLineCount(pr.deletions)}`;
 }
 
-function pullRequestTitle(pullRequest: GithubPullRequest): string {
-  const changes = lineChangesLabel(pullRequest);
-  const label = pullRequestLabel(pullRequest);
-
+function pullRequestTitle(pr: GithubPullRequest): string {
+  const changes = lineChangesLabel(pr);
+  const label = pullRequestLabel(pr);
   return changes ? `${label} · ${changes}` : label;
-}
-
-function PullRequestName(props: {
-  pullRequest: GithubPullRequest;
-}): JSX.Element {
-  const name = () => pullRequestName(props.pullRequest);
-
-  return (
-    <span class={GITHUB_PULL_REQUEST_SECTION_CLASS}>
-      <Show
-        when={name()}
-        fallback={
-          <span class="min-w-0 truncate">{props.pullRequest.displayName}</span>
-        }
-      >
-        {(title) => (
-          <>
-            <span class="min-w-0 truncate font-medium text-ink">{title()}</span>
-            <span class="shrink-0 text-ink-extra-muted">
-              {props.pullRequest.displayName}
-            </span>
-          </>
-        )}
-      </Show>
-    </span>
-  );
-}
-
-function PullRequestLineChanges(props: {
-  pullRequest: GithubPullRequest;
-}): JSX.Element {
-  return (
-    <span
-      class={cn(
-        GITHUB_PULL_REQUEST_SECTION_CLASS,
-        'shrink-0 gap-1 font-mono text-xs tabular-nums'
-      )}
-    >
-      <span class="text-success">
-        +{formatLineCount(props.pullRequest.additions)}
-      </span>
-      <span class="text-ink-extra-muted">/</span>
-      <span class="text-failure">
-        -{formatLineCount(props.pullRequest.deletions)}
-      </span>
-    </span>
-  );
 }
 
 export function InlineTaskGithubPullRequests(): JSX.Element {
@@ -110,39 +53,51 @@ export function InlineTaskGithubPullRequests(): JSX.Element {
 
   return (
     <Show when={pullRequests().length > 0}>
-      <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm">
-        <For each={pullRequests()}>
-          {(pullRequest) => (
+      <For each={pullRequests()}>
+        {(pr) => {
+          const name = pullRequestName(pr);
+          return (
             <Layer depth={2}>
               <a
-                aria-label={`Open GitHub pull request ${pullRequestLabel(
-                  pullRequest
-                )}`}
-                class={GITHUB_PULL_REQUEST_LINK_CLASS}
-                href={pullRequest.url}
+                aria-label={`Open GitHub pull request ${pullRequestLabel(pr)}`}
+                class={PILL_CLASS}
+                href={pr.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                title={pullRequestTitle(pullRequest)}
+                title={pullRequestTitle(pr)}
               >
-                <span
-                  class={cn(
-                    GITHUB_PULL_REQUEST_SECTION_CLASS,
-                    'shrink-0 text-ink-extra-muted'
-                  )}
+                <GithubIcon class="size-3 shrink-0" aria-hidden="true" />
+                <Show
+                  when={name}
+                  fallback={
+                    <span class="min-w-0 truncate">{pr.displayName}</span>
+                  }
                 >
-                  <GithubIcon class="size-4" aria-hidden="true" />
-                </span>
-                <span class={GITHUB_PULL_REQUEST_DIVIDER_CLASS} />
-                <PullRequestName pullRequest={pullRequest} />
-                <Show when={hasLineChanges(pullRequest)}>
-                  <span class={GITHUB_PULL_REQUEST_DIVIDER_CLASS} />
-                  <PullRequestLineChanges pullRequest={pullRequest} />
+                  {(title) => (
+                    <>
+                      <span class="min-w-0 truncate text-ink">{title()}</span>
+                      <span class="shrink-0 text-ink-extra-muted">
+                        {pr.displayName}
+                      </span>
+                    </>
+                  )}
+                </Show>
+                <Show when={hasLineChanges(pr)}>
+                  <span class="shrink-0 font-mono text-xs tabular-nums">
+                    <span class="text-success">
+                      +{formatLineCount(pr.additions)}
+                    </span>
+                    <span class="text-ink-extra-muted mx-0.5">/</span>
+                    <span class="text-failure">
+                      -{formatLineCount(pr.deletions)}
+                    </span>
+                  </span>
                 </Show>
               </a>
             </Layer>
-          )}
-        </For>
-      </div>
+          );
+        }}
+      </For>
     </Show>
   );
 }

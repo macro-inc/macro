@@ -2,7 +2,7 @@
 
 use crate::domain::ports::{DocumentService, create::DocumentCreationService};
 use crate::domain::response::DocumentMetadataWithContent;
-use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use entity_access::domain::{
     models::{AccessLevel, EntityType},

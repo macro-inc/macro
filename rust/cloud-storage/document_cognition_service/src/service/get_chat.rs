@@ -1,8 +1,7 @@
 // biohazard
 use crate::api::context::ApiContext;
-use crate::core::model::FALLBACK_MODEL;
+use crate::core::model::{CHAT_MODELS, FALLBACK_MODEL};
 use crate::model::chats::ChatResponse;
-use ai::model_selection::ModelSelection;
 use anyhow::Context;
 use macro_db_client::dcs::get_chat::{get_chat_db, get_messages, get_web_citations};
 use unfurl_service::GetUnfurlResponse;
@@ -22,12 +21,6 @@ pub async fn get_chat(
         .context("Failed to get messages")?;
 
     let model = Some(FALLBACK_MODEL);
-
-    // relic of model selection
-    let model_selection = ModelSelection {
-        available_models: vec![FALLBACK_MODEL],
-        new_model: None,
-    };
 
     let web_citations = get_web_citations(&ctx.db, chat_id)
         .await
@@ -61,7 +54,7 @@ pub async fn get_chat(
         updated_at: chat.updated_at,
         attachments: vec![],
         token_count: chat.token_count,
-        available_models: model_selection.available_models,
+        available_models: CHAT_MODELS.to_vec(),
         web_citations,
         is_persistent: chat.is_persistent,
     })

@@ -282,6 +282,7 @@ async fn test_insert_thread_conflict_with_provider_id(pool: Pool<Postgres>) -> a
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_update_thread_metadata_with_inbound_message(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
@@ -310,6 +311,7 @@ async fn test_update_thread_metadata_with_inbound_message(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_update_thread_metadata_read_status(pool: Pool<Postgres>) -> anyhow::Result<()> {
     use sqlx::Row;
 
@@ -338,6 +340,7 @@ async fn test_update_thread_metadata_read_status(pool: Pool<Postgres>) -> anyhow
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_upsert_user_history_insert(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
@@ -363,6 +366,7 @@ async fn test_upsert_user_history_insert(pool: Pool<Postgres>) -> anyhow::Result
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_upsert_user_history_updates_timestamp(pool: Pool<Postgres>) -> anyhow::Result<()> {
     use sqlx::Row;
 

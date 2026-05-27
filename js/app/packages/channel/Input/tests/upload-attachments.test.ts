@@ -50,19 +50,38 @@ describe('uploadInputAttachments', () => {
     ).toBe('document');
   });
 
-  it('replaces pending attachment with uploaded attachment', async () => {
+  it('keeps the attachment pending until the upload promise resolves', async () => {
     const tracker = createInputAttachmentTracker();
     const file = new File(['abc'], 'image.png', { type: 'image/png' });
+    let resolveUpload:
+      | ((result: { failed: false; destination: 'static'; id: string }) => void)
+      | undefined;
 
-    await uploadInputAttachments({
+    const uploadPromise = uploadInputAttachments({
       files: [file],
       tracker,
-      uploadFile: async () => ({
-        failed: false,
-        destination: 'static',
-        id: 'uploaded-image-1',
-      }),
+      uploadFile: () =>
+        new Promise((resolve) => {
+          resolveUpload = resolve;
+        }),
     });
+
+    await Promise.resolve();
+    expect(tracker.attachments()).toEqual([
+      {
+        id: expect.any(String),
+        name: 'image.png',
+        kind: 'image',
+        pending: true,
+      },
+    ]);
+
+    resolveUpload?.({
+      failed: false,
+      destination: 'static',
+      id: 'uploaded-image-1',
+    });
+    await uploadPromise;
 
     expect(tracker.attachments()).toEqual([
       {

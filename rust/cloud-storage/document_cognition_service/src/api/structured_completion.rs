@@ -1,10 +1,8 @@
 use crate::api::context::ApiContext;
-use crate::core::constants::DEFAULT_MAX_TOKENS;
 use crate::model::stream::ToolSet;
-use ai::structured_output_v2::DynamicSchema;
-use ai::tool::ToolLoop;
-use ai::types::{MessageBuilder, Model, RequestBuilder, Role};
-use ai_tools::RequestContext;
+use agent::structured_output::DynamicSchema;
+use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
+use agent::{AgentLoop, AgentModel, StreamPart};
 use axum::Json;
 use axum::extract::{Extension, State};
 use axum::http::StatusCode;
@@ -22,7 +20,7 @@ use utoipa::ToSchema;
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct StructuredCompletionRequest {
     pub prompt: String,
-    pub model: Model,
+    pub model: AgentModel,
     pub output_schema: DynamicSchema,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub additional_instructions: Option<String>,
@@ -92,70 +90,117 @@ pub async fn structured_completion(
         None => tools_prompt.to_string(),
     };
 
-    let ai_request = RequestBuilder::new()
-        .model(request.model)
-        .user_message(&request.prompt)
-        .system_prompt(system_prompt.clone())
-        .max_tokens(DEFAULT_MAX_TOKENS)
-        .build();
-
     // Phase 1: Run agent loop to gather information
     let mcp_store = ctx.mcp_state.store();
     let mcp_records = mcp_store.list(&user_id).await.unwrap_or_default();
-    let toolset = Arc::new(
+    let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> = Arc::new(
         mcp_client::domain::service::CombinedToolSet::new(ctx.all_tools.clone(), &mcp_records)
             .await,
     );
-    let client = ToolLoop::new(toolset, ctx.tool_service_context.clone());
-    let mut chat = client.chat();
 
-    let request_context = RequestContext {
-        user_id: user_id.clone(),
+    let user_message = ChatMessage {
+        role: Role::User,
+        content: ChatMessageContent::Text(request.prompt.clone()),
+        attachments: None,
     };
-    let mut stream = chat
-        .send_message(ai_request, request_context, user_id.as_ref().to_string())
-        .await
-        .map_err(|e| StructuredCompletionError {
-            error: format!("Agent loop failed: {e}"),
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-        })?;
+    let rig_messages = agent::to_rig_messages(&[user_message]);
 
-    while let Some(item) = stream.next().await {
-        if let Err(e) = item {
-            return Err(StructuredCompletionError {
-                error: format!("Agent loop error: {e}"),
+    let agent_loop = AgentLoop::new().with_model(request.model);
+    let mut session = agent_loop
+        .session(
+            toolset,
+            Arc::new(ctx.tool_service_context.clone()),
+            &system_prompt,
+            user_id,
+        )
+        .await;
+
+    let mut ai_stream =
+        session
+            .send_message(rig_messages)
+            .await
+            .map_err(|e| StructuredCompletionError {
+                error: format!("Agent loop failed: {e}"),
                 status: StatusCode::INTERNAL_SERVER_ERROR,
-            });
+            })?;
+
+    let mut yielded_parts: Vec<AssistantMessagePart> = Vec::new();
+    while let Some(item) = ai_stream.next().await {
+        match item {
+            Ok(part) => match part {
+                StreamPart::Content(content) if !content.is_empty() => {
+                    yielded_parts.push(AssistantMessagePart::Text { text: content });
+                }
+                StreamPart::ToolCall(call) => match call.mcp {
+                    Some(mcp) => yielded_parts.push(AssistantMessagePart::McpToolCall {
+                        name: mcp.tool_name,
+                        service: mcp.service,
+                        display_name: mcp.display_name,
+                        json: call.json,
+                        id: call.id,
+                    }),
+                    None => yielded_parts.push(AssistantMessagePart::ToolCall {
+                        name: call.name,
+                        json: call.json,
+                        id: call.id,
+                    }),
+                },
+                StreamPart::ToolResponse(agent::ToolResponse::Json { id, json, name }) => {
+                    yielded_parts.push(AssistantMessagePart::ToolCallResponseJson {
+                        name,
+                        json,
+                        id,
+                    });
+                }
+                StreamPart::ToolResponse(agent::ToolResponse::Err {
+                    id,
+                    name,
+                    description,
+                }) => {
+                    yielded_parts.push(AssistantMessagePart::ToolCallErr {
+                        name,
+                        description,
+                        id,
+                    });
+                }
+                _ => {}
+            },
+            Err(e) => {
+                return Err(StructuredCompletionError {
+                    error: format!("Agent loop error: {e}"),
+                    status: StatusCode::INTERNAL_SERVER_ERROR,
+                });
+            }
         }
     }
-    drop(stream);
+    drop(ai_stream);
 
     // Phase 2: Structured completion with the gathered context
-    let new_messages = chat.get_new_conversation_messages();
-
-    let mut all_messages = vec![
-        MessageBuilder::new()
-            .role(Role::User)
-            .content(request.prompt)
-            .build(),
+    let conversation: Vec<ChatMessage> = vec![
+        ChatMessage {
+            role: Role::User,
+            content: ChatMessageContent::Text(request.prompt),
+            attachments: None,
+        },
+        ChatMessage {
+            role: Role::Assistant,
+            content: ChatMessageContent::AssistantMessageParts(yielded_parts),
+            attachments: None,
+        },
+        ChatMessage {
+            role: Role::User,
+            content: ChatMessageContent::Text(
+                "Based on the information gathered above, produce a structured response matching the required schema.".to_string(),
+            ),
+            attachments: None,
+        },
     ];
-    all_messages.extend(new_messages);
-    all_messages.push(
-        MessageBuilder::new()
-            .role(Role::User)
-            .content("Based on the information gathered above, produce a structured response matching the required schema.")
-            .build(),
-    );
+    let rig_messages = agent::to_rig_messages(&conversation);
 
-    let structured_request = RequestBuilder::new()
-        .model(request.model)
-        .messages(all_messages)
-        .system_prompt(system_prompt)
-        .max_tokens(DEFAULT_MAX_TOKENS)
-        .build();
-
-    let result = ai::structured_output_v2::dynamic_structured_completion(
-        structured_request,
+    let result = agent::structured_output::dynamic_structured_completion(
+        request.model,
+        &system_prompt,
+        rig_messages,
         request.output_schema,
     )
     .await

@@ -43,12 +43,15 @@ async fn insert_company(
 ) -> sqlx::Result<Uuid> {
     let company_id = Uuid::now_v7();
 
-    sqlx::query(r#"INSERT INTO crm_companies (id, team_id, email_sync) VALUES ($1, $2, $3)"#)
-        .bind(company_id)
-        .bind(team_id)
-        .bind(email_sync)
-        .execute(pool)
-        .await?;
+    sqlx::query(
+        r#"INSERT INTO crm_companies (id, team_id, email_sync, first_interaction, last_interaction)
+           VALUES ($1, $2, $3, now(), now())"#,
+    )
+    .bind(company_id)
+    .bind(team_id)
+    .bind(email_sync)
+    .execute(pool)
+    .await?;
 
     for domain in domains {
         sqlx::query(r#"INSERT INTO crm_domains (company_id, team_id, domain) VALUES ($1, $2, $3)"#)
@@ -84,12 +87,15 @@ async fn insert_contact_with_source(
     link_id: Uuid,
 ) -> sqlx::Result<Uuid> {
     let contact_id = Uuid::now_v7();
-    sqlx::query(r#"INSERT INTO crm_contacts (id, company_id, email) VALUES ($1, $2, $3)"#)
-        .bind(contact_id)
-        .bind(company_id)
-        .bind(email)
-        .execute(pool)
-        .await?;
+    sqlx::query(
+        r#"INSERT INTO crm_contacts (id, company_id, email, first_interaction, last_interaction)
+           VALUES ($1, $2, $3, now(), now())"#,
+    )
+    .bind(contact_id)
+    .bind(company_id)
+    .bind(email)
+    .execute(pool)
+    .await?;
     sqlx::query(r#"INSERT INTO crm_contact_sources (contact_id, link_id) VALUES ($1, $2)"#)
         .bind(contact_id)
         .bind(link_id)
@@ -166,6 +172,60 @@ async fn fetch_contact_updated_at(
             .fetch_optional(pool)
             .await?;
     Ok(row.map(|(updated_at,)| updated_at))
+}
+
+async fn fetch_company_interactions(
+    pool: &PgPool,
+    company_id: Uuid,
+) -> sqlx::Result<Option<(chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)>> {
+    sqlx::query_as(r#"SELECT first_interaction, last_interaction FROM crm_companies WHERE id = $1"#)
+        .bind(company_id)
+        .fetch_optional(pool)
+        .await
+}
+
+async fn fetch_contact_interactions(
+    pool: &PgPool,
+    contact_id: Uuid,
+) -> sqlx::Result<Option<(chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)>> {
+    sqlx::query_as(r#"SELECT first_interaction, last_interaction FROM crm_contacts WHERE id = $1"#)
+        .bind(contact_id)
+        .fetch_optional(pool)
+        .await
+}
+
+async fn fetch_company_for_domain(
+    pool: &PgPool,
+    team_id: Uuid,
+    domain: &str,
+) -> sqlx::Result<Option<Uuid>> {
+    let row: Option<(Uuid,)> = sqlx::query_as(
+        r#"SELECT c.id
+           FROM crm_companies c
+           JOIN crm_domains d ON d.company_id = c.id
+           WHERE c.team_id = $1 AND LOWER(d.domain) = LOWER($2)
+           LIMIT 1"#,
+    )
+    .bind(team_id)
+    .bind(domain)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|(id,)| id))
+}
+
+async fn fetch_contact_id(
+    pool: &PgPool,
+    company_id: Uuid,
+    email: &str,
+) -> sqlx::Result<Option<Uuid>> {
+    let row: Option<(Uuid,)> = sqlx::query_as(
+        r#"SELECT id FROM crm_contacts WHERE company_id = $1 AND LOWER(email) = LOWER($2) LIMIT 1"#,
+    )
+    .bind(company_id)
+    .bind(email)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|(id,)| id))
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -632,6 +692,9 @@ async fn service_populate_contact_skips_when_domain_matches_user_domain(
             "user@macro.com",
             "colleague@macro.com",
             None,
+            chrono::Utc::now(),
+            chrono::Utc::now(),
+            true,
         )
         .await?;
 
@@ -665,6 +728,9 @@ async fn service_populate_contact_same_domain_check_is_case_insensitive(
             "User@MACRO.com",
             "colleague@macro.com",
             None,
+            chrono::Utc::now(),
+            chrono::Utc::now(),
+            true,
         )
         .await?;
 
@@ -692,8 +758,8 @@ async fn service_populate_contact_refreshes_existing_company_and_contact_updated
 
     let company_id = Uuid::now_v7();
     sqlx::query(
-        r#"INSERT INTO crm_companies (id, team_id, email_sync, updated_at)
-           VALUES ($1, $2, TRUE, $3)"#,
+        r#"INSERT INTO crm_companies (id, team_id, email_sync, updated_at, first_interaction, last_interaction)
+           VALUES ($1, $2, TRUE, $3, $3, $3)"#,
     )
     .bind(company_id)
     .bind(team_id)
@@ -710,8 +776,8 @@ async fn service_populate_contact_refreshes_existing_company_and_contact_updated
 
     let contact_id = Uuid::now_v7();
     sqlx::query(
-        r#"INSERT INTO crm_contacts (id, company_id, email, updated_at)
-           VALUES ($1, $2, $3, $4)"#,
+        r#"INSERT INTO crm_contacts (id, company_id, email, updated_at, first_interaction, last_interaction)
+           VALUES ($1, $2, $3, $4, $4, $4)"#,
     )
     .bind(contact_id)
     .bind(company_id)
@@ -738,6 +804,9 @@ async fn service_populate_contact_refreshes_existing_company_and_contact_updated
             "user@macro.com",
             "alice@acme.com",
             Some("Alice"),
+            chrono::Utc::now(),
+            chrono::Utc::now(),
+            true,
         )
         .await?;
 
@@ -767,7 +836,16 @@ async fn service_populate_contact_writes_when_domain_differs(pool: PgPool) -> an
     );
 
     service
-        .populate_contact(&team_id, &link_id, "user@macro.com", "alice@acme.com", None)
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            chrono::Utc::now(),
+            chrono::Utc::now(),
+            true,
+        )
         .await?;
 
     assert_eq!(
@@ -917,5 +995,555 @@ async fn precheck_address_does_not_leak_other_team_contacts(pool: PgPool) -> any
         .crm_scope_precheck(&team_b, &[], &["alice@acme.com".to_string()])
         .await?;
     assert!(!result.addresses[0].exists);
+    Ok(())
+}
+
+/// Received-direction populate for an unknown `(team, domain)` is a
+/// no-op: only sent-direction may create a new `crm_companies` row.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn populate_contact_is_sent_false_skips_when_no_company(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+
+    let now = chrono::Utc::now();
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            now,
+            now,
+            false,
+        )
+        .await?;
+
+    assert_eq!(
+        count_companies_for_domain(&pool, team_id, "acme.com").await?,
+        0,
+        "received-direction populate must not create a crm_companies row"
+    );
+    Ok(())
+}
+
+/// Brand-new company + contact INSERT writes `first_interaction` and
+/// `last_interaction` directly from the payload's distinct `first_at` /
+/// `last_at` (covers the historical-seed range, e.g. 2020→2024).
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn populate_contact_insert_seeds_first_and_last_from_payload(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
+
+    let first: chrono::DateTime<chrono::Utc> = "2020-01-01T00:00:00Z".parse()?;
+    let last: chrono::DateTime<chrono::Utc> = "2024-06-15T00:00:00Z".parse()?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            first,
+            last,
+            true,
+        )
+        .await?;
+
+    let company_id = fetch_company_for_domain(&pool, team_id, "acme.com")
+        .await?
+        .expect("company should be inserted");
+    let (company_first, company_last) = fetch_company_interactions(&pool, company_id)
+        .await?
+        .expect("company interactions");
+    assert_eq!(company_first, first);
+    assert_eq!(company_last, last);
+
+    let contact_id = fetch_contact_id(&pool, company_id, "alice@acme.com")
+        .await?
+        .expect("contact should be inserted");
+    let (contact_first, contact_last) = fetch_contact_interactions(&pool, contact_id)
+        .await?
+        .expect("contact interactions");
+    assert_eq!(contact_first, first);
+    assert_eq!(contact_last, last);
+    Ok(())
+}
+
+/// Sent-direction populate against an existing row merges
+/// `first_interaction` via `LEAST` (older message pulls it back) and
+/// `last_interaction` via `GREATEST` (newer message pushes it forward),
+/// on both the company and contact rows.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn populate_contact_is_sent_true_merges_first_least_and_last_greatest(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
+
+    let initial: chrono::DateTime<chrono::Utc> = "2022-06-01T00:00:00Z".parse()?;
+    let older: chrono::DateTime<chrono::Utc> = "2020-01-01T00:00:00Z".parse()?;
+    let newer: chrono::DateTime<chrono::Utc> = "2024-12-31T00:00:00Z".parse()?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+
+    // First populate establishes the row at `initial`.
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            initial,
+            initial,
+            true,
+        )
+        .await?;
+
+    let company_id = fetch_company_for_domain(&pool, team_id, "acme.com")
+        .await?
+        .expect("company");
+    let contact_id = fetch_contact_id(&pool, company_id, "alice@acme.com")
+        .await?
+        .expect("contact");
+
+    // A backfilled older message should pull first_interaction back via LEAST.
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            older,
+            older,
+            true,
+        )
+        .await?;
+
+    let (company_first, company_last) = fetch_company_interactions(&pool, company_id)
+        .await?
+        .expect("interactions");
+    assert_eq!(company_first, older);
+    assert_eq!(company_last, initial);
+    let (contact_first, contact_last) = fetch_contact_interactions(&pool, contact_id)
+        .await?
+        .expect("interactions");
+    assert_eq!(contact_first, older);
+    assert_eq!(contact_last, initial);
+
+    // A newer message should push last_interaction forward via GREATEST,
+    // leaving first_interaction at `older`.
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            newer,
+            newer,
+            true,
+        )
+        .await?;
+
+    let (company_first, company_last) = fetch_company_interactions(&pool, company_id)
+        .await?
+        .expect("interactions");
+    assert_eq!(company_first, older);
+    assert_eq!(company_last, newer);
+    Ok(())
+}
+
+/// Received-direction populate against an existing row must not pull
+/// `first_interaction` backwards — even with an older timestamp — but
+/// still GREATEST-merges `last_interaction` when newer. Asserts both
+/// company and contact.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn populate_contact_is_sent_false_leaves_first_interaction_unchanged(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
+
+    let baseline: chrono::DateTime<chrono::Utc> = "2022-06-01T00:00:00Z".parse()?;
+    let older: chrono::DateTime<chrono::Utc> = "2020-01-01T00:00:00Z".parse()?;
+    let newer: chrono::DateTime<chrono::Utc> = "2024-12-31T00:00:00Z".parse()?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+
+    // Sent populate seeds the row at `baseline`.
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            baseline,
+            baseline,
+            true,
+        )
+        .await?;
+
+    let company_id = fetch_company_for_domain(&pool, team_id, "acme.com")
+        .await?
+        .expect("company");
+    let contact_id = fetch_contact_id(&pool, company_id, "alice@acme.com")
+        .await?
+        .expect("contact");
+
+    // Received populate with an older timestamp must NOT pull
+    // first_interaction backwards on either row.
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            older,
+            older,
+            false,
+        )
+        .await?;
+
+    let (company_first, _) = fetch_company_interactions(&pool, company_id)
+        .await?
+        .expect("interactions");
+    assert_eq!(
+        company_first, baseline,
+        "received populate must not pull company first_interaction backwards"
+    );
+    let (contact_first, _) = fetch_contact_interactions(&pool, contact_id)
+        .await?
+        .expect("interactions");
+    assert_eq!(
+        contact_first, baseline,
+        "received populate must not pull contact first_interaction backwards"
+    );
+
+    // Received populate with a newer timestamp still bumps last_interaction.
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            newer,
+            newer,
+            false,
+        )
+        .await?;
+
+    let (_, company_last) = fetch_company_interactions(&pool, company_id)
+        .await?
+        .expect("interactions");
+    assert_eq!(company_last, newer);
+    let (_, contact_last) = fetch_contact_interactions(&pool, contact_id)
+        .await?
+        .expect("interactions");
+    assert_eq!(contact_last, newer);
+    Ok(())
+}
+
+/// Received-direction populate at a known company creates a new
+/// `crm_contacts` row (seeded with both timestamps) and a
+/// `crm_contact_sources` row — verifying sources now track
+/// interactions in both directions.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn populate_contact_is_sent_false_inserts_contact_at_existing_company(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
+
+    let baseline: chrono::DateTime<chrono::Utc> = "2022-06-01T00:00:00Z".parse()?;
+    let received_at: chrono::DateTime<chrono::Utc> = "2024-09-15T00:00:00Z".parse()?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+
+    // Sent populate establishes the company via alice@acme.com.
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            baseline,
+            baseline,
+            true,
+        )
+        .await?;
+
+    let company_id = fetch_company_for_domain(&pool, team_id, "acme.com")
+        .await?
+        .expect("company");
+    assert_eq!(count_contacts(&pool, company_id).await?, 1);
+
+    // Received-direction populate for a *new* address at the same
+    // company creates a contact row + source row.
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "bob@acme.com",
+            Some("Bob"),
+            received_at,
+            received_at,
+            false,
+        )
+        .await?;
+
+    assert_eq!(
+        count_contacts(&pool, company_id).await?,
+        2,
+        "received-direction populate must insert a contact under the known company"
+    );
+    let bob_id = fetch_contact_id(&pool, company_id, "bob@acme.com")
+        .await?
+        .expect("bob contact");
+    let (bob_first, bob_last) = fetch_contact_interactions(&pool, bob_id)
+        .await?
+        .expect("bob interactions");
+    assert_eq!(bob_first, received_at);
+    assert_eq!(bob_last, received_at);
+    assert_eq!(
+        count_sources_for_company(&pool, company_id).await?,
+        2,
+        "received-direction populate must write a crm_contact_sources row"
+    );
+    Ok(())
+}
+
+/// Team-level CRM killswitch (`team_crm_settings.crm_enabled = false`
+/// or missing) short-circuits populate in both directions before any
+/// rows are written.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn populate_contact_team_killswitch_off_noops_both_directions(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    // Intentionally do NOT enable_crm_for_team — team_crm_settings row is
+    // missing, which is treated as crm_enabled = false.
+    let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+
+    let now = chrono::Utc::now();
+
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            now,
+            now,
+            true,
+        )
+        .await?;
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            now,
+            now,
+            false,
+        )
+        .await?;
+
+    assert_eq!(
+        count_companies_for_domain(&pool, team_id, "acme.com").await?,
+        0,
+        "team killswitch must short-circuit both directions"
+    );
+    Ok(())
+}
+
+/// Per-domain killswitch (`crm_companies.email_sync = false`)
+/// short-circuits populate in both directions: interaction columns
+/// stay at the stored baseline and no contact / source rows land.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn populate_contact_per_domain_killswitch_noops_both_directions(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
+
+    // Seed a killswitched company for the domain. Baseline timestamp
+    // is parsed from a string so it has zero sub-microsecond precision
+    // — Postgres `TIMESTAMPTZ` only stores microseconds, and
+    // `chrono::Utc::now()` would carry nanos that get silently
+    // truncated and break the `assert_eq` below.
+    let company_id = insert_company(&pool, team_id, false, &["acme.com"]).await?;
+    let baseline: chrono::DateTime<chrono::Utc> = "2024-01-01T00:00:00Z".parse()?;
+    sqlx::query(
+        r#"UPDATE crm_companies
+           SET first_interaction = $2, last_interaction = $2
+           WHERE id = $1"#,
+    )
+    .bind(company_id)
+    .bind(baseline)
+    .execute(&pool)
+    .await?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+
+    let later: chrono::DateTime<chrono::Utc> = "2024-01-08T00:00:00Z".parse()?;
+
+    for is_sent in [true, false] {
+        service
+            .populate_contact(
+                &team_id,
+                &link_id,
+                "user@macro.com",
+                "alice@acme.com",
+                None,
+                later,
+                later,
+                is_sent,
+            )
+            .await?;
+    }
+
+    // Killswitch must keep the company's interaction columns at the
+    // baseline and prevent contact / source inserts.
+    let (first, last) = fetch_company_interactions(&pool, company_id)
+        .await?
+        .expect("company");
+    assert_eq!(first, baseline);
+    assert_eq!(last, baseline);
+    assert_eq!(count_contacts(&pool, company_id).await?, 0);
+    assert_eq!(count_sources_for_company(&pool, company_id).await?, 0);
+    Ok(())
+}
+
+/// Historical-seed-style populate (`first_at != last_at`) against an
+/// already-tracked row expands the stored range outward: `first` pulls
+/// back via LEAST and `last` pushes forward via GREATEST in the same
+/// call.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn populate_contact_seed_style_range_merges_into_existing(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
+
+    let baseline: chrono::DateTime<chrono::Utc> = "2022-06-01T00:00:00Z".parse()?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+
+    // Establish the rows at `baseline`.
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            baseline,
+            baseline,
+            true,
+        )
+        .await?;
+
+    let company_id = fetch_company_for_domain(&pool, team_id, "acme.com")
+        .await?
+        .expect("company");
+    let contact_id = fetch_contact_id(&pool, company_id, "alice@acme.com")
+        .await?
+        .expect("contact");
+
+    // Historical-seed-style populate: distinct first_at < last_at,
+    // is_sent=true, hitting an already-populated contact. Should pull
+    // first_interaction earlier AND push last_interaction later.
+    let seed_first: chrono::DateTime<chrono::Utc> = "2010-03-15T00:00:00Z".parse()?;
+    let seed_last: chrono::DateTime<chrono::Utc> = "2024-12-31T00:00:00Z".parse()?;
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            seed_first,
+            seed_last,
+            true,
+        )
+        .await?;
+
+    let (company_first, company_last) = fetch_company_interactions(&pool, company_id)
+        .await?
+        .expect("interactions");
+    assert_eq!(company_first, seed_first);
+    assert_eq!(company_last, seed_last);
+    let (contact_first, contact_last) = fetch_contact_interactions(&pool, contact_id)
+        .await?
+        .expect("interactions");
+    assert_eq!(contact_first, seed_first);
+    assert_eq!(contact_last, seed_last);
     Ok(())
 }

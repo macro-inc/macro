@@ -1,4 +1,4 @@
-use ai::types::ChatMessageContent;
+use agent::types::ChatMessageContent;
 use attachment::FormattedParts;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

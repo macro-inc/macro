@@ -132,7 +132,6 @@ const PaywallComponentNew = (props: PaywallProps) => {
                     </div>
                     <SubscriptionTier
                       class="w-7 shrink-0"
-                      total={1}
                       tier={plan.tier === 'premium' ? 'premium' : undefined}
                     />
                   </div>

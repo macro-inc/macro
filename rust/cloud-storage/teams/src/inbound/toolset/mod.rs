@@ -6,7 +6,7 @@ mod list_team_members;
 mod test;
 
 use crate::domain::team_repo::TeamMembersService;
-use ai::tool::AsyncToolCollection;
+use ai_toolset::AsyncToolCollection;
 use entity_access::domain::ports::EntityAccessService;
 use list_team_members::ListTeamMembers;
 use std::sync::Arc;

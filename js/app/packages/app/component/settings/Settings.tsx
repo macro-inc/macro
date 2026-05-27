@@ -1,4 +1,4 @@
-import { createEffect, onMount, Show, Suspense } from 'solid-js';
+import { onMount, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isMobile } from '@core/mobile/isMobile';
@@ -14,7 +14,10 @@ import { Shortcuts } from './Shortcuts';
 import { Team } from './Team';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
-import { SplitHeaderLeft, SplitHeaderRight } from '../split-layout/components/SplitHeader';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '../split-layout/components/SplitHeader';
 import { CollapsibleHeaderItem } from '../split-layout/components/CollapsibleHeaderItem';
 import { SettingsButton } from './SettingsButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -37,23 +40,12 @@ type SettingsPanelProps = {
 };
 
 function SettingsPanel(props: SettingsPanelProps) {
-  const { settingsOpen, closeSettings, activeTabId, setActiveTabId } = useSettingsState();
+  const { closeSettings, activeTabId, setActiveTabId } = useSettingsState();
     const teamsFlag = useFeatureFlag('enable-teams-settings', { enabledOverride: ENABLE_TEAMS_OVERRIDE });
 
   // Set up hotkey scope for settings panel
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
   let settingsContainerRef: HTMLDivElement | undefined;
-
-  function focusSettingsOnOpen() {
-    if (settingsOpen()){
-      setTimeout(() => {
-        // Focus the settings container to activate the hotkey scope
-        settingsContainerRef?.focus();
-      }, 10);
-    }
-  }
-
-  createEffect(focusSettingsOnOpen);
 
   function settingsTabs() {
     const tabs: { value: string; label: string }[] = [
@@ -175,6 +167,7 @@ function SettingsPanel(props: SettingsPanelProps) {
       class="size-full flex flex-col outline-none"
       classList={{ invisible: props.hide }}
       tabIndex={0}
+      data-settings-panel
       ref={settingsContainerRef}
     >
       <SplitHeaderLeft>
@@ -239,4 +232,3 @@ function SettingsPanel(props: SettingsPanelProps) {
     </div>
   );
 }
-

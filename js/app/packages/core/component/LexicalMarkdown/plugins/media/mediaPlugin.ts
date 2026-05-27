@@ -2,9 +2,14 @@ import { blockNameToFileExtensionSet } from '@core/constant/allBlocks';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { heicConversionService } from '@core/heic/service';
 import type { FetchError } from '@core/service';
-import { createStaticFile } from '@core/util/create';
-import { contentHash } from '@core/util/hash';
 import type { ResultError } from '@core/util/result';
+import {
+  createStaticUploadFile,
+  createUploadFile,
+  createUploadFilePreviewUrl,
+  getUploadFileCacheKey,
+  type UploadFile,
+} from '@core/util/uploadFile';
 
 import { mergeRegister } from '@lexical/utils';
 import {
@@ -94,7 +99,7 @@ export const TRY_INSERT_MEDIA_UPLOAD_COMMAND: LexicalCommand<
   MediaType | 'all'
 > = createCommand('TRY_INSERT_MEDIA_UPLOAD_COMMAND');
 
-function validateMediaFile(file: File, mediaType: MediaType): boolean {
+function validateMediaFile(file: UploadFile, mediaType: MediaType): boolean {
   const ext = fileExtension(file.name);
   return ext != null && blockNameToFileExtensionSet[mediaType].has(ext);
 }
@@ -105,12 +110,12 @@ export async function addMediaFromFile(
   mediaType: MediaType,
   constrainedMediaDimensions?: { width: number; height: number }
 ) {
-  const processedFile = await processFile(file);
+  const processedFile = await processFile(createUploadFile(file));
   if (!validateMediaFile(processedFile, mediaType)) return { success: false };
   editor.dispatchCommand(INSERT_MEDIA_COMMAND, {
     type: 'local',
-    url: URL.createObjectURL(processedFile),
-    file: processedFile,
+    url: createUploadFilePreviewUrl(processedFile),
+    file: processedFile.file,
     mediaType,
     constrainedMediaDimensions,
   });
@@ -140,17 +145,13 @@ export async function getMediaUrl(src: {
 /**
  * Generate a unique key for a file to prevent duplicate uploads.
  */
-async function getFileKey(file: File, chunks = 8) {
-  const hash = await contentHash(
-    await file.slice(0, chunks * 1024).arrayBuffer()
-  );
-  return `${file.name}_${file.size}_${hash}`;
+async function getFileKey(file: UploadFile, chunks = 8) {
+  return getUploadFileCacheKey(file, chunks);
 }
 
-async function processFile(file: File): Promise<File> {
-  if (heicConversionService.canConvert(file)) {
-    const convertedFile = await heicConversionService.convertFile(file);
-    return convertedFile;
+async function processFile(file: UploadFile): Promise<UploadFile> {
+  if (file.kind === 'browser' && heicConversionService.canConvert(file.file)) {
+    return createUploadFile(await heicConversionService.convertFile(file.file));
   }
   return file;
 }
@@ -165,8 +166,8 @@ async function uploadStaticFiles(
 ) {
   for (const file of files) {
     try {
-      const processedFile = await processFile(file);
-      const id = await createStaticFile(processedFile);
+      const processedFile = await processFile(createUploadFile(file));
+      const id = await createStaticUploadFile(processedFile);
       onUpload(id);
     } catch (_error) {
       onError?.();
@@ -313,7 +314,7 @@ function registerMediaPlugin(editor: LexicalEditor) {
     localUrl: string,
     mediaType: MediaType
   ) => {
-    const uploadKey = await getFileKey(file);
+    const uploadKey = await getFileKey(createUploadFile(file));
 
     if (cachedUploads.has(uploadKey)) {
       const id = cachedUploads.get(uploadKey)!;

@@ -24,11 +24,22 @@ use call::{
     },
 };
 use channels::{
-    domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
-    outbound::pg_channels_repo::PgChannelMessagesRepo,
+    domain::{
+        service::ChannelServiceImpl,
+        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
+    },
+    inbound::axum_router::ChannelsRouterState,
+    outbound::{
+        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
+        contacts_dispatcher::ContactsChannelDispatcher,
+        notification_sender::NotificationChannelSender,
+        pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
+        pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
+        sqs_search_indexer::SqsChannelSearchIndexer,
+    },
 };
 use comms::{
-    domain::service::ChannelServiceImpl,
+    domain::service::ChannelServiceImpl as CommsChannelServiceImpl,
     inbound::router::CommsRouterState,
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
@@ -271,7 +282,7 @@ async fn main() -> anyhow::Result<()> {
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
     let ingress_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.vars.notification_queue.as_ref().to_string(),
+        config.vars.notification_ingress_queue.as_ref().to_string(),
     );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue.clone(),
@@ -294,13 +305,13 @@ async fn main() -> anyhow::Result<()> {
         Some(notification_service),
     ));
 
-    // Create the ChannelServiceImpl - we need to create separate instances as it doesn't impl Clone
-    let channel_service_for_soup = ChannelServiceImpl::new(
+    // Create the comms ChannelServiceImpl instances.
+    let channel_service_for_soup = CommsChannelServiceImpl::new(
         PgCommsRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
         PgUserRepo::new(readonly_db.clone()),
         frecency_storage.clone(),
     );
-    let channel_service_for_comms = ChannelServiceImpl::new(
+    let channel_service_for_comms = CommsChannelServiceImpl::new(
         PgCommsRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
         PgUserRepo::new(db.clone()),
         frecency_storage.clone(),
@@ -539,8 +550,24 @@ async fn main() -> anyhow::Result<()> {
         PgCallRepo::new(readonly_db.clone()),
     );
 
+    let sqs_client = Arc::new(sqs_client);
+    let conn_gateway_client = Arc::new(conn_gateway_client);
+    let channels_repo = PgChannelsRepo::new(db.clone());
+
+    let channels_service = ChannelServiceImpl::with_dependencies(
+        channels_repo,
+        SpawnedChannelEventDispatcher::new(ChannelSideEffectService::new(
+            PgChannelSideEffectContext::new(db.clone()),
+            ConnectionGatewayChannelRealtimePublisher::new(conn_gateway_client.clone()),
+            NotificationChannelSender::new(notification_ingress_service.clone()),
+            SqsChannelSearchIndexer::new(sqs_client.clone()),
+            ContactsChannelDispatcher::new(contacts_ingress.clone()),
+        )),
+        PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
+    );
+
     let api_context = ApiContext {
-        contacts_ingress,
+        contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
                 PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
@@ -559,9 +586,9 @@ async fn main() -> anyhow::Result<()> {
         s3_client: s3,
         dynamodb_client: Arc::new(dynamodb_client),
         dynamo_db,
-        sqs_client: Arc::new(sqs_client),
-        notification_ingress_service,
-        conn_gateway_client: Arc::new(conn_gateway_client),
+        sqs_client: sqs_client.clone(),
+        notification_ingress_service: notification_ingress_service.clone(),
+        conn_gateway_client: conn_gateway_client.clone(),
         sync_service_client: sync_service_client.clone(),
         system_properties_service: system_properties_service.clone(),
         properties_service: properties_service.clone(),
@@ -584,10 +611,7 @@ async fn main() -> anyhow::Result<()> {
                 documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
             ),
         },
-        channels_state: ChannelsRouterState::new(
-            ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(db.clone())),
-            (*entity_access_service).clone(),
-        ),
+        channels_state: ChannelsRouterState::new(channels_service, (*entity_access_service).clone()),
         call_state,
         call_webhook_state,
         call_internal_state,

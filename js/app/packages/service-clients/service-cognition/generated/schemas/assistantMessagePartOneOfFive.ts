@@ -7,14 +7,19 @@
 import type { AssistantMessagePartOneOfFiveDisplayName } from './assistantMessagePartOneOfFiveDisplayName';
 import type { AssistantMessagePartOneOfFiveType } from './assistantMessagePartOneOfFiveType';
 
+/**
+ * A tool call routed through an MCP service.
+ */
 export type AssistantMessagePartOneOfFive = {
-  /** Human-readable title from the MCP server, if provided */
+  /** Optional human-readable name. */
   display_name?: AssistantMessagePartOneOfFiveDisplayName;
+  /** Provider-assigned call id. */
   id: string;
+  /** Tool arguments as JSON. */
   json: unknown;
-  /** Demangled tool name from the MCP server */
+  /** Tool name. */
   name: string;
-  /** MCP server name */
+  /** MCP service identifier. */
   service: string;
   type: AssistantMessagePartOneOfFiveType;
 };

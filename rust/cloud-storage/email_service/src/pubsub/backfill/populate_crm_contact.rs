@@ -4,21 +4,23 @@ use models_email::email::service::backfill::PopulateCrmContactPayload;
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
-/// Idempotently records a contact the user has emailed into the CRM tables.
+/// Records a CRM interaction for one `(link, contact_email)` —
+/// possibly inserting new `crm_companies` / `crm_contacts` /
+/// `crm_contact_sources` rows.
 ///
-/// Fanned out one-per-recipient from `backfill_message` when the message was
-/// sent by the user. Resolves the user's team (no-op if the user has no
-/// team), then upserts `crm_companies`/`crm_domains`/`crm_contacts`/
-/// `crm_contact_sources` atomically. The call is a no-op when either
-/// killswitch is engaged: the team-level `team_crm_settings.crm_enabled
-/// = false` (toggled via `PATCH /team/crm`), or the per-domain
-/// `crm_companies.email_sync = false` for the contact's domain. See
-/// [`crm::domain::companies_repo::CompaniesRepository::populate_contact`].
+/// Fanned out one-per-address from `backfill_message`, `upsert_message`,
+/// and `populate_crm_for_user`. Every non-draft message contributes:
+/// sent-direction populates fan out per to/cc/bcc recipient and may
+/// insert new company rows; received-direction populates fan out for
+/// the sender and only touch already-tracked companies. The consumer
+/// resolves the team for the link (no-op if no team), then delegates
+/// to [`crm::domain::service::CrmService::populate_contact`] which
+/// applies the full insert / update matrix.
 ///
-/// Company metadata (name, description, icon) is resolved and cached
-/// inside `crm_service.populate_contact` via the
-/// `crm_domain_directory` lookup → resolver → upsert path, so the
-/// consumer here doesn't need to know how that's done.
+/// `first_at` / `last_at` come from the producer pre-computed. Per-
+/// message paths set both to the message's `internal_date_ts` (with
+/// `Utc::now()` fallback at the producer when Gmail returned none).
+/// The historical seed aggregates MIN/MAX per contact in SQL.
 #[tracing::instrument(skip(ctx), err, fields(contact_email = %p.contact_email, link_id = %link.id))]
 pub async fn populate_crm_contact(
     ctx: &PubSubContext,
@@ -50,6 +52,9 @@ pub async fn populate_crm_contact(
             link.email_address.0.as_ref(),
             &p.contact_email,
             p.contact_name.as_deref(),
+            p.first_at,
+            p.last_at,
+            p.is_sent,
         )
         .await
         .map_err(|e| {
