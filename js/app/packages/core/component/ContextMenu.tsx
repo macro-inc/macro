@@ -7,6 +7,7 @@ import { cn, Layer } from '@ui';
 import {
   type Component,
   createEffect,
+  createMemo,
   type JSX,
   Match,
   onCleanup,
@@ -23,71 +24,6 @@ import { Hotkey } from '../../ui/components/Hotkey';
  * `@ui` `Dropdown`. Right-click menus still use this file because they need
  * separate behavior + positioning from the click-triggered Dropdown.
  */
-
-type BaseMenuItemWrapperProps = {
-  children: JSX.Element;
-  disabled?: boolean;
-  onClick?: () => void;
-  closeOnSelect?: boolean;
-  selectorType?: 'checkbox' | 'radio';
-  class?: string;
-};
-
-type CheckboxMenuItemWrapperProps = BaseMenuItemWrapperProps & {
-  selectorType: 'checkbox';
-  checked?: boolean;
-  onChange?: (value: boolean) => void;
-};
-
-type RadioMenuItemWrapperProps = BaseMenuItemWrapperProps & {
-  selectorType: 'radio';
-  value: string;
-};
-
-type MenuItemWrapperProps =
-  | BaseMenuItemWrapperProps
-  | CheckboxMenuItemWrapperProps
-  | RadioMenuItemWrapperProps;
-
-function MenuItemWrapper(props: MenuItemWrapperProps) {
-  return (
-    <Switch>
-      <Match when={props.selectorType === 'checkbox'}>
-        <ContextMenu.CheckboxItem
-          class={props.class}
-          checked={(props as CheckboxMenuItemWrapperProps).checked}
-          onChange={(props as CheckboxMenuItemWrapperProps).onChange}
-          disabled={props.disabled}
-          onSelect={props.onClick}
-          closeOnSelect={props.closeOnSelect}
-        >
-          {props.children}
-        </ContextMenu.CheckboxItem>
-      </Match>
-      <Match when={props.selectorType === 'radio'}>
-        <ContextMenu.RadioItem
-          class={props.class}
-          value={(props as RadioMenuItemWrapperProps).value}
-          disabled={props.disabled}
-          onSelect={props.onClick}
-          closeOnSelect={props.closeOnSelect}
-        >
-          {props.children}
-        </ContextMenu.RadioItem>
-      </Match>
-      <Match when={!props.selectorType}>
-        <ContextMenu.Item
-          class={props.class}
-          disabled={props.disabled}
-          onSelect={props.onClick}
-          closeOnSelect={props.closeOnSelect}
-        >
-          {props.children}
-        </ContextMenu.Item>
-      </Match>
-    </Switch>
-  );
-}
 
 type BaseMenuItemProps = {
   text?: string | JSX.Element;
@@ -138,23 +74,23 @@ export const MENU_ITEM_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${is
  * - Radio menu item (with radio button selection)
  */
 export function MenuItem(props: MenuItemProps) {
-  return (
-    <MenuItemWrapper
-      class={cn(
-        MENU_ITEM_CLASS,
-        props.disabled
-          ? 'opacity-50 cursor-not-allowed'
-          : 'hover:bg-ink/3 hover-transition-bg',
-        props.class
-      )}
-      onClick={props.onClick}
-      disabled={props.disabled}
-      closeOnSelect={props.closeOnSelect}
-      selectorType={props.selectorType}
-      value={props.value}
-      checked={props.checked}
-      onChange={props.onChange}
-    >
+  // Memoize `disabled` so it isn't forwarded as a chained getter — the prior
+  // MenuItem → wrapper → ContextMenu.Item chain stack-overflowed when something
+  // re-entered the same accessor during a layout-driven re-evaluation.
+  const isDisabled = createMemo(() => props.disabled ?? false);
+
+  const rowClass = createMemo(() =>
+    cn(
+      MENU_ITEM_CLASS,
+      isDisabled()
+        ? 'opacity-50 cursor-not-allowed'
+        : 'hover:bg-ink/3 hover-transition-bg',
+      props.class
+    )
+  );
+
+  const renderChildren = () => (
+    <>
       <Show when={props.selectorType === 'checkbox'}>
         <div
           class={cn(
@@ -217,7 +153,45 @@ export function MenuItem(props: MenuItemProps) {
           </div>
         )}
       </Show>
-    </MenuItemWrapper>
+    </>
+  );
+
+  return (
+    <Switch>
+      <Match when={props.selectorType === 'checkbox'}>
+        <ContextMenu.CheckboxItem
+          class={rowClass()}
+          checked={(props as CheckboxMenuItemProps).checked}
+          onChange={(props as CheckboxMenuItemProps).onChange}
+          disabled={isDisabled()}
+          onSelect={props.onClick}
+          closeOnSelect={props.closeOnSelect}
+        >
+          {renderChildren()}
+        </ContextMenu.CheckboxItem>
+      </Match>
+      <Match when={props.selectorType === 'radio'}>
+        <ContextMenu.RadioItem
+          class={rowClass()}
+          value={(props as RadioMenuItemProps).value}
+          disabled={isDisabled()}
+          onSelect={props.onClick}
+          closeOnSelect={props.closeOnSelect}
+        >
+          {renderChildren()}
+        </ContextMenu.RadioItem>
+      </Match>
+      <Match when={!props.selectorType}>
+        <ContextMenu.Item
+          class={rowClass()}
+          disabled={isDisabled()}
+          onSelect={props.onClick}
+          closeOnSelect={props.closeOnSelect}
+        >
+          {renderChildren()}
+        </ContextMenu.Item>
+      </Match>
+    </Switch>
   );
 }
 
