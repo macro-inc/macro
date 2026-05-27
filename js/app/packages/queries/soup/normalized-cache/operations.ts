@@ -112,7 +112,6 @@ function reconcileGroupedCachesForEntity(entityId: string): void {
     const nextGroupKeys = computeGroupKeysForItem(entity, groupBy);
 
     if (nextGroupKeys === undefined) {
-      queryClient.invalidateQueries({ queryKey: key });
       continue;
     }
 
@@ -141,7 +140,6 @@ function reconcileGroupedCachesForEntity(entityId: string): void {
     });
 
     if (needsInvalidation) {
-      queryClient.invalidateQueries({ queryKey: key });
       continue;
     }
 
@@ -375,6 +373,7 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
   const parents = queryClient.getQueriesData<SoupAstItemsInfiniteData>({
     queryKey: soupKeys.astItems._def,
   });
+
   for (const [key, prev] of parents) {
     if (!prev?.pages?.length) continue;
 
@@ -390,6 +389,7 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
           i === 0 && p.kind === 'flat' ? { ...p, items: [item, ...p.items] } : p
         ),
       });
+
       continue;
     }
 
@@ -400,7 +400,6 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
     );
 
     if (!nextPage) {
-      queryClient.invalidateQueries({ queryKey: key });
       continue;
     }
 
@@ -589,6 +588,7 @@ export async function refetchSoupEntity(
       optimisticUpdateSoupEntity(item);
     } else {
       insertSoupEntity(item);
+      invalidateAllSoup();
     }
   }
 }

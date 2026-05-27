@@ -1,7 +1,4 @@
-import {
-  filterSoupItemByAstBody,
-  filterSoupItemByRequestBody,
-} from '@app/component/next-soup/filters/query-filters';
+import { filterSoupItemByRequestBody } from '@app/component/next-soup/filters/query-filters';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -234,7 +231,6 @@ export const useSoupAstItemsQuery = (
       staleTime: options?.().staleTime,
       placeholderData: (p) => p,
       meta: {
-        itemFilter: (item: SoupApiItem) => filterSoupItemByAstBody(item, body),
         normalize: true,
       },
     };
