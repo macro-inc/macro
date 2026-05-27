@@ -42,14 +42,10 @@ export function Hero() {
         />
 
         <h1 class="text-3xl font-semibold tracking-tight text-ink text-balance sm:text-4xl lg:text-5xl">
-          {greeting()}, {firstName()}.
+          {greeting()}, <span class="capitalize">{firstName()}.</span>
         </h1>
         <div class="mt-6 flex flex-wrap gap-3">
-          <Button
-            variant="cta"
-            size="lg"
-            class="h-10 rounded-lg px-4 text-sm"
-          >
+          <Button variant="cta" size="lg" class="h-10 rounded-lg px-4 text-sm">
             <PlusIcon />
             Create
           </Button>
@@ -60,10 +56,7 @@ export function Hero() {
             onPointerEnter={() => setAiHovering(true)}
             onPointerLeave={() => setAiHovering(false)}
           >
-            <AnimatedStarIcon
-              class="size-4"
-              triggerAnimation={aiHovering()}
-            />
+            <AnimatedStarIcon class="size-4" triggerAnimation={aiHovering()} />
             Ask AI
           </Button>
           <ResponsiveDropdown open={moreOpen()} onOpenChange={setMoreOpen}>
@@ -76,10 +69,22 @@ export function Hero() {
             </ResponsiveDropdown.Trigger>
             <ResponsiveDropdown.Portal>
               <ResponsiveDropdown.Content class="z-highlight-menu min-w-48 rounded-xl border border-edge bg-surface p-1.5 shadow-xl shadow-drop-shadow outline-none">
-                <ResponsiveDropdown.Item text="Compose email" icon={EnvelopeSimpleIcon} />
-                <ResponsiveDropdown.Item text="Create task" icon={ListChecksIcon} />
-                <ResponsiveDropdown.Item text="Start channel" icon={ChatCircleTextIcon} />
-                <ResponsiveDropdown.Item text="Invite teammate" icon={UsersThreeIcon} />
+                <ResponsiveDropdown.Item
+                  text="Compose email"
+                  icon={EnvelopeSimpleIcon}
+                />
+                <ResponsiveDropdown.Item
+                  text="Create task"
+                  icon={ListChecksIcon}
+                />
+                <ResponsiveDropdown.Item
+                  text="Start channel"
+                  icon={ChatCircleTextIcon}
+                />
+                <ResponsiveDropdown.Item
+                  text="Invite teammate"
+                  icon={UsersThreeIcon}
+                />
               </ResponsiveDropdown.Content>
             </ResponsiveDropdown.Portal>
           </ResponsiveDropdown>
