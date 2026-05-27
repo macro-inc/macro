@@ -2,7 +2,10 @@
  * @vitest-environment jsdom
  */
 
-import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
+import type {
+  ApiChannelMessage,
+  ApiThreadReply,
+} from '@service-storage/client';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,8 +21,8 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: vi.fn(), success: vi.fn() },
 }));
 
-vi.mock('@service-comms/client', () => ({
-  commsServiceClient: {},
+vi.mock('@service-storage/client', () => ({
+  storageServiceClient: {},
 }));
 
 vi.mock('@macro-entity', () => ({

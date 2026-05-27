@@ -4908,12 +4908,12 @@ async fn test_property_filter_multiple_and(db: Pool<Postgres>) -> anyhow::Result
     )
 )]
 async fn test_property_filter_no_match(db: Pool<Postgres>) -> anyhow::Result<()> {
-    // Filter for Priority = Critical (no documents have this)
+    // Filter for Priority = Urgent (no documents have this)
     let entity_filters = item_filters::EntityFilters {
         property_filters: vec![PropertyFilter {
             property_definition_id: "00000001-0000-0000-0000-000000000003".to_string(), // Priority
             entity_type: Some("DOCUMENT".to_string()),
-            option_ids: vec!["00000001-0000-0000-0003-000000000004".to_string()], // Critical
+            option_ids: vec!["00000001-0000-0000-0003-000000000004".to_string()], // Urgent
             entity_ids: vec![],
         }],
         ..Default::default()
@@ -4936,10 +4936,7 @@ async fn test_property_filter_no_match(db: Pool<Postgres>) -> anyhow::Result<()>
         .filter(|i| matches!(i, SoupItem::Document(_)))
         .count();
 
-    assert_eq!(
-        doc_count, 0,
-        "No documents should match Priority = Critical"
-    );
+    assert_eq!(doc_count, 0, "No documents should match Priority = Urgent");
 
     Ok(())
 }

@@ -1,4 +1,4 @@
-import type { ApiThreadReply } from '@service-comms/client';
+import type { ApiThreadReply } from '@service-storage/client';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas';
 
 type ThreadPreviewState = {

@@ -27,6 +27,8 @@ const MSG1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000001);
 const MSG2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000002);
 const MSG3: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000003);
 const REPLY1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b001);
+const REPLY2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b002);
+const REPLY3: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b003);
 const REPLY5: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b005);
 const DELETED_MSG_ATTACHMENT: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000a004);
 const USER_A: &str = "macro|user-a@test.com";
@@ -149,6 +151,35 @@ async fn top_level_ordered_newest_first(pool: Pool<Postgres>) -> anyhow::Result<
 
     let ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
     assert_eq!(ids, vec![MSG3, MSG2, MSG1]);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn message_context_returns_chronological_window(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let messages = repo.get_messages_with_context(CH1, REPLY2, 2, 1).await?;
+
+    let ids = messages
+        .iter()
+        .map(|message| message.id)
+        .collect::<Vec<_>>();
+    assert_eq!(ids, vec![MSG1, REPLY1, REPLY2, REPLY3]);
+    assert_eq!(messages[2].thread_id, Some(MSG1));
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn message_context_is_bound_to_channel(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let messages = repo.get_messages_with_context(CH2, MSG1, 1, 1).await?;
+
+    assert!(messages.is_empty());
     Ok(())
 }
 

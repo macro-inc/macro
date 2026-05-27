@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::{
-    ChannelAttachment, ChannelMessage, ChannelMessageFilters, ChannelParticipant,
-    DeleteMessageQuery, GetOrCreateChannelResponse, GetOrCreateDmRequest,
+    ChannelAttachment, ChannelContextMessage, ChannelMessage, ChannelMessageFilters,
+    ChannelParticipant, DeleteMessageQuery, GetOrCreateChannelResponse, GetOrCreateDmRequest,
     GetOrCreatePrivateRequest, MessagePageDirection, ParticipantRole, PatchChannelRequest,
     PatchMessageRequest, PostMessageRequest, PostMessageResponse, PostReactionRequest,
     PostTypingRequest, RemoveParticipantsRequest,
@@ -240,6 +240,27 @@ impl ChannelService for MockService {
         _message_id: Uuid,
     ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
         Ok(vec![])
+    }
+
+    async fn get_message_context(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+        _before: i64,
+        _after: i64,
+    ) -> Result<Vec<ChannelContextMessage>, ChannelMessagesErr> {
+        let now = chrono::Utc::now();
+        Ok(vec![ChannelContextMessage {
+            id: message_id,
+            channel_id,
+            thread_id: None,
+            sender_id: "macro|user@example.com".to_string(),
+            content: "message context".to_string(),
+            created_at: now,
+            updated_at: now,
+            edited_at: None,
+            deleted_at: None,
+        }])
     }
 }
 
@@ -1366,6 +1387,30 @@ async fn thread_replies_returns_404_when_not_found() {
     assert_eq!(json["message"], "Message not found");
 }
 
+#[tokio::test]
+async fn message_context_returns_flat_context_response() {
+    let router = mock_router();
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let request = Request::builder()
+        .uri(format!(
+            "/{channel_id}/messages/{message_id}/context?before=2&after=3"
+        ))
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let messages = json["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0]["id"], message_id.to_string());
+    assert_eq!(messages[0]["channel_id"], channel_id.to_string());
+    assert_eq!(messages[0]["content"], "message context");
+}
+
 // --- Access control tests ---
 
 #[tokio::test]
@@ -1421,6 +1466,20 @@ async fn non_member_cannot_access_thread_replies() {
     let message_id = Uuid::new_v4();
     let request = Request::builder()
         .uri(format!("/{channel_id}/messages/{message_id}/replies"))
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn non_member_cannot_access_message_context() {
+    let router = denied_router();
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let request = Request::builder()
+        .uri(format!("/{channel_id}/messages/{message_id}/context"))
         .body(axum::body::Body::empty())
         .unwrap();
 

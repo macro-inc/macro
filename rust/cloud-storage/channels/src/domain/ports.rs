@@ -1,7 +1,7 @@
 use crate::domain::events::ChannelEvent;
 use crate::domain::models::{
-    AddParticipantsRequest, ChannelAttachment, ChannelAttachmentType, ChannelInfo,
-    ChannelMessageFilters, ChannelMetadata, ChannelParticipant, CountedReaction,
+    AddParticipantsRequest, ChannelAttachment, ChannelAttachmentType, ChannelContextMessage,
+    ChannelInfo, ChannelMessageFilters, ChannelMetadata, ChannelParticipant, CountedReaction,
     CreateChannelRequest, CreateChannelResponse, DeleteMessageQuery, GetOrCreateChannelResponse,
     GetOrCreateDmRequest, GetOrCreatePrivateRequest, MessageAttachment, MessagePageDirection,
     MutatedAttachment, MutatedMessage, NewChannelAttachment, PatchChannelRequest,
@@ -77,6 +77,15 @@ pub trait ChannelRepo: Send + Sync + 'static {
         &self,
         channel_id: Uuid,
     ) -> impl Future<Output = Result<Vec<ChannelParticipant>, Self::Err>> + Send;
+
+    /// Fetch messages around a target message in chronological order.
+    fn get_messages_with_context(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+        before: i64,
+        after: i64,
+    ) -> impl Future<Output = Result<Vec<ChannelContextMessage>, Self::Err>> + Send;
 
     /// Resolve a message id to its top-level parent row. If the message is a thread reply,
     /// returns the parent; if already top-level, returns itself. Returns `None` if not found.
@@ -333,6 +342,18 @@ pub trait ChannelService: Send + Sync + 'static {
         &self,
         channel_id: Uuid,
     ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send;
+
+    /// Fetch messages around a target message in chronological order.
+    fn get_message_context(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+        before: i64,
+        after: i64,
+    ) -> impl Future<Output = Result<Vec<ChannelContextMessage>, ChannelMessagesErr>> + Send {
+        let _ = (channel_id, before, after);
+        async move { Err(ChannelMessagesErr::MessageNotFound(message_id)) }
+    }
 
     /// Fetch a centered window of messages around a specific message id.
     ///

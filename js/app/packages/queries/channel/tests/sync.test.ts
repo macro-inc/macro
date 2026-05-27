@@ -2,8 +2,11 @@
  * @vitest-environment jsdom
  */
 
-import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
 import type { Attachment as ApiAttachment } from '@service-comms/generated/models';
+import type {
+  ApiChannelMessage,
+  ApiThreadReply,
+} from '@service-storage/client';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,6 +16,10 @@ vi.mock('../../client', () => ({
   get queryClient() {
     return testQueryClient;
   },
+}));
+
+vi.mock('@service-storage/client', () => ({
+  storageServiceClient: {},
 }));
 
 import type { ChannelMessagesData } from '../channel-messages';

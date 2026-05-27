@@ -1,28 +1,6 @@
 name: Deploy Cloud Storage Services on Push
 
 on:
-  workflow_dispatch:
-    inputs:
-      service:
-        type: choice
-        required: true
-        default: static-file-service
-        description: Service to deploy to dev for end-to-end testing
-        options:
-          - agent-schedule-service
-          - authentication-service
-          - connection-gateway
-          - contacts-service
-          - convert-service
-          - document-cognition-service
-          - document-storage-service
-          - email-service
-          - image-proxy-service
-          - mcp-server
-          - notification-service
-          - search-processing-service
-          - static-file-service
-          - unfurl-service
   push:
     branches: [ 'main' ]
     paths:
@@ -40,43 +18,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  detect-changes:
-    name: Detect Changed Services
+  generate-deploy-list:
+    name: Generate Deploy List
     runs-on: ubuntu-latest
     outputs:
-      services: ${{ steps.detect.outputs.services }}
-      has_changes: ${{ steps.detect.outputs.has_changes }}
-      lambda_matrix: ${{ steps.detect.outputs.lambda_matrix }}
-      lambda_services: ${{ steps.detect.outputs.lambda_services }}
-      has_lambdas: ${{ steps.detect.outputs.has_lambdas }}
+      services: ${{ steps.generate-list.outputs.services }}
+      lambda_matrix: ${{ steps.generate-list.outputs.lambda_matrix }}
+      lambda_services: ${{ steps.generate-list.outputs.lambda_services }}
+      has_lambdas: ${{ steps.generate-list.outputs.has_lambdas }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          fetch-depth: 2
-
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-
-      - name: Detect changed services
-        id: detect
+          fetch-depth: 1
+      - name: Generate deploy list
+        id: generate-list
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            SERVICES=$(jq -cn --arg service "${{ inputs.service }}" '[$service]')
-            HAS_CHANGES=true
-            echo "Manually selected service: $SERVICES"
-          else
-            # Make the script executable
-            chmod +x .github/scripts/detect-affected-services.sh
-
-            # Run the detection script and capture output
-            OUTPUT=$(.github/scripts/detect-affected-services.sh)
-
-            # Parse the output
-            SERVICES=$(echo "$OUTPUT" | grep "^services=" | cut -d'=' -f2-)
-            HAS_CHANGES=$(echo "$OUTPUT" | grep "^has_changes=" | cut -d'=' -f2-)
-          fi
+          SERVICES=$(jq -c '.services | keys_unsorted' .github/services-config.json)
+          echo "Automatic deploy selected all services: $SERVICES"
 
           lambda_matrix=$(jq -cn --argjson services "$SERVICES" --slurpfile config .github/services-config.json '$services as $services | $config[0] as $config | [$services[] as $service | ($config.services[$service].deploy_lambdas // [])[] | {service:$service, lambda:.}]')
           lambda_services=$(jq -cn --argjson matrix "$lambda_matrix" '[$matrix[].service] | unique')
@@ -84,20 +42,17 @@ jobs:
 
           # Set outputs
           echo "services=$SERVICES" >> $GITHUB_OUTPUT
-          echo "has_changes=$HAS_CHANGES" >> $GITHUB_OUTPUT
           echo "lambda_matrix=$lambda_matrix" >> $GITHUB_OUTPUT
           echo "lambda_services=$lambda_services" >> $GITHUB_OUTPUT
           echo "has_lambdas=$has_lambdas" >> $GITHUB_OUTPUT
 
           # Log for debugging
-          echo "Detected services: $SERVICES"
-          echo "Has changes: $HAS_CHANGES"
+          echo "Selected services: $SERVICES"
           echo "Lambda matrix: $lambda_matrix"
 
   migrate-db:
     name: Run Database Migrations
-    needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.has_changes == 'true' }}
+    needs: generate-deploy-list
     runs-on: db-migrator
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -111,14 +66,13 @@ jobs:
 
   build-service-binaries:
     name: Build ${{ matrix.service }} binaries
-    needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.has_changes == 'true' }}
+    needs: [generate-deploy-list, migrate-db]
     runs-on: linux-extra-beefy
     strategy:
       fail-fast: false
       max-parallel: 8
       matrix:
-        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+        service: ${{ fromJson(needs.generate-deploy-list.outputs.services) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -170,14 +124,14 @@ jobs:
 
   build-lambda-artifacts:
     name: Build ${{ matrix.lambda }} Lambda artifact
-    needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.has_changes == 'true' && needs.detect-changes.outputs.has_lambdas == 'true' }}
+    needs: [generate-deploy-list, migrate-db]
+    if: ${{ needs.generate-deploy-list.outputs.has_lambdas == 'true' }}
     runs-on: linux-extra-beefy
     strategy:
       fail-fast: false
       max-parallel: 8
       matrix:
-        include: ${{ fromJson(needs.detect-changes.outputs.lambda_matrix || '[]') }}
+        include: ${{ fromJson(needs.generate-deploy-list.outputs.lambda_matrix || '[]') }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -218,14 +172,14 @@ jobs:
 
   package-lambda-artifacts:
     name: Package ${{ matrix.service }} Lambda artifacts
-    needs: [detect-changes, build-lambda-artifacts]
-    if: ${{ needs.detect-changes.outputs.has_changes == 'true' && needs.detect-changes.outputs.has_lambdas == 'true' }}
+    needs: [generate-deploy-list, build-lambda-artifacts]
+    if: ${{ needs.generate-deploy-list.outputs.has_lambdas == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       max-parallel: 8
       matrix:
-        service: ${{ fromJson(needs.detect-changes.outputs.lambda_services || '[]') }}
+        service: ${{ fromJson(needs.generate-deploy-list.outputs.lambda_services || '[]') }}
     steps:
       - name: Download Lambda artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -246,8 +200,8 @@ jobs:
 
   deploy-services:
     name: Deploy ${{ matrix.service }}
-    needs: [detect-changes, migrate-db, build-service-binaries, build-lambda-artifacts, package-lambda-artifacts]
-    if: ${{ always() && needs.detect-changes.outputs.has_changes == 'true' && needs.migrate-db.result == 'success' && needs.build-service-binaries.result == 'success' && (needs.build-lambda-artifacts.result == 'success' || needs.build-lambda-artifacts.result == 'skipped') && (needs.package-lambda-artifacts.result == 'success' || needs.package-lambda-artifacts.result == 'skipped') }}
+    needs: [generate-deploy-list, migrate-db, build-service-binaries, build-lambda-artifacts, package-lambda-artifacts]
+    if: ${{ always() && needs.migrate-db.result == 'success' && needs.build-service-binaries.result == 'success' && (needs.build-lambda-artifacts.result == 'success' || needs.build-lambda-artifacts.result == 'skipped') && (needs.package-lambda-artifacts.result == 'success' || needs.package-lambda-artifacts.result == 'skipped') }}
     runs-on:
       [
         runs-on,
@@ -262,7 +216,7 @@ jobs:
       fail-fast: false
       max-parallel: 20
       matrix:
-        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+        service: ${{ fromJson(needs.generate-deploy-list.outputs.services) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
@@ -298,16 +252,14 @@ jobs:
   deployment-summary:
     name: Deployment Summary
     runs-on: ubuntu-latest
-    needs: [detect-changes, migrate-db, build-service-binaries, build-lambda-artifacts, package-lambda-artifacts, deploy-services]
+    needs: [generate-deploy-list, migrate-db, build-service-binaries, build-lambda-artifacts, package-lambda-artifacts, deploy-services]
     if: always()
     steps:
       - name: Check deployment results
         run: |
-          if [[ "${{ needs.detect-changes.result }}" == "failure" ]]; then
-            echo "❌ Failed to detect changed services"
+          if [[ "${{ needs.generate-deploy-list.result }}" == "failure" ]]; then
+            echo "❌ Failed to generate deploy list"
             exit 1
-          elif [[ "${{ needs.detect-changes.outputs.has_changes }}" == "false" ]]; then
-            echo "ℹ️ No cloud-storage services were affected by the changes"
           elif [[ "${{ needs.migrate-db.result }}" == "failure" ]]; then
             echo "❌ Database migrations failed"
             exit 1
@@ -326,5 +278,5 @@ jobs:
           elif [[ "${{ needs.deploy-services.result }}" == "skipped" ]]; then
             echo "⏭️ No services to deploy"
           else
-            echo "✅ All affected cloud-storage services deployed successfully to dev environment"
+            echo "✅ All selected cloud-storage services deployed successfully to dev environment"
           fi

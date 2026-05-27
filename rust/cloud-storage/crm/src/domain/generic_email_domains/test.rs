@@ -137,13 +137,94 @@ fn zohomail_is_flagged_but_zoho_is_not() {
 }
 
 #[test]
+fn matches_saas_and_dev_tool_vendors() {
+    for domain in [
+        "github.com",
+        "slack.com",
+        "zoom.us",
+        "figma.com",
+        "stripe.com",
+        "anthropic.com",
+        "datadoghq.com",
+        "auth0.com",
+        "carta.com",
+        "gusto.com",
+        "apollo.io",
+    ] {
+        assert!(
+            is_generic_email_domain(domain),
+            "expected {domain} to be flagged as a SaaS/dev-tool vendor"
+        );
+    }
+}
+
+#[test]
+fn matches_big_consumer_brands() {
+    for domain in [
+        "google.com",
+        "accounts.google.com",
+        "microsoft.com",
+        "apple.com",
+        "amazon.com",
+        "uber.com",
+        "doordash.com",
+        "marriott.com",
+        "e.starbucks.com",
+        "zillow.com",
+    ] {
+        assert!(
+            is_generic_email_domain(domain),
+            "expected {domain} to be flagged as a big consumer brand"
+        );
+    }
+}
+
+#[test]
+fn matches_carrier_mailboxes() {
+    for domain in ["tmomail.net", "rogers.com", "bell.net", "sympatico.ca"] {
+        assert!(
+            is_generic_email_domain(domain),
+            "expected {domain} to be flagged as a carrier mailbox"
+        );
+    }
+}
+
+#[test]
+fn matches_bulk_mail_senders() {
+    for domain in [
+        "bf08x.hubspotemail.net",
+        "unsub-ab.mktomail.com",
+        "mailin.mcsv.net",
+        "noreply.github.com",
+        "mail.anthropic.com",
+        "outgoing.mixpanel.com",
+        "unsubscribe.iterable.com",
+        "imh.rsys2.com",
+    ] {
+        assert!(
+            is_generic_email_domain(domain),
+            "expected {domain} to be flagged as a bulk-mail sender"
+        );
+    }
+}
+
+#[test]
 fn legitimate_company_domains_pass_through() {
     for domain in [
-        "anthropic.com",
         "macro.com",
         "acme.io",
-        "stripe.com",
         "zoho.com",
+        // Real correspondents we must never filter: law firms, banks,
+        // funds, and universities are genuine CRM relationships even
+        // though they send some automated mail.
+        "kirkland.com",
+        "jpmorgan.com",
+        "blackrock.com",
+        "a16z.com",
+        "harvard.edu",
+        // Apollo Global Management (a PE firm) shares a brand with the
+        // `apollo.io` sales tool — only the tool is generic.
+        "apollo.com",
         // Subdomains of generic providers aren't on the list — they
         // belong to whoever runs the subdomain, not the parent
         // provider. The lookup is exact-match by design.
