@@ -16,6 +16,7 @@ import {
   DEV_MODE_ENV,
   ENABLE_AUTO_UPDATE_UI,
   ENABLE_EMAIL,
+  ENABLE_MULTI_INBOX,
   ENABLE_PROFILE_PICTURES,
   ENABLE_NEW_PRICING_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -344,14 +345,16 @@ export function Account() {
                     when={!emailActive()}
                     fallback={
                       <div class="flex items-center gap-2">
-                        <Button
-                          variant="base"
-                          size="sm"
-                          depth={3}
-                          onClick={handleAddInbox}
-                        >
-                          Add Inbox
-                        </Button>
+                        <Show when={ENABLE_MULTI_INBOX}>
+                          <Button
+                            variant="base"
+                            size="sm"
+                            depth={3}
+                            onClick={handleAddInbox}
+                          >
+                            Add Inbox
+                          </Button>
+                        </Show>
                         <Button
                           variant="base"
                           size="sm"
