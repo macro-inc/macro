@@ -22,7 +22,7 @@ use crate::domain::models::email_notification_digest::ports::{ClaimResult, Diges
 use crate::domain::models::request::NotificationListFilters;
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NotificationExtEmail, NotificationIdAndCollapseKey,
-    NotificationStatusPatch, SendNotificationRequestBuilder, UserNotificationRow,
+    NotificationStatusPatch, SendNotificationRequestBuilder, UserNotificationRow, VoipPushTarget,
     android::FCMMessage,
     apple::{APNSPushNotification, VoipPushPayload},
     mobile::MessageAttributes,
@@ -401,15 +401,6 @@ pub trait NotificationIngressQueue: Send + Sync + 'static {
         &self,
         receipt_handle: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
-}
-
-/// Recipient/endpoints pair resolved before LiveKit token minting.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VoipPushTarget {
-    /// Recipient whose VoIP-capable endpoints were resolved.
-    pub recipient_id: MacroUserIdStr<'static>,
-    /// SNS endpoints registered for APNS_VOIP delivery.
-    pub endpoint_arns: Vec<String>,
 }
 
 /// Port for sending VoIP push notifications (PushKit / CallKit) to iOS devices.

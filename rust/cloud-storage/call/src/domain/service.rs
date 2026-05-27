@@ -24,7 +24,9 @@ use std::collections::{HashMap, HashSet};
 
 use uuid::Uuid;
 
-use crate::domain::models::{EditCallRecordRequest, EditCallTranscriptRequest};
+use crate::domain::models::{
+    EditCallRecordRequest, EditCallTranscriptRequest, VoipPushPayloadRequest,
+};
 
 use super::models::{
     AddParticipantError, CallActiveResponse, CallError, CallRecord, CallRecordTranscriptSegment,
@@ -35,7 +37,6 @@ use super::models::{
 use super::ports::{
     CallRecordQueryService, CallRepository, CallRtcClient, CallSearchIndexer, CallService,
     CallSummarizer, NoOpCallSearchIndexer, NoOpVoiceRepository, RecordingStorage, VoiceRepository,
-    VoipPushPayloadRequest,
 };
 
 /// The concrete call service implementation.

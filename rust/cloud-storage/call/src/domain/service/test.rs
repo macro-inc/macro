@@ -6,8 +6,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::models::apple::VoipPushPayload;
 use uuid::Uuid;
 
-use crate::domain::models::{CallError, CallWebhookEvent, EgressS3Config};
-use crate::domain::ports::{CallRtcClient, VoipPushPayloadRequest};
+use crate::domain::models::{CallError, CallWebhookEvent, EgressS3Config, VoipPushPayloadRequest};
+use crate::domain::ports::CallRtcClient;
 
 use super::{exclude_voip_recipients, extract_recording_key};
 

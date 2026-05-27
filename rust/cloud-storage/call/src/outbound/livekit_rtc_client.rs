@@ -16,8 +16,8 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::models::apple::VoipPushPayload;
 
-use crate::domain::models::{CallError, CallWebhookEvent, EgressS3Config};
-use crate::domain::ports::{CallRtcClient, VoipPushPayloadRequest};
+use crate::domain::models::{CallError, CallWebhookEvent, EgressS3Config, VoipPushPayloadRequest};
+use crate::domain::ports::CallRtcClient;
 
 const VOIP_TOKEN_MINT_CONCURRENCY: usize = 16;
 
@@ -117,6 +117,15 @@ impl CallRtcClient for LivekitRtcClient {
         Ok(token)
     }
 
+    #[tracing::instrument(
+        skip(self, request),
+        fields(
+            recipient_count = request.recipients.len(),
+            room_name = request.room_name,
+            call_id = %request.call_id,
+            channel_id = request.channel_id,
+        )
+    )]
     async fn build_voip_push_payloads<'a>(
         &self,
         request: VoipPushPayloadRequest<'a>,

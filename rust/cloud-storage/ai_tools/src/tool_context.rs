@@ -169,7 +169,7 @@ impl CallRtcClient for NoOpCallRtcClient {
 
     async fn build_voip_push_payloads<'a>(
         &self,
-        _request: call::domain::ports::VoipPushPayloadRequest<'a>,
+        _request: call::domain::models::VoipPushPayloadRequest<'a>,
     ) -> Vec<(
         MacroUserIdStr<'static>,
         notification::domain::models::apple::VoipPushPayload,

@@ -11,9 +11,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::collections::HashSet;
 
+use crate::domain::models::VoipPushTarget;
 use crate::domain::models::apple::VoipPushPayload;
 use crate::domain::models::mobile::DeviceEndpoint;
-use crate::domain::ports::{NotificationRepository, VoipPushSender, VoipPushTarget};
+use crate::domain::ports::{NotificationRepository, VoipPushSender};
 use crate::outbound::mobile::MobilePushAdapter;
 use crate::outbound::mobile::MobilePushOps;
 
