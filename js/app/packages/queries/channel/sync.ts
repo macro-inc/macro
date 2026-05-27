@@ -1,9 +1,9 @@
-import type { ApiThreadReply } from '@service-comms/client';
 import type {
   Attachment as ApiAttachment,
   Message as ApiMessage,
   CountedReaction,
 } from '@service-comms/generated/models';
+import type { ApiThreadReply } from '@service-storage/client';
 import { consumeNonce } from '../nonce';
 import { ChannelNonceKeys } from './keys';
 import {

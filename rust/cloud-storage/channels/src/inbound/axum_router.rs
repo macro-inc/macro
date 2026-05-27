@@ -281,6 +281,20 @@ where
 }
 
 /// Handler for `POST /channels`.
+#[utoipa::path(
+    post,
+    tag = "channels",
+    operation_id = "create_channel",
+    path = "/channels",
+    request_body = CreateChannelRequest,
+    responses(
+        (status = 200, body = CreateChannelResponse),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(err, skip_all)]
 pub async fn create_channel_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
@@ -296,6 +310,20 @@ pub async fn create_channel_handler<S: ChannelService, Svc: EntityAccessService>
 }
 
 /// Handler for `POST /channels/get_or_create_dm`.
+#[utoipa::path(
+    post,
+    tag = "channels",
+    operation_id = "get_or_create_dm",
+    path = "/channels/get_or_create_dm",
+    request_body = GetOrCreateDmRequest,
+    responses(
+        (status = 200, body = GetOrCreateChannelResponse),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(err, skip_all)]
 pub async fn get_or_create_dm_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
@@ -308,6 +336,20 @@ pub async fn get_or_create_dm_handler<S: ChannelService, Svc: EntityAccessServic
 }
 
 /// Handler for `POST /channels/get_or_create_private`.
+#[utoipa::path(
+    post,
+    tag = "channels",
+    operation_id = "get_or_create_private",
+    path = "/channels/get_or_create_private",
+    request_body = GetOrCreatePrivateRequest,
+    responses(
+        (status = 200, body = GetOrCreateChannelResponse),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(err, skip_all)]
 pub async fn get_or_create_private_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
@@ -320,6 +362,24 @@ pub async fn get_or_create_private_handler<S: ChannelService, Svc: EntityAccessS
 }
 
 /// Handler for `PATCH /channels/{channel_id}`.
+#[utoipa::path(
+    patch,
+    tag = "channels",
+    operation_id = "patch_channel",
+    path = "/channels/{channel_id}",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID")
+    ),
+    request_body = PatchChannelRequest,
+    responses(
+        (status = 200, body = String),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(err, skip_all)]
 pub async fn patch_channel_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
@@ -333,6 +393,23 @@ pub async fn patch_channel_handler<S: ChannelService, Svc: EntityAccessService>(
 }
 
 /// Handler for `DELETE /channels/{channel_id}`.
+#[utoipa::path(
+    delete,
+    tag = "channels",
+    operation_id = "delete_channel",
+    path = "/channels/{channel_id}",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID")
+    ),
+    responses(
+        (status = 200, body = String),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(err, skip_all)]
 pub async fn delete_channel_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
@@ -345,6 +422,24 @@ pub async fn delete_channel_handler<S: ChannelService, Svc: EntityAccessService>
 }
 
 /// Handler for `POST /channels/{channel_id}/message`.
+#[utoipa::path(
+    post,
+    tag = "channels",
+    operation_id = "post_message",
+    path = "/channels/{channel_id}/message",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID")
+    ),
+    request_body = PostMessageRequest,
+    responses(
+        (status = 200, body = PostMessageResponse),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(err, skip_all)]
 pub async fn post_message_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
@@ -358,6 +453,25 @@ pub async fn post_message_handler<S: ChannelService, Svc: EntityAccessService>(
 }
 
 /// Handler for `PATCH /channels/{channel_id}/message/{message_id}`.
+#[utoipa::path(
+    patch,
+    tag = "channels",
+    operation_id = "patch_message",
+    path = "/channels/{channel_id}/message/{message_id}",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID"),
+        ("message_id" = Uuid, Path, description = "Message ID")
+    ),
+    request_body = PatchMessageRequest,
+    responses(
+        (status = 200, body = String),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(err, skip_all)]
 pub async fn patch_message_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
@@ -375,6 +489,25 @@ pub async fn patch_message_handler<S: ChannelService, Svc: EntityAccessService>(
 }
 
 /// Handler for `DELETE /channels/{channel_id}/message/{message_id}`.
+#[utoipa::path(
+    delete,
+    tag = "channels",
+    operation_id = "delete_message",
+    path = "/channels/{channel_id}/message/{message_id}",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID"),
+        ("message_id" = Uuid, Path, description = "Message ID"),
+        ("nonce" = Option<String>, Query, description = "Optional optimistic-update nonce")
+    ),
+    responses(
+        (status = 200, body = String),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(err, skip_all)]
 pub async fn delete_message_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
@@ -392,6 +525,24 @@ pub async fn delete_message_handler<S: ChannelService, Svc: EntityAccessService>
 }
 
 /// Handler for `POST /channels/{channel_id}/reaction`.
+#[utoipa::path(
+    post,
+    tag = "channels",
+    operation_id = "post_reaction",
+    path = "/channels/{channel_id}/reaction",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID")
+    ),
+    request_body = PostReactionRequest,
+    responses(
+        (status = 200, body = String),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(err, skip_all)]
 pub async fn post_reaction_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
@@ -405,6 +556,24 @@ pub async fn post_reaction_handler<S: ChannelService, Svc: EntityAccessService>(
 }
 
 /// Handler for `POST /channels/{channel_id}/typing`.
+#[utoipa::path(
+    post,
+    tag = "channels",
+    operation_id = "post_typing",
+    path = "/channels/{channel_id}/typing",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID")
+    ),
+    request_body = PostTypingRequest,
+    responses(
+        (status = 200, body = String),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(err, skip_all)]
 pub async fn post_typing_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
@@ -418,6 +587,24 @@ pub async fn post_typing_handler<S: ChannelService, Svc: EntityAccessService>(
 }
 
 /// Handler for `POST /channels/{channel_id}/participants`.
+#[utoipa::path(
+    post,
+    tag = "channels",
+    operation_id = "add_participants",
+    path = "/channels/{channel_id}/participants",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID")
+    ),
+    request_body = AddParticipantsRequest,
+    responses(
+        (status = 200),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(err, skip_all)]
 pub async fn add_participants_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
@@ -434,6 +621,24 @@ pub async fn add_participants_handler<S: ChannelService, Svc: EntityAccessServic
 }
 
 /// Handler for `DELETE /channels/{channel_id}/participants`.
+#[utoipa::path(
+    delete,
+    tag = "channels",
+    operation_id = "remove_participants",
+    path = "/channels/{channel_id}/participants",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID")
+    ),
+    request_body = RemoveParticipantsRequest,
+    responses(
+        (status = 200),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(err, skip_all)]
 pub async fn remove_participants_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
@@ -446,6 +651,22 @@ pub async fn remove_participants_handler<S: ChannelService, Svc: EntityAccessSer
 }
 
 /// Handler for `POST /channels/{channel_id}/join`.
+#[utoipa::path(
+    post,
+    tag = "channels",
+    operation_id = "join_channel",
+    path = "/channels/{channel_id}/join",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID")
+    ),
+    responses(
+        (status = 200),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(err, skip_all)]
 pub async fn join_channel_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
@@ -459,6 +680,23 @@ pub async fn join_channel_handler<S: ChannelService, Svc: EntityAccessService>(
 }
 
 /// Handler for `POST /channels/{channel_id}/leave`.
+#[utoipa::path(
+    post,
+    tag = "channels",
+    operation_id = "leave_channel",
+    path = "/channels/{channel_id}/leave",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID")
+    ),
+    responses(
+        (status = 200),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(err, skip_all)]
 pub async fn leave_channel_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,

@@ -1,4 +1,4 @@
-import { commsServiceClient } from '@service-comms/client';
+import { storageServiceClient } from '@service-storage/client';
 import { ok } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -7,8 +7,8 @@ import {
   getChannelAttachmentsQueryKeyPrefix,
 } from '../channel-attachments';
 
-vi.mock('@service-comms/client', () => ({
-  commsServiceClient: {
+vi.mock('@service-storage/client', () => ({
+  storageServiceClient: {
     getChannelAttachments: vi.fn(),
   },
 }));
@@ -34,7 +34,7 @@ describe('channel attachment queries', () => {
 
   it('passes attachment type, cursor, and abort signal to the service client', async () => {
     const page = { items: [], next_cursor: null };
-    vi.mocked(commsServiceClient.getChannelAttachments).mockResolvedValue(
+    vi.mocked(storageServiceClient.getChannelAttachments).mockResolvedValue(
       ok(page)
     );
     const signal = new AbortController().signal;
@@ -46,7 +46,7 @@ describe('channel attachment queries', () => {
       })
     ).resolves.toBe(page);
 
-    expect(commsServiceClient.getChannelAttachments).toHaveBeenCalledWith({
+    expect(storageServiceClient.getChannelAttachments).toHaveBeenCalledWith({
       channel_id: 'channel-1',
       limit: 100,
       cursor: 'cursor-1',

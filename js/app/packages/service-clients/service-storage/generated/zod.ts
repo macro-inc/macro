@@ -1245,6 +1245,84 @@ export const ingestTranscriptBody = zod
   .describe('A transcript segment from LiveKit Inference STT.');
 
 /**
+ * @summary Handler for `POST /channels`.
+ */
+export const createChannelBody = zod
+  .object({
+    channel_type: zod
+      .enum(['public', 'organization', 'private', 'direct_message', 'team'])
+      .describe('Type of channel.'),
+    name: zod.string().nullish().describe('Optional channel name.'),
+    participants: zod
+      .array(zod.string())
+      .describe('Participants to add, excluding the owner.'),
+    team_id: zod.uuid().nullish().describe('Team id for team channels.'),
+  })
+  .describe('Request to create a channel.');
+
+export const createChannelResponse = zod
+  .object({
+    id: zod.string().describe('Created channel id.'),
+  })
+  .describe('Response returned after creating a channel.');
+
+/**
+ * @summary Handler for `POST /channels/get_or_create_dm`.
+ */
+export const getOrCreateDmBody = zod
+  .object({
+    recipient_id: zod.string().describe('Recipient user id.'),
+  })
+  .describe('Request to get or create a direct message channel.');
+
+export const getOrCreateDmResponse = zod
+  .object({
+    action: zod
+      .enum(['get', 'create'])
+      .describe('Result of a get-or-create channel operation.'),
+    channel_id: zod.string().describe('Channel id.'),
+  })
+  .describe('Response for get-or-create channel operations.');
+
+/**
+ * @summary Handler for `POST /channels/get_or_create_private`.
+ */
+export const getOrCreatePrivateBody = zod
+  .object({
+    recipients: zod.array(zod.string()).describe('Recipient user ids.'),
+  })
+  .describe('Request to get or create a private channel.');
+
+export const getOrCreatePrivateResponse = zod
+  .object({
+    action: zod
+      .enum(['get', 'create'])
+      .describe('Result of a get-or-create channel operation.'),
+    channel_id: zod.string().describe('Channel id.'),
+  })
+  .describe('Response for get-or-create channel operations.');
+
+/**
+ * @summary Handler for `DELETE /channels/{channel_id}`.
+ */
+export const deleteChannelParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+/**
+ * @summary Handler for `PATCH /channels/{channel_id}`.
+ */
+export const patchChannelParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const patchChannelBody = zod
+  .object({
+    channel_name: zod.string().nullish().describe('New channel name.'),
+  })
+  .describe('Request to patch a channel.');
+
+/**
  * @summary Handler for `GET /channels/{channel_id}/attachments`.
  */
 export const getChannelAttachmentsParams = zod.object({
@@ -1301,6 +1379,128 @@ export const getChannelAttachmentsResponse = zod
       .describe('Cursor for the next page, null if no more pages.'),
   })
   .describe('Paginated response of channel attachments.');
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/join`.
+ */
+export const joinChannelParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/leave`.
+ */
+export const leaveChannelParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/message`.
+ */
+export const postMessageParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const postMessageBody = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Attachment entity id.'),
+            entity_type: zod.string().describe('Attachment entity type.'),
+            height: zod
+              .number()
+              .nullish()
+              .describe('Optional rendered height.'),
+            width: zod.number().nullish().describe('Optional rendered width.'),
+          })
+          .describe('New attachment to add to a channel message.')
+      )
+      .describe('Attachments to add after message creation.'),
+    content: zod.string().describe('Message body.'),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity id.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('Simple entity mention attached to a message.')
+      )
+      .describe('Message mentions.'),
+    nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
+    thread_id: zod.uuid().nullish().describe('Optional thread parent id.'),
+  })
+  .describe('Request to send a channel message.');
+
+export const postMessageResponse = zod
+  .object({
+    id: zod.string().describe('Created message id.'),
+    nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
+  })
+  .describe('Response returned after sending a message.');
+
+/**
+ * @summary Handler for `DELETE /channels/{channel_id}/message/{message_id}`.
+ */
+export const deleteMessageParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+  message_id: zod.uuid().describe('Message ID'),
+});
+
+export const deleteMessageQueryParams = zod.object({
+  nonce: zod.string().optional().describe('Optional optimistic-update nonce'),
+});
+
+/**
+ * @summary Handler for `PATCH /channels/{channel_id}/message/{message_id}`.
+ */
+export const patchMessageParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+  message_id: zod.uuid().describe('Message ID'),
+});
+
+export const patchMessageBody = zod
+  .object({
+    attachment_ids_to_delete: zod
+      .array(zod.string())
+      .nullish()
+      .describe('Attachment ids to remove.'),
+    attachments_to_add: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Attachment entity id.'),
+            entity_type: zod.string().describe('Attachment entity type.'),
+            height: zod
+              .number()
+              .nullish()
+              .describe('Optional rendered height.'),
+            width: zod.number().nullish().describe('Optional rendered width.'),
+          })
+          .describe('New attachment to add to a channel message.')
+      )
+      .nullish()
+      .describe('Attachments to add.'),
+    content: zod
+      .string()
+      .nullish()
+      .describe('Optional replacement message body.'),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity id.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('Simple entity mention attached to a message.')
+      )
+      .nullish()
+      .describe('Optional replacement mentions.'),
+    nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
+  })
+  .describe('Request to patch a channel message.');
 
 /**
  * @summary Handler for `GET /channels/{channel_id}/messages`.
@@ -1795,6 +1995,63 @@ export const getChannelParticipantsResponseItem = zod
 export const getChannelParticipantsResponse = zod.array(
   getChannelParticipantsResponseItem
 );
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/participants`.
+ */
+export const addParticipantsParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const addParticipantsBody = zod
+  .object({
+    participants: zod.array(zod.string()).describe('User ids to add.'),
+  })
+  .describe('Request to add participants.');
+
+/**
+ * @summary Handler for `DELETE /channels/{channel_id}/participants`.
+ */
+export const removeParticipantsParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const removeParticipantsBody = zod
+  .object({
+    participants: zod.array(zod.string()).describe('User ids to remove.'),
+  })
+  .describe('Request to remove participants.');
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/reaction`.
+ */
+export const postReactionParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const postReactionBody = zod
+  .object({
+    action: zod.enum(['Add', 'Remove']).describe('Reaction mutation action.'),
+    emoji: zod.string().describe('Reaction emoji.'),
+    message_id: zod.string().describe('Message id to react to.'),
+    nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
+  })
+  .describe('Request to mutate a reaction.');
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/typing`.
+ */
+export const postTypingParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const postTypingBody = zod
+  .object({
+    action: zod.enum(['start', 'stop']).describe('Typing indicator action.'),
+    nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
+    thread_id: zod.string().nullish().describe('Optional thread id.'),
+  })
+  .describe('Request to emit a typing event.');
 
 /**
  * @summary Toggle `email_sync` on a CRM company. `false` disables CRM email
@@ -5579,13 +5836,15 @@ export const getItemsSoupResponse = zod.object({
           data: zod
             .object({
               channel: zod.object({
-                channel_type: zod.enum([
-                  'public',
-                  'organization',
-                  'private',
-                  'direct_message',
-                  'team',
-                ]),
+                channel_type: zod
+                  .enum([
+                    'public',
+                    'organization',
+                    'private',
+                    'direct_message',
+                    'team',
+                  ])
+                  .describe('Type of channel.'),
                 created_at: zod.iso.datetime({}),
                 id: zod.uuid(),
                 name: zod.string().nullish(),
@@ -7280,13 +7539,15 @@ export const postItemsSoupResponse = zod.object({
           data: zod
             .object({
               channel: zod.object({
-                channel_type: zod.enum([
-                  'public',
-                  'organization',
-                  'private',
-                  'direct_message',
-                  'team',
-                ]),
+                channel_type: zod
+                  .enum([
+                    'public',
+                    'organization',
+                    'private',
+                    'direct_message',
+                    'team',
+                  ])
+                  .describe('Type of channel.'),
                 created_at: zod.iso.datetime({}),
                 id: zod.uuid(),
                 name: zod.string().nullish(),
@@ -8612,13 +8873,15 @@ export const postItemsSoupAstResponse = zod.object({
           data: zod
             .object({
               channel: zod.object({
-                channel_type: zod.enum([
-                  'public',
-                  'organization',
-                  'private',
-                  'direct_message',
-                  'team',
-                ]),
+                channel_type: zod
+                  .enum([
+                    'public',
+                    'organization',
+                    'private',
+                    'direct_message',
+                    'team',
+                  ])
+                  .describe('Type of channel.'),
                 created_at: zod.iso.datetime({}),
                 id: zod.uuid(),
                 name: zod.string().nullish(),

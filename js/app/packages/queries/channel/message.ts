@@ -4,23 +4,23 @@ import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import {
-  type ApiChannelMessage,
-  type ApiThreadReply,
-  commsServiceClient,
-  type IdResponse,
-  type MessageResponse,
-} from '@service-comms/client';
 import type {
   Attachment,
   ChannelMessage,
   CountedReaction,
   Message,
-  PostMessageRequest,
 } from '@service-comms/generated/models';
-import type { NewAttachment } from '@service-comms/generated/models/newAttachment';
-import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
+import {
+  type ApiChannelMessage,
+  type ApiThreadReply,
+  type IdResponse,
+  type MessageResponse,
+  storageServiceClient,
+} from '@service-storage/client';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
+import type { NewChannelAttachment as NewAttachment } from '@service-storage/generated/schemas/newChannelAttachment';
+import type { PostMessageRequest } from '@service-storage/generated/schemas/postMessageRequest';
+import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { createMutationNonce, registerNonce } from '../nonce';
@@ -422,7 +422,7 @@ export function useSendMessageMutation(
       // Use optimisticId as nonce - allows server to echo it back for correlation
       return await throwOnErr(
         async () =>
-          await commsServiceClient.postMessage({
+          await storageServiceClient.postMessage({
             channel_id: vars.channelID,
             message: vars.message,
             nonce: vars.optimisticId,
@@ -512,7 +512,7 @@ export function useDeleteMessageMutation(
     mutationFn: async (vars: DeleteMessageParams) => {
       await throwOnErr(
         async () =>
-          await commsServiceClient.deleteMessage({
+          await storageServiceClient.deleteMessage({
             channel_id: vars.channelID,
             message_id: vars.messageID,
             nonce: deleteNonce.use(vars),
@@ -588,7 +588,7 @@ export function usePatchMessageMutation(
     mutationFn: async (vars: PatchMessageParams) => {
       return await throwOnErr(
         async () =>
-          await commsServiceClient.patchMessage({
+          await storageServiceClient.patchMessage({
             channel_id: vars.channelID,
             message_id: vars.messageID,
             content: vars.content,

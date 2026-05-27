@@ -36,12 +36,22 @@ import type {
   View,
   ViewsResponse,
 } from './generated/schemas';
+import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
+import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
+import type { ApiChannelMessagesPage } from './generated/schemas/apiChannelMessagesPage';
+import type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
+import type { ApiResolvedChannelMessage } from './generated/schemas/apiResolvedChannelMessage';
+import type { ApiThreadReply } from './generated/schemas/apiThreadReply';
+import type { ChannelMessageFilters } from './generated/schemas/channelMessageFilters';
+import { ChannelType } from './generated/schemas/channelType';
 import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
+import type { CreateChannelRequest } from './generated/schemas/createChannelRequest';
+import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
 import type { CreateCommentResponse } from './generated/schemas/createCommentResponse';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
@@ -66,13 +76,23 @@ import type { GetDocumentProcessingResultResponse } from './generated/schemas/ge
 import type { GetDocumentResponseData } from './generated/schemas/getDocumentResponseData';
 import type { GetDocumentSearchResponse } from './generated/schemas/getDocumentSearchResponse';
 import type { GetInstructionsDocumentResponse } from './generated/schemas/getInstructionsDocumentResponse';
+import type { GetOrCreateChannelResponse } from './generated/schemas/getOrCreateChannelResponse';
+import type { GetOrCreateDmRequest } from './generated/schemas/getOrCreateDmRequest';
+import type { GetOrCreatePrivateRequest } from './generated/schemas/getOrCreatePrivateRequest';
 import type { GetPendingProjectsHandler200 } from './generated/schemas/getPendingProjectsHandler200';
 import type { GetProjectContentResponse } from './generated/schemas/getProjectContentResponse';
 import type { GetProjectResponse } from './generated/schemas/getProjectResponse';
 import type { Item } from './generated/schemas/item';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
+import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
+import type { PatchMessageRequest } from './generated/schemas/patchMessageRequest';
 import type { PinRequest } from './generated/schemas/pinRequest';
+import type { PostMessageRequest } from './generated/schemas/postMessageRequest';
+import type { PostMessageResponse } from './generated/schemas/postMessageResponse';
+import type { PostReactionRequest } from './generated/schemas/postReactionRequest';
+import type { PostTypingRequest } from './generated/schemas/postTypingRequest';
 import type { Project } from './generated/schemas/project';
+import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
@@ -135,6 +155,29 @@ export type ItemType =
   | 'automation';
 
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
+
+export type { ApiChannelAttachment } from './generated/schemas/apiChannelAttachment';
+export type { ApiChannelAttachmentsPage as ChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
+export type { ApiChannelMessage } from './generated/schemas/apiChannelMessage';
+export type { ApiChannelMessagesPage as ChannelMessagesPage } from './generated/schemas/apiChannelMessagesPage';
+export type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
+export type { ApiThreadReply } from './generated/schemas/apiThreadReply';
+export type { GetOrCreateChannelResponse } from './generated/schemas/getOrCreateChannelResponse';
+
+export type IdResponse = { id: string };
+export type MessageResponse = { message: string };
+
+type WithChannelId = { channel_id: string };
+type WithMessageId = { message_id: string };
+export type ChannelAttachmentType = 'static' | 'dss';
+
+export const ChannelTypeEnum = {
+  Public: ChannelType.public,
+  Organization: ChannelType.organization,
+  Private: ChannelType.private,
+  DirectMessage: ChannelType.direct_message,
+  Team: ChannelType.team,
+} as const satisfies Record<string, ChannelType>;
 
 const itemTypeSet = new Set([
   'document',
@@ -293,6 +336,294 @@ export const storageServiceClient = {
       method: 'POST',
       body: JSON.stringify(body),
     });
+  },
+
+  async createChannel(args: CreateChannelRequest) {
+    return (
+      await dssFetch<CreateChannelResponse>(`/channels`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
+
+  async getOrCreateDirectMessage(args: GetOrCreateDmRequest) {
+    const { recipient_id } = args;
+    return (
+      await dssFetch<GetOrCreateChannelResponse>(`/channels/get_or_create_dm`, {
+        method: 'POST',
+        body: JSON.stringify({ recipient_id }),
+      })
+    ).map((result) => result);
+  },
+
+  async getOrCreatePrivateChannel(args: GetOrCreatePrivateRequest) {
+    const { recipients } = args;
+    return (
+      await dssFetch<GetOrCreateChannelResponse>(
+        `/channels/get_or_create_private`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ recipients }),
+        }
+      )
+    ).map((result) => result);
+  },
+
+  async patchChannel(args: WithChannelId & PatchChannelRequest) {
+    const { channel_id, channel_name } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ channel_name }),
+      })
+    ).map((result) => result);
+  },
+
+  async deleteChannel(args: WithChannelId) {
+    const { channel_id } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}`, {
+        method: 'DELETE',
+      })
+    ).map((result) => result);
+  },
+
+  async postMessage(
+    args: WithChannelId & { message: PostMessageRequest; nonce?: string }
+  ) {
+    const { channel_id, message, nonce } = args;
+    const uniqueMentions = Array.from(new Set(message.mentions));
+    const sendMessage = { ...message, mentions: uniqueMentions, nonce };
+    return (
+      await dssFetch<PostMessageResponse>(`/channels/${channel_id}/message`, {
+        method: 'POST',
+        body: JSON.stringify(sendMessage),
+      })
+    ).map((result) => result);
+  },
+
+  async patchMessage(
+    args: PatchMessageRequest &
+      WithChannelId &
+      WithMessageId & { nonce?: string }
+  ) {
+    const {
+      channel_id,
+      content,
+      message_id,
+      mentions,
+      attachment_ids_to_delete,
+      attachments_to_add,
+      nonce,
+    } = args;
+    return (
+      await dssFetch<MessageResponse>(
+        `/channels/${channel_id}/message/${message_id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            content,
+            mentions,
+            attachment_ids_to_delete,
+            attachments_to_add,
+            nonce,
+          }),
+        }
+      )
+    ).map((result) => result);
+  },
+
+  async deleteMessage(
+    args: WithChannelId & WithMessageId & { nonce?: string }
+  ) {
+    const { channel_id, message_id, nonce } = args;
+    const params = new URLSearchParams();
+    if (nonce) params.append('nonce', nonce);
+    const query = params.toString();
+    return (
+      await dssFetch<MessageResponse>(
+        `/channels/${channel_id}/message/${message_id}${query ? `?${query}` : ''}`,
+        {
+          method: 'DELETE',
+        }
+      )
+    ).map((result) => result);
+  },
+
+  async postReaction(
+    args: PostReactionRequest & WithChannelId & { nonce?: string }
+  ) {
+    const { channel_id, action, emoji, message_id, nonce } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}/reaction`, {
+        method: 'POST',
+        body: JSON.stringify({ action, emoji, message_id, nonce }),
+      })
+    ).map((result) => result);
+  },
+
+  async postTypingUpdate(
+    args: PostTypingRequest & WithChannelId & { nonce?: string }
+  ) {
+    const { channel_id, action, thread_id, nonce } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}/typing`, {
+        method: 'POST',
+        body: JSON.stringify({ action, thread_id, nonce }),
+      })
+    ).map((result) => result);
+  },
+
+  async addParticipantsToChanenl(args: AddParticipantsRequest & WithChannelId) {
+    const { channel_id, participants } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}/participants`, {
+        method: 'POST',
+        body: JSON.stringify({ participants }),
+      })
+    ).map((result) => result);
+  },
+
+  async addParticipantsToChannel(args: AddParticipantsRequest & WithChannelId) {
+    const { channel_id, participants } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}/participants`, {
+        method: 'POST',
+        body: JSON.stringify({ participants }),
+      })
+    ).map((result) => result);
+  },
+
+  async removeParticipantsFromChannel(
+    args: RemoveParticipantsRequest & WithChannelId
+  ) {
+    const { channel_id, participants } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}/participants`, {
+        method: 'DELETE',
+        body: JSON.stringify({ participants }),
+      })
+    ).map((result) => result);
+  },
+
+  async joinChannel(args: WithChannelId) {
+    const { channel_id } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}/join`, {
+        method: 'POST',
+      })
+    ).map((result) => result);
+  },
+
+  async leaveChannel(args: WithChannelId) {
+    const { channel_id } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}/leave`, {
+        method: 'POST',
+      })
+    ).map((result) => result);
+  },
+
+  async getChannelMessages(
+    args: WithChannelId & {
+      limit: number;
+      next_cursor: string | null;
+      previous_cursor: string | null;
+      load_around_message_id: string | null;
+    }
+  ) {
+    const {
+      channel_id,
+      limit,
+      next_cursor,
+      previous_cursor,
+      load_around_message_id,
+    } = args;
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    if (load_around_message_id) {
+      params.append('load_around_message_id', load_around_message_id);
+    } else if (next_cursor) {
+      params.append('cursor', next_cursor);
+    } else if (previous_cursor) {
+      params.append('previous_cursor', previous_cursor);
+    }
+    return (
+      await dssFetch<ApiChannelMessagesPage>(
+        `/channels/${channel_id}/messages?${params.toString()}`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async postChannelMessages(
+    args: WithChannelId & { filters: ChannelMessageFilters; limit?: number }
+  ) {
+    const { channel_id, filters, limit } = args;
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.append('limit', limit.toString());
+    const query = params.toString();
+    return (
+      await dssFetch<ApiChannelMessagesPage>(
+        `/channels/${channel_id}/messages${query ? `?${query}` : ''}`,
+        {
+          method: 'POST',
+          body: JSON.stringify(filters),
+        }
+      )
+    ).map((result) => result);
+  },
+
+  async getThreadReplies(args: WithChannelId & WithMessageId) {
+    const { channel_id, message_id } = args;
+    return (
+      await dssFetch<Array<ApiThreadReply>>(
+        `/channels/${channel_id}/messages/${message_id}/replies`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async resolveChannelMessage(args: WithChannelId & WithMessageId) {
+    const { channel_id, message_id } = args;
+    return (
+      await dssFetch<ApiResolvedChannelMessage>(
+        `/channels/${channel_id}/messages/${message_id}/resolve`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async getChannelAttachments(
+    args: WithChannelId & {
+      limit: number;
+      cursor: string | null;
+      attachment_type?: ChannelAttachmentType;
+      signal?: AbortSignal;
+    }
+  ) {
+    const { channel_id, limit, cursor, attachment_type, signal } = args;
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    if (cursor) params.append('cursor', cursor);
+    if (attachment_type) params.append('attachment_type', attachment_type);
+    return (
+      await dssFetch<ApiChannelAttachmentsPage>(
+        `/channels/${channel_id}/attachments?${params.toString()}`,
+        { method: 'GET', signal }
+      )
+    ).map((result) => result);
+  },
+
+  async getChannelParticipants(args: WithChannelId) {
+    const { channel_id } = args;
+    return (
+      await dssFetch<ApiChannelParticipant[]>(
+        `/channels/${channel_id}/participants`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
   },
 
   permissionsTokens: {
