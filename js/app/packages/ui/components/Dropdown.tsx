@@ -143,6 +143,7 @@ function DropdownItem(props: DropdownItemProps) {
   return (
     <KobalteDropdownMenu.Item
       class={cn(ROW_CLASS, local.class)}
+      closeOnSelect={props.closeOnSelect}
       {...rest}
     />
   );

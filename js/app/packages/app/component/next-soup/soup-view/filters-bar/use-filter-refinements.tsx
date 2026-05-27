@@ -836,11 +836,17 @@ export function useFilterRefinements() {
       seenKeys.add(args.key);
 
       // Compute values as accessor for reactivity
-      const getValues = (): FilterValue[] =>
-        args.getIds().map((id) => ({
-          id,
-          label: args.labelMap().get(id) ?? id,
-        }));
+      const getValues = (): FilterValue[] => {
+        const options = args.searchableOptions();
+        return args.getIds().map((id) => {
+          const opt = options.find((o) => o.id === id);
+          return {
+            id,
+            label: args.labelMap().get(id) ?? id,
+            icon: opt?.icon,
+          };
+        });
+      };
 
       filters.push(
         getOrCreateConsolidatedChip(args.key, () => {

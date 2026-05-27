@@ -810,9 +810,38 @@ export const UnifiedFilterDropdown = (
     },
   });
 
+  // Capture anchor position when menu opens to prevent jumping when chips are added
+  const [anchorRect, setAnchorRect] = createSignal<DOMRect | null>(null);
+
+  const handleOpenChange = (isOpen: boolean) => {
+    if (isOpen) {
+      // Clear any stale anchor rect so it gets recaptured from trigger
+      setAnchorRect(null);
+    }
+    setOpen(isOpen);
+  };
+
+  const getAnchorRect = (anchor?: HTMLElement) => {
+    // If we have a captured rect, use it (prevents jumping)
+    const captured = anchorRect();
+    if (captured) return captured;
+
+    // Otherwise capture the current position
+    if (anchor) {
+      const rect = anchor.getBoundingClientRect();
+      setAnchorRect(rect);
+      return rect;
+    }
+    return undefined;
+  };
+
   return (
     <Show when={categories().length > 0 || isTasksView() || isSearchView()}>
-      <Dropdown open={open()} onOpenChange={setOpen}>
+      <Dropdown
+        open={open()}
+        onOpenChange={handleOpenChange}
+        getAnchorRect={getAnchorRect}
+      >
         <Show when={!props.hideTrigger}>
           <Switch>
             <Match when={props.customTrigger}>{props.customTrigger}</Match>

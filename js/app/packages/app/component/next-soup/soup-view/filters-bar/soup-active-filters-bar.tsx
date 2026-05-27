@@ -23,9 +23,9 @@ const AddFilterButton = () => (
     variant="ghost"
     size="icon-sm"
     tooltip="Add filters"
-    class="rounded-full"
+    class="p-1 rounded-full"
   >
-    <Plus />
+    <Plus class="size-3" />
   </Dropdown.Trigger>
 );
 
@@ -36,7 +36,7 @@ export function SoupActiveFiltersBar(props: SoupActiveFiltersBarProps) {
     <Show when={props.filters.length > 0}>
       <Layer depth={0}>
         <div class={cn('w-full p-2', props.class)}>
-          <div class="flex items-center p-2 border border-edge-muted bg-surface rounded-lg">
+          <div class="flex items-start p-2 border border-edge-muted bg-surface rounded-lg font-medium">
             {/* Filter chips and add button - flex left */}
             <div class="flex items-center gap-2 flex-wrap flex-1 min-w-0">
               <For each={props.filters}>
@@ -55,9 +55,10 @@ export function SoupActiveFiltersBar(props: SoupActiveFiltersBarProps) {
                 variant="base"
                 size="sm"
                 class="h-7 rounded-md"
+                tooltip="Clear active filters"
               >
                 <XIcon />
-                Clear all
+                <span class="hidden @min-[300px]/split:inline">Clear all</span>
               </Button>
             </div>
           </div>

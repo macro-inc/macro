@@ -1,8 +1,7 @@
 import { Combobox } from '@kobalte/core/combobox';
 import CheckIcon from '@phosphor/check.svg';
-import CirclesThreePlusIcon from '@phosphor/circles-three-plus.svg';
 import XIcon from '@phosphor/x.svg';
-import { Avatar, AvatarGroup, cn, Dropdown, Layer } from '@ui';
+import { Button, cn, Dropdown, Layer } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -14,8 +13,6 @@ import {
 } from 'solid-js';
 import type { SearchableOption } from './search-filter-controls';
 import { SearchableMultiSelect } from './searchable-multi-select';
-
-const MAX_VISIBLE_ICONS = 3;
 
 export type FilterValue = {
   id: string;
@@ -79,54 +76,64 @@ const SingleValueDisplay = (props: { value: FilterValue }) => (
   </span>
 );
 
-const MultiValueDisplay = (props: {
-  values: FilterValue[];
-  pluralLabel: string;
-}) => {
+const MultiValueDisplay = (props: { values: FilterValue[] }) => {
+  const first = () => props.values[0];
+  const overflowCount = () => props.values.length - 1;
+
   return (
     <span
       class="inline-flex h-full items-center gap-1.5"
       title={props.values.map((v) => v.label).join(', ')}
     >
-      <CirclesThreePlusIcon class="size-3" />
-      <span>
-        {props.values.length} {props.pluralLabel}
-      </span>
+      <Show when={first()?.icon}>
+        {(icon) => (
+          <span class="size-3 flex items-center justify-center shrink-0">
+            {icon()()}
+          </span>
+        )}
+      </Show>
+      <span class="truncate max-w-32">{first()?.label}</span>
+      <Show when={overflowCount() > 0}>
+        <span class="inline-flex items-center justify-center px-1 min-w-4 h-4 rounded-full bg-ink/10 text-xxs">
+          +{overflowCount()}
+        </span>
+      </Show>
     </span>
   );
 };
 
-const AssigneeMultiValueDisplay = (props: { values: FilterValue[] }) => {
-  const visibleValues = () => props.values.slice(0, MAX_VISIBLE_ICONS);
-  const overflowCount = () =>
-    Math.max(0, props.values.length - MAX_VISIBLE_ICONS);
+/** People filter keys that should show avatar stacks */
+const PEOPLE_FILTER_KEYS = new Set(['assignee', 'channel-from', 'call-from']);
+
+const PeopleMultiValueDisplay = (props: { values: FilterValue[] }) => {
+  const first = () => props.values[0];
+  const overflowCount = () => props.values.length - 1;
 
   return (
     <span
       class="inline-flex items-center gap-1.5"
       title={props.values.map((v) => v.label).join(', ')}
     >
-      <AvatarGroup size="sm">
-        <For each={visibleValues()}>
-          {(value) => (
-            <Avatar size="sm">
-              <Show when={value.icon}>{(icon) => icon()()}</Show>
-            </Avatar>
-          )}
-        </For>
-        <Show when={overflowCount() > 0}>
-          <AvatarGroup.Count size="sm">+{overflowCount()}</AvatarGroup.Count>
-        </Show>
-      </AvatarGroup>
-      <span>{props.values.length} Assignees</span>
+      <Show when={first()?.icon}>
+        {(icon) => (
+          <span class="size-3 flex items-center justify-center shrink-0">
+            {icon()()}
+          </span>
+        )}
+      </Show>
+      <span class="truncate max-w-32">{first()?.label}</span>
+      <Show when={overflowCount() > 0}>
+        <span class="inline-flex items-center justify-center px-1 min-w-4 h-4 rounded-full bg-ink/10 text-xxs">
+          +{overflowCount()}
+        </span>
+      </Show>
     </span>
   );
 };
 
 const ValueDisplay = (props: {
   values: Accessor<FilterValue[]>;
-  isAssignee?: boolean;
-  pluralLabel: string;
+  isPeopleFilter?: boolean;
 }) => {
   const vals = () => props.values();
   const isSingle = () => vals().length === 1;
@@ -136,20 +143,17 @@ const ValueDisplay = (props: {
       <Match when={isSingle()}>
         <SingleValueDisplay value={vals()[0]} />
       </Match>
-      <Match when={props.isAssignee}>
-        <AssigneeMultiValueDisplay values={vals()} />
+      <Match when={props.isPeopleFilter}>
+        <PeopleMultiValueDisplay values={vals()} />
       </Match>
-      <Match when={!props.isAssignee}>
-        <MultiValueDisplay values={vals()} pluralLabel={props.pluralLabel} />
+      <Match when={!props.isPeopleFilter}>
+        <MultiValueDisplay values={vals()} />
       </Match>
     </Switch>
   );
 };
 
-const ValueDropdownContent = (props: {
-  filter: ConsolidatedFilter;
-  onClose: () => void;
-}) => {
+const ValueDropdownContent = (props: { filter: ConsolidatedFilter }) => {
   const isActive = (id: string) =>
     props.filter.isValueActive?.(id) ??
     props.filter.values().some((v) => v.id === id);
@@ -162,11 +166,9 @@ const ValueDropdownContent = (props: {
             const active = () => isActive(option.id);
             return (
               <Dropdown.Item
+                closeOnSelect={!props.filter.multiple}
                 onSelect={() => {
                   props.filter.onToggleValue?.(option.id);
-                  if (!props.filter.multiple) {
-                    props.onClose();
-                  }
                 }}
               >
                 <Show
@@ -238,9 +240,7 @@ const SearchableValueSegment = (props: {
     props.filter.searchPlaceholder ??
     `Search ${props.filter.categoryLabel.toLowerCase()}...`;
 
-  const isAssignee = () => props.filter.key === 'assignee';
-  const pluralLabel = () =>
-    props.filter.categoryLabelPlural ?? `${props.filter.categoryLabel}s`;
+  const isPeopleFilter = () => PEOPLE_FILTER_KEYS.has(props.filter.key);
 
   return (
     <SearchableMultiSelect
@@ -261,8 +261,7 @@ const SearchableValueSegment = (props: {
       >
         <ValueDisplay
           values={props.filter.values}
-          isAssignee={isAssignee()}
-          pluralLabel={pluralLabel()}
+          isPeopleFilter={isPeopleFilter()}
         />
       </Combobox.Trigger>
     </SearchableMultiSelect>
@@ -277,9 +276,7 @@ const StandardValueSegment = (props: {
   const hasOptions = () =>
     props.filter.availableOptions && props.filter.availableOptions.length > 0;
 
-  const isAssignee = () => props.filter.key === 'assignee';
-  const pluralLabel = () =>
-    props.filter.categoryLabelPlural ?? `${props.filter.categoryLabel}s`;
+  const isPeopleFilter = () => PEOPLE_FILTER_KEYS.has(props.filter.key);
 
   return (
     <Show
@@ -290,8 +287,7 @@ const StandardValueSegment = (props: {
         >
           <ValueDisplay
             values={props.filter.values}
-            isAssignee={isAssignee()}
-            pluralLabel={pluralLabel()}
+            isPeopleFilter={isPeopleFilter()}
           />
         </span>
       }
@@ -307,14 +303,10 @@ const StandardValueSegment = (props: {
         >
           <ValueDisplay
             values={props.filter.values}
-            isAssignee={isAssignee()}
-            pluralLabel={pluralLabel()}
+            isPeopleFilter={isPeopleFilter()}
           />
         </Dropdown.Trigger>
-        <ValueDropdownContent
-          filter={props.filter}
-          onClose={() => setOpen(false)}
-        />
+        <ValueDropdownContent filter={props.filter} />
       </Dropdown>
     </Show>
   );
@@ -359,20 +351,16 @@ export const ConsolidatedFilterChip = (props: ConsolidatedFilterChipProps) => {
 
         <ChipDivider />
 
-        {/* Remove button */}
-        <button
-          type="button"
-          class={cn(
-            'inline-flex items-center justify-center px-1.5',
-            'hover:bg-ink/5 active:bg-ink/8 hover:text-failure'
-          )}
+        <Button
+          class="rounded-none h-full not-disabled:hover:text-failure"
+          size="icon-sm"
           onClick={(e) => {
             e.stopPropagation();
             props.filter.onRemoveAll();
           }}
         >
-          <XIcon class="size-4" />
-        </button>
+          <XIcon class="size-3.5!" />
+        </Button>
       </div>
     </Layer>
   );

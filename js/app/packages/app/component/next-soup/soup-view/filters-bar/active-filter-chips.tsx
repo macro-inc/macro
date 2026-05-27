@@ -1,5 +1,3 @@
-import XIcon from '@phosphor/x.svg';
-import { Button } from '@ui';
 import { type Accessor, For, type JSX, Show } from 'solid-js';
 import {
   type ConsolidatedFilter,
@@ -159,8 +157,6 @@ function toConsolidatedFilter(
 }
 
 export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
-  const lastIndex = () => props.filters.length - 1;
-
   const containerProps = () => ({
     onRemove: props.onRemove,
     onReplace: props.onReplace,
