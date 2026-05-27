@@ -57,6 +57,10 @@ pub async fn handler(
         }
     };
 
+    if access_token.starts_with("mbot_") {
+        return Ok(next.run(req).await);
+    }
+
     let jwt = macro_auth::middleware::decode_jwt::handler(&jwt_validation_args, &access_token)
         .map_err(|e| match e {
             MacroAuthError::JwtExpired => (

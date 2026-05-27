@@ -5,6 +5,8 @@ members = [
   "agent",
   "authentication_service",
   "backfill_entity_access",
+  "bot_id",
+  "bots",
   "comms_service",
   "connection_gateway",
   "contacts_service",

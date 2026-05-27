@@ -63,7 +63,8 @@ impl<E: EntityAccessService, Cgw: ConnectionGateway> ConnectionService
                     .collect::<Vec<MacroUserId<Lowercase<'a>>>>()
             }
             entity_access::domain::models::EntityAccessAuth::Unauthenticated
-            | entity_access::domain::models::EntityAccessAuth::Internal => {
+            | entity_access::domain::models::EntityAccessAuth::Internal
+            | entity_access::domain::models::EntityAccessAuth::Bot(_) => {
                 users.into_iter().map(|s| s.0.to_owned()).collect()
             }
         };

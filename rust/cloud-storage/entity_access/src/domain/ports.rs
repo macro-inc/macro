@@ -73,6 +73,14 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_org_id: Option<i64>,
     ) -> impl Future<Output = Result<ChannelRoleResult, AccessError>> + Send;
 
+    /// Get a string principal's role in a channel.
+    fn get_channel_role_for_principal(
+        &self,
+        channel_id: &Uuid,
+        principal_id: &str,
+        user_org_id: Option<i64>,
+    ) -> impl Future<Output = Result<ChannelRoleResult, AccessError>> + Send;
+
     /// Gets all the user's that have access to a given entity.
     fn get_entity_users(
         &self,
@@ -175,6 +183,14 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
         entity_id: &str,
         entity_type: EntityType,
+        user_org_id: Option<i64>,
+    ) -> impl Future<Output = Result<EntityPermission, AccessError>> + Send;
+
+    /// Get a string principal's permission for a channel entity.
+    fn get_channel_permission_for_principal(
+        &self,
+        principal_id: &str,
+        channel_id: &str,
         user_org_id: Option<i64>,
     ) -> impl Future<Output = Result<EntityPermission, AccessError>> + Send;
 

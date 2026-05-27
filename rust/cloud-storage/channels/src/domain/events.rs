@@ -2,7 +2,7 @@
 
 use crate::domain::models::{
     ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction, MutatedAttachment,
-    MutatedMessage, SimpleMention, TypingAction,
+    MutatedMessage, Sender, SimpleMention, TypingAction,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -14,6 +14,8 @@ pub enum ChannelEvent {
     ChannelCreated {
         /// Created channel id.
         channel_id: Uuid,
+        /// Actor that created the channel.
+        actor: Sender,
         /// Type of channel that was created.
         channel_type: ChannelType,
         /// Active participants after creation.
@@ -23,6 +25,8 @@ pub enum ChannelEvent {
     ChannelDeleted {
         /// Deleted channel id.
         channel_id: Uuid,
+        /// Actor that deleted the channel.
+        actor: Sender,
     },
     /// A message was posted.
     MessagePosted {
@@ -47,6 +51,8 @@ pub enum ChannelEvent {
     AttachmentsChanged {
         /// Channel containing the message.
         channel_id: Uuid,
+        /// Actor that changed the attachments.
+        actor: Sender,
         /// Message whose attachments changed.
         message_id: Uuid,
         /// Current attachment set for the message.
@@ -60,6 +66,8 @@ pub enum ChannelEvent {
     MessageChanged {
         /// Channel containing the message.
         channel_id: Uuid,
+        /// Actor that changed the message.
+        actor: Sender,
         /// Persisted message payload after mutation.
         message: MutatedMessage,
         /// Realtime recipients at mutation time.
@@ -71,6 +79,8 @@ pub enum ChannelEvent {
     MessageDeleted {
         /// Channel containing the message.
         channel_id: Uuid,
+        /// Actor that deleted the message.
+        actor: Sender,
         /// Persisted message payload after deletion.
         message: MutatedMessage,
         /// Realtime recipients at mutation time.
@@ -82,6 +92,8 @@ pub enum ChannelEvent {
     ReactionChanged {
         /// Channel containing the message.
         channel_id: Uuid,
+        /// Actor that changed the reaction.
+        actor: Sender,
         /// Message whose reactions changed.
         message_id: Uuid,
         /// Current grouped reaction state for the message.
@@ -95,8 +107,8 @@ pub enum ChannelEvent {
     TypingChanged {
         /// Channel containing the typing update.
         channel_id: Uuid,
-        /// User whose typing state changed.
-        user_id: String,
+        /// Actor whose typing state changed.
+        actor: Sender,
         /// Typing action.
         action: TypingAction,
         /// Optional thread id for thread-scoped typing.
@@ -114,8 +126,8 @@ pub enum ChannelEvent {
         channel_type: ChannelType,
         /// Active participants after the addition.
         active_participant_user_ids: Vec<MacroUserIdStr<'static>>,
-        /// User who initiated the add.
-        invited_by_user_id: MacroUserIdStr<'static>,
+        /// Actor who initiated the add.
+        invited_by: Sender,
         /// Newly added recipients.
         recipient_user_ids: Vec<MacroUserIdStr<'static>>,
         /// Resolved channel metadata for notification copy.
@@ -129,8 +141,8 @@ pub enum ChannelEvent {
         channel_id: Uuid,
         /// Type of channel that was joined.
         channel_type: ChannelType,
-        /// User that joined the channel.
-        user_id: MacroUserIdStr<'static>,
+        /// Actor that joined the channel.
+        user_id: Sender,
         /// Active participants after the join.
         active_participant_user_ids: Vec<MacroUserIdStr<'static>>,
     },

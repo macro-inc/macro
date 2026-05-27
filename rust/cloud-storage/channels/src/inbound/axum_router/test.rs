@@ -4,7 +4,7 @@ use crate::domain::models::{
     ChannelParticipant, DeleteMessageQuery, GetOrCreateChannelResponse, GetOrCreateDmRequest,
     GetOrCreatePrivateRequest, MessagePageDirection, ParticipantRole, PatchChannelRequest,
     PatchMessageRequest, PostMessageRequest, PostMessageResponse, PostReactionRequest,
-    PostTypingRequest, RemoveParticipantsRequest,
+    PostTypingRequest, RemoveParticipantsRequest, Sender,
 };
 use crate::domain::ports::{
     ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMutationErr,
@@ -146,6 +146,21 @@ impl EntityAccessService for TestAccessService {
                     access_level: AccessLevel::View,
                 }),
             },
+            AccessMode::Deny => Err(AccessError::Unauthorized),
+            AccessMode::NotFound => Err(AccessError::NotFound("Channel not found")),
+        }
+    }
+
+    async fn get_channel_permission_for_principal(
+        &self,
+        _principal_id: &str,
+        _channel_id: &str,
+        _user_org_id: Option<i64>,
+    ) -> Result<EntityPermission, AccessError> {
+        match self.mode {
+            AccessMode::Allow => Ok(EntityPermission::ChannelRole {
+                role: EntityParticipantRole::Member,
+            }),
             AccessMode::Deny => Err(AccessError::Unauthorized),
             AccessMode::NotFound => Err(AccessError::NotFound("Channel not found")),
         }
@@ -399,7 +414,7 @@ impl ChannelService for ParticipantsService {
 
 #[derive(Clone, Default)]
 struct RecordingMutationService {
-    posts: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid, PostMessageRequest)>>>,
+    posts: Arc<Mutex<Vec<(Sender, Uuid, PostMessageRequest)>>>,
 }
 
 impl ChannelService for RecordingMutationService {
@@ -469,7 +484,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn create_channel(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _actor_org_id: Option<i64>,
         _req: CreateChannelRequest,
     ) -> Result<CreateChannelResponse, ChannelMutationErr> {
@@ -480,7 +495,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn get_or_create_dm(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _req: GetOrCreateDmRequest,
     ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
         Err(ChannelMutationErr::NotFound("unused".to_string()))
@@ -488,7 +503,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn get_or_create_private(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _req: GetOrCreatePrivateRequest,
     ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
         Err(ChannelMutationErr::NotFound("unused".to_string()))
@@ -496,7 +511,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn patch_channel(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: PatchChannelRequest,
     ) -> Result<(), ChannelMutationErr> {
@@ -505,7 +520,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn delete_channel(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
         Ok(())
@@ -513,7 +528,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn post_message(
         &self,
-        actor: MacroUserIdStr<'static>,
+        actor: Sender,
         channel_id: Uuid,
         req: PostMessageRequest,
     ) -> Result<PostMessageResponse, ChannelMutationErr> {
@@ -526,7 +541,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn patch_message(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _actor_role: ParticipantRole,
         _channel_id: Uuid,
         _message_id: Uuid,
@@ -537,7 +552,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn delete_message(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _actor_role: ParticipantRole,
         _channel_id: Uuid,
         _message_id: Uuid,
@@ -548,7 +563,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn post_reaction(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: PostReactionRequest,
     ) -> Result<(), ChannelMutationErr> {
@@ -557,7 +572,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn post_typing(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: PostTypingRequest,
     ) -> Result<(), ChannelMutationErr> {
@@ -566,7 +581,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn add_participants(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: AddParticipantsRequest,
     ) -> Result<(), ChannelMutationErr> {
@@ -575,6 +590,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn remove_participants(
         &self,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: RemoveParticipantsRequest,
     ) -> Result<(), ChannelMutationErr> {
@@ -583,7 +599,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn join_channel(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
         Ok(())
@@ -591,7 +607,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn leave_channel(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
         Ok(())
@@ -673,7 +689,7 @@ async fn post_message_route_uses_entity_access_and_mutation_service() {
 
     let posts = posts.lock().unwrap();
     assert_eq!(posts.len(), 1);
-    assert_eq!(posts[0].0.as_ref(), "macro|test@example.com");
+    assert_eq!(posts[0].0.to_storage_string(), "macro|test@example.com");
     assert_eq!(posts[0].1, channel_id);
     assert_eq!(posts[0].2.content, "hello");
 }

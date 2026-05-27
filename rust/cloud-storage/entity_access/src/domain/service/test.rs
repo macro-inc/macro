@@ -157,6 +157,15 @@ impl AccessRepository for MockRepo {
         Ok(*self.channel_role.lock().await)
     }
 
+    async fn get_channel_role_for_principal(
+        &self,
+        _channel_id: &Uuid,
+        _principal_id: &str,
+        _user_org_id: Option<i64>,
+    ) -> Result<ChannelRoleResult, AccessError> {
+        Ok(*self.channel_role.lock().await)
+    }
+
     async fn get_call_access(
         &self,
         _call_id: &str,
@@ -442,6 +451,28 @@ async fn test_get_entity_permission_channel_returns_role() {
         result,
         EntityPermission::ChannelRole {
             role: ParticipantRole::Admin
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_get_channel_permission_for_principal_returns_role() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::Role(ParticipantRole::Member));
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_channel_permission_for_principal(
+            "bot|00000000-0000-0000-0000-000000000000",
+            "11111111-1111-1111-1111-111111111111",
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        result,
+        EntityPermission::ChannelRole {
+            role: ParticipantRole::Member
         }
     ));
 }

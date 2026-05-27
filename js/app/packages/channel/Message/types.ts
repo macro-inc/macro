@@ -5,6 +5,10 @@ export type MessageData = {
   id: string;
   content: string;
   sender_id: string;
+  sender?: {
+    type: 'user' | 'bot';
+    id: string;
+  };
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;

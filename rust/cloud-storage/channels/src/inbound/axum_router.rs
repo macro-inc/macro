@@ -10,7 +10,7 @@ pub use crate::domain::models::{
 use crate::domain::models::{
     ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelMessage,
     ChannelMessageKind, ChannelParticipant, CountedReaction, MessageAttachment,
-    MessagePageDirection, ParticipantRole, ResolvedChannelMessage, ThreadInfo, ThreadReply,
+    MessagePageDirection, ParticipantRole, ResolvedChannelMessage, Sender, ThreadInfo, ThreadReply,
 };
 pub use crate::domain::models::{ChannelMessageFilters, NotificationFilters};
 use crate::domain::ports::{
@@ -28,8 +28,8 @@ use chrono::{DateTime, Utc};
 use entity_access::{
     domain::{
         models::{
-            AdminParticipantRole, EntityAccessReceipt, EntityPermission, MemberParticipantRole,
-            OwnerParticipantRole, RequiredPermission,
+            AdminParticipantRole, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
+            MemberParticipantRole, OwnerParticipantRole, RequiredPermission,
         },
         ports::EntityAccessService,
     },
@@ -100,10 +100,23 @@ fn notification_user_id_from_receipt<T: RequiredPermission>(
 
 fn actor_from_receipt<T: RequiredPermission>(
     receipt: &EntityAccessReceipt<T>,
-) -> Result<MacroUserIdStr<'static>, ChannelsHandlerErr> {
+) -> Result<Sender, ChannelsHandlerErr> {
+    match receipt.auth() {
+        EntityAccessAuth::Authenticated(user_id) => Ok(Sender::User(user_id.clone())),
+        EntityAccessAuth::Bot(bot) => Ok(Sender::Bot(bot.bot_id)),
+        EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => Err(
+            ChannelsHandlerErr::BadRequest("authenticated actor required"),
+        ),
+    }
+}
+
+fn user_actor_from_receipt<T: RequiredPermission>(
+    receipt: &EntityAccessReceipt<T>,
+) -> Result<Sender, ChannelsHandlerErr> {
     receipt
         .get_authenticated_user()
         .cloned()
+        .map(Sender::User)
         .map_err(|_| ChannelsHandlerErr::BadRequest("authenticated user required"))
 }
 
@@ -120,10 +133,9 @@ fn role_from_receipt<T: RequiredPermission>(
     }
 }
 
-fn actor_from_user_context(
-    user_context: &UserContext,
-) -> Result<MacroUserIdStr<'static>, ChannelsHandlerErr> {
+fn actor_from_user_context(user_context: &UserContext) -> Result<Sender, ChannelsHandlerErr> {
     MacroUserIdStr::try_from(user_context.user_id.clone())
+        .map(Sender::User)
         .map_err(|_| ChannelsHandlerErr::BadRequest("invalid user id"))
 }
 
@@ -402,7 +414,7 @@ pub async fn patch_channel_handler<S: ChannelService, Svc: EntityAccessService>(
     Json(req): Json<PatchChannelRequest>,
 ) -> Result<(StatusCode, String), ChannelsHandlerErr> {
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
-    let actor = actor_from_receipt(&access.entity_access_receipt)?;
+    let actor = user_actor_from_receipt(&access.entity_access_receipt)?;
     state.service.patch_channel(actor, channel_id, req).await?;
     Ok((StatusCode::OK, "patched channel".to_string()))
 }
@@ -431,7 +443,7 @@ pub async fn delete_channel_handler<S: ChannelService, Svc: EntityAccessService>
     access: ChannelAccessLevelExtractor<OwnerParticipantRole, Svc>,
 ) -> Result<(StatusCode, String), ChannelsHandlerErr> {
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
-    let actor = actor_from_receipt(&access.entity_access_receipt)?;
+    let actor = user_actor_from_receipt(&access.entity_access_receipt)?;
     state.service.delete_channel(actor, channel_id).await?;
     Ok((StatusCode::OK, "channel successfully deleted".to_string()))
 }
@@ -627,7 +639,7 @@ pub async fn add_participants_handler<S: ChannelService, Svc: EntityAccessServic
     Json(req): Json<AddParticipantsRequest>,
 ) -> Result<StatusCode, ChannelsHandlerErr> {
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
-    let actor = actor_from_receipt(&access.entity_access_receipt)?;
+    let actor = user_actor_from_receipt(&access.entity_access_receipt)?;
     state
         .service
         .add_participants(actor, channel_id, req)
@@ -661,7 +673,11 @@ pub async fn remove_participants_handler<S: ChannelService, Svc: EntityAccessSer
     Json(req): Json<RemoveParticipantsRequest>,
 ) -> Result<StatusCode, ChannelsHandlerErr> {
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
-    state.service.remove_participants(channel_id, req).await?;
+    let actor = user_actor_from_receipt(&access.entity_access_receipt)?;
+    state
+        .service
+        .remove_participants(actor, channel_id, req)
+        .await?;
     Ok(StatusCode::OK)
 }
 
@@ -718,7 +734,7 @@ pub async fn leave_channel_handler<S: ChannelService, Svc: EntityAccessService>(
     access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
 ) -> Result<StatusCode, ChannelsHandlerErr> {
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
-    let actor = actor_from_receipt(&access.entity_access_receipt)?;
+    let actor = user_actor_from_receipt(&access.entity_access_receipt)?;
     state.service.leave_channel(actor, channel_id).await?;
     Ok(StatusCode::OK)
 }
@@ -1129,6 +1145,45 @@ pub struct ApiChannelMessagesPage {
     previous_cursor: Option<String>,
 }
 
+/// Public sender identity for channel messages.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ApiMessageSender {
+    /// Sender type.
+    #[serde(rename = "type")]
+    sender_type: ApiMessageSenderType,
+    /// Sender id without the storage namespace prefix.
+    id: String,
+}
+
+/// Public sender type.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiMessageSenderType {
+    /// Macro user sender.
+    User,
+    /// Bot sender.
+    Bot,
+}
+
+impl ApiMessageSender {
+    fn from_storage_string(sender_id: &str) -> Self {
+        match Sender::parse_storage_str(sender_id) {
+            Ok(Sender::Bot(bot_id)) => Self {
+                sender_type: ApiMessageSenderType::Bot,
+                id: bot_id.as_uuid().to_string(),
+            },
+            Ok(Sender::User(user_id)) => Self {
+                sender_type: ApiMessageSenderType::User,
+                id: user_id.to_string(),
+            },
+            Err(_) => Self {
+                sender_type: ApiMessageSenderType::User,
+                id: sender_id.to_string(),
+            },
+        }
+    }
+}
+
 /// A top-level channel message with thread info.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ApiChannelMessage {
@@ -1138,6 +1193,8 @@ pub struct ApiChannelMessage {
     channel_id: Uuid,
     /// Sender user id.
     sender_id: String,
+    /// Structured sender identity.
+    sender: ApiMessageSender,
     /// Message content.
     content: String,
     /// When the message was created.
@@ -1161,6 +1218,7 @@ impl From<ChannelMessage> for ApiChannelMessage {
         Self {
             id: m.id,
             channel_id: m.channel_id,
+            sender: ApiMessageSender::from_storage_string(&m.sender_id),
             sender_id: m.sender_id,
             content: m.content,
             created_at: m.created_at,
@@ -1200,6 +1258,8 @@ pub struct ApiChannelContextMessage {
     thread_id: Option<Uuid>,
     /// Sender user id.
     sender_id: String,
+    /// Structured sender identity.
+    sender: ApiMessageSender,
     /// Message content.
     content: String,
     /// When the message was created.
@@ -1218,6 +1278,7 @@ impl From<ChannelContextMessage> for ApiChannelContextMessage {
             id: message.id,
             channel_id: message.channel_id,
             thread_id: message.thread_id,
+            sender: ApiMessageSender::from_storage_string(&message.sender_id),
             sender_id: message.sender_id,
             content: message.content,
             created_at: message.created_at,
@@ -1256,6 +1317,8 @@ pub struct ApiThreadReply {
     id: Uuid,
     /// Sender user id.
     sender_id: String,
+    /// Structured sender identity.
+    sender: ApiMessageSender,
     /// Reply content.
     content: String,
     /// When the reply was created.
@@ -1274,6 +1337,7 @@ impl From<ThreadReply> for ApiThreadReply {
     fn from(r: ThreadReply) -> Self {
         Self {
             id: r.id,
+            sender: ApiMessageSender::from_storage_string(&r.sender_id),
             sender_id: r.sender_id,
             content: r.content,
             created_at: r.created_at,

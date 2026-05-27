@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE bot_tokens\n            SET revoked_at = now()\n            WHERE id = $1\n              AND bot_id = $2\n              AND revoked_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f8ea2beac8e9feddd9f8ebd4e3d67032505a085b4c9c5e787f3194414758601b"
+}

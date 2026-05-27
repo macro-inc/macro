@@ -211,6 +211,9 @@ fn api_router(state: ApiContext) -> Router {
             "/channels",
             channels::inbound::axum_router::channels_router(state.channels_state.clone()),
         )
+        .merge(bots::inbound::axum_router::bots_router(
+            state.bots_state.clone(),
+        ))
         .nest(
             "/call",
             call::inbound::axum_router::call_router(state.call_state.clone()),
@@ -223,6 +226,10 @@ fn api_router(state: ApiContext) -> Router {
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn(
                     macro_middleware::auth::initialize_user_context::handler,
+                ))
+                .layer(axum::middleware::from_fn_with_state(
+                    state.bots_auth_state.clone(),
+                    bots::inbound::auth::bot_bearer_auth,
                 ))
                 .layer(axum::middleware::from_fn_with_state(
                     state.jwt_validation_args.clone(),

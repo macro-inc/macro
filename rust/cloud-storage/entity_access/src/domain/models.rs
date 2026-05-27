@@ -2,6 +2,7 @@
 
 use std::marker::PhantomData;
 
+use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -246,10 +247,26 @@ pub struct Entity {
 pub enum EntityAccessAuth {
     /// The user is authenticated
     Authenticated(MacroUserIdStr<'static>),
+    /// The request is authenticated as a bot principal.
+    Bot(BotPrincipal),
     /// The user is unauthenticated
     Unauthenticated,
     /// Internally authenticated
     Internal,
+}
+
+/// Authenticated bot principal.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct BotPrincipal {
+    /// Bot id.
+    pub bot_id: BotId,
+}
+
+impl BotPrincipal {
+    /// Storage principal id used in `comms_channel_participants.user_id`.
+    pub fn principal_id(&self) -> String {
+        self.bot_id.to_storage_string()
+    }
 }
 
 /// Represents that a given user has a given permission for the provided id.
@@ -291,6 +308,14 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
     pub fn get_authenticated_user(&self) -> Result<&MacroUserIdStr<'static>, AccessError> {
         match &self.auth {
             EntityAccessAuth::Authenticated(user) => Ok(user),
+            _ => Err(AccessError::Unauthorized),
+        }
+    }
+
+    /// Get the authenticated bot or error.
+    pub fn get_authenticated_bot(&self) -> Result<&BotPrincipal, AccessError> {
+        match &self.auth {
+            EntityAccessAuth::Bot(bot) => Ok(bot),
             _ => Err(AccessError::Unauthorized),
         }
     }

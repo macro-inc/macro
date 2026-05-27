@@ -553,6 +553,9 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
     let channels_repo = PgChannelsRepo::new(db.clone());
+    let bots_service = bots::domain::service::BotServiceImpl::new(
+        bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone()),
+    );
 
     let channels_service = ChannelServiceImpl::with_dependencies(
         channels_repo,
@@ -612,6 +615,11 @@ async fn main() -> anyhow::Result<()> {
             ),
         },
         channels_state: ChannelsRouterState::new(channels_service, (*entity_access_service).clone()),
+        bots_state: bots::inbound::axum_router::BotsRouterState::new(
+            bots_service.clone(),
+            (*entity_access_service).clone(),
+        ),
+        bots_auth_state: bots::inbound::auth::BotAuthState::new(bots_service),
         call_state,
         call_webhook_state,
         call_internal_state,

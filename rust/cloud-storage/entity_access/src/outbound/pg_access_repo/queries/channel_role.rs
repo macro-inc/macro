@@ -5,11 +5,15 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 /// Row returned from the channel role query.
-#[derive(sqlx::FromRow)]
 struct ChannelRoleRow {
     role: Option<String>,
     channel_type: String,
     org_id: Option<i64>,
+}
+
+/// Row returned from the strict channel principal role query.
+struct ExplicitChannelRoleRow {
+    role: Option<String>,
 }
 
 /// Parse a participant role string from the database.
@@ -40,20 +44,21 @@ pub async fn get_channel_role(
     user_id: &str,
     user_org_id: Option<i64>,
 ) -> Result<ChannelRoleResult, sqlx::Error> {
-    let row = sqlx::query_as::<_, ChannelRoleRow>(
+    let row = sqlx::query_as!(
+        ChannelRoleRow,
         r#"
         SELECT
-            cp.role::text as role,
-            c.channel_type::text as channel_type,
-            c.org_id
+            cp.role::text as "role?",
+            c.channel_type::text as "channel_type!",
+            c.org_id as "org_id?"
         FROM comms_channels c
         LEFT JOIN comms_channel_participants cp
             ON cp.channel_id = c.id AND cp.user_id = $2 AND cp.left_at IS NULL
         WHERE c.id = $1
         "#,
+        channel_id,
+        user_id,
     )
-    .bind(channel_id)
-    .bind(user_id)
     .fetch_optional(pool)
     .await?;
 
@@ -86,6 +91,42 @@ pub async fn get_channel_role(
     };
 
     Ok(match role {
+        Some(role) => ChannelRoleResult::Role(role),
+        None => ChannelRoleResult::NoAccess,
+    })
+}
+
+/// Get an explicitly listed principal's role in a channel.
+///
+/// Unlike [`get_channel_role`], this does not apply public or organization
+/// channel fallback rules. Bot principals must be channel participants.
+#[tracing::instrument(err, skip(pool))]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
+pub async fn get_explicit_channel_role(
+    pool: &PgPool,
+    channel_id: &Uuid,
+    principal_id: &str,
+) -> Result<ChannelRoleResult, sqlx::Error> {
+    let row = sqlx::query_as!(
+        ExplicitChannelRoleRow,
+        r#"
+        SELECT cp.role::text as "role?"
+        FROM comms_channels c
+        LEFT JOIN comms_channel_participants cp
+            ON cp.channel_id = c.id AND cp.user_id = $2 AND cp.left_at IS NULL
+        WHERE c.id = $1
+        "#,
+        channel_id,
+        principal_id,
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(row) = row else {
+        return Ok(ChannelRoleResult::NotFound);
+    };
+
+    Ok(match row.role.as_deref().map(parse_role) {
         Some(role) => ChannelRoleResult::Role(role),
         None => ChannelRoleResult::NoAccess,
     })

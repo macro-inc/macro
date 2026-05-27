@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE comms_messages\n            SET content = '', updated_at = NOW(), deleted_at = NOW()\n            WHERE id = $1 AND channel_id = $2\n            RETURNING\n                id,\n                channel_id,\n                sender_id AS \"sender_id: MacroUserIdStr\",\n                content,\n                created_at,\n                updated_at,\n                thread_id,\n                edited_at::timestamptz AS \"edited_at?\",\n                deleted_at::timestamptz AS \"deleted_at?\"\n            ",
+  "query": "\n            UPDATE comms_messages\n            SET content = $1, updated_at = NOW(), edited_at = NOW()\n            WHERE id = $2 AND channel_id = $3\n            RETURNING\n                id,\n                channel_id,\n                sender_id,\n                content,\n                created_at,\n                updated_at,\n                thread_id,\n                edited_at::timestamptz AS \"edited_at?\",\n                deleted_at::timestamptz AS \"deleted_at?\"\n            ",
   "describe": {
     "columns": [
       {
@@ -15,7 +15,7 @@
       },
       {
         "ordinal": 2,
-        "name": "sender_id: MacroUserIdStr",
+        "name": "sender_id",
         "type_info": "Text"
       },
       {
@@ -51,6 +51,7 @@
     ],
     "parameters": {
       "Left": [
+        "Text",
         "Uuid",
         "Uuid"
       ]
@@ -67,5 +68,5 @@
       null
     ]
   },
-  "hash": "45ad79d68456546519948ee22ab123c807c6ebc97bf5d6b523ef00b40beeb70e"
+  "hash": "1df49f5d478dcee269a9bded7fdcc34060d1c9dd6f964f3d6444b55830af299a"
 }

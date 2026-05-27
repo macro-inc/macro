@@ -208,18 +208,30 @@ where
                 let channel_uuid = Uuid::from_str(entity_id)
                     .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
 
-                match self
+                let result = self
                     .repo
                     .get_channel_role(&channel_uuid, user_id, user_org_id)
-                    .await?
-                {
-                    ChannelRoleResult::Role(role) => Ok(EntityPermission::ChannelRole { role }),
-                    ChannelRoleResult::NoAccess => Err(AccessError::Unauthorized),
-                    ChannelRoleResult::NotFound => Err(AccessError::NotFound("Channel not found")),
-                }
+                    .await?;
+                channel_role_result_to_permission(result)
             }
             _ => Err(AccessError::BadRequest("Unsupported entity type")),
         }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_channel_permission_for_principal(
+        &self,
+        principal_id: &str,
+        channel_id: &str,
+        user_org_id: Option<i64>,
+    ) -> Result<EntityPermission, AccessError> {
+        let channel_uuid = Uuid::from_str(channel_id)
+            .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
+        let result = self
+            .repo
+            .get_channel_role_for_principal(&channel_uuid, principal_id, user_org_id)
+            .await?;
+        channel_role_result_to_permission(result)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -278,6 +290,16 @@ where
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         self.repo.get_user_team(user_id).await
+    }
+}
+
+fn channel_role_result_to_permission(
+    result: ChannelRoleResult,
+) -> Result<EntityPermission, AccessError> {
+    match result {
+        ChannelRoleResult::Role(role) => Ok(EntityPermission::ChannelRole { role }),
+        ChannelRoleResult::NoAccess => Err(AccessError::Unauthorized),
+        ChannelRoleResult::NotFound => Err(AccessError::NotFound("Channel not found")),
     }
 }
 
