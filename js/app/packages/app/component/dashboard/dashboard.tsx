@@ -1,4 +1,5 @@
 import { Hero } from './sections/hero';
+import { QuickLinksSection } from './sections/quick-links';
 
 export function Dashboard() {
   return (
@@ -24,18 +25,7 @@ export function Dashboard() {
               </div>
             </section>
 
-            <section>
-              <div class="grid grid-cols-4 gap-2 xl:grid-cols-8">
-                <div class="h-20 rounded-2xl border border-edge-muted bg-[#F8F3D9]" />
-                <div class="h-20 rounded-2xl border border-edge-muted bg-[#EAF6F6]" />
-                <div class="h-20 rounded-2xl border border-edge-muted bg-[#FFF0E8]" />
-                <div class="h-20 rounded-2xl border border-edge-muted bg-accent/5" />
-                <div class="h-20 rounded-2xl border border-edge-muted bg-[#EEF2FA]" />
-                <div class="h-20 rounded-2xl border border-edge-muted bg-[#EEF4ED]" />
-                <div class="h-20 rounded-2xl border border-edge-muted bg-[#F4EEF8]" />
-                <div class="h-20 rounded-2xl border border-edge-muted bg-[#F7F1E8]" />
-              </div>
-            </section>
+            <QuickLinksSection />
 
             <div class="grid gap-8 lg:grid-cols-2">
               <section>
