@@ -226,8 +226,8 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
     label: 'Priority',
     options: [
       {
-        id: 'task-critical',
-        label: 'Critical',
+        id: 'task-urgent',
+        label: 'Urgent',
         icon: () => (
           <PropertyValueIcon
             optionId={PROPERTY_OPTION_IDS.PRIORITY.URGENT}
