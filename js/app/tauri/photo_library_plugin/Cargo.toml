@@ -8,6 +8,8 @@ links = "tauri-plugin-photo-library"
 tauri-plugin = { version = "2.4", features = ["build"] }
 
 [dependencies]
+serde = { workspace = true, features = ["derive"] }
+staged_upload_constants = { path = "../staged_upload_constants" }
 tauri = { workspace = true }
 
 [target.'cfg(target_os = "ios")'.dependencies]

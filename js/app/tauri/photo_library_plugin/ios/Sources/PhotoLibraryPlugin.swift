@@ -6,12 +6,10 @@ import UniformTypeIdentifiers
 
 private let maxPhotoLibrarySelectionCount = 10
 
-// The Rust upload handler (src-tauri/src/staged_upload.rs) finds the staged
-// file by source/token, so these values MUST stay in sync with
-// StagedUploadSource::PhotoLibrary:
-//   - cache directory: Library/Caches/<bundleIdentifier>
-//   - subdirectory name: ios-photo-library-staging
-//   - token prefix:      photo-stage-
+private struct PickPhotoLibraryImagesPayload: Decodable {
+    let stagingDirectoryPath: String
+    let tokenPrefix: String
+}
 
 class UnavailablePhotoLibraryPlugin: Plugin {
     @objc public func pickPhotoLibraryImages(_ invoke: Invoke) {
@@ -21,10 +19,15 @@ class UnavailablePhotoLibraryPlugin: Plugin {
 
 @available(iOS 14.0, *)
 class PhotoLibraryPlugin: Plugin {
-    private let stagingDirectoryName = "ios-photo-library-staging"
     private var pickerDelegate: PhotoLibraryPickerDelegate?
 
-    @objc public func pickPhotoLibraryImages(_ invoke: Invoke) {
+    @objc public func pickPhotoLibraryImages(_ invoke: Invoke) throws {
+        let payload = try invoke.parseArgs(PickPhotoLibraryImagesPayload.self)
+        let stagingDirectory = URL(
+            fileURLWithPath: payload.stagingDirectoryPath,
+            isDirectory: true
+        )
+
         DispatchQueue.main.async {
             guard self.pickerDelegate == nil else {
                 invoke.reject("Photo library picker is already open")
@@ -50,6 +53,8 @@ class PhotoLibraryPlugin: Plugin {
             let delegate = PhotoLibraryPickerDelegate(
                 plugin: self,
                 invoke: invoke,
+                stagingDirectory: stagingDirectory,
+                tokenPrefix: payload.tokenPrefix,
                 onComplete: { [weak self] in
                     self?.pickerDelegate = nil
                 }
@@ -61,16 +66,13 @@ class PhotoLibraryPlugin: Plugin {
         }
     }
 
-    fileprivate func stagingDirectory() -> URL {
-        appCacheDirectory()
-            .appendingPathComponent(stagingDirectoryName, isDirectory: true)
-    }
-
     fileprivate func stageMediaFile(
         sourceURL: URL,
         typeIdentifier: String?,
         suggestedName: String?,
-        mediaKind: PhotoLibraryMediaKind
+        mediaKind: PhotoLibraryMediaKind,
+        stagingDirectory: URL,
+        tokenPrefix: String
     ) throws -> StagedPhotoLibraryMedia {
         let sourceType: UTType?
         if mediaKind == .image {
@@ -80,7 +82,8 @@ class PhotoLibraryPlugin: Plugin {
         }
         let shouldConvertToJpeg =
             mediaKind == .image && isHeicOrHeif(type: sourceType, sourceURL: sourceURL)
-        let token = "photo-stage-\(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased())"
+        let token = tokenPrefix
+            + UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
         let fileExtension = shouldConvertToJpeg
             ? "jpg"
             : preferredFilenameExtension(type: sourceType, sourceURL: sourceURL, mediaKind: mediaKind)
@@ -89,10 +92,10 @@ class PhotoLibraryPlugin: Plugin {
             fileExtension: fileExtension,
             mediaKind: mediaKind
         )
-        let targetURL = stagingDirectory().appendingPathComponent("\(token)-\(name)")
+        let targetURL = stagingDirectory.appendingPathComponent("\(token)-\(name)")
 
         try FileManager.default.createDirectory(
-            at: stagingDirectory(),
+            at: stagingDirectory,
             withIntermediateDirectories: true
         )
 
@@ -129,27 +132,7 @@ class PhotoLibraryPlugin: Plugin {
         )
     }
 
-    private func appCacheDirectory() -> URL {
-        let cacheDirectory = FileManager.default.urls(
-            for: .cachesDirectory,
-            in: .userDomainMask
-        )[0]
-
-        guard
-            let bundleIdentifier = Bundle.main.bundleIdentifier,
-            !bundleIdentifier.isEmpty
-        else {
-            return cacheDirectory
-        }
-
-        return cacheDirectory.appendingPathComponent(
-            bundleIdentifier,
-            isDirectory: true
-        )
-    }
-
-    fileprivate func cleanupStalePhotoLibraryMedia() {
-        let directory = stagingDirectory()
+    fileprivate func cleanupStalePhotoLibraryMedia(in directory: URL) {
         guard
             let entries = try? FileManager.default.contentsOfDirectory(
                 at: directory,
@@ -191,11 +174,21 @@ private struct StagedPhotoLibraryMedia: Encodable {
 private class PhotoLibraryPickerDelegate: NSObject, PHPickerViewControllerDelegate {
     private weak var plugin: PhotoLibraryPlugin?
     private let invoke: Invoke
+    private let stagingDirectory: URL
+    private let tokenPrefix: String
     private let onComplete: () -> Void
 
-    init(plugin: PhotoLibraryPlugin, invoke: Invoke, onComplete: @escaping () -> Void) {
+    init(
+        plugin: PhotoLibraryPlugin,
+        invoke: Invoke,
+        stagingDirectory: URL,
+        tokenPrefix: String,
+        onComplete: @escaping () -> Void
+    ) {
         self.plugin = plugin
         self.invoke = invoke
+        self.stagingDirectory = stagingDirectory
+        self.tokenPrefix = tokenPrefix
         self.onComplete = onComplete
     }
 
@@ -215,7 +208,7 @@ private class PhotoLibraryPickerDelegate: NSObject, PHPickerViewControllerDelega
         }
 
         DispatchQueue.global(qos: .userInitiated).async {
-            plugin.cleanupStalePhotoLibraryMedia()
+            plugin.cleanupStalePhotoLibraryMedia(in: self.stagingDirectory)
 
             let group = DispatchGroup()
             let lock = NSLock()
@@ -254,7 +247,9 @@ private class PhotoLibraryPickerDelegate: NSObject, PHPickerViewControllerDelega
                             sourceURL: url,
                             typeIdentifier: mediaType.identifier,
                             suggestedName: provider.suggestedName,
-                            mediaKind: mediaType.kind
+                            mediaKind: mediaType.kind,
+                            stagingDirectory: self.stagingDirectory,
+                            tokenPrefix: self.tokenPrefix
                         )
                         lock.lock()
                         stagedMedia[index] = staged

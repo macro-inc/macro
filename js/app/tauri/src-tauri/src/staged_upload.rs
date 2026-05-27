@@ -1,5 +1,9 @@
 use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE};
 use serde::Deserialize;
+use staged_upload_constants::{
+    PASTEBOARD_STAGING_DIRECTORY_NAME, PASTEBOARD_TOKEN_PREFIX,
+    PHOTO_LIBRARY_STAGING_DIRECTORY_NAME, PHOTO_LIBRARY_TOKEN_PREFIX,
+};
 use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 use tauri::Manager;
@@ -23,16 +27,16 @@ impl StagedUploadSource {
     fn directory_name(self) -> &'static str {
         match self {
             Self::Share => "ios-share-staging",
-            Self::Pasteboard => "ios-pasteboard-staging",
-            Self::PhotoLibrary => "ios-photo-library-staging",
+            Self::Pasteboard => PASTEBOARD_STAGING_DIRECTORY_NAME,
+            Self::PhotoLibrary => PHOTO_LIBRARY_STAGING_DIRECTORY_NAME,
         }
     }
 
     fn token_prefix(self) -> &'static str {
         match self {
             Self::Share => "share-stage-",
-            Self::Pasteboard => "paste-stage-",
-            Self::PhotoLibrary => "photo-stage-",
+            Self::Pasteboard => PASTEBOARD_TOKEN_PREFIX,
+            Self::PhotoLibrary => PHOTO_LIBRARY_TOKEN_PREFIX,
         }
     }
 

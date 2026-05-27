@@ -7,6 +7,7 @@ members = [
   "navigation_plugin",
   "pasteboard_plugin",
   "photo_library_plugin",
+  "staged_upload_constants",
   "src-tauri",
 ]
 package.edition = "2024"

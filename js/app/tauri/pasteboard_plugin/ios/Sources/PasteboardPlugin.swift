@@ -1,19 +1,19 @@
 import UIKit
 import Tauri
 
-// The Rust upload handler (src-tauri/src/staged_upload.rs) finds the staged
-// file by token rather than trusting the path returned here, so these three
-// values MUST stay in sync with their Rust counterparts or uploads will fail
-// with "staged pasteboard image not found":
-//   - cache directory: matches Tauri's `app.path().app_cache_dir()` on iOS
-//     (Library/Caches/<bundleIdentifier>)
-//   - subdirectory name: `StagedUploadSource::Pasteboard.directory_name()`
-//   - token prefix:      `StagedUploadSource::Pasteboard.token_prefix()`
+private struct StagePasteboardImagePayload: Decodable {
+    let stagingDirectoryPath: String
+    let tokenPrefix: String
+}
 
 class PasteboardPlugin: Plugin {
-    private let stagingDirectoryName = "ios-pasteboard-staging"
+    @objc public func stagePasteboardImage(_ invoke: Invoke) throws {
+        let payload = try invoke.parseArgs(StagePasteboardImagePayload.self)
+        let stagingDirectory = URL(
+            fileURLWithPath: payload.stagingDirectoryPath,
+            isDirectory: true
+        )
 
-    @objc public func stagePasteboardImage(_ invoke: Invoke) {
         DispatchQueue.main.async {
             guard let image = UIPasteboard.general.image else {
                 invoke.resolve([
@@ -27,7 +27,7 @@ class PasteboardPlugin: Plugin {
             }
 
             DispatchQueue.global(qos: .userInitiated).async {
-                self.cleanupStalePasteboardImages()
+                self.cleanupStalePasteboardImages(in: stagingDirectory)
 
                 let encoded = encodedData(from: image)
                 guard let data = encoded.data else {
@@ -35,13 +35,14 @@ class PasteboardPlugin: Plugin {
                     return
                 }
 
-                let token = "paste-stage-\(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased())"
+                let token = payload.tokenPrefix
+                    + UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
                 let name = "pasted-image.\(encoded.fileExtension)"
-                let fileURL = self.stagingDirectory().appendingPathComponent("\(token)-\(name)")
+                let fileURL = stagingDirectory.appendingPathComponent("\(token)-\(name)")
 
                 do {
                     try FileManager.default.createDirectory(
-                        at: self.stagingDirectory(),
+                        at: stagingDirectory,
                         withIntermediateDirectories: true
                     )
                     try data.write(to: fileURL, options: [.atomic])
@@ -63,32 +64,7 @@ class PasteboardPlugin: Plugin {
         }
     }
 
-    private func stagingDirectory() -> URL {
-        appCacheDirectory()
-            .appendingPathComponent(stagingDirectoryName, isDirectory: true)
-    }
-
-    private func appCacheDirectory() -> URL {
-        let cacheDirectory = FileManager.default.urls(
-            for: .cachesDirectory,
-            in: .userDomainMask
-        )[0]
-
-        guard
-            let bundleIdentifier = Bundle.main.bundleIdentifier,
-            !bundleIdentifier.isEmpty
-        else {
-            return cacheDirectory
-        }
-
-        return cacheDirectory.appendingPathComponent(
-            bundleIdentifier,
-            isDirectory: true
-        )
-    }
-
-    private func cleanupStalePasteboardImages() {
-        let directory = stagingDirectory()
+    private func cleanupStalePasteboardImages(in directory: URL) {
         guard
             let entries = try? FileManager.default.contentsOfDirectory(
                 at: directory,
