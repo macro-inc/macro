@@ -1,4 +1,3 @@
-use anthropic::toolset::AnthropicToolContext;
 use axum::extract::FromRef;
 use call::domain::models::{CallError, CallWebhookEvent, EgressS3Config};
 use call::domain::ports::CallRtcClient;
@@ -6,9 +5,9 @@ use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
-use channels::domain::service::ChannelServiceImpl;
+use channels::domain::service::ChannelMessagesServiceImpl;
 use channels::inbound::toolset::ChannelToolContext;
-use channels::outbound::pg_channels_repo::PgChannelsRepo;
+use channels::outbound::pg_channels_repo::PgChannelMessagesRepo;
 use chat::domain::service::ChatServiceImpl;
 use chat::inbound::toolset::ChatToolContext;
 use chat::outbound::postgres::PgChatRepo;
@@ -62,7 +61,7 @@ pub type ToolCommsService = comms::domain::service::ChannelServiceImpl<
 >;
 
 /// Type alias for the channel messages service implementation used by AI tools.
-pub type ToolChannelMessagesService = ChannelServiceImpl<PgChannelsRepo>;
+pub type ToolChannelMessagesService = ChannelMessagesServiceImpl<PgChannelMessagesRepo>;
 
 /// Type alias for the channel AI tool context.
 pub type ToolChannelToolContext =
@@ -71,7 +70,7 @@ pub type ToolChannelToolContext =
 /// Build the channel AI tool context from a Postgres pool.
 pub fn build_channel_tool_context(pool: sqlx::PgPool) -> ToolChannelToolContext {
     ChannelToolContext::new(
-        ChannelServiceImpl::new(PgChannelsRepo::new(pool.clone())),
+        ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(pool.clone())),
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool),
         ),
@@ -165,6 +164,16 @@ impl CallRtcClient for NoOpCallRtcClient {
         _participant_identity: MacroUserIdStr<'a>,
     ) -> anyhow::Result<String> {
         anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn build_voip_push_payloads<'a>(
+        &self,
+        _request: call::domain::ports::VoipPushPayloadRequest<'a>,
+    ) -> Vec<(
+        MacroUserIdStr<'static>,
+        notification::domain::models::apple::VoipPushPayload,
+    )> {
+        Vec::new()
     }
 
     async fn remove_participant<'a>(
@@ -457,7 +466,6 @@ pub struct ToolServiceContext {
     pub channel_tool_context: ToolChannelToolContext,
     pub team_tool_context: ToolTeamToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
-    pub anthropic_tool_context: AnthropicToolContext,
 }
 
 impl FromRef<ToolServiceContext> for ai_toolset::NoContext {

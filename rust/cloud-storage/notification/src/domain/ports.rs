@@ -403,41 +403,71 @@ pub trait NotificationIngressQueue: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
+/// Recipient/endpoints pair resolved before LiveKit token minting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VoipPushTarget {
+    /// Recipient whose VoIP-capable endpoints were resolved.
+    pub recipient_id: MacroUserIdStr<'static>,
+    /// SNS endpoints registered for APNS_VOIP delivery.
+    pub endpoint_arns: Vec<String>,
+}
+
 /// Port for sending VoIP push notifications (PushKit / CallKit) to iOS devices.
 ///
 /// VoIP pushes bypass the regular notification pipeline — they are delivered
 /// immediately without DB persistence and wake the app via PushKit so that
 /// CallKit can display the native incoming-call UI.
 pub trait VoipPushSender: Send + Sync + 'static {
-    /// Send a VoIP push to all registered VoIP device endpoints of the given users.
+    /// Batch-resolve VoIP endpoints before the caller mints per-recipient tokens.
+    fn get_voip_push_targets(
+        &self,
+        recipient_ids: &[MacroUserIdStr<'_>],
+    ) -> impl Future<Output = Result<Vec<VoipPushTarget>, Report>> + Send;
+
+    /// Send recipient-specific payloads to already-resolved VoIP endpoints.
     ///
     /// Errors are logged but do not propagate. The returned set contains users
     /// that received at least one successful VoIP push delivery.
-    fn send_voip_push(
+    fn send_voip_pushes(
         &self,
-        recipient_ids: &[MacroUserIdStr<'_>],
-        payload: &VoipPushPayload,
+        pushes: Vec<(VoipPushTarget, VoipPushPayload)>,
     ) -> impl std::future::Future<Output = HashSet<MacroUserIdStr<'static>>> + Send;
 }
 
 impl VoipPushSender for () {
-    async fn send_voip_push(
+    async fn get_voip_push_targets(
         &self,
         _: &[MacroUserIdStr<'_>],
-        _: &VoipPushPayload,
+    ) -> Result<Vec<VoipPushTarget>, Report> {
+        Ok(Vec::new())
+    }
+
+    async fn send_voip_pushes(
+        &self,
+        _: Vec<(VoipPushTarget, VoipPushPayload)>,
     ) -> HashSet<MacroUserIdStr<'static>> {
         HashSet::new()
     }
 }
 
 impl<V: VoipPushSender> VoipPushSender for Option<V> {
-    async fn send_voip_push(
+    async fn get_voip_push_targets(
         &self,
         recipient_ids: &[MacroUserIdStr<'_>],
-        payload: &VoipPushPayload,
+    ) -> Result<Vec<VoipPushTarget>, Report> {
+        if let Some(inner) = self {
+            inner.get_voip_push_targets(recipient_ids).await
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    async fn send_voip_pushes(
+        &self,
+        pushes: Vec<(VoipPushTarget, VoipPushPayload)>,
     ) -> HashSet<MacroUserIdStr<'static>> {
         if let Some(inner) = self {
-            inner.send_voip_push(recipient_ids, payload).await
+            inner.send_voip_pushes(pushes).await
         } else {
             HashSet::new()
         }

@@ -7,6 +7,7 @@ use std::future::Future;
 
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
+use notification::domain::models::apple::VoipPushPayload;
 use uuid::Uuid;
 
 use item_filters::ast::{LiteralTree, call::CallLiteral};
@@ -22,6 +23,24 @@ use super::models::{
     GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
     LeaveCallResponse, TranscriptSegmentRequest,
 };
+
+/// Inputs required by the RTC adapter to produce native VoIP invite payloads.
+pub struct VoipPushPayloadRequest<'a> {
+    /// Users with resolved PushKit endpoints that should receive native VoIP invites.
+    pub recipients: &'a [MacroUserIdStr<'static>],
+    /// RTC room name the recipient will join.
+    pub room_name: &'a str,
+    /// Call record ID exposed to the client.
+    pub call_id: Uuid,
+    /// Channel ID associated with the call.
+    pub channel_id: &'a str,
+    /// Channel display name shown in the native incoming-call UI.
+    pub channel_name: &'a str,
+    /// Caller display name shown in the native incoming-call UI.
+    pub caller_name: &'a str,
+    /// RTC server URL the native client should connect to.
+    pub livekit_server_url: &'a str,
+}
 
 /// Repository port for persisting call state to the database.
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
@@ -439,6 +458,12 @@ pub trait CallRtcClient: Send + Sync + 'static {
         room_name: &str,
         participant_identity: MacroUserIdStr<'a>,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Build VoIP payloads for native incoming-call delivery.
+    fn build_voip_push_payloads<'a>(
+        &self,
+        request: VoipPushPayloadRequest<'a>,
+    ) -> impl Future<Output = Vec<(MacroUserIdStr<'static>, VoipPushPayload)>> + Send;
 
     /// Remove a participant from a room.
     fn remove_participant<'a>(
