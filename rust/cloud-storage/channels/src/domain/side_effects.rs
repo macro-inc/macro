@@ -204,6 +204,27 @@ pub struct ChannelSideEffectService<C, R, N, S, K> {
     contacts: K,
 }
 
+struct MessagePostedSideEffects {
+    channel_id: Uuid,
+    metadata: ChannelMetadata,
+    participants: Vec<ChannelParticipant>,
+    message: MutatedMessage,
+    mentions: Vec<SimpleMention>,
+    has_attachments: bool,
+    attachments: Vec<MutatedAttachment>,
+    nonce: Option<String>,
+}
+
+struct InviteNotificationRequest {
+    channel_id: Uuid,
+    invited_by_user_id: MacroUserIdStr<'static>,
+    recipient_user_ids: Vec<MacroUserIdStr<'static>>,
+    existing_user_ids: HashSet<String>,
+    sender_profile_picture_url: Option<String>,
+    message_content: Option<String>,
+    metadata: ChannelMetadata,
+}
+
 impl<C, R, N, S, K> ChannelSideEffectService<C, R, N, S, K> {
     /// Create a channel side-effect service.
     pub fn new(context: C, realtime: R, notifications: N, search: S, contacts: K) -> Self {
@@ -268,7 +289,7 @@ where
                 attachments,
                 nonce,
             } => {
-                self.handle_message_posted(
+                self.handle_message_posted(MessagePostedSideEffects {
                     channel_id,
                     metadata,
                     participants,
@@ -277,7 +298,7 @@ where
                     has_attachments,
                     attachments,
                     nonce,
-                )
+                })
                 .await;
             }
             ChannelEvent::AttachmentsChanged {
@@ -400,17 +421,17 @@ where
     S: ChannelSearchIndexer + Clone,
     K: ChannelContactsDispatcher + Clone,
 {
-    async fn handle_message_posted(
-        &self,
-        channel_id: Uuid,
-        metadata: ChannelMetadata,
-        participants: Vec<ChannelParticipant>,
-        message: MutatedMessage,
-        mentions: Vec<SimpleMention>,
-        has_attachments: bool,
-        attachments: Vec<MutatedAttachment>,
-        nonce: Option<String>,
-    ) {
+    async fn handle_message_posted(&self, event: MessagePostedSideEffects) {
+        let MessagePostedSideEffects {
+            channel_id,
+            metadata,
+            participants,
+            message,
+            mentions,
+            has_attachments,
+            attachments,
+            nonce,
+        } = event;
         let recipients = participant_ids(&participants);
         self.publish_realtime(ChannelRealtimeEffect::Message {
             recipients: recipients.clone(),
@@ -718,18 +739,18 @@ where
         message: &MutatedMessage,
         context: PostedMessageNotificationContext,
     ) {
-        self.send_invite_notification(
+        self.send_invite_notification(InviteNotificationRequest {
             channel_id,
-            message.sender_id.clone(),
-            context
+            invited_by_user_id: message.sender_id.clone(),
+            recipient_user_ids: context
                 .recipients_without_sender_and_mentions
                 .into_iter()
                 .collect(),
-            context.existing_user_ids,
-            context.sender_profile_picture_url,
-            Some(message.content.clone()),
-            context.metadata,
-        )
+            existing_user_ids: context.existing_user_ids,
+            sender_profile_picture_url: context.sender_profile_picture_url,
+            message_content: Some(message.content.clone()),
+            metadata: context.metadata,
+        })
         .await;
     }
 
@@ -778,7 +799,7 @@ where
             }
         };
 
-        self.send_invite_notification(
+        self.send_invite_notification(InviteNotificationRequest {
             channel_id,
             invited_by_user_id,
             recipient_user_ids,
@@ -786,20 +807,20 @@ where
             sender_profile_picture_url,
             message_content,
             metadata,
-        )
+        })
         .await;
     }
 
-    async fn send_invite_notification(
-        &self,
-        channel_id: Uuid,
-        invited_by_user_id: MacroUserIdStr<'static>,
-        recipient_user_ids: Vec<MacroUserIdStr<'static>>,
-        existing_user_ids: HashSet<String>,
-        sender_profile_picture_url: Option<String>,
-        message_content: Option<String>,
-        metadata: ChannelMetadata,
-    ) {
+    async fn send_invite_notification(&self, req: InviteNotificationRequest) {
+        let InviteNotificationRequest {
+            channel_id,
+            invited_by_user_id,
+            recipient_user_ids,
+            existing_user_ids,
+            sender_profile_picture_url,
+            message_content,
+            metadata,
+        } = req;
         let (registered_recipient_ids, unregistered_recipient_ids): (HashSet<_>, HashSet<_>) =
             recipient_user_ids
                 .into_iter()
@@ -887,6 +908,9 @@ mod tests {
     use chrono::Utc;
     use std::sync::{Arc, Mutex};
 
+    type IndexedMessages = Arc<Mutex<Vec<(Uuid, Uuid)>>>;
+    type RemovedMessages = Arc<Mutex<Vec<(Uuid, Option<Uuid>)>>>;
+
     #[derive(Clone)]
     struct FakeContext {
         message_count: i64,
@@ -962,8 +986,8 @@ mod tests {
 
     #[derive(Clone, Default)]
     struct FakeSearch {
-        indexed: Arc<Mutex<Vec<(Uuid, Uuid)>>>,
-        removed: Arc<Mutex<Vec<(Uuid, Option<Uuid>)>>>,
+        indexed: IndexedMessages,
+        removed: RemovedMessages,
     }
 
     impl ChannelSearchIndexer for FakeSearch {

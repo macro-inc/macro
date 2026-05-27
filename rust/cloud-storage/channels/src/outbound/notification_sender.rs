@@ -47,8 +47,7 @@ fn to_common_metadata(metadata: ChannelMetadata) -> CommonChannelMetadata {
     }
 }
 
-async fn send_invite_notifications(
-    ingress: &impl NotificationIngress,
+struct InviteNotificationDelivery {
     channel_id: Uuid,
     invited_by_user_id: MacroUserIdStr<'static>,
     registered_recipient_ids: HashSet<MacroUserIdStr<'static>>,
@@ -56,7 +55,21 @@ async fn send_invite_notifications(
     sender_profile_picture_url: Option<String>,
     message_content: Option<String>,
     common: CommonChannelMetadata,
+}
+
+async fn send_invite_notifications(
+    ingress: &impl NotificationIngress,
+    delivery: InviteNotificationDelivery,
 ) -> anyhow::Result<()> {
+    let InviteNotificationDelivery {
+        channel_id,
+        invited_by_user_id,
+        registered_recipient_ids,
+        unregistered_recipient_ids,
+        sender_profile_picture_url,
+        message_content,
+        common,
+    } = delivery;
     let _ = tokio::try_join!(
         ingress.send_notification(
             SendNotificationRequestBuilder {
@@ -251,13 +264,15 @@ where
             } => {
                 send_invite_notifications(
                     &*self.ingress,
-                    channel_id,
-                    invited_by_user_id,
-                    registered_recipient_ids,
-                    unregistered_recipient_ids,
-                    sender_profile_picture_url,
-                    message_content,
-                    to_common_metadata(metadata),
+                    InviteNotificationDelivery {
+                        channel_id,
+                        invited_by_user_id,
+                        registered_recipient_ids,
+                        unregistered_recipient_ids,
+                        sender_profile_picture_url,
+                        message_content,
+                        common: to_common_metadata(metadata),
+                    },
                 )
                 .await?;
             }
