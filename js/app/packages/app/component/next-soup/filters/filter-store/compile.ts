@@ -1,4 +1,3 @@
-import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type {
   DateRangeFilter,
   EmailView,
@@ -17,14 +16,7 @@ type BackendAst =
   | { '!': BackendAst }
   | { l: unknown };
 
-export type QueryTarget =
-  | 'df'
-  | 'ef'
-  | 'chanf'
-  | 'cf'
-  | 'pf'
-  | 'callf'
-  | 'propf';
+type QueryTarget = 'df' | 'ef' | 'chanf' | 'cf' | 'pf' | 'callf' | 'propf';
 
 export type TargetAstMap = {
   [K in QueryTarget]?: BackendAst;
@@ -62,65 +54,28 @@ const AST = {
   },
 };
 
-export const FIELD_CONFIG: Record<
+const FIELD_CONFIG: Record<
   CompiledFieldName,
   {
     target: QueryTarget;
     field: string;
     formatValue?: (value: unknown) => unknown;
-    getValue?: (item: SoupApiItem) => unknown;
   }
 > = {
-  documentId: {
-    target: 'df',
-    field: 'id',
-    getValue: (item) => {
-      if (item.tag === 'document') return item.data.id;
-    },
-  },
+  documentId: { target: 'df', field: 'id' },
   fileType: { target: 'df', field: 'ft' },
   fileAssoc: { target: 'df', field: 'fa' },
-  subType: {
-    target: 'df',
-    field: 'dst',
-    getValue: (item) => {
-      if (item.tag === 'document') return item.data.subType?.type;
-    },
-  },
-  projectId: {
-    target: 'df',
-    field: 'pid',
-    getValue: (item) => {
-      if (item.tag === 'document') return item.data.projectId;
-    },
-  },
-  documentOwnerId: {
-    target: 'df',
-    field: 'o',
-    getValue: (item) => {
-      if (item.tag === 'document') return item.data.ownerId;
-    },
-  },
+  subType: { target: 'df', field: 'dst' },
+  projectId: { target: 'df', field: 'pid' },
+  documentOwnerId: { target: 'df', field: 'o' },
   documentSeen: { target: 'df', field: 'ns' },
   documentDone: { target: 'df', field: 'nd' },
   isEmailAttachment: { target: 'df', field: 'iea' },
-  threadId: {
-    target: 'ef',
-    field: 'ThreadId',
-    getValue: (item) => {
-      if (item.tag === 'emailThread') return item.data.id;
-    },
-  },
+  threadId: { target: 'ef', field: 'ThreadId' },
   emailSeen: { target: 'ef', field: 'NotificationSeen' },
   emailDone: { target: 'ef', field: 'NotificationDone' },
   emailImportance: { target: 'ef', field: 'Importance' },
-  emailProjectId: {
-    target: 'ef',
-    field: 'ProjectId',
-    getValue: (item) => {
-      if (item.tag === 'emailThread') return item.data.projectId;
-    },
-  },
+  emailProjectId: { target: 'ef', field: 'ProjectId' },
   emailSender: {
     target: 'ef',
     field: 'Sender',
@@ -128,79 +83,25 @@ export const FIELD_CONFIG: Record<
   },
   emailShared: { target: 'ef', field: 'Shared' },
   emailCalendarOnly: { target: 'ef', field: 'CalendarOnly' },
-  channelId: {
-    target: 'chanf',
-    field: 'ChannelId',
-    getValue: (item) => {
-      if (item.tag === 'channel') return item.data.channel.id;
-    },
-  },
+  channelId: { target: 'chanf', field: 'ChannelId' },
   channelType: { target: 'chanf', field: 'ChannelType' },
   channelSeen: { target: 'chanf', field: 'NotificationSeen' },
   channelDone: { target: 'chanf', field: 'NotificationDone' },
   channelImportance: { target: 'chanf', field: 'Importance' },
   channelSenderId: { target: 'chanf', field: 'Sender' },
-  chatId: {
-    target: 'cf',
-    field: 'cid',
-    getValue: (item) => {
-      if (item.tag === 'chat') return item.data.id;
-    },
-  },
-  chatOwnerId: {
-    target: 'cf',
-    field: 'o',
-    getValue: (item) => {
-      if (item.tag === 'chat') return item.data.ownerId;
-    },
-  },
-  chatProjectId: {
-    target: 'cf',
-    field: 'pid',
-    getValue: (item) => {
-      if (item.tag === 'chat') return item.data.projectId;
-    },
-  },
+  chatId: { target: 'cf', field: 'cid' },
+  chatOwnerId: { target: 'cf', field: 'o' },
+  chatProjectId: { target: 'cf', field: 'pid' },
   chatSeen: { target: 'cf', field: 'ns' },
   chatDone: { target: 'cf', field: 'nd' },
-  folderId: {
-    target: 'pf',
-    field: 'pid',
-    getValue: (item) => {
-      if (item.tag === 'project') return item.data.id;
-    },
-  },
-  folderOwnerId: {
-    target: 'pf',
-    field: 'o',
-    getValue: (item) => {
-      if (item.tag === 'project') return item.data.ownerId;
-    },
-  },
+  folderId: { target: 'pf', field: 'pid' },
+  folderOwnerId: { target: 'pf', field: 'o' },
   folderSeen: { target: 'pf', field: 'ns' },
   folderDone: { target: 'pf', field: 'nd' },
-  callId: {
-    target: 'callf',
-    field: 'CallId',
-    getValue: (item) => {
-      if (item.tag === 'call') return item.data.callId;
-    },
-  },
-  callChannelId: {
-    target: 'callf',
-    field: 'ChannelId',
-    getValue: (item) => {
-      if (item.tag === 'call') return item.data.channelId;
-    },
-  },
+  callId: { target: 'callf', field: 'CallId' },
+  callChannelId: { target: 'callf', field: 'ChannelId' },
   callSpeakerId: { target: 'callf', field: 'Speaker' },
-  callAttended: {
-    target: 'callf',
-    field: 'Attended',
-    getValue: (item) => {
-      if (item.tag === 'call') return item.data.attended;
-    },
-  },
+  callAttended: { target: 'callf', field: 'Attended' },
 };
 
 const DATE_RANGE_FIELDS: Record<
