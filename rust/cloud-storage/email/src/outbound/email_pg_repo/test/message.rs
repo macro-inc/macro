@@ -459,6 +459,7 @@ async fn test_scheduled_send_times_by_message_ids_empty_input(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_process_scheduled_message_insert(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
@@ -493,6 +494,7 @@ async fn test_process_scheduled_message_insert(pool: Pool<Postgres>) -> anyhow::
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_process_scheduled_message_upsert(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
@@ -542,6 +544,7 @@ async fn test_process_scheduled_message_upsert(pool: Pool<Postgres>) -> anyhow::
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_process_scheduled_message_delete(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
@@ -594,6 +597,7 @@ async fn test_process_scheduled_message_delete_nonexistent(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_upsert_recipients_insert(pool: Pool<Postgres>) -> anyhow::Result<()> {
     // msg2 (draft) currently has no recipients in the fixture
     let msg_id = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
@@ -634,6 +638,7 @@ async fn test_upsert_recipients_insert(pool: Pool<Postgres>) -> anyhow::Result<(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_upsert_recipients_removes_stale(pool: Pool<Postgres>) -> anyhow::Result<()> {
     // msg1 has bob=TO in the fixture. Replace with carol=CC.
     let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
@@ -678,6 +683,7 @@ async fn test_upsert_recipients_removes_stale(pool: Pool<Postgres>) -> anyhow::R
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_upsert_recipients_empty_deletes_all(pool: Pool<Postgres>) -> anyhow::Result<()> {
     // msg1 has bob=TO. Calling upsert with empty recipients should delete all existing.
     let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;

@@ -2,6 +2,7 @@ use model::document::{BomPart, SaveBomPart};
 
 /// Saves the bom parts to the db under the documents bom id
 #[tracing::instrument(skip(db, bom_parts))]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn save_bom_parts_to_db(
     db: &sqlx::Pool<sqlx::Postgres>,
     bom_parts: &[SaveBomPart],
@@ -36,6 +37,7 @@ pub async fn save_bom_parts_to_db(
 
 /// Updates the `uploaded` status of the document to be true.
 #[tracing::instrument(skip(db))]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn update_uploaded_status(
     db: &sqlx::Pool<sqlx::Postgres>,
     document_id: &str,

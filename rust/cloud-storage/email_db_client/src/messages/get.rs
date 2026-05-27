@@ -63,6 +63,7 @@ pub async fn get_message_sender_and_pretty_sender(
 /// Returns the (message_id, thread_id) for a message with the given (link_id, provider_id).
 /// Errors if no row is found.
 #[tracing::instrument(skip(pool), err)]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn get_message_and_thread_id_by_provider_id(
     pool: &PgPool,
     link_id: Uuid,
@@ -93,6 +94,7 @@ pub async fn get_message_and_thread_id_by_provider_id(
 
 /// Returns `true` if a message already exists for this (provider_id, link_id), else `false`.
 #[tracing::instrument(skip(pool), err)]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn message_exists_by_provider_id(
     pool: &PgPool,
     provider_id: &str,

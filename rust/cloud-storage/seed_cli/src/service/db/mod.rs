@@ -37,6 +37,7 @@ impl SeedDb {
 
     /// Execute a semicolon-delimited SQL script inside a transaction.
     #[tracing::instrument(skip(self, sql), err)]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     pub async fn execute_sql_script(&self, sql: &str) -> anyhow::Result<()> {
         let mut transaction = self.inner.begin().await?;
 
@@ -50,6 +51,7 @@ impl SeedDb {
 
     /// Execute SQL only when the table exists in the current database.
     #[tracing::instrument(skip(self, sql), err)]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     pub async fn execute_sql_if_table_exists(
         &self,
         table_name: &str,

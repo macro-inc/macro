@@ -39,6 +39,7 @@ pub(crate) async fn edit_chat_permission(
 
 /// Update a `SharePermission` row and its channel share permissions.
 #[tracing::instrument(err, skip(tx))]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn edit_share_permission(
     tx: &mut Transaction<'_, Postgres>,
     chat_id: &str,

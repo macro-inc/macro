@@ -277,6 +277,7 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn has_user_trialed(&self, user_id: &MacroUserIdStr<'_>) -> Result<bool, TeamError> {
         let has_trialed = sqlx::query_scalar::<_, bool>(
             r#"
@@ -519,6 +520,7 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn remove_user_from_team(
         &self,
         team_id: &uuid::Uuid,
@@ -727,6 +729,7 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn accept_team_invite(
         &self,
         team_invite_id: &uuid::Uuid,
@@ -819,6 +822,7 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn rollback_accept_team_invite(
         &self,
         accepted_invite: &AcceptedTeamInvite<'_>,
@@ -869,6 +873,7 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn rollback_remove_user_from_team(
         &self,
         removed_member: &TeamMember<'_>,
@@ -1167,6 +1172,7 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn patch_team(
         &self,
         team_id: &uuid::Uuid,

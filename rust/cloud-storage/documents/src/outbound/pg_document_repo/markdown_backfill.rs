@@ -5,6 +5,7 @@ use crate::outbound::pg_document_repo::PgDocumentRepo;
 
 impl MarkdownBackfillRepo for PgDocumentRepo {
     #[tracing::instrument(err, skip(self))]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn fetch_markdown_backfill_candidates(
         &self,
         start_after: Option<&str>,
@@ -61,6 +62,7 @@ impl MarkdownBackfillRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self, candidates), fields(count = candidates.len()))]
+    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn mark_markdown_sync_service_ready(
         &self,
         candidates: &[MarkdownBackfillCandidate],

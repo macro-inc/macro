@@ -55,6 +55,7 @@ pub async fn create_project_transaction(
 /// Creates documents under a project
 /// This does not include creating the docx file as that requires special handling
 #[tracing::instrument(skip(transaction, document_names))]
+#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn create_onboarding_documents(
     transaction: &mut Transaction<'_, Postgres>,
     user_id: MacroUserIdStr<'static>,
