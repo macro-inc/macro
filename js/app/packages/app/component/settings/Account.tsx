@@ -45,8 +45,10 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import PaywallComponent from '../paywall/PaywallComponent';
 import PaywallTeamMemberView from '../paywall/PaywallTeamMemberView';
 import PaywallTeamOwnerView from '../paywall/PaywallTeamOwnerView';
+import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import {
-    useEmailLinks,
+  connectAdditionalGmailInbox,
+  useEmailLinks,
   useEmailLinksStatus,
 } from '@core/email-link';
 import {
@@ -150,6 +152,14 @@ export function Account() {
   >(undefined);
 
   const emailActive = useEmailLinksStatus();
+
+  const handleAddInbox = async () => {
+    const callbackUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}inbox-link-callback`;
+    await connectAdditionalGmailInbox(callbackUrl).match(
+      () => {},
+      () => toast.failure('Failed to start Gmail link flow')
+    );
+  };
 
   const [githubLinkExists, { refetch: refetchGithubLink }] = createResource(async () => {
     const response = await authServiceClient.checkLinkExists({ idp_name: 'github' });
@@ -333,14 +343,24 @@ export function Account() {
                   <Show
                     when={!emailActive()}
                     fallback={
-                      <Button
-                        variant="base"
-                        size="sm"
-                        depth={3}
-                        onClick={() => setShowEmailModal(true)}
-                      >
-                        Disable
-                      </Button>
+                      <div class="flex items-center gap-2">
+                        <Button
+                          variant="base"
+                          size="sm"
+                          depth={3}
+                          onClick={handleAddInbox}
+                        >
+                          Add Inbox
+                        </Button>
+                        <Button
+                          variant="base"
+                          size="sm"
+                          depth={3}
+                          onClick={() => setShowEmailModal(true)}
+                        >
+                          Disable
+                        </Button>
+                      </div>
                     }
                   >
                     <Show when={!showEnableEmailModal()}>

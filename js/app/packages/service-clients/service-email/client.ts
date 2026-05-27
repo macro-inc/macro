@@ -52,9 +52,12 @@ function emailFetch<T extends ObjectLike = never>(
 }
 
 export const emailClient = {
-  async init() {
+  async init(args?: { linkId?: string }) {
+    const path = args?.linkId
+      ? `/email/init?link_id=${encodeURIComponent(args.linkId)}`
+      : '/email/init';
     return (
-      await emailFetch<EmptyResponse>('/email/init', {
+      await emailFetch<EmptyResponse>(path, {
         method: 'POST',
       })
     ).map((result) => result);

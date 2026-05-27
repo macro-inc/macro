@@ -13,6 +13,7 @@ import type {
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
   InitGithubLinkResponse,
+  InitGmailLinkResponse,
   PatchSubscriptionTierRequest,
   PatchUserTutorialRequest,
   SendMobileWelcomeEmailResponse,
@@ -557,6 +558,23 @@ export const authServiceClient = {
         method: 'POST',
       })
     ).map((result) => result.authorization_url);
+  },
+
+  /**
+   * Initializes a gmail account link for the already-authenticated user (multi-inbox flow).
+   * Returns the OAuth authorization URL to redirect the browser to.
+   * After Google consent, the user is redirected back to `originalUrl` with `?link_id=<uuid>`
+   * appended; the frontend then calls `emailClient.init({ linkId })` to provision the inbox.
+   */
+  async initGmailLink(originalUrl?: string) {
+    const url = originalUrl
+      ? `${authHost}/link/gmail?original_url=${encodeURIComponent(originalUrl)}`
+      : `${authHost}/link/gmail`;
+    return (
+      await fetchWithAuth<InitGmailLinkResponse>(url, {
+        method: 'POST',
+      })
+    ).map((result) => result);
   },
 
   /**

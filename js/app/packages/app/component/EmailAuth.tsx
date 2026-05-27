@@ -6,12 +6,13 @@ import { toast } from '@core/component/Toast/Toast';
 import { useEmailLinks } from '@core/email-link';
 import { whenSettled } from '@core/util/whenSettled';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
-import { useNavigate } from '@solidjs/router';
+import { useNavigate, useSearchParams } from '@solidjs/router';
 import { onMount, Suspense } from 'solid-js';
 
 type EmailAuthParams = {
   callbackPath: string;
   successPath: string;
+  linkCallbackPath: string;
 };
 
 export function makeEmailAuthComponents(params: EmailAuthParams) {
@@ -29,7 +30,13 @@ export function makeEmailAuthComponents(params: EmailAuthParams) {
         />
       </Suspense>
     ),
+    EmailLinkCallback: () => (
+      <Suspense>
+        <EmailLinkCallback successPath={params.successPath} />
+      </Suspense>
+    ),
     CALLBACK_PATH: params.callbackPath,
+    LINK_CALLBACK_PATH: params.linkCallbackPath,
   };
 }
 
@@ -82,7 +89,58 @@ function EmailSignupCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   return <LoadingBlock />;
 }
 
-function EmailSignUp(props: EmailAuthParams) {
+/**
+ * Handles the OAuth callback after an already-authenticated user adds another Gmail
+ * inbox via /link/gmail. Reads `link_id` from the query string and invokes init to
+ * provision the second `email_links` row. Falls back to a toast on failure.
+ */
+function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { query, initEmailLink } = useEmailLinks();
+
+  const navigateToSuccess = () => {
+    navigate(props.successPath, { replace: true });
+  };
+
+  whenSettled(
+    query,
+    async () => {
+      const linkId =
+        typeof searchParams.link_id === 'string' ? searchParams.link_id : null;
+      if (!linkId) {
+        toast.failure('Missing link id in callback URL');
+        navigateToSuccess();
+        return;
+      }
+
+      await initEmailLink({ linkId }).match(
+        () => {
+          toast.success('Inbox connected');
+          navigateToSuccess();
+        },
+        (err) => {
+          if (err.tag === 'AlreadyInitialized') {
+            navigateToSuccess();
+            return;
+          }
+          toast.failure('Failed to add inbox');
+          navigateToSuccess();
+        }
+      );
+    },
+    (error) => {
+      toast.failure(error.message);
+      navigateToSuccess();
+    }
+  );
+
+  return <LoadingBlock />;
+}
+
+function EmailSignUp(
+  props: Pick<EmailAuthParams, 'callbackPath' | 'successPath'>
+) {
   const navigate = useNavigate();
   const { query: emailLinks } = useEmailLinks();
   const analytics = useAnalytics();
