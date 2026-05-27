@@ -253,16 +253,39 @@ export const SoupViewContextProvider: FlowComponent<
 
   const groupPageFetcher = useFetchGroupPage();
 
-  const fetchNextGroupPage = async (groupKey: string, cursor: string) => {
+  const groupedSoupQueryKey = createMemo(() => {
     const field = groupByField();
     if (!field) return;
+
+    return soupKeys.astItems({
+      params: soupParams(),
+      body: soupBody(),
+      groupBy: field,
+    }).queryKey;
+  });
+
+  const fetchNextGroupPage = async (groupKey: string, cursor: string) => {
+    const field = groupByField();
+    const queryKey = groupedSoupQueryKey();
+
+    if (!field || !queryKey) return;
+
     await groupPageFetcher.fetch({
+      queryKey,
       groupKey,
       cursor,
       field,
       soupParams: soupParams(),
       soupBody: soupBody(),
     });
+  };
+
+  const isFetchingGroupPage = (groupKey: string) => {
+    const queryKey = groupedSoupQueryKey();
+
+    if (!queryKey) return false;
+
+    return groupPageFetcher.isPending(queryKey, groupKey);
   };
 
   const [searchText, setSearchText] = useEntryState<string>('search.text', {
@@ -537,7 +560,7 @@ export const SoupViewContextProvider: FlowComponent<
     setActiveTab,
     groupByField,
     fetchNextGroupPage,
-    isFetchingGroupPage: groupPageFetcher.isPending,
+    isFetchingGroupPage,
   };
 
   return (

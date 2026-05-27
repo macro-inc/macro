@@ -1,19 +1,21 @@
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import {
+  hashKey,
   type InfiniteData,
+  type QueryKey,
   useMutation,
   useMutationState,
   useQueryClient,
 } from '@tanstack/solid-query';
 import type { SoupAstBody, SoupAstItemsPage, SoupAstParams } from '../items';
-import { soupKeys } from '../keys';
 import { parseGroupedSoupPage, serializeGroupByField } from './api';
 import type { GroupByField, GroupedSoupPage } from './types';
 
 const FETCH_KEY = ['soup', 'group-fetch'] as const;
 
 type FetchVars = {
+  queryKey: QueryKey;
   groupKey: string;
   cursor: string;
   field: GroupByField;
@@ -22,6 +24,7 @@ type FetchVars = {
 };
 
 type FetchSnapshot = {
+  queryHash: string | undefined;
   groupKey: string | undefined;
   status: 'idle' | 'pending' | 'success' | 'error';
   error: Error | null;
@@ -82,45 +85,48 @@ export const useFetchGroupPage = () => {
       return parseGroupedSoupPage(response);
     },
     onSuccess: (parsed, vars) => {
-      const queryKey = soupKeys.astItems({
-        params: vars.soupParams,
-        body: vars.soupBody,
-        groupBy: vars.field,
-      }).queryKey;
       queryClient.setQueryData<
         InfiniteData<SoupAstItemsPage, string | null> | undefined
-      >(queryKey, (prev) => appendGroupPage(prev, vars.groupKey, parsed));
+      >(vars.queryKey, (prev) => appendGroupPage(prev, vars.groupKey, parsed));
     },
   }));
 
   const snapshots = useMutationState<FetchSnapshot>(() => ({
     filters: { mutationKey: FETCH_KEY },
-    select: (m) => ({
-      groupKey: (m.state.variables as FetchVars | undefined)?.groupKey,
-      status: m.state.status,
-      error: m.state.error as Error | null,
-      submittedAt: m.state.submittedAt,
-    }),
+    select: (m) => {
+      const vars = m.state.variables as FetchVars | undefined;
+      return {
+        queryHash: vars ? hashKey(vars.queryKey) : undefined,
+        groupKey: vars?.groupKey,
+        status: m.state.status,
+        error: m.state.error as Error | null,
+        submittedAt: m.state.submittedAt,
+      };
+    },
   }));
 
-  const latestForGroup = (k: string) => {
+  const latestForGroup = (queryKey: QueryKey, groupKey: string) => {
+    const queryHash = hashKey(queryKey);
     let latest: FetchSnapshot | undefined;
     for (const s of snapshots()) {
-      if (s.groupKey !== k) continue;
-      if (!latest || s.submittedAt > latest.submittedAt) latest = s;
+      if (s.queryHash !== queryHash || s.groupKey !== groupKey) continue;
+
+      if (!latest || s.submittedAt > latest.submittedAt) {
+        latest = s;
+      }
     }
     return latest;
   };
 
   return {
     fetch: async (vars: FetchVars) => {
-      if (latestForGroup(vars.groupKey)?.status === 'pending') return;
+      if (latestForGroup(vars.queryKey, vars.groupKey)?.status === 'pending') {
+        return;
+      }
       await mutation.mutateAsync(vars);
     },
-    isPending: (k: string) => latestForGroup(k)?.status === 'pending',
-    error: (k: string) => {
-      const latest = latestForGroup(k);
-      return latest?.status === 'error' ? latest.error : undefined;
+    isPending: (queryKey: QueryKey, groupKey: string) => {
+      return latestForGroup(queryKey, groupKey)?.status === 'pending';
     },
   };
 };
