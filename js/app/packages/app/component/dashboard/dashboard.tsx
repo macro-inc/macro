@@ -1,5 +1,6 @@
 import { Hero } from './sections/hero';
 import { QuickLinksSection } from './sections/quick-links';
+import { RecentChannelsSection } from './sections/recent-channels';
 
 export function Dashboard() {
   return (
@@ -9,21 +10,7 @@ export function Dashboard() {
       <div class="px-6 pb-10 sm:px-8">
         <div class="grid w-full gap-x-8 gap-y-10 xl:grid-cols-[minmax(0,1fr)_24rem]">
           <div class="space-y-10">
-            <section>
-              <div class="mb-4 flex items-center justify-between gap-4">
-                <h2 class="text-lg font-semibold tracking-tight text-ink">
-                  Recent channels
-                </h2>
-                <div class="h-8 w-36 rounded-lg border border-edge-muted bg-hover" />
-              </div>
-
-              <div class="grid max-w-4xl grid-cols-4 gap-3">
-                <div class="h-36 rounded-2xl border border-edge-muted bg-[#F4EEF8]" />
-                <div class="h-36 rounded-2xl border border-edge-muted bg-[#F4EEF8]" />
-                <div class="h-36 rounded-2xl border border-edge-muted bg-[#F4EEF8]" />
-                <div class="h-36 rounded-2xl border border-edge-muted bg-[#F4EEF8]" />
-              </div>
-            </section>
+            <RecentChannelsSection />
 
             <QuickLinksSection />
 
