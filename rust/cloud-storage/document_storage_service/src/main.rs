@@ -282,7 +282,7 @@ async fn main() -> anyhow::Result<()> {
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
     let ingress_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.vars.notification_ingress_queue.as_ref().to_string(),
+        config.vars.notification_queue.as_ref().to_string(),
     );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue.clone(),
