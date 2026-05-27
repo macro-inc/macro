@@ -4936,10 +4936,7 @@ async fn test_property_filter_no_match(db: Pool<Postgres>) -> anyhow::Result<()>
         .filter(|i| matches!(i, SoupItem::Document(_)))
         .count();
 
-    assert_eq!(
-        doc_count, 0,
-        "No documents should match Priority = Urgent"
-    );
+    assert_eq!(doc_count, 0, "No documents should match Priority = Urgent");
 
     Ok(())
 }
