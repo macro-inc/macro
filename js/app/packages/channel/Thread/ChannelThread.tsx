@@ -289,6 +289,7 @@ export function ChannelThread(props: ThreadProps) {
                         setReplyInputState={props.setReplyInputState}
                         setIsReplying={props.setIsReplying}
                         setReplyInputEl={props.setReplyInputEl}
+                        setReplyInputHandle={props.setReplyInputHandle}
                       />
                     </div>
                   </Show>

@@ -64,6 +64,7 @@ import {
 import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { ChannelThread } from '../Thread';
+import { buildQuoteReplyValue } from '../Thread/utils/message-actions';
 import { ChannelDropZone } from './ChannelDropZone';
 import { createChannelDragState } from './create-channel-drag-state';
 import { createChannelFindBar } from './create-channel-find-bar';
@@ -255,6 +256,40 @@ export function Channel(props: ChannelProps) {
       },
     });
 
+  const openReplyInput = (message: {
+    id: string;
+    thread_id?: string | null;
+  }) => {
+    const threadId = message.thread_id ?? message.id;
+    const state = threadManager.getOrCreateThreadState(threadId);
+    state.setIsReplying(true);
+    return state;
+  };
+
+  const openQuoteReplyInput = (message: {
+    id: string;
+    content: string;
+    thread_id?: string | null;
+  }) => {
+    const threadId = message.thread_id ?? message.id;
+    const state = threadManager.getOrCreateThreadState(threadId);
+    const beforeSnapshot = state.replyInputState();
+    const nextSnapshot: InputSnapshot = {
+      value: buildQuoteReplyValue({
+        quotedContent: message.content,
+        existingValue: beforeSnapshot?.value,
+      }),
+      mentions: beforeSnapshot?.mentions ?? [],
+      attachments: beforeSnapshot?.attachments ?? [],
+    };
+
+    state.setReplyInputState(nextSnapshot);
+    state.setIsReplying(true);
+    requestAnimationFrame(() => {
+      state.replyInputHandle?.()?.restoreSnapshot(nextSnapshot);
+    });
+  };
+
   const getMessageActions = createChannelMessageActions({
     channelId: () => props.channelId,
     userId,
@@ -262,8 +297,11 @@ export function Channel(props: ChannelProps) {
     addReaction: addReactionMutation.mutate,
     removeReaction: removeReactionMutation.mutate,
     onReply: (ctx) => {
-      const state = threadManager.getOrCreateThreadState(ctx.message.id);
-      state.setIsReplying(true);
+      if (ctx.message.thread_id) {
+        openQuoteReplyInput(ctx.message);
+        return;
+      }
+      openReplyInput(ctx.message);
     },
     onEdit: ({ message }) => {
       messageEditor.start(message);
@@ -468,6 +506,7 @@ export function Channel(props: ChannelProps) {
                                 replyInputState={state.replyInputState}
                                 setReplyInputState={state.setReplyInputState}
                                 setReplyInputEl={state.setReplyInputEl}
+                                setReplyInputHandle={state.setReplyInputHandle}
                                 listMeta={listMetaByMessageId()[item.id]}
                                 messageEditor={messageEditor}
                                 threadActions={{

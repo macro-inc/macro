@@ -2,6 +2,7 @@ import { URL_PARAMS } from '@channel/Channel/link';
 import { describe, expect, it } from 'vitest';
 import {
   buildMessageLink,
+  buildQuoteReplyValue,
   canEditOrDeleteMessage,
   canReplyToMessage,
   DEFAULT_REACTION_EMOJI,
@@ -30,17 +31,43 @@ describe('message-actions helpers', () => {
     ).toBe(false);
   });
 
-  it('allows reply only for non-thread non-deleted messages', () => {
+  it('allows reply for non-deleted top-level messages and thread replies', () => {
     expect(canReplyToMessage({ thread_id: null, deleted_at: null })).toBe(true);
     expect(
       canReplyToMessage({ thread_id: 'parent-id', deleted_at: null })
-    ).toBe(false);
+    ).toBe(true);
     expect(
       canReplyToMessage({
         thread_id: null,
         deleted_at: '2026-02-25T00:00:00.000Z',
       })
     ).toBe(false);
+  });
+
+  it('builds quote reply markdown before existing draft text', () => {
+    expect(
+      buildQuoteReplyValue({
+        quotedContent: 'first line\nsecond line',
+        existingValue: 'draft',
+      })
+    ).toBe('> first line\n> second line\n\ndraft');
+  });
+
+  it('does not insert a quote for empty quoted content', () => {
+    expect(
+      buildQuoteReplyValue({
+        quotedContent: '   \n  ',
+        existingValue: 'draft',
+      })
+    ).toBe('draft');
+  });
+
+  it('flattens existing quote markers instead of nesting blockquotes', () => {
+    expect(
+      buildQuoteReplyValue({
+        quotedContent: '> first line\n>> second line',
+      })
+    ).toBe('> first line\n> second line\n\n ');
   });
 
   it('detects if user already reacted with the default emoji', () => {

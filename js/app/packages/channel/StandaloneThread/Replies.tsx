@@ -56,13 +56,16 @@ export function Replies(props: RepliesProps) {
         <Thread.RepliesContainer>
           <For each={ctx.displayReplies()}>
             {(reply) => {
+              const replyMessage = () =>
+                ({ ...reply, thread_id: ctx.messageId() }) as MessageData;
               const meta = () => listMetaByReplyId()[reply.id];
-              const replyActions = () => props.getMessageActions?.(reply);
+              const replyActions = () =>
+                props.getMessageActions?.(replyMessage());
               return (
                 <div class="relative">
                   <ThreadRail />
                   <Message.Root
-                    message={reply}
+                    message={replyMessage()}
                     actions={replyActions()}
                     onClick={
                       props.onClickMessage

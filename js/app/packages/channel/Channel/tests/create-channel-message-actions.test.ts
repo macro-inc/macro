@@ -98,4 +98,18 @@ describe('createChannelMessageActions', () => {
       currentReactions: [],
     });
   });
+
+  it('exposes reply action for thread replies', () => {
+    const onReply = vi.fn();
+    const harness = buildHarness({ userId: 'user-1', onReply });
+    const reply = buildMessage({
+      id: 'reply-1',
+      thread_id: 'parent-1',
+    });
+    const actions = harness.getMessageActions(reply);
+
+    actions.onReply?.({ message: reply });
+
+    expect(onReply).toHaveBeenCalledWith({ message: reply });
+  });
 });

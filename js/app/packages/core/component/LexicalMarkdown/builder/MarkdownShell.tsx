@@ -84,6 +84,8 @@ export const MarkdownShell: Component<
     if (hasInitialContent) {
       builderConfig.handlers.onChange?.(markdownState());
     }
+
+    props.onConnect?.();
   };
 
   // Track editable state
