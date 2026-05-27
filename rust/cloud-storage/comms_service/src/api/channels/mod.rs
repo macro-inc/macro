@@ -23,21 +23,10 @@ pub mod post_typing;
 pub mod remove_participants;
 use crate::api::context::AppState;
 
-pub fn read_router() -> Router<AppState> {
-    Router::new()
-        .route("/{channel_id}", get(get_channel::get_channel_handler))
-        .route("/{channel_id}/mentions", get(get_mentions::handler))
-        .route(
-            "/{channel_id}/metadata",
-            get(get_channel_metadata::handler_external),
-        )
-        .route("/messages/context", get(get_message_with_context::handler))
-}
-
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(create_channel::create_channel_handler))
-        .merge(read_router())
+        .route("/{channel_id}", get(get_channel::get_channel_handler))
         .route(
             "/{channel_id}",
             delete(delete_channel::delete_channel_handler),
@@ -84,4 +73,10 @@ pub fn router() -> Router<AppState> {
             "/get_or_create_private",
             post(get_or_create_private::handler),
         )
+        .route("/{channel_id}/mentions", get(get_mentions::handler))
+        .route(
+            "/{channel_id}/metadata",
+            get(get_channel_metadata::handler_external),
+        )
+        .route("/messages/context", get(get_message_with_context::handler))
 }

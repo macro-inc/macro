@@ -201,8 +201,8 @@ fn cursor_from_first_message(
     })
 }
 
-/// Build the legacy `/comms/channels` mutation-only compatibility router.
-pub fn legacy_channel_mutation_alias_router<S, Svc>() -> Router<ChannelsRouterState<S, Svc>>
+/// Build the channel mutation router.
+pub fn channel_mutation_router<S, Svc>() -> Router<ChannelsRouterState<S, Svc>>
 where
     S: ChannelService,
     Svc: EntityAccessService,
@@ -255,7 +255,7 @@ where
     Svc: EntityAccessService,
     T: Send + Sync,
 {
-    legacy_channel_mutation_alias_router::<S, Svc>()
+    channel_mutation_router::<S, Svc>()
         .route(
             "/{channel_id}/messages",
             get(get_channel_messages_handler::<S, Svc>)
