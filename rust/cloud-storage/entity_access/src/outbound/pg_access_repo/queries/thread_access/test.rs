@@ -714,3 +714,57 @@ async fn denies_when_unsynced_participant_in_a_later_message(pool: PgPool) -> an
     assert_eq!(access_as_requester(&pool, &thread_id).await, None);
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Requester's own domain is exempt from the CRM-contact requirement
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn grants_when_only_unsynced_participant_is_on_requesters_domain(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    // A colleague on the requester's own domain (corp.test) is a participant but
+    // has no CRM contact. Internal addresses are exempt, so the external
+    // participant (alice) being synced is enough to grant.
+    let team_id = setup_shared_team(&pool, true).await;
+    let thread_id = create_thread(
+        &pool,
+        OWNER,
+        "alice@client.test",
+        &[("colleague@corp.test", "TO")],
+    )
+    .await;
+
+    let company = insert_crm_company(&pool, team_id, true, false).await;
+    insert_crm_contact(&pool, company, "alice@client.test", false).await;
+    // colleague@corp.test intentionally has no CRM contact.
+
+    assert_eq!(
+        access_as_requester(&pool, &thread_id).await,
+        Some(AccessLevel::Comment)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn denies_when_every_participant_is_on_requesters_domain(pool: PgPool) -> anyhow::Result<()> {
+    // Purely-internal thread: all participants share the requester's domain, so
+    // there's no external participant to anchor CRM access. Deny even though the
+    // internal addresses would be exempt from the contact check.
+    let team_id = setup_shared_team(&pool, true).await;
+    let thread_id = create_thread(
+        &pool,
+        OWNER,
+        "boss@corp.test",
+        &[("colleague@corp.test", "TO")],
+    )
+    .await;
+
+    // Even with a qualifying contact for an internal address, the absence of any
+    // external participant must deny.
+    let company = insert_crm_company(&pool, team_id, true, false).await;
+    insert_crm_contact(&pool, company, "boss@corp.test", false).await;
+
+    assert_eq!(access_as_requester(&pool, &thread_id).await, None);
+    Ok(())
+}
