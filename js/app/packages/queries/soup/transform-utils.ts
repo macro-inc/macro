@@ -33,6 +33,7 @@ import type {
   UnifiedSearchResponseItem,
 } from '@service-search/generated/models';
 import type {
+  SoupApiItem,
   SoupDocument,
   SoupPage,
 } from '@service-storage/generated/schemas';
@@ -443,6 +444,157 @@ const resolveDocumentEntityName = (
   });
 };
 
+export const mapApiSoupItemToEntity = (
+  item: SoupApiItem
+):
+  | DocumentEntity
+  | ChatEntity
+  | ProjectEntity
+  | EmailEntity
+  | ChannelEntity
+  | CallEntity => {
+  if (item.tag === 'chat') {
+    return {
+      ...item.data,
+      createdAt: item.data.createdAt,
+      updatedAt: item.data.updatedAt,
+      type: item.tag,
+      name: item.data.name || 'New Chat',
+      frecencyScore: item.frecency_score,
+      viewedAt: item.data.viewedAt,
+      projectId: item.data.projectId ?? undefined,
+    };
+  }
+
+  if (item.tag === 'project') {
+    return {
+      createdAt: item.data.createdAt,
+      updatedAt: item.data.updatedAt,
+      id: item.data.id,
+      ownerId: item.data.ownerId,
+      frecencyScore: item.frecency_score,
+      viewedAt: item.data.viewedAt,
+      projectId: item.data.parentId ?? undefined,
+      type: item.tag,
+      name: item.data.name || 'New Project',
+    };
+  }
+
+  if (item.tag === 'emailThread') {
+    const participants = item.data.participants?.map((p) => ({
+      email: p.emailAddress ?? '',
+      name: p.name ?? '',
+    }));
+
+    const hasIcsAttachment = item.data.attachments?.some(
+      (a) =>
+        a.mimeType === 'text/calendar' ||
+        a.filename?.toLowerCase().endsWith('.ics')
+    );
+
+    const attachments = item.data.attachments?.map((a) => ({
+      id: a.id,
+      filename: a.filename,
+      mimeType: a.mimeType,
+      sizeBytes: a.sizeBytes,
+    }));
+
+    return {
+      ...item.data,
+      createdAt: item.data.createdAt,
+      updatedAt: item.data.updatedAt,
+      sortTs: item.data.sortTs,
+      senderEmail: item.data.senderEmail ?? undefined,
+      senderName: item.data.senderName ?? undefined,
+      snippet: item.data.snippet ?? undefined,
+      done: !item.data.inboxVisible,
+      type: 'email',
+      name: item.data.name || 'Email Thread',
+      frecencyScore: item.frecency_score,
+      viewedAt: item.data.viewedAt,
+      projectId: item.data.projectId ?? undefined,
+      participants,
+      hasIcsAttachment,
+      attachments,
+    };
+  }
+
+  if (item.tag === 'call') {
+    return {
+      type: 'call',
+      id: item.data.callId,
+      name:
+        item.data.customName ??
+        item.data.channelName ??
+        blockNameToDefaultFile('call'),
+      channelId: item.data.channelId,
+      channelName: item.data.channelName ?? undefined,
+      ownerId: item.data.createdBy,
+      createdAt: item.data.startedAt,
+      updatedAt: item.data.endedAt ?? item.data.startedAt,
+      sortTs: item.data.endedAt ?? item.data.startedAt,
+      isActive: item.data.isActive,
+      attended: item.data.attended,
+      durationMs: item.data.durationMs ?? undefined,
+      participantIds: item.data.participants.map((p) => p.userId),
+      summary: item.data.summary ?? undefined,
+    } satisfies CallEntity;
+  }
+
+  if (item.tag === 'channel') {
+    const out: ChannelEntity = {
+      type: 'channel',
+      id: item.data.channel.id,
+      name: item.data.channel.name || 'Unknown Channel',
+      channelType: item.data.channel.channel_type,
+      ownerId: item.data.channel.owner_id,
+      frecencyScore: item.frecency_score ?? 0,
+      updatedAt: item.data.channel.updated_at,
+      createdAt: item.data.channel.created_at,
+      participantIds: item.data.participants.map((p) => p.user_id),
+      viewedAt: item.data.viewed_at ?? item.data.interacted_at,
+      latestMessage: item.data.latest_non_thread_message
+        ? {
+            content: item.data.latest_non_thread_message.content,
+            senderId: item.data.latest_non_thread_message.sender_id,
+            createdAt: item.data.latest_non_thread_message.created_at,
+          }
+        : undefined,
+    };
+    return out;
+  }
+
+  return {
+    ...item.data,
+    createdAt: item.data.createdAt,
+    updatedAt: item.data.updatedAt,
+    type: item.tag,
+    frecencyScore: item.frecency_score,
+    viewedAt: item.data.viewedAt,
+    fileType: item.data.fileType ?? undefined,
+    projectId: item.data.projectId ?? undefined,
+    subType:
+      item.data.subType === null || item.data.subType === undefined
+        ? undefined
+        : {
+            type: item.data.subType.type as 'task',
+            is_completed: item.data.subType.is_completed,
+          },
+    name: resolveDocumentEntityName(item.data),
+  };
+};
+
+export const isInstructionsMdDoc = (
+  item: SoupApiItem,
+  instructionsIdQuery: UseQueryResult<string | null | undefined, Error>
+) => {
+  if (item.tag !== 'document') return false;
+
+  if (!instructionsIdQuery.isSuccess) return false;
+
+  return item.data.id === instructionsIdQuery.data;
+};
+
 export const mapSoupPageToEntityList: (
   data: SoupPage,
   options: {
@@ -457,151 +609,6 @@ export const mapSoupPageToEntityList: (
   | CallEntity
 )[] = (data, options) => {
   return data.items
-    .filter(
-      (item) =>
-        item.tag !== 'document' ||
-        !options.instructionsIdQuery.isSuccess ||
-        item.data.id !== options.instructionsIdQuery.data
-    )
-    .map(
-      (
-        item
-      ):
-        | DocumentEntity
-        | ChatEntity
-        | ProjectEntity
-        | EmailEntity
-        | ChannelEntity
-        | CallEntity => {
-        if (item.tag === 'chat') {
-          return {
-            ...item.data,
-            createdAt: item.data.createdAt,
-            updatedAt: item.data.updatedAt,
-            type: item.tag,
-            name: item.data.name || 'New Chat',
-            frecencyScore: item.frecency_score,
-            viewedAt: item.data.viewedAt,
-            projectId: item.data.projectId ?? undefined,
-          };
-        }
-
-        if (item.tag === 'project') {
-          return {
-            createdAt: item.data.createdAt,
-            updatedAt: item.data.updatedAt,
-            id: item.data.id,
-            ownerId: item.data.ownerId,
-            frecencyScore: item.frecency_score,
-            viewedAt: item.data.viewedAt,
-            projectId: item.data.parentId ?? undefined,
-            type: item.tag,
-            name: item.data.name || 'New Project',
-          };
-        }
-
-        if (item.tag === 'emailThread') {
-          const participants = item.data.participants?.map((p) => ({
-            email: p.emailAddress ?? '',
-            name: p.name ?? '',
-          }));
-
-          const hasIcsAttachment = item.data.attachments?.some(
-            (a) =>
-              a.mimeType === 'text/calendar' ||
-              a.filename?.toLowerCase().endsWith('.ics')
-          );
-
-          const attachments = item.data.attachments?.map((a) => ({
-            id: a.id,
-            filename: a.filename,
-            mimeType: a.mimeType,
-            sizeBytes: a.sizeBytes,
-          }));
-
-          return {
-            ...item.data,
-            createdAt: item.data.createdAt,
-            updatedAt: item.data.updatedAt,
-            sortTs: item.data.sortTs,
-            senderEmail: item.data.senderEmail ?? undefined,
-            senderName: item.data.senderName ?? undefined,
-            snippet: item.data.snippet ?? undefined,
-            done: !item.data.inboxVisible,
-            type: 'email',
-            name: item.data.name || 'Email Thread',
-            frecencyScore: item.frecency_score,
-            viewedAt: item.data.viewedAt,
-            projectId: item.data.projectId ?? undefined,
-            participants,
-            hasIcsAttachment,
-            attachments,
-          };
-        }
-
-        if (item.tag === 'call') {
-          return {
-            type: 'call',
-            id: item.data.callId,
-            name:
-              item.data.customName ??
-              item.data.channelName ??
-              blockNameToDefaultFile('call'),
-            channelId: item.data.channelId,
-            channelName: item.data.channelName ?? undefined,
-            ownerId: item.data.createdBy,
-            createdAt: item.data.startedAt,
-            updatedAt: item.data.endedAt ?? item.data.startedAt,
-            sortTs: item.data.endedAt ?? item.data.startedAt,
-            isActive: item.data.isActive,
-            attended: item.data.attended,
-            durationMs: item.data.durationMs ?? undefined,
-            participantIds: item.data.participants.map((p) => p.userId),
-            summary: item.data.summary ?? undefined,
-          } satisfies CallEntity;
-        }
-
-        if (item.tag === 'channel') {
-          const out: ChannelEntity = {
-            type: 'channel',
-            id: item.data.channel.id,
-            name: item.data.channel.name || 'Unknown Channel',
-            channelType: item.data.channel.channel_type,
-            ownerId: item.data.channel.owner_id,
-            frecencyScore: item.frecency_score ?? 0,
-            updatedAt: item.data.channel.updated_at,
-            createdAt: item.data.channel.created_at,
-            participantIds: item.data.participants.map((p) => p.user_id),
-            viewedAt: item.data.viewed_at ?? item.data.interacted_at,
-            latestMessage: item.data.latest_non_thread_message
-              ? {
-                  content: item.data.latest_non_thread_message.content,
-                  senderId: item.data.latest_non_thread_message.sender_id,
-                  createdAt: item.data.latest_non_thread_message.created_at,
-                }
-              : undefined,
-          };
-          return out;
-        }
-
-        return {
-          ...item.data,
-          createdAt: item.data.createdAt,
-          updatedAt: item.data.updatedAt,
-          type: item.tag,
-          frecencyScore: item.frecency_score,
-          viewedAt: item.data.viewedAt,
-          fileType: item.data.fileType ?? undefined,
-          projectId: item.data.projectId ?? undefined,
-          subType:
-            item.data.subType === null || item.data.subType === undefined
-              ? undefined
-              : {
-                  type: item.data.subType.type as 'task',
-                  is_completed: item.data.subType.is_completed,
-                },
-          name: resolveDocumentEntityName(item.data),
-        };
-      }
-    );
+    .filter((item) => !isInstructionsMdDoc(item, options.instructionsIdQuery))
+    .map(mapApiSoupItemToEntity);
 };
