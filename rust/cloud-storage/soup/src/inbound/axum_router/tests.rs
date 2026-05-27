@@ -131,7 +131,7 @@ impl NotificationResponseSoup {
         let source_id = notification_source_id();
         let timestamp = Utc::now();
 
-        SoupItem::Notification(SoupNotification {
+        SoupItem::Notification(Box::new(SoupNotification {
             id: Uuid::from_u128(2),
             owner_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
             event_type: "document_updated".to_string(),
@@ -148,7 +148,7 @@ impl NotificationResponseSoup {
             source: Some(SoupNotificationSource::Document(Self::source_document(
                 source_id, timestamp,
             ))),
-        })
+        }))
     }
 
     fn source_document(id: Uuid, timestamp: chrono::DateTime<Utc>) -> SoupDocument {

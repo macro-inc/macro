@@ -871,7 +871,7 @@ async fn notification_enrichment_should_run_after_page_selection() {
                 DateTime::default() + Days::new(1),
             );
 
-            Box::pin(async move { Ok(vec![SoupItem::Notification(notification)]) })
+            Box::pin(async move { Ok(vec![SoupItem::Notification(Box::new(notification))]) })
         });
 
     soup_mock.expect_unexpanded_soup_by_ids().times(0);
@@ -927,18 +927,18 @@ async fn notification_enrichment_should_deduplicate_duplicate_sources() {
         .times(1)
         .returning(move |_params| {
             let notifications = vec![
-                SoupItem::Notification(soup_notification(
+                SoupItem::Notification(Box::new(soup_notification(
                     Uuid::from_u128(42_001),
                     EntityType::Document,
                     source_id,
                     DateTime::default() + Days::new(10),
-                )),
-                SoupItem::Notification(soup_notification(
+                ))),
+                SoupItem::Notification(Box::new(soup_notification(
                     Uuid::from_u128(42_002),
                     EntityType::Document,
                     source_id,
                     DateTime::default() + Days::new(9),
-                )),
+                ))),
             ];
 
             Box::pin(async move { Ok(notifications) })

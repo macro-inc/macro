@@ -197,7 +197,7 @@ fn test_notification_item_maps_fields_and_source() {
         "source.md",
     )));
 
-    let item = EntityItem::from(SoupItem::Notification(notification));
+    let item = EntityItem::from(SoupItem::Notification(Box::new(notification)));
     let EntityItem::Notification {
         id,
         event_type,

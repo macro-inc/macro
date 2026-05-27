@@ -84,6 +84,9 @@ fn build_user_notifications_query<'a>(
     );
     builder.push_bind(args.user_id);
     builder.push(" AND un.deleted_at IS NULL AND un.done = false");
+    builder.push(
+        " AND n.event_item_type IN ('document', 'chat', 'project', 'email_thread', 'channel', 'call')",
+    );
 
     if let (Some(cursor_timestamp), Some(cursor_id)) = (args.cursor_timestamp, args.cursor_id) {
         builder.push(" AND (un.created_at::timestamptz, un.notification_id) < (");

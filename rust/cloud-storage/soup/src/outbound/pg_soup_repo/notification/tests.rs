@@ -249,6 +249,40 @@ async fn skips_invalid_source_entity_types(pool: Pool<Postgres>) -> anyhow::Resu
     Ok(())
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn filters_invalid_source_entity_types_before_limiting(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let valid_id = uuid(41);
+    let invalid_id = uuid(42);
+
+    insert_test_notification(
+        &pool,
+        TestNotification::new(valid_id, USER_ONE, "2024-01-01 10:00:00"),
+    )
+    .await?;
+    insert_test_notification(
+        &pool,
+        TestNotification::new(invalid_id, USER_ONE, "2024-01-02 10:00:00")
+            .with_event_item("not_a_source_type", "bad-source"),
+    )
+    .await?;
+
+    let items = user_notifications(
+        &pool,
+        notification_request(
+            MacroUserIdStr::parse_from_str(USER_ONE).unwrap(),
+            1,
+            Query::Sort(SimpleSortMethod::UpdatedAt, ()),
+        ),
+    )
+    .await?;
+
+    assert_eq!(notification_ids(&items), vec![valid_id]);
+
+    Ok(())
+}
+
 async fn insert_test_notification(
     pool: &Pool<Postgres>,
     notification: TestNotification<'_>,
