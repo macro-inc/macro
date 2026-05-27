@@ -138,18 +138,16 @@ pub(in crate::api::oauth2) async fn handler(
             // consumed by /email/init (no redirect carrying link_id is emitted on
             // error). Best-effort delete so a failed attempt doesn't burn one of
             // the user's 5 in-flight link slots.
-            macro_db_client::in_progress_user_link::delete_in_progress_user_link(
-                &ctx.db, link_id,
-            )
-            .await
-            .inspect_err(|e| {
-                tracing::warn!(
-                    error=?e,
-                    ?link_id,
-                    "failed to clean up in_progress_user_link after link_user error"
-                );
-            })
-            .ok();
+            macro_db_client::in_progress_user_link::delete_in_progress_user_link(&ctx.db, link_id)
+                .await
+                .inspect_err(|e| {
+                    tracing::warn!(
+                        error=?e,
+                        ?link_id,
+                        "failed to clean up in_progress_user_link after link_user error"
+                    );
+                })
+                .ok();
         }
 
         link_result.map_err(|(status_code, error)| {
