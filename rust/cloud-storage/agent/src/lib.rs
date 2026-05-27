@@ -17,7 +17,7 @@ pub mod types;
 
 pub use agent_loop::{AgentLoop, Session};
 pub use completion::{complete, complete_with_history};
-pub use convert::to_rig_messages;
+pub use convert::{merge_consecutive_parts, to_rig_messages};
 pub use error::AgentError;
 pub use hook::StreamBridge;
 pub use model::AgentModel;

@@ -94,6 +94,29 @@ fn convert_assistant(msg: &ChatMessage) -> Vec<Message> {
     out
 }
 
+/// Merges consecutive `Text` and `Thinking` parts into single entries.
+pub fn merge_consecutive_parts(parts: Vec<AssistantMessagePart>) -> Vec<AssistantMessagePart> {
+    let mut out: Vec<AssistantMessagePart> = Vec::with_capacity(parts.len());
+    for part in parts {
+        match (&mut out.last_mut(), &part) {
+            (
+                Some(AssistantMessagePart::Text { text: acc }),
+                AssistantMessagePart::Text { text },
+            ) => {
+                acc.push_str(text);
+            }
+            (
+                Some(AssistantMessagePart::Thinking { thinking: acc }),
+                AssistantMessagePart::Thinking { thinking },
+            ) => {
+                acc.push_str(thinking);
+            }
+            _ => out.push(part),
+        }
+    }
+    out
+}
+
 fn flush(
     out: &mut Vec<Message>,
     assistant_parts: &mut Vec<AssistantContent>,

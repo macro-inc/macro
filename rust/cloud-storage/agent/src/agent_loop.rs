@@ -140,9 +140,6 @@ impl Session {
             )));
         };
 
-        #[cfg(feature = "debug-messages")]
-        dump_messages("agent_input.log", &self.history);
-
         let (bridge, mut rx) = StreamBridge::channel();
 
         let mut rig_stream = self
@@ -172,10 +169,6 @@ impl Session {
                         }
                         match other {
                             Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
-                                #[cfg(feature = "debug-messages")]
-                                if let Some(history) = final_resp.history() {
-                                    dump_messages("agent_output.log", history);
-                                }
                                 let usage = final_resp.usage();
                                 yield Ok(StreamPart::Usage(crate::stream::Usage {
                                     input_tokens: usage.input_tokens,
@@ -204,22 +197,5 @@ impl Session {
     /// Get the conversation messages accumulated during this session.
     pub fn get_history(&self) -> &[Message] {
         &self.history
-    }
-}
-
-#[cfg(feature = "debug-messages")]
-fn dump_messages(filename: &str, messages: &[Message]) {
-    use std::io::Write;
-
-    let path = std::path::PathBuf::from(filename);
-    match serde_json::to_string_pretty(messages) {
-        Ok(json) => match std::fs::File::create(&path) {
-            Ok(mut f) => {
-                let _ = f.write_all(json.as_bytes());
-                tracing::info!(path = %path.display(), "wrote message chain");
-            }
-            Err(e) => tracing::warn!(error = %e, path = %path.display(), "failed to write"),
-        },
-        Err(e) => tracing::warn!(error = %e, "failed to serialize message chain"),
     }
 }
