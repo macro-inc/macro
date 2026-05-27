@@ -15,7 +15,11 @@ import {
   NOT_SET_GROUP_KEY,
 } from '@queries/soup/grouped/types';
 import { soupKeys } from '@queries/soup/keys';
-import { mapSoupPageToEntityList } from '@queries/soup/transform-utils';
+import {
+  isInstructionsMdDoc,
+  mapApiSoupItemToEntity,
+  mapSoupPageToEntityList,
+} from '@queries/soup/transform-utils';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
@@ -80,7 +84,7 @@ export type SoupAstItemsData = {
   entities: EntityData[];
   groups: GroupMeta[] | undefined;
   /** Only present when query is grouped. */
-  itemsById?: Record<string, SoupApiItem>;
+  itemsById?: Record<string, EntityData>;
 };
 
 export const useSoupItemsQuery = (
@@ -194,28 +198,36 @@ export const useSoupAstItemsQuery = (
           const groups = firstPage.groups
             .slice()
             .sort(makeGroupComparator(groupBy));
+
           const itemsById = firstPage.items;
-          const orderedItems: SoupApiItem[] = [];
+          const entitiesById: Record<string, EntityData> = {};
+          const entities: EntityData[] = [];
+
           for (const g of groups) {
             for (const id of g.itemIds) {
-              const it = itemsById[id];
-              if (it) orderedItems.push(it);
+              const item = itemsById[id];
+
+              if (item && !isInstructionsMdDoc(item, instructionsIdQuery)) {
+                const mapped = mapApiSoupItemToEntity(item);
+                entities.push(mapped);
+
+                entitiesById[id] = mapped;
+              }
             }
           }
-          const entities = mapSoupPageToEntityList(
-            { items: orderedItems, next_cursor: null },
-            { instructionsIdQuery }
-          );
-          return { entities, groups, itemsById };
+
+          return { entities, groups, itemsById: entitiesById };
         }
 
         const entities = data.pages.flatMap((page) => {
           if (page.kind !== 'flat') return [];
+
           return mapSoupPageToEntityList(
             { items: page.items, next_cursor: null },
             { instructionsIdQuery }
           );
         });
+
         return { entities, groups: undefined };
       },
       enabled: options?.().enabled,

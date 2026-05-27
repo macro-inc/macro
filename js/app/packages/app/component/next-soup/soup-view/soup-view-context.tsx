@@ -414,8 +414,7 @@ export const SoupViewContextProvider: FlowComponent<
       );
     }
 
-    const byId = new Map<string, SoupEntity>();
-    for (const e of items()) byId.set(e.id, e);
+    const byId = itemsQuery.data?.itemsById ?? {};
 
     const result: SoupRow[] = [];
     let globalIndex = 0;
@@ -424,8 +423,9 @@ export const SoupViewContextProvider: FlowComponent<
       const groupMeta = buildGroupMeta(apiGroup);
       const groupEntities: SoupEntity[] = [];
       for (const id of apiGroup.itemIds) {
-        const entity = byId.get(id);
-        if (entity) groupEntities.push(entity);
+        const item = byId[id];
+
+        if (item) groupEntities.push(item);
       }
 
       const firstEntity = groupEntities[0];
