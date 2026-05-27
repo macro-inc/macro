@@ -17,6 +17,11 @@ import { createSearchState } from '@app/component/next-soup/soup-view/create-sea
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { useEntryState } from '@app/component/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import {
+  isListViewID,
+  soupItemMatchesListView,
+  type ListView,
+} from '@app/constants/list-views';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import {
@@ -291,15 +296,27 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  const activeListView = createMemo<ListView | undefined>(() => {
+    const content = panel.handle.content();
+    if (content.type !== 'component') return;
+    return isListViewID(content.id) ? content.id : undefined;
+  });
+
   const itemsQuery = useSoupAstItemsQuery(
     () => ({
       params: soupParams(),
       body: soupBody(),
       groupBy: groupByField(),
     }),
-    () => ({
-      enabled: !search.isSearching(),
-    })
+    () => {
+      const view = activeListView();
+      return {
+        enabled: !search.isSearching(),
+        meta: {
+          itemFilter: (item) => soupItemMatchesListView(item, view),
+        },
+      };
+    }
   );
 
   const items = createMemo<SoupEntity[]>(

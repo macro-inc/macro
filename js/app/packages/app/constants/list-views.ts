@@ -1,4 +1,5 @@
 import type { BlockAlias, BlockName } from '@core/block';
+import type { SoupApiItem } from '@service-storage/generated/schemas';
 
 export const LIST_VIEWS = [
   'inbox',
@@ -46,6 +47,32 @@ export const isListViewID = (id: string | null | undefined): id is ListView => {
   if (!id) return false;
 
   return LIST_VIEWS.includes(id as 'inbox');
+};
+
+export const soupItemMatchesListView = (
+  item: SoupApiItem,
+  view: ListView | undefined
+): boolean => {
+  switch (view) {
+    case 'agents':
+      return item.tag === 'chat';
+    case 'mail':
+      return item.tag === 'emailThread';
+    case 'documents':
+      return item.tag === 'document' && item.data.subType?.type !== 'task';
+    case 'tasks':
+      return item.tag === 'document' && item.data.subType?.type === 'task';
+    case 'channels':
+      return item.tag === 'channel';
+    case 'calls':
+      return item.tag === 'call';
+    case 'folders':
+      return item.tag === 'project';
+    case 'inbox':
+    case 'search':
+    case undefined:
+      return true;
+  }
 };
 
 const BLOCK_LIST_VIEW_MAP = {

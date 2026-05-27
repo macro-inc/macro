@@ -54,6 +54,9 @@ export type SoupApiItemFilter = (item: SoupApiItem) => boolean;
 interface SoupItemsQueryOptions {
   enabled?: boolean;
   staleTime?: StaleTime;
+  meta?: {
+    itemFilter?: (item: SoupApiItem) => boolean;
+  };
 }
 
 /**
@@ -231,6 +234,7 @@ export const useSoupAstItemsQuery = (
       staleTime: options?.().staleTime,
       placeholderData: (p) => p,
       meta: {
+        ...options?.().meta,
         normalize: true,
       },
     };
