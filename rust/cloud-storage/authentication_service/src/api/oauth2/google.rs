@@ -4,11 +4,12 @@ use std::borrow::Cow;
 
 use axum::{
     Json,
-    response::{IntoResponse, Response},
+    response::{IntoResponse, Redirect, Response},
 };
 use model::response::ErrorResponse;
 use reqwest::StatusCode;
 use tower_cookies::Cookies;
+use url::Url;
 
 use crate::api::{
     context::ApiContext,
@@ -17,7 +18,6 @@ use crate::api::{
         login::{self},
     },
 };
-use authentication_service::service::user::create_user::create_user_profile;
 use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
 
 async fn link_user(
@@ -26,7 +26,6 @@ async fn link_user(
     code: &str,
     link_id: &uuid::Uuid,
 ) -> Result<(), (StatusCode, String)> {
-    // Get existing macro user id from link id
     let macro_user_id =
         macro_db_client::in_progress_user_link::get_macro_user_id_by_link_id(&ctx.db, link_id)
             .await
@@ -62,68 +61,45 @@ async fn link_user(
             )
         })?;
 
-    // Check if this is an account merge situation
-    match macro_db_client::user::get::get_user_id_by_email(ctx.db.clone(), &user_info_email).await {
-        Ok(_) => {
-            // NOTE: the user profile already exists, we need to handle account merging separately
-            return Err((
-                StatusCode::NOT_IMPLEMENTED,
-                "user profile already exists".to_string(),
-            ));
-        }
-        Err(_e) => (), // if there is an error we assume that it's because the user does not exist
+    // Reject account-merge attempts: the new Gmail already maps to a separate macro user.
+    if macro_db_client::user::get::get_user_id_by_email(ctx.db.clone(), &user_info_email)
+        .await
+        .is_ok()
+    {
+        return Err((
+            StatusCode::NOT_IMPLEMENTED,
+            "user profile already exists".to_string(),
+        ));
     }
 
-    // Creates the new user profile
-    create_user_profile(&macro_user_id.to_string(), &user_info.email, &ctx.db)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("unable to create user profile {e}"),
-            )
-        })?;
-
-    // With the token response and the user's macro_user_id, we can now link the user
-    match ctx
-        .auth_client
+    ctx.auth_client
         .link_user(LinkUserRequest {
             identity_provider_link: IdentityProviderLink {
                 display_name: user_info_email.clone(),
                 identity_provider_id: Cow::Borrowed(identity_provider_id),
-                identity_provider_user_id: Cow::Borrowed(&user_info.sub), // google user id
-                user_id: Cow::Borrowed(&macro_user_id.to_string()),       // fusionauth user id
-                token: Cow::Borrowed(&token_response.refresh_token), // For google, this is the refresh token
+                identity_provider_user_id: Cow::Borrowed(&user_info.sub),
+                user_id: Cow::Borrowed(&macro_user_id.to_string()),
+                token: Cow::Borrowed(&token_response.refresh_token),
             },
         })
         .await
-    {
-        Ok(()) => (),
-        Err(e) => {
-            let macro_user_id = format!("macro|{}", &user_info_email);
-
-            let _ = macro_db_client::user::delete_user::delete_user(&ctx.db, &macro_user_id)
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(
-                        error=?e,
-                        "unable to delete user {user_info_email}"
-                    );
-                });
-
-            return Err((
+        .map_err(|e| {
+            (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("unable to link user {e}"),
-            ));
-        }
-    }
+            )
+        })?;
 
-    // delete in_progress_user_link once complete
-    let _ = macro_db_client::in_progress_user_link::delete_in_progress_user_link(&ctx.db, link_id)
+    // Stash the linked email on the in_progress_user_link row so /email/init can pick it up.
+    // The row is consumed and deleted by /email/init once the email_links record is created.
+    macro_db_client::in_progress_user_link::set_linked_email(&ctx.db, link_id, &user_info_email)
         .await
-        .inspect_err(|e| {
-            tracing::error!(error=?e, "unable to delete in progress user link");
-        });
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("unable to record linked email on in_progress_user_link {e}"),
+            )
+        })?;
 
     Ok(())
 }
@@ -149,7 +125,38 @@ pub(in crate::api::oauth2) async fn handler(
                 )
                     .into_response()
             })?;
-        // Early exit, we don't actually log the user into fusionauth
+
+        if let Some(original_url) = &state.original_url {
+            let decoded = urlencoding::decode(original_url).map_err(|e| {
+                tracing::error!(error=?e, "unable to decode original url");
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorResponse {
+                        message: "unable to decode original url".into(),
+                    }),
+                )
+                    .into_response()
+            })?;
+
+            let mut url: Url = decoded
+                .parse()
+                .inspect_err(|e| tracing::error!(error=?e, "unable to parse string to url"))
+                .map_err(|_| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        Json(ErrorResponse {
+                            message: "unable to parse to original url".into(),
+                        }),
+                    )
+                        .into_response()
+                })?;
+
+            url.query_pairs_mut()
+                .append_pair("link_id", &link_id.to_string());
+
+            return Ok(Redirect::to(url.as_str()).into_response());
+        }
+
         return Ok(StatusCode::OK.into_response());
     }
 
