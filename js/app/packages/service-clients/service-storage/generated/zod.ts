@@ -1797,6 +1797,47 @@ export const getChannelParticipantsResponse = zod.array(
 );
 
 /**
+ * @summary List the non-hidden contacts of a CRM company, scoped to the
+requesting user's team. Returns 404 when the company isn't owned by
+the team (so existence doesn't leak across teams); an owned company
+with no visible contacts returns `200 []`.
+ */
+export const listCompanyContactsParams = zod.object({
+  company_id: zod.uuid().describe('The CRM company whose contacts to list'),
+});
+
+export const listCompanyContactsResponseItem = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .describe('The id of the company the contact belongs to.'),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod.string().describe("The contact's email address."),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+export const listCompanyContactsResponse = zod.array(
+  listCompanyContactsResponseItem
+);
+
+/**
  * @summary Toggle `email_sync` on a CRM company. `false` disables CRM email
 sharing for the company and permanently removes its existing CRM
 contacts and contact sources.

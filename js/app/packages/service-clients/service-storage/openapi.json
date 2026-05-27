@@ -1753,6 +1753,70 @@
         }
       }
     },
+    "/crm/companies/{company_id}/contacts": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::list_company_contacts"],
+        "summary": "List the non-hidden contacts of a CRM company, scoped to the\nrequesting user's team. Returns 404 when the company isn't owned by\nthe team (so existence doesn't leak across teams); an owned company\nwith no visible contacts returns `200 []`.",
+        "operationId": "list_company_contacts",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The CRM company whose contacts to list",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CrmContactResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/companies/{company_id}/email-sync": {
       "put": {
         "tags": ["crm::inbound::axum_router::set_email_sync"],
@@ -8096,6 +8160,59 @@
               "type": "string"
             },
             "description": "CRM company ids to filter by. Examples: ['11111111-...']. Empty to\ninclude all of the team's visible CRM companies."
+          }
+        }
+      },
+      "CrmContactResponse": {
+        "type": "object",
+        "description": "A CRM contact as returned by `GET /crm/companies/{company_id}/contacts`.",
+        "required": [
+          "id",
+          "companyId",
+          "email",
+          "firstInteraction",
+          "lastInteraction",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the company the contact belongs to."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the contact record was created."
+          },
+          "email": {
+            "type": "string",
+            "description": "The contact's email address."
+          },
+          "firstInteraction": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Earliest known interaction with this contact."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the contact record."
+          },
+          "lastInteraction": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Most recent known interaction with this contact."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name observed for the contact, if any."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the contact record was last updated."
           }
         }
       },

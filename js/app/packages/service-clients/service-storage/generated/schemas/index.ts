@@ -219,6 +219,8 @@ export * from './createUnthreadedPdfAnchorRequestOneOfAllOf';
 export * from './createUnthreadedPdfAnchorRequestOneOfAllOfAnchorType';
 export * from './createViewRequest';
 export * from './crmCompanyFilters';
+export * from './crmContactResponse';
+export * from './crmContactResponseName';
 export * from './customSpeakerAssignment';
 export * from './dataType';
 export * from './deleteAnchorInfo';
