@@ -82,21 +82,21 @@ use model::{
     annotations::AnnotationIncrementalUpdate,
     chat::Chat,
     document::{
+        BasicDocument, BomPart, DocumentMetadata, DocumentPermissionsToken, FileType, SaveBomPart,
         response::{
             GetDocumentListResult, GetDocumentResponse, GetDocumentResponseData,
             LocationResponseData,
         },
-        BasicDocument, BomPart, DocumentMetadata, DocumentPermissionsToken, FileType, SaveBomPart,
     },
     item::{CloudStorageItemType, Item, ItemWithUserAccessLevel},
-    pin::{request::ReorderPinRequest, PinnedItem},
+    pin::{PinnedItem, request::ReorderPinRequest},
     project::{
+        Project,
         request::{CreateProjectRequest, GetBatchProjectPreviewRequest, PatchProjectRequestV2},
         response::{
             CreateProjectResponse, GetBatchProjectPreviewResponse, GetProjectContentResponse,
             GetProjectResponse, GetProjectResponseData, GetProjectsResponse,
         },
-        Project,
     },
     response::{
         GenericErrorResponse, GenericResponse, GenericSuccessResponse, PresignedUrl,
