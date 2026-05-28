@@ -13,10 +13,10 @@ import { Entity } from '@entity';
 import {
   getNotificationContent,
   getNotificationTargetName,
-  isChannelNotification,
   notificationIsRead,
   openNotification,
 } from '@notifications';
+import { isChannelNotification } from '@notifications/notification-helpers';
 import type { UnifiedNotification } from '@notifications/types';
 import BellIcon from '@phosphor/bell.svg';
 import CheckIcon from '@phosphor/check.svg';
@@ -172,7 +172,7 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
                       <span class="inline-flex shrink-0 items-center gap-1 font-medium text-ink-muted">
                         <UserIcon
                           id={id()}
-                          size="xs"
+                          size="sm"
                           suppressClick
                           showTooltip={false}
                         />
@@ -200,7 +200,7 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
               {(id) => (
                 <UserIcon
                   id={id()}
-                  size="xs"
+                  size="sm"
                   suppressClick
                   showTooltip={false}
                 />
