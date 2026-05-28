@@ -224,7 +224,7 @@ const reconcileSecondaryIdpLinkLambda = new FusionAuthLambda(
     lambdaId: 'b8c1f6d3-5e2a-4d8b-9f7e-2c3d4e5f6a7b',
     name: 'reconcile_secondary_idp_link',
     type: 'OpenIDReconcile',
-    debug: stack === 'local',
+    debug: stack !== 'prod',
     body: fs.readFileSync(
       './templates/reconcile_secondary_idp_link.js',
       'utf-8'
