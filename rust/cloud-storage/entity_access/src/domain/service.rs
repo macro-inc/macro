@@ -219,22 +219,6 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_channel_permission_for_principal(
-        &self,
-        principal_id: &str,
-        channel_id: &str,
-        user_org_id: Option<i64>,
-    ) -> Result<EntityPermission, AccessError> {
-        let channel_uuid = Uuid::from_str(channel_id)
-            .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
-        let result = self
-            .repo
-            .get_channel_role_for_principal(&channel_uuid, principal_id, user_org_id)
-            .await?;
-        channel_role_result_to_permission(result)
-    }
-
-    #[tracing::instrument(err, skip(self))]
     async fn get_users_by_entity(
         &self,
         entity_id: &str,

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE comms_channel_participants\n                SET left_at = now()\n                WHERE user_id = $1\n                  AND left_at IS NULL\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dbf934ed3c82b433deea3da7035a976b443a4280c01b09fdc5f673ad66f06c28"
+}

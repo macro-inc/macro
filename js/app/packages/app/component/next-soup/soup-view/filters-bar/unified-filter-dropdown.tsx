@@ -51,15 +51,17 @@ import {
 } from './search-filter-controls';
 import { SearchableMultiSelectInline } from './searchable-multi-select';
 
-const TypeIndicator = (props: { active: boolean }) => (
+export const TypeIndicator = (props: { active: boolean }) => (
   <span
     class={cn(
-      'size-4 flex items-center justify-center shrink-0 rounded-full border',
-      props.active ? 'bg-accent border-accent' : 'border-edge'
+      'size-3.5 flex items-center justify-center shrink-0 rounded-sm border text-surface',
+      props.active
+        ? 'bg-accent border-accent'
+        : 'border-transparent group-hover:not-hover:border-edge-muted group-data-highlighted:not-hover:border-edge-muted hover:border-accent'
     )}
   >
     <Show when={props.active}>
-      <CheckIcon class="size-2.5 text-surface" />
+      <CheckIcon class="size-2.5" />
     </Show>
   </span>
 );
@@ -917,18 +919,7 @@ export const UnifiedFilterDropdown = (
                                     onSelect={() => toggleFilter(option.id)}
                                     closeOnSelect={!category.multiple}
                                   >
-                                    <span
-                                      class={cn(
-                                        'size-4 flex items-center justify-center shrink-0 rounded border',
-                                        active()
-                                          ? 'bg-accent border-accent'
-                                          : 'border-edge'
-                                      )}
-                                    >
-                                      <Show when={active()}>
-                                        <CheckIcon class="size-2.5 text-surface" />
-                                      </Show>
-                                    </span>
+                                    <TypeIndicator active={active()} />
 
                                     <Show when={option.icon}>
                                       {(icon) => (
@@ -1035,16 +1026,7 @@ export const UnifiedFilterDropdown = (
                       onSelect={() => toggleFilter(option.id)}
                       closeOnSelect={!categories()[0]!.multiple}
                     >
-                      <span
-                        class={cn(
-                          'size-4 flex items-center justify-center shrink-0 rounded border',
-                          active() ? 'bg-accent border-accent' : 'border-edge'
-                        )}
-                      >
-                        <Show when={active()}>
-                          <CheckIcon class="size-2.5 text-surface" />
-                        </Show>
-                      </span>
+                      <TypeIndicator active={active()} />
 
                       <Show when={option.icon}>
                         {(icon) => (

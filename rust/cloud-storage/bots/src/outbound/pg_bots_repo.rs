@@ -1,5 +1,8 @@
 //! Postgres bot repository.
 
+#[cfg(test)]
+mod tests;
+
 use crate::domain::{
     models::{
         AuthenticatedBot, Bot, BotId, BotKind, BotOwner, BotToken, CreateBotRequest,
@@ -348,8 +351,10 @@ impl BotRepo for PgBotsRepo {
         if result.rows_affected() > 0 {
             sqlx::query!(
                 r#"
-                DELETE FROM comms_channel_participants
+                UPDATE comms_channel_participants
+                SET left_at = now()
                 WHERE user_id = $1
+                  AND left_at IS NULL
                 "#,
                 principal_id(bot_id),
             )
@@ -388,8 +393,11 @@ impl BotRepo for PgBotsRepo {
     ) -> Result<bool, Self::Err> {
         let result = sqlx::query!(
             r#"
-            DELETE FROM comms_channel_participants
-            WHERE channel_id = $1 AND user_id = $2
+            UPDATE comms_channel_participants
+            SET left_at = now()
+            WHERE channel_id = $1
+              AND user_id = $2
+              AND left_at IS NULL
             "#,
             channel_id,
             principal_id(bot_id),

@@ -236,6 +236,11 @@ const _ENABLE_DOCK_NOTITIFCATIONS = resolveFeatureFlag(
 );
 export const ENABLE_TTFT = resolveFeatureFlag('ENABLE_TTFT', DEV_MODE_ENV);
 
+export const ENABLE_MULTI_INBOX = resolveFeatureFlag(
+  'ENABLE_MULTI_INBOX',
+  DEV_MODE_ENV
+);
+
 const _ENABLE_TASKS_TABS = resolveFeatureFlag('ENABLE_TASKS_TABS', true);
 
 export const ENABLE_EMAIL_SHARING = resolveFeatureFlag(

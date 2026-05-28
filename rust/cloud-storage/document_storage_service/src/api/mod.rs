@@ -228,10 +228,6 @@ fn api_router(state: ApiContext) -> Router {
                     macro_middleware::auth::initialize_user_context::handler,
                 ))
                 .layer(axum::middleware::from_fn_with_state(
-                    state.bots_auth_state.clone(),
-                    bots::inbound::auth::bot_bearer_auth,
-                ))
-                .layer(axum::middleware::from_fn_with_state(
                     state.jwt_validation_args.clone(),
                     macro_middleware::auth::attach_user::handler,
                 )),

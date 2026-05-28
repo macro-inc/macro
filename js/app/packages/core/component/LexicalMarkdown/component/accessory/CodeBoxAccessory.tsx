@@ -26,6 +26,7 @@ import FilePy from '@phosphor/file-py.svg';
 import FileRs from '@phosphor/file-rs.svg';
 import FileSql from '@phosphor/file-sql.svg';
 import FileTs from '@phosphor/file-ts.svg';
+import TrashCan from '@phosphor/trash-simple.svg';
 import { Button, cn, Dropdown } from '@ui';
 import {
   $getNodeByKey,
@@ -105,7 +106,7 @@ function CodeLanguageSelector(props: {
         <Dropdown.Trigger
           variant="ghost"
           size="sm"
-          class="text-ink-extra-muted/50 rounded-xs p-1.5"
+          class="text-ink-extra-muted/50 p-1.5"
           tabIndex={-1}
         >
           <Dynamic
@@ -194,6 +195,14 @@ export function CodeBoxAccessory(props: {
     }
   };
 
+  const deleteCode = () => {
+    props.editor.update(() => {
+      const node = $getNodeByKey(props.nodeKey);
+      if (!$isCodeNode(node)) return;
+      node.remove();
+    });
+  };
+
   const setLanguageOnNode = (language: string) => {
     props.editor.update(() => {
       const node = $getNodeByKey(props.nodeKey);
@@ -237,9 +246,9 @@ export function CodeBoxAccessory(props: {
             setLanguage={setLanguageOnNode}
             editor={props.editor}
           />
-          <div class="flex gap-2 items-center h-full">
+          <div class="flex items-center h-full">
             <Show when={showPreviewToggle()}>
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 mr-2">
                 <div class="text-xs text-ink-extra-muted/50">Preview</div>
                 <Switch
                   checked={isPreviewMode()}
@@ -255,10 +264,25 @@ export function CodeBoxAccessory(props: {
                 </Switch>
               </div>
             </Show>
+            <Show when={props.editor.isEditable()}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="text-ink-extra-muted/50 hover:text-failure h-full"
+                tooltip="Delete Code"
+                on:click={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  deleteCode();
+                }}
+              >
+                <TrashCan />
+              </Button>
+            </Show>
             <Button
               variant="ghost"
               size="icon-sm"
-              class="text-ink-extra-muted/50 rounded-xs h-full"
+              class="text-ink-extra-muted/50 h-full"
               tooltip="Copy Code"
               on:click={(e) => {
                 e.stopPropagation();
@@ -425,7 +449,7 @@ export const StaticCodeBoxAccessory = (props: {
           <Button
             variant="ghost"
             size="icon-sm"
-            class="text-ink-extra-muted/50 rounded-xs h-full"
+            class="text-ink-extra-muted/50 h-full"
             tooltip="Copy Code"
             on:click={(e) => {
               e.stopPropagation();

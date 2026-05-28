@@ -619,7 +619,6 @@ async fn main() -> anyhow::Result<()> {
             bots_service.clone(),
             (*entity_access_service).clone(),
         ),
-        bots_auth_state: bots::inbound::auth::BotAuthState::new(bots_service),
         call_state,
         call_webhook_state,
         call_internal_state,

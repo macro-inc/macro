@@ -11,11 +11,6 @@ struct ChannelRoleRow {
     org_id: Option<i64>,
 }
 
-/// Row returned from the strict channel principal role query.
-struct ExplicitChannelRoleRow {
-    role: Option<String>,
-}
-
 /// Parse a participant role string from the database.
 fn parse_role(s: &str) -> ParticipantRole {
     match s {
@@ -91,42 +86,6 @@ pub async fn get_channel_role(
     };
 
     Ok(match role {
-        Some(role) => ChannelRoleResult::Role(role),
-        None => ChannelRoleResult::NoAccess,
-    })
-}
-
-/// Get an explicitly listed principal's role in a channel.
-///
-/// Unlike [`get_channel_role`], this does not apply public or organization
-/// channel fallback rules. Bot principals must be channel participants.
-#[tracing::instrument(err, skip(pool))]
-#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
-pub async fn get_explicit_channel_role(
-    pool: &PgPool,
-    channel_id: &Uuid,
-    principal_id: &str,
-) -> Result<ChannelRoleResult, sqlx::Error> {
-    let row = sqlx::query_as!(
-        ExplicitChannelRoleRow,
-        r#"
-        SELECT cp.role::text as "role?"
-        FROM comms_channels c
-        LEFT JOIN comms_channel_participants cp
-            ON cp.channel_id = c.id AND cp.user_id = $2 AND cp.left_at IS NULL
-        WHERE c.id = $1
-        "#,
-        channel_id,
-        principal_id,
-    )
-    .fetch_optional(pool)
-    .await?;
-
-    let Some(row) = row else {
-        return Ok(ChannelRoleResult::NotFound);
-    };
-
-    Ok(match row.role.as_deref().map(parse_role) {
         Some(role) => ChannelRoleResult::Role(role),
         None => ChannelRoleResult::NoAccess,
     })

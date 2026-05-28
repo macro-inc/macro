@@ -1,5 +1,8 @@
 //! Axum router for bot management and channel reach.
 
+#[cfg(test)]
+mod tests;
+
 use crate::domain::{
     models::{
         AddChannelBotRequest, Bot, BotId, BotToken, CreateBotRequest, CreateBotTokenRequest,

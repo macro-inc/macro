@@ -26,7 +26,7 @@ export function Dialog(props: DialogProps) {
         <div class={cn('fixed inset-0 z-modal flex justify-center px-2', props.position === 'center' ? 'items-center' : 'items-start pt-[10vh]')}>
           <KobalteDialog.Content
             ref={props.contentRef}
-            class={cn('w-200 max-w-[calc(100vw-16px)] overflow-hidden portal-scope', props.class)}
+            class={cn('w-200 max-w-[calc(100vw-16px)] overflow-hidden portal-scope isolate', props.class)}
             onCloseAutoFocus={props.onCloseAutoFocus}
             onEscapeKeyDown={props.onEscapeKeyDown}
             onOpenAutoFocus={props.onOpenAutoFocus}

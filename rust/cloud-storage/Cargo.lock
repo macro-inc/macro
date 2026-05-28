@@ -1722,6 +1722,7 @@ dependencies = [
  "chrono",
  "entity_access",
  "hex",
+ "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
  "model-error-response",
@@ -1733,6 +1734,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "uuid",
@@ -4196,7 +4198,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "bot_id",
  "cached",
  "cool_asserts",
  "macro_db_migrator",

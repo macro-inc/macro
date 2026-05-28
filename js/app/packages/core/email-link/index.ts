@@ -40,28 +40,34 @@ type EmailInitError =
 /**
  * Calls email service to start syncing and initialize a new email link.
  *
+ * Pass `linkId` to complete a multi-inbox add via the `/link/gmail` flow — init will
+ * read the `in_progress_user_link` row and provision a second `email_links` scoped to
+ * that linked email. Omit for the first-time signup path.
+ *
  * @returns ok if syncing was started, err if syncing failed
  */
-function initEmailLink(): ResultAsync<void, EmailInitError> {
-  return ResultAsync.fromSafePromise(emailClient.init()).andThen(
-    (initResult) => {
-      if (initResult.isErr()) {
-        const badRequestError = initResult.error.find(
-          // TODO: this is cope but seems like error.code not being set correctly
-          (e) => e.message.includes('400')
-        );
-        return err(
-          badRequestError
-            ? { tag: 'AlreadyInitialized' as const }
-            : {
-                tag: 'FailedToInitialize' as const,
-                message: 'Failed to initialize',
-              }
-        );
-      }
-      return okAsync(undefined);
+function initEmailLink(args?: {
+  linkId?: string;
+}): ResultAsync<void, EmailInitError> {
+  return ResultAsync.fromSafePromise(
+    emailClient.init({ linkId: args?.linkId })
+  ).andThen((initResult) => {
+    if (initResult.isErr()) {
+      const badRequestError = initResult.error.find(
+        // TODO: this is cope but seems like error.code not being set correctly
+        (e) => e.message.includes('400')
+      );
+      return err(
+        badRequestError
+          ? { tag: 'AlreadyInitialized' as const }
+          : {
+              tag: 'FailedToInitialize' as const,
+              message: 'Failed to initialize',
+            }
+      );
     }
-  );
+    return okAsync(undefined);
+  });
 }
 
 /**
@@ -150,11 +156,11 @@ export function useEmailLinks() {
   return {
     query: query,
     isConnected: () => hasEmailLinks(query),
-    initEmailLink: () =>
-      initEmailLink().map(startEmailPolling).map(invalidations),
+    initEmailLink: (args?: { linkId?: string }) =>
+      initEmailLink(args).map(startEmailPolling).map(invalidations),
     connect: () =>
       connectEmail()
-        .andThen(initEmailLink)
+        .andThen(() => initEmailLink())
         .map(startEmailPolling)
         .andTee(invalidations),
     disconnect: () => disconnectEmail().andTee(invalidations),

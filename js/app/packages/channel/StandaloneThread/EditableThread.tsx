@@ -7,8 +7,9 @@ import {
 import type { ApiChannelMessage } from '@service-comms/client';
 import { createSignal, Show } from 'solid-js';
 import { createChannelMessageActions } from '../Channel/create-channel-message-actions';
-import type { InputSnapshot } from '../Input';
+import type { InputHandle, InputSnapshot } from '../Input';
 import { Thread } from '../Thread';
+import { buildQuoteReplyValue } from '../Thread/utils/message-actions';
 import { useStandaloneThread } from './context';
 import { StandaloneThread } from './StandaloneThread';
 
@@ -24,6 +25,9 @@ function EditableThreadInner() {
   const [replyInputState, setReplyInputState] = createSignal<
     InputSnapshot | undefined
   >();
+  const [replyInputHandle, setReplyInputHandle] = createSignal<
+    InputHandle | undefined
+  >();
   const deleteMessageMutation = useDeleteMessageMutation();
   const addReactionMutation = useAddReactionMutation();
   const removeReactionMutation = useRemoveReactionMutation();
@@ -34,7 +38,23 @@ function EditableThreadInner() {
     deleteMessage: deleteMessageMutation.mutate,
     addReaction: addReactionMutation.mutate,
     removeReaction: removeReactionMutation.mutate,
-    onReply: () => void ctx.setIsReplying(true),
+    onReply: ({ message }) => {
+      if (message.thread_id) {
+        const current = replyInputState();
+        const nextSnapshot: InputSnapshot = {
+          value: buildQuoteReplyValue({
+            quotedContent: message.content,
+            existingValue: current?.value,
+          }),
+          mentions: current?.mentions ?? [],
+          attachments: current?.attachments ?? [],
+        };
+        setReplyInputState(nextSnapshot);
+        replyInputHandle()?.restoreSnapshot(nextSnapshot);
+      }
+
+      ctx.setIsReplying(true);
+    },
   });
 
   const parentActions = () => {
@@ -56,6 +76,7 @@ function EditableThreadInner() {
           replyInputState={replyInputState}
           setReplyInputState={setReplyInputState}
           setIsReplying={ctx.setIsReplying}
+          setReplyInputHandle={setReplyInputHandle}
         />
       </Show>
     </>

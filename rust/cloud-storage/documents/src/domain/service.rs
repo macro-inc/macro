@@ -493,9 +493,7 @@ impl<
                 .get_user_view_location(user_id.as_ref(), &document_id)
                 .await
                 .map_err(|e| DocumentError::Internal(e.into()))?,
-            EntityAccessAuth::Unauthenticated
-            | EntityAccessAuth::Internal
-            | EntityAccessAuth::Bot(_) => None,
+            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
         };
 
         let access_level = match entity_access_receipt.entity_permission() {
@@ -713,9 +711,9 @@ impl<
                     context.team_task_id,
                 )
             }
-            EntityAccessAuth::Unauthenticated
-            | EntityAccessAuth::Internal
-            | EntityAccessAuth::Bot(_) => ("macro".to_string(), None, None),
+            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => {
+                ("macro".to_string(), None, None)
+            }
         };
 
         let branch_name = build_task_branch_name(

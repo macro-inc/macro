@@ -12,7 +12,7 @@ use axum::{
 use super::{ExtractorError, InternalUser};
 use crate::domain::{
     models::{
-        BotPrincipal, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+        Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
         ParticipantRole, RequiredPermission,
     },
     ports::EntityAccessService,
@@ -82,37 +82,6 @@ where
                     entity_permission: EntityPermission::ChannelRole {
                         role: ParticipantRole::Owner,
                     },
-                    _marker: PhantomData,
-                },
-                _marker: PhantomData,
-            });
-        }
-
-        let bot_principal: Option<Extension<BotPrincipal>> = if macro_user_id.is_none() {
-            parts
-                .extract()
-                .await
-                .map_err(|_| ExtractorError::Internal)?
-        } else {
-            None
-        };
-
-        if let Some(Extension(bot)) = bot_principal {
-            let permission = service
-                .get_channel_permission_for_principal(&bot.principal_id(), &channel_id, None)
-                .await
-                .map_err(ExtractorError::from)?;
-            if !permission.satisfies::<T>() {
-                return Err(ExtractorError::Unauthorized);
-            }
-            return Ok(Self {
-                entity_access_receipt: EntityAccessReceipt {
-                    entity: Entity {
-                        entity_id: channel_id,
-                        entity_type: EntityType::Channel,
-                    },
-                    auth: EntityAccessAuth::Bot(bot),
-                    entity_permission: permission,
                     _marker: PhantomData,
                 },
                 _marker: PhantomData,

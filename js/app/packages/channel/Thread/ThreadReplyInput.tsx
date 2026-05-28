@@ -22,10 +22,14 @@ type ThreadReplyInputProps = {
   setReplyInputState: Setter<InputSnapshot | undefined>;
   setIsReplying: Setter<boolean>;
   setReplyInputEl?: Setter<HTMLElement | undefined>;
+  setReplyInputHandle?: Setter<InputHandle | undefined>;
 };
 
 export function ThreadReplyInput(props: ThreadReplyInputProps) {
-  onCleanup(() => props.setReplyInputEl?.(undefined));
+  onCleanup(() => {
+    props.setReplyInputEl?.(undefined);
+    props.setReplyInputHandle?.(undefined);
+  });
 
   const userId = useUserId();
   const sendMessageMutation = useSendMessageMutation();
@@ -46,7 +50,16 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
     tracker,
   });
 
-  const [replyInputHandle, setReplyInputHandle] = createSignal<InputHandle>();
+  const [replyInputHandle, setLocalReplyInputHandle] =
+    createSignal<InputHandle>();
+  const setReplyInputHandle = (handle: InputHandle) => {
+    setLocalReplyInputHandle(handle);
+    props.setReplyInputHandle?.(handle);
+
+    const snapshot = props.replyInputState();
+    if (!snapshot) return;
+    requestAnimationFrame(() => handle.restoreSnapshot(snapshot));
+  };
 
   return (
     <div

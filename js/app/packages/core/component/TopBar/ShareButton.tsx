@@ -34,16 +34,16 @@ import { idToEmail } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import type { ResultError } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import IconComment from '@icon/wide-comment.svg';
-import WideCopy from '@icon/wide-copy.svg';
-import IconEdit from '@icon/wide-edit.svg';
-import IconEye from '@icon/wide-eye.svg';
 import UserCircle from '@icon/wide-user-circle.svg';
 import WideUsers from '@icon/wide-users.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import ChevronDownIcon from '@phosphor/caret-down.svg';
+import IconComment from '@phosphor/chat-teardrop.svg';
 import CheckIcon from '@phosphor/check.svg';
+import CopyIcon from '@phosphor/copy.svg';
+import IconEye from '@phosphor/eye.svg';
 import IconLink from '@phosphor/link.svg';
+import IconEdit from '@phosphor/pencil.svg';
 import IconShared from '@phosphor/share.svg';
 import IconX from '@phosphor/x.svg';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -511,13 +511,8 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                       setPermissions={props.setPublicPermissions}
                     />
                   </span>
-                  <Button
-                    variant="base"
-                    size="sm"
-                    class="flex items-center gap-1 rounded-xs px-2 py-1"
-                    onClick={props.copyPublicLink}
-                  >
-                    <WideCopy class="size-4" />
+                  <Button variant="base" onClick={props.copyPublicLink}>
+                    <CopyIcon class="size-4" />
                     <span>Copy Link</span>
                   </Button>
                 </div>
@@ -951,12 +946,12 @@ export function ShareModal(props: ShareModalProps) {
           <Dialog.Overlay class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
           <div class="z-modal fixed inset-0">
             <Dialog.Content
-              class="max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto overflow-y-auto scrollbar-hidden portal-scope flex flex-col gap-2 *:max-h-[75vh]"
+              class="max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto overflow-y-auto scrollbar-hidden portal-scope isolate flex flex-col gap-2 *:max-h-[75vh]"
               style={{ width: '800px' }}
             >
               {/* Card 1: Share form — gradient border */}
-              <Panel active depth={2}>
-                <Panel.Header class="px-3">
+              <Panel active depth={2} class="rounded-xl">
+                <Panel.Header class="px-4">
                   <Dialog.Title class="flex items-center gap-1.5 min-w-0 overflow-hidden whitespace-nowrap w-full text-sm font-medium">
                     <span class="shrink-0">Share:</span>
                     <EntityIcon
@@ -991,8 +986,8 @@ export function ShareModal(props: ShareModalProps) {
 
               {/* Card 2: Recipients — plain border */}
               <Show when={(recipients()?.length ?? 0) > 0 || !!props.owner}>
-                <Panel depth={2}>
-                  <Panel.Header class="px-3">
+                <Panel depth={2} class="rounded-xl">
+                  <Panel.Header class="px-4">
                     <span class="text-sm font-medium">
                       People with access to this{' '}
                       {props.itemType === 'email'
@@ -1012,7 +1007,7 @@ export function ShareModal(props: ShareModalProps) {
                         class="overflow-y-auto scrollbar-hidden max-h-[calc(27vh-40px)]"
                         ref={setRecipientScrollRef}
                       >
-                        <div class="grid gap-3 text-ink text-sm select-none p-3">
+                        <div class="grid gap-3 text-ink text-sm select-none p-4">
                           <Show when={props.owner}>
                             <div class="flex justify-between">
                               <div class="flex items-center gap-2 overflow-hidden">
@@ -1125,8 +1120,13 @@ export function ShareModal(props: ShareModalProps) {
                   props.itemType !== 'email'
                 }
               >
-                <Panel depth={2}>
-                  <Panel.Header class="justify-between px-3">
+                <Panel depth={2} class="rounded-xl">
+                  <Panel.Header
+                    class={cn(
+                      'justify-between px-4',
+                      publicAccessLevel() == null && 'border-b-0'
+                    )}
+                  >
                     <div class="flex items-center gap-2">
                       <span class="text-sm font-medium">Public link</span>
                       <div
@@ -1151,7 +1151,7 @@ export function ShareModal(props: ShareModalProps) {
                     </div>
                     <ToggleSwitch
                       label="Enable public link"
-                      labelClass="whitespace-nowrap"
+                      labelClass="text-xs whitespace-nowrap"
                       checked={publicAccessLevel() != null}
                       onChange={(on) =>
                         setPublicPermissions(on ? 'view' : null)
@@ -1160,14 +1160,9 @@ export function ShareModal(props: ShareModalProps) {
                   </Panel.Header>
                   <Show when={publicAccessLevel() != null}>
                     <Panel.Body class="text-ink">
-                      <div class="flex items-center p-3 justify-between">
-                        <Button
-                          variant="base"
-                          size="sm"
-                          class="flex items-center gap-1 rounded-xs px-2 py-1"
-                          onClick={copyPublicLink}
-                        >
-                          <WideCopy class="size-4" />
+                      <div class="flex items-center p-4 justify-between">
+                        <Button variant="base" onClick={copyPublicLink}>
+                          <CopyIcon class="size-4" />
                           <span class="hidden sm:inline">Copy Link</span>
                         </Button>
                         <span class="text-sm text-ink-muted flex items-center">
@@ -1392,6 +1387,12 @@ export function ShareOptions(props: {
     return accessLevelText(value as AccessLevel);
   });
 
+  const CurrentIcon = createMemo(() => {
+    const value = currentValue();
+    if (value === 'none') return IconX;
+    return PERMISSION_ICONS[value as keyof typeof PERMISSION_ICONS];
+  });
+
   const [isOpen, setIsOpen] = createSignal(false);
 
   const handleChange = (value: string) => {
@@ -1406,9 +1407,9 @@ export function ShareOptions(props: {
   return (
     <Dropdown open={isOpen()} onOpenChange={setIsOpen}>
       <Dropdown.Trigger
-        variant="ghost"
+        variant="base"
         disabled={props.disabled}
-        class={`min-w-16.75 py-1 pl-2 pr-1 rounded-xs flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
+        class={`min-w-16.75 py-1 pl-2 pr-1 rounded-md flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
         on:keydown={(e: KeyboardEvent) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.stopPropagation();
@@ -1417,10 +1418,11 @@ export function ShareOptions(props: {
           }
         }}
       >
+        <Dynamic component={CurrentIcon()} class="size-4 shrink-0" />
         {currentValueText()}
-        <ChevronDownIcon class="size-4 text-ink-extra-muted/50" />
+        <ChevronDownIcon class="size-4 text-ink-extra-muted" />
       </Dropdown.Trigger>
-      <Dropdown.Content>
+      <Dropdown.Content portalScope="local">
         <Dropdown.RadioGroup value={currentValue()} onChange={handleChange}>
           <Dropdown.Group>
             <For each={options().filter((o) => o.value !== 'none')}>

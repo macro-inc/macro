@@ -151,21 +151,6 @@ impl EntityAccessService for TestAccessService {
         }
     }
 
-    async fn get_channel_permission_for_principal(
-        &self,
-        _principal_id: &str,
-        _channel_id: &str,
-        _user_org_id: Option<i64>,
-    ) -> Result<EntityPermission, AccessError> {
-        match self.mode {
-            AccessMode::Allow => Ok(EntityPermission::ChannelRole {
-                role: EntityParticipantRole::Member,
-            }),
-            AccessMode::Deny => Err(AccessError::Unauthorized),
-            AccessMode::NotFound => Err(AccessError::NotFound("Channel not found")),
-        }
-    }
-
     async fn get_call_channel(
         &self,
         _call_id: &Uuid,

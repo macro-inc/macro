@@ -146,19 +146,6 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_channel_role_for_principal(
-        &self,
-        channel_id: &Uuid,
-        principal_id: &str,
-        _user_org_id: Option<i64>,
-    ) -> Result<ChannelRoleResult, AccessError> {
-        Ok(
-            queries::channel_role::get_explicit_channel_role(&self.pool, channel_id, principal_id)
-                .await?,
-        )
-    }
-
-    #[tracing::instrument(err, skip(self))]
     async fn get_entity_users(
         &self,
         entity_id: &uuid::Uuid,
