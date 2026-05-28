@@ -46,6 +46,27 @@ fn test_validate_url_strips_fragment() {
 }
 
 #[test]
+fn test_allows_image_content_types() {
+    assert!(is_allowed_content_type("image/png"));
+    assert!(is_allowed_content_type("image/jpeg; charset=utf-8"));
+}
+
+#[test]
+fn test_allows_octet_stream_content_type() {
+    assert!(is_allowed_content_type("application/octet-stream"));
+    assert!(is_allowed_content_type(
+        "application/octet-stream; charset=binary"
+    ));
+    assert!(is_allowed_content_type("APPLICATION/OCTET-STREAM"));
+}
+
+#[test]
+fn test_rejects_non_image_content_types() {
+    assert!(!is_allowed_content_type("text/html"));
+    assert!(!is_allowed_content_type("application/json"));
+}
+
+#[test]
 fn test_is_private_ip_loopback() {
     assert!(is_private_ip(&"127.0.0.1".parse().unwrap()));
     assert!(is_private_ip(&"::1".parse().unwrap()));
