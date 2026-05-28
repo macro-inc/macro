@@ -8,7 +8,7 @@ import { NotificationsSection } from './sections/notifications';
 import { QuickLinksSection } from './sections/quick-links';
 import { RecentChannelsSection } from './sections/recent-channels';
 import { RecentSharedSection } from './sections/recent-shared';
-import { TeamMembersSection } from './sections/team-members';
+import { TeamPulseSection } from './sections/team-pulse';
 
 export function Dashboard() {
   return (
@@ -30,18 +30,18 @@ export function Dashboard() {
       <Hero />
 
       <div class="@container/dashboard px-6 pb-10 sm:px-8">
-        <div class="mx-auto max-w-7xl space-y-10">
-          <QuickLinksSection />
+        <div class="mx-auto max-w-4xl space-y-10">
+          <TeamPulseSection />
 
           <RecentChannelsSection />
 
           <RecentSharedSection />
 
+          <QuickLinksSection />
+
           <AutomationsSection />
 
           <NotificationsSection />
-
-          <TeamMembersSection />
 
           <section>
             <h2 class="mb-4 text-lg font-semibold tracking-tight text-ink">
