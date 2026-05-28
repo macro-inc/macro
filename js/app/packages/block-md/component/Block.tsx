@@ -5,7 +5,6 @@ import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { useCanEdit } from '@core/signal/permissions';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { Scroll } from '@ui';
@@ -17,6 +16,10 @@ import {
   Suspense,
 } from 'solid-js';
 import { mdStore } from '../signal/markdownBlockData';
+import {
+  MarkdownTitleNameProvider,
+  useMarkdownTitleName,
+} from '../signal/titleName';
 import { FindAndReplace } from './FindAndReplace';
 import { ModalsProvider } from './ModalsProvider';
 import { InstructionsNotebook, Notebook } from './Notebook';
@@ -24,13 +27,21 @@ import { MarkdownSidePanelSections } from './sidepanel/MarkdownSidePanelSections
 import { InstructionsTopBar, TopBar } from './TopBar';
 
 export default function BlockMarkdown() {
+  return (
+    <MarkdownTitleNameProvider>
+      <BlockMarkdownContent />
+    </MarkdownTitleNameProvider>
+  );
+}
+
+function BlockMarkdownContent() {
   useBlockEntityCommands();
   const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
   const blockId = useBlockId();
   const instructionsMdId = useInstructionsMdIdQuery();
   const notificationSource = useGlobalNotificationSource();
   const canEdit = useCanEdit();
-  const documentName = useBlockDocumentName();
+  const { displayName } = useMarkdownTitleName();
   const isInstructionsMd = createMemo(() => blockId === instructionsMdId.data);
 
   createEffect(() => {
@@ -51,7 +62,7 @@ export default function BlockMarkdown() {
             <Show when={ENABLE_MARKDOWN_SIDE_PANEL && !isInstructionsMd()}>
               <MarkdownSidePanelSections
                 canEdit={canEdit()}
-                documentName={documentName()}
+                documentName={displayName() ?? ''}
               />
             </Show>
             <div class="flex flex-col size-full">
@@ -61,7 +72,7 @@ export default function BlockMarkdown() {
                     when={!isInstructionsMd()}
                     fallback={<InstructionsTopBar />}
                   >
-                    <TopBar />
+                    <TopBar name={displayName} />
                   </Show>
                 </Suspense>
                 {/* off until - https://linear.app/macro-eng/issue/M-5203/markdown-unloads-completely-after-find */}
