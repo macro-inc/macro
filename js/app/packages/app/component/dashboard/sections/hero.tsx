@@ -1,3 +1,6 @@
+import { setInviteModalOpen } from '@app/component/app-sidebar/invite-modal';
+import { CommandState } from '@app/component/command';
+import { setCreateMenuOpen } from '@app/component/Launcher';
 import { ResponsiveDropdown } from '@app/component/SimpleDropdown';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
@@ -5,13 +8,14 @@ import type { ChatSendInput } from '@core/component/AI/component/input/buildRequ
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
 import { ChatInputProvider } from '@core/component/AI/context';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
-import ChatCircleTextIcon from '@phosphor/chat-circle-text.svg';
-import EnvelopeSimpleIcon from '@phosphor/envelope-simple.svg';
-import ListChecksIcon from '@phosphor/list-checks.svg';
+import { useSettingsState } from '@core/constant/SettingsState';
+import { setAutomationComposerOpen } from '@block-automation/component';
+import GearIcon from '@phosphor/gear.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import RobotIcon from '@phosphor/robot.svg';
+import SearchIcon from '@phosphor/magnifying-glass.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import MoreIcon from '@phosphor-icons/core/fill/dots-three-outline-fill.svg?component-solid';
-import { AnimatedStarIcon } from '@icon/wide-star';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { Button } from '@ui';
 import { createMemo, createSignal } from 'solid-js';
@@ -50,8 +54,8 @@ function DashboardAiInput() {
 
 export function Hero() {
   const user = useUserContext();
+  const { openSettings } = useSettingsState();
   const [moreOpen, setMoreOpen] = createSignal(false);
-  const [aiHovering, setAiHovering] = createSignal(false);
 
   const firstName = createMemo(() => {
     const name = user.author();
@@ -77,7 +81,12 @@ export function Hero() {
         </div>
 
         <div class="mt-5 flex flex-wrap justify-center gap-3">
-          <Button variant="cta" size="lg" class="h-10 rounded-lg px-4 text-sm">
+          <Button
+            variant="cta"
+            size="lg"
+            class="h-10 rounded-lg px-4 text-sm"
+            onClick={() => setCreateMenuOpen(true)}
+          >
             <PlusIcon />
             Create
           </Button>
@@ -85,11 +94,10 @@ export function Hero() {
             variant="base"
             size="lg"
             class="h-10 rounded-lg px-4 text-sm"
-            onPointerEnter={() => setAiHovering(true)}
-            onPointerLeave={() => setAiHovering(false)}
+            onClick={() => CommandState.open()}
           >
-            <AnimatedStarIcon class="size-4" triggerAnimation={aiHovering()} />
-            Ask AI
+            <SearchIcon class="size-4" />
+            Search
           </Button>
           <ResponsiveDropdown open={moreOpen()} onOpenChange={setMoreOpen}>
             <ResponsiveDropdown.Trigger
@@ -102,20 +110,28 @@ export function Hero() {
             <ResponsiveDropdown.Portal>
               <ResponsiveDropdown.Content class="z-highlight-menu min-w-48 rounded-xl border border-edge bg-surface p-1.5 shadow-xl shadow-drop-shadow outline-none">
                 <ResponsiveDropdown.Item
-                  text="Compose email"
-                  icon={EnvelopeSimpleIcon}
-                />
-                <ResponsiveDropdown.Item
-                  text="Create task"
-                  icon={ListChecksIcon}
-                />
-                <ResponsiveDropdown.Item
-                  text="Start channel"
-                  icon={ChatCircleTextIcon}
-                />
-                <ResponsiveDropdown.Item
                   text="Invite teammate"
                   icon={UsersThreeIcon}
+                  onClick={() => {
+                    setInviteModalOpen(true);
+                    setMoreOpen(false);
+                  }}
+                />
+                <ResponsiveDropdown.Item
+                  text="Create automation"
+                  icon={RobotIcon}
+                  onClick={() => {
+                    setAutomationComposerOpen(true, false);
+                    setMoreOpen(false);
+                  }}
+                />
+                <ResponsiveDropdown.Item
+                  text="Team settings"
+                  icon={GearIcon}
+                  onClick={() => {
+                    openSettings('Team');
+                    setMoreOpen(false);
+                  }}
                 />
               </ResponsiveDropdown.Content>
             </ResponsiveDropdown.Portal>
