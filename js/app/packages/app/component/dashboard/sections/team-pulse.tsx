@@ -17,7 +17,8 @@ import { AgentModel } from '@service-cognition/generated/schemas/agentModel';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import RefreshIcon from '@phosphor/arrow-clockwise.svg';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import SparkleIcon from '@phosphor/sparkle.svg';
+import { PulsingStar } from '@entity/components/PulsingStar';
+import { AnimatedStarIcon } from '@icon/wide-star';
 import { Button, HoverCard } from '@ui';
 import {
   type Accessor,
@@ -244,7 +245,7 @@ function TeamPulseSkeleton() {
     <div>
       <div class="skeleton-shimmer rounded-xl bg-hover/50 p-3">
         <div class="flex items-start gap-2">
-          <div class="skeleton-shimmer size-4 shrink-0 rounded-md bg-accent/15" />
+          <PulsingStar kind="streamIndicator" animate />
           <div class="min-w-0 flex-1">
             <div class="skeleton-shimmer mb-3 h-3 w-2/3 rounded-full bg-ink/10" />
             <div class="space-y-2">
@@ -406,7 +407,10 @@ JSON context:\n${source.context}`,
               <div>
                 <div class="rounded-xl bg-hover/50 p-3">
                   <div class="flex min-w-0 items-start gap-2">
-                    <SparkleIcon class="size-4 shrink-0 translate-y-px text-accent" />
+                    <AnimatedStarIcon
+                      class="size-4 shrink-0 translate-y-px text-accent"
+                      triggerAnimation
+                    />
                     <div class="flex min-w-0 flex-col gap-3">
                       <p class="text-xs text-ink-muted">
                         {data().health}
