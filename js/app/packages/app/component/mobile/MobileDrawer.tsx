@@ -62,6 +62,7 @@ function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
           scrollToFocusedInput(e);
         }}
         class={cn(
+          'portal-scope',
           'bottom-(--virtual-keyboard-height,0) fixed inset-x-0 z-modal bg-surface rounded-t-2xl flex flex-col max-h-[80vh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
           virtualKeyboardVisible()
             ? 'pb-0 max-h-[calc(80vh-var(--virtual-keyboard-height))] overflow-y-auto'

@@ -316,6 +316,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
     <MobileDrawer
       open={props.isOpen}
       onOpenChange={wrappedSetOpen}
+      closeOnOutsidePointerStrategy="pointerdown"
       initialFocusEl={getShareDrawerRecipientInput() ?? undefined}
     >
       <MobileDrawer.Portal>
@@ -1405,7 +1406,7 @@ export function ShareOptions(props: {
   };
 
   return (
-    <Dropdown open={isOpen()} onOpenChange={setIsOpen}>
+    <Dropdown modal={false} open={isOpen()} onOpenChange={setIsOpen}>
       <Dropdown.Trigger
         variant="base"
         disabled={props.disabled}
