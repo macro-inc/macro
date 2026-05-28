@@ -117,12 +117,15 @@ function FormInput(props: {
   let inputEl: HTMLInputElement | undefined;
   onMount(() => {
     if (props.autoFocus === false) return;
-    // Double rAF so focus runs after the Stepper enter transition has applied
-    // its initial classes — a single rAF or short setTimeout races with the
-    // outin transition and the focus can be silently dropped on re-mount.
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => inputEl?.focus({ preventScroll: true }))
-    );
+    // The Stepper uses an outin Transition: the new step mounts only after the
+    // previous step's 150ms exit, and the enter animation then manipulates
+    // classes via a queueMicrotask + double rAF. A single focus attempt races
+    // with that and can be silently dropped, so we focus at several points
+    // until something sticks.
+    const attemptFocus = () => inputEl?.focus({ preventScroll: true });
+    queueMicrotask(attemptFocus);
+    requestAnimationFrame(attemptFocus);
+    setTimeout(attemptFocus, 220);
   });
   return (
     <input
@@ -137,7 +140,6 @@ function FormInput(props: {
       required={props.required ?? true}
       maxLength={props.maxLength}
       autocomplete={props.id}
-      autofocus={props.autoFocus !== false}
       onInput={props.onInput}
       class={cn(
         'ln-input w-full px-4 py-3 rounded-lg border border-edge bg-surface text-sm text-ink placeholder:text-ink-placeholder focus:border-accent focus:outline-none transition-colors',
