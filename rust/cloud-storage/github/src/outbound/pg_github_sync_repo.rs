@@ -198,20 +198,22 @@ impl GithubSyncRepo for PgGithubSyncRepo {
         &self,
         installation_id: &str,
     ) -> Result<Vec<GithubAppInstallationSource>, Self::Err> {
-        let rows: Vec<(String, String)> = sqlx::query_as(
+        let rows = sqlx::query!(
             r#"
-            SELECT source_id, source_type::text
+            SELECT source_id AS "source_id!", source_type::text AS "source_type!"
             FROM github_app_installation
             WHERE id = $1
             ORDER BY source_type, source_id
             "#,
+            installation_id,
         )
-        .bind(installation_id)
         .fetch_all(&self.pool)
         .await?;
 
         let mut sources = Vec::new();
-        for (source_id, source_type) in rows {
+        for row in rows {
+            let source_id = row.source_id;
+            let source_type = row.source_type;
             match source_type.as_str() {
                 "team" => match uuid::Uuid::parse_str(&source_id) {
                     Ok(team_id) => sources.push(GithubAppInstallationSource::Team(team_id)),

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT source_id AS \"source_id!\", source_type::text AS \"source_type!\"\n            FROM github_app_installation\n            WHERE id = $1\n            ORDER BY source_type, source_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "source_type!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "51c9b178186c513e2359c6ae0d9eb291f29d3fe5dca1bfa5ae426aad4a086ccd"
+}
