@@ -1,5 +1,6 @@
 use crate::domain::models::{
-    ChannelMessageFilters, MessagePageDirection, NotificationFilters, ParticipantRole,
+    AttachmentEntityReference, ChannelMessageFilters, MessagePageDirection, NotificationFilters,
+    ParticipantRole,
 };
 use crate::domain::ports::ChannelRepo;
 use crate::outbound::pg_channels_repo::PgChannelsRepo;
@@ -33,6 +34,8 @@ const REPLY5: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b005);
 const DELETED_MSG_ATTACHMENT: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000a004);
 const USER_A: &str = "macro|user-a@test.com";
 const USER_B: &str = "macro|user-b@test.com";
+const NON_MEMBER: &str = "macro|user-d@test.com";
+const LEFT_USER: &str = "macro|left-user@test.com";
 
 fn repo(pool: Pool<Postgres>) -> PgChannelsRepo {
     PgChannelsRepo::new(pool)
@@ -1167,6 +1170,148 @@ async fn notification_filter_requires_requesting_user(pool: Pool<Postgres>) -> a
     assert_eq!(
         err.to_string(),
         "notification_user_id is required when notification_filters are set"
+    );
+    Ok(())
+}
+
+// --- get_attachment_references ---
+//
+// The query is a byte-identical port of comms_db_client::get_attachment_references;
+// these cover the three source paths (direct attachment, message mention, generic
+// mention), participation gating, deleted-message exclusion, and the merged sort —
+// rather than re-porting the full original suite.
+
+fn channel_refs(
+    refs: &[AttachmentEntityReference],
+) -> Vec<&crate::domain::models::AttachmentChannelReference> {
+    refs.iter()
+        .filter_map(|r| match r {
+            AttachmentEntityReference::Channel(c) => Some(c),
+            AttachmentEntityReference::Generic(_) => None,
+        })
+        .collect()
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn attachment_references_returns_channel_reference_for_participant(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let refs = repo(pool)
+        .get_attachment_references("document", "doc-1", USER_A)
+        .await?;
+
+    assert_eq!(refs.len(), 1);
+    let channel = channel_refs(&refs);
+    assert_eq!(channel.len(), 1);
+    assert_eq!(channel[0].channel_id, CH1);
+    assert_eq!(channel[0].message_id, MSG1);
+    assert_eq!(channel[0].message_content, "first message");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn attachment_references_hidden_from_non_and_former_participants(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    // user never in the channel
+    let refs = repo
+        .get_attachment_references("document", "doc-1", NON_MEMBER)
+        .await?;
+    assert!(refs.is_empty());
+
+    // user who left the channel (left_at IS NOT NULL)
+    let refs = repo
+        .get_attachment_references("document", "doc-1", LEFT_USER)
+        .await?;
+    assert!(refs.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn attachment_references_excludes_deleted_message(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // img-deleted is attached to msg2, which is soft-deleted.
+    let refs = repo(pool)
+        .get_attachment_references("image", "img-deleted", USER_A)
+        .await?;
+    assert!(refs.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn attachment_references_returns_message_mention(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    // doc-mention is mentioned inside msg3 (source_entity_type = 'message').
+    let refs = repo(pool)
+        .get_attachment_references("document", "doc-mention", USER_A)
+        .await?;
+
+    assert_eq!(refs.len(), 1);
+    let channel = channel_refs(&refs);
+    assert_eq!(channel.len(), 1);
+    assert_eq!(channel[0].channel_id, CH1);
+    assert_eq!(channel[0].message_id, MSG3);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn attachment_references_returns_generic_reference(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // doc-generic is mentioned by a non-message source; generic refs are not gated
+    // by channel participation, so any user resolves them.
+    let refs = repo(pool)
+        .get_attachment_references("document", "doc-generic", NON_MEMBER)
+        .await?;
+
+    assert_eq!(refs.len(), 1);
+    let AttachmentEntityReference::Generic(generic) = &refs[0] else {
+        anyhow::bail!("expected a generic reference");
+    };
+    assert_eq!(generic.source_entity_type, "doc");
+    assert_eq!(generic.source_entity_id, "src-doc");
+    assert_eq!(generic.entity_id, "doc-generic");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn attachment_references_merges_channel_and_generic_newest_first(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // doc-2 has a direct attachment on msg3 (12:00) and a newer generic mention
+    // (2024-01-04); the merged result must be sorted newest-first.
+    let refs = repo(pool)
+        .get_attachment_references("document", "doc-2", USER_A)
+        .await?;
+
+    assert_eq!(refs.len(), 2);
+    assert!(
+        matches!(refs[0], AttachmentEntityReference::Generic(_)),
+        "newer generic reference should come first"
+    );
+    assert!(
+        matches!(refs[1], AttachmentEntityReference::Channel(_)),
+        "older channel reference should come second"
     );
     Ok(())
 }
