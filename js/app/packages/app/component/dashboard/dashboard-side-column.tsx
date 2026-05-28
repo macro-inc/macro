@@ -328,7 +328,7 @@ function AutomationsColumnSection() {
 
 export function DashboardSideColumn() {
   return (
-    <aside class="absolute left-[calc(100%+1rem)] top-8 hidden w-64 flex-col gap-8 text-left @[80rem]/dashboard:flex @[96rem]/dashboard:left-[calc(100%+2rem)] @[96rem]/dashboard:w-80">
+    <aside class="hidden min-w-0 flex-col gap-8 pt-8 text-left @6xl/dashboard:flex">
       <AutomationsColumnSection />
       <NotificationsColumnSection />
     </aside>

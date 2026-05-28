@@ -27,15 +27,12 @@ export function Dashboard() {
         </div>
       </SplitHeaderLeft>
 
-      <div class="@container/dashboard relative">
-        <div class="relative mx-auto max-w-4xl px-6 sm:px-8">
-          <DashboardSideColumn />
-        </div>
+      <div class="@container/dashboard px-6 pb-10 sm:px-8">
+        <div class="grid grid-cols-1 gap-24 @6xl/dashboard:grid-cols-[minmax(0,4rem)_minmax(0,1fr)_minmax(18rem,22rem)] @7xl/dashboard:grid-cols-[minmax(0,8rem)_minmax(0,1fr)_minmax(18rem,22rem)] @8xl/dashboard:grid-cols-[minmax(0,22rem)_minmax(0,1fr)_minmax(18rem,22rem)]">
+          <div class="hidden @6xl/dashboard:block" />
 
-        <Hero />
-
-        <div class="px-6 pb-10 sm:px-8">
-          <div class="mx-auto max-w-4xl space-y-10">
+          <div class="min-w-0 space-y-10 @6xl/dashboard:mx-0 @6xl/dashboard:max-w-none">
+            <Hero />
             <TeamPulseSection />
 
             <RecentChannelsSection />
@@ -68,6 +65,8 @@ export function Dashboard() {
               </div>
             </section>
           </div>
+
+          <DashboardSideColumn />
         </div>
       </div>
     </main>
