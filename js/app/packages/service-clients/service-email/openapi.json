@@ -3896,15 +3896,17 @@
       },
       "InitResponse": {
         "type": "object",
-        "required": ["link_id", "backfill_job_id"],
+        "required": ["link_id"],
         "properties": {
           "backfill_job_id": {
-            "type": "string",
-            "format": "uuid"
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Present when init enqueued a backfill job. Absent for the graph path,\nwhere the child link's backfill already ran under its own macro_id."
           },
           "link_id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "The email_links row id for the now-accessible inbox. For the graph path\n(cross-account add) this is the *existing* child link the caller now\ndelegates over; for the data-source path it's a freshly upserted row."
           }
         }
       },
