@@ -2,9 +2,10 @@ use super::*;
 use crate::domain::{
     events::ChannelEvent,
     models::{
-        BotId, ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelInfo,
-        ChannelMessageFilters, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
-        MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
+        Activity, ActivityType, BotId, ChannelAttachment, ChannelAttachmentType,
+        ChannelContextMessage, ChannelInfo, ChannelMessageFilters, ChannelMetadata,
+        ChannelParticipant, ChannelType, CountedReaction, CreateEntityMentionOptions,
+        EntityMention, MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
         NewChannelAttachment, ParticipantRole, PatchChannelRequest, PatchMessageRequest,
         PostMessageRequest, PostReactionRequest, ReactionAction, ReferencedShareItem,
         ReferencedShareItemType, ResolvedChannelMessage, Sender, SimpleMention, ThreadData,
@@ -313,6 +314,15 @@ impl ChannelRepo for FakeMutationRepo {
         Ok(vec![])
     }
 
+    async fn get_attachment_references(
+        &self,
+        _entity_type: &str,
+        _entity_id: &str,
+        _user_id: &str,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, Self::Err> {
+        Ok(vec![])
+    }
+
     async fn resolve_top_level_parent(
         &self,
         _channel_id: Uuid,
@@ -358,6 +368,23 @@ impl ChannelRepo for FakeMutationRepo {
             channel_type: ChannelType::Private,
             channel_name: "Project".to_string(),
         })
+    }
+
+    async fn batch_get_channel_previews(
+        &self,
+        _channel_ids: &[String],
+        _viewer_user_id: &str,
+        _org_id: Option<i64>,
+    ) -> Result<Vec<crate::domain::models::ChannelPreviewRow>, Self::Err> {
+        Ok(vec![])
+    }
+
+    async fn resolve_channel_name(
+        &self,
+        _info: &ChannelInfo,
+        _viewer_user_id: MacroUserIdStr<'static>,
+    ) -> Result<String, Self::Err> {
+        Ok("Project".to_string())
     }
 
     async fn user_has_team(&self, _user_id: String, _team_id: Uuid) -> Result<bool, Self::Err> {
@@ -497,6 +524,24 @@ impl ChannelRepo for FakeMutationRepo {
         Ok(())
     }
 
+    async fn create_entity_mention(
+        &self,
+        _options: CreateEntityMentionOptions,
+    ) -> Result<EntityMention, Self::Err> {
+        anyhow::bail!("not implemented in test repo")
+    }
+
+    async fn get_entity_mention_by_id(
+        &self,
+        _id: Uuid,
+    ) -> Result<Option<EntityMention>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn delete_entity_mention_by_id(&self, _id: Uuid) -> Result<bool, Self::Err> {
+        Ok(false)
+    }
+
     async fn patch_message_attachments(
         &self,
         _message_id: Uuid,
@@ -551,6 +596,28 @@ impl ChannelRepo for FakeMutationRepo {
     async fn upsert_activity(&self, _user_id: String, _channel_id: Uuid) -> Result<(), Self::Err> {
         self.state.lock().unwrap().activity_upserts += 1;
         Ok(())
+    }
+
+    async fn get_activities(&self, _user_id: String) -> Result<Vec<Activity>, Self::Err> {
+        Ok(Vec::new())
+    }
+
+    async fn set_activity(
+        &self,
+        user_id: String,
+        channel_id: Uuid,
+        _activity_type: ActivityType,
+    ) -> Result<Activity, Self::Err> {
+        self.state.lock().unwrap().activity_upserts += 1;
+        Ok(Activity {
+            id: Uuid::nil(),
+            user_id,
+            channel_id,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            viewed_at: None,
+            interacted_at: None,
+        })
     }
 
     async fn add_reaction(

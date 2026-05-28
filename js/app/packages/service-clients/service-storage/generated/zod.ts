@@ -1267,6 +1267,162 @@ export const createChannelResponse = zod
   .describe('Response returned after creating a channel.');
 
 /**
+ * @summary Handler for `GET /channels/activity`.
+ */
+export const getActivityResponseItem = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel id.'),
+    created_at: zod.iso
+      .datetime({})
+      .describe('When the activity row was created.'),
+    id: zod.uuid().describe('Activity id.'),
+    interacted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('The last time the user interacted with the channel.'),
+    updated_at: zod.iso
+      .datetime({})
+      .describe('When the activity row was last updated.'),
+    user_id: zod.string().describe('User id.'),
+    viewed_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('The last time the user viewed the channel.'),
+  })
+  .describe("A user's activity (view\/interaction) within a channel.");
+export const getActivityResponse = zod.array(getActivityResponseItem);
+
+/**
+ * @summary Handler for `POST /channels/activity`.
+ */
+export const postActivityBody = zod
+  .object({
+    activity_type: zod
+      .enum(['view', 'interact'])
+      .describe('The kind of activity a user performs in a channel.'),
+    channel_id: zod.string().describe('Channel id to record activity for.'),
+  })
+  .describe('Request body for `POST \/channels\/activity`.');
+
+export const postActivityResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel id.'),
+    created_at: zod.iso
+      .datetime({})
+      .describe('When the activity row was created.'),
+    id: zod.uuid().describe('Activity id.'),
+    interacted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('The last time the user interacted with the channel.'),
+    updated_at: zod.iso
+      .datetime({})
+      .describe('When the activity row was last updated.'),
+    user_id: zod.string().describe('User id.'),
+    viewed_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('The last time the user viewed the channel.'),
+  })
+  .describe("A user's activity (view\/interaction) within a channel.");
+
+/**
+ * @summary Handler for `GET /channels/attachments/{entity_type}/{entity_id}/references`.
+ */
+export const getAttachmentReferencesParams = zod.object({
+  entity_type: zod.string().describe('Type of the attachment entity'),
+  entity_id: zod.string().describe('Id of the attachment entity'),
+});
+
+export const getAttachmentReferencesResponse = zod
+  .object({
+    references: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                attachment_created_at: zod.iso
+                  .datetime({})
+                  .describe('When the attachment row was created.'),
+                channel_id: zod
+                  .uuid()
+                  .describe('Channel that contains the message.'),
+                channel_name: zod
+                  .string()
+                  .nullish()
+                  .describe('Optional channel name (DMs do not have a name).'),
+                message_content: zod
+                  .string()
+                  .describe(
+                    'Full message content (might be used for preview\/snippet).'
+                  ),
+                message_created_at: zod.iso
+                  .datetime({})
+                  .describe('When the message itself was created.'),
+                message_id: zod
+                  .uuid()
+                  .describe('Message that contains the attachment reference.'),
+                sender_id: zod.string().describe('Sender of the message.'),
+                thread_id: zod
+                  .uuid()
+                  .nullish()
+                  .describe(
+                    'If the message belongs to a thread this is the parent id.'
+                  ),
+              })
+              .describe(
+                'A reference to an attachment entity from a channel message.'
+              )
+              .and(
+                zod.object({
+                  reference_type: zod.enum(['channel']),
+                })
+              )
+              .describe('Referenced from a channel message.'),
+            zod
+              .object({
+                created_at: zod.iso
+                  .datetime({})
+                  .describe('When this reference was created.'),
+                entity_id: zod
+                  .string()
+                  .describe('ID of the referenced entity.'),
+                entity_type: zod
+                  .string()
+                  .describe('Type of the referenced entity.'),
+                source_entity_id: zod
+                  .string()
+                  .describe('ID of the source entity.'),
+                source_entity_type: zod
+                  .string()
+                  .describe(
+                    'Type of the source entity (e.g., \"document\", \"chat\", etc.).'
+                  ),
+                user_id: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'User who created this reference (optional for non-user sources).'
+                  ),
+              })
+              .describe(
+                'A reference to an attachment entity from a non-message source.'
+              )
+              .and(
+                zod.object({
+                  reference_type: zod.enum(['generic']),
+                })
+              )
+              .describe('Referenced from any non-message source entity.'),
+          ])
+          .describe('An attachment reference, tagged by source kind.')
+      )
+      .describe('References to the requested entity, newest-first.'),
+  })
+  .describe('Response from the attachment-references endpoint.');
+
+/**
  * @summary Handler for `POST /channels/get_or_create_dm`.
  */
 export const getOrCreateDmBody = zod
@@ -1301,6 +1457,106 @@ export const getOrCreatePrivateResponse = zod
     channel_id: zod.string().describe('Channel id.'),
   })
   .describe('Response for get-or-create channel operations.');
+
+/**
+ * @summary Handler for `POST /channels/mentions`.
+ */
+export const createEntityMentionBody = zod
+  .object({
+    entity_id: zod.string().describe('Id of the mentioned entity.'),
+    entity_type: zod.string().describe('Type of the mentioned entity.'),
+    source_entity_id: zod
+      .string()
+      .describe('Id of the entity that owns the mention.'),
+    source_entity_type: zod
+      .string()
+      .describe('Type of the entity that owns the mention.'),
+  })
+  .describe('Request body for `POST \/channels\/mentions`.');
+
+/**
+ * @summary Handler for `DELETE /channels/mentions/{mention_id}`.
+ */
+export const deleteEntityMentionParams = zod.object({
+  mention_id: zod.uuid().describe('Entity mention id'),
+});
+
+export const deleteEntityMentionResponse = zod
+  .object({
+    deleted: zod.boolean().describe('Whether the mention was deleted.'),
+  })
+  .describe('Response body for `DELETE \/channels\/mentions\/{mention_id}`.');
+
+/**
+ * @summary Handler for `POST /channels/preview`.
+ */
+export const getBatchChannelPreviewBody = zod
+  .object({
+    channel_ids: zod.array(zod.string()).describe('Channel ids to look up.'),
+  })
+  .describe('Request for a batched channel preview lookup.');
+
+export const getBatchChannelPreviewResponse = zod
+  .object({
+    previews: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                channel_id: zod.string().describe('Channel id.'),
+                channel_name: zod
+                  .string()
+                  .describe('Resolved channel display name.'),
+                channel_type: zod
+                  .enum([
+                    'public',
+                    'organization',
+                    'private',
+                    'direct_message',
+                    'team',
+                  ])
+                  .describe('Type of channel.'),
+              })
+              .describe('Preview payload returned for accessible channels.')
+              .and(
+                zod.object({
+                  type: zod.enum(['access']),
+                })
+              )
+              .describe('Viewer can access the channel.'),
+            zod
+              .object({
+                channel_id: zod.string().describe('Channel id.'),
+              })
+              .describe(
+                'Preview payload returned for channels with only id information.'
+              )
+              .and(
+                zod.object({
+                  type: zod.enum(['no_access']),
+                })
+              )
+              .describe('Viewer cannot access the channel.'),
+            zod
+              .object({
+                channel_id: zod.string().describe('Channel id.'),
+              })
+              .describe(
+                'Preview payload returned for channels with only id information.'
+              )
+              .and(
+                zod.object({
+                  type: zod.enum(['does_not_exist']),
+                })
+              )
+              .describe('Channel does not exist.'),
+          ])
+          .describe('Preview entry for a single channel id.')
+      )
+      .describe('Resolved channel previews, one per requested channel id.'),
+  })
+  .describe('Response for a batched channel preview lookup.');
 
 /**
  * @summary Handler for `DELETE /channels/{channel_id}`.

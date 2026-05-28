@@ -1,0 +1,73 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id as \"id!\", macro_id as \"macro_id!\",\n               fusionauth_user_id as \"fusionauth_user_id!\",\n               email_address as \"email_address!\",\n               provider as \"provider!: _\",\n               is_sync_active as \"is_sync_active!\",\n               created_at as \"created_at!\",\n               updated_at as \"updated_at!\"\n        FROM (\n            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,\n                   el.provider, el.is_sync_active, el.created_at, el.updated_at\n            FROM email_links el\n            WHERE el.macro_id = $1\n            UNION\n            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,\n                   el.provider, el.is_sync_active, el.created_at, el.updated_at\n            FROM email_links el\n            JOIN macro_user_links mul ON el.macro_id = mul.child_macro_id\n            WHERE mul.primary_macro_id = $1\n        ) AS combined\n        ORDER BY created_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "macro_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "fusionauth_user_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "email_address!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "provider!: _",
+        "type_info": {
+          "Custom": {
+            "name": "email_user_provider_enum",
+            "kind": {
+              "Enum": [
+                "GMAIL"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "is_sync_active!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "7bdcbf27b9edb2a2efc0e30c83230f6400385b295a50b48776985089d6ae3c84"
+}

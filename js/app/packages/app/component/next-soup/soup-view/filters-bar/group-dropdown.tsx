@@ -3,9 +3,8 @@ import type {
   GroupOptionId,
 } from '@app/component/next-soup/soup-view/group-options';
 import StackSimpleIcon from '@phosphor/stack-simple.svg';
-import { Dropdown, Tooltip } from '@ui';
+import { Dropdown, SingleSelectCheck, Tooltip } from '@ui';
 import { type Component, For } from 'solid-js';
-import { TypeIndicator } from './unified-filter-dropdown';
 
 interface GroupDropdownProps {
   value: () => GroupOptionId;
@@ -33,16 +32,8 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
           <For each={props.options}>
             {(option) => (
               <Dropdown.Item onSelect={() => props.onChange(option.value)}>
-                <TypeIndicator active={props.value() === option.value} />
-                <span
-                  class="flex-1 truncate"
-                  classList={{
-                    'text-ink font-medium': props.value() === option.value,
-                    'text-ink-muted': props.value() !== option.value,
-                  }}
-                >
-                  {option.label}
-                </span>
+                <span class="flex-1 truncate">{option.label}</span>
+                <SingleSelectCheck active={props.value() === option.value} />
               </Dropdown.Item>
             )}
           </For>

@@ -15,7 +15,6 @@ import {
 } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import type { ViewId } from '@core/types/view';
-import NotificationRoute from '@notifications/components/NotificationRoute';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/compose/Compose';
@@ -297,7 +296,6 @@ registerComponent(
   lazy(() => import('@app/component/import-linear/ImportLinear'))
 );
 registerComponent('settings', () => <SettingsPanelComponentWrapper />);
-registerComponent('notification', () => <NotificationRoute />);
 const NewOnboarding = lazy(
   () => import('@app/component/onboarding/onboarding')
 );

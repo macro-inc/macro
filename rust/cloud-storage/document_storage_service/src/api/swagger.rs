@@ -63,10 +63,13 @@ use crate::{
     },
 };
 use channels::inbound::axum_router::{
-    ApiChannelAttachment, ApiChannelAttachmentsPage, ApiChannelContextMessage, ApiChannelMessage,
-    ApiChannelMessageKind, ApiChannelMessagesPage, ApiChannelParticipant, ApiCountedReaction,
-    ApiMessageAttachment, ApiParticipantRole, ApiResolvedChannelMessage, ApiThreadInfo,
-    ApiThreadReply, ChannelMessageFilters, GetMessageWithContextResponse,
+    ApiActivity, ApiAttachmentChannelReference, ApiAttachmentEntityReference,
+    ApiAttachmentGenericReference, ApiChannelAttachment, ApiChannelAttachmentsPage,
+    ApiChannelContextMessage, ApiChannelMessage, ApiChannelMessageKind, ApiChannelMessagesPage,
+    ApiChannelParticipant, ApiCountedReaction, ApiMessageAttachment, ApiParticipantRole,
+    ApiResolvedChannelMessage, ApiThreadInfo, ApiThreadReply, ChannelMessageFilters,
+    CreateEntityMentionRequest, CreateEntityMentionResponse, DeleteEntityMentionResponse,
+    GetAttachmentReferencesResponse, GetMessageWithContextResponse, PostActivityRequest,
 };
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
@@ -214,6 +217,12 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::resolve_channel_message_handler,
         channels::inbound::axum_router::get_channel_attachments_handler,
         channels::inbound::axum_router::get_channel_participants_handler,
+        channels::inbound::axum_router::get_batch_channel_preview_handler,
+        channels::inbound::axum_router::create_mention_handler,
+        channels::inbound::axum_router::delete_mention_handler,
+        channels::inbound::axum_router::get_attachment_references_handler,
+        channels::inbound::axum_router::get_activity_handler,
+        channels::inbound::axum_router::post_activity_handler,
 
         // calls
         call::inbound::axum_router::get_or_create_call_handler,
@@ -378,6 +387,10 @@ use utoipa::OpenApi;
             ApiChannelAttachment,
             ApiChannelParticipant,
             ApiParticipantRole,
+            GetAttachmentReferencesResponse,
+            ApiAttachmentEntityReference,
+            ApiAttachmentChannelReference,
+            ApiAttachmentGenericReference,
             ChannelMessageFilters,
             channels::domain::models::ChannelType,
             channels::domain::models::GetOrCreateAction,
@@ -399,6 +412,17 @@ use utoipa::OpenApi;
             channels::domain::models::PostTypingRequest,
             channels::domain::models::AddParticipantsRequest,
             channels::domain::models::RemoveParticipantsRequest,
+            channels::domain::models::GetBatchChannelPreviewRequest,
+            channels::domain::models::GetBatchChannelPreviewResponse,
+            channels::domain::models::ChannelPreview,
+            channels::domain::models::ChannelPreviewData,
+            channels::domain::models::WithChannelId,
+            CreateEntityMentionRequest,
+            CreateEntityMentionResponse,
+            DeleteEntityMentionResponse,
+            channels::domain::models::ActivityType,
+            ApiActivity,
+            PostActivityRequest,
 
             // Calls
             call::domain::models::CallTokenResponse,

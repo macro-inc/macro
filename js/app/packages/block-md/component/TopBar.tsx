@@ -53,16 +53,24 @@ import SidePanelIcon from '@phosphor/square-half.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { blockNameToItemType } from '@service-storage/client';
 import { Button, cn } from '@ui';
-import { createEffect, For, on, onCleanup, Show } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  For,
+  on,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import { DispatchAgentButton } from './DispatchAgentMenu';
 import { HISTORY_DRAWER_ID } from './History';
 
-export function TopBar() {
+export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
   const canEdit = useCanEdit();
   const blockName = useBlockName();
   const blockId = useBlockId();
   const scopeId = blockHotkeyScopeSignal.get;
-  const name = useBlockDocumentName();
+  const fallbackName = useBlockDocumentName();
+  const name = () => props.name?.() ?? fallbackName();
   const itemType = blockNameToItemType(blockName);
   if (!itemType)
     throw new Error('Using functionality in an unknown item type.');
@@ -107,7 +115,7 @@ export function TopBar() {
   }
 
   const ops: FileOperation[] = [
-    { op: 'copy', divideAbove: true },
+    { op: 'copy' },
     { op: 'rename' },
     { op: 'moveToProject' },
     ...(isTask
@@ -123,9 +131,8 @@ export function TopBar() {
       label: 'Download',
       icon: Download,
       action: downloadAsMarkdownText,
-      divideAbove: true,
     },
-    { op: 'delete', divideAbove: true },
+    { op: 'delete' },
   ];
 
   const sidePanel = useSidePanel();
@@ -185,7 +192,6 @@ export function TopBar() {
           name: name(),
           fileType: 'md',
         }),
-      divideAbove: true,
       buttonComponent: () => (
         <ChatWithAgentButton
           entity={{
@@ -247,7 +253,7 @@ export function TopBar() {
   return (
     <>
       <SplitHeaderLeft>
-        <BlockItemSplitLabel />
+        <BlockItemSplitLabel name={name} />
       </SplitHeaderLeft>
 
       <SplitHeaderRight>

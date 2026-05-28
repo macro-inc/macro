@@ -83,6 +83,7 @@ import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
 import { Layout } from './Layout';
 import { SearchProvider } from './next-soup/search-context';
+import { usePendingNotificationNavigationEffect } from './PendingNotificationNavigationEffect';
 import { ReactiveFavicon } from './ReactiveFavicon';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import { TeamInviteAcceptance } from './TeamInviteAcceptance';
@@ -409,6 +410,7 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   }
 
   const blockOrchestrator = createBlockOrchestrator();
+  usePendingNotificationNavigationEffect(notificationSource);
 
   return (
     <GlobalAppStateProvider

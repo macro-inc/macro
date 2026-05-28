@@ -47,7 +47,6 @@ import IconEdit from '@phosphor/pencil.svg';
 import IconShared from '@phosphor/share.svg';
 import IconX from '@phosphor/x.svg';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { commsServiceClient } from '@service-comms/client';
 import {
   blockNameToItemType,
   type ItemType,
@@ -316,6 +315,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
     <MobileDrawer
       open={props.isOpen}
       onOpenChange={wrappedSetOpen}
+      closeOnOutsidePointerStrategy="pointerdown"
       initialFocusEl={getShareDrawerRecipientInput() ?? undefined}
     >
       <MobileDrawer.Portal>
@@ -601,7 +601,7 @@ export function ShareModal(props: ShareModalProps) {
       );
       return { channel_ids };
     },
-    commsServiceClient.getBatchChannelPreviews,
+    storageServiceClient.getBatchChannelPreviews,
     { initialValue: undefined }
   );
 
@@ -1405,7 +1405,7 @@ export function ShareOptions(props: {
   };
 
   return (
-    <Dropdown open={isOpen()} onOpenChange={setIsOpen}>
+    <Dropdown modal={false} open={isOpen()} onOpenChange={setIsOpen}>
       <Dropdown.Trigger
         variant="base"
         disabled={props.disabled}

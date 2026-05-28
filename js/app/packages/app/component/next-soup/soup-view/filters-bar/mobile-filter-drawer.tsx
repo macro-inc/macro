@@ -255,16 +255,7 @@ export const MobileFilterDrawer = () => {
                                 </span>
                               )}
                             </Show>
-                            <span
-                              class={cn(
-                                'flex-1 truncate',
-                                active()
-                                  ? 'text-ink font-medium'
-                                  : 'text-ink-muted'
-                              )}
-                            >
-                              {option.label}
-                            </span>
+                            <span class="flex-1 truncate">{option.label}</span>
                             <Show when={active()}>
                               <CheckIcon class="size-3.5 text-accent shrink-0" />
                             </Show>

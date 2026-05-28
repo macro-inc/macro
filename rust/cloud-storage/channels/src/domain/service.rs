@@ -1,14 +1,16 @@
 use crate::domain::{
     events::ChannelEvent,
     models::{
-        AddParticipantsRequest, ChannelAttachmentType, ChannelContextMessage, ChannelMessage,
-        ChannelMessageFilters, ChannelMetadata, ChannelParticipant, ChannelType,
-        DeleteMessageQuery, GetOrCreateAction, GetOrCreateChannelResponse, GetOrCreateDmRequest,
-        GetOrCreatePrivateRequest, MessagePageDirection, NewChannelAttachment, ParticipantRole,
-        PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostMessageResponse,
-        PostReactionRequest, PostTypingRequest, ReactionAction, ReferencedShareItem,
-        RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention, ThreadInfo,
-        ThreadReply, TopLevelMessageRow,
+        Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference,
+        ChannelAttachmentType, ChannelContextMessage, ChannelMessage, ChannelMessageFilters,
+        ChannelMetadata, ChannelParticipant, ChannelPreview, ChannelPreviewData, ChannelType,
+        CreateEntityMentionOptions, DeleteMessageQuery, EntityMention, GetOrCreateAction,
+        GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest,
+        MessagePageDirection, NewChannelAttachment, ParticipantRole, PatchChannelRequest,
+        PatchMessageRequest, PostMessageRequest, PostMessageResponse, PostReactionRequest,
+        PostTypingRequest, ReactionAction, ReferencedShareItem, RemoveParticipantsRequest,
+        ResolvedChannelMessage, Sender, SimpleMention, ThreadInfo, ThreadReply, TopLevelMessageRow,
+        WithChannelId,
     },
     ports::{
         ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr,
@@ -1250,6 +1252,76 @@ where
         Ok(participants)
     }
 
+    #[tracing::instrument(err, skip(self, channel_ids))]
+    async fn batch_get_channel_previews(
+        &self,
+        viewer_user_id: MacroUserIdStr<'static>,
+        org_id: Option<i64>,
+        channel_ids: Vec<String>,
+    ) -> Result<Vec<ChannelPreview>, ChannelMessagesErr> {
+        let rows = self
+            .repo
+            .batch_get_channel_previews(&channel_ids, viewer_user_id.as_ref(), org_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        let mut previews: Vec<ChannelPreview> = Vec::with_capacity(channel_ids.len());
+        let mut found: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        for row in rows {
+            let channel_id_str = row.info.id.to_string();
+            found.insert(channel_id_str.clone());
+            let channel_type = row.info.channel_type;
+            let channel_name = self
+                .repo
+                .resolve_channel_name(&row.info, viewer_user_id.clone())
+                .await
+                .map_err(anyhow::Error::from)?;
+            previews.push(ChannelPreview::Access(ChannelPreviewData {
+                channel_id: channel_id_str,
+                channel_name,
+                channel_type,
+            }));
+        }
+
+        for id in channel_ids {
+            if !found.contains(&id) {
+                previews.push(ChannelPreview::DoesNotExist(WithChannelId {
+                    channel_id: id,
+                }));
+            }
+        }
+
+        Ok(previews)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_activities(&self, user_id: String) -> Result<Vec<Activity>, ChannelMessagesErr> {
+        let activities = self
+            .repo
+            .get_activities(user_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        Ok(activities)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn post_activity(
+        &self,
+        actor: Sender,
+        channel_id: Uuid,
+        activity_type: ActivityType,
+    ) -> Result<Activity, ChannelMutationErr> {
+        let activity = self
+            .repo
+            .set_activity(actor.to_storage_string(), channel_id, activity_type)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        Ok(activity)
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_message_context(
         &self,
@@ -1260,6 +1332,20 @@ where
     ) -> Result<Vec<ChannelContextMessage>, ChannelMessagesErr> {
         self.repo
             .get_messages_with_context(channel_id, message_id, before.max(0), after.max(0))
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(ChannelMessagesErr::Repo)
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn get_attachment_references(
+        &self,
+        entity_type: String,
+        entity_id: String,
+        user_id: String,
+    ) -> Result<Vec<AttachmentEntityReference>, ChannelMessagesErr> {
+        self.repo
+            .get_attachment_references(&entity_type, &entity_id, &user_id)
             .await
             .map_err(anyhow::Error::from)
             .map_err(ChannelMessagesErr::Repo)
@@ -1505,5 +1591,38 @@ where
         channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
         ChannelServiceImpl::leave_channel(self, actor, channel_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn create_entity_mention(
+        &self,
+        options: CreateEntityMentionOptions,
+    ) -> Result<EntityMention, ChannelMutationErr> {
+        self.repo
+            .create_entity_mention(options)
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(ChannelMutationErr::Repo)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_entity_mention(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<EntityMention>, ChannelMutationErr> {
+        self.repo
+            .get_entity_mention_by_id(id)
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(ChannelMutationErr::Repo)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn delete_entity_mention(&self, id: Uuid) -> Result<bool, ChannelMutationErr> {
+        self.repo
+            .delete_entity_mention_by_id(id)
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(ChannelMutationErr::Repo)
     }
 }

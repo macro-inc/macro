@@ -57,7 +57,7 @@ tauri-plugin-notification = "2"
 macro_bundle_updater_plugin = { path = "../macro_bundle_updater_plugin" }
 navigation_plugin = { path = "../navigation_plugin" }
 tauri-plugin-device-info = "1.0.1"
-tauri-plugin-notifications = { git = "https://github.com/macro-inc/tauri-plugins", rev = "61520093d5c7fcd60a2ed354dc150ca9556519a4" }
+tauri-plugin-notifications = { git = "https://github.com/macro-inc/tauri-plugins", rev = "26537c8a46bb8424f9cf4021d08aa76aa7cd66ef" }
 tauri-plugin-os = "2"
 tauri-plugin-virtual-keyboard = { git = "https://github.com/voxelbee/tauri-plugin-virtual-keyboard", branch = "main" }
 
@@ -66,7 +66,7 @@ tauri-plugin-virtual-keyboard = { git = "https://github.com/voxelbee/tauri-plugi
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
-tauri-plugin-auth = { git = "https://github.com/macro-inc/tauri-plugins", rev = "61520093d5c7fcd60a2ed354dc150ca9556519a4" }
+tauri-plugin-auth = { git = "https://github.com/macro-inc/tauri-plugins", rev = "26537c8a46bb8424f9cf4021d08aa76aa7cd66ef" }
 tauri-plugin-haptics = "2"
 
 [target.'cfg(target_os = "ios")'.dependencies]

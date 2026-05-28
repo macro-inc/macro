@@ -9,7 +9,7 @@ import {
   useDisplayNameParts,
 } from '@core/user';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
-import { commsServiceClient } from '@service-comms/client';
+import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { Avatar, type AvatarSize } from '@ui';
 import {
   createMemo,
@@ -147,18 +147,18 @@ export function UserIcon(props: UserIconProps) {
   });
 
   const { replaceOrInsertSplit } = useSplitLayout();
+  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
 
-  const getOrCreateDm = async () => {
+  const getOrCreateDm = () => {
     if (!props.id) return;
-
-    const result = await commsServiceClient.getOrCreateDirectMessage({
-      recipient_id: props.id,
-    });
-
-    const channelId = result.isOk() && result.value?.channel_id;
-    if (!channelId) return;
-
-    replaceOrInsertSplit({ type: 'channel', id: channelId });
+    getOrCreateDmMutation.mutate(
+      { recipient_id: props.id },
+      {
+        onSuccess: ({ channel_id }) => {
+          replaceOrInsertSplit({ type: 'channel', id: channel_id });
+        },
+      }
+    );
   };
 
   const showTooltip = () => props.showTooltip !== false;

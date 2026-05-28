@@ -408,6 +408,53 @@ pub struct ChannelContextMessage {
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
+/// A reference to an attachment entity originating from a channel message.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttachmentChannelReference {
+    /// Channel that contains the message.
+    pub channel_id: Uuid,
+    /// Optional channel name (DMs do not have a name).
+    pub channel_name: Option<String>,
+    /// Message that contains the attachment reference.
+    pub message_id: Uuid,
+    /// If the message belongs to a thread this is the parent id.
+    pub thread_id: Option<Uuid>,
+    /// Sender of the message.
+    pub sender_id: String,
+    /// Full message content (might be used for preview/snippet).
+    pub message_content: String,
+    /// When the message itself was created.
+    pub message_created_at: DateTime<Utc>,
+    /// When the attachment row was created.
+    pub attachment_created_at: DateTime<Utc>,
+}
+
+/// A reference to an attachment entity from any non-message source entity.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttachmentGenericReference {
+    /// Type of the source entity (e.g., "document", "chat", etc.).
+    pub source_entity_type: String,
+    /// ID of the source entity.
+    pub source_entity_id: String,
+    /// Type of the referenced entity.
+    pub entity_type: String,
+    /// ID of the referenced entity.
+    pub entity_id: String,
+    /// User who created this reference (optional for non-user sources).
+    pub user_id: Option<String>,
+    /// When this reference was created.
+    pub created_at: DateTime<Utc>,
+}
+
+/// A reference to an attachment entity, tagged by source kind.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AttachmentEntityReference {
+    /// Referenced from a channel message.
+    Channel(AttachmentChannelReference),
+    /// Referenced from any non-message source entity.
+    Generic(AttachmentGenericReference),
+}
+
 /// Raw row returned from the top-level messages query.
 #[derive(Debug, Clone)]
 pub struct TopLevelMessageRow {
@@ -479,6 +526,37 @@ pub enum ChannelType {
     DirectMessage,
     /// Team channel.
     Team,
+}
+
+/// A user's activity (view/interaction) within a channel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Activity {
+    /// Activity row id.
+    pub id: Uuid,
+    /// Id of the user this activity belongs to.
+    pub user_id: String,
+    /// Id of the channel this activity is for.
+    pub channel_id: Uuid,
+    /// When the activity row was created.
+    pub created_at: DateTime<Utc>,
+    /// When the activity row was last updated.
+    pub updated_at: DateTime<Utc>,
+    /// The last time the user viewed the channel.
+    pub viewed_at: Option<DateTime<Utc>>,
+    /// The last time the user interacted with the channel
+    /// (e.g. reacting, replying, sending a message).
+    pub interacted_at: Option<DateTime<Utc>>,
+}
+
+/// The kind of activity a user performs in a channel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum ActivityType {
+    /// The user viewed the channel.
+    View,
+    /// The user interacted with the channel.
+    Interact,
 }
 
 /// Result of a get-or-create channel operation.
@@ -826,6 +904,141 @@ pub struct ChannelInfo {
     pub org_id: Option<i64>,
     /// Team id.
     pub team_id: Option<Uuid>,
+}
+
+/// Request for a batched channel preview lookup.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct GetBatchChannelPreviewRequest {
+    /// Channel ids to look up.
+    pub channel_ids: Vec<String>,
+}
+
+/// Response for a batched channel preview lookup.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct GetBatchChannelPreviewResponse {
+    /// Resolved channel previews, one per requested channel id.
+    pub previews: Vec<ChannelPreview>,
+}
+
+/// Preview entry for a single channel id.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ChannelPreview {
+    /// Viewer can access the channel.
+    Access(ChannelPreviewData),
+    /// Viewer cannot access the channel.
+    NoAccess(WithChannelId),
+    /// Channel does not exist.
+    DoesNotExist(WithChannelId),
+}
+
+/// Preview payload returned for accessible channels.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct ChannelPreviewData {
+    /// Channel id.
+    pub channel_id: String,
+    /// Resolved channel display name.
+    pub channel_name: String,
+    /// Channel type.
+    pub channel_type: ChannelType,
+}
+
+/// Preview payload returned for channels with only id information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct WithChannelId {
+    /// Channel id.
+    pub channel_id: String,
+}
+
+/// Raw preview row returned from the repository.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChannelPreviewRow {
+    /// Channel info.
+    pub info: ChannelInfo,
+    /// Whether the viewer can access the channel.
+    pub has_access: bool,
+}
+
+/// Persisted entity-to-entity mention.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct EntityMention {
+    /// Mention id.
+    pub id: Uuid,
+    /// Type of the entity that owns the mention.
+    pub source_entity_type: String,
+    /// Id of the entity that owns the mention.
+    pub source_entity_id: String,
+    /// Type of the mentioned entity.
+    pub entity_type: String,
+    /// Id of the mentioned entity.
+    pub entity_id: String,
+    /// User who recorded the mention.
+    pub user_id: Option<String>,
+    /// Created timestamp.
+    pub created_at: DateTime<Utc>,
+}
+
+/// Options for creating an entity mention.
+#[derive(Debug, Clone)]
+pub struct CreateEntityMentionOptions {
+    /// Type of the entity that owns the mention.
+    pub source_entity_type: String,
+    /// Id of the entity that owns the mention.
+    pub source_entity_id: String,
+    /// Type of the mentioned entity.
+    pub entity_type: String,
+    /// Id of the mentioned entity.
+    pub entity_id: String,
+    /// User who recorded the mention.
+    pub user_id: Option<String>,
+}
+
+/// Request body for `POST /channels/mentions`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct CreateEntityMentionRequest {
+    /// Type of the entity that owns the mention.
+    pub source_entity_type: String,
+    /// Id of the entity that owns the mention.
+    pub source_entity_id: String,
+    /// Type of the mentioned entity.
+    pub entity_type: String,
+    /// Id of the mentioned entity.
+    pub entity_id: String,
+}
+
+/// Response body for `POST /channels/mentions`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct CreateEntityMentionResponse {
+    /// Mention id.
+    pub id: String,
+    /// Type of the entity that owns the mention.
+    pub source_entity_type: String,
+    /// Id of the entity that owns the mention.
+    pub source_entity_id: String,
+    /// Type of the mentioned entity.
+    pub entity_type: String,
+    /// Id of the mentioned entity.
+    pub entity_id: String,
+    /// User who recorded the mention.
+    pub user_id: Option<String>,
+    /// Created timestamp.
+    pub created_at: DateTime<Utc>,
+}
+
+/// Response body for `DELETE /channels/mentions/{mention_id}`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct DeleteEntityMentionResponse {
+    /// Whether the mention was deleted.
+    pub deleted: bool,
 }
 
 #[cfg(test)]

@@ -65,6 +65,7 @@ teams = { path = "../teams", default-features = false, features = ["ai_tools", "
 sqlx.workspace = true
 strum.workspace = true
 sync_service_client = { path = "../sync_service_client" }
+system_properties = { path = "../system_properties" }
 tokio.workspace = true
 tracing.workspace = true
 utoipa.workspace = true
