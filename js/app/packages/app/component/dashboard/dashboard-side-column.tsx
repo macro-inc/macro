@@ -364,8 +364,15 @@ function AutomationsColumnSection() {
 export function DashboardSideColumn() {
   return (
     <aside class="hidden min-w-0 flex-col gap-8 pt-8 text-left @6xl/dashboard:flex">
-      <AutomationsColumnSection />
-      <NotificationsColumnSection />
+      <DashboardSectionBoundary title="recent channels">
+        <RecentChannelsColumnSection />
+      </DashboardSectionBoundary>
+      <DashboardSectionBoundary title="automations">
+        <AutomationsColumnSection />
+      </DashboardSectionBoundary>
+      <DashboardSectionBoundary title="notifications">
+        <NotificationsColumnSection />
+      </DashboardSectionBoundary>
     </aside>
   );
 }

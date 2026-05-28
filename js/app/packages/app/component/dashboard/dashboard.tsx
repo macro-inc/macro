@@ -1,5 +1,6 @@
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { TabsInset } from '@core/component/TabsInset';
+import { DashboardSectionBoundary } from './dashboard-section-boundary';
 import { DashboardSideColumn } from './dashboard-side-column';
 import { Hero } from './sections/hero';
 import { NotificationsSection } from './sections/notifications';
@@ -30,18 +31,33 @@ export function Dashboard() {
           <div class="hidden @7xl/dashboard:block" />
 
           <div class="min-w-0 space-y-10 @6xl/dashboard:mx-0 @6xl/dashboard:max-w-none">
-            <Hero />
-            <TeamPulseSection />
+            <DashboardSectionBoundary title="hero">
+              <Hero />
+            </DashboardSectionBoundary>
 
-            <RecentChannelsSection />
+            <DashboardSectionBoundary title="team pulse">
+              <TeamPulseSection />
+            </DashboardSectionBoundary>
 
             <div class="@6xl/dashboard:hidden">
-              <NotificationsSection />
+              <DashboardSectionBoundary title="recent channels">
+                <RecentChannelsSection />
+              </DashboardSectionBoundary>
             </div>
 
-            <RecentSharedSection />
+            <div class="@6xl/dashboard:hidden">
+              <DashboardSectionBoundary title="notifications">
+                <NotificationsSection />
+              </DashboardSectionBoundary>
+            </div>
 
-            <QuickLinksSection />
+            <DashboardSectionBoundary title="recent and shared">
+              <RecentSharedSection />
+            </DashboardSectionBoundary>
+
+            <DashboardSectionBoundary title="quick links">
+              <QuickLinksSection />
+            </DashboardSectionBoundary>
           </div>
 
           <DashboardSideColumn />
