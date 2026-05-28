@@ -145,7 +145,6 @@ pub async fn handler(
                     identity_provider_user_id: Cow::Borrowed(&link.identity_provider_user_id),
                     user_id: Cow::Borrowed(&user_context.fusion_user_id),
                     token: Cow::Borrowed(&link.token),
-                    data: None,
                 },
             })
             .collect::<Vec<_>>();

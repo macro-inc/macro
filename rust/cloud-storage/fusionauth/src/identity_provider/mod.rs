@@ -8,10 +8,7 @@ mod lookup;
 mod search;
 mod unlink;
 
-pub use link::{
-    IdentityProviderLink, IdentityProviderLinkData, IdentityProviderLinkRole, Link,
-    LinkUserRequest, RetrieveLinkResponse,
-};
+pub use link::{IdentityProviderLink, Link, LinkUserRequest, RetrieveLinkResponse};
 impl FusionAuthClient {
     /// Searches for an identity provider by name and returns its ID.
     #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]

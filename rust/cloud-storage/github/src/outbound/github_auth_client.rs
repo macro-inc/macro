@@ -63,7 +63,6 @@ impl Auth for GithubAuthImpl {
                     identity_provider_user_id: github_user_id.into(),
                     user_id: fusionauth_user_id.to_string().into(),
                     token: access_token.into(),
-                    data: None,
                 },
             })
             .await?;

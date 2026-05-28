@@ -19,9 +19,7 @@ use crate::api::{
     },
 };
 use fusionauth::error::FusionAuthClientError;
-use fusionauth::identity_provider::{
-    IdentityProviderLink, IdentityProviderLinkData, IdentityProviderLinkRole, LinkUserRequest,
-};
+use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
 
 async fn link_user(
     ctx: &ApiContext,
@@ -70,9 +68,6 @@ async fn link_user(
     //   Err(alreadyLinked, owned by other) → cross-account add; init promotes to graph edge.
     // The FA error doesn't distinguish self vs other in the typed variant, but it doesn't need
     // to — init re-derives ownership via macrodb's User table to pick its dispatch path.
-    // Any link we create here is a secondary inbox-add (the primary FA link was already
-    // created at signup). Tag accordingly so login routing can reject sign-in attempts
-    // against this link — enforcement lands in a follow-up; this PR only writes the tag.
     match ctx
         .auth_client
         .link_user(LinkUserRequest {
@@ -82,9 +77,6 @@ async fn link_user(
                 identity_provider_user_id: Cow::Borrowed(&user_info.sub),
                 user_id: Cow::Borrowed(&macro_user_id.to_string()),
                 token: Cow::Borrowed(&token_response.refresh_token),
-                data: Some(IdentityProviderLinkData {
-                    role: Some(IdentityProviderLinkRole::Secondary),
-                }),
             },
         })
         .await
