@@ -10,7 +10,7 @@ import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import { notificationIsRead } from '@notifications/notification-helpers';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import { Hotkey } from '@ui';
+import { Hotkey, Layer } from '@ui';
 import { type Component, createMemo, createSignal } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -40,7 +40,7 @@ function QuickLinkButton(props: {
 
   return (
     <button
-      class="group flex h-20 flex-col items-start justify-between rounded-2xl border border-edge-muted bg-hover/60 p-3 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent"
+      class="group relative flex h-20 flex-col items-start justify-between rounded-2xl border border-edge-muted bg-hover/60 p-3 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent"
       onPointerEnter={() => setHovering(true)}
       onPointerLeave={() => setHovering(false)}
     >
@@ -55,16 +55,24 @@ function QuickLinkButton(props: {
             <span class="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-hover bg-accent" />
           )}
         </div>
-        <ArrowRightIcon class="size-3.5 text-ink-extra-muted opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
-      </div>
-      <div class="flex w-full items-end justify-between gap-2">
-        <span class="text-sm font-medium text-ink">{props.label}</span>
-        <span class="flex items-center gap-1">
+        <span class="flex shrink-0 items-center gap-1 transition group-hover:opacity-0">
           {!props.standaloneHotkey && (
             <Hotkey token={TOKENS.sidebar.goToLeader} theme="subtle" />
           )}
           <Hotkey shortcut={props.hotkey} theme="subtle" />
         </span>
+      </div>
+      <div class="flex w-full min-w-0 items-end justify-between gap-2">
+        <span class="min-w-0 truncate text-sm font-medium text-ink">
+          {props.label}
+        </span>
+        <div class="pointer-events-none absolute right-3 top-3 opacity-0 transition group-hover:opacity-100">
+          <Layer depth={3} class="rounded-xl">
+            <div class="flex size-8 items-center justify-center rounded-xl bg-hover text-ink-muted transition group-hover:text-ink">
+              <ArrowRightIcon class="size-4" />
+            </div>
+          </Layer>
+        </div>
       </div>
     </button>
   );
@@ -110,7 +118,7 @@ export function QuickLinksSection() {
 
   return (
     <section class="@container/quick-links">
-      <div class="grid grid-cols-2 gap-3 @md/quick-links:grid-cols-3 @2xl/quick-links:grid-cols-4">
+      <div class="grid grid-cols-2 gap-2 @md/quick-links:grid-cols-4 @4xl/quick-links:grid-cols-8">
         <QuickLinkButton
           label="Inbox"
           icon={AnimatedInboxIcon}
