@@ -20,77 +20,6 @@ export function Dashboard() {
               <section>
                 <div class="mb-4 flex items-center justify-between gap-4">
                   <h2 class="text-lg font-semibold tracking-tight text-ink">
-                    Signal
-                  </h2>
-                  <div class="h-8 w-24 rounded-lg border border-edge-muted bg-hover" />
-                </div>
-
-                <div class="divide-y divide-edge-muted overflow-hidden rounded-2xl border border-edge-muted bg-accent/5">
-                  <div class="flex h-16 items-center gap-4 px-4">
-                    <div class="size-9 rounded-lg bg-accent/10" />
-                    <div class="min-w-0 flex-1 space-y-2">
-                      <div class="h-3 w-3/5 rounded-full bg-ink/10" />
-                      <div class="h-2.5 w-2/5 rounded-full bg-ink/5" />
-                    </div>
-                    <div class="h-6 w-14 rounded-full bg-accent/10" />
-                  </div>
-                  <div class="flex h-16 items-center gap-4 px-4">
-                    <div class="size-9 rounded-lg bg-accent/10" />
-                    <div class="min-w-0 flex-1 space-y-2">
-                      <div class="h-3 w-1/2 rounded-full bg-ink/10" />
-                      <div class="h-2.5 w-1/3 rounded-full bg-ink/5" />
-                    </div>
-                    <div class="h-6 w-14 rounded-full bg-accent/10" />
-                  </div>
-                  <div class="flex h-16 items-center gap-4 px-4">
-                    <div class="size-9 rounded-lg bg-accent/10" />
-                    <div class="min-w-0 flex-1 space-y-2">
-                      <div class="h-3 w-2/5 rounded-full bg-ink/10" />
-                      <div class="h-2.5 w-1/4 rounded-full bg-ink/5" />
-                    </div>
-                    <div class="h-6 w-14 rounded-full bg-accent/10" />
-                  </div>
-                </div>
-              </section>
-
-              <section>
-                <div class="mb-4 flex items-center justify-between gap-4">
-                  <h2 class="text-lg font-semibold tracking-tight text-ink">
-                    Tasks
-                  </h2>
-                  <div class="h-8 w-24 rounded-lg border border-edge-muted bg-hover" />
-                </div>
-
-                <div class="divide-y divide-edge-muted overflow-hidden rounded-2xl border border-edge-muted">
-                  <div class="flex h-14 items-center gap-3 px-4">
-                    <div class="size-5 rounded-md border border-edge-muted bg-surface" />
-                    <div class="min-w-0 flex-1 space-y-2">
-                      <div class="h-3 w-3/5 rounded-full bg-ink/10" />
-                      <div class="h-2.5 w-1/4 rounded-full bg-ink/5" />
-                    </div>
-                  </div>
-                  <div class="flex h-14 items-center gap-3 px-4">
-                    <div class="size-5 rounded-md border border-edge-muted bg-surface" />
-                    <div class="min-w-0 flex-1 space-y-2">
-                      <div class="h-3 w-1/2 rounded-full bg-ink/10" />
-                      <div class="h-2.5 w-1/3 rounded-full bg-ink/5" />
-                    </div>
-                  </div>
-                  <div class="flex h-14 items-center gap-3 px-4">
-                    <div class="size-5 rounded-md border border-edge-muted bg-surface" />
-                    <div class="min-w-0 flex-1 space-y-2">
-                      <div class="h-3 w-2/5 rounded-full bg-ink/10" />
-                      <div class="h-2.5 w-1/5 rounded-full bg-ink/5" />
-                    </div>
-                  </div>
-                </div>
-              </section>
-            </div>
-
-            <div class="@container/dashboard-row grid gap-8 @3xl/dashboard-row:grid-cols-2">
-              <section>
-                <div class="mb-4 flex items-center justify-between gap-4">
-                  <h2 class="text-lg font-semibold tracking-tight text-ink">
                     Shared with me
                   </h2>
                   <div class="h-8 w-24 rounded-lg border border-edge-muted bg-hover" />
@@ -182,42 +111,6 @@ export function Dashboard() {
                   <div class="h-24 rounded-2xl border border-edge-muted bg-[#EEF4ED]" />
                   <div class="h-24 rounded-2xl border border-edge-muted bg-[#EEF4ED]" />
                   <div class="h-24 rounded-2xl border border-edge-muted bg-[#EEF4ED]" />
-                </div>
-              </section>
-
-              <section>
-                <div class="mb-4 flex items-center justify-between gap-4">
-                  <h2 class="text-lg font-semibold tracking-tight text-ink">
-                    Drafts
-                  </h2>
-                  <div class="h-8 w-24 rounded-lg border border-edge-muted bg-hover" />
-                </div>
-
-                <div class="divide-y divide-edge-muted overflow-hidden rounded-2xl border border-edge-muted">
-                  <div class="flex h-16 items-center gap-4 px-4">
-                    <div class="size-9 rounded-lg bg-[#FFF0E8]" />
-                    <div class="min-w-0 flex-1 space-y-2">
-                      <div class="h-3 w-1/2 rounded-full bg-ink/10" />
-                      <div class="h-2.5 w-1/3 rounded-full bg-ink/5" />
-                    </div>
-                    <div class="h-6 w-16 rounded-full bg-ink/5" />
-                  </div>
-                  <div class="flex h-16 items-center gap-4 px-4">
-                    <div class="size-9 rounded-lg bg-[#F8F3D9]" />
-                    <div class="min-w-0 flex-1 space-y-2">
-                      <div class="h-3 w-2/5 rounded-full bg-ink/10" />
-                      <div class="h-2.5 w-1/4 rounded-full bg-ink/5" />
-                    </div>
-                    <div class="h-6 w-16 rounded-full bg-ink/5" />
-                  </div>
-                  <div class="flex h-16 items-center gap-4 px-4">
-                    <div class="size-9 rounded-lg bg-[#F7F1E8]" />
-                    <div class="min-w-0 flex-1 space-y-2">
-                      <div class="h-3 w-1/3 rounded-full bg-ink/10" />
-                      <div class="h-2.5 w-1/5 rounded-full bg-ink/5" />
-                    </div>
-                    <div class="h-6 w-16 rounded-full bg-ink/5" />
-                  </div>
                 </div>
               </section>
             </div>
