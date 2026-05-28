@@ -22,7 +22,7 @@ use crate::domain::ports::{
 };
 use axum::{
     Json, Router,
-    extract::{Extension, FromRef, Path, Query, State},
+    extract::{FromRef, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, patch, post},
@@ -40,7 +40,7 @@ use entity_access::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
-use model_user::{UserContext, axum_extractor::MacroUserExtractor};
+use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{
     Base64Str, BidirectionalCursor, CreatedAt, Cursor, CursorOptionExt, CursorVal,
     CursorWithValAndFilter, PaginatedOpaqueCursor, Query as PaginationQuery, TypeEraseCursor,
@@ -121,13 +121,6 @@ fn role_from_receipt<T: RequiredPermission>(
         }),
         _ => Err(ChannelsHandlerErr::BadRequest("channel role required")),
     }
-}
-
-fn actor_from_user_context(
-    user_context: &UserContext,
-) -> Result<MacroUserIdStr<'static>, ChannelsHandlerErr> {
-    MacroUserIdStr::try_from(user_context.user_id.clone())
-        .map_err(|_| ChannelsHandlerErr::BadRequest("invalid user id"))
 }
 
 const MAX_MESSAGE_ID_FILTERS: usize = 100;
@@ -334,13 +327,16 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn create_channel_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    Extension(user_context): Extension<UserContext>,
+    user: MacroUserExtractor,
     Json(req): Json<CreateChannelRequest>,
 ) -> Result<(StatusCode, Json<CreateChannelResponse>), ChannelsHandlerErr> {
-    let actor = actor_from_user_context(&user_context)?;
     let res = state
         .service
-        .create_channel(actor, user_context.organization_id.map(i64::from), req)
+        .create_channel(
+            user.macro_user_id,
+            user.user_context.organization_id.map(i64::from),
+            req,
+        )
         .await?;
     Ok((StatusCode::OK, Json(res)))
 }
@@ -363,11 +359,13 @@ pub async fn create_channel_handler<S: ChannelService, Svc: EntityAccessService>
 #[tracing::instrument(err, skip_all)]
 pub async fn get_or_create_dm_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    Extension(user_context): Extension<UserContext>,
+    user: MacroUserExtractor,
     Json(req): Json<GetOrCreateDmRequest>,
 ) -> Result<(StatusCode, Json<GetOrCreateChannelResponse>), ChannelsHandlerErr> {
-    let actor = actor_from_user_context(&user_context)?;
-    let res = state.service.get_or_create_dm(actor, req).await?;
+    let res = state
+        .service
+        .get_or_create_dm(user.macro_user_id, req)
+        .await?;
     Ok((StatusCode::OK, Json(res)))
 }
 
@@ -389,11 +387,13 @@ pub async fn get_or_create_dm_handler<S: ChannelService, Svc: EntityAccessServic
 #[tracing::instrument(err, skip_all)]
 pub async fn get_or_create_private_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    Extension(user_context): Extension<UserContext>,
+    user: MacroUserExtractor,
     Json(req): Json<GetOrCreatePrivateRequest>,
 ) -> Result<(StatusCode, Json<GetOrCreateChannelResponse>), ChannelsHandlerErr> {
-    let actor = actor_from_user_context(&user_context)?;
-    let res = state.service.get_or_create_private(actor, req).await?;
+    let res = state
+        .service
+        .get_or_create_private(user.macro_user_id, req)
+        .await?;
     Ok((StatusCode::OK, Json(res)))
 }
 
@@ -707,11 +707,13 @@ pub async fn remove_participants_handler<S: ChannelService, Svc: EntityAccessSer
 pub async fn join_channel_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
     Path(path): Path<ChannelPath>,
-    Extension(user_context): Extension<UserContext>,
+    user: MacroUserExtractor,
 ) -> Result<StatusCode, ChannelsHandlerErr> {
     let channel_id = path.channel_id;
-    let actor = actor_from_user_context(&user_context)?;
-    state.service.join_channel(actor, channel_id).await?;
+    state
+        .service
+        .join_channel(user.macro_user_id, channel_id)
+        .await?;
     Ok(StatusCode::OK)
 }
 
@@ -1307,7 +1309,7 @@ pub async fn get_channel_participants_handler<S: ChannelService, Svc: EntityAcce
 )]
 pub async fn get_attachment_references_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    Extension(user_context): Extension<UserContext>,
+    user: MacroUserExtractor,
     Path(path): Path<AttachmentReferencesPath>,
 ) -> Result<Json<GetAttachmentReferencesResponse>, ChannelsHandlerErr> {
     let span = tracing::Span::current();
@@ -1316,7 +1318,11 @@ pub async fn get_attachment_references_handler<S: ChannelService, Svc: EntityAcc
 
     let references = state
         .service
-        .get_attachment_references(path.entity_type, path.entity_id, user_context.user_id)
+        .get_attachment_references(
+            path.entity_type,
+            path.entity_id,
+            user.macro_user_id.to_string(),
+        )
         .await?;
 
     Ok(Json(GetAttachmentReferencesResponse {
