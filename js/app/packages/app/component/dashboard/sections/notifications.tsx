@@ -71,7 +71,7 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
 
   return (
     <button
-      class="soup-list-entity group/narrow group relative flex w-full items-start gap-3 rounded-lg p-2.5 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset"
+      class="group relative flex w-full items-start gap-3 rounded-lg p-2.5 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset"
       onClick={open}
     >
       <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-hover text-ink-muted transition group-hover:text-ink [&_svg]:size-4">

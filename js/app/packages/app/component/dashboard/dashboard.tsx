@@ -2,6 +2,7 @@ import { Hero } from './sections/hero';
 import { NotificationsSection } from './sections/notifications';
 import { QuickLinksSection } from './sections/quick-links';
 import { RecentChannelsSection } from './sections/recent-channels';
+import { TeamMembersSection } from './sections/team-members';
 
 export function Dashboard() {
   return (
@@ -225,23 +226,7 @@ export function Dashboard() {
           <aside class="space-y-8">
             <NotificationsSection />
 
-            <section class="rounded-2xl border border-edge-muted bg-[#EAF6F6] p-5">
-              <h2 class="mb-4 text-lg font-semibold tracking-tight text-ink">
-                Team members
-              </h2>
-
-              <div class="mb-4 h-10 rounded-xl bg-surface/80" />
-              <div class="mb-4 grid grid-cols-2 gap-3">
-                <div class="h-20 rounded-xl bg-surface/70" />
-                <div class="h-20 rounded-xl bg-surface/70" />
-              </div>
-              <div class="space-y-2">
-                <div class="h-12 rounded-xl bg-surface/70" />
-                <div class="h-12 rounded-xl bg-surface/70" />
-                <div class="h-12 rounded-xl bg-surface/70" />
-                <div class="h-12 rounded-xl bg-surface/70" />
-              </div>
-            </section>
+            <TeamMembersSection />
 
             <section>
               <h2 class="mb-4 text-lg font-semibold tracking-tight text-ink">
