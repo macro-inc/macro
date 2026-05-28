@@ -185,10 +185,10 @@ export function RecentSharedSection() {
                     <For each={[0, 1, 2, 3]}>
                       {() => (
                         <div class="flex h-14 items-center gap-3 rounded-lg p-2.5">
-                          <div class="size-8 rounded-lg bg-hover" />
+                          <div class="skeleton-shimmer size-8 rounded-lg bg-hover" />
                           <div class="min-w-0 flex-1 space-y-2">
-                            <div class="h-2.5 w-3/5 rounded-full bg-ink/10" />
-                            <div class="h-2 w-2/5 rounded-full bg-ink/5" />
+                            <div class="skeleton-shimmer h-2.5 w-3/5 rounded-full bg-ink/10" />
+                            <div class="skeleton-shimmer h-2 w-2/5 rounded-full bg-ink/5" />
                           </div>
                         </div>
                       )}

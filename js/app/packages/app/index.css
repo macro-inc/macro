@@ -245,6 +245,31 @@
   }
 }
 
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    oklch(from var(--color-ink) l c h / 0.08),
+    transparent
+  );
+  animation: skeleton-shimmer 1.4s infinite;
+}
+
 @keyframes slideIn {
   from { transform: translateX(calc(100% + 16px)); }
   to   { transform: translateX(0                ); }

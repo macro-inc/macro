@@ -154,10 +154,10 @@ export function NotificationsSection() {
             <For each={[0, 1, 2]}>
               {() => (
                 <div class="flex h-16 items-center gap-3 rounded-xl px-3">
-                  <div class="size-6 rounded-full bg-hover" />
+                  <div class="skeleton-shimmer size-6 rounded-full bg-hover" />
                   <div class="min-w-0 flex-1 space-y-2">
-                    <div class="h-2.5 w-4/5 rounded-full bg-ink/10" />
-                    <div class="h-2 w-1/2 rounded-full bg-ink/5" />
+                    <div class="skeleton-shimmer h-2.5 w-4/5 rounded-full bg-ink/10" />
+                    <div class="skeleton-shimmer h-2 w-1/2 rounded-full bg-ink/5" />
                   </div>
                 </div>
               )}

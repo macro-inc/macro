@@ -241,15 +241,15 @@ function PulseEntityRow(props: { entity: PulseEntity }) {
 
 function TeamPulseSkeleton() {
   return (
-    <div class="animate-pulse">
-      <div class="rounded-xl bg-hover/50 p-3">
+    <div>
+      <div class="skeleton-shimmer rounded-xl bg-hover/50 p-3">
         <div class="flex items-start gap-2">
-          <div class="size-4 shrink-0 rounded-md bg-accent/15" />
+          <div class="skeleton-shimmer size-4 shrink-0 rounded-md bg-accent/15" />
           <div class="min-w-0 flex-1">
-            <div class="mb-3 h-3 w-2/3 rounded-full bg-ink/10" />
+            <div class="skeleton-shimmer mb-3 h-3 w-2/3 rounded-full bg-ink/10" />
             <div class="space-y-2">
-              <div class="h-2.5 w-full rounded-full bg-ink/5" />
-              <div class="h-2.5 w-4/5 rounded-full bg-ink/5" />
+              <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-ink/5" />
+              <div class="skeleton-shimmer h-2.5 w-4/5 rounded-full bg-ink/5" />
             </div>
           </div>
         </div>
@@ -257,12 +257,12 @@ function TeamPulseSkeleton() {
       <div class="mt-3 grid gap-2 @3xl/dashboard:grid-cols-2 @6xl/dashboard:grid-cols-4">
         <For each={[0, 1, 2, 3]}>
           {() => (
-            <div class="h-24 rounded-xl border border-edge-muted p-3">
+            <div class="skeleton-shimmer h-24 rounded-xl border border-edge-muted p-3">
               <div class="mb-4 flex items-center justify-between gap-2">
-                <div class="h-5 w-24 rounded-md bg-hover" />
-                <div class="size-4 rounded bg-ink/5" />
+                <div class="skeleton-shimmer h-5 w-24 rounded-md bg-hover" />
+                <div class="skeleton-shimmer size-4 rounded bg-ink/5" />
               </div>
-              <div class="h-3 w-2/3 rounded-full bg-ink/10" />
+              <div class="skeleton-shimmer h-3 w-2/3 rounded-full bg-ink/10" />
             </div>
           )}
         </For>

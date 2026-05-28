@@ -261,11 +261,11 @@ export function RecentChannelsSection() {
           fallback={
             <For each={[0, 1, 2, 3, 4, 5, 6]}>
               {() => (
-                <div class="h-36 rounded-2xl border border-edge-muted bg-hover/60 p-3">
-                  <div class="size-9 rounded-xl bg-surface" />
+                <div class="skeleton-shimmer h-36 rounded-2xl border border-edge-muted bg-hover/60 p-3">
+                  <div class="skeleton-shimmer size-9 rounded-xl bg-surface" />
                   <div class="flex flex-col gap-2 pt-6">
-                    <div class="h-3 w-3/4 rounded-full bg-ink/10" />
-                    <div class="h-2.5 w-1/2 rounded-full bg-ink/5" />
+                    <div class="skeleton-shimmer h-3 w-3/4 rounded-full bg-ink/10" />
+                    <div class="skeleton-shimmer h-2.5 w-1/2 rounded-full bg-ink/5" />
                   </div>
                 </div>
               )}
