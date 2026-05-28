@@ -3,6 +3,7 @@ import { Thread } from '@channel/Thread/Thread';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { formatVideoTimestamp } from '@core/util/duration';
 import Subtitles from '@phosphor/subtitles.svg';
+import { senderFromStorageId } from '@queries/channel/message-sender';
 import type { ApiChannelMessage } from '@service-comms/client';
 import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';
 import {
@@ -83,6 +84,7 @@ function segmentToApiChannelMessage(
     id: s.segmentId ?? `transcript-${s.sequenceNum}`,
     channel_id: channelId,
     content: s.content,
+    sender: senderFromStorageId(s.speakerId),
     sender_id: s.speakerId,
     created_at: s.startedAt,
     updated_at: s.startedAt,

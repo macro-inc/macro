@@ -26,6 +26,7 @@ import { queryClient } from '../client';
 import { createMutationNonce, registerNonce } from '../nonce';
 import { getChannelMessagesQueryKeyPrefix } from './channel-messages';
 import { ChannelNonceKeys } from './keys';
+import { senderFromStorageId } from './message-sender';
 import {
   captureDeleteSnapshotForTarget,
   type DeleteTargetSnapshot,
@@ -121,6 +122,7 @@ function makeOptimisticTopLevelMessage(
   return {
     id: vars.optimisticId,
     channel_id: vars.channelId,
+    sender: senderFromStorageId(vars.senderId),
     sender_id: vars.senderId,
     content: vars.content,
     created_at: now,
@@ -144,6 +146,7 @@ function makeOptimisticThreadReply(
 ): ApiThreadReply {
   return {
     id: vars.optimisticId,
+    sender: senderFromStorageId(vars.senderId),
     sender_id: vars.senderId,
     content: vars.content,
     created_at: now,

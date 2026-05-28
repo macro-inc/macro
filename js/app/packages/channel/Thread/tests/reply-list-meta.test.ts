@@ -1,3 +1,4 @@
+import { senderFromStorageId } from '@queries/channel/message-sender';
 import type { ApiThreadReply } from '@service-comms/client';
 import { describe, expect, it } from 'vitest';
 import { buildThreadReplyListMeta } from '../reply-list-meta';
@@ -12,6 +13,7 @@ function createReply(
     content: '',
     created_at: createdAt,
     updated_at: createdAt,
+    sender: senderFromStorageId(senderId),
     sender_id: senderId,
     attachments: [],
     reactions: [],

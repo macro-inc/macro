@@ -4,8 +4,10 @@ import type {
   CountedReaction,
 } from '@service-comms/generated/models';
 import type { ApiThreadReply } from '@service-storage/client';
+import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
 import { consumeNonce } from '../nonce';
 import { ChannelNonceKeys } from './keys';
+import { senderFromStorageId } from './message-sender';
 import {
   getTargetMessageState,
   insertMessageIntoTargetCaches,
@@ -22,7 +24,11 @@ import {
 /**
  * Websocket payload types
  */
-type CommsMessagePayload = ApiMessage & { channel_id: string; nonce: string };
+type CommsMessagePayload = ApiMessage & {
+  channel_id: string;
+  nonce: string;
+  sender?: ApiMessageSender;
+};
 
 type CommsReactionPayload = {
   channel_id: string;
@@ -94,6 +100,7 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
         } else if (target.kind === 'thread_reply') {
           const reply: ApiThreadReply = {
             id: payload.id,
+            sender: payload.sender ?? senderFromStorageId(payload.sender_id),
             sender_id: payload.sender_id,
             content: payload.content,
             created_at: payload.created_at,
@@ -107,6 +114,7 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
           insertMessageIntoTargetCaches(payload.channel_id, target, {
             id: payload.id,
             channel_id: payload.channel_id,
+            sender: payload.sender ?? senderFromStorageId(payload.sender_id),
             sender_id: payload.sender_id,
             content: payload.content,
             created_at: payload.created_at,
