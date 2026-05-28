@@ -32,15 +32,7 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
           <For each={props.options}>
             {(option) => (
               <Dropdown.Item onSelect={() => props.onChange(option.value)}>
-                <span
-                  class="flex-1 truncate"
-                  classList={{
-                    'text-ink font-medium': props.value() === option.value,
-                    'text-ink-muted': props.value() !== option.value,
-                  }}
-                >
-                  {option.label}
-                </span>
+                <span class="flex-1 truncate">{option.label}</span>
                 <SingleSelectCheck active={props.value() === option.value} />
               </Dropdown.Item>
             )}

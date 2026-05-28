@@ -47,15 +47,7 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
                     </span>
                   )}
                 </Show>
-                <span
-                  class="flex-1 truncate"
-                  classList={{
-                    'text-ink font-medium': props.value() === option.value,
-                    'text-ink-muted': props.value() !== option.value,
-                  }}
-                >
-                  {option.label}
-                </span>
+                <span class="flex-1 truncate">{option.label}</span>
                 <SingleSelectCheck active={props.value() === option.value} />
               </Dropdown.Item>
             )}

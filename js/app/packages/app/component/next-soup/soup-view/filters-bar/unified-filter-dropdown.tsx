@@ -478,14 +478,7 @@ function SingleValueSubmenu<T>(props: {
                   onSelect={() => props.onSelect(option.value)}
                   closeOnSelect
                 >
-                  <span
-                    class={cn(
-                      'flex-1 truncate',
-                      active() ? 'text-ink font-medium' : 'text-ink-muted'
-                    )}
-                  >
-                    {option.label}
-                  </span>
+                  <span class="flex-1 truncate">{option.label}</span>
                   <SingleSelectCheck active={active()} />
                 </Dropdown.Item>
               );
@@ -609,14 +602,7 @@ const SearchIndexRowLabel = (props: {
         </span>
       )}
     </Show>
-    <span
-      class={cn(
-        'flex-1 truncate',
-        props.active() ? 'text-ink font-medium' : 'text-ink-muted'
-      )}
-    >
-      {props.option.label}
-    </span>
+    <span class="flex-1 truncate">{props.option.label}</span>
     <SingleSelectCheck active={props.active()} />
   </>
 );
@@ -1003,16 +989,7 @@ export const UnifiedFilterDropdown = (
                       onSelect={() => handleIndexChange('all')}
                       closeOnSelect
                     >
-                      <span
-                        class={cn(
-                          'flex-1 truncate',
-                          !hasActiveIndex()
-                            ? 'text-ink font-medium'
-                            : 'text-ink-muted'
-                        )}
-                      >
-                        All
-                      </span>
+                      <span class="flex-1 truncate">All</span>
                       <SingleSelectCheck active={!hasActiveIndex()} />
                     </Dropdown.Item>
                   </Show>
