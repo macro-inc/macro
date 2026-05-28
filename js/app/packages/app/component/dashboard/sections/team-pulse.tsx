@@ -405,14 +405,14 @@ JSON context:\n${source.context}`,
             {(data) => (
               <div>
                 <div class="rounded-xl bg-hover/50 p-3">
-                  <div class="flex items-start gap-2">
-                    <SparkleIcon class="mt-0.5 size-4 shrink-0 text-accent" />
-                    <div class="min-w-0">
-                      <p class="text-sm/6 text-ink">
-                        {data().overview}
-                      </p>
-                      <p class="mt-2 text-xs text-ink-muted">
+                  <div class="flex min-w-0 items-start gap-2">
+                    <SparkleIcon class="size-4 shrink-0 translate-y-px text-accent" />
+                    <div class="flex min-w-0 flex-col gap-3">
+                      <p class="text-xs text-ink-muted">
                         {data().health}
+                      </p>
+                      <p class="text-sm leading-6 text-ink">
+                        {data().overview}
                       </p>
                     </div>
                   </div>
