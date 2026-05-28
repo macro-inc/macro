@@ -256,7 +256,7 @@ export function RecentChannelsSection() {
         </Button>
       </div>
 
-      <AdaptiveScroller scrollAmount={280}>
+      <AdaptiveScroller scrollAmount={280} class="relative">
         <AdaptiveScroller.Viewport class="w-full scroll-pl-4 px-4 pb-1 sm:px-0 @md/recent-channels:grid @md/recent-channels:grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] @md/recent-channels:gap-3 @md/recent-channels:overflow-visible @md/recent-channels:pb-0">
           <Show
             when={!channelsQuery.isLoading}
@@ -283,6 +283,7 @@ export function RecentChannelsSection() {
             </StaticMarkdownContext>
           </Show>
         </AdaptiveScroller.Viewport>
+        <AdaptiveScroller.FadeEdges class="bottom-10 top-0 hidden sm:block @md/recent-channels:hidden" />
         <AdaptiveScroller.Controls class="mt-2 @md/recent-channels:hidden">
           <AdaptiveScroller.Control
             direction="left"

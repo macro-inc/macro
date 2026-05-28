@@ -36,9 +36,11 @@ function AdaptiveScrollerRoot(props: {
   children: JSX.Element;
   class?: string;
   scrollAmount?: number;
+  onViewportReady?: (viewport: HTMLElement) => void;
 }) {
   let viewport: HTMLElement | undefined;
   let resizeObserver: ResizeObserver | undefined;
+  let mutationObserver: MutationObserver | undefined;
 
   const [canScrollLeft, setCanScrollLeft] = createSignal(false);
   const [canScrollRight, setCanScrollRight] = createSignal(false);
@@ -52,12 +54,29 @@ function AdaptiveScrollerRoot(props: {
     );
   };
 
+  const observeViewportContent = () => {
+    if (!viewport || !resizeObserver) return;
+
+    resizeObserver.disconnect();
+    resizeObserver.observe(viewport);
+    for (const child of Array.from(viewport.children)) {
+      resizeObserver.observe(child);
+    }
+    queueMicrotask(updateScrollState);
+  };
+
   const setViewport = (element: HTMLElement) => {
     viewport = element;
+
     resizeObserver?.disconnect();
+    mutationObserver?.disconnect();
+
     resizeObserver = new ResizeObserver(updateScrollState);
-    resizeObserver.observe(element);
-    queueMicrotask(updateScrollState);
+    mutationObserver = new MutationObserver(observeViewportContent);
+    mutationObserver.observe(element, { childList: true, subtree: true });
+
+    observeViewportContent();
+    props.onViewportReady?.(element);
   };
 
   const scroll = (direction: ScrollDirection) => {
@@ -72,7 +91,10 @@ function AdaptiveScrollerRoot(props: {
 
   onMount(() => queueMicrotask(updateScrollState));
 
-  onCleanup(() => resizeObserver?.disconnect());
+  onCleanup(() => {
+    resizeObserver?.disconnect();
+    mutationObserver?.disconnect();
+  });
 
   return (
     <AdaptiveScrollerContext.Provider
@@ -166,9 +188,40 @@ function AdaptiveScrollerControls(
   );
 }
 
+function AdaptiveScrollerFadeEdges(props: {
+  class?: string;
+  leftClass?: string;
+  rightClass?: string;
+}) {
+  const context = useAdaptiveScroller();
+
+  return (
+    <div
+      class={cn('pointer-events-none absolute inset-y-0 inset-x-0', props.class)}
+      aria-hidden="true"
+    >
+      <div
+        class={cn(
+          'absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-surface to-transparent opacity-0 transition',
+          context.canScrollLeft() && 'opacity-100',
+          props.leftClass
+        )}
+      />
+      <div
+        class={cn(
+          'absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-surface to-transparent opacity-0 transition',
+          context.canScrollRight() && 'opacity-100',
+          props.rightClass
+        )}
+      />
+    </div>
+  );
+}
+
 export const AdaptiveScroller = Object.assign(AdaptiveScrollerRoot, {
   Viewport: AdaptiveScrollerViewport,
   Item: AdaptiveScrollerItem,
   Control: AdaptiveScrollerControl,
   Controls: AdaptiveScrollerControls,
+  FadeEdges: AdaptiveScrollerFadeEdges,
 });

@@ -427,12 +427,13 @@ JSON context:\n${source.context}`,
                   </div>
                 </div>
 
-                <AdaptiveScroller scrollAmount={280}>
+                <AdaptiveScroller scrollAmount={280} class="relative">
                   <AdaptiveScroller.Viewport class="mt-3 scroll-pl-4 px-4 pb-1 sm:px-0 @3xl/dashboard:grid @3xl/dashboard:grid-cols-2 @3xl/dashboard:overflow-visible @3xl/dashboard:pb-0 @6xl/dashboard:grid-cols-4">
                     <For each={data().entities}>
                       {(entity) => <PulseEntityRow entity={entity} />}
                     </For>
                   </AdaptiveScroller.Viewport>
+                  <AdaptiveScroller.FadeEdges class="bottom-10 top-3 hidden sm:block @3xl/dashboard:hidden" />
                   <AdaptiveScroller.Controls class="mt-2 @3xl/dashboard:hidden">
                     <AdaptiveScroller.Control
                       direction="left"
