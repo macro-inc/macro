@@ -23,10 +23,7 @@ export function CallDeviceList(props: {
       >
         <For each={props.devices}>
           {(device) => (
-            <Dropdown.RadioItem
-              closeOnSelect={false}
-              value={device.deviceId}
-            >
+            <Dropdown.RadioItem closeOnSelect={false} value={device.deviceId}>
               <span class="min-w-0 flex-1 truncate">{device.label}</span>
               <SingleSelectCheck
                 active={props.activeDeviceId === device.deviceId}
