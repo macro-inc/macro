@@ -4,7 +4,7 @@ import {
   CodeNode,
   registerCodeHighlighting,
 } from '@lexical/code';
-import { mergeRegister } from '@lexical/utils';
+import { $findMatchingParent, mergeRegister } from '@lexical/utils';
 import {
   $createCustomCodeNode,
   $isCustomCodeNode,
@@ -16,14 +16,17 @@ import {
   $insertNodes,
   $isLineBreakNode,
   $isRangeSelection,
+  COMMAND_PRIORITY_HIGH,
   COMMAND_PRIORITY_LOW,
   COMMAND_PRIORITY_NORMAL,
   createCommand,
   KEY_DOWN_COMMAND,
   type LexicalCommand,
   type LexicalEditor,
+  type LexicalNode,
   type NodeKey,
   type RangeSelection,
+  SELECT_ALL_COMMAND,
 } from 'lexical';
 import type { SetStoreFunction } from 'solid-js/store';
 import { CodeBoxAccessory } from '../../component/accessory/CodeBoxAccessory';
@@ -38,6 +41,11 @@ enum CodeCaretPosition {
 
 function $isCode(node: any): node is CodeNode | CustomCodeNode {
   return $isCodeNode(node) || $isCustomCodeNode(node);
+}
+
+function $getCodeAncestor(node: LexicalNode): CodeNode | CustomCodeNode | null {
+  const target = $findMatchingParent(node, $isCode);
+  return $isCode(target) ? target : null;
 }
 
 function $getNodeKeysByLine(
@@ -207,6 +215,35 @@ function registerCodePlugin(editor: LexicalEditor, props: CodePluginProps) {
         return true;
       },
       COMMAND_PRIORITY_NORMAL
+    ),
+
+    editor.registerCommand(
+      SELECT_ALL_COMMAND,
+      () => {
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) return false;
+
+        const anchorCode = $getCodeAncestor(selection.anchor.getNode());
+        const focusCode = $getCodeAncestor(selection.focus.getNode());
+
+        if (!anchorCode || anchorCode.getKey() !== focusCode?.getKey())
+          return false;
+
+        const codeKey = anchorCode.getKey();
+        const codeSize = anchorCode.getChildrenSize();
+        const selectedText = selection.getTextContent();
+        const codeText = anchorCode.getTextContent();
+        const isCodeFullySelected =
+          selectedText === codeText &&
+          $getCodeAncestor(selection.anchor.getNode())?.getKey() === codeKey &&
+          $getCodeAncestor(selection.focus.getNode())?.getKey() === codeKey;
+
+        if (isCodeFullySelected) return false;
+
+        anchorCode.select(0, codeSize);
+        return true;
+      },
+      COMMAND_PRIORITY_HIGH
     ),
 
     editor.registerCommand(
