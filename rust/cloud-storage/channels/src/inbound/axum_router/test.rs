@@ -345,6 +345,15 @@ impl ChannelService for ErrorService {
     ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
         Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
     }
+
+    async fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, ChannelMessagesErr> {
+        Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
+    }
 }
 
 struct ParticipantsService;
@@ -426,6 +435,15 @@ impl ChannelService for ParticipantsService {
         _channel_id: Uuid,
         _message_id: Uuid,
     ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, ChannelMessagesErr> {
         Ok(vec![])
     }
 }
@@ -628,6 +646,15 @@ impl ChannelService for RecordingMutationService {
         _channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
         Ok(())
+    }
+
+    async fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, ChannelMessagesErr> {
+        Ok(vec![])
     }
 }
 
@@ -950,6 +977,15 @@ impl ChannelService for NotFoundService {
     ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
         Err(ChannelMessagesErr::MessageNotFound(message_id))
     }
+
+    async fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
 }
 
 struct AroundHasItemsService {
@@ -1037,6 +1073,15 @@ impl ChannelService for AroundHasItemsService {
         _channel_id: Uuid,
         _message_id: Uuid,
     ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, ChannelMessagesErr> {
         Ok(vec![])
     }
 }
@@ -1221,6 +1266,15 @@ impl ChannelService for std::sync::Arc<CapturingService> {
         _channel_id: Uuid,
         _message_id: Uuid,
     ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, ChannelMessagesErr> {
         Ok(vec![])
     }
 }

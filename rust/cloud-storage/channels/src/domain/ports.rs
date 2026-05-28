@@ -367,13 +367,10 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Fetch attachment references for an entity visible to a user.
     fn get_attachment_references(
         &self,
-        _entity_type: String,
-        _entity_id: String,
-        _user_id: String,
-    ) -> impl Future<Output = Result<Vec<AttachmentEntityReference>, ChannelMessagesErr>> + Send
-    {
-        async move { Ok(Vec::new()) }
-    }
+        entity_type: String,
+        entity_id: String,
+        user_id: String,
+    ) -> impl Future<Output = Result<Vec<AttachmentEntityReference>, ChannelMessagesErr>> + Send;
 
     /// Fetch a centered window of messages around a specific message id.
     ///

@@ -1226,7 +1226,7 @@ where
             .map_err(ChannelMessagesErr::Repo)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_attachment_references(
         &self,
         entity_type: String,

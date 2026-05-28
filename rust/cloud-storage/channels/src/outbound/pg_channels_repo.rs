@@ -1235,7 +1235,7 @@ impl ChannelRepo for PgChannelsRepo {
             .collect())
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_attachment_references(
         &self,
         entity_type: &str,
