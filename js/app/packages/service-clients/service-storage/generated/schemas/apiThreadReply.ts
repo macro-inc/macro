@@ -7,6 +7,7 @@
 
 import type { ApiCountedReaction } from './apiCountedReaction';
 import type { ApiMessageAttachment } from './apiMessageAttachment';
+import type { ApiMessageSender } from './apiMessageSender';
 import type { ApiThreadReplyEditedAt } from './apiThreadReplyEditedAt';
 
 /**
@@ -25,6 +26,8 @@ export interface ApiThreadReply {
   id: string;
   /** Reactions on this reply. */
   reactions: ApiCountedReaction[];
+  /** Structured sender identity. */
+  sender: ApiMessageSender;
   /** Sender user id. */
   sender_id: string;
   /** When the reply was last updated. */

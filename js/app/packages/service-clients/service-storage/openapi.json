@@ -7684,6 +7684,7 @@
           "id",
           "channel_id",
           "sender_id",
+          "sender",
           "content",
           "created_at",
           "updated_at"
@@ -7718,6 +7719,10 @@
             "format": "uuid",
             "description": "Message id."
           },
+          "sender": {
+            "$ref": "#/components/schemas/ApiMessageSender",
+            "description": "Structured sender identity."
+          },
           "sender_id": {
             "type": "string",
             "description": "Sender user id."
@@ -7741,6 +7746,7 @@
           "id",
           "channel_id",
           "sender_id",
+          "sender",
           "content",
           "created_at",
           "updated_at",
@@ -7791,6 +7797,10 @@
               "$ref": "#/components/schemas/ApiCountedReaction"
             },
             "description": "Reactions on this message."
+          },
+          "sender": {
+            "$ref": "#/components/schemas/ApiMessageSender",
+            "description": "Structured sender identity."
           },
           "sender_id": {
             "type": "string",
@@ -7952,6 +7962,26 @@
           }
         }
       },
+      "ApiMessageSender": {
+        "type": "object",
+        "description": "Public sender identity for channel messages.",
+        "required": ["type", "id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Sender id without the storage namespace prefix."
+          },
+          "type": {
+            "$ref": "#/components/schemas/ApiMessageSenderType",
+            "description": "Sender type."
+          }
+        }
+      },
+      "ApiMessageSenderType": {
+        "type": "string",
+        "description": "Public sender type.",
+        "enum": ["user", "bot"]
+      },
       "ApiParticipantRole": {
         "type": "string",
         "description": "Participant role in a channel.",
@@ -8024,6 +8054,7 @@
         "required": [
           "id",
           "sender_id",
+          "sender",
           "content",
           "created_at",
           "updated_at",
@@ -8063,6 +8094,10 @@
               "$ref": "#/components/schemas/ApiCountedReaction"
             },
             "description": "Reactions on this reply."
+          },
+          "sender": {
+            "$ref": "#/components/schemas/ApiMessageSender",
+            "description": "Structured sender identity."
           },
           "sender_id": {
             "type": "string",

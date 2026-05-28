@@ -9,6 +9,7 @@ import type { ApiChannelMessageDeletedAt } from './apiChannelMessageDeletedAt';
 import type { ApiChannelMessageEditedAt } from './apiChannelMessageEditedAt';
 import type { ApiCountedReaction } from './apiCountedReaction';
 import type { ApiMessageAttachment } from './apiMessageAttachment';
+import type { ApiMessageSender } from './apiMessageSender';
 import type { ApiThreadInfo } from './apiThreadInfo';
 
 /**
@@ -31,6 +32,8 @@ export interface ApiChannelMessage {
   id: string;
   /** Reactions on this message. */
   reactions: ApiCountedReaction[];
+  /** Structured sender identity. */
+  sender: ApiMessageSender;
   /** Sender user id. */
   sender_id: string;
   /** Thread metadata and preview. */

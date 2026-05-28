@@ -62,6 +62,8 @@ export * from './apiEntityFilterAst';
 export * from './apiMessageAttachment';
 export * from './apiMessageAttachmentHeight';
 export * from './apiMessageAttachmentWidth';
+export * from './apiMessageSender';
+export * from './apiMessageSenderType';
 export * from './apiParticipantRole';
 export * from './apiResolvedChannelMessage';
 export * from './apiThreadInfo';
