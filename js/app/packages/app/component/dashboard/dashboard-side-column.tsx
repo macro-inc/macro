@@ -19,6 +19,7 @@ import { createMemo, createSignal, For, type JSX, Show } from "solid-js";
 
 function SideColumnSection(props: {
   title: string;
+  count?: number;
   viewAllLabel: string;
   onViewAll: () => void;
   children: JSX.Element;
@@ -44,7 +45,14 @@ function SideColumnSection(props: {
                 />
               </div>
             </Layer>
-            <h2 class="min-w-0 flex-1 truncate">{props.title}</h2>
+            <div class="flex min-w-0 flex-1 items-center gap-1.5">
+              <h2 class="min-w-0 truncate">{props.title}</h2>
+              <Show when={props.count !== undefined}>
+                <span class="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-sm bg-hover px-1 text-xxs font-bold text-ink-muted">
+                  {props.count}
+                </span>
+              </Show>
+            </div>
           </div>
           <Button
             variant="base"
@@ -233,6 +241,7 @@ function RecentChannelsColumnSection() {
   return (
     <SideColumnSection
       title="Recent channels"
+      count={channels().length}
       viewAllLabel="View channels"
       onViewAll={openChannelsView}
     >
@@ -288,6 +297,7 @@ function NotificationsColumnSection() {
   return (
     <SideColumnSection
       title="Notifications"
+      count={notifications().length}
       viewAllLabel="View inbox"
       onViewAll={openInboxView}
     >
@@ -331,6 +341,7 @@ function AutomationsColumnSection() {
   return (
     <SideColumnSection
       title="Automations"
+      count={visibleAutomations().length}
       viewAllLabel="View all automations"
       onViewAll={openAutomationsView}
     >
