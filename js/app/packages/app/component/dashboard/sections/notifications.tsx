@@ -3,23 +3,23 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { UserIcon } from '@core/component/UserIcon';
 import {
   createTheme,
   theme as markdownTheme,
 } from '@core/component/LexicalMarkdown/theme';
+import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
-import { formatDate } from '@core/util/date';
 import { Entity } from '@entity';
 import {
   getNotificationContent,
   getNotificationTargetName,
+  isChannelNotification,
   notificationIsRead,
   openNotification,
 } from '@notifications';
 import type { UnifiedNotification } from '@notifications/types';
-import CheckIcon from '@phosphor/check.svg';
 import BellIcon from '@phosphor/bell.svg';
+import CheckIcon from '@phosphor/check.svg';
 import { Button, cn, Layer, Tooltip } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 
@@ -33,12 +33,6 @@ const compactMarkdownTheme = createTheme(
   markdownTheme
 );
 
-function metadataContent(notification: UnifiedNotification) {
-  return (
-    notification.notification_metadata as { content?: Record<string, unknown> }
-  ).content;
-}
-
 function NotificationRow(props: { notification: UnifiedNotification }) {
   const notificationSource = useGlobalNotificationSource();
 
@@ -49,34 +43,28 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
   const tag = createMemo(() => props.notification.notification_metadata.tag);
   const unread = createMemo(() => !notificationIsRead(props.notification));
 
-  const target = createMemo(() => getNotificationTargetName(props.notification));
+  const target = createMemo(() =>
+    getNotificationTargetName(props.notification)
+  );
   const content = createMemo(() => getNotificationContent(props.notification));
-  const notificationContent = createMemo(() =>
-    metadataContent(props.notification)
-  );
 
-  const channelName = createMemo(
-    () => notificationContent()?.channelName as string | undefined
-  );
-  const isDirectMessage = createMemo(
-    () => notificationContent()?.channelType === 'directMessage'
-  );
-
-  const timestamp = createMemo(() =>
-    formatDate(props.notification.created_at, { shortWeekday: true })
-  );
-
-  const actor = createMemo(() => {
-    const content = notificationContent();
-    return (
-      actorName() ||
-      (content?.senderName as string | undefined) ||
-      (content?.fromName as string | undefined) ||
-      (content?.from as string | undefined) ||
-      (content?.senderEmail as string | undefined) ||
-      'Someone'
-    );
+  const channel = createMemo(() => {
+    if (!isChannelNotification(props.notification)) return;
+    return props.notification.notification_metadata.content;
   });
+
+  const sender = createMemo(() => {
+    const metadata = props.notification.notification_metadata;
+    if (metadata.tag !== 'new_email') return;
+    return metadata.content.sender;
+  });
+
+  const channelName = createMemo(() => channel()?.channelName);
+  const isDirectMessage = createMemo(
+    () => channel()?.channelType === 'directMessage'
+  );
+
+  const actor = createMemo(() => actorName() || sender() || 'Someone');
 
   const title = createMemo(() => {
     if (tag() === 'task_assigned') return target() || content() || 'Task';
@@ -93,12 +81,14 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
   const open = () => {
     const manager = globalSplitManager();
     if (!manager) return;
+
     void openNotification(props.notification, manager, false);
     if (unread()) void notificationSource.markAsRead(props.notification);
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
+
     event.preventDefault();
     open();
   };
@@ -143,7 +133,7 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
                   when={tag() === 'task_assigned'}
                   fallback={
                     <Entity.Notification.Icon
-                      notification={props.notification as any}
+                      notification={props.notification}
                       class="shrink-0"
                     />
                   }
@@ -167,7 +157,7 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
             <span class="truncate">{title()}</span>
           </p>
           <span class="shrink-0 text-xxs font-light text-ink-extra-muted">
-            {timestamp()}
+            <Entity.Notification.Timestamp notification={props.notification} />
           </span>
         </div>
 
@@ -186,7 +176,11 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
                           suppressClick
                           showTooltip={false}
                         />
-                        <span>{actor()}</span>
+                        <span>
+                          <Entity.Notification.Sender
+                            notification={props.notification}
+                          />
+                        </span>
                       </span>
                     )}
                   </Show>
@@ -213,7 +207,10 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
               )}
             </Show>
             <span class="truncate">
-              <span class="font-medium">{actor()}</span> assigned you
+              <span class="font-medium">
+                <Entity.Notification.Sender notification={props.notification} />
+              </span>{' '}
+              assigned you
             </span>
           </div>
         </Show>
