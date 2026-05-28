@@ -72,16 +72,15 @@ export const TopBar: Component<{
       icon: Info,
       action: detailsControl.toggle,
     },
-    { op: 'rename', divideAbove: true },
+    { op: 'rename' },
     { op: 'copy' },
     { op: 'moveToProject' },
     {
       label: 'Download',
       icon: Download,
       action: downloadDocument,
-      divideAbove: true,
     },
-    { op: 'delete', divideAbove: true },
+    { op: 'delete' },
   ];
 
   const tools: BlockTool[] = [
@@ -102,7 +101,6 @@ export const TopBar: Component<{
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),
-      divideAbove: true,
       buttonComponent: () => <ShareTrigger />,
       focusTarget: getShareDrawerRecipientInput,
     },

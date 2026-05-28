@@ -71,7 +71,6 @@ export function CallRecordingSplitHeader(props: {
           name: callName(),
           fileType: 'call',
         }),
-      divideAbove: true,
       buttonComponent: () => (
         <ChatWithAgentButton
           entity={{

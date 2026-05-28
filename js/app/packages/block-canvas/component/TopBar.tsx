@@ -105,16 +105,15 @@ export function TopBar() {
       icon: Info,
       action: detailsControl.toggle,
     },
-    { op: 'copy', divideAbove: true },
+    { op: 'copy' },
     { op: 'rename' },
     { op: 'moveToProject' },
     {
       label: 'Download',
       icon: DownloadSimple,
       action: downloadDocument,
-      divideAbove: true,
     },
-    { op: 'delete', divideAbove: true },
+    { op: 'delete' },
   ];
 
   const tools: BlockTool[] = [
@@ -135,7 +134,6 @@ export function TopBar() {
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),
-      divideAbove: true,
       condition: () => !!canvasFile(),
       buttonComponent: () => <ShareTrigger copyLink={copyLink} />,
       focusTarget: getShareDrawerRecipientInput,

@@ -84,9 +84,9 @@ export function TopBar() {
       : []),
     ...(isOwner() && !isSpecialProject
       ? [
-          { op: 'rename' as const, divideAbove: true },
+          { op: 'rename' as const },
           { op: 'moveToProject' as const },
-          { op: 'delete' as const, divideAbove: true },
+          { op: 'delete' as const },
         ]
       : []),
   ]);
@@ -108,7 +108,6 @@ export function TopBar() {
       icon: ChatWithAgentIcon,
       action: () => openChatWithAgent({ type: 'project', id, name: name() }),
       condition: () => !isSpecialProject,
-      divideAbove: true,
       buttonComponent: () => (
         <ChatWithAgentButton entity={{ type: 'project', id, name: name() }} />
       ),

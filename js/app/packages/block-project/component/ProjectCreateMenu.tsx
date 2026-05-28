@@ -296,7 +296,6 @@ export function useProjectCreateTools(
       icon: PlusIcon,
       // Using a setTimeout here so that the synthetic click event after the touch doesn't instantly select an item
       action: () => setTimeout(() => setOpen(true), 0),
-      divideAbove: true,
       condition,
     },
   ];

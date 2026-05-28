@@ -107,7 +107,7 @@ export function TopBar() {
   }
 
   const ops: FileOperation[] = [
-    { op: 'copy', divideAbove: true },
+    { op: 'copy' },
     { op: 'rename' },
     { op: 'moveToProject' },
     ...(isTask
@@ -123,9 +123,8 @@ export function TopBar() {
       label: 'Download',
       icon: Download,
       action: downloadAsMarkdownText,
-      divideAbove: true,
     },
-    { op: 'delete', divideAbove: true },
+    { op: 'delete' },
   ];
 
   const sidePanel = useSidePanel();
@@ -185,7 +184,6 @@ export function TopBar() {
           name: name(),
           fileType: 'md',
         }),
-      divideAbove: true,
       buttonComponent: () => (
         <ChatWithAgentButton
           entity={{
