@@ -115,11 +115,6 @@ async fn main() -> anyhow::Result<()> {
         .get_maybe_secret_value(env, DocumentPermissionJwtSecretKey::new()?)
         .await?;
 
-    // Also get it with the comms_service type for CommsHandlerState
-    let comms_permissions_token_secret = secretsmanager_client
-        .get_maybe_secret_value(env, comms_service::DocumentPermissionJwtSecretKey::new()?)
-        .await?;
-
     // Parse our configuration from the environment.
     let config = Config::from_env(
         cloudfront_signer_private_key,
@@ -321,7 +316,7 @@ async fn main() -> anyhow::Result<()> {
         frecency_storage.clone(),
     );
 
-    // Create the CommsRouterState for comms_service routes
+    // Create the CommsRouterState for the comms hex routes mounted under /comms.
     let comms_state = CommsRouterState::new(channel_service_for_comms);
 
     let s3 = Arc::new(S3::new(
@@ -608,7 +603,6 @@ async fn main() -> anyhow::Result<()> {
         // Comms service fields
         frecency_storage,
         comms_state,
-        permissions_token_secret: comms_permissions_token_secret,
         entity_access_service: entity_access_service.clone(),
         documents_state: DocumentRouterState {
             service: document_service.clone(),

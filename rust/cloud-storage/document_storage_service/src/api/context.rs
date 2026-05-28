@@ -32,7 +32,6 @@ use comms::{
     inbound::router::CommsRouterState,
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
-use comms_service::CommsHandlerState;
 use connection::{
     domain::service::ConnectionServiceImpl,
     outbound::connection_gateway_client::ConnectionGatewayImpl,
@@ -69,7 +68,6 @@ use properties::{
 use properties_service::PropertiesHandlerState;
 use readonly_pool::ReadOnlyPool;
 use search_service::SearchHandlerState;
-use secretsmanager_client::LocalOrRemoteSecret;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
@@ -303,8 +301,6 @@ pub(crate) struct ApiContext {
     // Comms service fields
     pub frecency_storage: FrecencyPgStorage,
     pub comms_state: CommsState,
-    pub permissions_token_secret:
-        LocalOrRemoteSecret<comms_service::DocumentPermissionJwtSecretKey>,
     pub entity_access_service: Arc<EntityAccessService>,
     pub documents_state: DocumentsState,
     pub channels_state: DssChannelsState,
@@ -349,28 +345,5 @@ impl From<&ApiContext> for SearchHandlerState {
 impl FromRef<ApiContext> for SearchHandlerState {
     fn from_ref(ctx: &ApiContext) -> Self {
         SearchHandlerState::from(ctx)
-    }
-}
-
-impl From<&ApiContext> for CommsHandlerState {
-    fn from(ctx: &ApiContext) -> Self {
-        CommsHandlerState {
-            jwt_validation_args: ctx.jwt_validation_args.clone(),
-            db: ctx.db.clone(),
-            connection_gateway_client: ctx.conn_gateway_client.clone(),
-            notification_ingress_service: ctx.notification_ingress_service.clone(),
-            sqs_client: ctx.sqs_client.clone(),
-            contacts_ingress: ctx.contacts_ingress.clone(),
-            permissions_token_secret: ctx.permissions_token_secret.clone(),
-            frecency_storage: ctx.frecency_storage.clone(),
-            comms_state: ctx.comms_state.clone(),
-            entity_access_service: ctx.entity_access_service.clone(),
-        }
-    }
-}
-
-impl FromRef<ApiContext> for CommsHandlerState {
-    fn from_ref(ctx: &ApiContext) -> Self {
-        CommsHandlerState::from(ctx)
     }
 }

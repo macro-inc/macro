@@ -127,12 +127,9 @@ impl LocalE2eServices {
         )
     }
 
-    /// URL for fetching channel data through document storage's comms API.
+    /// URL for fetching channel data through document storage's channels hex API.
     pub fn get_channel_url(&self, channel_id: &str) -> String {
-        format!(
-            "{}/comms/channels/{}",
-            self.document_storage_url, channel_id
-        )
+        format!("{}/channels/{}", self.document_storage_url, channel_id)
     }
 
     /// URL for patching or deleting a channel through document storage's channels hex API.

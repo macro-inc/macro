@@ -65,11 +65,12 @@ use crate::{
 use channels::inbound::axum_router::{
     ApiActivity, ApiAttachmentChannelReference, ApiAttachmentEntityReference,
     ApiAttachmentGenericReference, ApiChannelAttachment, ApiChannelAttachmentsPage,
-    ApiChannelContextMessage, ApiChannelMessage, ApiChannelMessageKind, ApiChannelMessagesPage,
-    ApiChannelParticipant, ApiCountedReaction, ApiMessageAttachment, ApiParticipantRole,
-    ApiResolvedChannelMessage, ApiThreadInfo, ApiThreadReply, ChannelMessageFilters,
-    CreateEntityMentionRequest, CreateEntityMentionResponse, DeleteEntityMentionResponse,
-    GetAttachmentReferencesResponse, GetMessageWithContextResponse, PostActivityRequest,
+    ApiChannelContextMessage, ApiChannelDetail, ApiChannelMessage, ApiChannelMessageKind,
+    ApiChannelMessagesPage, ApiChannelParticipant, ApiCountedReaction, ApiMessageAttachment,
+    ApiParticipantRole, ApiResolvedChannelMessage, ApiThreadInfo, ApiThreadReply,
+    ChannelMessageFilters, CreateEntityMentionRequest, CreateEntityMentionResponse,
+    DeleteEntityMentionResponse, GetAttachmentReferencesResponse, GetMessageWithContextResponse,
+    PostActivityRequest,
 };
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
@@ -216,6 +217,7 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::get_message_with_context_handler,
         channels::inbound::axum_router::resolve_channel_message_handler,
         channels::inbound::axum_router::get_channel_attachments_handler,
+        channels::inbound::axum_router::get_channel_handler,
         channels::inbound::axum_router::get_channel_participants_handler,
         channels::inbound::axum_router::get_batch_channel_preview_handler,
         channels::inbound::axum_router::create_mention_handler,
@@ -386,6 +388,7 @@ use utoipa::OpenApi;
             ApiChannelAttachmentsPage,
             ApiChannelAttachment,
             ApiChannelParticipant,
+            ApiChannelDetail,
             ApiParticipantRole,
             GetAttachmentReferencesResponse,
             ApiAttachmentEntityReference,

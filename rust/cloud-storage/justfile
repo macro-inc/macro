@@ -83,7 +83,6 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./email_scheduled_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./saved_views/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./channels/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./comms_service/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./documents/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./foreign_entity/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./stream/.env

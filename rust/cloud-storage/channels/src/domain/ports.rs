@@ -401,6 +401,20 @@ pub trait ChannelService: Send + Sync + 'static {
         channel_id: Uuid,
     ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send;
 
+    /// Fetch channel metadata (type + resolved display name) from the viewer's perspective.
+    fn get_channel_metadata(
+        &self,
+        channel_id: Uuid,
+        viewer_user_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<ChannelMetadata, ChannelMessagesErr>> + Send {
+        let _ = (channel_id, viewer_user_id);
+        async move {
+            Err(ChannelMessagesErr::Repo(anyhow::anyhow!(
+                "get_channel_metadata is not configured"
+            )))
+        }
+    }
+
     /// Batch fetch channel previews for the requested ids.
     fn batch_get_channel_previews(
         &self,

@@ -142,7 +142,6 @@
               "--locked"
               "--all-features"
               "--bin document_storage_service_openapi"
-              "--bin comms_service_openapi"
               "--bin properties_service_openapi"
               "--bin document_cognition_service_openapi"
               "--bin authentication_service_openapi"
