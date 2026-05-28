@@ -24,6 +24,7 @@ import type { ResultError } from '@core/util/result';
 
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
+import type { ApiChannelWithLatest } from '@service-comms/generated/models/apiChannelWithLatest';
 import { platformFetch } from 'core/util/platformFetch';
 import { err, ok, type Result } from 'neverthrow';
 import type {
@@ -39,7 +40,6 @@ import type {
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
-import type { ApiChannelWithLatest } from '@service-comms/generated/models/apiChannelWithLatest';
 import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
 import type { ApiChannelMessagesPage } from './generated/schemas/apiChannelMessagesPage';
 import type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
