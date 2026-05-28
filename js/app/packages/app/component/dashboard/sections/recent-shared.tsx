@@ -122,11 +122,11 @@ function EntityRow(props: { entity: EntityData; mode: 'recent' | 'shared' }) {
 
 export function RecentSharedSection() {
   const userId = useUserId();
-  const [tab, setTab] = createSignal<'recent' | 'shared'>('recent');
+  const [tab, setTab] = createSignal<'relevant' | 'shared'>('relevant');
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
 
-  const recentQuery = useSoupItemsQuery(() => ({
-    params: { sort_method: 'viewed_at', limit: 30 },
+  const relevantQuery = useSoupItemsQuery(() => ({
+    params: { sort_method: 'frecency', limit: 30 },
     body: {
       call_filters: {
         call_ids: ['00000000-0000-0000-0000-000000000000'],
@@ -143,7 +143,7 @@ export function RecentSharedSection() {
     },
   }));
 
-  const recentItems = createMemo(() => (recentQuery.data ?? []).slice(0, 20));
+  const relevantItems = createMemo(() => (relevantQuery.data ?? []).slice(0, 20));
   const sharedItems = createMemo(() =>
     (sharedQuery.data ?? [])
       .filter((entity) => !!userId() && entity.ownerId !== userId())
@@ -151,10 +151,10 @@ export function RecentSharedSection() {
   );
 
   const items = createMemo(() =>
-    tab() === 'recent' ? recentItems() : sharedItems()
+    tab() === 'relevant' ? relevantItems() : sharedItems()
   );
   const isLoading = createMemo(() =>
-    tab() === 'recent' ? recentQuery.isLoading : sharedQuery.isLoading
+    tab() === 'relevant' ? relevantQuery.isLoading : sharedQuery.isLoading
   );
 
   return (
@@ -164,11 +164,11 @@ export function RecentSharedSection() {
           <div class="p-3">
             <TabsInset
               value={tab()}
-              onChange={(value) => setTab(value as 'recent' | 'shared')}
+              onChange={(value) => setTab(value as 'relevant' | 'shared')}
               depth={3}
               class="inline-flex h-auto"
               list={[
-                { value: 'recent', label: 'Recent' },
+                { value: 'relevant', label: 'Relevant' },
                 { value: 'shared', label: 'Shared' },
               ]}
             />
@@ -198,11 +198,11 @@ export function RecentSharedSection() {
                 <Match when={items().length === 0}>
                   <div class="flex flex-col items-center justify-center rounded-xl bg-hover/50 px-4 py-6 text-center">
                     <p class="text-sm font-medium text-ink">
-                      No {tab() === 'recent' ? 'recent' : 'shared'} items
+                      No {tab() === 'relevant' ? 'relevant' : 'shared'} items
                     </p>
                     <p class="mt-1 text-xs text-ink-muted">
-                      {tab() === 'recent'
-                        ? 'Recently opened files will appear here.'
+                      {tab() === 'relevant'
+                        ? 'Relevant items will appear here.'
                         : 'Items shared with you will appear here.'}
                     </p>
                   </div>
@@ -210,7 +210,12 @@ export function RecentSharedSection() {
                 <Match when={true}>
                   <div class="space-y-1">
                     <For each={items()}>
-                      {(entity) => <EntityRow entity={entity} mode={tab()} />}
+                      {(entity) => (
+                        <EntityRow
+                          entity={entity}
+                          mode={tab() === 'relevant' ? 'recent' : 'shared'}
+                        />
+                      )}
                     </For>
                   </div>
                 </Match>
