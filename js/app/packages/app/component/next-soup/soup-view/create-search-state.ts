@@ -107,6 +107,13 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
     };
   }
 
+  // Foreign entity filters
+  if (include.foreignEntityRecordId?.length) {
+    filters.foreign_entity_filters = {
+      ids: include.foreignEntityRecordId,
+    };
+  }
+
   return filters;
 }
 
