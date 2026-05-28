@@ -1,10 +1,10 @@
 /* components */
+export { Checkbox, SingleSelectCheck } from './components/Checkbox';
 export { SegmentedControl } from './components/SegmentedControl';
 export { TabbedControl } from './components/TabbedControl';
 export { Avatar, AvatarGroup } from './components/Avatar';
 export { LogoProgress } from './components/LogoProgress';
 export { ToggleSwitch } from './components/ToggleSwitch';
-export { Checkbox } from './components/Checkbox';
 export { ButtonGroup } from './components/ButtonGroup';
 export { SendButton } from './components/SendButton';
 export { HoverCard } from './components/HoverCard';
