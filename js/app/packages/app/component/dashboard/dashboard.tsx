@@ -31,9 +31,7 @@ export function Dashboard() {
 
           <div class="min-w-0 space-y-10 @6xl/dashboard:mx-0 @6xl/dashboard:max-w-none">
             <Hero />
-            <div class="grid gap-4 @4xl/dashboard:grid-cols-[minmax(0,1fr)_14rem] @6xl/dashboard:grid-cols-[minmax(0,1fr)_16rem]">
-              <TeamPulseSection />
-            </div>
+            <TeamPulseSection />
 
             <RecentChannelsSection />
 
