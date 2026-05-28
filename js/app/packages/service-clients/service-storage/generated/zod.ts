@@ -1418,7 +1418,7 @@ export const createEntityMentionBody = zod
  * @summary Handler for `DELETE /channels/mentions/{mention_id}`.
  */
 export const deleteEntityMentionParams = zod.object({
-  mention_id: zod.string().describe('Entity mention id'),
+  mention_id: zod.string().uuid().describe('Entity mention id'),
 });
 
 export const deleteEntityMentionResponse = zod

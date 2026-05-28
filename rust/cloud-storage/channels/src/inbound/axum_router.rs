@@ -40,7 +40,7 @@ use entity_access::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
-use model_user::UserContext;
+use model_user::{UserContext, axum_extractor::MacroUserExtractor};
 use models_pagination::{
     Base64Str, BidirectionalCursor, CreatedAt, Cursor, CursorOptionExt, CursorVal,
     CursorWithValAndFilter, PaginatedOpaqueCursor, Query as PaginationQuery, TypeEraseCursor,
@@ -795,19 +795,19 @@ fn map_access_error(err: AccessError) -> ChannelsHandlerErr {
         (status = 201, body = CreateEntityMentionResponse),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip_all)]
 pub async fn create_mention_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    Extension(user_context): Extension<UserContext>,
+    macro_user: MacroUserExtractor,
     Json(req): Json<CreateEntityMentionRequest>,
 ) -> Result<(StatusCode, Json<CreateEntityMentionResponse>), ChannelsHandlerErr> {
-    let actor = actor_from_user_context(&user_context)?;
     require_document_edit_access(
         state.access_service.as_ref(),
-        &actor,
+        &macro_user.macro_user_id,
         &req.source_entity_type,
         &req.source_entity_id,
     )
@@ -820,7 +820,7 @@ pub async fn create_mention_handler<S: ChannelService, Svc: EntityAccessService>
             source_entity_id: req.source_entity_id,
             entity_type: req.entity_type,
             entity_id: req.entity_id,
-            user_id: Some(user_context.user_id.clone()),
+            user_id: Some(macro_user.user_context.user_id.clone()),
         })
         .await?;
 
@@ -845,7 +845,7 @@ pub async fn create_mention_handler<S: ChannelService, Svc: EntityAccessService>
     operation_id = "delete_entity_mention",
     path = "/channels/mentions/{mention_id}",
     params(
-        ("mention_id" = String, Path, description = "Entity mention id"),
+        ("mention_id" = Uuid, Path, description = "Entity mention id"),
     ),
     responses(
         (status = 200, body = DeleteEntityMentionResponse),
@@ -858,28 +858,24 @@ pub async fn create_mention_handler<S: ChannelService, Svc: EntityAccessService>
 #[tracing::instrument(err, skip_all)]
 pub async fn delete_mention_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    Extension(user_context): Extension<UserContext>,
-    Path(mention_id): Path<String>,
+    macro_user: MacroUserExtractor,
+    Path(mention_id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DeleteEntityMentionResponse>), ChannelsHandlerErr> {
-    let id = Uuid::parse_str(&mention_id)
-        .map_err(|_| ChannelsHandlerErr::BadRequest("invalid entity mention id"))?;
-
     let mention = state
         .service
-        .get_entity_mention(id)
+        .get_entity_mention(mention_id)
         .await?
         .ok_or(ChannelsHandlerErr::NotFound("entity mention not found"))?;
 
-    let actor = actor_from_user_context(&user_context)?;
     require_document_edit_access(
         state.access_service.as_ref(),
-        &actor,
+        &macro_user.macro_user_id,
         &mention.source_entity_type,
         &mention.source_entity_id,
     )
     .await?;
 
-    let deleted = state.service.delete_entity_mention(id).await?;
+    let deleted = state.service.delete_entity_mention(mention_id).await?;
     if !deleted {
         return Err(ChannelsHandlerErr::NotFound("entity mention not found"));
     }
