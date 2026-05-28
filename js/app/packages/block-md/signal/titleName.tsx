@@ -15,8 +15,7 @@ type MarkdownTitleNameContextValue = {
   setOptimisticName: (name: string | undefined) => void;
 };
 
-const MarkdownTitleNameContext =
-  createContext<MarkdownTitleNameContextValue>();
+const MarkdownTitleNameContext = createContext<MarkdownTitleNameContextValue>();
 
 export const MarkdownTitleNameProvider: FlowComponent = (props) => {
   const persistedName = useBlockDocumentName('');
