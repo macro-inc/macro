@@ -1626,19 +1626,20 @@ async fn pr_closed_upserts_merged_pull_request_metadata() {
 }
 
 #[tokio::test]
-async fn pr_event_without_valid_tasks_does_not_upsert_foreign_entity() {
+async fn pr_event_without_valid_tasks_still_upserts_foreign_entity() {
     let (service, foreign_entity_service) = make_sync_service_with_foreign_entity_service();
     let unknown_task_id = MacroTaskId::from_uuid(
         &uuid::Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
     )
     .to_task_id_string();
+    let title = format!("fixes {unknown_task_id}");
     let event = ValidatedGithubWebhookEvent::new(
         "pull_request".to_string(),
         serde_json::json!({
             "action": "opened",
             "pull_request": {
                 "number": 42,
-                "title": format!("fixes {unknown_task_id}"),
+                "title": title.clone(),
                 "body": null,
                 "head": { "ref": "feature/some-branch" },
                 "state": "open",
@@ -1656,8 +1657,97 @@ async fn pr_event_without_valid_tasks_does_not_upsert_foreign_entity() {
 
     service.process_webhook_event(&event).await.unwrap();
 
-    assert!(foreign_entity_service.foreign_entities().is_empty());
-    assert!(foreign_entity_service.create_calls().is_empty());
+    let foreign_entities = foreign_entity_service.foreign_entities();
+    assert_eq!(foreign_entities.len(), 1);
+    assert_eq!(
+        foreign_entities[0].metadata,
+        expected_pull_request_metadata(&title, GithubPullRequestStatus::Open, Some(10), Some(2))
+    );
+    assert_eq!(foreign_entity_service.create_calls().len(), 1);
+    assert!(foreign_entity_service.patch_calls().is_empty());
+}
+
+#[tokio::test]
+async fn pr_event_without_task_ids_still_upserts_foreign_entity() {
+    let (service, foreign_entity_service) = make_sync_service_with_foreign_entity_service();
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "number": 42,
+                "title": "just a normal PR",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "state": "open",
+                "merged": false,
+                "additions": 10,
+                "deletions": 2
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let foreign_entities = foreign_entity_service.foreign_entities();
+    assert_eq!(foreign_entities.len(), 1);
+    assert_eq!(
+        foreign_entities[0].metadata,
+        expected_pull_request_metadata(
+            "just a normal PR",
+            GithubPullRequestStatus::Open,
+            Some(10),
+            Some(2),
+        )
+    );
+    assert_eq!(foreign_entity_service.create_calls().len(), 1);
+    assert!(foreign_entity_service.patch_calls().is_empty());
+}
+
+#[tokio::test]
+async fn unhandled_pr_action_still_upserts_foreign_entity() {
+    let (service, foreign_entity_service) = make_sync_service_with_foreign_entity_service();
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "synchronize",
+            "pull_request": {
+                "number": 42,
+                "title": "sync branch changes",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "state": "open",
+                "merged": false,
+                "additions": 12,
+                "deletions": 3
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let foreign_entities = foreign_entity_service.foreign_entities();
+    assert_eq!(foreign_entities.len(), 1);
+    assert_eq!(
+        foreign_entities[0].metadata,
+        expected_pull_request_metadata(
+            "sync branch changes",
+            GithubPullRequestStatus::Open,
+            Some(12),
+            Some(3),
+        )
+    );
+    assert_eq!(foreign_entity_service.create_calls().len(), 1);
     assert!(foreign_entity_service.patch_calls().is_empty());
 }
 

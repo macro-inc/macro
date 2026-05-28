@@ -43,8 +43,6 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
             return Ok(());
         }
 
-        self.upsert_pull_request_foreign_entities(event).await;
-
         let github_key = Self::github_key(event);
 
         // Determine which validated tasks are new for this PR
@@ -125,8 +123,6 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
             tracing::debug!("no valid task documents found for extracted IDs");
             return Ok(());
         }
-
-        self.upsert_pull_request_foreign_entities(event).await;
 
         let github_key = Self::github_key(event);
 
@@ -237,9 +233,6 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
 
         // resolve_tasks validates each ID is an actual task document
         let resolved = self.resolve_tasks(&all_task_ids).await;
-        if !resolved.doc_ids.is_empty() {
-            self.upsert_pull_request_foreign_entities(event).await;
-        }
 
         // No bot comment on close
         let status = if is_merged {

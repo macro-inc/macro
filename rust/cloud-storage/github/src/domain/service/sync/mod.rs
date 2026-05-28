@@ -573,15 +573,20 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
                 tracing::debug!(event_type=%name, "skipping unknown event type");
                 Ok(())
             }
-            GithubWebhookEventType::PullRequest => match action {
-                Some("opened" | "reopened") => self.handle_pr_open(webhook_event).await,
-                Some("edited") => self.handle_pr_edit(webhook_event).await,
-                Some("closed") => self.handle_pr_close(webhook_event).await,
-                _ => {
-                    tracing::debug!(action, "skipping unhandled pull_request action");
-                    Ok(())
+            GithubWebhookEventType::PullRequest => {
+                self.upsert_pull_request_foreign_entities(webhook_event)
+                    .await;
+
+                match action {
+                    Some("opened" | "reopened") => self.handle_pr_open(webhook_event).await,
+                    Some("edited") => self.handle_pr_edit(webhook_event).await,
+                    Some("closed") => self.handle_pr_close(webhook_event).await,
+                    _ => {
+                        tracing::debug!(action, "skipping unhandled pull_request action");
+                        Ok(())
+                    }
                 }
-            },
+            }
             GithubWebhookEventType::IssueComment
             | GithubWebhookEventType::PullRequestReview
             | GithubWebhookEventType::PullRequestReviewComment => {
