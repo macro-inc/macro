@@ -38,7 +38,7 @@ use entity_access::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
-use model_user::UserContext;
+use model_user::{UserContext, axum_extractor::MacroUserExtractor};
 use models_pagination::{
     Base64Str, BidirectionalCursor, CreatedAt, Cursor, CursorOptionExt, CursorVal,
     CursorWithValAndFilter, PaginatedOpaqueCursor, Query as PaginationQuery, TypeEraseCursor,
@@ -1158,7 +1158,7 @@ pub async fn get_channel_participants_handler<S: ChannelService, Svc: EntityAcce
 )]
 pub async fn get_attachment_references_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    Extension(user_context): Extension<UserContext>,
+    user: MacroUserExtractor,
     Path(path): Path<AttachmentReferencesPath>,
 ) -> Result<Json<GetAttachmentReferencesResponse>, ChannelsHandlerErr> {
     let span = tracing::Span::current();
@@ -1167,7 +1167,7 @@ pub async fn get_attachment_references_handler<S: ChannelService, Svc: EntityAcc
 
     let references = state
         .service
-        .get_attachment_references(path.entity_type, path.entity_id, user_context.user_id)
+        .get_attachment_references(path.entity_type, path.entity_id, user.user_context.user_id)
         .await?;
 
     Ok(Json(GetAttachmentReferencesResponse {
