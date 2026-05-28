@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { AdaptiveScroller } from '@app/component/dashboard/adaptive-scroller';
 import { DashboardSectionError } from '@app/component/dashboard/dashboard-section-error';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { EntityIcon, type EntityIconSelector } from '@core/component/EntityIcon';
@@ -426,11 +427,23 @@ JSON context:\n${source.context}`,
                   </div>
                 </div>
 
-                <div class="mt-3 flex snap-x scroll-pl-4 gap-2 overflow-x-auto px-4 pb-1 scrollbar-hidden sm:px-0 @3xl/dashboard:grid @3xl/dashboard:grid-cols-2 @3xl/dashboard:overflow-visible @3xl/dashboard:pb-0 @6xl/dashboard:grid-cols-4">
-                  <For each={data().entities}>
-                    {(entity) => <PulseEntityRow entity={entity} />}
-                  </For>
-                </div>
+                <AdaptiveScroller scrollAmount={280}>
+                  <AdaptiveScroller.Viewport class="mt-3 scroll-pl-4 px-4 pb-1 sm:px-0 @3xl/dashboard:grid @3xl/dashboard:grid-cols-2 @3xl/dashboard:overflow-visible @3xl/dashboard:pb-0 @6xl/dashboard:grid-cols-4">
+                    <For each={data().entities}>
+                      {(entity) => <PulseEntityRow entity={entity} />}
+                    </For>
+                  </AdaptiveScroller.Viewport>
+                  <AdaptiveScroller.Controls class="mt-2 @3xl/dashboard:hidden">
+                    <AdaptiveScroller.Control
+                      direction="left"
+                      class="hidden sm:inline-flex @3xl/dashboard:hidden"
+                    />
+                    <AdaptiveScroller.Control
+                      direction="right"
+                      class="hidden sm:inline-flex @3xl/dashboard:hidden"
+                    />
+                  </AdaptiveScroller.Controls>
+                </AdaptiveScroller>
 
               </div>
             )}
