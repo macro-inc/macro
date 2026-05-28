@@ -217,7 +217,7 @@ export const populateJwtLambdaId = populateJwtLambda.lambdaId;
 // email — the signal that the link being matched was created by /link/gmail as a
 // secondary inbox, not the user's primary signup link. Must be wired to the
 // reconcile slot of the google_gmail IdP via FA admin UI per environment until
-// the IdP itself is declared in Pulumi (see this stack's README).
+// the IdP itself is declared in Pulumi.
 const reconcileSecondaryIdpLinkLambda = new FusionAuthLambda(
   'reconcile-secondary-idp-link-lambda',
   {
