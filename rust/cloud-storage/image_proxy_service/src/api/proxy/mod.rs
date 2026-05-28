@@ -198,8 +198,9 @@ fn extract_content_type(response: &reqwest::Response) -> Result<String, ProxyErr
     let content_type = response
         .headers()
         .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("application/octet-stream")
+        .ok_or_else(|| ProxyError::NotAnImage("missing Content-Type".to_string()))?
+        .to_str()
+        .map_err(|_| ProxyError::NotAnImage("invalid Content-Type".to_string()))?
         .to_string();
 
     if !is_allowed_content_type(&content_type) {
@@ -217,7 +218,7 @@ fn is_allowed_content_type(content_type: &str) -> bool {
         .trim()
         .to_ascii_lowercase();
 
-    media_type.starts_with("image/") || media_type == "application/octet-stream"
+    media_type.starts_with("image/")
 }
 
 fn check_content_length(

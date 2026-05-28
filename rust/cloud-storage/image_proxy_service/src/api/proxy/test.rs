@@ -52,18 +52,47 @@ fn test_allows_image_content_types() {
 }
 
 #[test]
-fn test_allows_octet_stream_content_type() {
-    assert!(is_allowed_content_type("application/octet-stream"));
-    assert!(is_allowed_content_type(
+fn test_rejects_octet_stream_content_type() {
+    assert!(!is_allowed_content_type("application/octet-stream"));
+    assert!(!is_allowed_content_type(
         "application/octet-stream; charset=binary"
     ));
-    assert!(is_allowed_content_type("APPLICATION/OCTET-STREAM"));
+    assert!(!is_allowed_content_type("APPLICATION/OCTET-STREAM"));
 }
 
 #[test]
 fn test_rejects_non_image_content_types() {
     assert!(!is_allowed_content_type("text/html"));
     assert!(!is_allowed_content_type("application/json"));
+}
+
+fn response_with_content_type(
+    content_type: Option<reqwest::header::HeaderValue>,
+) -> reqwest::Response {
+    let mut response = axum::http::Response::builder().status(StatusCode::OK);
+    if let Some(content_type) = content_type {
+        response = response.header(reqwest::header::CONTENT_TYPE, content_type);
+    }
+    response.body("").unwrap().into()
+}
+
+#[test]
+fn test_extract_content_type_rejects_missing_header() {
+    let result = extract_content_type(&response_with_content_type(None));
+    assert!(matches!(
+        result,
+        Err(ProxyError::NotAnImage(message)) if message == "missing Content-Type"
+    ));
+}
+
+#[test]
+fn test_extract_content_type_rejects_invalid_header() {
+    let content_type = reqwest::header::HeaderValue::from_bytes(&[0xff]).unwrap();
+    let result = extract_content_type(&response_with_content_type(Some(content_type)));
+    assert!(matches!(
+        result,
+        Err(ProxyError::NotAnImage(message)) if message == "invalid Content-Type"
+    ));
 }
 
 #[test]
