@@ -1,34 +1,33 @@
-import { setInviteModalOpen } from '@app/component/app-sidebar/invite-modal';
-import { CommandState } from '@app/component/command';
-import { setCreateMenuOpen } from '@app/component/Launcher';
-import { ResponsiveDropdown } from '@app/component/SimpleDropdown';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
-import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import { ChatInput } from '@core/component/AI/component/input/ChatInput';
-import { ChatInputProvider } from '@core/component/AI/context';
-import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
-import { setAutomationComposerOpen } from '@block-automation/component';
-import { useSettingsState } from '@core/constant/SettingsState';
-import GearIcon from '@phosphor/gear.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import RobotIcon from '@phosphor/robot.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
-import MoreIcon from '@phosphor-icons/core/fill/dots-three-outline-fill.svg?component-solid';
-import { cognitionApiServiceClient } from '@service-cognition/client';
-import { Button } from '@ui';
-import { createMemo, createSignal } from 'solid-js';
+import { setInviteModalOpen } from "@app/component/app-sidebar/invite-modal";
+import { CommandState } from "@app/component/command";
+import { setCreateMenuOpen } from "@app/component/Launcher";
+import { globalSplitManager } from "@app/signal/splitLayout";
+import { buildChatEditor } from "@core/component/AI/component/input/buildChatEditor";
+import type { ChatSendInput } from "@core/component/AI/component/input/buildRequest";
+import { ChatInput } from "@core/component/AI/component/input/ChatInput";
+import { ChatInputProvider } from "@core/component/AI/context";
+import { setPendingSendData } from "@core/component/AI/signal/pendingSend";
+import { setAutomationComposerOpen } from "@block-automation/component";
+import { useSettingsState } from "@core/constant/SettingsState";
+import GearIcon from "@phosphor/gear.svg";
+import PlusIcon from "@phosphor/plus.svg";
+import RobotIcon from "@phosphor/robot.svg";
+import SearchIcon from "@phosphor/magnifying-glass.svg";
+import UsersThreeIcon from "@phosphor/users-three.svg";
+import MoreIcon from "@phosphor-icons/core/fill/dots-three-outline-fill.svg?component-solid";
+import { cognitionApiServiceClient } from "@service-cognition/client";
+import { Button, Dropdown } from "@ui";
+import { createMemo, createSignal } from "solid-js";
 
-import { useUserContext } from '@core/context/user';
+import { useUserContext } from "@core/context/user";
 
 function openAutomationsView() {
   globalSplitManager()?.openWithSplit(
-    { type: 'component', id: 'agents' },
+    { type: "component", id: "agents" },
     {
       activate: true,
-      referredFrom: 'dashboard',
-    }
+      referredFrom: "dashboard",
+    },
   );
 }
 
@@ -46,12 +45,12 @@ function DashboardAiInput() {
     });
 
     globalSplitManager()?.openWithSplit(
-      { type: 'chat', id: response.value.id },
+      { type: "chat", id: response.value.id },
       {
         activate: true,
         referredFrom: null,
         preferNewSplit: request.metaKey,
-      }
+      },
     );
   };
 
@@ -69,14 +68,14 @@ export function Hero() {
 
   const firstName = createMemo(() => {
     const name = user.author();
-    return name.includes('@') ? name.split('@')[0] : name.split(' ')[0];
+    return name.includes("@") ? name.split("@")[0] : name.split(" ")[0];
   });
 
   const greeting = createMemo(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
   });
 
   return (
@@ -109,51 +108,51 @@ export function Hero() {
             <SearchIcon class="size-4" />
             Search
           </Button>
-          <ResponsiveDropdown open={moreOpen()} onOpenChange={setMoreOpen}>
-            <ResponsiveDropdown.Trigger
-              class="inline-flex h-10 items-center gap-2 rounded-lg border border-edge-muted bg-transparent px-3 text-sm font-medium text-ink-muted transition hover:bg-hover hover:text-ink focus:outline-none focus-visible:bg-active"
+          <Dropdown
+            open={moreOpen()}
+            onOpenChange={setMoreOpen}
+            placement="bottom-end"
+          >
+            <Dropdown.Trigger
+              variant="base"
+              size="lg"
+              class="h-10 rounded-lg px-3 text-sm"
               aria-label="More dashboard actions"
             >
               <MoreIcon class="size-4" />
               More
-            </ResponsiveDropdown.Trigger>
-            <ResponsiveDropdown.Portal>
-              <ResponsiveDropdown.Content class="z-highlight-menu min-w-48 rounded-xl border border-edge bg-surface p-1.5 shadow-xl shadow-drop-shadow outline-none">
-                <ResponsiveDropdown.Item
-                  text="Invite teammate"
-                  icon={UsersThreeIcon}
-                  onClick={() => {
-                    setInviteModalOpen(true);
-                    setMoreOpen(false);
-                  }}
-                />
-                <ResponsiveDropdown.Item
-                  text="Create automation"
-                  icon={RobotIcon}
-                  onClick={() => {
-                    setAutomationComposerOpen(true, false);
-                    setMoreOpen(false);
-                  }}
-                />
-                <ResponsiveDropdown.Item
-                  text="Team settings"
-                  icon={GearIcon}
-                  onClick={() => {
-                    openSettings('Team');
-                    setMoreOpen(false);
-                  }}
-                />
-                <ResponsiveDropdown.Item
-                  text="View automations"
-                  icon={RobotIcon}
-                  onClick={() => {
-                    openAutomationsView();
-                    setMoreOpen(false);
-                  }}
-                />
-              </ResponsiveDropdown.Content>
-            </ResponsiveDropdown.Portal>
-          </ResponsiveDropdown>
+            </Dropdown.Trigger>
+            <Dropdown.Content class="min-w-48">
+              <Dropdown.Group>
+                <Dropdown.Item onSelect={() => setInviteModalOpen(true)}>
+                  <UsersThreeIcon class="size-4 shrink-0 text-ink-muted" />
+                  <span class="flex-1 truncate text-ink-muted">
+                    Invite teammate
+                  </span>
+                </Dropdown.Item>
+                <Dropdown.Item
+                  onSelect={() => setAutomationComposerOpen(true, false)}
+                >
+                  <RobotIcon class="size-4 shrink-0 text-ink-muted" />
+                  <span class="flex-1 truncate text-ink-muted">
+                    Create automation
+                  </span>
+                </Dropdown.Item>
+                <Dropdown.Item onSelect={() => openSettings("Team")}>
+                  <GearIcon class="size-4 shrink-0 text-ink-muted" />
+                  <span class="flex-1 truncate text-ink-muted">
+                    Team settings
+                  </span>
+                </Dropdown.Item>
+                <Dropdown.Item onSelect={openAutomationsView}>
+                  <RobotIcon class="size-4 shrink-0 text-ink-muted" />
+                  <span class="flex-1 truncate text-ink-muted">
+                    View automations
+                  </span>
+                </Dropdown.Item>
+              </Dropdown.Group>
+            </Dropdown.Content>
+          </Dropdown>
         </div>
       </div>
     </section>
