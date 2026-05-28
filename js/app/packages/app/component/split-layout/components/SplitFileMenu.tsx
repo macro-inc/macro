@@ -14,7 +14,7 @@ import ThreeDots from '@phosphor/list.svg';
 import Rename from '@phosphor/pencil-line.svg';
 import Trash from '@phosphor/trash-simple.svg';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
-import { Button, cn, Dropdown } from '@ui';
+import { Button, Dropdown } from '@ui';
 import {
   type Component,
   createMemo,
