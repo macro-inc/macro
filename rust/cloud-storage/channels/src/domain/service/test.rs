@@ -2,13 +2,13 @@ use super::*;
 use crate::domain::{
     events::ChannelEvent,
     models::{
-        ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelInfo,
-        ChannelMessageFilters, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
-        CreateEntityMentionOptions, EntityMention, MessageAttachment, MessagePageDirection,
-        MutatedAttachment, MutatedMessage, NewChannelAttachment, ParticipantRole,
-        PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostReactionRequest,
-        ReactionAction, ReferencedShareItem, ReferencedShareItemType, ResolvedChannelMessage,
-        SimpleMention, ThreadData, ThreadReplyRow, TopLevelMessageRow,
+        Activity, ActivityType, ChannelAttachment, ChannelAttachmentType, ChannelContextMessage,
+        ChannelInfo, ChannelMessageFilters, ChannelMetadata, ChannelParticipant, ChannelType,
+        CountedReaction, CreateEntityMentionOptions, EntityMention, MessageAttachment,
+        MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
+        ParticipantRole, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
+        PostReactionRequest, ReactionAction, ReferencedShareItem, ReferencedShareItemType,
+        ResolvedChannelMessage, SimpleMention, ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{
         ChannelEventDispatcher, ChannelReferenceSharePermissions, ChannelRepo, MockChannelRepo,
@@ -595,6 +595,28 @@ impl ChannelRepo for FakeMutationRepo {
     async fn upsert_activity(&self, _user_id: String, _channel_id: Uuid) -> Result<(), Self::Err> {
         self.state.lock().unwrap().activity_upserts += 1;
         Ok(())
+    }
+
+    async fn get_activities(&self, _user_id: String) -> Result<Vec<Activity>, Self::Err> {
+        Ok(Vec::new())
+    }
+
+    async fn set_activity(
+        &self,
+        user_id: String,
+        channel_id: Uuid,
+        _activity_type: ActivityType,
+    ) -> Result<Activity, Self::Err> {
+        self.state.lock().unwrap().activity_upserts += 1;
+        Ok(Activity {
+            id: Uuid::nil(),
+            user_id,
+            channel_id,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            viewed_at: None,
+            interacted_at: None,
+        })
     }
 
     async fn add_reaction(

@@ -1,15 +1,15 @@
 use crate::domain::events::ChannelEvent;
 use crate::domain::models::{
-    AddParticipantsRequest, AttachmentEntityReference, ChannelAttachment, ChannelAttachmentType,
-    ChannelContextMessage, ChannelInfo, ChannelMessageFilters, ChannelMetadata, ChannelParticipant,
-    ChannelPreview, ChannelPreviewRow, CountedReaction, CreateChannelRequest,
-    CreateChannelResponse, CreateEntityMentionOptions, DeleteMessageQuery, EntityMention,
-    GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest, MessageAttachment,
-    MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
-    PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostMessageResponse,
-    PostReactionRequest, PostTypingRequest, ReferencedShareItem, RemoveParticipantsRequest,
-    ResolvedChannelMessage, SimpleMention, ThreadData, ThreadReply, ThreadReplyRow,
-    TopLevelMessageRow,
+    Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference, ChannelAttachment,
+    ChannelAttachmentType, ChannelContextMessage, ChannelInfo, ChannelMessageFilters,
+    ChannelMetadata, ChannelParticipant, ChannelPreview, ChannelPreviewRow, CountedReaction,
+    CreateChannelRequest, CreateChannelResponse, CreateEntityMentionOptions, DeleteMessageQuery,
+    EntityMention, GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest,
+    MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
+    NewChannelAttachment, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
+    PostMessageResponse, PostReactionRequest, PostTypingRequest, ReferencedShareItem,
+    RemoveParticipantsRequest, ResolvedChannelMessage, SimpleMention, ThreadData, ThreadReply,
+    ThreadReplyRow, TopLevelMessageRow,
 };
 use crate::domain::side_effects::{
     ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
@@ -331,6 +331,20 @@ pub trait ChannelRepo: Send + Sync + 'static {
         channel_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Fetch all activities for a user across channels, most-recent first.
+    fn get_activities(
+        &self,
+        user_id: String,
+    ) -> impl Future<Output = Result<Vec<Activity>, Self::Err>> + Send;
+
+    /// Upsert the user's activity for a channel with the given type, returning the row.
+    fn set_activity(
+        &self,
+        user_id: String,
+        channel_id: Uuid,
+        activity_type: ActivityType,
+    ) -> impl Future<Output = Result<Activity, Self::Err>> + Send;
+
     /// Add a reaction to a message within a channel.
     fn add_reaction(
         &self,
@@ -445,6 +459,14 @@ pub trait ChannelService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ResolvedChannelMessage, ChannelMessagesErr>> + Send {
         let _ = channel_id;
         async move { Err(ChannelMessagesErr::MessageNotFound(message_id)) }
+    }
+
+    /// Fetch all activities for the user across channels.
+    fn get_activities(
+        &self,
+        _user_id: String,
+    ) -> impl Future<Output = Result<Vec<Activity>, ChannelMessagesErr>> + Send {
+        async move { Ok(Vec::new()) }
     }
 
     // Channel mutation operations.
@@ -672,6 +694,20 @@ pub trait ChannelService: Send + Sync + 'static {
         &self,
         _id: Uuid,
     ) -> impl Future<Output = Result<bool, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Upsert the user's activity (view/interaction) for a channel.
+    fn post_activity(
+        &self,
+        _user_id: String,
+        _channel_id: Uuid,
+        _activity_type: ActivityType,
+    ) -> impl Future<Output = Result<Activity, ChannelMutationErr>> + Send {
         async move {
             Err(ChannelMutationErr::NotFound(
                 "channel mutations are not configured".to_string(),

@@ -63,12 +63,13 @@ use crate::{
     },
 };
 use channels::inbound::axum_router::{
-    ApiAttachmentChannelReference, ApiAttachmentEntityReference, ApiAttachmentGenericReference,
-    ApiChannelAttachment, ApiChannelAttachmentsPage, ApiChannelContextMessage, ApiChannelMessage,
-    ApiChannelMessageKind, ApiChannelMessagesPage, ApiChannelParticipant, ApiCountedReaction,
-    ApiMessageAttachment, ApiParticipantRole, ApiResolvedChannelMessage, ApiThreadInfo,
-    ApiThreadReply, ChannelMessageFilters, CreateEntityMentionRequest, CreateEntityMentionResponse,
-    DeleteEntityMentionResponse, GetAttachmentReferencesResponse, GetMessageWithContextResponse,
+    ApiActivity, ApiAttachmentChannelReference, ApiAttachmentEntityReference,
+    ApiAttachmentGenericReference, ApiChannelAttachment, ApiChannelAttachmentsPage,
+    ApiChannelContextMessage, ApiChannelMessage, ApiChannelMessageKind, ApiChannelMessagesPage,
+    ApiChannelParticipant, ApiCountedReaction, ApiMessageAttachment, ApiParticipantRole,
+    ApiResolvedChannelMessage, ApiThreadInfo, ApiThreadReply, ChannelMessageFilters,
+    CreateEntityMentionRequest, CreateEntityMentionResponse, DeleteEntityMentionResponse,
+    GetAttachmentReferencesResponse, GetMessageWithContextResponse, PostActivityRequest,
 };
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
@@ -220,6 +221,8 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::create_mention_handler,
         channels::inbound::axum_router::delete_mention_handler,
         channels::inbound::axum_router::get_attachment_references_handler,
+        channels::inbound::axum_router::get_activity_handler,
+        channels::inbound::axum_router::post_activity_handler,
 
         // calls
         call::inbound::axum_router::get_or_create_call_handler,
@@ -417,6 +420,9 @@ use utoipa::OpenApi;
             CreateEntityMentionRequest,
             CreateEntityMentionResponse,
             DeleteEntityMentionResponse,
+            channels::domain::models::ActivityType,
+            ApiActivity,
+            PostActivityRequest,
 
             // Calls
             call::domain::models::CallTokenResponse,

@@ -1,15 +1,16 @@
 use crate::domain::{
     events::ChannelEvent,
     models::{
-        AddParticipantsRequest, AttachmentEntityReference, ChannelAttachmentType,
-        ChannelContextMessage, ChannelMessage, ChannelMessageFilters, ChannelParticipant,
-        ChannelPreview, ChannelPreviewData, ChannelType, CreateEntityMentionOptions,
-        DeleteMessageQuery, EntityMention, GetOrCreateAction, GetOrCreateChannelResponse,
-        GetOrCreateDmRequest, GetOrCreatePrivateRequest, MessagePageDirection,
-        NewChannelAttachment, ParticipantRole, PatchChannelRequest, PatchMessageRequest,
-        PostMessageRequest, PostMessageResponse, PostReactionRequest, PostTypingRequest,
-        ReactionAction, ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage,
-        SimpleMention, ThreadInfo, ThreadReply, TopLevelMessageRow, WithChannelId,
+        Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference,
+        ChannelAttachmentType, ChannelContextMessage, ChannelMessage, ChannelMessageFilters,
+        ChannelParticipant, ChannelPreview, ChannelPreviewData, ChannelType,
+        CreateEntityMentionOptions, DeleteMessageQuery, EntityMention, GetOrCreateAction,
+        GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest,
+        MessagePageDirection, NewChannelAttachment, ParticipantRole, PatchChannelRequest,
+        PatchMessageRequest, PostMessageRequest, PostMessageResponse, PostReactionRequest,
+        PostTypingRequest, ReactionAction, ReferencedShareItem, RemoveParticipantsRequest,
+        ResolvedChannelMessage, SimpleMention, ThreadInfo, ThreadReply, TopLevelMessageRow,
+        WithChannelId,
     },
     ports::{
         ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr,
@@ -1253,6 +1254,33 @@ where
         }
 
         Ok(previews)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_activities(&self, user_id: String) -> Result<Vec<Activity>, ChannelMessagesErr> {
+        let activities = self
+            .repo
+            .get_activities(user_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        Ok(activities)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn post_activity(
+        &self,
+        user_id: String,
+        channel_id: Uuid,
+        activity_type: ActivityType,
+    ) -> Result<Activity, ChannelMutationErr> {
+        let activity = self
+            .repo
+            .set_activity(user_id, channel_id, activity_type)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        Ok(activity)
     }
 
     #[tracing::instrument(err, skip(self))]

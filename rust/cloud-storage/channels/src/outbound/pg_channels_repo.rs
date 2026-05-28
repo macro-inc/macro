@@ -3,14 +3,14 @@ mod tests;
 
 use crate::domain::{
     models::{
-        AttachmentChannelReference, AttachmentEntityReference, AttachmentGenericReference,
-        ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelInfo,
-        ChannelMessageFilters, ChannelMessageKind, ChannelMetadata, ChannelParticipant,
-        ChannelPreviewRow, ChannelType, CountedReaction, CreateChannelRequest,
-        CreateEntityMentionOptions, EntityMention, MessageAttachment, MessagePageDirection,
-        MutatedAttachment, MutatedMessage, NewChannelAttachment, ParticipantRole,
-        PatchChannelRequest, ResolvedChannelMessage, SimpleMention, ThreadData, ThreadReplyRow,
-        TopLevelMessageRow,
+        Activity, ActivityType, AttachmentChannelReference, AttachmentEntityReference,
+        AttachmentGenericReference, ChannelAttachment, ChannelAttachmentType,
+        ChannelContextMessage, ChannelInfo, ChannelMessageFilters, ChannelMessageKind,
+        ChannelMetadata, ChannelParticipant, ChannelPreviewRow, ChannelType, CountedReaction,
+        CreateChannelRequest, CreateEntityMentionOptions, EntityMention, MessageAttachment,
+        MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
+        ParticipantRole, PatchChannelRequest, ResolvedChannelMessage, SimpleMention, ThreadData,
+        ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
@@ -2300,6 +2300,120 @@ impl ChannelRepo for PgChannelsRepo {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    async fn get_activities(&self, user_id: String) -> Result<Vec<Activity>, Self::Err> {
+        let activities = sqlx::query!(
+            r#"
+        SELECT 
+            a.id as "id!: Uuid",
+            a.user_id as "user_id!: String",
+            a.channel_id as "channel_id!: Uuid",
+            a.viewed_at as "viewed_at?: DateTime<Utc>",
+            a.interacted_at as "interacted_at?: DateTime<Utc>",
+            a.created_at as "created_at!: DateTime<Utc>",
+            a.updated_at as "updated_at!: DateTime<Utc>"
+        FROM comms_activity a
+        WHERE a.user_id = $1
+        ORDER BY 
+            GREATEST(
+                COALESCE(a.viewed_at, '1970-01-01'::timestamp),
+                COALESCE(a.interacted_at, '1970-01-01'::timestamp)
+            ) DESC,
+            a.created_at DESC
+        LIMIT 100
+        "#,
+            user_id
+        )
+        .map(|row| Activity {
+            id: row.id,
+            user_id: row.user_id,
+            channel_id: row.channel_id,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            viewed_at: row.viewed_at,
+            interacted_at: row.interacted_at,
+        })
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(activities)
+    }
+
+    async fn set_activity(
+        &self,
+        user_id: String,
+        channel_id: Uuid,
+        activity_type: ActivityType,
+    ) -> Result<Activity, Self::Err> {
+        let activity = match activity_type {
+            ActivityType::View => {
+                sqlx::query_as!(
+                    Activity,
+                    r#"
+                INSERT INTO comms_activity (
+                    id,
+                    user_id,
+                    channel_id,
+                    viewed_at
+                )
+                VALUES (
+                    $1, $2, $3, NOW()
+                )
+                ON CONFLICT (user_id, channel_id) DO UPDATE 
+                SET 
+                    viewed_at = NOW(),
+                    updated_at = NOW()
+                RETURNING 
+                    id as "id!: Uuid",
+                    user_id as "user_id!: String",
+                    channel_id as "channel_id!: Uuid",
+                    created_at as "created_at!: DateTime<Utc>",
+                    updated_at as "updated_at!: DateTime<Utc>",
+                    viewed_at as "viewed_at?: DateTime<Utc>",
+                    interacted_at as "interacted_at?: DateTime<Utc>"
+                "#,
+                    macro_uuid::generate_uuid_v7(),
+                    user_id,
+                    channel_id,
+                )
+                .fetch_one(&self.pool)
+                .await?
+            }
+            ActivityType::Interact => {
+                sqlx::query_as!(
+                    Activity,
+                    r#"
+                INSERT INTO comms_activity (
+                    id,
+                    user_id,
+                    channel_id,
+                    interacted_at
+                )
+                VALUES (
+                    $1, $2, $3, NOW()
+                )
+                ON CONFLICT (user_id, channel_id) DO UPDATE 
+                SET 
+                    interacted_at = NOW(),
+                    updated_at = NOW()
+                RETURNING 
+                    id as "id!: Uuid",
+                    user_id as "user_id!: String",
+                    channel_id as "channel_id!: Uuid",
+                    created_at as "created_at!: DateTime<Utc>",
+                    updated_at as "updated_at!: DateTime<Utc>",
+                    viewed_at as "viewed_at?: DateTime<Utc>",
+                    interacted_at as "interacted_at?: DateTime<Utc>"
+                "#,
+                    macro_uuid::generate_uuid_v7(),
+                    user_id,
+                    channel_id,
+                )
+                .fetch_one(&self.pool)
+                .await?
+            }
+        };
+        Ok(activity)
     }
 
     async fn add_reaction(

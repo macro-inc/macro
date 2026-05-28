@@ -1295,6 +1295,125 @@
         }
       }
     },
+    "/channels/activity": {
+      "get": {
+        "tags": ["channels"],
+        "summary": "Handler for `GET /channels/activity`.",
+        "operationId": "get_activity",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApiActivity"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["channels"],
+        "summary": "Handler for `POST /channels/activity`.",
+        "operationId": "post_activity",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostActivityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiActivity"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/attachments/{entity_type}/{entity_id}/references": {
       "get": {
         "tags": ["channels::inbound::axum_router"],
@@ -7626,6 +7745,11 @@
           }
         ]
       },
+      "ActivityType": {
+        "type": "string",
+        "description": "The kind of activity a user performs in a channel.",
+        "enum": ["view", "interact"]
+      },
       "AddParticipantsRequest": {
         "type": "object",
         "description": "Request to add participants.",
@@ -7869,6 +7993,47 @@
             }
           }
         ]
+      },
+      "ApiActivity": {
+        "type": "object",
+        "description": "A user's activity (view/interaction) within a channel.",
+        "required": ["id", "user_id", "channel_id", "created_at", "updated_at"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the activity row was created."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Activity id."
+          },
+          "interacted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "The last time the user interacted with the channel."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the activity row was last updated."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User id."
+          },
+          "viewed_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "The last time the user viewed the channel."
+          }
+        }
       },
       "ApiAttachmentChannelReference": {
         "type": "object",
@@ -13296,6 +13461,21 @@
             "type": "integer",
             "format": "int32",
             "description": "The pin index"
+          }
+        }
+      },
+      "PostActivityRequest": {
+        "type": "object",
+        "description": "Request body for `POST /channels/activity`.",
+        "required": ["channel_id", "activity_type"],
+        "properties": {
+          "activity_type": {
+            "$ref": "#/components/schemas/ActivityType",
+            "description": "The kind of activity to record."
+          },
+          "channel_id": {
+            "type": "string",
+            "description": "Channel id to record activity for."
           }
         }
       },

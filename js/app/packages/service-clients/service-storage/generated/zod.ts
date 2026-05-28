@@ -1267,6 +1267,66 @@ export const createChannelResponse = zod
   .describe('Response returned after creating a channel.');
 
 /**
+ * @summary Handler for `GET /channels/activity`.
+ */
+export const getActivityResponseItem = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel id.'),
+    created_at: zod.iso
+      .datetime({})
+      .describe('When the activity row was created.'),
+    id: zod.uuid().describe('Activity id.'),
+    interacted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('The last time the user interacted with the channel.'),
+    updated_at: zod.iso
+      .datetime({})
+      .describe('When the activity row was last updated.'),
+    user_id: zod.string().describe('User id.'),
+    viewed_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('The last time the user viewed the channel.'),
+  })
+  .describe("A user's activity (view\/interaction) within a channel.");
+export const getActivityResponse = zod.array(getActivityResponseItem);
+
+/**
+ * @summary Handler for `POST /channels/activity`.
+ */
+export const postActivityBody = zod
+  .object({
+    activity_type: zod
+      .enum(['view', 'interact'])
+      .describe('The kind of activity a user performs in a channel.'),
+    channel_id: zod.string().describe('Channel id to record activity for.'),
+  })
+  .describe('Request body for `POST \/channels\/activity`.');
+
+export const postActivityResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel id.'),
+    created_at: zod.iso
+      .datetime({})
+      .describe('When the activity row was created.'),
+    id: zod.uuid().describe('Activity id.'),
+    interacted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('The last time the user interacted with the channel.'),
+    updated_at: zod.iso
+      .datetime({})
+      .describe('When the activity row was last updated.'),
+    user_id: zod.string().describe('User id.'),
+    viewed_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('The last time the user viewed the channel.'),
+  })
+  .describe("A user's activity (view\/interaction) within a channel.");
+
+/**
  * @summary Handler for `GET /channels/attachments/{entity_type}/{entity_id}/references`.
  */
 export const getAttachmentReferencesParams = zod.object({

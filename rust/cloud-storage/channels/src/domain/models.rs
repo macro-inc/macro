@@ -439,6 +439,37 @@ pub enum ChannelType {
     Team,
 }
 
+/// A user's activity (view/interaction) within a channel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Activity {
+    /// Activity row id.
+    pub id: Uuid,
+    /// Id of the user this activity belongs to.
+    pub user_id: String,
+    /// Id of the channel this activity is for.
+    pub channel_id: Uuid,
+    /// When the activity row was created.
+    pub created_at: DateTime<Utc>,
+    /// When the activity row was last updated.
+    pub updated_at: DateTime<Utc>,
+    /// The last time the user viewed the channel.
+    pub viewed_at: Option<DateTime<Utc>>,
+    /// The last time the user interacted with the channel
+    /// (e.g. reacting, replying, sending a message).
+    pub interacted_at: Option<DateTime<Utc>>,
+}
+
+/// The kind of activity a user performs in a channel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum ActivityType {
+    /// The user viewed the channel.
+    View,
+    /// The user interacted with the channel.
+    Interact,
+}
+
 /// Result of a get-or-create channel operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]

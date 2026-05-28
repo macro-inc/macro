@@ -3,10 +3,8 @@ import { useChannelsActivityQuery } from '@queries/channel/activity';
 import { useListChannelsQuery } from '@queries/channel/channels';
 import { queryReadyGate } from '@queries/gate';
 import { ChannelTypeEnum } from '@service-comms/client';
-import type {
-  ApiChannelWithLatest,
-  ApiActivity as ChannelsActivity,
-} from '@service-comms/generated/models';
+import type { ApiChannelWithLatest } from '@service-comms/generated/models';
+import type { ApiActivity as ChannelsActivity } from '@service-storage/generated/schemas/apiActivity';
 import { type Accessor, createMemo } from 'solid-js';
 import { createAssertedContextProvider } from './createContext';
 import { useUserId } from './user';
