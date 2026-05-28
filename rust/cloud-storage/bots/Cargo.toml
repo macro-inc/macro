@@ -41,6 +41,10 @@ utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+entity_access = { path = "../entity_access", default-features = false, features = [
+  "outbound",
+  "ports",
+] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
