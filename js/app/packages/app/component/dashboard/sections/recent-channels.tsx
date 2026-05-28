@@ -255,7 +255,7 @@ export function RecentChannelsSection() {
         </Button>
       </div>
 
-      <div class="flex w-full snap-x scroll-pl-4 gap-2 overflow-x-auto pb-1 pl-4 scrollbar-hidden @md/recent-channels:grid @md/recent-channels:grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] @md/recent-channels:gap-3 @md/recent-channels:overflow-visible @md/recent-channels:pb-0 @md/recent-channels:pl-0">
+      <div class="flex w-full snap-x scroll-pl-4 gap-2 overflow-x-auto px-4 pb-1 scrollbar-hidden @md/recent-channels:grid @md/recent-channels:grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] @md/recent-channels:gap-3 @md/recent-channels:overflow-visible @md/recent-channels:px-0 @md/recent-channels:pb-0">
         <Show
           when={!channelsQuery.isLoading}
           fallback={

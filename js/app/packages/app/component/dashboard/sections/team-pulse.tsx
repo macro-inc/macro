@@ -207,7 +207,7 @@ function openPulseEntity(entity: PulseEntity, event: MouseEvent) {
 function PulseEntityRow(props: { entity: PulseEntity }) {
   return (
     <button
-      class="group flex min-h-24 w-full min-w-0 flex-col justify-between rounded-xl border border-edge-muted p-3 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset"
+      class="group flex min-h-24 w-64 shrink-0 snap-start flex-col justify-between rounded-xl border border-edge-muted p-3 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset @3xl/dashboard:w-auto @3xl/dashboard:min-w-0"
       onClick={(event) => openPulseEntity(props.entity, event)}
     >
       <div class="flex w-full items-center justify-between gap-2">
@@ -243,7 +243,8 @@ function PulseEntityRow(props: { entity: PulseEntity }) {
 function TeamPulseSkeleton() {
   return (
     <div>
-      <div class="skeleton-shimmer rounded-xl bg-hover/50 p-3">
+      <div class="px-4 sm:px-0">
+        <div class="skeleton-shimmer rounded-xl bg-hover/50 p-3">
         <div class="flex items-start gap-2">
           <PulsingStar kind="streamIndicator" animate />
           <div class="min-w-0 flex-1">
@@ -254,11 +255,12 @@ function TeamPulseSkeleton() {
             </div>
           </div>
         </div>
+        </div>
       </div>
-      <div class="mt-3 grid gap-2 @3xl/dashboard:grid-cols-2 @6xl/dashboard:grid-cols-4">
+      <div class="mt-3 flex snap-x scroll-pl-4 gap-2 overflow-x-auto px-4 pb-1 scrollbar-hidden @3xl/dashboard:grid @3xl/dashboard:grid-cols-2 @3xl/dashboard:overflow-visible @3xl/dashboard:px-0 @3xl/dashboard:pb-0 @6xl/dashboard:grid-cols-4">
         <For each={[0, 1, 2, 3]}>
           {() => (
-            <div class="skeleton-shimmer h-24 rounded-xl border border-edge-muted p-3">
+            <div class="skeleton-shimmer h-24 w-64 shrink-0 snap-start rounded-xl border border-edge-muted p-3 @3xl/dashboard:w-auto">
               <div class="mb-4 flex items-center justify-between gap-2">
                 <div class="skeleton-shimmer h-5 w-24 rounded-md bg-hover" />
                 <div class="skeleton-shimmer size-4 rounded bg-ink/5" />
@@ -405,7 +407,8 @@ JSON context:\n${source.context}`,
           <Match when={pulse()}>
             {(data) => (
               <div>
-                <div class="rounded-xl bg-hover/50 p-3">
+                <div class="px-4 sm:px-0">
+                  <div class="rounded-xl bg-hover/50 p-3">
                   <div class="flex min-w-0 items-start gap-2">
                     <AnimatedStarIcon
                       class="size-4 shrink-0 translate-y-px text-accent"
@@ -420,9 +423,10 @@ JSON context:\n${source.context}`,
                       </p>
                     </div>
                   </div>
+                  </div>
                 </div>
 
-                <div class="mt-3 grid gap-2 @3xl/dashboard:grid-cols-2 @6xl/dashboard:grid-cols-4">
+                <div class="mt-3 flex snap-x scroll-pl-4 gap-2 overflow-x-auto px-4 pb-1 scrollbar-hidden @3xl/dashboard:grid @3xl/dashboard:grid-cols-2 @3xl/dashboard:overflow-visible @3xl/dashboard:px-0 @3xl/dashboard:pb-0 @6xl/dashboard:grid-cols-4">
                   <For each={data().entities}>
                     {(entity) => <PulseEntityRow entity={entity} />}
                   </For>
@@ -455,7 +459,7 @@ export function TeamPulseSection() {
 
   return (
     <section>
-      <div class="flex items-start justify-between gap-3">
+      <div class="flex items-start justify-between gap-3 px-4 sm:px-0">
         <div class="flex min-w-0 items-center gap-2">
           <h2 class="truncate text-lg font-semibold tracking-tight text-ink">
             {firstTeam()?.name ?? 'Team'}

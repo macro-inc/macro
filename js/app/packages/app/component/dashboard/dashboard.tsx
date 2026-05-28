@@ -37,11 +37,9 @@ export function Dashboard() {
               </DashboardSectionBoundary>
             </div>
 
-            <div class="px-4 sm:px-0">
-              <DashboardSectionBoundary title="team pulse">
-                <TeamPulseSection />
-              </DashboardSectionBoundary>
-            </div>
+            <DashboardSectionBoundary title="team pulse">
+              <TeamPulseSection />
+            </DashboardSectionBoundary>
 
             <div class="@6xl/dashboard:hidden">
               <DashboardSectionBoundary title="recent channels">
