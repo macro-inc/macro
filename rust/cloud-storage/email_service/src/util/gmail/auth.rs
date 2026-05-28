@@ -5,6 +5,7 @@ use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use gmail_client::GmailClient;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
 use model::user::UserContext;
 use models_email::email::service::cache::TokenCacheKey;
@@ -51,15 +52,6 @@ pub async fn fetch_token_or_delete_on_revocation(
     }
 }
 
-/// Parses the email out of a `macro|<email>` JWT subject. Returns `None` on
-/// malformed input; callers map that to whatever error shape they need.
-fn primary_inbox_email(user_id: &str) -> Option<&str> {
-    user_id
-        .split_once('|')
-        .map(|(_, email)| email)
-        .filter(|email| !email.is_empty())
-}
-
 /// Checks if an error chain contains a Forbidden error from the auth service
 fn is_forbidden_error(e: &anyhow::Error) -> bool {
     e.chain().any(|cause| {
@@ -98,19 +90,18 @@ pub async fn fetch_gmail_token_usercontext_response(
 ) -> Result<String, Response> {
     let key = TokenCacheKey::new(
         &user_context.fusion_user_id,
-        primary_inbox_email(&user_context.user_id).ok_or_else(|| {
-            tracing::error!(
-                user_id = %user_context.user_id,
-                "unable to derive email from user id"
-            );
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "unable to get gmail access token".into(),
-                }),
-            )
-                .into_response()
-        })?,
+        MacroUserIdStr::parse_from_str(&user_context.user_id)
+            .map(|id| id.email_str().to_string())
+            .map_err(|e| {
+                tracing::error!(error=?e, user_id=%user_context.user_id, "unable to derive email from user id");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        message: "unable to get gmail access token".into(),
+                    }),
+                )
+                    .into_response()
+            })?,
         UserProvider::Gmail.as_str(),
     );
 
@@ -139,19 +130,18 @@ pub async fn fetch_gmail_token_no_cache(
 ) -> Result<String, Response> {
     let key = TokenCacheKey::new(
         &user_context.fusion_user_id,
-        primary_inbox_email(&user_context.user_id).ok_or_else(|| {
-            tracing::error!(
-                user_id = %user_context.user_id,
-                "unable to derive email from user id"
-            );
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "unable to get gmail access token".into(),
-                }),
-            )
-                .into_response()
-        })?,
+        MacroUserIdStr::parse_from_str(&user_context.user_id)
+            .map(|id| id.email_str().to_string())
+            .map_err(|e| {
+                tracing::error!(error=?e, user_id=%user_context.user_id, "unable to derive email from user id");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        message: "unable to get gmail access token".into(),
+                    }),
+                )
+                    .into_response()
+            })?,
         UserProvider::Gmail.as_str(),
     );
 
