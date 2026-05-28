@@ -1,6 +1,5 @@
 import { cn } from '@ui';
 import { onCleanup, onMount } from 'solid-js';
-import type { SplitId } from '../layoutManager';
 import { createMobileForwardAnimation } from './createMobileForwardAnimation';
 import { createMobileSwipeBackGesture } from './createMobileSwipeBackGesture';
 import type { MobileSwipeLayout } from './createMobileSwipeLayout';
@@ -13,7 +12,6 @@ const BG_PEEK_OFFSET = 110; // px the BG panel is offset left at rest; closes to
 
 type MobileSplitMotionOptions = {
   mobileSwipeLayout: MobileSwipeLayout;
-  panelRefs: Map<SplitId, HTMLDivElement>;
 };
 
 export function createMobileSplitMotion(options: MobileSplitMotionOptions) {
@@ -23,7 +21,6 @@ export function createMobileSplitMotion(options: MobileSplitMotionOptions) {
     animationMs: SWIPE_ANIMATION_MS,
     bgPeekOffset: BG_PEEK_OFFSET,
     mobileSwipeLayout,
-    panelRefs: options.panelRefs,
   });
   const swipeBackGesture = createMobileSwipeBackGesture({
     animationMs: SWIPE_ANIMATION_MS,
@@ -80,7 +77,6 @@ export function createMobileSplitMotion(options: MobileSplitMotionOptions) {
   return {
     classForSlot,
     styleForSlot,
-    handlePanelRef: forwardAnimation.handlePanelRef,
     handleTransitionEnd: forwardAnimation.handleTransitionEnd,
     handleTouchStart: swipeBackGesture.handleTouchStart,
     handleTouchMove: swipeBackGesture.handleTouchMove,

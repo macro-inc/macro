@@ -1,5 +1,4 @@
 import { batch, createSignal, onCleanup } from 'solid-js';
-import type { SplitId } from '../layoutManager';
 import type { MobileSwipeLayout } from './createMobileSwipeLayout';
 
 type ForwardAnimationPhase = 'idle' | 'preparing' | 'animating';
@@ -14,7 +13,6 @@ type MobileForwardAnimationOptions = {
   animationMs: number;
   bgPeekOffset: number;
   mobileSwipeLayout: MobileSwipeLayout;
-  panelRefs: Map<SplitId, HTMLDivElement>;
 };
 
 export function createMobileForwardAnimation(
@@ -44,25 +42,8 @@ export function createMobileForwardAnimation(
 
   onCleanup(clearScheduledAnimation);
 
-  function incomingSplitId() {
-    return options.mobileSwipeLayout.fgIsSlotA()
-      ? options.mobileSwipeLayout.slotBSplitId()
-      : options.mobileSwipeLayout.slotASplitId();
-  }
-
-  function incomingPanelIsMounted() {
-    const splitId = incomingSplitId();
-    if (!splitId) return false;
-    return options.panelRefs.get(splitId)?.isConnected === true;
-  }
-
-  function scheduleAnimationStartIfReady() {
-    if (phase() !== 'preparing') return;
-    if (!incomingPanelIsMounted()) return;
-    scheduleAnimationStart();
-  }
-
   function scheduleAnimationStart() {
+    if (phase() !== 'preparing') return;
     if (forwardStartFrame !== undefined) return;
     forwardStartFrame = requestAnimationFrame(() => {
       forwardStartFrame = undefined;
@@ -70,6 +51,7 @@ export function createMobileForwardAnimation(
         forwardSettleFrame = undefined;
         if (phase() === 'preparing') {
           setPhase('animating');
+          scheduleAnimationCompletion();
         }
       });
     });
@@ -80,7 +62,11 @@ export function createMobileForwardAnimation(
 
     clearScheduledAnimation();
     setPhase('preparing');
-    scheduleAnimationStartIfReady();
+    scheduleAnimationStart();
+  }
+
+  function scheduleAnimationCompletion() {
+    clearTimeout(forwardCompletionTimer);
     forwardCompletionTimer = setTimeout(() => {
       if (phase() === 'idle') return;
       completeForwardNavigation();
@@ -103,17 +89,6 @@ export function createMobileForwardAnimation(
     if (phase() !== 'animating') return;
 
     completeForwardNavigation();
-  }
-
-  function handlePanelRef(
-    splitId: SplitId,
-    ref: HTMLDivElement,
-    isForeground: boolean
-  ) {
-    options.panelRefs.set(splitId, ref);
-    if (!isForeground && splitId === incomingSplitId()) {
-      scheduleAnimationStartIfReady();
-    }
   }
 
   function incomingStyle(): SplitTransformStyle {
@@ -149,7 +124,6 @@ export function createMobileForwardAnimation(
     phase,
     trigger,
     handleTransitionEnd,
-    handlePanelRef,
     styleForSlot,
   };
 }

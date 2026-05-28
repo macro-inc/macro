@@ -21,7 +21,6 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
 
   const motion = createMobileSplitMotion({
     mobileSwipeLayout,
-    panelRefs: props.panelRefs,
   });
 
   const slotDataFor = (slotSplitId: Accessor<SplitId | undefined>) =>
@@ -74,11 +73,7 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
                     handle={a().handle}
                     active={mobileSwipeLayout.fgIsSlotA()}
                     setPanelRef={(ref) =>
-                      motion.handlePanelRef(
-                        a().split.id,
-                        ref,
-                        mobileSwipeLayout.fgIsSlotA()
-                      )
+                      props.panelRefs.set(a().split.id, ref)
                     }
                     index={0}
                   />
@@ -106,11 +101,7 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
                     handle={b().handle}
                     active={!mobileSwipeLayout.fgIsSlotA()}
                     setPanelRef={(ref) =>
-                      motion.handlePanelRef(
-                        b().split.id,
-                        ref,
-                        !mobileSwipeLayout.fgIsSlotA()
-                      )
+                      props.panelRefs.set(b().split.id, ref)
                     }
                     index={1}
                   />
