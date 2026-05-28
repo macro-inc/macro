@@ -408,10 +408,10 @@ JSON context:\n${source.context}`,
                   <div class="flex items-start gap-2">
                     <SparkleIcon class="mt-0.5 size-4 shrink-0 text-accent" />
                     <div class="min-w-0">
-                      <p class="line-clamp-2 text-sm/6 text-ink">
+                      <p class="text-sm/6 text-ink">
                         {data().overview}
                       </p>
-                      <p class="mt-2 truncate text-xs text-ink-muted">
+                      <p class="mt-2 text-xs text-ink-muted">
                         {data().health}
                       </p>
                     </div>
