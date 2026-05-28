@@ -21,6 +21,9 @@ import type { AddParticipantsRequest } from './generated/models/addParticipantsR
 import { ChannelType } from './generated/models/channelType';
 import type { CreateChannelRequest } from './generated/models/createChannelRequest';
 import type { CreateChannelResponse } from './generated/models/createChannelResponse';
+import type { CreateEntityMentionRequest } from './generated/models/createEntityMentionRequest';
+import type { CreateEntityMentionResponse } from './generated/models/createEntityMentionResponse';
+import type { DeleteEntityMentionResponse } from './generated/models/deleteEntityMentionResponse';
 import type { GetAttachmentReferencesResponse } from './generated/models/getAttachmentReferencesResponse';
 import type { GetBatchChannelPreviewRequest } from './generated/models/getBatchChannelPreviewRequest';
 import type { GetBatchChannelPreviewResponse } from './generated/models/getBatchChannelPreviewResponse';
@@ -70,6 +73,7 @@ export type MessageResponse = { message: string };
 
 type WithChannelId = { channel_id: string };
 type WithMessageId = { message_id: string };
+type WithMentionId = { mention_id: string };
 type WithEntity = { entity_type: string; entity_id: string };
 export type ChannelAttachmentType = 'static' | 'dss';
 
@@ -314,6 +318,30 @@ export const commsServiceClient = {
         `/comms/attachments/${entity_type}/${entity_id}/references`,
         {
           method: 'GET',
+        }
+      )
+    ).map((result) => result);
+  },
+  async createEntityMention(args: CreateEntityMentionRequest, token?: string) {
+    return (
+      await commsFetch<CreateEntityMentionResponse>('/comms/mentions', {
+        method: 'POST',
+        body: JSON.stringify(args),
+        headers: token
+          ? {
+              'x-permissions-token': `${token}`,
+            }
+          : undefined,
+      })
+    ).map((result) => result);
+  },
+  async deleteEntityMention(args: WithMentionId, token?: string) {
+    return (
+      await commsFetch<DeleteEntityMentionResponse>(
+        `/comms/mentions/${args.mention_id}`,
+        {
+          method: 'DELETE',
+          headers: token ? { 'x-permissions-token': `${token}` } : undefined,
         }
       )
     ).map((result) => result);

@@ -14,12 +14,17 @@ use crate::api::{
         remove_participants::RemoveParticipantsRequest,
     },
     extractors::ParticipantAccess,
+    mentions::{
+        CreateEntityMentionRequest, CreateEntityMentionResponse, DeleteEntityMentionRequest,
+        DeleteEntityMentionResponse,
+    },
     preview::get_batch_preview::{GetBatchChannelPreviewRequest, GetBatchChannelPreviewResponse},
 };
 use comms::inbound::router::{ApiActivity, ApiChannelWithLatest};
 use comms_db_client::channels::patch_channel::PatchChannelOptions;
 use comms_db_client::model::{
-    Activity, ActivityType, CountedReaction, Message, NewAttachment, Reaction, SimpleMention,
+    Activity, ActivityType, CountedReaction, EntityMention, Message, NewAttachment, Reaction,
+    SimpleMention,
 };
 use model::comms::{
     Channel, ChannelParticipant, ChannelType, ChannelWithParticipants,
@@ -45,6 +50,9 @@ use comms_db_client::attachments::get_attachment_references::{
 use super::channels::get_mentions::GetMentionsResponse;
 
 use super::activity::post_activity;
+use super::mentions::{
+    create_mention::__path_create_mention_handler, delete_mention::__path_delete_mention_handler,
+};
 use super::preview::get_batch_preview;
 
 #[derive(OpenApi)]
@@ -73,6 +81,8 @@ use super::preview::get_batch_preview;
             delete_channel::delete_channel_handler,
             patch_channel::patch_channel_handler,
             references::handler,
+            create_mention_handler,
+            delete_mention_handler,
             get_mentions::handler,
             get_message_with_context::handler,
         ),
@@ -110,6 +120,7 @@ use super::preview::get_batch_preview;
                 NewAttachment,
                 ParticipantAccess,
                 SimpleMention,
+                EntityMention,
 
                 GetBatchChannelPreviewRequest,
                 GetBatchChannelPreviewResponse,
@@ -127,6 +138,11 @@ use super::preview::get_batch_preview;
                 ChannelReference,
                 GenericReference,
                 EntityReference,
+
+                CreateEntityMentionRequest,
+                CreateEntityMentionResponse,
+                DeleteEntityMentionRequest,
+                DeleteEntityMentionResponse,
 
                 GetMentionsResponse,
                 ChannelWithParticipants,
