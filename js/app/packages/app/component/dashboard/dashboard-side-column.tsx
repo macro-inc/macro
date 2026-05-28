@@ -18,10 +18,57 @@ import {
 import type { UnifiedNotification } from "@notifications/types";
 import { useAutomationEntities } from "@queries/agent-schedule/entities";
 import ArrowRightIcon from "@phosphor/arrow-right.svg";
+import CaretDownIcon from "@phosphor/caret-down.svg";
 import BellIcon from "@phosphor/bell.svg";
 import RobotIcon from "@phosphor/robot.svg";
-import { Button } from "@ui";
-import { createMemo, For, Show } from "solid-js";
+import { Button, Layer } from "@ui";
+import { createMemo, createSignal, For, type JSX, Show } from "solid-js";
+
+function SideColumnSection(props: {
+  title: string;
+  viewAllLabel: string;
+  onViewAll: () => void;
+  children: JSX.Element;
+}) {
+  const [collapsed, setCollapsed] = createSignal(false);
+
+  return (
+    <section class="flex flex-col gap-2">
+      <Layer depth={2}>
+        <div class="group/header relative flex w-full items-center gap-2.5 px-2 py-2 text-xs font-semibold tracking-tight text-text-muted">
+          <button
+            class="peer/collapse absolute inset-0 rounded-lg border border-transparent bg-transparent transition hover:border-edge-muted hover:bg-surface focus:outline-none focus-visible:border-edge-muted focus-visible:bg-surface"
+            onClick={() => setCollapsed((value) => !value)}
+            aria-expanded={!collapsed()}
+            aria-label={`${collapsed() ? "Expand" : "Collapse"} ${props.title}`}
+          />
+          <div class="pointer-events-none relative flex min-w-0 flex-1 items-center gap-2.5">
+            <Layer depth={3}>
+              <div class="flex size-4.5 items-center justify-center rounded-md bg-transparent peer-hover/collapse:bg-active peer-focus-visible/collapse:bg-active">
+                <CaretDownIcon
+                  class="size-2.5 transition"
+                  classList={{ "-rotate-90": collapsed() }}
+                />
+              </div>
+            </Layer>
+            <h2 class="min-w-0 flex-1 truncate">{props.title}</h2>
+          </div>
+          <Button
+            variant="base"
+            size="sm"
+            depth={3}
+            class="absolute right-2 top-1/2 z-10 h-6 -translate-y-1/2 rounded-md bg-surface px-1.5 text-xxs opacity-0 transition group-hover/header:opacity-100 focus-visible:opacity-100"
+            onClick={props.onViewAll}
+          >
+            View all
+            <ArrowRightIcon class="size-3" />
+          </Button>
+        </div>
+      </Layer>
+      <Show when={!collapsed()}>{props.children}</Show>
+    </section>
+  );
+}
 
 function openInboxView() {
   globalSplitManager()?.openWithSplit(
@@ -87,8 +134,9 @@ function notificationIconType(
 }
 
 function metadataContent(notification: UnifiedNotification) {
-  return (notification.notification_metadata as { content?: Record<string, unknown> })
-    .content;
+  return (
+    notification.notification_metadata as { content?: Record<string, unknown> }
+  ).content;
 }
 
 function NotificationSummary(props: { notification: UnifiedNotification }) {
@@ -200,20 +248,11 @@ function NotificationsColumnSection() {
   );
 
   return (
-    <section class="flex flex-col gap-2">
-      <div class="flex items-center justify-between gap-2 px-2 py-1">
-        <h2 class="text-sm font-semibold text-ink">Notifications</h2>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          class="size-7 rounded-lg text-ink-extra-muted"
-          label="View inbox"
-          onClick={openInboxView}
-        >
-          <ArrowRightIcon class="size-4" />
-        </Button>
-      </div>
-
+    <SideColumnSection
+      title="Notifications"
+      viewAllLabel="View inbox"
+      onViewAll={openInboxView}
+    >
       <Show
         when={notifications().length > 0}
         fallback={
@@ -236,7 +275,7 @@ function NotificationsColumnSection() {
           </For>
         </div>
       </Show>
-    </section>
+    </SideColumnSection>
   );
 }
 
@@ -255,20 +294,11 @@ function AutomationsColumnSection() {
   );
 
   return (
-    <section class="flex flex-col gap-2">
-      <div class="flex items-center justify-between gap-2 px-2 py-1">
-        <h2 class="text-sm font-semibold text-ink">Automations</h2>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          class="size-7 rounded-lg text-ink-extra-muted"
-          label="View all automations"
-          onClick={openAutomationsView}
-        >
-          <ArrowRightIcon class="size-4" />
-        </Button>
-      </div>
-
+    <SideColumnSection
+      title="Automations"
+      viewAllLabel="View all automations"
+      onViewAll={openAutomationsView}
+    >
       <Show
         when={visibleAutomations().length > 0}
         fallback={
@@ -292,7 +322,7 @@ function AutomationsColumnSection() {
           </For>
         </div>
       </Show>
-    </section>
+    </SideColumnSection>
   );
 }
 
