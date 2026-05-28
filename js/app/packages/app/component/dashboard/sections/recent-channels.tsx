@@ -255,7 +255,7 @@ export function RecentChannelsSection() {
         </Button>
       </div>
 
-      <div class="grid w-full grid-cols-2 gap-3 @lg/recent-channels:grid-cols-3 @2xl/recent-channels:grid-cols-4 @4xl/recent-channels:grid-cols-5 @5xl/recent-channels:grid-cols-6">
+      <div class="grid w-full grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3">
         <Show
           when={!channelsQuery.isLoading}
           fallback={
