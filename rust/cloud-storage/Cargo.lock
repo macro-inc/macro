@@ -151,6 +151,7 @@ dependencies = [
  "sqs_client",
  "strum",
  "sync_service_client",
+ "system_properties",
  "teams",
  "tokio",
  "tracing",

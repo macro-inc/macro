@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use ai_tools::{
-    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
-    NoOpScheduleContext, NoOpSnsEndpointManager, NoOpTaskProperties, ToolNotificationQueue,
-    ToolServiceContext,
+    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpScheduleContext,
+    NoOpSnsEndpointManager, ToolNotificationQueue, ToolServiceContext,
 };
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
@@ -218,39 +217,34 @@ async fn build_tool_context(
     };
     let sync_service_client =
         SyncServiceClient::new(sync_service_auth_key.clone(), sync_service_url.clone());
+    let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        db.clone(),
+    )));
+    let properties_service =
+        ai_tools::build_properties_service(db.clone(), entity_access_service.clone());
+    let task_properties_service =
+        ai_tools::build_task_properties_adapter(db.clone(), properties_service.clone());
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,
         cloudfront_config,
         sync_service_client: sync_service_client.clone(),
         upload_url_service: s3_upload_adapter,
-        task_properties_service: NoOpTaskProperties,
+        task_properties_service,
         connection_service: NoOpConnectionService,
         entity_access_management_service:
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
                 entity_access_management::outbound::PgRepository::new(db.clone()),
             ),
     };
-    let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
         document_service,
-        entity_access_service,
+        (*entity_access_service).clone(),
         lexical_client_for_tools,
         sync_service_client.clone(),
     );
 
-    let properties_service = properties::PropertiesServiceImpl::new(
-        properties::PropertiesPgRepo::new(db.clone()),
-        Some(properties::PermissionServiceImpl::new(
-            db.clone(),
-            Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
-                db.clone(),
-            ))),
-        )),
-        Some(NoOpNotificationService),
-    );
-    let properties_tool_context =
-        properties::inbound::toolset::PropertiesToolContext::new(properties_service);
+    let properties_tool_context = ai_tools::build_properties_tool_context(properties_service);
 
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
         Arc::new(EmailServiceImpl::new(
