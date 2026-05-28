@@ -39,6 +39,7 @@ import type {
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
+import type { ApiChannelWithLatest } from '@service-comms/generated/models/apiChannelWithLatest';
 import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
 import type { ApiChannelMessagesPage } from './generated/schemas/apiChannelMessagesPage';
 import type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
@@ -346,6 +347,17 @@ export const storageServiceClient = {
       await dssFetch<CreateChannelResponse>(`/channels`, {
         method: 'POST',
         body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
+
+  // The channel list is still served by the comms hex, mounted at
+  // `/comms/channels` on the same DSS host. Repoint to `/channels` once the
+  // list moves into the channels hex (alongside the comms teardown).
+  async getChannels() {
+    return (
+      await dssFetch<ApiChannelWithLatest[]>(`/comms/channels`, {
+        method: 'GET',
       })
     ).map((result) => result);
   },
