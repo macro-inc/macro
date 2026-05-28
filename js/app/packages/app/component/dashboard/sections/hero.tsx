@@ -25,6 +25,7 @@ import { Button, Dropdown } from "@ui";
 import { createMemo, createSignal, Show } from "solid-js";
 
 import { useUserContext } from "@core/context/user";
+import { isMobile } from "@core/mobile/isMobile";
 
 function openAutomationsView() {
   globalSplitManager()?.openWithSplit(
@@ -70,7 +71,8 @@ export function Hero() {
   const user = useUserContext();
   const { openSettings } = useSettingsState();
   const notificationSource = useGlobalNotificationSource();
-  const [moreOpen, setMoreOpen] = createSignal(false);
+  const [moreDrawerOpen, setMoreDrawerOpen] = createSignal(false);
+  const [moreDropdownOpen, setMoreDropdownOpen] = createSignal(false);
   const [notificationsOpen, setNotificationsOpen] = createSignal(false);
 
   const firstName = createMemo(() => {
@@ -100,23 +102,28 @@ export function Hero() {
 
   return (
     <section class="relative py-10 sm:py-14">
-      <div class="absolute right-0 top-4 sm:hidden">
-        <Button
-          variant="base"
-          size="icon-md"
-          class="relative rounded-lg bg-surface"
-          aria-label="Notifications"
-          onClick={() => setNotificationsOpen(true)}
-        >
-          <BellIcon class="size-4" />
-          <Show when={unreadNotifications().length > 0}>
-            <span class="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[0.625rem] font-bold text-surface">
-              {unreadNotifications().length > 99
-                ? "99+"
-                : unreadNotifications().length}
-            </span>
-          </Show>
-        </Button>
+      <div class="mx-auto flex max-w-3xl flex-col items-center gap-6">
+        <div class="flex w-full items-start justify-between gap-3 sm:justify-center">
+          <h1 class="min-w-0 text-balance text-4xl font-semibold tracking-tight text-ink sm:text-center lg:text-5xl">
+            {greeting()}, <span class="capitalize">{firstName()}.</span>
+          </h1>
+          <Button
+            variant="base"
+            size="icon-md"
+            class="relative shrink-0 rounded-lg bg-surface sm:hidden"
+            aria-label="Notifications"
+            onClick={() => setNotificationsOpen(true)}
+          >
+            <BellIcon class="size-4" />
+            <Show when={unreadNotifications().length > 0}>
+              <span class="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[0.625rem] font-bold text-surface">
+                {unreadNotifications().length > 99
+                  ? "99+"
+                  : unreadNotifications().length}
+              </span>
+            </Show>
+          </Button>
+        </div>
 
         <MobileDrawer
           open={notificationsOpen()}
@@ -158,12 +165,6 @@ export function Hero() {
             </MobileDrawer.Content>
           </MobileDrawer.Portal>
         </MobileDrawer>
-      </div>
-
-      <div class="mx-auto flex max-w-3xl flex-col items-center gap-6">
-        <h1 class="text-balance text-4xl font-semibold tracking-tight text-ink sm:text-center lg:text-5xl">
-          {greeting()}, <span class="capitalize">{firstName()}.</span>
-        </h1>
 
         <div class="w-full max-w-2xl text-left">
           <DashboardAiInput />
@@ -188,19 +189,92 @@ export function Hero() {
             <SearchIcon class="size-4" />
             <span class="hidden sm:inline">Search</span>
           </Button>
-          <Dropdown
-            open={moreOpen()}
-            onOpenChange={setMoreOpen}
-            placement="bottom-end"
+          <Button
+            variant="base"
+            size="lg"
+            class="h-10 rounded-lg px-3 text-sm sm:hidden"
+            aria-label="More dashboard actions"
+            onClick={() => setMoreDrawerOpen(true)}
           >
+            <MoreIcon class="size-4" />
+          </Button>
+
+          <MobileDrawer open={moreDrawerOpen()} onOpenChange={setMoreDrawerOpen}>
+            <MobileDrawer.Portal>
+              <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay sm:hidden" />
+              <MobileDrawer.Content
+                aria-label="More dashboard actions"
+                class="sm:hidden"
+              >
+                <MobileDrawer.Handle />
+                <div class="flex flex-col gap-2 px-3 pb-4">
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    class="h-11 justify-start rounded-lg px-3"
+                    onClick={() => {
+                      setMoreDrawerOpen(false);
+                      setInviteModalOpen(true);
+                    }}
+                  >
+                    <UsersThreeIcon class="size-4 shrink-0" />
+                    Invite teammate
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    class="h-11 justify-start rounded-lg px-3"
+                    onClick={() => {
+                      setMoreDrawerOpen(false);
+                      setAutomationComposerOpen(true, false);
+                    }}
+                  >
+                    <RobotIcon class="size-4 shrink-0" />
+                    Create automation
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    class="h-11 justify-start rounded-lg px-3"
+                    onClick={() => {
+                      setMoreDrawerOpen(false);
+                      openSettings("Team");
+                    }}
+                  >
+                    <GearIcon class="size-4 shrink-0" />
+                    Team settings
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    class="h-11 justify-start rounded-lg px-3"
+                    onClick={() => {
+                      setMoreDrawerOpen(false);
+                      openAutomationsView();
+                    }}
+                  >
+                    <RobotIcon class="size-4 shrink-0" />
+                    View automations
+                  </Button>
+                </div>
+              </MobileDrawer.Content>
+            </MobileDrawer.Portal>
+          </MobileDrawer>
+
+          <Show when={!isMobile()}>
+            <Dropdown
+              open={moreDropdownOpen()}
+              onOpenChange={setMoreDropdownOpen}
+              placement="bottom-end"
+            >
             <Dropdown.Trigger
               variant="base"
               size="lg"
-              class="h-10 rounded-lg px-3 text-sm"
+              class="hidden h-10 rounded-lg px-3 text-sm sm:inline-flex"
               aria-label="More dashboard actions"
             >
               <MoreIcon class="size-4" />
-              <span class="hidden sm:inline">More</span>
+              <span>More</span>
             </Dropdown.Trigger>
             <Dropdown.Content class="min-w-48">
               <Dropdown.Group>
@@ -232,7 +306,8 @@ export function Hero() {
                 </Dropdown.Item>
               </Dropdown.Group>
             </Dropdown.Content>
-          </Dropdown>
+            </Dropdown>
+          </Show>
         </div>
       </div>
     </section>
