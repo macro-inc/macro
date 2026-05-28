@@ -24,4 +24,5 @@ pub use model::AgentModel;
 pub use stream::{ChatCompletionStream, McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
 pub use tool_adapter::{DynToolSetAdapter, ToolsetToolAdapter};
 
+pub use rig_core::message::Message;
 pub use rig_core::tool::{Tool, ToolDyn};

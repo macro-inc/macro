@@ -50,6 +50,11 @@ export const TASK_GRID_TEMPLATE_COLUMNS_WIDE = `1rem minmax(0, 100%) ${TASK_GRID
   (c) => c.width
 ).join(' ')} ${CREATED_BY_COLUMN_WIDTH} var(--task-col-timestamp, 5rem)`;
 
+/** Wide template without the leading indicator (checkbox) column. */
+export const TASK_GRID_TEMPLATE_COLUMNS_WIDE_NO_INDICATOR = `minmax(0, 100%) ${TASK_GRID_COLUMNS.map(
+  (c) => c.width
+).join(' ')} ${CREATED_BY_COLUMN_WIDTH} var(--task-col-timestamp, 5rem)`;
+
 /** @deprecated Use TASK_GRID_TEMPLATE_COLUMNS_NARROW or TASK_GRID_TEMPLATE_COLUMNS_WIDE */
 const _TASK_GRID_TEMPLATE_COLUMNS = TASK_GRID_TEMPLATE_COLUMNS_NARROW;
 
@@ -60,6 +65,11 @@ const TASK_GRID_TEMPLATE_AREAS_NARROW = `"indicator content ${TASK_GRID_COLUMNS.
 
 /** Grid template areas for wide containers (includes Created By column) */
 export const TASK_GRID_TEMPLATE_AREAS_WIDE = `"indicator content ${TASK_GRID_COLUMNS.map(
+  (c) => c.id
+).join(' ')} createdBy timestamp"`;
+
+/** Wide template areas without the leading indicator (checkbox) column. */
+export const TASK_GRID_TEMPLATE_AREAS_WIDE_NO_INDICATOR = `"content ${TASK_GRID_COLUMNS.map(
   (c) => c.id
 ).join(' ')} createdBy timestamp"`;
 

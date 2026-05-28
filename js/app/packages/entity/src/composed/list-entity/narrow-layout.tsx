@@ -25,16 +25,18 @@ export function NarrowLayout(props: LayoutProps) {
       }}
     >
       <Entity.Slot placement="indicator" class="relative self-start pt-3">
-        <div
-          class={cn('w-0 opacity-0 overflow-hidden', {
-            'w-6 opacity-100': props.checked,
-          })}
-        >
-          <MultiSelectCheckbox
-            checked={props.checked}
-            onChecked={props.onChecked}
-          />
-        </div>
+        <Show when={!props.hideCheckbox}>
+          <div
+            class={cn('w-0 opacity-0 overflow-hidden', {
+              'w-6 opacity-100': props.checked,
+            })}
+          >
+            <MultiSelectCheckbox
+              checked={props.checked}
+              onChecked={props.onChecked}
+            />
+          </div>
+        </Show>
       </Entity.Slot>
 
       <Entity.Slot

@@ -182,6 +182,30 @@ export type { GetOrCreateChannelResponse } from './generated/schemas/getOrCreate
 export type IdResponse = { id: string };
 export type MessageResponse = { message: string };
 
+export type TaskDuplicate = {
+  id: string;
+  taskId: string;
+  taskName: string;
+  vectorScore: number;
+  rerankScore: number;
+  judgeReason?: string | null;
+};
+
+export type TaskDuplicatesResponse = {
+  duplicates: TaskDuplicate[];
+};
+
+export type TaskSimilarityResult = {
+  taskId: string;
+  taskName: string;
+  vectorScore: number;
+  rerankScore: number;
+};
+
+export type TaskSimilaritySearchResponse = {
+  results: TaskSimilarityResult[];
+};
+
 type WithChannelId = { channel_id: string };
 type WithMessageId = { message_id: string };
 type WithMentionId = { mention_id: string };
@@ -967,6 +991,63 @@ export const storageServiceClient = {
 
     const response = result.value;
     return ok(response);
+  },
+
+  async getTaskDuplicates(params: { documentId: string }) {
+    return (
+      await dssFetch<TaskDuplicatesResponse>(
+        `/documents/${params.documentId}/duplicates`
+      )
+    ).map((result) => result.duplicates);
+  },
+
+  async searchSimilarTasks(params: {
+    taskName: string;
+    markdown?: string;
+    shareWithTeam?: boolean;
+  }) {
+    return (
+      await dssFetch<TaskSimilaritySearchResponse>(
+        `/documents/similarity_search`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            taskName: params.taskName,
+            markdown: params.markdown,
+            shareWithTeam: params.shareWithTeam ?? false,
+          }),
+        }
+      )
+    ).map((result) => result.results);
+  },
+
+  async dismissTaskDuplicates(params: {
+    documentId: string;
+    matchIds: string[];
+  }) {
+    return (
+      await dssFetch<SuccessResponse>(
+        `/documents/${params.documentId}/duplicates/dismiss`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ matchIds: params.matchIds }),
+        }
+      )
+    ).map((result) => result.data);
+  },
+
+  async deleteThisDuplicateTask(params: {
+    documentId: string;
+    matchId: string;
+  }) {
+    return (
+      await dssFetch<SuccessResponse>(
+        `/documents/${params.documentId}/duplicates/${params.matchId}/delete_this`,
+        {
+          method: 'POST',
+        }
+      )
+    ).map((result) => result.data);
   },
 
   async copyDocument(params: {

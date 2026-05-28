@@ -58,6 +58,7 @@ import {
   Switch,
 } from 'solid-js';
 import { mdStore } from '../../signal/markdownBlockData';
+import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 
 interface MarkdownSidePanelSectionsProps {
   canEdit: boolean;
@@ -102,7 +103,10 @@ export function MarkdownSidePanelSections(
           <StatsSectionContent />
         </SidePanel.Section>
       </Show>
-      <GithubSectionConditional documentId={blockId} isTask={isTask()} />
+      <Show when={isTask()}>
+        <TaskDuplicateMatchesSidePanelSection />
+      </Show>
+      <GithubSectionConditional documentId={blockId} isTask={isTask} />
       <NotificationsSectionConditional entity={entity()} />
       <ReferencesSectionConditional documentId={blockId} />
     </>
@@ -928,7 +932,7 @@ function ReferencesSectionConditional(props: { documentId: string }) {
 
 function GithubSectionConditional(props: {
   documentId: string;
-  isTask: boolean;
+  isTask: () => boolean;
 }) {
   const query = useDocumentGithubPullRequestsQuery(
     props.documentId,
@@ -936,7 +940,7 @@ function GithubSectionConditional(props: {
   );
 
   const pullRequests = createMemo((): GithubPullRequest[] => {
-    if (!props.isTask || query.isLoading || query.isError) return [];
+    if (!props.isTask() || query.isLoading || query.isError) return [];
     return query.data?.pullRequests ?? [];
   });
   const count = createMemo(() => pullRequests().length);

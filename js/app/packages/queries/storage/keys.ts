@@ -58,7 +58,23 @@ export const entityKeys = createQueryKeys('entity', {
   projectData: (projectId: string) => ({
     queryKey: [projectId],
   }),
+  taskDuplicates: (documentId: string) => ({
+    queryKey: [documentId, 'duplicates'],
+  }),
 });
+
+export const taskSimilaritySearchKeys = createQueryKeys(
+  'taskSimilaritySearch',
+  {
+    forInput: (input: {
+      title: string;
+      markdown: string;
+      shareWithTeam: boolean;
+    }) => ({
+      queryKey: [input.title, input.markdown, input.shareWithTeam],
+    }),
+  }
+);
 
 export const instructionsMdKeys = createQueryKeys('instructionsMd', {
   id: null,
