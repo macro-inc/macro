@@ -18,7 +18,8 @@ export function FilteredHiddenBanner(props: FilteredHiddenBannerProps) {
           }
         >
           <span class="font-semibold text-ink">
-            {props.hiddenCount} {props.itemLabel ?? 'items'}
+            {props.hiddenCount}{' '}
+            {props.itemLabel ?? (props.hiddenCount === 1 ? 'item' : 'items')}
           </span>
           <span class="text-ink-muted">hidden by filters</span>
         </Show>

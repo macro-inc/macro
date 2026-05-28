@@ -27,28 +27,30 @@ export function FolderDropZone() {
         <p class="text-ink-muted">Drag & drop files and folders here</p>
         <p class="text-ink-muted">
           or{' '}
-          <span
+          <button
+            type="button"
             use:fileSelector={{
               multiple: true,
               onSelect: (files) => {
                 handleFileUpload(files);
               },
             }}
-            class="underline"
+            class="cursor-pointer border-0 bg-transparent p-0 font-inherit text-inherit underline"
           >
             Upload files
-          </span>{' '}
+          </button>{' '}
           /{' '}
-          <span
+          <button
+            type="button"
             use:folderSelector={{
               onSelect: async (files) => {
                 await handleFolderSelect(files, handleFileUpload);
               },
             }}
-            class="underline"
+            class="cursor-pointer border-0 bg-transparent p-0 font-inherit text-inherit underline"
           >
             Upload folders
-          </span>
+          </button>
         </p>
       </div>
     </Show>
