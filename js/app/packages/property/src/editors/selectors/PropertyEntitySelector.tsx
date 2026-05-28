@@ -285,6 +285,17 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     getId: (e: CombinedEntity) => e.id,
   });
 
+  const openedSelectedIds = new Set(props.selectedOptions());
+  const selectedEntityCountAtOpen = createMemo(() => {
+    if (!props.config.isMultiSelect || searchTerm()) return 0;
+    return sortedEntities().filter((entity) => openedSelectedIds.has(entity.id))
+      .length;
+  });
+  const shouldShowSelectedDivider = (index: number) =>
+    selectedEntityCountAtOpen() > 0 &&
+    selectedEntityCountAtOpen() < sortedEntities().length &&
+    index === selectedEntityCountAtOpen();
+
   const toggleEntity = (entity: CombinedEntity) => {
     const newSelected = new Set(props.selectedOptions());
     const isCurrentlySelected = newSelected.has(entity.id);
@@ -422,10 +433,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
               return (
                 <div
-                  class="flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8 rounded-md"
+                  class="group flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8 rounded-md"
                   classList={{
                     'bg-hover': isKeyboardSelected(),
-                    'bg-accent/10': isSelected(),
                   }}
                   onClick={() => togglePinnedOption(option)}
                   onMouseEnter={() => {
@@ -434,15 +444,15 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                     }
                   }}
                 >
-                  <div class="flex items-center gap-2 flex-1 min-w-0">
-                    <div class="size-4 shrink-0">{option.icon}</div>
-                    <span class="truncate min-w-0">{option.label}</span>
-                  </div>
                   <div class="shrink-0">
                     <OptionCheckBox
                       checked={isSelected()}
                       multiselect={props.config.isMultiSelect}
                     />
+                  </div>
+                  <div class="flex items-center gap-2 flex-1 min-w-0">
+                    <div class="size-4 shrink-0">{option.icon}</div>
+                    <span class="truncate min-w-0">{option.label}</span>
                   </div>
                 </div>
               );
@@ -465,55 +475,61 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                     adjustedIndex() === selectedIndex();
 
                   return (
-                    <div
-                      data-entity-index={index()}
-                      class="flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8 rounded-md"
-                      classList={{
-                        'bg-hover': isKeyboardSelected(),
-                        'bg-accent/10': isSelected(),
-                      }}
-                      onClick={() => toggleEntity(entity)}
-                      onKeyDown={(e) =>
-                        e.key === 'Enter' && toggleEntity(entity)
-                      }
-                      onMouseEnter={() => {
-                        if (!keyboardMode()) {
-                          setSelectedIndex(adjustedIndex());
+                    <>
+                      <Show when={shouldShowSelectedDivider(index())}>
+                        <div class="my-1 border-t border-edge-muted" />
+                      </Show>
+                      <div
+                        data-entity-index={index()}
+                        class="group flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8 rounded-md"
+                        classList={{
+                          'bg-hover': isKeyboardSelected(),
+                        }}
+                        onClick={() => toggleEntity(entity)}
+                        onKeyDown={(e) =>
+                          e.key === 'Enter' && toggleEntity(entity)
                         }
-                      }}
-                    >
-                      <div class="flex items-center gap-2 flex-1 min-w-0">
-                        <div class="size-4 shrink-0 flex items-center">
-                          <Show
-                            when={entity.kind === 'entity'}
-                            fallback={
-                              <UserIcon
-                                id={entity.id}
-                                size="sm"
-                                isDeleted={false}
-                                suppressClick={true}
-                              />
-                            }
-                          >
-                            <Entity.Icon entity={entity.data as EntityData} />
-                          </Show>
+                        onMouseEnter={() => {
+                          if (!keyboardMode()) {
+                            setSelectedIndex(adjustedIndex());
+                          }
+                        }}
+                      >
+                        <div class="shrink-0">
+                          <OptionCheckBox
+                            checked={isSelected()}
+                            multiselect={props.config.isMultiSelect}
+                          />
                         </div>
-                        <span class="truncate min-w-0">
-                          <Show
-                            when={entity.kind === 'entity'}
-                            fallback={getEntityName(entity)}
-                          >
-                            <Entity.Title entity={entity.data as EntityData} />
-                          </Show>
-                        </span>
+                        <div class="flex items-center gap-2 flex-1 min-w-0">
+                          <div class="size-4 shrink-0 flex items-center">
+                            <Show
+                              when={entity.kind === 'entity'}
+                              fallback={
+                                <UserIcon
+                                  id={entity.id}
+                                  size="sm"
+                                  isDeleted={false}
+                                  suppressClick={true}
+                                />
+                              }
+                            >
+                              <Entity.Icon entity={entity.data as EntityData} />
+                            </Show>
+                          </div>
+                          <span class="truncate min-w-0">
+                            <Show
+                              when={entity.kind === 'entity'}
+                              fallback={getEntityName(entity)}
+                            >
+                              <Entity.Title
+                                entity={entity.data as EntityData}
+                              />
+                            </Show>
+                          </span>
+                        </div>
                       </div>
-                      <div class="shrink-0">
-                        <OptionCheckBox
-                          checked={isSelected()}
-                          multiselect={props.config.isMultiSelect}
-                        />
-                      </div>
-                    </div>
+                    </>
                   );
                 }}
               </For>

@@ -1,4 +1,5 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
+import { SidePanel } from '@app/component/side-panel';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { getChannelParams } from '@block-channel/utils/link';
 import type { BlockAlias, BlockName } from '@core/block';
@@ -6,7 +7,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
 import { compareDateDesc, type DateValue } from '@core/util/date';
-
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { formatRelativeTimestamp } from '@entity';
 import {
@@ -119,14 +119,6 @@ function ReferenceRow(props: ReferenceRowProps) {
           {props.body}
         </div>
       </Show>
-    </div>
-  );
-}
-
-function ReferencesCard(props: { children: JSX.Element }) {
-  return (
-    <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden">
-      <div class="divide-y divide-ink-muted/8">{props.children}</div>
     </div>
   );
 }
@@ -313,7 +305,7 @@ export function References(props: ReferenceProps) {
         </div>
       }
     >
-      <ReferencesCard>
+      <SidePanel.Card>
         <For each={sortedReferences()}>
           {(ref) => {
             if (isChannelReference(ref)) {
@@ -346,7 +338,7 @@ export function References(props: ReferenceProps) {
             );
           }}
         </For>
-      </ReferencesCard>
+      </SidePanel.Card>
     </Show>
   );
 }

@@ -1,5 +1,5 @@
-import CheckIcon from '@phosphor/check.svg';
-import { type Component, Show } from 'solid-js';
+import { Checkbox } from '@ui';
+import type { Component } from 'solid-js';
 
 /**
  * CheckBox component for property option menus.
@@ -13,18 +13,16 @@ export const OptionCheckBox: Component<{
   multiselect?: boolean;
 }> = (props) => {
   return (
-    <div
-      class="size-4 flex items-center justify-center"
-      classList={{
-        'bg-accent border-accent border': props.checked,
-        'bg-transparent border-edge-muted border': !props.checked,
-        'rounded-full': props.multiselect === false,
-        'rounded-sm': props.multiselect !== false,
-      }}
+    <Checkbox
+      checked={props.checked}
+      onChange={() => undefined}
+      class="shrink-0"
     >
-      <Show when={props.checked && props.multiselect !== false}>
-        <CheckIcon class="size-3 text-surface" />
-      </Show>
-    </div>
+      <Checkbox.Control
+        class={`size-3.5 border-transparent bg-transparent hover:border-accent data-checked:bg-accent data-checked:border-accent ${
+          props.checked ? '' : 'group-hover:not-hover:border-edge-muted'
+        } ${props.multiselect === false ? 'rounded-full' : 'rounded-sm'}`}
+      />
+    </Checkbox>
   );
 };
