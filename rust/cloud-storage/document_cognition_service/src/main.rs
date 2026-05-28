@@ -1,9 +1,6 @@
 #![recursion_limit = "256"]
 use crate::api::context::ApiContext;
-use ai_tools::{
-    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
-    NoOpTaskProperties,
-};
+use ai_tools::{NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress};
 use anyhow::Context;
 use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
@@ -252,12 +249,16 @@ async fn main() -> anyhow::Result<()> {
         presigned_url_expiry_seconds: 3600,
         browser_cache_expiry_seconds: 86400,
     };
+    let properties_service =
+        ai_tools::build_properties_service(db.clone(), entity_access_service.clone());
+    let task_properties_service =
+        ai_tools::build_task_properties_adapter(db.clone(), properties_service.clone());
     let document_service = DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
         sync_service_client.clone(),
         s3_upload_adapter,
-        NoOpTaskProperties,
+        task_properties_service,
         NoOpConnectionService,
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(db.clone()),
@@ -308,16 +309,7 @@ async fn main() -> anyhow::Result<()> {
 
     let search_service_client = Arc::new(search_service_client);
 
-    let properties_service = properties::PropertiesServiceImpl::new(
-        properties::PropertiesPgRepo::new(db.clone()),
-        Some(properties::PermissionServiceImpl::new(
-            db.clone(),
-            entity_access_service.clone(),
-        )),
-        Some(NoOpNotificationService),
-    );
-    let properties_tool_context =
-        properties::inbound::toolset::PropertiesToolContext::new(properties_service);
+    let properties_tool_context = ai_tools::build_properties_tool_context(properties_service);
 
     tracing::info!("initialized properties tool context");
 

@@ -4,8 +4,14 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
+import type { InitResponseBackfillJobId } from './initResponseBackfillJobId';
 
 export interface InitResponse {
-  backfill_job_id: string;
+  /** Present when init enqueued a backfill job. Absent for the graph path,
+where the child link's backfill already ran under its own macro_id. */
+  backfill_job_id?: InitResponseBackfillJobId;
+  /** The email_links row id for the now-accessible inbox. For the graph path
+(cross-account add) this is the *existing* child link the caller now
+delegates over; for the data-source path it's a freshly upserted row. */
   link_id: string;
 }

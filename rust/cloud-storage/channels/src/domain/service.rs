@@ -1,14 +1,15 @@
 use crate::domain::{
     events::ChannelEvent,
     models::{
-        AddParticipantsRequest, ChannelAttachmentType, ChannelContextMessage, ChannelMessage,
-        ChannelMessageFilters, ChannelParticipant, ChannelPreview, ChannelPreviewData, ChannelType,
-        DeleteMessageQuery, GetOrCreateAction, GetOrCreateChannelResponse, GetOrCreateDmRequest,
-        GetOrCreatePrivateRequest, MessagePageDirection, NewChannelAttachment, ParticipantRole,
-        PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostMessageResponse,
-        PostReactionRequest, PostTypingRequest, ReactionAction, ReferencedShareItem,
-        RemoveParticipantsRequest, ResolvedChannelMessage, SimpleMention, ThreadInfo, ThreadReply,
-        TopLevelMessageRow, WithChannelId,
+        AddParticipantsRequest, AttachmentEntityReference, ChannelAttachmentType,
+        ChannelContextMessage, ChannelMessage, ChannelMessageFilters, ChannelParticipant,
+        ChannelPreview, ChannelPreviewData, ChannelType, DeleteMessageQuery, GetOrCreateAction,
+        GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest,
+        MessagePageDirection, NewChannelAttachment, ParticipantRole, PatchChannelRequest,
+        PatchMessageRequest, PostMessageRequest, PostMessageResponse, PostReactionRequest,
+        PostTypingRequest, ReactionAction, ReferencedShareItem, RemoveParticipantsRequest,
+        ResolvedChannelMessage, SimpleMention, ThreadInfo, ThreadReply, TopLevelMessageRow,
+        WithChannelId,
     },
     ports::{
         ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr,
@@ -1264,6 +1265,20 @@ where
     ) -> Result<Vec<ChannelContextMessage>, ChannelMessagesErr> {
         self.repo
             .get_messages_with_context(channel_id, message_id, before.max(0), after.max(0))
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(ChannelMessagesErr::Repo)
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn get_attachment_references(
+        &self,
+        entity_type: String,
+        entity_id: String,
+        user_id: String,
+    ) -> Result<Vec<AttachmentEntityReference>, ChannelMessagesErr> {
+        self.repo
+            .get_attachment_references(&entity_type, &entity_id, &user_id)
             .await
             .map_err(anyhow::Error::from)
             .map_err(ChannelMessagesErr::Repo)

@@ -4,9 +4,8 @@ import type {
 } from '@app/component/next-soup/soup-view/sort-options';
 import { TOKENS } from '@core/hotkey/tokens';
 import SortIcon from '@phosphor-icons/core/regular/funnel-simple.svg?component-solid';
-import { Dropdown, Tooltip } from '@ui';
+import { Dropdown, SingleSelectCheck, Tooltip } from '@ui';
 import { type Component, For, Show } from 'solid-js';
-import { TypeIndicator } from './unified-filter-dropdown';
 
 interface SortDropdownProps {
   /** Current sort value */
@@ -41,7 +40,6 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
           <For each={options()}>
             {(option) => (
               <Dropdown.Item onSelect={() => props.onChange(option.value)}>
-                <TypeIndicator active={props.value() === option.value} />
                 <Show when={option.icon}>
                   {(icon) => (
                     <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
@@ -49,15 +47,8 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
                     </span>
                   )}
                 </Show>
-                <span
-                  class="flex-1 truncate"
-                  classList={{
-                    'text-ink font-medium': props.value() === option.value,
-                    'text-ink-muted': props.value() !== option.value,
-                  }}
-                >
-                  {option.label}
-                </span>
+                <span class="flex-1 truncate">{option.label}</span>
+                <SingleSelectCheck active={props.value() === option.value} />
               </Dropdown.Item>
             )}
           </For>

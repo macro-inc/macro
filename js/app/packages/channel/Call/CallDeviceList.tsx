@@ -1,6 +1,5 @@
-import CheckIcon from '@phosphor/check.svg';
-import { Dropdown } from '@ui';
-import { For, Show } from 'solid-js';
+import { Dropdown, SingleSelectCheck } from '@ui';
+import { For } from 'solid-js';
 import type { MediaDeviceInfo } from './CallContext';
 
 /**
@@ -24,13 +23,11 @@ export function CallDeviceList(props: {
       >
         <For each={props.devices}>
           {(device) => (
-            <Dropdown.RadioItem value={device.deviceId}>
+            <Dropdown.RadioItem closeOnSelect={false} value={device.deviceId}>
               <span class="min-w-0 flex-1 truncate">{device.label}</span>
-              <span class="size-3.5 flex items-center justify-center shrink-0">
-                <Show when={props.activeDeviceId === device.deviceId}>
-                  <CheckIcon class="size-3 text-accent" />
-                </Show>
-              </span>
+              <SingleSelectCheck
+                active={props.activeDeviceId === device.deviceId}
+              />
             </Dropdown.RadioItem>
           )}
         </For>

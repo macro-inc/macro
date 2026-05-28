@@ -16,7 +16,6 @@ import {
 } from '@core/component/LexicalMarkdown/utils';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { useCanEdit } from '@core/signal/permissions';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { mergeRegister } from '@lexical/utils';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
@@ -38,12 +37,14 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   Show,
   untrack,
 } from 'solid-js';
 import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
 import { useRenameMarkdownDocument } from '../signal/save';
+import { useMarkdownName } from './MarkdownNameProvider';
 
 /**
  * Use the plugin architecture to set up command handlers on both the
@@ -136,18 +137,40 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   const canEdit = useCanEdit();
   const renameMarkdownDocument = useRenameMarkdownDocument();
+  const {
+    persistedName: persistedDocumentName,
+    editorName: mdDocumentName,
+    setOptimisticName,
+  } = useMarkdownName();
 
   const [showFallback, setShowFallback] = createSignal(true);
   const [titlePlaceholder, _setTitlePlaceholder] = TitlePlaceholderSignal;
+  const [titleFocused, setTitleFocused] = createSignal(false);
 
   const blockName = useBlockAliasedName();
   const titlePlaceholderFallback = blockNameToDefaultFile(blockName);
 
-  const debouncedRename = debounce(() => {
-    const name = state();
-    const prevName = untrack(mdDocumentName);
-    if (canEdit()) renameMarkdownDocument(name, prevName);
-  }, 500);
+  let pendingRename:
+    | {
+        newName: string;
+        oldName: string;
+      }
+    | undefined;
+
+  const flushPendingRename = () => {
+    const next = pendingRename;
+    pendingRename = undefined;
+    if (!next || !canEdit()) return;
+    void renameMarkdownDocument(next.newName, next.oldName);
+  };
+
+  const scheduleRename = (newName: string, oldName: string) => {
+    if (newName === oldName) return;
+    pendingRename = { newName, oldName };
+    debouncedFlushRename();
+  };
+
+  const debouncedFlushRename = debounce(flushPendingRename, 2000);
 
   const [state, setState] = createSignal('');
   const [initialized, setInitialized] = createSignal(false);
@@ -199,6 +222,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   });
 
   function onBlur() {
+    setTitleFocused(false);
     trimWhitespace(editor, { trailing: true });
   }
 
@@ -206,10 +230,15 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   const onConnect = (el: HTMLDivElement) => {
     editor.setRootElement(el);
+    const onFocus = () => setTitleFocused(true);
+    el.addEventListener('focus', onFocus);
     el.addEventListener('blur', onBlur);
     setRootConnected(true);
     onCleanup(() => {
+      debouncedFlushRename.clear();
+      flushPendingRename();
       cleanup();
+      el.removeEventListener('focus', onFocus);
       el.removeEventListener('blur', onBlur);
     });
   };
@@ -220,22 +249,29 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   const dataReady = createMemo(() => blockData() !== undefined);
 
-  // Use the empty string as the fallback to show correct empty document state.
-  const mdDocumentName = useBlockDocumentName('');
-
-  createEffect(() => {
-    const docName = mdDocumentName();
-    const currentState = untrack(state);
-    if (
-      dataReady() &&
-      docName !== undefined &&
-      docName !== currentState.trim() &&
-      !selfChangedTitle
-    ) {
-      forceSetTextContent(editor, docName);
-    }
-    selfChangedTitle = false;
+  const hasLocalTitleEdit = createMemo(() => {
+    if (!titleFocused()) return false;
+    return state().trim() !== (mdDocumentName() ?? '');
   });
+
+  createEffect(
+    on(
+      () => ({ docName: persistedDocumentName(), ready: dataReady() }),
+      ({ docName, ready }) => {
+        const currentState = untrack(state);
+        if (
+          ready &&
+          docName !== undefined &&
+          docName !== currentState.trim() &&
+          !selfChangedTitle &&
+          !untrack(hasLocalTitleEdit)
+        ) {
+          forceSetTextContent(editor, docName);
+        }
+        selfChangedTitle = false;
+      }
+    )
+  );
 
   createEffect(() => {
     if (emojiMenuOperations.isOpen()) return;
@@ -244,9 +280,21 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
       setInitialized(true);
       return;
     }
-    if (currentState.trim() !== untrack(mdDocumentName)) {
+    const nextName = currentState.trim();
+    if (nextName !== untrack(mdDocumentName)) {
+      setOptimisticName(nextName);
+    }
+    if (nextName !== (untrack(persistedDocumentName) ?? '')) {
       selfChangedTitle = true;
-      debouncedRename();
+      if (canEdit()) {
+        scheduleRename(nextName, untrack(persistedDocumentName) ?? '');
+      }
+    }
+  });
+
+  createEffect(() => {
+    if (mdDocumentName() === persistedDocumentName()) {
+      setOptimisticName(undefined);
     }
   });
 

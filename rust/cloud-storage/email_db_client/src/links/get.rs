@@ -64,6 +64,56 @@ pub async fn fetch_link_by_macro_id(
     Ok(db_link.map(service::link::Link::try_from).transpose()?)
 }
 
+/// Fetches all email_links the user can access via their macro_id, including any
+/// inboxes delegated via macro_user_links. The union is the read-side half of the
+/// multi-inbox narrow-graph design — it surfaces both the user's own inboxes
+/// (same macro_id) and inboxes belonging to other macro users they've been delegated.
+#[tracing::instrument(skip(pool), err)]
+pub async fn fetch_inboxes_for_macro_id(
+    pool: &PgPool,
+    macro_id: &str,
+) -> anyhow::Result<Vec<link::Link>> {
+    if macro_id.is_empty() {
+        anyhow::bail!("macro_id cannot be empty");
+    }
+
+    let db_links = sqlx::query_as!(
+        DbLink,
+        r#"
+        SELECT id as "id!", macro_id as "macro_id!",
+               fusionauth_user_id as "fusionauth_user_id!",
+               email_address as "email_address!",
+               provider as "provider!: _",
+               is_sync_active as "is_sync_active!",
+               created_at as "created_at!",
+               updated_at as "updated_at!"
+        FROM (
+            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
+                   el.provider, el.is_sync_active, el.created_at, el.updated_at
+            FROM email_links el
+            WHERE el.macro_id = $1
+            UNION
+            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
+                   el.provider, el.is_sync_active, el.created_at, el.updated_at
+            FROM email_links el
+            JOIN macro_user_links mul ON el.macro_id = mul.child_macro_id
+            WHERE mul.primary_macro_id = $1
+        ) AS combined
+        ORDER BY created_at DESC
+        "#,
+        macro_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let service_links: Result<Vec<_>, _> = db_links
+        .into_iter()
+        .map(service::link::Link::try_from)
+        .collect();
+
+    Ok(service_links?)
+}
+
 /// fetches email_links given a fusionauth_user_id. a fusionauth_user_id can have multiple email_links, each with a unique macro_id
 #[tracing::instrument(skip(pool), err)]
 pub async fn fetch_links_by_fusionauth_user_id(

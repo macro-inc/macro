@@ -5,8 +5,8 @@
 //! instead of duplicating the wiring logic.
 
 use crate::tool_context::{
-    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
-    NoOpSnsEndpointManager, NoOpTaskProperties, ToolNotificationQueue, ToolServiceContext,
+    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpSnsEndpointManager,
+    ToolNotificationQueue, ToolServiceContext,
 };
 use anthropic::toolset::AnthropicToolContext;
 use anyhow::Context;
@@ -194,12 +194,21 @@ pub async fn build_tool_service_context_from_env(
         presigned_url_expiry_seconds: 3600,
         browser_cache_expiry_seconds: 86400,
     };
+    let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        pool.clone(),
+    )));
+    let properties_service =
+        crate::tool_context::build_properties_service(pool.clone(), entity_access_service.clone());
+    let task_properties_service = crate::tool_context::build_task_properties_adapter(
+        pool.clone(),
+        properties_service.clone(),
+    );
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,
         cloudfront_config,
         sync_service_client: sync_client.as_ref().clone(),
         upload_url_service: s3_upload_adapter,
-        task_properties_service: NoOpTaskProperties,
+        task_properties_service,
         connection_service: NoOpConnectionService,
         entity_access_management_service:
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
@@ -207,9 +216,6 @@ pub async fn build_tool_service_context_from_env(
             ),
     };
 
-    let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
-        pool.clone(),
-    )));
     let document_tool_context = DocumentToolContext::new(
         document_service,
         (*entity_access_service).clone(),
@@ -217,16 +223,8 @@ pub async fn build_tool_service_context_from_env(
         sync_client.as_ref().clone(),
     );
 
-    let properties_service = properties::PropertiesServiceImpl::new(
-        properties::PropertiesPgRepo::new(pool.clone()),
-        Some(properties::PermissionServiceImpl::new(
-            pool.clone(),
-            entity_access_service.clone(),
-        )),
-        Some(NoOpNotificationService),
-    );
     let properties_tool_context =
-        properties::inbound::toolset::PropertiesToolContext::new(properties_service);
+        crate::tool_context::build_properties_tool_context(properties_service);
 
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
         Arc::new(EmailServiceImpl::new(

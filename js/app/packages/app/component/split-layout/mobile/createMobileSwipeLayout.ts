@@ -20,13 +20,13 @@ export type MobileSwipeLayout = {
    * Completes a swipe-back. Flips the FG/BG role so the current BG slot becomes FG
    * (no remount for the promoted panel), destroys the old FG, and lazily mounts a
    * new BG from the promoted split's history into the old FG slot.
-   * Called by MobileSwipeBackContainer after its animation finishes.
+   * Called by MobileSplitContainer after its animation finishes.
    */
   completeSwipeBack: () => void;
   /** Completes a prepared forward navigation after the swipe-in animation. */
   completeNavigateForward: () => void;
   /**
-   * Register an animated trigger provided by MobileSwipeBackContainer.
+   * Register an animated trigger provided by MobileSplitContainer.
    * When set, swipeBack() will animate before completing.
    */
   setAnimatedTrigger: (trigger: (() => void) | undefined) => void;

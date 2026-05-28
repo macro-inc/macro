@@ -114,14 +114,22 @@ function FormInput(props: {
   class?: string;
   onInput?: JSX.ChangeEventHandlerUnion<HTMLInputElement, Event>;
 }) {
-  const [el, setEl] = createSignal<HTMLInputElement>();
+  let inputEl: HTMLInputElement | undefined;
   onMount(() => {
     if (props.autoFocus === false) return;
-    setTimeout(() => el()?.focus(), 1);
+    // The Stepper's outin Transition resolves this step's JSX (firing onMount)
+    // before attaching it to the document, so the input is still detached
+    // here. Poll until it's connected, then focus.
+    const focusWhenConnected = () => {
+      if (!inputEl) return;
+      if (inputEl.isConnected) inputEl.focus({ preventScroll: true });
+      else requestAnimationFrame(focusWhenConnected);
+    };
+    focusWhenConnected();
   });
   return (
     <input
-      ref={setEl}
+      ref={(el) => (inputEl = el)}
       id={props.id}
       name={props.id}
       type={props.type ?? 'text'}

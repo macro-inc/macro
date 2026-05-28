@@ -11,7 +11,7 @@ import {
   useSetCallRecordShareWithTeamMutation,
   useToggleShareWithTeamMutation,
 } from '@queries/call/call';
-import { commsServiceClient } from '@service-comms/client';
+import { storageServiceClient } from '@service-storage/client';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { cn } from '@ui';
 import { type Accessor, createResource, Show, Suspense } from 'solid-js';
@@ -196,7 +196,7 @@ function ReferencesSectionConditional(props: { callId: string }) {
   const [references] = createResource(
     () => props.callId,
     async (id) => {
-      const response = await commsServiceClient.attachmentReferences({
+      const response = await storageServiceClient.attachmentReferences({
         entity_type: 'call',
         entity_id: id,
       });

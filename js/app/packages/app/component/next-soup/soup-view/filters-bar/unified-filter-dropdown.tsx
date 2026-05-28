@@ -26,7 +26,7 @@ import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizont
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useContacts } from '@queries/contacts/contacts';
-import { cn, Dropdown, Tooltip } from '@ui';
+import { cn, Dropdown, SingleSelectCheck, Tooltip } from '@ui';
 import {
   type Accessor,
   batch,
@@ -478,15 +478,8 @@ function SingleValueSubmenu<T>(props: {
                   onSelect={() => props.onSelect(option.value)}
                   closeOnSelect
                 >
-                  <TypeIndicator active={active()} />
-                  <span
-                    class={cn(
-                      'flex-1 truncate',
-                      active() ? 'text-ink' : 'text-ink-muted'
-                    )}
-                  >
-                    {option.label}
-                  </span>
+                  <span class="flex-1 truncate">{option.label}</span>
+                  <SingleSelectCheck active={active()} />
                 </Dropdown.Item>
               );
             }}
@@ -602,7 +595,6 @@ const SearchIndexRowLabel = (props: {
   active: Accessor<boolean>;
 }) => (
   <>
-    <TypeIndicator active={props.active()} />
     <Show when={props.option.icon}>
       {(icon) => (
         <span class="size-4 flex items-center justify-center shrink-0">
@@ -610,14 +602,8 @@ const SearchIndexRowLabel = (props: {
         </span>
       )}
     </Show>
-    <span
-      class={cn(
-        'flex-1 truncate',
-        props.active() ? 'text-ink' : 'text-ink-muted'
-      )}
-    >
-      {props.option.label}
-    </span>
+    <span class="flex-1 truncate">{props.option.label}</span>
+    <SingleSelectCheck active={props.active()} />
   </>
 );
 
@@ -1003,15 +989,8 @@ export const UnifiedFilterDropdown = (
                       onSelect={() => handleIndexChange('all')}
                       closeOnSelect
                     >
-                      <TypeIndicator active={!hasActiveIndex()} />
-                      <span
-                        class={cn(
-                          'flex-1 truncate',
-                          !hasActiveIndex() ? 'text-ink' : 'text-ink-muted'
-                        )}
-                      >
-                        All
-                      </span>
+                      <span class="flex-1 truncate">All</span>
+                      <SingleSelectCheck active={!hasActiveIndex()} />
                     </Dropdown.Item>
                   </Show>
                 </>

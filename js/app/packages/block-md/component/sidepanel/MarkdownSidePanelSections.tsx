@@ -38,9 +38,11 @@ import { hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { useDocumentGithubPullRequestsQuery } from '@queries/storage/github-pull-requests';
-import { commsServiceClient } from '@service-comms/client';
 import type { EntityType as PropertiesEntityType } from '@service-properties/generated/schemas/entityType';
-import { blockNameToItemType } from '@service-storage/client';
+import {
+  blockNameToItemType,
+  storageServiceClient,
+} from '@service-storage/client';
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui/utils/classname';
@@ -637,7 +639,7 @@ function ReferencesSectionConditional(props: { documentId: string }) {
   const [references] = createResource(
     () => props.documentId,
     async (id) => {
-      const response = await commsServiceClient.attachmentReferences({
+      const response = await storageServiceClient.attachmentReferences({
         entity_type: 'document',
         entity_id: id,
       });

@@ -70,6 +70,7 @@ import type { DocumentResponseMetadataWithContent } from './generated/schemas/do
 import type { EditAnchorResponse } from './generated/schemas/editAnchorResponse';
 import type { EditCommentResponse } from './generated/schemas/editCommentResponse';
 import type { ExportDocumentResponse } from './generated/schemas/exportDocumentResponse';
+import type { GetAttachmentReferencesResponse } from './generated/schemas/getAttachmentReferencesResponse';
 import type { GetBatchChannelPreviewRequest } from './generated/schemas/getBatchChannelPreviewRequest';
 import type { GetBatchChannelPreviewResponse } from './generated/schemas/getBatchChannelPreviewResponse';
 import type { GetBatchProjectPreviewResponse } from './generated/schemas/getBatchProjectPreviewResponse';
@@ -160,6 +161,9 @@ export type ItemType =
 
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 
+export type { ApiAttachmentChannelReference } from './generated/schemas/apiAttachmentChannelReference';
+export type { ApiAttachmentEntityReference } from './generated/schemas/apiAttachmentEntityReference';
+export type { ApiAttachmentGenericReference } from './generated/schemas/apiAttachmentGenericReference';
 export type { ApiChannelAttachment } from './generated/schemas/apiChannelAttachment';
 export type { ApiChannelAttachmentsPage as ChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
 export type { ApiChannelContextMessage } from './generated/schemas/apiChannelContextMessage';
@@ -174,6 +178,7 @@ export type MessageResponse = { message: string };
 
 type WithChannelId = { channel_id: string };
 type WithMessageId = { message_id: string };
+type WithEntity = { entity_type: string; entity_id: string };
 export type ChannelAttachmentType = 'static' | 'dss';
 
 export const ChannelTypeEnum = {
@@ -654,6 +659,16 @@ export const storageServiceClient = {
     return (
       await dssFetch<ApiChannelParticipant[]>(
         `/channels/${channel_id}/participants`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async attachmentReferences(args: WithEntity) {
+    const { entity_type, entity_id } = args;
+    return (
+      await dssFetch<GetAttachmentReferencesResponse>(
+        `/channels/attachments/${entity_type}/${entity_id}/references`,
         { method: 'GET' }
       )
     ).map((result) => result);
