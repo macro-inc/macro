@@ -133,10 +133,23 @@ pub async fn handler(
         // Dispatch on whether the linked email already belongs to another macro user.
         // Same-user → fall through to the data-source path. Cross-user → add a graph
         // edge instead of creating a duplicate email_links row.
+        //
+        // Distinguish "no user with this email" (Ok(None)) from a transient DB error
+        // (Err) — collapsing the latter to None would silently fall through to the
+        // data-source upsert path and create a duplicate email_links row.
         let existing_owner =
-            macro_db_client::user::get::get_user_id_by_email(ctx.db.clone(), &linked_email)
+            match macro_db_client::user::get::get_user_id_by_email(ctx.db.clone(), &linked_email)
                 .await
-                .ok();
+            {
+                Ok(macro_id) => Some(macro_id),
+                Err(sqlx::Error::RowNotFound) => None,
+                Err(e) => {
+                    return Err(InitError::DatabaseError(
+                        anyhow::Error::from(e)
+                            .context("Failed to look up existing macro user by linked_email"),
+                    ));
+                }
+            };
 
         if let Some(child_macro_id) = existing_owner.as_deref()
             && child_macro_id != user_context.user_id
