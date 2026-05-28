@@ -5404,7 +5404,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-auth"
 version = "0.1.0"
-source = "git+https://github.com/macro-inc/tauri-plugins?rev=61520093d5c7fcd60a2ed354dc150ca9556519a4#61520093d5c7fcd60a2ed354dc150ca9556519a4"
+source = "git+https://github.com/macro-inc/tauri-plugins?rev=26537c8a46bb8424f9cf4021d08aa76aa7cd66ef#26537c8a46bb8424f9cf4021d08aa76aa7cd66ef"
 dependencies = [
  "serde",
  "tauri",
@@ -5575,7 +5575,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-notifications"
 version = "0.1.0"
-source = "git+https://github.com/macro-inc/tauri-plugins?rev=61520093d5c7fcd60a2ed354dc150ca9556519a4#61520093d5c7fcd60a2ed354dc150ca9556519a4"
+source = "git+https://github.com/macro-inc/tauri-plugins?rev=26537c8a46bb8424f9cf4021d08aa76aa7cd66ef#26537c8a46bb8424f9cf4021d08aa76aa7cd66ef"
 dependencies = [
  "serde",
  "tauri",
