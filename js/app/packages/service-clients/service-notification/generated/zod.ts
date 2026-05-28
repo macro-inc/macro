@@ -116,6 +116,7 @@ export const listTypedNotificationsResponse = zod
                 'email_thread',
                 'team',
                 'call',
+                'foreign_entity',
                 'static_file',
               ])
               .describe('The type of an entity in Macro'),
@@ -632,6 +633,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'email_thread',
                 'team',
                 'call',
+                'foreign_entity',
                 'static_file',
               ])
               .describe('The type of an entity in Macro'),
@@ -1142,6 +1144,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'email_thread',
                 'team',
                 'call',
+                'foreign_entity',
                 'static_file',
               ])
               .describe('The type of an entity in Macro'),
@@ -1663,6 +1666,7 @@ export const getTypedNotificationByIdResponse = zod
         'email_thread',
         'team',
         'call',
+        'foreign_entity',
         'static_file',
       ])
       .describe('The type of an entity in Macro'),
