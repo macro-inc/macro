@@ -80,8 +80,8 @@ export function Hero() {
 
   return (
     <section class="py-10 sm:py-14">
-      <div class="mx-auto flex max-w-3xl flex-col items-center gap-6 text-center">
-        <h1 class="text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl lg:text-5xl">
+      <div class="mx-auto flex max-w-3xl flex-col items-center gap-6">
+        <h1 class="text-balance text-4xl font-semibold tracking-tight text-ink sm:text-center lg:text-5xl">
           {greeting()}, <span class="capitalize">{firstName()}.</span>
         </h1>
 
@@ -89,7 +89,7 @@ export function Hero() {
           <DashboardAiInput />
         </div>
 
-        <div class="flex flex-wrap justify-center gap-3">
+        <div class="flex w-full flex-wrap justify-start gap-3 sm:justify-center">
           <Button
             variant="cta"
             size="lg"
@@ -106,7 +106,7 @@ export function Hero() {
             onClick={() => CommandState.open()}
           >
             <SearchIcon class="size-4" />
-            Search
+            <span class="hidden sm:inline">Search</span>
           </Button>
           <Dropdown
             open={moreOpen()}
@@ -120,7 +120,7 @@ export function Hero() {
               aria-label="More dashboard actions"
             >
               <MoreIcon class="size-4" />
-              More
+              <span class="hidden sm:inline">More</span>
             </Dropdown.Trigger>
             <Dropdown.Content class="min-w-48">
               <Dropdown.Group>
