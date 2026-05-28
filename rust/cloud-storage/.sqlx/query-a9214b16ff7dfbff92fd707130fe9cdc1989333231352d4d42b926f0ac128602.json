@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT child_macro_id\n            FROM macro_user_links\n            WHERE primary_macro_id = $1\n              AND capability = 'inbox'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "child_macro_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a9214b16ff7dfbff92fd707130fe9cdc1989333231352d4d42b926f0ac128602"
+}
