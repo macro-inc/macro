@@ -14,13 +14,6 @@ import {
   isTaskEntity,
 } from '@entity';
 import { ProjectBreadCrumb } from '@entity/components/ProjectBreadCrumb';
-import { AutomationWideContent } from '@entity/composed/list-entity/automation';
-import { CallWideContent } from '@entity/composed/list-entity/call';
-import {
-  ChannelMessageWideContent,
-  ChannelWideContent,
-} from '@entity/composed/list-entity/channel';
-import { EmailWideContent } from '@entity/composed/list-entity/email';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import { Layer } from '@ui';
@@ -32,6 +25,57 @@ function entityTimestamp(entity: EntityData, mode: 'recent' | 'shared') {
     : entity.updatedAt || entity.createdAt || entity.viewedAt;
 }
 
+function EntityPrimary(props: { entity: EntityData }) {
+  return (
+    <Switch fallback={<Entity.Title entity={props.entity} />}>
+      <Match when={isEmailEntity(props.entity) && props.entity}>
+        {(entity) => <Entity.Title entity={entity()} />}
+      </Match>
+      <Match when={isChannelMessageEntity(props.entity) && props.entity}>
+        {(entity) => <span class="truncate">{entity().channelName}</span>}
+      </Match>
+      <Match when={isChannelEntity(props.entity) && props.entity}>
+        {(entity) => <Entity.Title entity={entity()} />}
+      </Match>
+      <Match when={isCallEntity(props.entity) && props.entity}>
+        {(entity) => <Entity.Title entity={entity()} />}
+      </Match>
+      <Match when={isAutomationEntity(props.entity) && props.entity}>
+        {(entity) => <Entity.Title entity={entity()} />}
+      </Match>
+    </Switch>
+  );
+}
+
+function EntityInlineMeta(props: { entity: EntityData }) {
+  return (
+    <Switch>
+      <Match when={isTaskEntity(props.entity) && props.entity}>
+        {(entity) => <Entity.Properties entity={entity()} />}
+      </Match>
+      <Match when={isProjectContainedEntity(props.entity) && props.entity}>
+        {(entity) => <ProjectBreadCrumb entity={entity() as any} />}
+      </Match>
+      <Match when={isEmailEntity(props.entity) && props.entity}>
+        {(entity) => <Entity.EmailParticipants entity={entity()} />}
+      </Match>
+      <Match when={isAutomationEntity(props.entity) && props.entity}>
+        {(entity) => (
+          <Show
+            when={entity().isRunning}
+            fallback={entity().enabled ? 'Active' : 'Paused'}
+          >
+            Running
+          </Show>
+        )}
+      </Match>
+      <Match when={isCallEntity(props.entity) && props.entity}>
+        {(entity) => entity().channelName || 'Call'}
+      </Match>
+    </Switch>
+  );
+}
+
 function EntityRow(props: { entity: EntityData; mode: 'recent' | 'shared' }) {
   const open = (event: MouseEvent) => {
     void openEntityInSplitFromUnifiedList(props.entity, {
@@ -41,70 +85,31 @@ function EntityRow(props: { entity: EntityData; mode: 'recent' | 'shared' }) {
 
   return (
     <button
-      class="group relative grid min-h-10 w-full grid-cols-[1fr_auto] items-center rounded-lg py-0.5 pr-1 text-left transition hover:bg-active/30 focus:outline-none focus-visible:bg-active/30"
+      class="group relative flex min-h-10 w-full items-center rounded-lg py-1 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset"
       onClick={open}
     >
-      <div class="grid min-w-0 grid-cols-[1rem_1fr_auto] items-center gap-2 px-2 text-sm [--title-width:10rem]">
+      <div class="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-sm">
         <div class="size-4 shrink-0">
           <Entity.Icon entity={props.entity} />
         </div>
 
-        <div class="flex min-w-0 items-center gap-2 truncate font-semibold">
-          <Switch fallback={<Entity.Title entity={props.entity} />}>
-            <Match when={isEmailEntity(props.entity) && props.entity}>
-              {(entity) => (
-                <EmailWideContent
-                  entity={entity()}
-                  chars={120}
-                  showHitSnippet={false}
-                  setContainerRef={() => {}}
-                />
-              )}
-            </Match>
-            <Match when={isChannelMessageEntity(props.entity) && props.entity}>
-              {(entity) => <ChannelMessageWideContent entity={entity()} />}
-            </Match>
-            <Match when={isChannelEntity(props.entity) && props.entity}>
-              {(entity) => (
-                <ChannelWideContent entity={entity()} showLatestMessage />
-              )}
-            </Match>
-            <Match when={isCallEntity(props.entity) && props.entity}>
-              {(entity) => (
-                <CallWideContent
-                  entity={entity()}
-                  chars={120}
-                  setContainerRef={() => {}}
-                />
-              )}
-            </Match>
-            <Match when={isAutomationEntity(props.entity) && props.entity}>
-              {(entity) => <AutomationWideContent entity={entity()} />}
-            </Match>
-          </Switch>
+        <div class="min-w-0 flex-1 truncate font-semibold">
+          <EntityPrimary entity={props.entity} />
         </div>
 
-        <div class="flex items-center gap-2">
-          <Show when={isProjectContainedEntity(props.entity) && props.entity}>
-            {(entity) => (
-              <span class="text-xs text-ink-extra-muted">
-                <ProjectBreadCrumb entity={entity()} />
-              </span>
-            )}
-          </Show>
-          <Show when={isTaskEntity(props.entity) && props.entity}>
-            {(entity) => <Entity.Properties entity={entity()} />}
-          </Show>
-          <span class="shrink-0 text-xs font-light text-ink-extra-muted">
-            <Entity.Timestamp
-              entity={props.entity}
-              overrideTimeStamp={entityTimestamp(props.entity, props.mode)}
-            />
-          </span>
+        <div class="hidden min-w-0 shrink items-center gap-2 overflow-hidden text-xs text-ink-muted @2xl/dashboard:flex">
+          <EntityInlineMeta entity={props.entity} />
         </div>
+
+        <span class="shrink-0 text-xs font-light text-ink-extra-muted">
+          <Entity.Timestamp
+            entity={props.entity}
+            overrideTimeStamp={entityTimestamp(props.entity, props.mode)}
+          />
+        </span>
       </div>
 
-      <div class="pointer-events-none opacity-0 transition group-hover:opacity-100">
+      <div class="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 opacity-0 transition group-hover:opacity-100">
         <Layer depth={3}>
           <div class="flex size-8 items-center justify-center rounded-xl bg-hover text-ink-muted transition group-hover:text-ink">
             <ArrowRightIcon class="size-4" />
