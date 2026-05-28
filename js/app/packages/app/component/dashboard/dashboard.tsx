@@ -47,7 +47,7 @@ export function Dashboard() {
               </DashboardSectionBoundary>
             </div>
 
-            <div class="px-4 sm:px-0 @6xl/dashboard:hidden">
+            <div class="hidden px-4 sm:block sm:px-0 @6xl/dashboard:hidden">
               <DashboardSectionBoundary title="notifications">
                 <NotificationsSection />
               </DashboardSectionBoundary>

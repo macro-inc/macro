@@ -1,8 +1,12 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { EntityRow, EntityRowProvider } from '@app/component/mobile/EntityRow';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import {
+  StaticMarkdown,
+  StaticMarkdownContext,
+} from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
   createTheme,
   theme as markdownTheme,
@@ -103,11 +107,11 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
     <div
       role="button"
       tabIndex={0}
-      class="group relative w-full rounded-lg p-2.5 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset"
+      class="group relative w-full rounded-lg py-2.5 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset sm:p-2.5"
       onClick={open}
       onKeyDown={onKeyDown}
     >
-      <div class="absolute right-2 top-2 z-10 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+      <div class="hidden absolute right-2 top-2 z-10 opacity-0 transition sm:block sm:group-hover:opacity-100 sm:focus-within:opacity-100">
         <Tooltip label="Mark done">
           <Button
             type="button"
@@ -118,33 +122,33 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
             aria-label="Mark notification done"
             onClick={markDone}
           >
-            <CheckIcon class="size-3" />
+            <CheckIcon class="size-2.5" />
           </Button>
         </Tooltip>
       </div>
 
-      <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1">
+      <div class="flex items-start gap-2">
         <div class="relative shrink-0">
           <Show
             when={isDirectMessage() && actorId()}
             fallback={
-              <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-hover transition group-hover:bg-active">
+              <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-hover transition touch:size-9 group-hover:bg-active">
                 <Show
                   when={tag() === 'task_assigned'}
                   fallback={
                     <Entity.Notification.Icon
                       notification={props.notification}
-                      class="shrink-0"
+                      class="size-4 shrink-0 touch:size-5"
                     />
                   }
                 >
-                  <EntityIcon targetType="task" size="sm" class="shrink-0" />
+                  <EntityIcon targetType="task" size="sm" class="shrink-0 touch:size-5" />
                 </Show>
               </div>
             }
           >
             {(id) => (
-              <UserIcon id={id()} size="md" suppressClick showTooltip={false} />
+              <UserIcon id={id()} size="md" class="touch:size-9" suppressClick showTooltip={false} />
             )}
           </Show>
           <Show when={unread()}>
@@ -152,69 +156,73 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
           </Show>
         </div>
 
-        <div class="flex min-w-0 items-center gap-1.5">
-          <p class="flex min-w-0 flex-1 items-center gap-1.5 truncate text-[0.8125rem] font-semibold text-ink">
-            <span class="truncate">{title()}</span>
-          </p>
-          <span class="shrink-0 text-xxs font-light text-ink-extra-muted">
-            <Entity.Notification.Timestamp notification={props.notification} />
-          </span>
-        </div>
-
-        <Show
-          when={tag() === 'task_assigned'}
-          fallback={
-            <Show when={description()}>
-              {(markdown) => (
-                <div class="col-start-2 flex min-w-0 items-start gap-1.5 text-xs/5 text-ink-muted [&_*]:text-xs [&_*]:leading-5">
-                  <Show when={channelName() && !isDirectMessage() && actorId()}>
-                    {(id) => (
-                      <span class="inline-flex shrink-0 items-center gap-1 font-medium text-ink-muted">
-                        <UserIcon
-                          id={id()}
-                          size="sm"
-                          suppressClick
-                          showTooltip={false}
-                        />
-                        <span>
-                          <Entity.Notification.Sender
-                            notification={props.notification}
-                          />
-                        </span>
-                      </span>
-                    )}
-                  </Show>
-                  <div class="line-clamp-2 min-w-0">
-                    <StaticMarkdown
-                      markdown={markdown()}
-                      theme={compactMarkdownTheme}
-                    />
-                  </div>
-                </div>
-              )}
-            </Show>
-          }
-        >
-          <div class="col-start-2 flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
-            <Show when={actorId()}>
-              {(id) => (
-                <UserIcon
-                  id={id()}
-                  size="sm"
-                  suppressClick
-                  showTooltip={false}
-                />
-              )}
-            </Show>
-            <span class="truncate">
-              <span class="font-medium">
-                <Entity.Notification.Sender notification={props.notification} />
-              </span>{' '}
-              assigned you
+        <div class="flex min-w-0 flex-1 flex-col gap-1">
+          <div class="flex min-w-0 items-center gap-1.5">
+            <p class="flex min-w-0 flex-1 items-center gap-1.5 truncate text-[0.8125rem] font-semibold text-ink">
+              <span class="truncate">{title()}</span>
+            </p>
+            <span class="shrink-0 text-xxs font-light text-ink-extra-muted">
+              <Entity.Notification.Timestamp notification={props.notification} />
             </span>
           </div>
-        </Show>
+
+          <Show
+            when={tag() === 'task_assigned'}
+            fallback={
+              <Show when={description()}>
+                {(markdown) => (
+                  <div class="flex min-w-0 items-start gap-1.5 text-xs/5 text-ink-muted [&_*]:text-xs [&_*]:leading-5">
+                    <Show when={channelName() && !isDirectMessage() && actorId()}>
+                      {(id) => (
+                        <span class="inline-flex shrink-0 items-center gap-1 font-medium text-ink-muted">
+                          <UserIcon
+                            id={id()}
+                            size="sm"
+                            suppressClick
+                            showTooltip={false}
+                          />
+                          <span>
+                            <Entity.Notification.Sender
+                              notification={props.notification}
+                            />
+                          </span>
+                        </span>
+                      )}
+                    </Show>
+                    <div class="line-clamp-2 min-w-0">
+                      <StaticMarkdown
+                        markdown={markdown()}
+                        theme={compactMarkdownTheme}
+                      />
+                    </div>
+                  </div>
+                )}
+              </Show>
+            }
+          >
+            <div class="flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
+              <Show when={actorId()}>
+                {(id) => (
+                  <UserIcon
+                    id={id()}
+                    size="sm"
+                    suppressClick
+                    showTooltip={false}
+                  />
+                )}
+              </Show>
+              <span class="truncate">
+                <span class="font-medium">
+                  <Entity.Notification.Sender notification={props.notification} />
+                </span>{' '}
+                assigned you
+              </span>
+            </div>
+          </Show>
+        </div>
+
       </div>
+
     </div>
   );
 }
@@ -223,19 +231,38 @@ export function DashboardNotificationList(props: {
   notifications: UnifiedNotification[];
   class?: string;
 }) {
+  const notificationSource = useGlobalNotificationSource();
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
 
   return (
     <div class="relative min-h-0 overflow-hidden">
       <div
         ref={setScrollContainer}
-        class={cn('scrollbar-hidden overflow-y-auto pr-2', props.class)}
+        data-corvu-no-drag
+        class={cn('scrollbar-hidden overflow-y-auto sm:pr-2', props.class)}
       >
-        <div class="flex flex-col">
-          <For each={props.notifications}>
-            {(notification) => <NotificationRow notification={notification} />}
-          </For>
-        </div>
+        <StaticMarkdownContext>
+          <div class="flex flex-col gap-1 sm:gap-0">
+            <EntityRowProvider container={scrollContainer}>
+            <For each={props.notifications}>
+              {(notification) => (
+                <EntityRow
+                  entityId={notification.id}
+                  swipeLeftColor="bg-success-bg"
+                  swipeLeftRevealedComponent={
+                    <CheckIcon class="size-5 text-success" />
+                  }
+                  onSwipeLeft={() =>
+                    void notificationSource.markAsDone(notification)
+                  }
+                >
+                  <NotificationRow notification={notification} />
+                </EntityRow>
+              )}
+            </For>
+            </EntityRowProvider>
+          </div>
+        </StaticMarkdownContext>
       </div>
       <CustomScrollbar
         scrollContainer={scrollContainer}
