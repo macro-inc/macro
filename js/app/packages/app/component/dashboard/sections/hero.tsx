@@ -79,17 +79,17 @@ export function Hero() {
   });
 
   return (
-    <section class="px-6 py-8 sm:px-8 sm:py-12">
-      <div class="mx-auto flex max-w-3xl flex-col items-center text-center">
+    <section class="py-10 sm:py-14">
+      <div class="mx-auto flex max-w-3xl flex-col items-center gap-6 text-center">
         <h1 class="text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl lg:text-5xl">
           {greeting()}, <span class="capitalize">{firstName()}.</span>
         </h1>
 
-        <div class="mt-6 w-full max-w-2xl text-left">
+        <div class="w-full max-w-2xl text-left">
           <DashboardAiInput />
         </div>
 
-        <div class="mt-5 flex flex-wrap justify-center gap-3">
+        <div class="flex flex-wrap justify-center gap-3">
           <Button
             variant="cta"
             size="lg"

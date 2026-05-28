@@ -30,7 +30,7 @@ export function Dashboard() {
         <div class="grid grid-cols-1 gap-24 @6xl/dashboard:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] @7xl/dashboard:grid-cols-[minmax(0,8rem)_minmax(0,1fr)_minmax(18rem,22rem)] @8xl/dashboard:grid-cols-[minmax(0,22rem)_minmax(0,1fr)_minmax(18rem,22rem)]">
           <div class="hidden @7xl/dashboard:block" />
 
-          <div class="min-w-0 space-y-10 @6xl/dashboard:mx-0 @6xl/dashboard:max-w-none">
+          <div class="flex min-w-0 flex-col gap-10 @6xl/dashboard:mx-0 @6xl/dashboard:max-w-none">
             <DashboardSectionBoundary title="hero">
               <Hero />
             </DashboardSectionBoundary>
