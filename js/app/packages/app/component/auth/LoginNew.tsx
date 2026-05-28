@@ -117,15 +117,15 @@ function FormInput(props: {
   let inputEl: HTMLInputElement | undefined;
   onMount(() => {
     if (props.autoFocus === false) return;
-    // The Stepper uses an outin Transition: the new step mounts only after the
-    // previous step's 150ms exit, and the enter animation then manipulates
-    // classes via a queueMicrotask + double rAF. A single focus attempt races
-    // with that and can be silently dropped, so we focus at several points
-    // until something sticks.
-    const attemptFocus = () => inputEl?.focus({ preventScroll: true });
-    queueMicrotask(attemptFocus);
-    requestAnimationFrame(attemptFocus);
-    setTimeout(attemptFocus, 220);
+    // The Stepper's outin Transition resolves this step's JSX (firing onMount)
+    // before attaching it to the document, so the input is still detached
+    // here. Poll until it's connected, then focus.
+    const focusWhenConnected = () => {
+      if (!inputEl) return;
+      if (inputEl.isConnected) inputEl.focus({ preventScroll: true });
+      else requestAnimationFrame(focusWhenConnected);
+    };
+    focusWhenConnected();
   });
   return (
     <input
