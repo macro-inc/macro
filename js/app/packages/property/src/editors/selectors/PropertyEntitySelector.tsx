@@ -7,6 +7,7 @@ import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import type { EmailEntity } from '@entity';
 import { Entity, type EntityData } from '@entity';
 import { createEmailsInfiniteQuery } from '@macro-entity';
+import CheckIcon from '@phosphor/check.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils';
 import { useSearchSoupQuery } from '@queries/soup/search';
@@ -444,16 +445,18 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                     }
                   }}
                 >
-                  <div class="shrink-0">
-                    <OptionCheckBox
-                      checked={isSelected()}
-                      multiselect={props.config.isMultiSelect}
-                    />
-                  </div>
+                  <Show when={props.config.isMultiSelect}>
+                    <div class="shrink-0">
+                      <OptionCheckBox checked={isSelected()} multiselect />
+                    </div>
+                  </Show>
                   <div class="flex items-center gap-2 flex-1 min-w-0">
                     <div class="size-4 shrink-0">{option.icon}</div>
                     <span class="truncate min-w-0">{option.label}</span>
                   </div>
+                  <Show when={!props.config.isMultiSelect && isSelected()}>
+                    <CheckIcon class="size-3.5 shrink-0 text-accent" />
+                  </Show>
                 </div>
               );
             }}
@@ -495,12 +498,14 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                           }
                         }}
                       >
-                        <div class="shrink-0">
-                          <OptionCheckBox
-                            checked={isSelected()}
-                            multiselect={props.config.isMultiSelect}
-                          />
-                        </div>
+                        <Show when={props.config.isMultiSelect}>
+                          <div class="shrink-0">
+                            <OptionCheckBox
+                              checked={isSelected()}
+                              multiselect
+                            />
+                          </div>
+                        </Show>
                         <div class="flex items-center gap-2 flex-1 min-w-0">
                           <div class="size-4 shrink-0 flex items-center">
                             <Show
@@ -528,6 +533,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                             </Show>
                           </span>
                         </div>
+                        <Show
+                          when={!props.config.isMultiSelect && isSelected()}
+                        >
+                          <CheckIcon class="size-3.5 shrink-0 text-accent" />
+                        </Show>
                       </div>
                     </>
                   );
