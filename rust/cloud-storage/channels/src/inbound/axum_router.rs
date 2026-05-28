@@ -19,11 +19,10 @@ use crate::domain::ports::{
     ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesQueryResult, ChannelMutationErr,
     ChannelService,
 };
-use crate::inbound::permissions_token::{PermissionsTokenError, validate_edit_document_permission};
 use axum::{
     Json, Router,
     extract::{Extension, FromRef, Path, Query, State},
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, patch, post},
 };
@@ -31,8 +30,8 @@ use chrono::{DateTime, Utc};
 use entity_access::{
     domain::{
         models::{
-            AdminParticipantRole, EntityAccessReceipt, EntityPermission, MemberParticipantRole,
-            OwnerParticipantRole, RequiredPermission,
+            AccessError, AccessLevel, AdminParticipantRole, EntityAccessReceipt, EntityPermission,
+            EntityType, MemberParticipantRole, OwnerParticipantRole, RequiredPermission,
         },
         ports::EntityAccessService,
     },
@@ -53,7 +52,6 @@ use uuid::Uuid;
 pub struct ChannelsRouterState<S, Svc> {
     service: Arc<S>,
     access_service: Arc<Svc>,
-    permissions_token_secret: Arc<str>,
 }
 
 impl<S, Svc> Clone for ChannelsRouterState<S, Svc> {
@@ -61,7 +59,6 @@ impl<S, Svc> Clone for ChannelsRouterState<S, Svc> {
         Self {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
-            permissions_token_secret: self.permissions_token_secret.clone(),
         }
     }
 }
@@ -72,14 +69,7 @@ impl<S: ChannelService, Svc: EntityAccessService> ChannelsRouterState<S, Svc> {
         Self {
             service: Arc::new(service),
             access_service: Arc::new(access_service),
-            permissions_token_secret: Arc::from(""),
         }
-    }
-
-    /// Attach the document permissions JWT secret used by mention endpoints.
-    pub fn with_permissions_token_secret(mut self, secret: impl Into<Arc<str>>) -> Self {
-        self.permissions_token_secret = secret.into();
-        self
     }
 }
 
@@ -740,33 +730,44 @@ pub async fn leave_channel_handler<S: ChannelService, Svc: EntityAccessService>(
     Ok(StatusCode::OK)
 }
 
-const PERMISSIONS_TOKEN_HEADER: &str = "x-permissions-token";
-
-fn require_mention_edit_permission(
-    headers: &HeaderMap,
-    secret: &str,
+async fn require_document_edit_access<Svc: EntityAccessService>(
+    access_service: &Svc,
+    actor: &MacroUserIdStr<'static>,
     source_entity_type: &str,
     source_entity_id: &str,
 ) -> Result<(), ChannelsHandlerErr> {
     if source_entity_type != "document" {
         return Err(ChannelsHandlerErr::BadRequest("invalid source entity type"));
     }
+    access_service
+        .check_access(
+            Some(actor),
+            source_entity_id,
+            EntityType::Document,
+            AccessLevel::Edit,
+        )
+        .await
+        .map(|_| ())
+        .map_err(map_access_error)
+}
 
-    let token = headers
-        .get(PERMISSIONS_TOKEN_HEADER)
-        .and_then(|header| header.to_str().ok())
-        .ok_or(ChannelsHandlerErr::Unauthorized(
-            "missing required authentication header",
-        ))?;
-
-    validate_edit_document_permission(token, source_entity_id, secret).map_err(|err| match err {
-        PermissionsTokenError::DocumentMismatch | PermissionsTokenError::InvalidToken => {
-            ChannelsHandlerErr::Unauthorized("invalid permissions token")
+fn map_access_error(err: AccessError) -> ChannelsHandlerErr {
+    match err {
+        AccessError::Unauthorized => ChannelsHandlerErr::Unauthorized("unauthorized"),
+        AccessError::UnauthorizedWithMessage(msg) => ChannelsHandlerErr::Unauthorized(msg),
+        AccessError::BadRequest(msg) => ChannelsHandlerErr::BadRequest(msg),
+        AccessError::NotFound(msg) => ChannelsHandlerErr::NotFound(msg),
+        AccessError::DatabaseError(e) => {
+            tracing::error!(error=?e, "entity access database error");
+            ChannelsHandlerErr::Internal(ChannelMessagesErr::Repo(anyhow::Error::from(e)))
         }
-        PermissionsTokenError::InsufficientPermissions => {
-            ChannelsHandlerErr::Forbidden("insufficient permissions: edit access required")
+        AccessError::Internal => {
+            tracing::error!("entity access internal error");
+            ChannelsHandlerErr::Internal(ChannelMessagesErr::Repo(anyhow::anyhow!(
+                "entity access internal error"
+            )))
         }
-    })
+    }
 }
 
 /// Handler for `POST /channels/mentions`.
@@ -780,7 +781,6 @@ fn require_mention_edit_permission(
         (status = 201, body = CreateEntityMentionResponse),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
-        (status = 403, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -788,15 +788,16 @@ fn require_mention_edit_permission(
 pub async fn create_mention_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
     Extension(user_context): Extension<UserContext>,
-    headers: HeaderMap,
     Json(req): Json<CreateEntityMentionRequest>,
 ) -> Result<(StatusCode, Json<CreateEntityMentionResponse>), ChannelsHandlerErr> {
-    require_mention_edit_permission(
-        &headers,
-        state.permissions_token_secret.as_ref(),
+    let actor = actor_from_user_context(&user_context)?;
+    require_document_edit_access(
+        state.access_service.as_ref(),
+        &actor,
         &req.source_entity_type,
         &req.source_entity_id,
-    )?;
+    )
+    .await?;
 
     let mention = state
         .service
@@ -836,7 +837,6 @@ pub async fn create_mention_handler<S: ChannelService, Svc: EntityAccessService>
         (status = 200, body = DeleteEntityMentionResponse),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
-        (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
@@ -844,7 +844,7 @@ pub async fn create_mention_handler<S: ChannelService, Svc: EntityAccessService>
 #[tracing::instrument(err, skip_all)]
 pub async fn delete_mention_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    headers: HeaderMap,
+    Extension(user_context): Extension<UserContext>,
     Path(mention_id): Path<String>,
 ) -> Result<(StatusCode, Json<DeleteEntityMentionResponse>), ChannelsHandlerErr> {
     let id = Uuid::parse_str(&mention_id)
@@ -856,12 +856,14 @@ pub async fn delete_mention_handler<S: ChannelService, Svc: EntityAccessService>
         .await?
         .ok_or(ChannelsHandlerErr::NotFound("entity mention not found"))?;
 
-    require_mention_edit_permission(
-        &headers,
-        state.permissions_token_secret.as_ref(),
+    let actor = actor_from_user_context(&user_context)?;
+    require_document_edit_access(
+        state.access_service.as_ref(),
+        &actor,
         &mention.source_entity_type,
         &mention.source_entity_id,
-    )?;
+    )
+    .await?;
 
     let deleted = state.service.delete_entity_mention(id).await?;
     if !deleted {
@@ -1641,9 +1643,6 @@ pub enum ChannelsHandlerErr {
     /// Unauthorized.
     #[error("{0}")]
     Unauthorized(&'static str),
-    /// Forbidden.
-    #[error("{0}")]
-    Forbidden(&'static str),
     /// Not found.
     #[error("{0}")]
     NotFound(&'static str),
@@ -1667,13 +1666,6 @@ impl IntoResponse for ChannelsHandlerErr {
                 .into_response(),
             ChannelsHandlerErr::Unauthorized(message) => (
                 StatusCode::UNAUTHORIZED,
-                Json(ErrorResponse {
-                    message: message.into(),
-                }),
-            )
-                .into_response(),
-            ChannelsHandlerErr::Forbidden(message) => (
-                StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
                     message: message.into(),
                 }),

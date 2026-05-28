@@ -608,7 +608,7 @@ async fn main() -> anyhow::Result<()> {
         // Comms service fields
         frecency_storage,
         comms_state,
-        permissions_token_secret: comms_permissions_token_secret.clone(),
+        permissions_token_secret: comms_permissions_token_secret,
         entity_access_service: entity_access_service.clone(),
         documents_state: DocumentRouterState {
             service: document_service.clone(),
@@ -623,8 +623,7 @@ async fn main() -> anyhow::Result<()> {
         channels_state: ChannelsRouterState::new(
             channels_service,
             (*entity_access_service).clone(),
-        )
-        .with_permissions_token_secret(comms_permissions_token_secret.as_ref()),
+        ),
         call_state,
         call_webhook_state,
         call_internal_state,
