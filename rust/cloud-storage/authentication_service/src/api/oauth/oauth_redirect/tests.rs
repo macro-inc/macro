@@ -28,13 +28,50 @@ async fn it_should_deserialize_query_params() {
         .await
         .unwrap();
 
-    assert_matches!(data, OAuthCbParams { code, state: Some(container) } => {
+    assert_matches!(data, OAuthCbParams { code: Some(code), state: Some(container), .. } => {
         assert_eq!(code, "test123");
         assert_matches!(container.decode().unwrap(), SsoState { original_url: Some(url), is_mobile: true, referral_code: Some(code) } => {
             assert_eq!(url.as_str(), "https://example.com/");
             assert_eq!(code.as_str(), "test");
         })
     });
+}
+
+#[tokio::test]
+async fn it_should_deserialize_error_redirect_without_code() {
+    let mut url: Url = "https://test.com".parse().unwrap();
+    url.query_pairs_mut()
+        .append_pair("error", "invalid_request")
+        .append_pair("error_reason", "invalid_origin")
+        .append_pair(
+            "error_description",
+            "Invalid origin uri https://accounts.google.com",
+        );
+
+    let (mut parts, ()) = Request::builder()
+        .uri(url.as_str())
+        .body(())
+        .unwrap()
+        .into_parts();
+
+    let extract::Query(data) = extract::Query::<OAuthCbParams>::from_request_parts(&mut parts, &())
+        .await
+        .unwrap();
+
+    assert_matches!(
+        data,
+        OAuthCbParams {
+            code: None,
+            state: None,
+            error: Some(err),
+            error_reason: Some(reason),
+            error_description: Some(desc),
+        } => {
+            assert_eq!(err, "invalid_request");
+            assert_eq!(reason, "invalid_origin");
+            assert_eq!(desc, "Invalid origin uri https://accounts.google.com");
+        }
+    );
 }
 
 #[derive(Debug, Default)]

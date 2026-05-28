@@ -1,7 +1,6 @@
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import { commsServiceClient } from '@service-comms/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { CreateChannelRequest } from '@service-storage/generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from '@service-storage/generated/schemas/createChannelResponse';
@@ -11,7 +10,7 @@ import { channelKeys } from './keys';
 export function useListChannelsQuery() {
   return useQuery(() => ({
     queryKey: channelKeys.listChannels.queryKey,
-    queryFn: async () => await throwOnErr(commsServiceClient.getChannels),
+    queryFn: async () => await throwOnErr(storageServiceClient.getChannels),
   }));
 }
 

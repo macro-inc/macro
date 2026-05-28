@@ -46,9 +46,15 @@ pub(in crate::api) struct OAuthState {
 #[derive(Debug, serde::Deserialize)]
 pub(in crate::api) struct Params {
     /// The code to complete the login
-    code: String,
+    code: Option<String>,
     /// State that is passed from the original request
     state: String,
+    #[serde(default)]
+    error: Option<String>,
+    #[serde(default)]
+    error_description: Option<String>,
+    #[serde(default)]
+    error_reason: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -93,9 +99,28 @@ pub(in crate::api) async fn handler(
             .into_response()
     })?;
 
+    let code = match params.code {
+        Some(c) => c,
+        None => {
+            tracing::warn!(
+                error = ?params.error,
+                error_reason = ?params.error_reason,
+                error_description = ?params.error_description,
+                "oauth2 callback received without code",
+            );
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "Sign-in failed. Please try again or contact support.".into(),
+                }),
+            )
+                .into_response());
+        }
+    };
+
     match provider.as_str() {
-        "google" => google::handler(&ctx, cookies, &params.code, &state).await,
-        "github" => github::handler(&ctx, cookies, &params.code, &state)
+        "google" => google::handler(&ctx, cookies, &code, &state).await,
+        "github" => github::handler(&ctx, cookies, &code, &state)
             .await
             .map(|r| r.into_response())
             .map_err(|e| e.into_response()),

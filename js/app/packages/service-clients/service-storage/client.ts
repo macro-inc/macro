@@ -24,6 +24,7 @@ import type { ResultError } from '@core/util/result';
 
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
+import type { ApiChannelWithLatest } from '@service-comms/generated/models/apiChannelWithLatest';
 import { platformFetch } from 'core/util/platformFetch';
 import { err, ok, type Result } from 'neverthrow';
 import type {
@@ -353,6 +354,17 @@ export const storageServiceClient = {
       await dssFetch<CreateChannelResponse>(`/channels`, {
         method: 'POST',
         body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
+
+  // The channel list is still served by the comms hex, mounted at
+  // `/comms/channels` on the same DSS host. Repoint to `/channels` once the
+  // list moves into the channels hex (alongside the comms teardown).
+  async getChannels() {
+    return (
+      await dssFetch<ApiChannelWithLatest[]>(`/comms/channels`, {
+        method: 'GET',
       })
     ).map((result) => result);
   },
