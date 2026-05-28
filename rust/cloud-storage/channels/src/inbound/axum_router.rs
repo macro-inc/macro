@@ -1154,7 +1154,6 @@ pub async fn get_channel_participants_handler<S: ChannelService, Svc: EntityAcce
     fields(
         entity_type = tracing::field::Empty,
         entity_id = tracing::field::Empty,
-        user_id = tracing::field::Empty,
     )
 )]
 pub async fn get_attachment_references_handler<S: ChannelService, Svc: EntityAccessService>(
@@ -1165,7 +1164,6 @@ pub async fn get_attachment_references_handler<S: ChannelService, Svc: EntityAcc
     let span = tracing::Span::current();
     span.record("entity_type", tracing::field::display(&path.entity_type));
     span.record("entity_id", tracing::field::display(&path.entity_id));
-    span.record("user_id", tracing::field::display(&user_context.user_id));
 
     let references = state
         .service
