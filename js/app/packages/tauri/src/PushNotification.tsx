@@ -10,6 +10,7 @@ import {
 import {
   type PlatformNotificationInterface,
   PlatformNotificationProvider,
+  triggerNotificationNavigation,
 } from '@notifications';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { notificationServiceClient } from '@service-notification/client';
@@ -21,9 +22,13 @@ import {
   createSignal,
   type JSX,
 } from 'solid-js';
-import { triggerNavigation } from './navigation';
 import { createTauriNotificationInterface } from './notification';
 import { useExpectTauri } from './TauriProvider';
+
+function getNotificationId(payload: Record<string, unknown>) {
+  const value = payload.notificationId;
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
 
 function usePushNotifications(
   deviceType: 'android' | 'ios',
@@ -121,9 +126,15 @@ function usePushNotifications(
     console.error
   );
 
+  let notificationWatchStarted = false;
   createEffect(() => {
     if (!registrationResult()?.success || !onPushNotification) return;
-    watchNotifications(onPushNotification).then(console.info);
+    if (notificationWatchStarted) return;
+
+    notificationWatchStarted = true;
+    void watchNotifications(onPushNotification).catch(() => {
+      notificationWatchStarted = false;
+    });
   });
 
   return {
@@ -159,18 +170,17 @@ export function MaybePushNotificationRegistration(props: {
   }
 
   const push = usePushNotifications(os, (event) => {
-    const notificationId: string | undefined = event.payload.notificationId;
+    const notificationId = getNotificationId(event.payload);
 
     const tapped =
       event.type === 'BACKGROUND_TAP' || event.type === 'FOREGROUND_TAP';
+
     // Only navigate on explicit user interaction.
     if (!tapped) return;
     if (!notificationId) return;
 
     invalidateUserNotifications();
-    triggerNavigation(
-      `/component/notification?notificationId=${notificationId}`
-    );
+    triggerNotificationNavigation(notificationId);
   });
 
   // now we compose the standard tauri notif plugin with the push notification plugin
