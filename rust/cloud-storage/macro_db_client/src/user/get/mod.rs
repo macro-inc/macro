@@ -75,6 +75,26 @@ pub async fn get_user_id_by_email(
     Ok(user_id)
 }
 
+/// Returns the `macro_user_id` (FusionAuth uuid) tied to a User row by email, if any.
+/// Used to distinguish "this email belongs to the same macro user" from a true cross-user
+/// account merge.
+#[tracing::instrument(skip(db))]
+pub async fn get_macro_user_id_by_email(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    email: &str,
+) -> Result<Option<uuid::Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT "macro_user_id"
+        FROM "User"
+        WHERE "email" = $1
+        "#,
+        email
+    )
+    .fetch_optional(db)
+    .await
+}
+
 /// Gets the user id and stripe customer id for a given email
 #[tracing::instrument(skip(db))]
 pub async fn get_user_id_and_stripe_customer_id_by_email(
