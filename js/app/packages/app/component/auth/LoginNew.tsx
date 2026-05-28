@@ -114,14 +114,19 @@ function FormInput(props: {
   class?: string;
   onInput?: JSX.ChangeEventHandlerUnion<HTMLInputElement, Event>;
 }) {
-  const [el, setEl] = createSignal<HTMLInputElement>();
+  let inputEl: HTMLInputElement | undefined;
   onMount(() => {
     if (props.autoFocus === false) return;
-    setTimeout(() => el()?.focus(), 1);
+    // Double rAF so focus runs after the Stepper enter transition has applied
+    // its initial classes — a single rAF or short setTimeout races with the
+    // outin transition and the focus can be silently dropped on re-mount.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => inputEl?.focus({ preventScroll: true }))
+    );
   });
   return (
     <input
-      ref={setEl}
+      ref={(el) => (inputEl = el)}
       id={props.id}
       name={props.id}
       type={props.type ?? 'text'}
@@ -132,6 +137,7 @@ function FormInput(props: {
       required={props.required ?? true}
       maxLength={props.maxLength}
       autocomplete={props.id}
+      autofocus={props.autoFocus !== false}
       onInput={props.onInput}
       class={cn(
         'ln-input w-full px-4 py-3 rounded-lg border border-edge bg-surface text-sm text-ink placeholder:text-ink-placeholder focus:border-accent focus:outline-none transition-colors',
