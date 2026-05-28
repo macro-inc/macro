@@ -27,10 +27,10 @@ export function Dashboard() {
       </SplitHeaderLeft>
 
       <div class="@container/dashboard px-0 pb-10 sm:px-8">
-        <div class="grid grid-cols-1 gap-24 @6xl/dashboard:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] @7xl/dashboard:grid-cols-[minmax(0,8rem)_minmax(0,1fr)_minmax(18rem,22rem)] @8xl/dashboard:grid-cols-[minmax(0,22rem)_minmax(0,1fr)_minmax(18rem,22rem)]">
+        <div class="grid grid-cols-1 gap-24 @6xl/dashboard:grid-cols-[minmax(0,1fr)_minmax(22rem,26rem)] @7xl/dashboard:grid-cols-[minmax(0,8rem)_minmax(0,1fr)_minmax(22rem,26rem)] @8xl/dashboard:grid-cols-[minmax(0,22rem)_minmax(0,1fr)_minmax(22rem,26rem)]">
           <div class="hidden @7xl/dashboard:block" />
 
-          <div class="flex min-w-0 flex-col gap-10 @6xl/dashboard:mx-0 @6xl/dashboard:max-w-none">
+          <div class="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-10 @6xl/dashboard:mx-auto">
             <div class="px-4 sm:px-0">
               <DashboardSectionBoundary title="hero">
                 <Hero />

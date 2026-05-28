@@ -257,7 +257,7 @@ function TeamPulseSkeleton() {
         </div>
         </div>
       </div>
-      <div class="mt-3 flex snap-x scroll-pl-4 gap-2 overflow-x-auto px-4 pb-1 scrollbar-hidden @3xl/dashboard:grid @3xl/dashboard:grid-cols-2 @3xl/dashboard:overflow-visible @3xl/dashboard:px-0 @3xl/dashboard:pb-0 @6xl/dashboard:grid-cols-4">
+      <div class="mt-3 flex snap-x scroll-pl-4 gap-2 overflow-x-auto px-4 pb-1 scrollbar-hidden sm:px-0 @3xl/dashboard:grid @3xl/dashboard:grid-cols-2 @3xl/dashboard:overflow-visible @3xl/dashboard:pb-0 @6xl/dashboard:grid-cols-4">
         <For each={[0, 1, 2, 3]}>
           {() => (
             <div class="skeleton-shimmer h-24 w-64 shrink-0 snap-start rounded-xl border border-edge-muted p-3 @3xl/dashboard:w-auto">
@@ -426,7 +426,7 @@ JSON context:\n${source.context}`,
                   </div>
                 </div>
 
-                <div class="mt-3 flex snap-x scroll-pl-4 gap-2 overflow-x-auto px-4 pb-1 scrollbar-hidden @3xl/dashboard:grid @3xl/dashboard:grid-cols-2 @3xl/dashboard:overflow-visible @3xl/dashboard:px-0 @3xl/dashboard:pb-0 @6xl/dashboard:grid-cols-4">
+                <div class="mt-3 flex snap-x scroll-pl-4 gap-2 overflow-x-auto px-4 pb-1 scrollbar-hidden sm:px-0 @3xl/dashboard:grid @3xl/dashboard:grid-cols-2 @3xl/dashboard:overflow-visible @3xl/dashboard:pb-0 @6xl/dashboard:grid-cols-4">
                   <For each={data().entities}>
                     {(entity) => <PulseEntityRow entity={entity} />}
                   </For>
