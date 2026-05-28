@@ -1,3 +1,7 @@
+import {
+  SplitHeaderLeft,
+} from '@app/component/split-layout/components/SplitHeader';
+import { TabsInset } from '@core/component/TabsInset';
 import { AutomationsSection } from './sections/automations';
 import { Hero } from './sections/hero';
 import { NotificationsSection } from './sections/notifications';
@@ -9,6 +13,20 @@ import { TeamMembersSection } from './sections/team-members';
 export function Dashboard() {
   return (
     <main class="relative h-full overflow-y-auto bg-surface">
+      <SplitHeaderLeft>
+        <div class="flex h-full items-center gap-3">
+          <h1 class="text-base font-bold text-ink">Dashboard</h1>
+          <TabsInset
+            class="inline-flex h-auto"
+            defaultValue="team"
+            list={[
+              { value: 'team', label: 'Team' },
+              { value: 'individual', label: 'Individual' },
+            ]}
+          />
+        </div>
+      </SplitHeaderLeft>
+
       <Hero />
 
       <div class="@container/dashboard px-6 pb-10 sm:px-8">

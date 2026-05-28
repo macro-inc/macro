@@ -5,7 +5,6 @@ import type { ChatSendInput } from '@core/component/AI/component/input/buildRequ
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
 import { ChatInputProvider } from '@core/component/AI/context';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
-import { TabsInset } from '@core/component/TabsInset';
 import ChatCircleTextIcon from '@phosphor/chat-circle-text.svg';
 import EnvelopeSimpleIcon from '@phosphor/envelope-simple.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
@@ -69,15 +68,6 @@ export function Hero() {
   return (
     <section class="px-6 py-8 sm:px-8 sm:py-12">
       <div class="mx-auto flex max-w-3xl flex-col items-center text-center">
-        <TabsInset
-          class="mb-5 inline-flex h-auto"
-          defaultValue="team"
-          list={[
-            { value: 'team', label: 'Team' },
-            { value: 'individual', label: 'Individual' },
-          ]}
-        />
-
         <h1 class="text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl lg:text-5xl">
           {greeting()}, <span class="capitalize">{firstName()}.</span>
         </h1>
