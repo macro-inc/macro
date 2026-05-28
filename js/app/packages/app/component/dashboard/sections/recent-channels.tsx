@@ -18,7 +18,7 @@ import { ChannelType } from '@service-comms/generated/models/channelType';
 import BuildingIcon from '@phosphor/building.svg';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import UsersIcon from '@phosphor/users.svg';
-import { Avatar, Layer, Tooltip } from '@ui';
+import { Avatar, Button, Layer, Tooltip } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 
 const compactMarkdownTheme = createTheme(
@@ -244,10 +244,18 @@ export function RecentChannelsSection() {
         <h2 class="text-lg font-semibold tracking-tight text-ink">
           Recent channels
         </h2>
-
+        <Button
+          variant="ghost"
+          size="sm"
+          class="rounded-lg"
+          onClick={openChannelsView}
+        >
+          View all
+          <ArrowRightIcon class="size-4" />
+        </Button>
       </div>
 
-      <div class="grid w-full grid-cols-2 gap-3 @lg/recent-channels:grid-cols-3 @2xl/recent-channels:grid-cols-4 @4xl/recent-channels:grid-cols-5 @5xl/recent-channels:grid-cols-7">
+      <div class="grid w-full grid-cols-2 gap-3 @lg/recent-channels:grid-cols-3 @2xl/recent-channels:grid-cols-4 @4xl/recent-channels:grid-cols-5 @5xl/recent-channels:grid-cols-6">
         <Show
           when={!channelsQuery.isLoading}
           fallback={
@@ -270,24 +278,7 @@ export function RecentChannelsSection() {
                 <ChannelCard channel={channel} onOpen={openChannel} />
               )}
             </For>
-            <button
-              class="group flex h-36 min-w-0 flex-col justify-end rounded-2xl border border-edge-muted bg-hover/60 p-3 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent"
-              onClick={openChannelsView}
-            >
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <h3 class="text-xs font-semibold text-ink">View all</h3>
-                  <p class="mt-1 text-xxs text-ink-extra-muted">
-                    Open channels
-                  </p>
-                </div>
-                <Layer depth={3} class="rounded-xl">
-                  <div class="flex size-10 items-center justify-center rounded-xl bg-hover text-ink-muted transition group-hover:text-ink">
-                    <ArrowRightIcon class="size-5" />
-                  </div>
-                </Layer>
-              </div>
-            </button>
+
           </StaticMarkdownContext>
         </Show>
       </div>
