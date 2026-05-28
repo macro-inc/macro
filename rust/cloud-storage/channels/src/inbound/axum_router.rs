@@ -41,6 +41,7 @@ use entity_access::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use model_user::UserContext;
+use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{
     Base64Str, BidirectionalCursor, CreatedAt, Cursor, CursorOptionExt, CursorVal,
     CursorWithValAndFilter, PaginatedOpaqueCursor, Query as PaginationQuery, TypeEraseCursor,
@@ -1155,14 +1156,17 @@ pub async fn get_channel_participants_handler<S: ChannelService, Svc: EntityAcce
 #[tracing::instrument(err, skip_all)]
 pub async fn get_batch_channel_preview_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    Extension(user_context): Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id,
+        user_context,
+        ..
+    }: MacroUserExtractor,
     Json(req): Json<GetBatchChannelPreviewRequest>,
 ) -> Result<Json<GetBatchChannelPreviewResponse>, ChannelsHandlerErr> {
-    let viewer = actor_from_user_context(&user_context)?;
     let org_id = user_context.organization_id.map(i64::from);
     let previews = state
         .service
-        .batch_get_channel_previews(viewer, org_id, req.channel_ids)
+        .batch_get_channel_previews(macro_user_id, org_id, req.channel_ids)
         .await?;
     Ok(Json(GetBatchChannelPreviewResponse { previews }))
 }
