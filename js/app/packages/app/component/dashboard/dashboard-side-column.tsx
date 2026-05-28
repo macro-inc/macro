@@ -1,12 +1,15 @@
 import { useGlobalNotificationSource } from "@app/component/GlobalAppState";
 import { globalSplitManager } from "@app/signal/splitLayout";
 import { setAutomationComposerOpen } from "@block-automation/component";
+import { StaticMarkdown } from "@core/component/LexicalMarkdown/component/core/StaticMarkdown";
+import { UserIcon } from "@core/component/UserIcon";
 import {
-  EntityIcon,
-  type EntityIconSelector,
-} from "@core/component/EntityIcon";
+  createTheme,
+  theme as markdownTheme,
+} from "@core/component/LexicalMarkdown/theme";
 import { tryMacroId, useDisplayName } from "@core/user";
 import type { AutomationEntity } from "@entity";
+import { Entity } from "@entity";
 import { formatDateAndTime } from "@entity/utils/timestamp";
 import {
   getNotificationAction,
@@ -120,24 +123,21 @@ function AutomationSummary(props: { automation: AutomationEntity }) {
   );
 }
 
-function notificationIconType(
-  notification: UnifiedNotification,
-): EntityIconSelector {
-  if (notification.notification_metadata.tag === "task_assigned") return "task";
-  if (notification.notification_metadata.tag === "ai_response") {
-    return notification.entity_type === "automation" ? "automation" : "chat";
-  }
-  if (notification.entity_type === "email_thread") return "email";
-  if (notification.entity_type === "channel_message") return "channel";
-  if (notification.entity_type === "document") return "md";
-  return notification.entity_type as EntityIconSelector;
-}
-
 function metadataContent(notification: UnifiedNotification) {
   return (
     notification.notification_metadata as { content?: Record<string, unknown> }
   ).content;
 }
+
+const compactMarkdownTheme = createTheme(
+  {
+    paragraph: "m-0 md-p text-[1em]",
+    list: {
+      listitem: "m-0",
+    },
+  },
+  markdownTheme,
+);
 
 function NotificationSummary(props: { notification: UnifiedNotification }) {
   const notificationSource = useGlobalNotificationSource();
@@ -157,11 +157,17 @@ function NotificationSummary(props: { notification: UnifiedNotification }) {
   };
   const unread = () => !notificationIsRead(props.notification);
   const target = () => getNotificationTargetName(props.notification);
+  const notificationContent = () => metadataContent(props.notification);
+  const channelName = () =>
+    notificationContent()?.channelName as string | undefined;
+  const isDirectMessage = () =>
+    notificationContent()?.channelType === "directMessage";
   const content = () => getNotificationContent(props.notification);
   const tag = () => props.notification.notification_metadata.tag;
+  const action = () => getNotificationAction(props.notification).replace(/\s+in$/, "");
   const title = () => {
-    if (tag() === "new_email") return actor();
-    return actor();
+    if (tag() === "new_email" || isDirectMessage()) return actor();
+    return channelName() || actor();
   };
   const description = () => {
     if (tag() === "new_email") return content();
@@ -184,50 +190,71 @@ function NotificationSummary(props: { notification: UnifiedNotification }) {
       <Show when={unread()}>
         <span class="absolute right-2.5 top-2.5 size-1.5 rounded-full bg-accent" />
       </Show>
-      <div class="flex items-start gap-2 pr-3">
-        <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-hover transition group-hover:bg-active">
-          <EntityIcon
-            targetType={notificationIconType(props.notification)}
-            size="sm"
-            class="shrink-0"
-          />
-        </div>
-        <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-          <div class="flex min-w-0 items-center gap-1.5">
-            <Show
-              when={tag() === "task_assigned"}
-              fallback={
-                <p class="truncate text-xs font-semibold text-ink">{title()}</p>
-              }
-            >
-              <p class="flex min-w-0 items-center gap-1.5 truncate text-xs">
-                <span class="truncate font-semibold text-ink">{actor()}</span>
-                <span class="shrink-0 font-medium text-ink-extra-muted">
-                  {getNotificationAction(props.notification)}
-                </span>
+      <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1 pr-3">
+        <Show
+          when={isDirectMessage() && actorId()}
+          fallback={
+            <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-hover transition group-hover:bg-active">
+              <Entity.Notification.Icon
+                notification={props.notification as any}
+                class="shrink-0"
+              />
+            </div>
+          }
+        >
+          {(id) => (
+            <UserIcon
+              id={id()}
+              size="md"
+              suppressClick
+              showTooltip={false}
+            />
+          )}
+        </Show>
+
+        <div class="flex min-w-0 items-center gap-1.5">
+          <Show
+            when={tag() === "task_assigned"}
+            fallback={
+              <p class="flex min-w-0 items-center gap-1.5 truncate text-xs font-semibold text-ink">
+                <span class="truncate">{title()}</span>
               </p>
-            </Show>
-            <Show
-              when={
-                tag() !== "new_email" && tag() !== "task_assigned" && target()
-              }
-            >
-              {(name) => (
-                <p class="truncate text-xs font-medium text-ink">{name()}</p>
-              )}
-            </Show>
-          </div>
-          <Show when={tag() !== "new_email" && tag() !== "task_assigned"}>
-            <p class="truncate text-xxs text-ink-extra-muted">
-              {getNotificationAction(props.notification)}
+            }
+          >
+            <p class="flex min-w-0 items-center gap-1.5 truncate text-xs">
+              <span class="truncate font-semibold text-ink">{actor()}</span>
+              <span class="shrink-0 font-medium text-ink-extra-muted">
+                {action()}
+              </span>
             </p>
           </Show>
-          <Show when={description()}>
-            {(text) => (
-              <p class="line-clamp-2 text-xs/5 text-ink-muted">{text()}</p>
-            )}
-          </Show>
         </div>
+
+        <Show when={description()}>
+          {(markdown) => (
+            <div class="col-start-2 flex min-w-0 items-start gap-1.5 text-xs/5 text-ink-muted [&_*]:text-xs [&_*]:leading-5">
+              <Show when={channelName() && !isDirectMessage() && actorId()}>
+                {(id) => (
+                  <span class="inline-flex shrink-0 items-center gap-1 font-medium text-ink-muted">
+                    <UserIcon
+                      id={id()}
+                      size="xs"
+                      suppressClick
+                      showTooltip={false}
+                    />
+                    <span>{actor()}</span>
+                  </span>
+                )}
+              </Show>
+              <div class="line-clamp-2 min-w-0">
+                <StaticMarkdown
+                  markdown={markdown()}
+                  theme={compactMarkdownTheme}
+                />
+              </div>
+            </div>
+          )}
+        </Show>
       </div>
     </button>
   );
