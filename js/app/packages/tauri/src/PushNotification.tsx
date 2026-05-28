@@ -126,14 +126,15 @@ function usePushNotifications(
     console.error
   );
 
-  let notificationWatchStarted = false;
+  const [notificationWatchStarted, setNotificationWatchStarted] =
+    createSignal(false);
   createEffect(() => {
     if (!registrationResult()?.success || !onPushNotification) return;
-    if (notificationWatchStarted) return;
+    if (notificationWatchStarted()) return;
 
-    notificationWatchStarted = true;
+    setNotificationWatchStarted(true);
     void watchNotifications(onPushNotification).catch(() => {
-      notificationWatchStarted = false;
+      setNotificationWatchStarted(false);
     });
   });
 
