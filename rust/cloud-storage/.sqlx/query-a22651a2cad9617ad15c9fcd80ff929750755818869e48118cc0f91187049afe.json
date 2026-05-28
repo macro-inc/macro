@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id\n            FROM email_labels\n            WHERE link_id = $1 AND name = 'TRASH'\n            ",
+  "query": "\n            SELECT id\n            FROM email_labels\n            WHERE link_id = ANY($1) AND name = 'TRASH'\n            ",
   "describe": {
     "columns": [
       {
@@ -11,12 +11,12 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "UuidArray"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "973d37572060a8cc387f72cf18688270bbb644e96783ac2364a2fee306b4dda6"
+  "hash": "a22651a2cad9617ad15c9fcd80ff929750755818869e48118cc0f91187049afe"
 }
