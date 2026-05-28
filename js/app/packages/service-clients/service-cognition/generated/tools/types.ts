@@ -118,6 +118,13 @@ export type EntityItem =
       createdBy: string;
       id: string;
       type: 'call';
+    }
+  | {
+      foreignEntityId: string;
+      foreignEntitySource: string;
+      id: string;
+      metadata: unknown;
+      type: 'foreignEntity';
     };
 export type ToolEntityType =
   | 'document'
@@ -133,7 +140,8 @@ export type ItemType =
   | 'project'
   | 'email'
   | 'channel'
-  | 'call';
+  | 'call'
+  | 'foreign_entity';
 export type SortBy =
   | 'recently_viewed'
   | 'recently_updated'
@@ -1163,7 +1171,7 @@ export interface ListCallRecordsResponse {
   records: CallRecordSummary[];
 }
 /**
- * Browse the user's workspace to see recent items they have access to. Returns documents, AI conversations, projects, emails, and chat channels. Use this to get an overview of what the user has been working on or to find items by type. For finding specific items by name or content, use the search tool instead.
+ * Browse the user's workspace to see recent items they have access to. Returns documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. For finding specific items by name or content, use the search tool instead.
  */
 export interface ListEntities {
   /**
@@ -1206,6 +1214,12 @@ export interface ListEntities {
    * When the user asks about signal or important emails, use emailView="inbox" together with emailPreset="signal" — do not set emailView="important" in that case. Only override the default when the user explicitly asks for a specific mailbox or label view (e.g. "sent", "drafts", "my Foo label").
    */
   emailView?: string | null;
+  /**
+   * Full soup AST foreign entity filter (fef).
+   */
+  fef?: {
+    [k: string]: unknown;
+  };
   /**
    * Filter returned items to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails. This is folded into the AST and applied as part of cursor-level filtering.
    */

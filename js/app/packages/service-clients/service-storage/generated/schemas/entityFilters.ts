@@ -9,6 +9,7 @@ import type { ChannelFilters } from './channelFilters';
 import type { ChatFilters } from './chatFilters';
 import type { DocumentFilters } from './documentFilters';
 import type { EmailFilters } from './emailFilters';
+import type { ForeignEntityFilters } from './foreignEntityFilters';
 import type { ProjectFilters } from './projectFilters';
 import type { PropertyFilter } from './propertyFilter';
 
@@ -26,6 +27,8 @@ export interface EntityFilters {
   document_filters?: DocumentFilters;
   /** the bundled [EmailFilters] */
   email_filters?: EmailFilters;
+  /** the bundled [ForeignEntityFilters] */
+  foreign_entity_filters?: ForeignEntityFilters;
   /** the bundled [ProjectFilters] */
   project_filters?: ProjectFilters;
   /** property-based filters applied across entity types */

@@ -2395,6 +2395,7 @@
           "email_thread",
           "team",
           "call",
+          "foreign_entity",
           "static_file"
         ]
       },

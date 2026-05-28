@@ -1452,6 +1452,10 @@
             "$ref": "#/components/schemas/EmailFilters",
             "description": "the bundled [EmailFilters]"
           },
+          "foreign_entity_filters": {
+            "$ref": "#/components/schemas/ForeignEntityFilters",
+            "description": "the bundled [ForeignEntityFilters]"
+          },
           "project_filters": {
             "$ref": "#/components/schemas/ProjectFilters",
             "description": "the bundled [ProjectFilters]"
@@ -1935,6 +1939,33 @@
           "img",
           "swf"
         ]
+      },
+      "ForeignEntityFilters": {
+        "type": "object",
+        "description": "Filters for foreign entity records.",
+        "properties": {
+          "foreign_entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "External entity identifiers to filter by. Empty to include all external IDs."
+          },
+          "foreign_entity_sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "External source names to filter by. Empty to include all sources."
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Internal foreign entity record IDs to filter by. Empty to include all records."
+          }
+        }
       },
       "MatchType": {
         "type": "string",

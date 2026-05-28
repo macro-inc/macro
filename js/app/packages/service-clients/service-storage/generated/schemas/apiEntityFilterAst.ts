@@ -29,6 +29,8 @@ tree only; CRM scope is carried by the `ecd` / `eca` sibling
 fields). On this endpoint the email filter stays a bare tree,
 unlike the materialized [`EntityFilterAst`] used for cursors. */
   ef?: unknown;
+  /** the filters that should be applied to foreign entity records */
+  fef?: unknown;
   /** the filters that should be applied to the project entity */
   pf?: unknown;
   /** the filters that should be applied based on entity properties */

@@ -7909,6 +7909,9 @@
           "ef": {
             "description": "the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` / `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors."
           },
+          "fef": {
+            "description": "the filters that should be applied to foreign entity records"
+          },
           "pf": {
             "description": "the filters that should be applied to the project entity"
           },
@@ -10535,6 +10538,10 @@
             "$ref": "#/components/schemas/EmailFilters",
             "description": "the bundled [EmailFilters]"
           },
+          "foreign_entity_filters": {
+            "$ref": "#/components/schemas/ForeignEntityFilters",
+            "description": "the bundled [ForeignEntityFilters]"
+          },
           "project_filters": {
             "$ref": "#/components/schemas/ProjectFilters",
             "description": "the bundled [ProjectFilters]"
@@ -11226,6 +11233,33 @@
           "sha": {
             "type": "string",
             "description": "The sha of the file."
+          }
+        }
+      },
+      "ForeignEntityFilters": {
+        "type": "object",
+        "description": "Filters for foreign entity records.",
+        "properties": {
+          "foreign_entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "External entity identifiers to filter by. Empty to include all external IDs."
+          },
+          "foreign_entity_sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "External source names to filter by. Empty to include all sources."
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Internal foreign entity record IDs to filter by. Empty to include all records."
           }
         }
       },
@@ -14223,6 +14257,57 @@
           }
         ]
       },
+      "SoupForeignEntity": {
+        "type": "object",
+        "description": "A foreign entity record as displayed in Soup.",
+        "required": [
+          "id",
+          "foreignEntityId",
+          "foreignEntitySource",
+          "metadata",
+          "storedForId",
+          "storedForAuthEntity",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the record was created."
+          },
+          "foreignEntityId": {
+            "type": "string",
+            "description": "Identifier assigned by the external system."
+          },
+          "foreignEntitySource": {
+            "type": "string",
+            "description": "Source system that owns the external identifier."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Internal primary key for this foreign entity record."
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Arbitrary metadata stored with the mapping."
+          },
+          "storedForAuthEntity": {
+            "type": "string",
+            "description": "Internal auth entity namespace this foreign entity is stored for."
+          },
+          "storedForId": {
+            "type": "string",
+            "description": "Internal entity identifier this foreign entity is stored for."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the record was last updated."
+          }
+        }
+      },
       "SoupItem": {
         "oneOf": [
           {
@@ -14300,6 +14385,19 @@
               "tag": {
                 "type": "string",
                 "enum": ["call"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupForeignEntity"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["foreignEntity"]
               }
             }
           }

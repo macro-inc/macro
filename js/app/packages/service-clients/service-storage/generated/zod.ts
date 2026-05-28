@@ -6047,6 +6047,43 @@ export const getItemsSoupResponse = zod.object({
             ),
           tag: zod.enum(['call']),
         }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod.iso
+                .datetime({})
+                .describe('Timestamp when the record was created.'),
+              foreignEntityId: zod
+                .string()
+                .describe('Identifier assigned by the external system.'),
+              foreignEntitySource: zod
+                .string()
+                .describe('Source system that owns the external identifier.'),
+              id: zod
+                .uuid()
+                .describe(
+                  'Internal primary key for this foreign entity record.'
+                ),
+              metadata: zod
+                .object({})
+                .describe('Arbitrary metadata stored with the mapping.'),
+              storedForAuthEntity: zod
+                .string()
+                .describe(
+                  'Internal auth entity namespace this foreign entity is stored for.'
+                ),
+              storedForId: zod
+                .string()
+                .describe(
+                  'Internal entity identifier this foreign entity is stored for.'
+                ),
+              updatedAt: zod.iso
+                .datetime({})
+                .describe('Timestamp when the record was last updated.'),
+            })
+            .describe('A foreign entity record as displayed in Soup.'),
+          tag: zod.enum(['foreignEntity']),
+        }),
       ])
       .and(
         zod.object({
@@ -6400,6 +6437,29 @@ export const postItemsSoupBody = zod
       .describe(
         'The email filters used to filter down what emails you search over.'
       ),
+    foreign_entity_filters: zod
+      .object({
+        foreign_entity_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'External entity identifiers to filter by. Empty to include all external IDs.'
+          ),
+        foreign_entity_sources: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'External source names to filter by. Empty to include all sources.'
+          ),
+        ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Internal foreign entity record IDs to filter by. Empty to include all records.'
+          ),
+      })
+      .optional()
+      .describe('Filters for foreign entity records.'),
     project_filters: zod
       .object({
         importance: zod
@@ -7750,6 +7810,43 @@ export const postItemsSoupResponse = zod.object({
             ),
           tag: zod.enum(['call']),
         }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod.iso
+                .datetime({})
+                .describe('Timestamp when the record was created.'),
+              foreignEntityId: zod
+                .string()
+                .describe('Identifier assigned by the external system.'),
+              foreignEntitySource: zod
+                .string()
+                .describe('Source system that owns the external identifier.'),
+              id: zod
+                .uuid()
+                .describe(
+                  'Internal primary key for this foreign entity record.'
+                ),
+              metadata: zod
+                .object({})
+                .describe('Arbitrary metadata stored with the mapping.'),
+              storedForAuthEntity: zod
+                .string()
+                .describe(
+                  'Internal auth entity namespace this foreign entity is stored for.'
+                ),
+              storedForId: zod
+                .string()
+                .describe(
+                  'Internal entity identifier this foreign entity is stored for.'
+                ),
+              updatedAt: zod.iso
+                .datetime({})
+                .describe('Timestamp when the record was last updated.'),
+            })
+            .describe('A foreign entity record as displayed in Soup.'),
+          tag: zod.enum(['foreignEntity']),
+        }),
       ])
       .and(
         zod.object({
@@ -7805,6 +7902,10 @@ export const postItemsSoupAstBody = zod
       .describe(
         'the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` \/ `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors.'
       ),
+    fef: zod
+      .unknown()
+      .optional()
+      .describe('the filters that should be applied to foreign entity records'),
     pf: zod
       .unknown()
       .optional()
@@ -9083,6 +9184,43 @@ export const postItemsSoupAstResponse = zod.object({
               'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'
             ),
           tag: zod.enum(['call']),
+        }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod.iso
+                .datetime({})
+                .describe('Timestamp when the record was created.'),
+              foreignEntityId: zod
+                .string()
+                .describe('Identifier assigned by the external system.'),
+              foreignEntitySource: zod
+                .string()
+                .describe('Source system that owns the external identifier.'),
+              id: zod
+                .uuid()
+                .describe(
+                  'Internal primary key for this foreign entity record.'
+                ),
+              metadata: zod
+                .object({})
+                .describe('Arbitrary metadata stored with the mapping.'),
+              storedForAuthEntity: zod
+                .string()
+                .describe(
+                  'Internal auth entity namespace this foreign entity is stored for.'
+                ),
+              storedForId: zod
+                .string()
+                .describe(
+                  'Internal entity identifier this foreign entity is stored for.'
+                ),
+              updatedAt: zod.iso
+                .datetime({})
+                .describe('Timestamp when the record was last updated.'),
+            })
+            .describe('A foreign entity record as displayed in Soup.'),
+          tag: zod.enum(['foreignEntity']),
         }),
       ])
       .and(
