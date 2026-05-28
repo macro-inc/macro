@@ -1,6 +1,8 @@
 import { useGlobalNotificationSource } from "@app/component/GlobalAppState";
 import { globalSplitManager } from "@app/signal/splitLayout";
 import { setAutomationComposerOpen } from "@block-automation/component";
+import { CustomScrollbar } from "@core/component/CustomScrollbar";
+import { EntityIcon } from "@core/component/EntityIcon";
 import { StaticMarkdown } from "@core/component/LexicalMarkdown/component/core/StaticMarkdown";
 import { UserIcon } from "@core/component/UserIcon";
 import {
@@ -166,6 +168,7 @@ function NotificationSummary(props: { notification: UnifiedNotification }) {
   const tag = () => props.notification.notification_metadata.tag;
   const action = () => getNotificationAction(props.notification).replace(/\s+in$/, "");
   const title = () => {
+    if (tag() === "task_assigned") return target() || content() || "Task";
     if (tag() === "new_email" || isDirectMessage()) return actor();
     return channelName() || actor();
   };
@@ -190,15 +193,22 @@ function NotificationSummary(props: { notification: UnifiedNotification }) {
       <Show when={unread()}>
         <span class="absolute right-2.5 top-2.5 size-1.5 rounded-full bg-accent" />
       </Show>
-      <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1 pr-3">
+      <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 pr-3">
         <Show
           when={isDirectMessage() && actorId()}
           fallback={
             <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-hover transition group-hover:bg-active">
-              <Entity.Notification.Icon
-                notification={props.notification as any}
-                class="shrink-0"
-              />
+              <Show
+                when={tag() === "task_assigned"}
+                fallback={
+                  <Entity.Notification.Icon
+                    notification={props.notification as any}
+                    class="shrink-0"
+                  />
+                }
+              >
+                <EntityIcon targetType="task" size="sm" class="shrink-0" />
+              </Show>
             </div>
           }
         >
@@ -213,47 +223,56 @@ function NotificationSummary(props: { notification: UnifiedNotification }) {
         </Show>
 
         <div class="flex min-w-0 items-center gap-1.5">
-          <Show
-            when={tag() === "task_assigned"}
-            fallback={
-              <p class="flex min-w-0 items-center gap-1.5 truncate text-xs font-semibold text-ink">
-                <span class="truncate">{title()}</span>
-              </p>
-            }
-          >
-            <p class="flex min-w-0 items-center gap-1.5 truncate text-xs">
-              <span class="truncate font-semibold text-ink">{actor()}</span>
-              <span class="shrink-0 font-medium text-ink-extra-muted">
-                {action()}
-              </span>
-            </p>
-          </Show>
+          <p class="flex min-w-0 items-center gap-1.5 truncate text-xs font-semibold text-ink">
+            <span class="truncate">{title()}</span>
+          </p>
         </div>
 
-        <Show when={description()}>
-          {(markdown) => (
-            <div class="col-start-2 flex min-w-0 items-start gap-1.5 text-xs/5 text-ink-muted [&_*]:text-xs [&_*]:leading-5">
-              <Show when={channelName() && !isDirectMessage() && actorId()}>
-                {(id) => (
-                  <span class="inline-flex shrink-0 items-center gap-1 font-medium text-ink-muted">
-                    <UserIcon
-                      id={id()}
-                      size="xs"
-                      suppressClick
-                      showTooltip={false}
+        <Show
+          when={tag() === "task_assigned"}
+          fallback={
+            <Show when={description()}>
+              {(markdown) => (
+                <div class="col-start-2 flex min-w-0 items-start gap-1.5 text-xs/5 text-ink-muted [&_*]:text-xs [&_*]:leading-5">
+                  <Show when={channelName() && !isDirectMessage() && actorId()}>
+                    {(id) => (
+                      <span class="inline-flex shrink-0 items-center gap-1 font-medium text-ink-muted">
+                        <UserIcon
+                          id={id()}
+                          size="xs"
+                          suppressClick
+                          showTooltip={false}
+                        />
+                        <span>{actor()}</span>
+                      </span>
+                    )}
+                  </Show>
+                  <div class="line-clamp-2 min-w-0">
+                    <StaticMarkdown
+                      markdown={markdown()}
+                      theme={compactMarkdownTheme}
                     />
-                    <span>{actor()}</span>
-                  </span>
-                )}
-              </Show>
-              <div class="line-clamp-2 min-w-0">
-                <StaticMarkdown
-                  markdown={markdown()}
-                  theme={compactMarkdownTheme}
+                  </div>
+                </div>
+              )}
+            </Show>
+          }
+        >
+          <div class="col-start-2 flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
+            <Show when={actorId()}>
+              {(id) => (
+                <UserIcon
+                  id={id()}
+                  size="xs"
+                  suppressClick
+                  showTooltip={false}
                 />
-              </div>
-            </div>
-          )}
+              )}
+            </Show>
+            <span class="truncate">
+              <span class="font-medium">{actor()}</span> assigned you
+            </span>
+          </div>
         </Show>
       </div>
     </button>
@@ -262,16 +281,18 @@ function NotificationSummary(props: { notification: UnifiedNotification }) {
 
 function NotificationsColumnSection() {
   const notificationSource = useGlobalNotificationSource();
+  const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
   const notifications = createMemo(() =>
     notificationSource
       .notifications()
-      .filter((notification) => !notification.done)
+      .filter(
+        (notification) =>
+          !notification.done && !notificationIsRead(notification),
+      )
       .sort(
         (a, b) =>
-          Number(!notificationIsRead(b)) - Number(!notificationIsRead(a)) ||
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      )
-      .slice(0, 4),
+      ),
   );
 
   return (
@@ -294,12 +315,24 @@ function NotificationsColumnSection() {
           </div>
         }
       >
-        <div class="flex flex-col gap-1">
-          <For each={notifications()}>
-            {(notification) => (
-              <NotificationSummary notification={notification} />
-            )}
-          </For>
+        <div class="relative max-h-[28rem] min-h-0 overflow-hidden">
+          <div
+            ref={setScrollContainer}
+            class="scrollbar-hidden max-h-[28rem] overflow-y-auto pr-2"
+          >
+            <div class="flex flex-col">
+              <For each={notifications()}>
+                {(notification) => (
+                  <NotificationSummary notification={notification} />
+                )}
+              </For>
+            </div>
+          </div>
+          <CustomScrollbar
+            scrollContainer={scrollContainer}
+            labelVisibilityDebounceMs={Infinity}
+            class="right-0.5"
+          />
         </div>
       </Show>
     </SideColumnSection>
