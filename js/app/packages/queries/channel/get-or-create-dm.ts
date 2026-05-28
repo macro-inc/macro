@@ -49,3 +49,44 @@ export function useGetOrCreateDirectMessageMutation(
     ),
   }));
 }
+
+type GetOrCreatePrivateChannelParams = {
+  recipients: string[];
+};
+
+/**
+ * Create or resolve a private group channel for a set of recipients. Invalidates the channel list on settle.
+ */
+export function useGetOrCreatePrivateChannelMutation(
+  callbacks?: MutationCallbacks<
+    GetOrCreateChannelResponse,
+    Error,
+    GetOrCreatePrivateChannelParams,
+    undefined
+  >
+) {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: async (vars: GetOrCreatePrivateChannelParams) => {
+      return await throwOnErr(async () =>
+        storageServiceClient.getOrCreatePrivateChannel({
+          recipients: vars.recipients,
+        })
+      );
+    },
+    ...withCallbacks<
+      GetOrCreateChannelResponse,
+      Error,
+      GetOrCreatePrivateChannelParams,
+      undefined
+    >(
+      {
+        onError(error) {
+          console.error('failed to get or create private channel', error);
+        },
+        onSettled: () => void invalidateListChannels(),
+      },
+      callbacks
+    ),
+  }));
+}

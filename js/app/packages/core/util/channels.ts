@@ -5,11 +5,15 @@ import { toast } from '@core/component/Toast/Toast';
 import { invalidateContacts } from '@core/user/contactService';
 
 import { invalidateListChannels } from '@queries/channel/channels';
-import { storageServiceClient } from '@service-storage/client';
+import {
+  useGetOrCreateDirectMessageMutation,
+  useGetOrCreatePrivateChannelMutation,
+} from '@queries/channel/get-or-create-dm';
 import type {
   NewAttachment,
   SimpleMention,
 } from '@service-comms/generated/models';
+import { storageServiceClient } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 
 type SendContent = {
@@ -36,6 +40,9 @@ type SendToChannelArgs = SendContent & {
 export function useSendMessageToPeople() {
   const { replaceSplit } = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
+  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
+  const getOrCreatePrivateChannelMutation =
+    useGetOrCreatePrivateChannelMutation();
 
   async function sendAndNavigateToChannel(
     channelId: string,
@@ -86,23 +93,25 @@ export function useSendMessageToPeople() {
   }
 
   async function sendToUsers(args: SendToUsersArgs) {
-    const result =
-      args.users.length === 1
-        ? await storageServiceClient.getOrCreateDirectMessage({
-            recipient_id: args.users[0],
-          })
-        : await storageServiceClient.getOrCreatePrivateChannel({
-            recipients: args.users,
-          });
-
-    if (result.isErr()) {
+    let channelId: string;
+    try {
+      const result =
+        args.users.length === 1
+          ? await getOrCreateDmMutation.mutateAsync({
+              recipient_id: args.users[0],
+            })
+          : await getOrCreatePrivateChannelMutation.mutateAsync({
+              recipients: args.users,
+            });
+      channelId = result.channel_id;
+    } catch (err) {
       toast.failure('Failed to send message to people');
-      console.error('failed to create new channel to forward', result);
+      console.error('failed to create new channel to forward', err);
       return;
     }
 
     return sendAndNavigateToChannel(
-      result.value.channel_id,
+      channelId,
       args.content,
       args.mentions,
       args.attachments ?? [],
