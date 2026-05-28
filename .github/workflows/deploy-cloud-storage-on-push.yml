@@ -66,7 +66,7 @@ jobs:
 
   build-service-binaries:
     name: Build ${{ matrix.service }} binaries
-    needs: [generate-deploy-list, migrate-db]
+    needs: generate-deploy-list
     runs-on: linux-extra-beefy
     strategy:
       fail-fast: false
@@ -124,7 +124,7 @@ jobs:
 
   build-lambda-artifacts:
     name: Build ${{ matrix.lambda }} Lambda artifact
-    needs: [generate-deploy-list, migrate-db]
+    needs: generate-deploy-list
     if: ${{ needs.generate-deploy-list.outputs.has_lambdas == 'true' }}
     runs-on: linux-extra-beefy
     strategy:

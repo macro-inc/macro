@@ -70,12 +70,10 @@ pub async fn list_links_handler(
     user_context: Extension<UserContext>,
     Query(query_params): Query<QueryParams>,
 ) -> Result<Response, ListLinksError> {
-    let links = email_db_client::links::get::fetch_links_by_fusionauth_user_id(
-        &ctx.db,
-        &user_context.fusion_user_id,
-    )
-    .await
-    .map_err(ListLinksError::DatabaseError)?;
+    let links =
+        email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, &user_context.user_id)
+            .await
+            .map_err(ListLinksError::DatabaseError)?;
 
     let tasks = links.into_iter().map(|link| {
         let ctx = ctx.clone();

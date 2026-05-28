@@ -14,10 +14,9 @@ import {
   type PreviewItem,
   useItemPreview,
 } from '@queries/preview';
-import { commsServiceClient } from '@service-comms/client';
-import type { EntityReference } from '@service-comms/generated/models/entityReference';
-import type { GenericReference } from '@service-comms/generated/models/genericReference';
-import type { ItemType } from '@service-storage/client';
+import { type ItemType, storageServiceClient } from '@service-storage/client';
+import type { ApiAttachmentEntityReference as EntityReference } from '@service-storage/generated/schemas/apiAttachmentEntityReference';
+import type { ApiAttachmentGenericReference as GenericReference } from '@service-storage/generated/schemas/apiAttachmentGenericReference';
 import { createMemo, createResource, For, type JSX, Show } from 'solid-js';
 import { InlineItemPreview } from './ItemPreview';
 import { StaticMarkdown } from './LexicalMarkdown/component/core/StaticMarkdown';
@@ -220,7 +219,7 @@ function GenericReferenceRow(props: {
 export function References(props: ReferenceProps) {
   const [references] = createResource(async () => {
     const entityType = props.entityType ?? 'document';
-    const response = await commsServiceClient.attachmentReferences({
+    const response = await storageServiceClient.attachmentReferences({
       entity_type: entityType,
       entity_id: props.documentId,
     });

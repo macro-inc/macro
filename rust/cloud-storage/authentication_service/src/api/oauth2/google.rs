@@ -62,21 +62,12 @@ async fn link_user(
             )
         })?;
 
-    // Reject account-merge attempts: a different macro user already owns this email.
-    // Same-user re-linking (e.g. user adds their primary Gmail again) is allowed — init's
-    // idempotency check on email_links will short-circuit downstream.
-    if let Some(existing_macro_user_id) =
-        macro_db_client::user::get::get_macro_user_id_by_email(&ctx.db, &user_info_email)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        && existing_macro_user_id != macro_user_id
-    {
-        return Err((
-            StatusCode::NOT_IMPLEMENTED,
-            "user profile already exists".to_string(),
-        ));
-    }
-
+    // Attempt to create the FA IdP link for the calling user. Three terminal cases:
+    //   Ok                                  → fresh link created; data-source path downstream.
+    //   Err(alreadyLinked, owned by self)  → idempotent relink; data-source path no-ops downstream.
+    //   Err(alreadyLinked, owned by other) → cross-account add; init promotes to graph edge.
+    // The FA error doesn't distinguish self vs other in the typed variant, but it doesn't need
+    // to — init re-derives ownership via macrodb's User table to pick its dispatch path.
     match ctx
         .auth_client
         .link_user(LinkUserRequest {
@@ -91,8 +82,6 @@ async fn link_user(
         .await
     {
         Ok(()) => {}
-        // Same Google identity already linked to this FA user → init's idempotency
-        // check on email_links will short-circuit downstream. No-op.
         Err(FusionAuthClientError::IdentityProviderLinkAlreadyExists) => {
             tracing::info!(
                 fusion_user_id = %macro_user_id,

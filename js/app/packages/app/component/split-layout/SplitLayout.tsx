@@ -36,7 +36,7 @@ import {
   createMobileSwipeLayout,
   type MobileSwipeLayout,
 } from './mobile/createMobileSwipeLayout';
-import { MobileSwipeBackContainer } from './mobile/MobileSwipeBackContainer';
+import { MobileSplitContainer } from './mobile/MobileSplitContainer';
 
 type SplitLayoutContainerProps = {
   pairs: string[];
@@ -349,7 +349,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
           }
         >
           {/* Mobile: stacked FG/BG layout with swipe-back gesture. */}
-          <MobileSwipeBackContainer
+          <MobileSplitContainer
             splitManager={splitManager}
             mobileSwipeLayout={mobileSwipeLayout!}
             splits={splits}

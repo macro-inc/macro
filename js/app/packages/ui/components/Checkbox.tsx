@@ -1,8 +1,9 @@
 import { Checkbox as KobalteCheckbox } from '@kobalte/core/checkbox';
+import type { ComponentProps } from 'solid-js';
 import CheckIcon from '@phosphor/check.svg';
 import MinusIcon from '@phosphor/minus.svg';
-import { splitProps, type ComponentProps } from 'solid-js';
 import { cn } from '../utils/classname';
+import { splitProps } from 'solid-js';
 
 /*
 <Checkbox checked={...} onChange={...}>
@@ -78,4 +79,13 @@ export const Checkbox = Object.assign(
     Indicator: CheckboxIndicator,
     Control: CheckboxControl,
   },
+);
+
+export const SingleSelectCheck = (props: { active: boolean }) => (
+  <CheckIcon
+    class={cn(
+      'size-3 text-accent shrink-0',
+      !props.active && 'hidden'
+    )}
+  />
 );

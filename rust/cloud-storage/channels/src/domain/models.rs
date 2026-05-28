@@ -319,6 +319,53 @@ pub struct ChannelContextMessage {
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
+/// A reference to an attachment entity originating from a channel message.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttachmentChannelReference {
+    /// Channel that contains the message.
+    pub channel_id: Uuid,
+    /// Optional channel name (DMs do not have a name).
+    pub channel_name: Option<String>,
+    /// Message that contains the attachment reference.
+    pub message_id: Uuid,
+    /// If the message belongs to a thread this is the parent id.
+    pub thread_id: Option<Uuid>,
+    /// Sender of the message.
+    pub sender_id: String,
+    /// Full message content (might be used for preview/snippet).
+    pub message_content: String,
+    /// When the message itself was created.
+    pub message_created_at: DateTime<Utc>,
+    /// When the attachment row was created.
+    pub attachment_created_at: DateTime<Utc>,
+}
+
+/// A reference to an attachment entity from any non-message source entity.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttachmentGenericReference {
+    /// Type of the source entity (e.g., "document", "chat", etc.).
+    pub source_entity_type: String,
+    /// ID of the source entity.
+    pub source_entity_id: String,
+    /// Type of the referenced entity.
+    pub entity_type: String,
+    /// ID of the referenced entity.
+    pub entity_id: String,
+    /// User who created this reference (optional for non-user sources).
+    pub user_id: Option<String>,
+    /// When this reference was created.
+    pub created_at: DateTime<Utc>,
+}
+
+/// A reference to an attachment entity, tagged by source kind.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AttachmentEntityReference {
+    /// Referenced from a channel message.
+    Channel(AttachmentChannelReference),
+    /// Referenced from any non-message source entity.
+    Generic(AttachmentGenericReference),
+}
+
 /// Raw row returned from the top-level messages query.
 #[derive(Debug, Clone)]
 pub struct TopLevelMessageRow {
