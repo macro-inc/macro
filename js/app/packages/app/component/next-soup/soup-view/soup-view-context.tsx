@@ -252,9 +252,9 @@ export const SoupViewContextProvider: FlowComponent<
   // soupBody is derived from the query filter store's compiled AST
   const soupBody = createMemo(() => queryFilters.compile());
 
-  const [searchText, setSearchText] = useEntryState<string>('search.text', {
-    default: props.initialSearchText ?? '',
-  });
+  const [searchText, setSearchText] = createSignal<string>(
+    props.initialSearchText ?? ''
+  );
 
   const search = createSearchState({
     soup,
