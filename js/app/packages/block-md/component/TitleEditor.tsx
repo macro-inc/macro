@@ -44,7 +44,7 @@ import {
 } from 'solid-js';
 import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
 import { useRenameMarkdownDocument } from '../signal/save';
-import { useMarkdownTitleName } from '../signal/titleName';
+import { useMarkdownName } from './MarkdownNameProvider';
 
 /**
  * Use the plugin architecture to set up command handlers on both the
@@ -141,7 +141,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     persistedName: persistedDocumentName,
     editorName: mdDocumentName,
     setOptimisticName,
-  } = useMarkdownTitleName();
+  } = useMarkdownName();
 
   const [showFallback, setShowFallback] = createSignal(true);
   const [titlePlaceholder, _setTitlePlaceholder] = TitlePlaceholderSignal;

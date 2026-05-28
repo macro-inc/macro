@@ -8,16 +8,20 @@ import {
   useContext,
 } from 'solid-js';
 
-type MarkdownTitleNameContextValue = {
+type MarkdownNameContextValue = {
   persistedName: Accessor<string | undefined>;
   editorName: Accessor<string | undefined>;
   displayName: Accessor<string | undefined>;
   setOptimisticName: (name: string | undefined) => void;
 };
 
-const MarkdownTitleNameContext = createContext<MarkdownTitleNameContextValue>();
+const MarkdownNameContext = createContext<MarkdownNameContextValue>();
 
-export const MarkdownTitleNameProvider: FlowComponent = (props) => {
+export const MarkdownNameProvider: FlowComponent = (props) => {
+  // Keep the editable title and the label separate. An empty persisted
+  // title is a real editor value so TitleEditor can stay empty and show its
+  // placeholder, but surrounding UI should still display the block fallback
+  // such as "New Note" or "New Task".
   const persistedName = useBlockDocumentName('');
   const fallbackName = useBlockDocumentName();
   const [optimisticName, setOptimisticName] = createSignal<
@@ -31,16 +35,16 @@ export const MarkdownTitleNameProvider: FlowComponent = (props) => {
   });
 
   return (
-    <MarkdownTitleNameContext.Provider
+    <MarkdownNameContext.Provider
       value={{ persistedName, editorName, displayName, setOptimisticName }}
     >
       {props.children}
-    </MarkdownTitleNameContext.Provider>
+    </MarkdownNameContext.Provider>
   );
 };
 
-export function useMarkdownTitleName() {
-  const context = useContext(MarkdownTitleNameContext);
+export function useMarkdownName() {
+  const context = useContext(MarkdownNameContext);
   if (!context) {
     const persistedName = useBlockDocumentName('');
     const fallbackName = useBlockDocumentName();

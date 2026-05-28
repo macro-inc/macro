@@ -16,11 +16,8 @@ import {
   Suspense,
 } from 'solid-js';
 import { mdStore } from '../signal/markdownBlockData';
-import {
-  MarkdownTitleNameProvider,
-  useMarkdownTitleName,
-} from '../signal/titleName';
 import { FindAndReplace } from './FindAndReplace';
+import { MarkdownNameProvider, useMarkdownName } from './MarkdownNameProvider';
 import { ModalsProvider } from './ModalsProvider';
 import { InstructionsNotebook, Notebook } from './Notebook';
 import { MarkdownSidePanelSections } from './sidepanel/MarkdownSidePanelSections';
@@ -28,9 +25,9 @@ import { InstructionsTopBar, TopBar } from './TopBar';
 
 export default function BlockMarkdown() {
   return (
-    <MarkdownTitleNameProvider>
+    <MarkdownNameProvider>
       <BlockMarkdownContent />
-    </MarkdownTitleNameProvider>
+    </MarkdownNameProvider>
   );
 }
 
@@ -41,7 +38,7 @@ function BlockMarkdownContent() {
   const instructionsMdId = useInstructionsMdIdQuery();
   const notificationSource = useGlobalNotificationSource();
   const canEdit = useCanEdit();
-  const { displayName } = useMarkdownTitleName();
+  const { displayName } = useMarkdownName();
   const isInstructionsMd = createMemo(() => blockId === instructionsMdId.data);
 
   createEffect(() => {
