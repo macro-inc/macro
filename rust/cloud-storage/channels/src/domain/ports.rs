@@ -4,12 +4,12 @@ use crate::domain::models::{
     ChannelContextMessage, ChannelInfo, ChannelMessageFilters, ChannelMetadata, ChannelParticipant,
     ChannelPreview, ChannelPreviewRow, CountedReaction, CreateChannelRequest,
     CreateChannelResponse, CreateEntityMentionOptions, DeleteMessageQuery, EntityMention,
-    GetOrCreateChannelResponse, GetOrCreateDmRequest,
-    GetOrCreatePrivateRequest, MessageAttachment, MessagePageDirection, MutatedAttachment,
-    MutatedMessage, NewChannelAttachment, PatchChannelRequest, PatchMessageRequest,
-    PostMessageRequest, PostMessageResponse, PostReactionRequest, PostTypingRequest,
-    ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage, SimpleMention,
-    ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+    GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest, MessageAttachment,
+    MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
+    PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostMessageResponse,
+    PostReactionRequest, PostTypingRequest, ReferencedShareItem, RemoveParticipantsRequest,
+    ResolvedChannelMessage, SimpleMention, ThreadData, ThreadReply, ThreadReplyRow,
+    TopLevelMessageRow,
 };
 use crate::domain::side_effects::{
     ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
