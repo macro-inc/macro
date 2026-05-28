@@ -73,12 +73,12 @@ function ChannelCard(props: {
 
   return (
     <button
-      class="group flex h-36 min-w-0 flex-col justify-between rounded-2xl border border-edge-muted bg-hover/60 p-3 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent"
+      class="group flex min-h-20 w-64 shrink-0 snap-start flex-col justify-between rounded-2xl border border-edge-muted bg-hover/60 p-3 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent @md/recent-channels:h-36 @md/recent-channels:w-auto @md/recent-channels:min-w-0"
       onClick={(event) => props.onOpen(props.channel.id, event)}
     >
       <div class="flex items-start justify-between gap-3">
         <div class="flex min-w-0 items-center gap-3">
-          <Avatar size="lg" class="bg-default/20 px-1 text-default">
+          <Avatar size="md" class="bg-default/20 px-1 text-default @md/recent-channels:size-10">
             <Avatar.Fallback>{initials(props.channel.name)}</Avatar.Fallback>
           </Avatar>
           <div class="flex min-w-0 flex-col gap-0.5">
@@ -103,7 +103,7 @@ function ChannelCard(props: {
         </Show>
       </div>
 
-      <div class="relative flex min-w-0 flex-col gap-1">
+      <div class="relative mt-2 flex min-w-0 flex-col gap-1 @md/recent-channels:mt-0">
         <div class="pointer-events-none absolute bottom-0 right-0 opacity-0 transition group-hover:opacity-100">
           <Layer depth={3} class="rounded-xl">
             <div class="flex size-8 items-center justify-center rounded-xl bg-hover text-ink-muted transition group-hover:text-ink">
@@ -240,7 +240,7 @@ export function RecentChannelsSection() {
 
   return (
     <section class="@container/recent-channels">
-      <div class="mb-4 flex items-center justify-between gap-4">
+      <div class="mb-4 flex items-center justify-between gap-4 px-4 sm:px-0">
         <h2 class="text-lg font-semibold tracking-tight text-ink">
           Recent channels
         </h2>
@@ -255,13 +255,13 @@ export function RecentChannelsSection() {
         </Button>
       </div>
 
-      <div class="grid w-full grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3">
+      <div class="flex w-full snap-x scroll-pl-4 gap-2 overflow-x-auto pb-1 pl-4 scrollbar-hidden @md/recent-channels:grid @md/recent-channels:grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] @md/recent-channels:gap-3 @md/recent-channels:overflow-visible @md/recent-channels:pb-0 @md/recent-channels:pl-0">
         <Show
           when={!channelsQuery.isLoading}
           fallback={
             <For each={[0, 1, 2, 3, 4, 5, 6]}>
               {() => (
-                <div class="skeleton-shimmer h-36 rounded-2xl border border-edge-muted bg-hover/60 p-3">
+                <div class="skeleton-shimmer h-28 w-64 shrink-0 snap-start rounded-2xl border border-edge-muted bg-hover/60 p-3 @md/recent-channels:h-36 @md/recent-channels:w-auto">
                   <div class="skeleton-shimmer size-9 rounded-xl bg-surface" />
                   <div class="flex flex-col gap-2 pt-6">
                     <div class="skeleton-shimmer h-3 w-3/4 rounded-full bg-ink/10" />
