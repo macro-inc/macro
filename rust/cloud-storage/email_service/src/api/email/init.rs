@@ -66,8 +66,14 @@ impl IntoResponse for InitError {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct InitResponse {
+    /// The email_links row id for the now-accessible inbox. For the graph path
+    /// (cross-account add) this is the *existing* child link the caller now
+    /// delegates over; for the data-source path it's a freshly upserted row.
     pub link_id: Uuid,
-    pub backfill_job_id: Uuid,
+    /// Present when init enqueued a backfill job. Absent for the graph path,
+    /// where the child link's backfill already ran under its own macro_id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backfill_job_id: Option<Uuid>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -124,6 +130,58 @@ pub async fn handler(
             InitError::BadRequest("link has not completed authentication yet".to_string())
         })?;
 
+        // Dispatch on whether the linked email already belongs to another macro user.
+        // Same-user → fall through to the data-source path. Cross-user → add a graph
+        // edge instead of creating a duplicate email_links row.
+        let existing_owner =
+            macro_db_client::user::get::get_user_id_by_email(ctx.db.clone(), &linked_email)
+                .await
+                .ok();
+
+        if let Some(child_macro_id) = existing_owner.as_deref()
+            && child_macro_id != user_context.user_id
+        {
+            // Graph path: delegate inbox capability from primary (caller) → child.
+            macro_db_client::macro_user_links::insert_edge(
+                &ctx.db,
+                &user_context.user_id,
+                child_macro_id,
+                macro_db_client::macro_user_links::Capability::Inbox,
+            )
+            .await
+            .context("Failed to insert macro_user_links edge")?;
+
+            macro_db_client::in_progress_user_link::delete_in_progress_user_link(&ctx.db, &link_id)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, ?link_id, "Failed to delete in_progress_user_link after graph delegation");
+                })
+                .ok();
+
+            let child_link = email_db_client::links::get::fetch_link_by_email(
+                &ctx.db,
+                &linked_email,
+                link::UserProvider::Gmail,
+            )
+            .await
+            .context("Failed to look up child link after delegation")?
+            .ok_or_else(|| {
+                InitError::BadRequest(
+                    "child macro user exists but has no email_links row".to_string(),
+                )
+            })?;
+
+            return Ok((
+                StatusCode::OK,
+                Json(InitResponse {
+                    link_id: child_link.id,
+                    backfill_job_id: None,
+                }),
+            )
+                .into_response());
+        }
+
+        // Data-source path (same-user re-link or brand-new email with no prior signup).
         if pg_repo
             .link_by_fusionauth_email_provider(
                 &user_context.fusion_user_id,
@@ -275,7 +333,7 @@ pub async fn handler(
         StatusCode::OK,
         Json(InitResponse {
             link_id: link.id,
-            backfill_job_id: backfill_job.id,
+            backfill_job_id: Some(backfill_job.id),
         }),
     )
         .into_response())
