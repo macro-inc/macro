@@ -6,7 +6,7 @@ import { TeamMembersSection } from './sections/team-members';
 
 export function Dashboard() {
   return (
-    <main class="relative h-full overflow-y-auto bg-surface text-ink">
+    <main class="relative h-full overflow-y-auto bg-surface">
       <Hero />
 
       <div class="px-6 pb-10 sm:px-8">

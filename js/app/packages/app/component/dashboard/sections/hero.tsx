@@ -1,4 +1,10 @@
 import { ResponsiveDropdown } from '@app/component/SimpleDropdown';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
+import { ChatInput } from '@core/component/AI/component/input/ChatInput';
+import { ChatInputProvider } from '@core/component/AI/context';
+import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { TabsInset } from '@core/component/TabsInset';
 import ChatCircleTextIcon from '@phosphor/chat-circle-text.svg';
 import EnvelopeSimpleIcon from '@phosphor/envelope-simple.svg';
@@ -7,10 +13,41 @@ import PlusIcon from '@phosphor/plus.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import MoreIcon from '@phosphor-icons/core/fill/dots-three-outline-fill.svg?component-solid';
 import { AnimatedStarIcon } from '@icon/wide-star';
+import { cognitionApiServiceClient } from '@service-cognition/client';
 import { Button } from '@ui';
 import { createMemo, createSignal } from 'solid-js';
 
 import { useUserContext } from '@core/context/user';
+
+function DashboardAiInput() {
+  const editor = buildChatEditor();
+
+  const handleSend = async (request: ChatSendInput) => {
+    const response = await cognitionApiServiceClient.createChat({});
+    if (response.isErr()) return;
+
+    setPendingSendData({
+      content: request.content,
+      attachments: request.attachments,
+      model: request.model,
+    });
+
+    globalSplitManager()?.openWithSplit(
+      { type: 'chat', id: response.value.id },
+      {
+        activate: true,
+        referredFrom: null,
+        preferNewSplit: request.metaKey,
+      }
+    );
+  };
+
+  return (
+    <ChatInputProvider>
+      <ChatInput editor={editor} onSend={handleSend} isPersistent />
+    </ChatInputProvider>
+  );
+}
 
 export function Hero() {
   const user = useUserContext();
@@ -30,8 +67,8 @@ export function Hero() {
   });
 
   return (
-    <section class="px-6 py-8 sm:px-8 sm:py-10">
-      <div class="max-w-3xl">
+    <section class="px-6 py-8 sm:px-8 sm:py-12">
+      <div class="mx-auto flex max-w-3xl flex-col items-center text-center">
         <TabsInset
           class="mb-5 inline-flex h-auto"
           defaultValue="team"
@@ -41,10 +78,15 @@ export function Hero() {
           ]}
         />
 
-        <h1 class="text-3xl font-semibold tracking-tight text-ink text-balance sm:text-4xl lg:text-5xl">
+        <h1 class="text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl lg:text-5xl">
           {greeting()}, <span class="capitalize">{firstName()}.</span>
         </h1>
-        <div class="mt-6 flex flex-wrap gap-3">
+
+        <div class="mt-6 w-full max-w-2xl text-left">
+          <DashboardAiInput />
+        </div>
+
+        <div class="mt-5 flex flex-wrap justify-center gap-3">
           <Button variant="cta" size="lg" class="h-10 rounded-lg px-4 text-sm">
             <PlusIcon />
             Create
