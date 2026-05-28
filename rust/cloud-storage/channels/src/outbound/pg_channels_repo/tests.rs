@@ -1238,7 +1238,11 @@ async fn get_entity_mention_by_id_returns_none_when_missing(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool);
-    assert!(repo.get_entity_mention_by_id(Uuid::new_v4()).await?.is_none());
+    assert!(
+        repo.get_entity_mention_by_id(Uuid::new_v4())
+            .await?
+            .is_none()
+    );
     Ok(())
 }
 
