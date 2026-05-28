@@ -7726,7 +7726,10 @@
         "oneOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/ApiAttachmentChannelReference" },
+              {
+                "$ref": "#/components/schemas/ApiAttachmentChannelReference",
+                "description": "Referenced from a channel message."
+              },
               {
                 "type": "object",
                 "required": ["reference_type"],
@@ -7742,7 +7745,10 @@
           },
           {
             "allOf": [
-              { "$ref": "#/components/schemas/ApiAttachmentGenericReference" },
+              {
+                "$ref": "#/components/schemas/ApiAttachmentGenericReference",
+                "description": "Referenced from any non-message source entity."
+              },
               {
                 "type": "object",
                 "required": ["reference_type"],
@@ -11465,20 +11471,6 @@
           }
         }
       },
-      "GetAttachmentReferencesResponse": {
-        "type": "object",
-        "description": "Response from the attachment-references endpoint.",
-        "required": ["references"],
-        "properties": {
-          "references": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ApiAttachmentEntityReference"
-            },
-            "description": "References to the requested entity, newest-first."
-          }
-        }
-      },
       "GetActivitiesResponse": {
         "type": "object",
         "required": ["error"],
@@ -11500,6 +11492,20 @@
           }
         },
         "deprecated": true
+      },
+      "GetAttachmentReferencesResponse": {
+        "type": "object",
+        "description": "Response from the attachment-references endpoint.",
+        "required": ["references"],
+        "properties": {
+          "references": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiAttachmentEntityReference"
+            },
+            "description": "References to the requested entity, newest-first."
+          }
+        }
       },
       "GetBatchCallRecordPreviewRequest": {
         "type": "object",
