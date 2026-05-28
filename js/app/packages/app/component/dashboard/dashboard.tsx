@@ -42,28 +42,6 @@ export function Dashboard() {
             <QuickLinksSection />
 
             <NotificationsSection />
-
-            <section>
-              <h2 class="mb-4 text-lg font-semibold tracking-tight text-ink">
-                Priorities
-              </h2>
-              <div class="space-y-2">
-                <div class="h-14 rounded-2xl border border-edge-muted bg-accent/5" />
-                <div class="h-14 rounded-2xl border border-edge-muted bg-accent/5" />
-                <div class="h-14 rounded-2xl border border-edge-muted bg-accent/5" />
-              </div>
-            </section>
-
-            <section>
-              <h2 class="mb-4 text-lg font-semibold tracking-tight text-ink">
-                Today
-              </h2>
-              <div class="space-y-2">
-                <div class="h-12 rounded-2xl border border-edge-muted bg-[#F8F3D9]" />
-                <div class="h-12 rounded-2xl border border-edge-muted bg-[#F8F3D9]" />
-                <div class="h-12 rounded-2xl border border-edge-muted bg-[#F8F3D9]" />
-              </div>
-            </section>
           </div>
 
           <DashboardSideColumn />
