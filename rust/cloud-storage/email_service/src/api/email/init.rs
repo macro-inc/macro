@@ -351,16 +351,15 @@ pub async fn handler(
         .into_response())
 }
 
-/// Fetches a Gmail access token scoped to a specific linked email by constructing the
-/// `macro|<email>` cache key directly. Use this instead of going through the
-/// `UserContext`-keyed path when the target inbox is not the user's primary email.
+/// Fetches a Gmail access token scoped to a specific linked email. Use this instead
+/// of going through the `UserContext`-keyed path when the target inbox is not the
+/// JWT subject's primary email.
 async fn fetch_gmail_token_for_email(
     ctx: &ApiContext,
     fusion_user_id: &str,
     linked_email: &str,
 ) -> Result<String, InitError> {
-    let macro_id = format!("macro|{}", linked_email);
-    let key = TokenCacheKey::new(fusion_user_id, macro_id, UserProvider::Gmail.as_str());
+    let key = TokenCacheKey::new(fusion_user_id, linked_email, UserProvider::Gmail.as_str());
 
     let conn = ctx
         .redis_client

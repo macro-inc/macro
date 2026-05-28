@@ -51,6 +51,15 @@ pub async fn fetch_token_or_delete_on_revocation(
     }
 }
 
+/// Parses the email out of a `macro|<email>` JWT subject. Returns `None` on
+/// malformed input; callers map that to whatever error shape they need.
+fn primary_inbox_email(user_id: &str) -> Option<&str> {
+    user_id
+        .split_once('|')
+        .map(|(_, email)| email)
+        .filter(|email| !email.is_empty())
+}
+
 /// Checks if an error chain contains a Forbidden error from the auth service
 fn is_forbidden_error(e: &anyhow::Error) -> bool {
     e.chain().any(|cause| {
@@ -68,26 +77,40 @@ pub async fn fetch_gmail_access_token_from_link(
     redis_client: &RedisClient,
     auth_service_client: &AuthServiceClient,
 ) -> anyhow::Result<String> {
-    // Create the cache key using the extracted email
     let key = TokenCacheKey::new(
         &link.fusionauth_user_id,
-        link.macro_id.0.as_ref(),
+        link.email_address.0.as_ref(),
         link.provider.as_str(),
     );
 
     fetch_gmail_access_token(&key, redis_client, auth_service_client).await
 }
 
-/// fetches a user's gmail token using the user_context from the API request
+/// fetches a user's gmail token using the user_context from the API request.
+/// This always resolves to the JWT subject's *primary* inbox — the email part of
+/// `user_context.user_id`. For multi-inbox callers that need a specific linked
+/// inbox's token, build a `TokenCacheKey` from that link's `email_address`
+/// directly or use `fetch_gmail_access_token_from_link`.
 pub async fn fetch_gmail_token_usercontext_response(
     user_context: &UserContext,
     redis_client: &RedisClient,
     auth_service_client: &AuthServiceClient,
 ) -> Result<String, Response> {
-    // Create the cache key using the extracted email
     let key = TokenCacheKey::new(
         &user_context.fusion_user_id,
-        &user_context.user_id,
+        primary_inbox_email(&user_context.user_id).ok_or_else(|| {
+            tracing::error!(
+                user_id = %user_context.user_id,
+                "unable to derive email from user id"
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to get gmail access token".into(),
+                }),
+            )
+                .into_response()
+        })?,
         UserProvider::Gmail.as_str(),
     );
 
@@ -106,7 +129,8 @@ pub async fn fetch_gmail_token_usercontext_response(
 }
 
 /// Fetches a user's gmail token directly from the auth service, bypassing the Redis cache.
-/// Used by the init endpoint where we always want a fresh token.
+/// Used by the init endpoint where we always want a fresh token. Resolves to the JWT
+/// subject's primary inbox.
 #[tracing::instrument(skip(user_context, redis_client, auth_service_client))]
 pub async fn fetch_gmail_token_no_cache(
     user_context: &UserContext,
@@ -115,7 +139,19 @@ pub async fn fetch_gmail_token_no_cache(
 ) -> Result<String, Response> {
     let key = TokenCacheKey::new(
         &user_context.fusion_user_id,
-        &user_context.user_id,
+        primary_inbox_email(&user_context.user_id).ok_or_else(|| {
+            tracing::error!(
+                user_id = %user_context.user_id,
+                "unable to derive email from user id"
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to get gmail access token".into(),
+                }),
+            )
+                .into_response()
+        })?,
         UserProvider::Gmail.as_str(),
     );
 

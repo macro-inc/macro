@@ -36,7 +36,7 @@ impl GmailTokenProvider for GmailTokenProviderImpl {
     async fn fetch_gmail_access_token(&self, link: &Link) -> Result<String, EmailErr> {
         let key = TokenCacheKey::new(
             &link.fusionauth_user_id,
-            link.macro_id.0.as_ref(),
+            link.email_address.0.as_ref(),
             link.provider.as_str(),
         );
         fetch_gmail_access_token(&key, &self.redis_conn, &self.auth_service_client)
@@ -48,7 +48,7 @@ impl GmailTokenProvider for GmailTokenProviderImpl {
     async fn fetch_gmail_access_token_no_cache(&self, link: &Link) -> Result<String, EmailErr> {
         let key = TokenCacheKey::new(
             &link.fusionauth_user_id,
-            link.macro_id.0.as_ref(),
+            link.email_address.0.as_ref(),
             link.provider.as_str(),
         );
         fetch_gmail_access_token_no_cache(&key, &self.redis_conn, &self.auth_service_client)
@@ -125,7 +125,7 @@ async fn fetch_token_from_auth_service(
     auth_service_client: &AuthServiceClient,
 ) -> anyhow::Result<String> {
     let fetched_token = auth_service_client
-        .get_google_access_token(&key.fusion_user_id, &key.macro_id)
+        .get_google_access_token(&key.fusion_user_id, &key.email_address)
         .await
         .with_context(|| {
             format!(

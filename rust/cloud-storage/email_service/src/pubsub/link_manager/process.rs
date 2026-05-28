@@ -178,7 +178,7 @@ async fn handle_delete(
     ctx.redis_client
         .delete_gmail_access_token(&TokenCacheKey::new(
             link.fusionauth_user_id.clone(),
-            link.macro_id.to_string(),
+            link.email_address.0.as_ref(),
             UserProvider::Gmail.as_str(),
         ))
         .await
