@@ -12,7 +12,8 @@ use item_filters::{
     SharedEmailFilter,
     ast::{
         EntityFilterAst, LiteralTree, call::CallLiteral, channel::ChannelLiteral,
-        chat::ChatLiteral, document::DocumentLiteral, email::EmailLiteral, project::ProjectLiteral,
+        chat::ChatLiteral, document::DocumentLiteral, email::EmailLiteral,
+        foreign_entity::ForeignEntityLiteral, project::ProjectLiteral,
         properties::PropertiesLiteral,
     },
 };
@@ -76,6 +77,7 @@ pub enum ItemType {
     Email,
     Channel,
     Call,
+    ForeignEntity,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -93,6 +95,13 @@ pub enum EntityItem {
     Channel { id: Uuid, name: Option<String> },
     #[serde(rename_all = "camelCase")]
     Call { id: Uuid, created_by: String },
+    #[serde(rename_all = "camelCase")]
+    ForeignEntity {
+        id: Uuid,
+        foreign_entity_id: String,
+        foreign_entity_source: String,
+        metadata: serde_json::Value,
+    },
 }
 
 impl From<SoupItem> for EntityItem {
@@ -122,6 +131,12 @@ impl From<SoupItem> for EntityItem {
                 id: record.call_id,
                 created_by: record.created_by,
             },
+            SoupItem::ForeignEntity(foreign_entity) => EntityItem::ForeignEntity {
+                id: foreign_entity.id,
+                foreign_entity_id: foreign_entity.foreign_entity_id,
+                foreign_entity_source: foreign_entity.foreign_entity_source,
+                metadata: foreign_entity.metadata,
+            },
         }
     }
 }
@@ -137,7 +152,7 @@ pub struct ListEntitiesResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ListEntities",
-    description = "Browse the user's workspace to see recent items they have access to. Returns documents, AI conversations, projects, emails, and chat channels. Use this to get an overview of what the user has been working on or to find items by type. For finding specific items by name or content, use the search tool instead."
+    description = "Browse the user's workspace to see recent items they have access to. Returns documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. For finding specific items by name or content, use the search tool instead."
 )]
 pub struct ListEntities {
     #[schemars(
@@ -201,6 +216,13 @@ pub struct ListEntities {
     pub call_filter: LiteralTree<CallLiteral>,
 
     #[schemars(
+        description = "Full soup AST foreign entity filter (fef).",
+        with = "Option<serde_json::Value>"
+    )]
+    #[serde(default, rename = "fef")]
+    pub foreign_entity_filter: LiteralTree<ForeignEntityLiteral>,
+
+    #[schemars(
         description = "Full soup AST property filter (propf).",
         with = "Option<serde_json::Value>"
     )]
@@ -240,6 +262,7 @@ impl ListEntities {
             },
             channel_filter: self.channel_filter.clone(),
             call_filter: self.call_filter.clone(),
+            foreign_entity_filter: self.foreign_entity_filter.clone(),
             properties_filter: self.properties_filter.clone(),
         };
 
@@ -287,6 +310,11 @@ impl ListEntities {
                 ast.call_filter
             } else {
                 Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil()))))
+            },
+            foreign_entity_filter: if include_types.contains(&ItemType::ForeignEntity) {
+                ast.foreign_entity_filter
+            } else {
+                Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil()))))
             },
             properties_filter: ast.properties_filter,
         }
@@ -401,6 +429,7 @@ pub(super) fn build_summary(
     let mut emails = 0;
     let mut channels = 0;
     let mut call_records = 0;
+    let mut foreign_entities = 0;
 
     for item in items {
         match item {
@@ -410,6 +439,7 @@ pub(super) fn build_summary(
             EntityItem::Email { .. } => emails += 1,
             EntityItem::Channel { .. } => channels += 1,
             EntityItem::Call { .. } => call_records += 1,
+            EntityItem::ForeignEntity { .. } => foreign_entities += 1,
         }
     }
 
@@ -449,6 +479,14 @@ pub(super) fn build_summary(
             "{call_records} call record{}",
             if call_records == 1 { "" } else { "s" }
         ));
+    }
+    if foreign_entities > 0 {
+        let label = if foreign_entities == 1 {
+            "foreign entity"
+        } else {
+            "foreign entities"
+        };
+        parts.push(format!("{foreign_entities} {label}"));
     }
 
     let counts = parts.join(", ");

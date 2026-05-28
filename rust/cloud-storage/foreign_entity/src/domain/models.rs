@@ -4,6 +4,41 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use uuid::Uuid;
 
+/// Identifies an internal source that can grant access to foreign entities.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceId {
+    /// Internal entity identifier, stored in `foreign_entity.stored_for_id`.
+    pub id: String,
+    /// Internal auth entity namespace, stored in `foreign_entity.stored_for_auth_entity`.
+    pub auth_entity: String,
+}
+
+impl SourceId {
+    /// Create a source identifier from explicit stored-for values.
+    pub fn new(id: impl Into<String>, auth_entity: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            auth_entity: auth_entity.into(),
+        }
+    }
+
+    /// Create a user-scoped source identifier.
+    pub fn user(id: impl Into<String>) -> Self {
+        Self::new(id, "user")
+    }
+
+    /// Create a team-scoped source identifier.
+    pub fn team(id: Uuid) -> Self {
+        Self::new(id.to_string(), "team")
+    }
+
+    pub(crate) fn validate(&self) -> Result<(), ForeignEntityError> {
+        validate_non_blank("sourceId.id", &self.id)?;
+        validate_non_blank("sourceId.authEntity", &self.auth_entity)
+    }
+}
+
 /// A persisted mapping to an entity owned by an external system.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]

@@ -17,6 +17,10 @@ use documents::{domain::ports::TaskPropertiesPort, inbound::toolset::DocumentToo
 use email::{
     domain::service::EmailServiceImpl, inbound::toolset::EmailToolContext, outbound::EmailPgRepo,
 };
+use foreign_entity::{
+    domain::service::ForeignEntityServiceImpl,
+    outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::inbound::ai_tool::NotificationToolContext;
 use properties::inbound::toolset::PropertiesToolContext;
@@ -428,6 +432,9 @@ pub type ToolEntityAccessService = entity_access::domain::service::EntityAccessS
 pub type ToolDocumentToolContext =
     DocumentToolContext<ToolDocumentService, ToolEntityAccessService>;
 
+/// Type alias for the foreign entity service implementation used by AI tools.
+pub type ToolForeignEntityService = ForeignEntityServiceImpl<PgForeignEntityRepo>;
+
 /// Type alias for the soup service implementation
 pub type ToolSoupService = SoupImpl<
     soup::outbound::pg_soup_repo::PgSoupRepo,
@@ -435,6 +442,7 @@ pub type ToolSoupService = SoupImpl<
     email::domain::ports::ReadonlyEmailPreviewAdapter<ToolEmailService>,
     ToolCommsService,
     call::domain::ports::NoOpCallRecordQueryService,
+    ToolForeignEntityService,
 >;
 
 /// No-op notification service for properties (tools don't send assignment notifications)

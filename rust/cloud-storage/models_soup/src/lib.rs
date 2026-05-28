@@ -3,6 +3,7 @@ pub mod chat;
 pub mod comms;
 pub mod document;
 pub mod email_thread;
+pub mod foreign_entity;
 pub mod item;
 pub mod project;
 pub mod properties;

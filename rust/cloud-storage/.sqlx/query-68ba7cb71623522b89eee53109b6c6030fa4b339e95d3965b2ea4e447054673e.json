@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE foreign_entity\n        SET updated_at = NOW() - INTERVAL '1 hour'\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "68ba7cb71623522b89eee53109b6c6030fa4b339e95d3965b2ea4e447054673e"
+}

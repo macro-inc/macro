@@ -14,6 +14,10 @@ use email::outbound::EmailPgRepo;
 use email_service_client::EmailServiceClientExternal;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
+use foreign_entity::{
+    domain::service::ForeignEntityServiceImpl,
+    outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
+};
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use lexical_client::LexicalClient;
@@ -83,12 +87,15 @@ pub async fn build_tool_service_context(
         frecency_storage,
     );
     let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
+    let foreign_entity_service =
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone()));
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(pool.clone())),
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
         call::domain::ports::NoOpCallRecordQueryService,
+        foreign_entity_service,
     ));
 
     // Document tool context

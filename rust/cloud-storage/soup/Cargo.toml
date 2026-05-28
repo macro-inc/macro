@@ -25,6 +25,7 @@ axum = [
   "dep:model_user",
   "dep:utoipa",
   "email/axum",
+  "email/inbound",
   "item_filters/schema",
   "models_pagination/axum",
   "models_soup/schema",
@@ -51,6 +52,7 @@ either = { workspace = true }
 email = { path = "../email", features = ["ports"] }
 entity_access = { path = "../entity_access", default-features = false }
 filter_ast = { path = "../filter_ast" }
+foreign_entity = { path = "../foreign_entity", default-features = false, features = ["ports"] }
 frecency = { path = "../frecency" }
 item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }

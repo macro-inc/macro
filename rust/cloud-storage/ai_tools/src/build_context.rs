@@ -23,6 +23,10 @@ use email::outbound::EmailPgRepo;
 use email_service_client::EmailServiceClientExternal;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
+use foreign_entity::{
+    domain::service::ForeignEntityServiceImpl,
+    outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
+};
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use lexical_client::LexicalClient;
@@ -168,12 +172,15 @@ pub async fn build_tool_service_context_from_env(
     let channel_tool_context = crate::tool_context::build_channel_tool_context(pool.clone());
     let email_service_for_tools: Arc<crate::tool_context::ToolEmailService> =
         Arc::new(email_service.clone());
+    let foreign_entity_service =
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone()));
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(ReadOnlyPool(pool.clone())),
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
         call::domain::ports::NoOpCallRecordQueryService,
+        foreign_entity_service,
     ));
 
     let s3_client = macro_aws_config::s3_client().await;

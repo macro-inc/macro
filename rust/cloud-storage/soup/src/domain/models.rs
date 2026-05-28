@@ -9,6 +9,10 @@ use call::domain::models::GetCallRecordsRequest;
 use comms::domain::models::GetChannelsRequest;
 use email::domain::models::{GetEmailsRequest, PreviewView};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
+use foreign_entity::domain::{
+    models::{ForeignEntityError, SourceId},
+    ports::ForeignEntityListQuery,
+};
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
 use item_filters::{
     EntityFilters,
@@ -370,6 +374,44 @@ impl SoupRequest<Option<EntityFilterAst>> {
             }?,
         })
     }
+
+    pub(crate) fn build_foreign_entity_query(&self) -> Option<ForeignEntityListQuery> {
+        match &self.cursor {
+            SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
+                *t,
+                f.as_ref()
+                    .and_then(|filter| filter.foreign_entity_filter.clone()),
+            )),
+            SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
+                id,
+                limit,
+                val,
+                filter,
+            }))) => Some(Query::Cursor(CursorWithValAndFilter {
+                id: *id,
+                limit: *limit,
+                val: val.clone(),
+                filter: filter
+                    .as_ref()
+                    .and_then(|filter| filter.foreign_entity_filter.clone()),
+            })),
+            // query by frecency is not implemented for foreign entities
+            SoupQuery::Frecency(_) => None,
+        }
+    }
+
+    pub(crate) fn build_foreign_entity_source_ids(
+        &self,
+        team_receipt: Option<&EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Vec<SourceId> {
+        let mut source_ids = vec![SourceId::user(self.user.as_ref())];
+
+        if let Some(receipt) = team_receipt {
+            source_ids.push(SourceId::new(receipt.entity().entity_id.clone(), "team"));
+        }
+
+        source_ids
+    }
 }
 
 /// a [SoupItem] with an associated frecency score
@@ -450,6 +492,8 @@ pub enum SoupErr {
     CommsErr,
     #[error("A call error has occurred, see logs for more details")]
     CallErr,
+    #[error(transparent)]
+    ForeignEntityErr(#[from] ForeignEntityError),
     #[error(transparent)]
     AstErr(#[from] ExpandErr),
 }

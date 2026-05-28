@@ -5,11 +5,20 @@ use chrono::{DateTime, Utc};
 use comms::domain::models::GetChannelsRequest;
 use cool_asserts::assert_matches;
 use email::domain::models::{EnrichedEmailThreadPreview, PreviewView};
+use filter_ast::Expr;
+use foreign_entity::domain::{
+    models::{
+        CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity, SourceId,
+    },
+    ports::{ForeignEntityListQuery, ForeignEntityService},
+};
 use frecency::domain::models::{FrecencyPageRequest, FrecencyPageResponse};
 use frecency::domain::ports::MockFrecencyQueryService;
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::{domain::models::AggregateFrecency, outbound::mock::MockFrecencyStorage};
-use item_filters::EntityFilters;
+use item_filters::{
+    EntityFilters, ForeignEntityFilters, ast::foreign_entity::ForeignEntityLiteral,
+};
 use model_entity::EntityType;
 use models_pagination::{
     Cursor, CursorVal, CursorWithValAndFilter, FrecencyValue, PaginatedCursor, SimpleSortMethod,
@@ -18,6 +27,7 @@ use models_pagination::{
 use models_soup::document::{SoupDocument, SoupDocumentSubType};
 use ordered_float::OrderedFloat;
 use rootcause::Report;
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 use super::*;
@@ -72,6 +82,207 @@ impl CallRecordQueryService for NoopCallRecordQueryService {
         _req: call::domain::models::GetCallRecordsRequest,
     ) -> Result<Vec<call::domain::models::CallRecord>, call::domain::models::CallError> {
         Ok(Vec::new())
+    }
+}
+
+#[derive(Clone)]
+struct NoopForeignEntityService;
+
+impl ForeignEntityService for NoopForeignEntityService {
+    async fn get_foreign_entity_by_id(
+        &self,
+        id: Uuid,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        Err(ForeignEntityError::NotFound(id))
+    }
+
+    async fn get_foreign_entities_by_foreign_entity_id(
+        &self,
+        _foreign_entity_id: &str,
+        _foreign_entity_source: Option<&str>,
+    ) -> Result<Vec<ForeignEntity>, ForeignEntityError> {
+        Ok(Vec::new())
+    }
+
+    async fn get_foreign_entities_for_user(
+        &self,
+        _source_ids: Vec<SourceId>,
+        _limit: u32,
+        _query: ForeignEntityListQuery,
+    ) -> Result<Vec<ForeignEntity>, ForeignEntityError> {
+        Ok(Vec::new())
+    }
+
+    async fn create_foreign_entity(
+        &self,
+        _create: CreateForeignEntity,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        unreachable!("NoopForeignEntityService does not create foreign entities")
+    }
+
+    async fn delete_foreign_entity(&self, _id: Uuid) -> Result<(), ForeignEntityError> {
+        unreachable!("NoopForeignEntityService does not delete foreign entities")
+    }
+
+    async fn patch_foreign_entity(
+        &self,
+        _id: Uuid,
+        _patch: PatchForeignEntity,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        unreachable!("NoopForeignEntityService does not patch foreign entities")
+    }
+}
+
+#[derive(Clone)]
+struct RecordingForeignEntityService {
+    state: Arc<RecordingForeignEntityState>,
+}
+
+struct RecordingForeignEntityState {
+    calls: Mutex<Vec<RecordedForeignEntityCall>>,
+    entities: Vec<ForeignEntity>,
+}
+
+#[derive(Clone)]
+struct RecordedForeignEntityCall {
+    source_ids: Vec<SourceId>,
+    limit: u32,
+    query: ForeignEntityListQuery,
+}
+
+fn foreign_entity_matches_filter(
+    entity: &ForeignEntity,
+    filter: &Option<Arc<Expr<ForeignEntityLiteral>>>,
+) -> bool {
+    filter
+        .as_deref()
+        .map(|expr| foreign_entity_matches_expr(entity, expr))
+        .unwrap_or(true)
+}
+
+fn foreign_entity_matches_expr(entity: &ForeignEntity, expr: &Expr<ForeignEntityLiteral>) -> bool {
+    match expr {
+        Expr::And(left, right) => {
+            foreign_entity_matches_expr(entity, left) && foreign_entity_matches_expr(entity, right)
+        }
+        Expr::Or(left, right) => {
+            foreign_entity_matches_expr(entity, left) || foreign_entity_matches_expr(entity, right)
+        }
+        Expr::Not(inner) => !foreign_entity_matches_expr(entity, inner),
+        Expr::Literal(literal) => foreign_entity_matches_literal(entity, literal),
+    }
+}
+
+fn foreign_entity_matches_literal(entity: &ForeignEntity, literal: &ForeignEntityLiteral) -> bool {
+    match literal {
+        ForeignEntityLiteral::Id(id) => entity.id == *id,
+        ForeignEntityLiteral::ForeignEntityId(id) => {
+            entity.foreign_entity_id.as_str() == id.as_str()
+        }
+        ForeignEntityLiteral::ForeignEntitySource(source) => {
+            entity.foreign_entity_source.as_str() == source.as_str()
+        }
+    }
+}
+
+impl RecordingForeignEntityService {
+    fn new(entities: Vec<ForeignEntity>) -> Self {
+        Self {
+            state: Arc::new(RecordingForeignEntityState {
+                calls: Mutex::new(Vec::new()),
+                entities,
+            }),
+        }
+    }
+
+    fn calls(&self) -> Vec<RecordedForeignEntityCall> {
+        self.state.calls.lock().unwrap().clone()
+    }
+}
+
+impl ForeignEntityService for RecordingForeignEntityService {
+    async fn get_foreign_entity_by_id(
+        &self,
+        id: Uuid,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        self.state
+            .entities
+            .iter()
+            .find(|entity| entity.id == id)
+            .cloned()
+            .ok_or(ForeignEntityError::NotFound(id))
+    }
+
+    async fn get_foreign_entities_by_foreign_entity_id(
+        &self,
+        foreign_entity_id: &str,
+        foreign_entity_source: Option<&str>,
+    ) -> Result<Vec<ForeignEntity>, ForeignEntityError> {
+        Ok(self
+            .state
+            .entities
+            .iter()
+            .filter(|entity| entity.foreign_entity_id == foreign_entity_id)
+            .filter(|entity| {
+                foreign_entity_source
+                    .map(|source| entity.foreign_entity_source == source)
+                    .unwrap_or(true)
+            })
+            .cloned()
+            .collect())
+    }
+
+    async fn get_foreign_entities_for_user(
+        &self,
+        source_ids: Vec<SourceId>,
+        limit: u32,
+        query: ForeignEntityListQuery,
+    ) -> Result<Vec<ForeignEntity>, ForeignEntityError> {
+        let filter = query.filter().clone();
+
+        self.state
+            .calls
+            .lock()
+            .unwrap()
+            .push(RecordedForeignEntityCall {
+                source_ids: source_ids.clone(),
+                limit,
+                query,
+            });
+
+        Ok(self
+            .state
+            .entities
+            .iter()
+            .filter(|entity| {
+                source_ids.iter().any(|source_id| {
+                    entity.stored_for_id.as_str() == source_id.id.as_str()
+                        && entity.stored_for_auth_entity.as_str() == source_id.auth_entity.as_str()
+                })
+            })
+            .filter(|entity| foreign_entity_matches_filter(entity, &filter))
+            .take(limit as usize)
+            .cloned()
+            .collect())
+    }
+
+    async fn create_foreign_entity(
+        &self,
+        _create: CreateForeignEntity,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        unreachable!("RecordingForeignEntityService does not create foreign entities")
+    }
+
+    async fn delete_foreign_entity(&self, _id: Uuid) -> Result<(), ForeignEntityError> {
+        unreachable!("RecordingForeignEntityService does not delete foreign entities")
+    }
+
+    async fn patch_foreign_entity(
+        &self,
+        _id: Uuid,
+        _patch: PatchForeignEntity,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        unreachable!("RecordingForeignEntityService does not patch foreign entities")
     }
 }
 
@@ -134,6 +345,267 @@ fn soup_document_with_is_completed(
     }
 }
 
+fn foreign_entity_for_source(
+    id: Uuid,
+    stored_for_id: impl Into<String>,
+    stored_for_auth_entity: impl Into<String>,
+    updated_at: DateTime<Utc>,
+) -> ForeignEntity {
+    ForeignEntity {
+        id,
+        foreign_entity_id: format!("external-{id}"),
+        foreign_entity_source: "github".to_string(),
+        metadata: serde_json::json!({}),
+        stored_for_id: stored_for_id.into(),
+        stored_for_auth_entity: stored_for_auth_entity.into(),
+        created_at: DateTime::default(),
+        updated_at,
+    }
+}
+
+#[tokio::test]
+async fn simple_soup_includes_foreign_entities() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let foreign_entity_id = Uuid::from_u128(2);
+    let foreign_entity_service =
+        RecordingForeignEntityService::new(vec![foreign_entity_for_source(
+            foreign_entity_id,
+            user.as_ref(),
+            "user",
+            DateTime::default() + Days::new(2),
+        )]);
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| {
+            Box::pin(async move {
+                Ok(vec![SoupItem::Document(soup_document_with_updated(
+                    "my-document-1",
+                    DateTime::default() + Days::new(1),
+                ))])
+            })
+        });
+
+    let page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        NoopCommsService,
+        NoopCallRecordQueryService,
+        foreign_entity_service.clone(),
+    )
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: None,
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::UpdatedAt,
+                EntityFilters::default(),
+            ),
+            user: user.clone(),
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .unwrap_left();
+
+    assert_eq!(page.items.len(), 2);
+    assert_matches!(
+        &page.items[0].item,
+        SoupItem::ForeignEntity(entity) => assert_eq!(entity.id, foreign_entity_id)
+    );
+    assert_matches!(&page.items[1].item, SoupItem::Document(_));
+
+    let calls = foreign_entity_service.calls();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].limit, 20);
+    assert_eq!(calls[0].source_ids, vec![SourceId::user(user.as_ref())]);
+    assert!(calls[0].query.filter().is_none());
+}
+
+#[tokio::test]
+async fn frecency_soup_does_not_query_foreign_entities() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let foreign_entity_service =
+        RecordingForeignEntityService::new(vec![foreign_entity_for_source(
+            Uuid::from_u128(42),
+            user.as_ref(),
+            "user",
+            DateTime::default(),
+        )]);
+
+    let mut frecency = MockFrecencyQueryService::new();
+    frecency
+        .expect_get_frecency_page()
+        .times(1)
+        .returning(|params| {
+            let iter = (1..=params.limit).map(|v| {
+                AggregateFrecency::new_mock(
+                    EntityType::Document.with_entity_string(Uuid::from_u128(v as u128).to_string()),
+                    v.into(),
+                )
+            });
+            Box::pin(async move { Ok(FrecencyPageResponse::new_mock(iter)) })
+        });
+
+    let mut soup = MockSoupRepo::new();
+    soup.expect_unexpanded_soup_by_ids()
+        .times(1)
+        .returning(|params| {
+            let vec = params
+                .entities
+                .iter()
+                .map(|entity| soup_document(&entity.entity_id))
+                .map(SoupItem::Document)
+                .collect();
+            Box::pin(async move { Ok(vec) })
+        });
+
+    SoupImpl::new(
+        soup,
+        frecency,
+        NoopEmailPreviewService,
+        NoopCommsService,
+        NoopCallRecordQueryService,
+        foreign_entity_service.clone(),
+    )
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: None,
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
+            user,
+        },
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert!(foreign_entity_service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn team_receipt_contributes_team_foreign_entity_source_id() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let team_id = Uuid::from_u128(100);
+    let foreign_entity_service = RecordingForeignEntityService::new(Vec::new());
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    let team_receipt = entity_access::domain::models::EntityAccessReceipt::<MemberTeamRole>::dangerously_assert_authenticated_user(
+        user.clone(),
+        &team_id.to_string(),
+        EntityType::Team,
+    );
+
+    SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        NoopCommsService,
+        NoopCallRecordQueryService,
+        foreign_entity_service.clone(),
+    )
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: None,
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::UpdatedAt,
+                EntityFilters::default(),
+            ),
+            user: user.clone(),
+        },
+        Some(team_receipt),
+    )
+    .await
+    .unwrap();
+
+    let calls = foreign_entity_service.calls();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(
+        calls[0].source_ids,
+        vec![
+            SourceId::user(user.as_ref()),
+            SourceId::new(team_id.to_string(), "team"),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn foreign_entity_filter_suppresses_non_matching_foreign_entities() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let foreign_entity_service =
+        RecordingForeignEntityService::new(vec![foreign_entity_for_source(
+            Uuid::from_u128(1),
+            user.as_ref(),
+            "user",
+            DateTime::default(),
+        )]);
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    let page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        NoopCommsService,
+        NoopCallRecordQueryService,
+        foreign_entity_service.clone(),
+    )
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: None,
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::UpdatedAt,
+                EntityFilters {
+                    foreign_entity_filters: ForeignEntityFilters {
+                        ids: vec![Uuid::from_u128(2).to_string()],
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            ),
+            user,
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .unwrap_left();
+
+    assert!(page.items.is_empty());
+    assert!(foreign_entity_service.calls()[0].query.filter().is_some());
+}
+
 #[tokio::test]
 async fn it_should_not_query_frecency() {
     let mut soup_mock = MockSoupRepo::new();
@@ -174,6 +646,7 @@ async fn it_should_not_query_frecency() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoopForeignEntityService,
     )
     .get_user_soup(
         SoupRequest {
@@ -259,6 +732,7 @@ async fn it_should_query_frecency() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoopForeignEntityService,
     )
     .get_user_soup(
         SoupRequest {
@@ -341,6 +815,7 @@ async fn it_should_sort_frecency_descending() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoopForeignEntityService,
     )
     .get_user_soup(
         SoupRequest {
@@ -437,6 +912,7 @@ async fn frecency_should_fallback() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoopForeignEntityService,
     )
     .get_user_soup(
         SoupRequest {
@@ -517,6 +993,7 @@ async fn frecency_should_paginate() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoopForeignEntityService,
     )
     .get_user_soup(
         SoupRequest {
@@ -599,6 +1076,7 @@ async fn frecency_should_resume_cursor() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoopForeignEntityService,
     )
     .get_user_soup(
         SoupRequest {
@@ -697,6 +1175,7 @@ async fn frecency_fallback_cursor_should_resume() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoopForeignEntityService,
     )
     .get_user_soup(
         SoupRequest {
@@ -771,6 +1250,7 @@ async fn cursor_should_return_simple_sort() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoopForeignEntityService,
     )
     .get_user_soup(
         SoupRequest {
@@ -841,6 +1321,7 @@ async fn cursor_should_return_frecency() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoopForeignEntityService,
     )
     .get_user_soup(
         SoupRequest {
@@ -901,6 +1382,7 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoopForeignEntityService,
     )
     .get_user_soup(
         SoupRequest {
@@ -951,6 +1433,7 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoopForeignEntityService,
     )
     .get_user_soup(
         SoupRequest {
@@ -1001,6 +1484,7 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoopForeignEntityService,
     )
     .get_user_soup(
         SoupRequest {
@@ -1063,6 +1547,7 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoopForeignEntityService,
     )
     .get_user_soup(
         SoupRequest {
@@ -1144,6 +1629,7 @@ async fn it_should_preserve_is_completed_in_by_ids_queries() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoopForeignEntityService,
     )
     .get_user_soup(
         SoupRequest {

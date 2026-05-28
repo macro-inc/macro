@@ -1,22 +1,30 @@
+use std::sync::Arc;
+
+use chrono::Utc;
+use filter_ast::Expr;
+use item_filters::ast::{LiteralTree, foreign_entity::ForeignEntityLiteral};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use models_pagination::{Cursor, CursorVal, Query, SimpleSortMethod};
 use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::PgForeignEntityRepo;
-use crate::domain::models::{CreateForeignEntity, ForeignEntity, PatchForeignEntity};
-use crate::domain::ports::ForeignEntityRepository;
+use crate::domain::models::{CreateForeignEntity, ForeignEntity, PatchForeignEntity, SourceId};
+use crate::domain::ports::{ForeignEntityListQuery, ForeignEntityRepository};
 
-fn create_request(
+fn create_request_for_source(
     foreign_entity_id: impl Into<String>,
     foreign_entity_source: impl Into<String>,
+    stored_for_id: impl Into<String>,
+    stored_for_auth_entity: impl Into<String>,
 ) -> CreateForeignEntity {
     CreateForeignEntity {
         foreign_entity_id: foreign_entity_id.into(),
         foreign_entity_source: foreign_entity_source.into(),
         metadata: json!({ "origin": "test" }),
-        stored_for_id: "document-1".to_string(),
-        stored_for_auth_entity: "document".to_string(),
+        stored_for_id: stored_for_id.into(),
+        stored_for_auth_entity: stored_for_auth_entity.into(),
     }
 }
 
@@ -25,12 +33,92 @@ async fn insert_foreign_entity(
     foreign_entity_id: &str,
     foreign_entity_source: &str,
 ) -> ForeignEntity {
+    insert_foreign_entity_for_source(
+        repo,
+        foreign_entity_id,
+        foreign_entity_source,
+        "document-1",
+        "document",
+    )
+    .await
+}
+
+async fn insert_foreign_entity_for_source(
+    repo: &PgForeignEntityRepo,
+    foreign_entity_id: &str,
+    foreign_entity_source: &str,
+    stored_for_id: &str,
+    stored_for_auth_entity: &str,
+) -> ForeignEntity {
     repo.create_foreign_entity(
         Uuid::now_v7(),
-        create_request(foreign_entity_id, foreign_entity_source),
+        create_request_for_source(
+            foreign_entity_id,
+            foreign_entity_source,
+            stored_for_id,
+            stored_for_auth_entity,
+        ),
     )
     .await
     .expect("foreign entity should be inserted")
+}
+
+fn list_query(sort_method: SimpleSortMethod) -> ForeignEntityListQuery {
+    Query::Sort(sort_method, None)
+}
+
+fn cursor_query(entity: &ForeignEntity, sort_method: SimpleSortMethod) -> ForeignEntityListQuery {
+    let last_val = match sort_method {
+        SimpleSortMethod::CreatedAt => entity.created_at,
+        SimpleSortMethod::ViewedAt
+        | SimpleSortMethod::UpdatedAt
+        | SimpleSortMethod::ViewedUpdated => entity.updated_at,
+    };
+
+    Query::Cursor(Cursor {
+        id: entity.id,
+        limit: 2,
+        val: CursorVal {
+            sort_type: sort_method,
+            last_val,
+        },
+        filter: None,
+    })
+}
+
+fn filter_query(filter: LiteralTree<ForeignEntityLiteral>) -> ForeignEntityListQuery {
+    Query::Sort(SimpleSortMethod::UpdatedAt, filter)
+}
+
+fn ids(entities: &[ForeignEntity]) -> Vec<Uuid> {
+    entities.iter().map(|entity| entity.id).collect()
+}
+
+async fn set_timestamps(
+    pool: &PgPool,
+    repo: &PgForeignEntityRepo,
+    entity: &ForeignEntity,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+) -> ForeignEntity {
+    sqlx::query!(
+        r#"
+        UPDATE foreign_entity
+        SET created_at = $2, updated_at = $3
+        WHERE id = $1
+        "#,
+        entity.id,
+        created_at,
+        updated_at,
+    )
+    .execute(pool)
+    .await
+    .expect("foreign entity timestamps should be updated");
+
+    repo.get_foreign_entity_by_id(entity.id)
+        .await
+        .expect("updated foreign entity lookup should succeed")
+        .expect("updated foreign entity should exist")
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -124,6 +212,326 @@ async fn get_by_foreign_entity_id_returns_all_matches_and_supports_source_filter
     assert_eq!(all_match_ids, expected_ids);
     assert_eq!(source_matches, vec![second]);
     assert!(missing_source_matches.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_returns_matching_user_and_team_sources(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool);
+    let team_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
+    let user_entity = insert_foreign_entity_for_source(
+        &repo,
+        "user-visible-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let team_entity = insert_foreign_entity_for_source(
+        &repo,
+        "team-visible-pr",
+        "github_pull_request",
+        &team_id.to_string(),
+        "team",
+    )
+    .await;
+    insert_foreign_entity_for_source(
+        &repo,
+        "unrelated-pr",
+        "github_pull_request",
+        "macro|other@example.com",
+        "user",
+    )
+    .await;
+
+    let entities = repo
+        .get_foreign_entities_for_user(
+            vec![
+                SourceId::user("macro|user@example.com"),
+                SourceId::team(team_id),
+            ],
+            10,
+            list_query(SimpleSortMethod::UpdatedAt),
+        )
+        .await
+        .expect("foreign entities should be listed for matching sources");
+
+    let mut actual_ids = ids(&entities);
+    actual_ids.sort_unstable();
+    let mut expected_ids = vec![user_entity.id, team_entity.id];
+    expected_ids.sort_unstable();
+
+    assert_eq!(actual_ids, expected_ids);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_empty_sources_returns_empty(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool);
+    insert_foreign_entity_for_source(
+        &repo,
+        "user-visible-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+
+    let entities = repo
+        .get_foreign_entities_for_user(Vec::new(), 10, list_query(SimpleSortMethod::UpdatedAt))
+        .await
+        .expect("empty source list should succeed");
+
+    assert!(entities.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_dedupes_duplicate_source_grants(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let team_id = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap();
+    let older = insert_foreign_entity_for_source(
+        &repo,
+        "shared-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let newer = insert_foreign_entity_for_source(
+        &repo,
+        "shared-pr",
+        "github_pull_request",
+        &team_id.to_string(),
+        "team",
+    )
+    .await;
+
+    let now = Utc::now();
+    let older = set_timestamps(
+        &pool,
+        &repo,
+        &older,
+        now - chrono::Duration::minutes(2),
+        now - chrono::Duration::minutes(2),
+    )
+    .await;
+    let newer = set_timestamps(
+        &pool,
+        &repo,
+        &newer,
+        now - chrono::Duration::minutes(1),
+        now - chrono::Duration::minutes(1),
+    )
+    .await;
+
+    let entities = repo
+        .get_foreign_entities_for_user(
+            vec![
+                SourceId::user("macro|user@example.com"),
+                SourceId::team(team_id),
+            ],
+            10,
+            list_query(SimpleSortMethod::UpdatedAt),
+        )
+        .await
+        .expect("duplicate foreign entity grants should be listed once");
+
+    assert_eq!(entities, vec![newer]);
+    assert_ne!(entities[0].id, older.id);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_paginates_by_created_at(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let first = insert_foreign_entity_for_source(
+        &repo,
+        "first-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let second = insert_foreign_entity_for_source(
+        &repo,
+        "second-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let third = insert_foreign_entity_for_source(
+        &repo,
+        "third-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let now = Utc::now();
+    let first = set_timestamps(
+        &pool,
+        &repo,
+        &first,
+        now - chrono::Duration::minutes(1),
+        now - chrono::Duration::minutes(30),
+    )
+    .await;
+    let second = set_timestamps(
+        &pool,
+        &repo,
+        &second,
+        now - chrono::Duration::minutes(2),
+        now - chrono::Duration::minutes(10),
+    )
+    .await;
+    let third = set_timestamps(
+        &pool,
+        &repo,
+        &third,
+        now - chrono::Duration::minutes(3),
+        now - chrono::Duration::minutes(20),
+    )
+    .await;
+
+    let first_page = repo
+        .get_foreign_entities_for_user(
+            vec![SourceId::user("macro|user@example.com")],
+            2,
+            list_query(SimpleSortMethod::CreatedAt),
+        )
+        .await
+        .expect("first created_at page should be fetched");
+    let second_page = repo
+        .get_foreign_entities_for_user(
+            vec![SourceId::user("macro|user@example.com")],
+            2,
+            cursor_query(&first_page[1], SimpleSortMethod::CreatedAt),
+        )
+        .await
+        .expect("second created_at page should be fetched");
+
+    assert_eq!(first_page, vec![first, second]);
+    assert_eq!(second_page, vec![third]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_paginates_by_updated_at(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let first = insert_foreign_entity_for_source(
+        &repo,
+        "first-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let second = insert_foreign_entity_for_source(
+        &repo,
+        "second-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let third = insert_foreign_entity_for_source(
+        &repo,
+        "third-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let now = Utc::now();
+    let first = set_timestamps(
+        &pool,
+        &repo,
+        &first,
+        now - chrono::Duration::minutes(30),
+        now - chrono::Duration::minutes(1),
+    )
+    .await;
+    let second = set_timestamps(
+        &pool,
+        &repo,
+        &second,
+        now - chrono::Duration::minutes(10),
+        now - chrono::Duration::minutes(2),
+    )
+    .await;
+    let third = set_timestamps(
+        &pool,
+        &repo,
+        &third,
+        now - chrono::Duration::minutes(20),
+        now - chrono::Duration::minutes(3),
+    )
+    .await;
+
+    let first_page = repo
+        .get_foreign_entities_for_user(
+            vec![SourceId::user("macro|user@example.com")],
+            2,
+            list_query(SimpleSortMethod::UpdatedAt),
+        )
+        .await
+        .expect("first updated_at page should be fetched");
+    let second_page = repo
+        .get_foreign_entities_for_user(
+            vec![SourceId::user("macro|user@example.com")],
+            2,
+            cursor_query(&first_page[1], SimpleSortMethod::UpdatedAt),
+        )
+        .await
+        .expect("second updated_at page should be fetched");
+
+    assert_eq!(first_page, vec![first, second]);
+    assert_eq!(second_page, vec![third]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_applies_foreign_entity_filters(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool);
+    let github = insert_foreign_entity_for_source(
+        &repo,
+        "github-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    insert_foreign_entity_for_source(
+        &repo,
+        "linear-issue",
+        "linear_issue",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+
+    let source_filter = Some(Arc::new(Expr::val(
+        ForeignEntityLiteral::ForeignEntitySource("github_pull_request".to_string()),
+    )));
+    let source_matches = repo
+        .get_foreign_entities_for_user(
+            vec![SourceId::user("macro|user@example.com")],
+            10,
+            filter_query(source_filter),
+        )
+        .await
+        .expect("foreign entity source filter should be applied");
+
+    let not_linear_filter = Some(Arc::new(Expr::is_not(Expr::val(
+        ForeignEntityLiteral::ForeignEntityId("linear-issue".to_string()),
+    ))));
+    let not_linear_matches = repo
+        .get_foreign_entities_for_user(
+            vec![SourceId::user("macro|user@example.com")],
+            10,
+            filter_query(not_linear_filter),
+        )
+        .await
+        .expect("foreign entity negated filter should be applied");
+
+    assert_eq!(source_matches, vec![github.clone()]);
+    assert_eq!(not_linear_matches, vec![github]);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

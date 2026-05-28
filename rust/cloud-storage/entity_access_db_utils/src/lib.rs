@@ -220,7 +220,11 @@ pub async fn update_entity_access_channel_share_permissions(
     // We need to remove all required items from entity_access for the given entity id for all channels
     if !remove_channel_ids.is_empty() {
         match entity_type {
-            EntityType::User | EntityType::Team | EntityType::Channel | EntityType::StaticFile => {
+            EntityType::User
+            | EntityType::Team
+            | EntityType::Channel
+            | EntityType::StaticFile
+            | EntityType::ForeignEntity => {
                 unreachable!()
             }
             EntityType::Project => {
@@ -275,7 +279,11 @@ pub async fn update_entity_access_channel_share_permissions(
     // We need to upsert all required items into entity_access for all channels with the desired access level
     if !upsert_channel_ids.is_empty() {
         match entity_type {
-            EntityType::User | EntityType::Team | EntityType::Channel | EntityType::StaticFile => {
+            EntityType::User
+            | EntityType::Team
+            | EntityType::Channel
+            | EntityType::StaticFile
+            | EntityType::ForeignEntity => {
                 unreachable!()
             }
             EntityType::Project => {

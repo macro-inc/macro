@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use super::*;
-use crate::{CallFilters, PropertyFilter};
+use crate::{CallFilters, ForeignEntityFilters, PropertyFilter};
 use cool_asserts::assert_matches;
 use model_file_type::FileType;
 use serde_json::json;
@@ -864,6 +864,116 @@ fn it_expands_call_filter_without_attended_is_none_when_empty() {
     let f = CallFilters::default();
     let ast = CallFilters::expand_ast(f).unwrap();
     assert!(ast.is_none(), "empty filter should expand to None");
+}
+
+#[test]
+fn foreign_entity_empty_filters_produce_no_ast() {
+    let ast = ForeignEntityFilters::expand_ast(ForeignEntityFilters::default()).unwrap();
+    assert!(ast.is_none(), "empty filter should expand to None");
+}
+
+#[test]
+fn foreign_entity_ids_parse_as_uuid_literals() {
+    let id = Uuid::new_v4();
+    let f = EntityFilters {
+        foreign_entity_filters: ForeignEntityFilters {
+            ids: vec![id.to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .foreign_entity_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    let exp = json!({
+        "l": {
+            "id": id
+        }
+    });
+
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn foreign_entity_external_ids_expand_as_or_tree() {
+    let f = EntityFilters {
+        foreign_entity_filters: ForeignEntityFilters {
+            foreign_entity_ids: vec!["external-a".to_string(), "external-b".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .foreign_entity_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    let exp = json!({
+        "|": [
+            { "l": { "feid": "external-a" } },
+            { "l": { "feid": "external-b" } }
+        ]
+    });
+
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn foreign_entity_sources_expand_as_or_tree() {
+    let f = EntityFilters {
+        foreign_entity_filters: ForeignEntityFilters {
+            foreign_entity_sources: vec!["github".to_string(), "linear".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .foreign_entity_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    let exp = json!({
+        "|": [
+            { "l": { "fes": "github" } },
+            { "l": { "fes": "linear" } }
+        ]
+    });
+
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn foreign_entity_invalid_id_returns_uuid_error() {
+    let f = EntityFilters {
+        foreign_entity_filters: ForeignEntityFilters {
+            ids: vec!["not-a-uuid".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let err = EntityFilterAst::new_from_filters(f).unwrap_err();
+    assert_matches!(err, ExpandErr::Uuid(_));
 }
 
 #[test]

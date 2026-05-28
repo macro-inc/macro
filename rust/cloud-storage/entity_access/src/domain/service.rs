@@ -142,7 +142,7 @@ where
             // Static files are always viewable. This is wrong for owners
             EntityType::StaticFile => Ok(Some(AccessLevel::View)),
             // These entity types don't have access checks implemented yet.
-            EntityType::Team | EntityType::User => Ok(None),
+            EntityType::ForeignEntity | EntityType::Team | EntityType::User => Ok(None),
         }
     }
 

@@ -558,6 +558,8 @@ async fn main() -> anyhow::Result<()> {
     let call_record_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
         PgCallRepo::new(readonly_db.clone()),
     );
+    let foreign_entity_service_for_soup =
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone()));
 
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
@@ -584,6 +586,7 @@ async fn main() -> anyhow::Result<()> {
                 readonly_email_service,
                 channel_service_for_soup,
                 call_record_query_service,
+                foreign_entity_service_for_soup,
             ),
             email_service,
             entity_access_service.clone(),

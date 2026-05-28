@@ -40,6 +40,7 @@ use item_filters::{
         chat::ChatLiteral,
         document::DocumentLiteral,
         email::EmailLiteral,
+        foreign_entity::ForeignEntityLiteral,
         project::ProjectLiteral,
         properties::{PropertiesLiteral, PropertyEntityType},
     },
@@ -842,6 +843,10 @@ pub struct ApiEntityFilterAst {
     #[serde(default, rename = "chanf")]
     #[schema(value_type = serde_json::Value)]
     pub channel_filter: LiteralTree<ChannelLiteral>,
+    /// the filters that should be applied to foreign entity records
+    #[serde(default, rename = "fef")]
+    #[schema(value_type = serde_json::Value)]
+    pub foreign_entity_filter: LiteralTree<ForeignEntityLiteral>,
     /// the filters that should be applied to the call entity
     #[serde(default, rename = "callf")]
     #[schema(value_type = serde_json::Value)]
@@ -926,6 +931,7 @@ impl ApiEntityFilterAst {
             chat_filter,
             email_filter,
             channel_filter,
+            foreign_entity_filter,
             call_filter,
             properties_filter,
             email_crm_domains,
@@ -991,6 +997,7 @@ impl ApiEntityFilterAst {
             },
             channel_filter,
             call_filter,
+            foreign_entity_filter,
             properties_filter,
         })
     }

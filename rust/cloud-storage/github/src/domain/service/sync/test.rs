@@ -24,8 +24,10 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use foreign_entity::domain::{
-    models::{CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity},
-    ports::ForeignEntityService,
+    models::{
+        CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity, SourceId,
+    },
+    ports::{ForeignEntityListQuery, ForeignEntityService},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentBasic, DocumentMetadata};
@@ -569,6 +571,28 @@ impl ForeignEntityService for StubForeignEntityService {
                     .map(|source| entity.foreign_entity_source == source)
                     .unwrap_or(true)
             })
+            .cloned()
+            .collect())
+    }
+
+    async fn get_foreign_entities_for_user(
+        &self,
+        source_ids: Vec<SourceId>,
+        limit: u32,
+        _query: ForeignEntityListQuery,
+    ) -> Result<Vec<ForeignEntity>, ForeignEntityError> {
+        Ok(self
+            .foreign_entities
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|entity| {
+                source_ids.iter().any(|source_id| {
+                    entity.stored_for_id.as_str() == source_id.id.as_str()
+                        && entity.stored_for_auth_entity.as_str() == source_id.auth_entity.as_str()
+                })
+            })
+            .take(limit as usize)
             .cloned()
             .collect())
     }

@@ -13,8 +13,8 @@ use item_filters::EntityFilters;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use model_user::UserContext;
 use models_pagination::{
-    CursorVal, Frecency, FrecencyValue, Identify, PaginateOn, Query, SimpleSortMethod, SortOn,
-    TypeEraseCursor,
+    CursorVal, CursorWithValAndFilter, Frecency, FrecencyValue, Identify, PaginateOn, Query,
+    SimpleSortMethod, SortOn, TypeEraseCursor,
 };
 use serde::Serialize;
 use serde_json::json;
@@ -1193,6 +1193,76 @@ async fn ast_endpoint_passes_through_plain_document_literal() {
         .expect("document_filter should be set");
     let doc_json = serde_json::to_value(doc_tree.as_ref()).unwrap();
     assert_eq!(doc_json, json!({ "l": { "id": doc_id.to_string() } }));
+}
+
+#[tokio::test]
+async fn ast_endpoint_passes_through_foreign_entity_filter() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = soup_router(SoupRouterState::new(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+        Arc::new(MockEntityAccess),
+    ))
+    .layer(Extension(UserContext {
+        user_id: "macro|test@example.com".to_string(),
+        fusion_user_id: "1234".to_string(),
+        permissions: None,
+        organization_id: None,
+    }));
+
+    let request = Request::builder()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({
+                "fef": { "l": { "feid": "github:123" } }
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+
+    let arg = {
+        let mut guard = inner_counter.lock().unwrap();
+        guard
+            .pop()
+            .expect("SoupService::handle should have been called")
+    };
+
+    let filter: EntityFilterAst = serde_json::from_value(arg.expanded_filter).unwrap();
+    let foreign_entity_tree = filter
+        .foreign_entity_filter
+        .expect("foreign_entity_filter should be set");
+    let foreign_entity_json = serde_json::to_value(foreign_entity_tree.as_ref()).unwrap();
+    assert_eq!(
+        foreign_entity_json,
+        json!({ "l": { "feid": "github:123" } })
+    );
+}
+
+#[test]
+fn ast_cursor_without_foreign_entity_filter_deserializes() {
+    let cursor_json = json!({
+        "id": Uuid::new_v4(),
+        "limit": 20,
+        "val": {
+            "sort_type": "updated_at",
+            "last_val": Utc::now(),
+        },
+        "filter": {
+            "df": { "l": { "id": Uuid::new_v4().to_string() } }
+        }
+    });
+
+    let cursor: CursorWithValAndFilter<Uuid, SimpleSortMethod, ApiEntityFilterAst> =
+        serde_json::from_value(cursor_json).unwrap();
+
+    assert!(cursor.filter.foreign_entity_filter.is_none());
 }
 
 #[tokio::test]

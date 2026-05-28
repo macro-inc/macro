@@ -6,10 +6,10 @@ mod tests;
 use uuid::Uuid;
 
 use super::models::{
-    CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity,
+    CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity, SourceId,
     validate_foreign_entity_lookup,
 };
-use super::ports::{ForeignEntityRepository, ForeignEntityService};
+use super::ports::{ForeignEntityListQuery, ForeignEntityRepository, ForeignEntityService};
 
 /// Concrete foreign entity service implementation.
 pub struct ForeignEntityServiceImpl<R> {
@@ -52,6 +52,27 @@ where
 
         self.repo
             .get_foreign_entities_by_foreign_entity_id(foreign_entity_id, foreign_entity_source)
+            .await
+            .map_err(|error| ForeignEntityError::Internal(error.into()))
+    }
+
+    #[tracing::instrument(err, skip(self, source_ids, query))]
+    async fn get_foreign_entities_for_user(
+        &self,
+        source_ids: Vec<SourceId>,
+        limit: u32,
+        query: ForeignEntityListQuery,
+    ) -> Result<Vec<ForeignEntity>, ForeignEntityError> {
+        if source_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        for source_id in &source_ids {
+            source_id.validate()?;
+        }
+
+        self.repo
+            .get_foreign_entities_for_user(source_ids, limit, query)
             .await
             .map_err(|error| ForeignEntityError::Internal(error.into()))
     }
