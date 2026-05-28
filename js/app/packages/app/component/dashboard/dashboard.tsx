@@ -1,3 +1,4 @@
+import { AutomationsSection } from './sections/automations';
 import { Hero } from './sections/hero';
 import { NotificationsSection } from './sections/notifications';
 import { QuickLinksSection } from './sections/quick-links';
@@ -98,22 +99,7 @@ export function Dashboard() {
               </section>
             </div>
 
-            <div class="@container/dashboard-row grid gap-8 @3xl/dashboard-row:grid-cols-2">
-              <section>
-                <div class="mb-4 flex items-center justify-between gap-4">
-                  <h2 class="text-lg font-semibold tracking-tight text-ink">
-                    Automations
-                  </h2>
-                  <div class="h-8 w-24 rounded-lg border border-edge-muted bg-hover" />
-                </div>
-
-                <div class="grid gap-3">
-                  <div class="h-24 rounded-2xl border border-edge-muted bg-[#EEF4ED]" />
-                  <div class="h-24 rounded-2xl border border-edge-muted bg-[#EEF4ED]" />
-                  <div class="h-24 rounded-2xl border border-edge-muted bg-[#EEF4ED]" />
-                </div>
-              </section>
-            </div>
+            <AutomationsSection />
           </div>
 
           <aside class="space-y-8">
