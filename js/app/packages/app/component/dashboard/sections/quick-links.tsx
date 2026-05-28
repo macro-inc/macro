@@ -56,9 +56,6 @@ function QuickLinkButton(props: {
           )}
         </div>
         <span class="flex shrink-0 items-center gap-1 transition group-hover:opacity-0">
-          {!props.standaloneHotkey && (
-            <Hotkey token={TOKENS.sidebar.goToLeader} theme="subtle" />
-          )}
           <Hotkey shortcut={props.hotkey} theme="subtle" />
         </span>
       </div>

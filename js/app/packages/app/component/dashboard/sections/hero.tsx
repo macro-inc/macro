@@ -10,10 +10,6 @@ import { ChatInputProvider } from '@core/component/AI/context';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { setAutomationComposerOpen } from '@block-automation/component';
 import { useSettingsState } from '@core/constant/SettingsState';
-import type { AutomationEntity } from '@entity';
-import { formatDateAndTime } from '@entity/utils/timestamp';
-import { useAutomationEntities } from '@queries/agent-schedule/entities';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import GearIcon from '@phosphor/gear.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import RobotIcon from '@phosphor/robot.svg';
@@ -22,7 +18,7 @@ import UsersThreeIcon from '@phosphor/users-three.svg';
 import MoreIcon from '@phosphor-icons/core/fill/dots-three-outline-fill.svg?component-solid';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { Button } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 
 import { useUserContext } from '@core/context/user';
 
@@ -33,101 +29,6 @@ function openAutomationsView() {
       activate: true,
       referredFrom: 'dashboard',
     }
-  );
-}
-
-function openAutomation(automation: AutomationEntity) {
-  globalSplitManager()?.openWithSplit(
-    { type: 'automation', id: automation.id },
-    {
-      activate: true,
-      referredFrom: 'dashboard',
-    }
-  );
-}
-
-function AutomationSummary(props: { automation: AutomationEntity }) {
-  const status = () => {
-    if (props.automation.isRunning) return 'Running';
-    if (!props.automation.enabled) return 'Paused';
-    return props.automation.nextRunAt
-      ? `Next ${formatDateAndTime(props.automation.nextRunAt)}`
-      : 'Active';
-  };
-
-  return (
-    <button
-      class="group w-full rounded-lg p-2.5 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset"
-      onClick={() => openAutomation(props.automation)}
-    >
-      <div class="flex items-center gap-2">
-        <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-hover text-ink-muted transition group-hover:text-ink">
-          <RobotIcon class="size-3.5" />
-        </div>
-        <div class="min-w-0 flex-1">
-          <p class="truncate text-xs font-semibold text-ink">
-            {props.automation.name}
-          </p>
-          <p class="mt-0.5 truncate text-xxs text-ink-muted">{status()}</p>
-        </div>
-      </div>
-    </button>
-  );
-}
-
-function HeroAutomationsPanel() {
-  const automations = useAutomationEntities();
-  const visibleAutomations = createMemo(() =>
-    [...automations()]
-      .sort((a, b) => {
-        if (a.isRunning !== b.isRunning) return a.isRunning ? -1 : 1;
-        if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
-        const aNext = a.nextRunAt ? new Date(a.nextRunAt).getTime() : Infinity;
-        const bNext = b.nextRunAt ? new Date(b.nextRunAt).getTime() : Infinity;
-        return aNext - bNext;
-      })
-      .slice(0, 3)
-  );
-
-  return (
-    <aside class="absolute right-8 top-8 hidden w-72 text-left @6xl/hero:block">
-      <div class="mb-2 flex items-center justify-between gap-2 px-2 py-1">
-        <h2 class="text-sm font-semibold text-ink">Automations</h2>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          class="group size-7 rounded-lg text-ink-extra-muted"
-          label="View all automations"
-          onClick={openAutomationsView}
-        >
-          <ArrowRightIcon class="size-4" />
-        </Button>
-      </div>
-
-      <Show
-        when={visibleAutomations().length > 0}
-        fallback={
-          <button
-            class="flex w-full items-center gap-2 rounded-lg p-2.5 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset"
-            onClick={() => setAutomationComposerOpen(true, false)}
-          >
-            <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-hover text-ink-muted">
-              <RobotIcon class="size-3.5" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <p class="text-xs font-medium text-ink">No automations yet</p>
-              <p class="mt-0.5 text-xxs text-ink-muted">Create one</p>
-            </div>
-          </button>
-        }
-      >
-        <div class="space-y-1">
-          <For each={visibleAutomations()}>
-            {(automation) => <AutomationSummary automation={automation} />}
-          </For>
-        </div>
-      </Show>
-    </aside>
   );
 }
 
@@ -179,9 +80,7 @@ export function Hero() {
   });
 
   return (
-    <section class="@container/hero relative px-6 py-8 sm:px-8 sm:py-12">
-      <HeroAutomationsPanel />
-
+    <section class="px-6 py-8 sm:px-8 sm:py-12">
       <div class="mx-auto flex max-w-3xl flex-col items-center text-center">
         <h1 class="text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl lg:text-5xl">
           {greeting()}, <span class="capitalize">{firstName()}.</span>
