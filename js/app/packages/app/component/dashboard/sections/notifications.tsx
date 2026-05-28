@@ -40,11 +40,33 @@ function metadataContent(notification: UnifiedNotification) {
 
 function NotificationRow(props: { notification: UnifiedNotification }) {
   const notificationSource = useGlobalNotificationSource();
-  const actorId = () => props.notification.sender_id ?? '';
-  const macroId = () => tryMacroId(actorId());
-  const [actorName] = useDisplayName(macroId());
-  const actor = () => {
-    const content = metadataContent(props.notification);
+
+  const actorId = createMemo(() => props.notification.sender_id ?? '');
+  const macroId = tryMacroId(actorId());
+  const [actorName] = useDisplayName(macroId);
+
+  const tag = createMemo(() => props.notification.notification_metadata.tag);
+  const unread = createMemo(() => !notificationIsRead(props.notification));
+
+  const target = createMemo(() => getNotificationTargetName(props.notification));
+  const content = createMemo(() => getNotificationContent(props.notification));
+  const notificationContent = createMemo(() =>
+    metadataContent(props.notification)
+  );
+
+  const channelName = createMemo(
+    () => notificationContent()?.channelName as string | undefined
+  );
+  const isDirectMessage = createMemo(
+    () => notificationContent()?.channelType === 'directMessage'
+  );
+
+  const timestamp = createMemo(() =>
+    formatDate(props.notification.created_at, { shortWeekday: true })
+  );
+
+  const actor = createMemo(() => {
+    const content = notificationContent();
     return (
       actorName() ||
       (content?.senderName as string | undefined) ||
@@ -53,26 +75,19 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
       (content?.senderEmail as string | undefined) ||
       'Someone'
     );
-  };
-  const unread = () => !notificationIsRead(props.notification);
-  const target = () => getNotificationTargetName(props.notification);
-  const notificationContent = () => metadataContent(props.notification);
-  const channelName = () =>
-    notificationContent()?.channelName as string | undefined;
-  const isDirectMessage = () =>
-    notificationContent()?.channelType === 'directMessage';
-  const content = () => getNotificationContent(props.notification);
-  const tag = () => props.notification.notification_metadata.tag;
-  const title = () => {
+  });
+
+  const title = createMemo(() => {
     if (tag() === 'task_assigned') return target() || content() || 'Task';
     if (tag() === 'new_email' || isDirectMessage()) return actor();
     return channelName() || actor();
-  };
-  const description = () => {
+  });
+
+  const description = createMemo(() => {
     if (tag() === 'new_email') return content();
     if (tag() === 'task_assigned') return target() || content();
     return content();
-  };
+  });
 
   const open = () => {
     const manager = globalSplitManager();
@@ -120,7 +135,7 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
             <span class="truncate">{title()}</span>
           </p>
           <span class="shrink-0 text-xxs font-light text-ink-extra-muted">
-            {formatDate(props.notification.created_at, { shortWeekday: true })}
+            {timestamp()}
           </span>
         </div>
 
@@ -189,9 +204,7 @@ export function DashboardNotificationList(props: {
       >
         <div class="flex flex-col">
           <For each={props.notifications}>
-            {(notification) => (
-              <NotificationRow notification={notification} />
-            )}
+            {(notification) => <NotificationRow notification={notification} />}
           </For>
         </div>
       </div>
