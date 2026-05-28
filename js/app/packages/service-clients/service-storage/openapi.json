@@ -1502,6 +1502,146 @@
         }
       }
     },
+    "/channels/mentions": {
+      "post": {
+        "tags": ["channels"],
+        "summary": "Handler for `POST /channels/mentions`.",
+        "operationId": "create_entity_mention",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEntityMentionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateEntityMentionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/mentions/{mention_id}": {
+      "delete": {
+        "tags": ["channels"],
+        "summary": "Handler for `DELETE /channels/mentions/{mention_id}`.",
+        "operationId": "delete_entity_mention",
+        "parameters": [
+          {
+            "name": "mention_id",
+            "in": "path",
+            "description": "Entity mention id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteEntityMentionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/preview": {
       "post": {
         "tags": ["channels"],
@@ -9578,6 +9718,77 @@
           }
         ]
       },
+      "CreateEntityMentionRequest": {
+        "type": "object",
+        "description": "Request body for `POST /channels/mentions`.",
+        "required": [
+          "source_entity_type",
+          "source_entity_id",
+          "entity_type",
+          "entity_id"
+        ],
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "Id of the mentioned entity."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Type of the mentioned entity."
+          },
+          "source_entity_id": {
+            "type": "string",
+            "description": "Id of the entity that owns the mention."
+          },
+          "source_entity_type": {
+            "type": "string",
+            "description": "Type of the entity that owns the mention."
+          }
+        }
+      },
+      "CreateEntityMentionResponse": {
+        "type": "object",
+        "description": "Response body for `POST /channels/mentions`.",
+        "required": [
+          "id",
+          "source_entity_type",
+          "source_entity_id",
+          "entity_type",
+          "entity_id",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Created timestamp."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "Id of the mentioned entity."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Type of the mentioned entity."
+          },
+          "id": {
+            "type": "string",
+            "description": "Mention id."
+          },
+          "source_entity_id": {
+            "type": "string",
+            "description": "Id of the entity that owns the mention."
+          },
+          "source_entity_type": {
+            "type": "string",
+            "description": "Type of the entity that owns the mention."
+          },
+          "user_id": {
+            "type": ["string", "null"],
+            "description": "User who recorded the mention."
+          }
+        }
+      },
       "CreateInstructionsDocumentResponse": {
         "type": "object",
         "required": ["documentId"],
@@ -9853,6 +10064,17 @@
           },
           "thread": {
             "$ref": "#/components/schemas/DeleteThreadInfo"
+          }
+        }
+      },
+      "DeleteEntityMentionResponse": {
+        "type": "object",
+        "description": "Response body for `DELETE /channels/mentions/{mention_id}`.",
+        "required": ["deleted"],
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "description": "Whether the mention was deleted."
           }
         }
       },

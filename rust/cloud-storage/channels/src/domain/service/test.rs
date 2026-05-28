@@ -4,11 +4,11 @@ use crate::domain::{
     models::{
         ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelInfo,
         ChannelMessageFilters, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
-        MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
-        NewChannelAttachment, ParticipantRole, PatchChannelRequest, PatchMessageRequest,
-        PostMessageRequest, PostReactionRequest, ReactionAction, ReferencedShareItem,
-        ReferencedShareItemType, ResolvedChannelMessage, SimpleMention, ThreadData, ThreadReplyRow,
-        TopLevelMessageRow,
+        CreateEntityMentionOptions, EntityMention, MessageAttachment, MessagePageDirection,
+        MutatedAttachment, MutatedMessage, NewChannelAttachment, ParticipantRole,
+        PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostReactionRequest,
+        ReactionAction, ReferencedShareItem, ReferencedShareItemType, ResolvedChannelMessage,
+        SimpleMention, ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{
         ChannelEventDispatcher, ChannelReferenceSharePermissions, ChannelRepo, MockChannelRepo,
@@ -521,6 +521,24 @@ impl ChannelRepo for FakeMutationRepo {
         _source_entity_id: String,
     ) -> Result<(), Self::Err> {
         Ok(())
+    }
+
+    async fn create_entity_mention(
+        &self,
+        _options: CreateEntityMentionOptions,
+    ) -> Result<EntityMention, Self::Err> {
+        anyhow::bail!("not implemented in test repo")
+    }
+
+    async fn get_entity_mention_by_id(
+        &self,
+        _id: Uuid,
+    ) -> Result<Option<EntityMention>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn delete_entity_mention_by_id(&self, _id: Uuid) -> Result<bool, Self::Err> {
+        Ok(false)
     }
 
     async fn patch_message_attachments(

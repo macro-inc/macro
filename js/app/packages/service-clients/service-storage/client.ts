@@ -56,6 +56,8 @@ import type { CreateChannelResponse } from './generated/schemas/createChannelRes
 import type { CreateCommentResponse } from './generated/schemas/createCommentResponse';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
+import type { CreateEntityMentionRequest } from './generated/schemas/createEntityMentionRequest';
+import type { CreateEntityMentionResponse } from './generated/schemas/createEntityMentionResponse';
 import type { CreateInstructionsDocumentResponse } from './generated/schemas/createInstructionsDocumentResponse';
 import type { CreateMarkdownDocumentRequest } from './generated/schemas/createMarkdownDocumentRequest';
 import type { CreateMarkdownHandler200 } from './generated/schemas/createMarkdownHandler200';
@@ -64,6 +66,7 @@ import type { CreateTaskHandler200 } from './generated/schemas/createTaskHandler
 import type { CreateTaskRequest } from './generated/schemas/createTaskRequest';
 import type { CreateUnthreadedAnchorResponse } from './generated/schemas/createUnthreadedAnchorResponse';
 import type { DeleteCommentResponse } from './generated/schemas/deleteCommentResponse';
+import type { DeleteEntityMentionResponse } from './generated/schemas/deleteEntityMentionResponse';
 import type { DeleteUnthreadedAnchorResponse } from './generated/schemas/deleteUnthreadedAnchorResponse';
 import type { DocumentMetadata } from './generated/schemas/documentMetadata';
 import type { DocumentPreview } from './generated/schemas/documentPreview';
@@ -179,6 +182,7 @@ export type MessageResponse = { message: string };
 
 type WithChannelId = { channel_id: string };
 type WithMessageId = { message_id: string };
+type WithMentionId = { mention_id: string };
 type WithEntity = { entity_type: string; entity_id: string };
 export type ChannelAttachmentType = 'static' | 'dss';
 
@@ -672,6 +676,28 @@ export const storageServiceClient = {
       await dssFetch<ApiChannelParticipant[]>(
         `/channels/${channel_id}/participants`,
         { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async createEntityMention(args: CreateEntityMentionRequest, token?: string) {
+    return (
+      await dssFetch<CreateEntityMentionResponse>(`/channels/mentions`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+        headers: token ? { 'x-permissions-token': token } : undefined,
+      })
+    ).map((result) => result);
+  },
+
+  async deleteEntityMention(args: WithMentionId, token?: string) {
+    return (
+      await dssFetch<DeleteEntityMentionResponse>(
+        `/channels/mentions/${args.mention_id}`,
+        {
+          method: 'DELETE',
+          headers: token ? { 'x-permissions-token': token } : undefined,
+        }
       )
     ).map((result) => result);
   },

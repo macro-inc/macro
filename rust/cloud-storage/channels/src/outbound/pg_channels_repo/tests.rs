@@ -1,6 +1,6 @@
 use crate::domain::models::{
-    AttachmentEntityReference, ChannelMessageFilters, MessagePageDirection, NotificationFilters,
-    ParticipantRole,
+    AttachmentEntityReference, ChannelMessageFilters, CreateEntityMentionOptions,
+    MessagePageDirection, NotificationFilters, ParticipantRole,
 };
 use crate::domain::ports::ChannelRepo;
 use crate::outbound::pg_channels_repo::PgChannelsRepo;
@@ -1186,6 +1186,107 @@ async fn batch_preview_returns_existing_public_channel(pool: Pool<Postgres>) -> 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].info.id, CH1);
     assert!(rows[0].has_access);
+    Ok(())
+}
+
+fn mention_opts(
+    source_id: &str,
+    entity_type: &str,
+    entity_id: &str,
+    user_id: Option<&str>,
+) -> CreateEntityMentionOptions {
+    CreateEntityMentionOptions {
+        source_entity_type: "document".to_string(),
+        source_entity_id: source_id.to_string(),
+        entity_type: entity_type.to_string(),
+        entity_id: entity_id.to_string(),
+        user_id: user_id.map(str::to_string),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_entity_mention_persists_row(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let mention = repo
+        .create_entity_mention(mention_opts("doc-1", "user", "user-x", Some(USER_A)))
+        .await?;
+
+    assert_eq!(mention.source_entity_type, "document");
+    assert_eq!(mention.source_entity_id, "doc-1");
+    assert_eq!(mention.entity_type, "user");
+    assert_eq!(mention.entity_id, "user-x");
+    assert_eq!(mention.user_id.as_deref(), Some(USER_A));
+
+    let fetched = repo
+        .get_entity_mention_by_id(mention.id)
+        .await?
+        .expect("mention should exist");
+    assert_eq!(fetched.id, mention.id);
+    assert_eq!(fetched.source_entity_id, "doc-1");
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_entity_mention_allows_duplicates(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let opts = mention_opts("doc-2", "user", "user-y", None);
+
+    let first = repo.create_entity_mention(opts.clone()).await?;
+    let second = repo.create_entity_mention(opts).await?;
+    assert_ne!(first.id, second.id);
+
+    let count = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) AS "count!"
+        FROM comms_entity_mentions
+        WHERE source_entity_id = $1 AND entity_id = $2
+        "#,
+        "doc-2",
+        "user-y",
+    )
+    .fetch_one(&repo.pool)
+    .await?;
+    assert_eq!(count, 2);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_entity_mention_by_id_returns_none_when_missing(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    assert!(
+        repo.get_entity_mention_by_id(Uuid::new_v4())
+            .await?
+            .is_none()
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delete_entity_mention_by_id_removes_only_targeted_row(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let target = repo
+        .create_entity_mention(mention_opts("doc-3", "user", "user-z", None))
+        .await?;
+    let other = repo
+        .create_entity_mention(mention_opts("doc-3", "user", "user-w", None))
+        .await?;
+
+    assert!(repo.delete_entity_mention_by_id(target.id).await?);
+    assert!(repo.get_entity_mention_by_id(target.id).await?.is_none());
+    assert!(repo.get_entity_mention_by_id(other.id).await?.is_some());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delete_entity_mention_by_id_returns_false_when_missing(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    assert!(!repo.delete_entity_mention_by_id(Uuid::new_v4()).await?);
     Ok(())
 }
 

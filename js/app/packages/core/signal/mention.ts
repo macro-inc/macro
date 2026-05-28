@@ -1,7 +1,6 @@
 import { ENABLE_MENTION_TRACKING } from '@core/constant/featureFlags';
 
-import { commsServiceClient } from '@service-comms/client';
-import type { ItemType } from '@service-storage/client';
+import { type ItemType, storageServiceClient } from '@service-storage/client';
 import { getPermissionToken } from './token';
 
 type MentionId = string;
@@ -15,7 +14,7 @@ export async function trackMention(
   const token = await getPermissionToken('document', sourceId);
   if (!token) return;
 
-  const response = await commsServiceClient.createEntityMention(
+  const response = await storageServiceClient.createEntityMention(
     {
       source_entity_type: 'document',
       source_entity_id: sourceId,
@@ -41,7 +40,7 @@ export async function untrackMention(
   const token = await getPermissionToken('document', sourceId);
   if (!token) return;
 
-  const response = await commsServiceClient.deleteEntityMention(
+  const response = await storageServiceClient.deleteEntityMention(
     {
       mention_id: mentionId,
     },

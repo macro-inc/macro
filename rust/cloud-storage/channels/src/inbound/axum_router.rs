@@ -3,7 +3,8 @@ mod test;
 
 pub use crate::domain::models::{
     AddParticipantsRequest, ChannelPreview, ChannelPreviewData, CreateChannelRequest,
-    CreateChannelResponse, DeleteMessageQuery, GetBatchChannelPreviewRequest,
+    CreateChannelResponse, CreateEntityMentionRequest, CreateEntityMentionResponse,
+    DeleteEntityMentionResponse, DeleteMessageQuery, GetBatchChannelPreviewRequest,
     GetBatchChannelPreviewResponse, GetOrCreateChannelResponse, GetOrCreateDmRequest,
     GetOrCreatePrivateRequest, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
     PostMessageResponse, PostReactionRequest, PostTypingRequest, RemoveParticipantsRequest,
@@ -12,8 +13,9 @@ pub use crate::domain::models::{
 use crate::domain::models::{
     AttachmentChannelReference, AttachmentEntityReference, AttachmentGenericReference,
     ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelMessage,
-    ChannelMessageKind, ChannelParticipant, CountedReaction, MessageAttachment,
-    MessagePageDirection, ParticipantRole, ResolvedChannelMessage, ThreadInfo, ThreadReply,
+    ChannelMessageKind, ChannelParticipant, CountedReaction, CreateEntityMentionOptions,
+    MessageAttachment, MessagePageDirection, ParticipantRole, ResolvedChannelMessage, ThreadInfo,
+    ThreadReply,
 };
 pub use crate::domain::models::{ChannelMessageFilters, NotificationFilters};
 use crate::domain::ports::{
@@ -31,8 +33,8 @@ use chrono::{DateTime, Utc};
 use entity_access::{
     domain::{
         models::{
-            AdminParticipantRole, EntityAccessReceipt, EntityPermission, MemberParticipantRole,
-            OwnerParticipantRole, RequiredPermission,
+            AccessError, AccessLevel, AdminParticipantRole, EntityAccessReceipt, EntityPermission,
+            EntityType, MemberParticipantRole, OwnerParticipantRole, RequiredPermission,
         },
         ports::EntityAccessService,
     },
@@ -232,6 +234,11 @@ where
         .route(
             "/get_or_create_private",
             post(get_or_create_private_handler::<S, Svc>),
+        )
+        .route("/mentions", post(create_mention_handler::<S, Svc>))
+        .route(
+            "/mentions/{mention_id}",
+            delete(delete_mention_handler::<S, Svc>),
         )
         .route("/{channel_id}", patch(patch_channel_handler::<S, Svc>))
         .route("/{channel_id}", delete(delete_channel_handler::<S, Svc>))
@@ -743,6 +750,148 @@ pub async fn leave_channel_handler<S: ChannelService, Svc: EntityAccessService>(
     let actor = actor_from_receipt(&access.entity_access_receipt)?;
     state.service.leave_channel(actor, channel_id).await?;
     Ok(StatusCode::OK)
+}
+
+async fn require_document_edit_access<Svc: EntityAccessService>(
+    access_service: &Svc,
+    actor: &MacroUserIdStr<'static>,
+    source_entity_type: &str,
+    source_entity_id: &str,
+) -> Result<(), ChannelsHandlerErr> {
+    if source_entity_type != "document" {
+        return Err(ChannelsHandlerErr::BadRequest("invalid source entity type"));
+    }
+    access_service
+        .check_access(
+            Some(actor),
+            source_entity_id,
+            EntityType::Document,
+            AccessLevel::Edit,
+        )
+        .await
+        .map(|_| ())
+        .map_err(map_access_error)
+}
+
+fn map_access_error(err: AccessError) -> ChannelsHandlerErr {
+    match err {
+        AccessError::Unauthorized => ChannelsHandlerErr::Unauthorized("unauthorized"),
+        AccessError::UnauthorizedWithMessage(msg) => ChannelsHandlerErr::Unauthorized(msg),
+        AccessError::BadRequest(msg) => ChannelsHandlerErr::BadRequest(msg),
+        AccessError::NotFound(msg) => ChannelsHandlerErr::NotFound(msg),
+        AccessError::DatabaseError(e) => {
+            tracing::error!(error=?e, "entity access database error");
+            ChannelsHandlerErr::Internal(ChannelMessagesErr::Repo(anyhow::Error::from(e)))
+        }
+        AccessError::Internal => {
+            tracing::error!("entity access internal error");
+            ChannelsHandlerErr::Internal(ChannelMessagesErr::Repo(anyhow::anyhow!(
+                "entity access internal error"
+            )))
+        }
+    }
+}
+
+/// Handler for `POST /channels/mentions`.
+#[utoipa::path(
+    post,
+    tag = "channels",
+    operation_id = "create_entity_mention",
+    path = "/channels/mentions",
+    request_body = CreateEntityMentionRequest,
+    responses(
+        (status = 201, body = CreateEntityMentionResponse),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn create_mention_handler<S: ChannelService, Svc: EntityAccessService>(
+    State(state): State<ChannelsRouterState<S, Svc>>,
+    macro_user: MacroUserExtractor,
+    Json(req): Json<CreateEntityMentionRequest>,
+) -> Result<(StatusCode, Json<CreateEntityMentionResponse>), ChannelsHandlerErr> {
+    require_document_edit_access(
+        state.access_service.as_ref(),
+        &macro_user.macro_user_id,
+        &req.source_entity_type,
+        &req.source_entity_id,
+    )
+    .await?;
+
+    let mention = state
+        .service
+        .create_entity_mention(CreateEntityMentionOptions {
+            source_entity_type: req.source_entity_type,
+            source_entity_id: req.source_entity_id,
+            entity_type: req.entity_type,
+            entity_id: req.entity_id,
+            user_id: Some(macro_user.user_context.user_id.clone()),
+        })
+        .await?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(CreateEntityMentionResponse {
+            id: mention.id.to_string(),
+            source_entity_type: mention.source_entity_type,
+            source_entity_id: mention.source_entity_id,
+            entity_type: mention.entity_type,
+            entity_id: mention.entity_id,
+            user_id: mention.user_id,
+            created_at: mention.created_at,
+        }),
+    ))
+}
+
+/// Handler for `DELETE /channels/mentions/{mention_id}`.
+#[utoipa::path(
+    delete,
+    tag = "channels",
+    operation_id = "delete_entity_mention",
+    path = "/channels/mentions/{mention_id}",
+    params(
+        ("mention_id" = Uuid, Path, description = "Entity mention id"),
+    ),
+    responses(
+        (status = 200, body = DeleteEntityMentionResponse),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn delete_mention_handler<S: ChannelService, Svc: EntityAccessService>(
+    State(state): State<ChannelsRouterState<S, Svc>>,
+    macro_user: MacroUserExtractor,
+    Path(mention_id): Path<Uuid>,
+) -> Result<(StatusCode, Json<DeleteEntityMentionResponse>), ChannelsHandlerErr> {
+    let mention = state
+        .service
+        .get_entity_mention(mention_id)
+        .await?
+        .ok_or(ChannelsHandlerErr::NotFound("entity mention not found"))?;
+
+    require_document_edit_access(
+        state.access_service.as_ref(),
+        &macro_user.macro_user_id,
+        &mention.source_entity_type,
+        &mention.source_entity_id,
+    )
+    .await?;
+
+    let deleted = state.service.delete_entity_mention(mention_id).await?;
+    if !deleted {
+        return Err(ChannelsHandlerErr::NotFound("entity mention not found"));
+    }
+
+    Ok((
+        StatusCode::OK,
+        Json(DeleteEntityMentionResponse { deleted }),
+    ))
 }
 
 /// Handler for `GET /channels/{channel_id}/messages`.
@@ -1687,6 +1836,12 @@ pub enum ChannelsHandlerErr {
     /// Bad request.
     #[error("{0}")]
     BadRequest(&'static str),
+    /// Unauthorized.
+    #[error("{0}")]
+    Unauthorized(&'static str),
+    /// Not found.
+    #[error("{0}")]
+    NotFound(&'static str),
     /// Internal server error.
     #[error("An internal server error occurred")]
     Internal(#[from] ChannelMessagesErr),
@@ -1700,6 +1855,20 @@ impl IntoResponse for ChannelsHandlerErr {
         match self {
             ChannelsHandlerErr::BadRequest(message) => (
                 StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: message.into(),
+                }),
+            )
+                .into_response(),
+            ChannelsHandlerErr::Unauthorized(message) => (
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    message: message.into(),
+                }),
+            )
+                .into_response(),
+            ChannelsHandlerErr::NotFound(message) => (
+                StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     message: message.into(),
                 }),

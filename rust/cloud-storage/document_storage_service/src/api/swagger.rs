@@ -67,8 +67,8 @@ use channels::inbound::axum_router::{
     ApiChannelAttachment, ApiChannelAttachmentsPage, ApiChannelContextMessage, ApiChannelMessage,
     ApiChannelMessageKind, ApiChannelMessagesPage, ApiChannelParticipant, ApiCountedReaction,
     ApiMessageAttachment, ApiParticipantRole, ApiResolvedChannelMessage, ApiThreadInfo,
-    ApiThreadReply, ChannelMessageFilters, GetAttachmentReferencesResponse,
-    GetMessageWithContextResponse,
+    ApiThreadReply, ChannelMessageFilters, CreateEntityMentionRequest, CreateEntityMentionResponse,
+    DeleteEntityMentionResponse, GetAttachmentReferencesResponse, GetMessageWithContextResponse,
 };
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
@@ -217,6 +217,8 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::get_channel_attachments_handler,
         channels::inbound::axum_router::get_channel_participants_handler,
         channels::inbound::axum_router::get_batch_channel_preview_handler,
+        channels::inbound::axum_router::create_mention_handler,
+        channels::inbound::axum_router::delete_mention_handler,
         channels::inbound::axum_router::get_attachment_references_handler,
 
         // calls
@@ -412,6 +414,9 @@ use utoipa::OpenApi;
             channels::domain::models::ChannelPreview,
             channels::domain::models::ChannelPreviewData,
             channels::domain::models::WithChannelId,
+            CreateEntityMentionRequest,
+            CreateEntityMentionResponse,
+            DeleteEntityMentionResponse,
 
             // Calls
             call::domain::models::CallTokenResponse,

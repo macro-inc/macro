@@ -6,10 +6,11 @@ use crate::domain::{
         AttachmentChannelReference, AttachmentEntityReference, AttachmentGenericReference,
         ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelInfo,
         ChannelMessageFilters, ChannelMessageKind, ChannelMetadata, ChannelParticipant,
-        ChannelPreviewRow, ChannelType, CountedReaction, CreateChannelRequest, MessageAttachment,
-        MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
-        ParticipantRole, PatchChannelRequest, ResolvedChannelMessage, SimpleMention, ThreadData,
-        ThreadReplyRow, TopLevelMessageRow,
+        ChannelPreviewRow, ChannelType, CountedReaction, CreateChannelRequest,
+        CreateEntityMentionOptions, EntityMention, MessageAttachment, MessagePageDirection,
+        MutatedAttachment, MutatedMessage, NewChannelAttachment, ParticipantRole,
+        PatchChannelRequest, ResolvedChannelMessage, SimpleMention, ThreadData, ThreadReplyRow,
+        TopLevelMessageRow,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
@@ -2077,6 +2078,61 @@ impl ChannelRepo for PgChannelsRepo {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    async fn create_entity_mention(
+        &self,
+        options: CreateEntityMentionOptions,
+    ) -> Result<EntityMention, Self::Err> {
+        let id = macro_uuid::generate_uuid_v7();
+        let mention = sqlx::query_as!(
+            EntityMention,
+            r#"
+            INSERT INTO comms_entity_mentions (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at
+            "#,
+            id,
+            options.source_entity_type,
+            options.source_entity_id,
+            options.entity_type,
+            options.entity_id,
+            options.user_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to create entity mention")?;
+        Ok(mention)
+    }
+
+    async fn get_entity_mention_by_id(&self, id: Uuid) -> Result<Option<EntityMention>, Self::Err> {
+        let mention = sqlx::query_as!(
+            EntityMention,
+            r#"
+            SELECT id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at
+            FROM comms_entity_mentions
+            WHERE id = $1
+            "#,
+            id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to fetch entity mention")?;
+        Ok(mention)
+    }
+
+    async fn delete_entity_mention_by_id(&self, id: Uuid) -> Result<bool, Self::Err> {
+        let result = sqlx::query!(
+            r#"
+            DELETE FROM comms_entity_mentions
+            WHERE id = $1
+            "#,
+            id,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to delete entity mention")?;
+        Ok(result.rows_affected() > 0)
     }
 
     async fn patch_message_attachments(

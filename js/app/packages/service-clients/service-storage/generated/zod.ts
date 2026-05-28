@@ -1399,6 +1399,35 @@ export const getOrCreatePrivateResponse = zod
   .describe('Response for get-or-create channel operations.');
 
 /**
+ * @summary Handler for `POST /channels/mentions`.
+ */
+export const createEntityMentionBody = zod
+  .object({
+    entity_id: zod.string().describe('Id of the mentioned entity.'),
+    entity_type: zod.string().describe('Type of the mentioned entity.'),
+    source_entity_id: zod
+      .string()
+      .describe('Id of the entity that owns the mention.'),
+    source_entity_type: zod
+      .string()
+      .describe('Type of the entity that owns the mention.'),
+  })
+  .describe('Request body for `POST \/channels\/mentions`.');
+
+/**
+ * @summary Handler for `DELETE /channels/mentions/{mention_id}`.
+ */
+export const deleteEntityMentionParams = zod.object({
+  mention_id: zod.uuid().describe('Entity mention id'),
+});
+
+export const deleteEntityMentionResponse = zod
+  .object({
+    deleted: zod.boolean().describe('Whether the mention was deleted.'),
+  })
+  .describe('Response body for `DELETE \/channels\/mentions\/{mention_id}`.');
+
+/**
  * @summary Handler for `POST /channels/preview`.
  */
 export const getBatchChannelPreviewBody = zod
