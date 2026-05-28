@@ -115,6 +115,24 @@ pub(crate) async fn get_links(
     }
 }
 
+/// Role this link plays in our application
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum IdentityProviderLinkRole {
+    /// Created at signup
+    Primary,
+    /// Created via /link/gmail
+    Secondary,
+}
+
+/// Application metadata stored on the FA link
+#[derive(serde::Serialize, serde::Deserialize, Debug, Default)]
+pub struct IdentityProviderLinkData {
+    /// Role
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<IdentityProviderLinkRole>,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 /// An identity provider link for creating a link.
@@ -129,6 +147,9 @@ pub struct IdentityProviderLink<'a> {
     pub user_id: Cow<'a, str>,
     /// The token
     pub token: Cow<'a, str>,
+    /// Application metadata
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub data: Option<IdentityProviderLinkData>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
