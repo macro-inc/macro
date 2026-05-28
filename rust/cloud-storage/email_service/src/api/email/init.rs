@@ -154,12 +154,11 @@ pub async fn handler(
         if let Some(child_macro_id) = existing_owner.as_deref()
             && child_macro_id != user_context.user_id
         {
-            // Graph path: delegate inbox capability from primary (caller) → child.
+            // Graph path: link primary (caller) → child so primary can read child's inbox.
             macro_db_client::macro_user_links::insert_edge(
                 &ctx.db,
                 &user_context.user_id,
                 child_macro_id,
-                macro_db_client::macro_user_links::Capability::Inbox,
             )
             .await
             .context("Failed to insert macro_user_links edge")?;

@@ -37,22 +37,10 @@ async fn insert_then_list_children(pool: Pool<Postgres>) -> anyhow::Result<()> {
     insert_user(&pool, "macro|child-a@x.com").await?;
     insert_user(&pool, "macro|child-b@x.com").await?;
 
-    insert_edge(
-        &pool,
-        "macro|primary@x.com",
-        "macro|child-a@x.com",
-        Capability::Inbox,
-    )
-    .await?;
-    insert_edge(
-        &pool,
-        "macro|primary@x.com",
-        "macro|child-b@x.com",
-        Capability::Inbox,
-    )
-    .await?;
+    insert_edge(&pool, "macro|primary@x.com", "macro|child-a@x.com").await?;
+    insert_edge(&pool, "macro|primary@x.com", "macro|child-b@x.com").await?;
 
-    let mut children = inbox_children_for_primary(&pool, "macro|primary@x.com").await?;
+    let mut children = children_for_primary(&pool, "macro|primary@x.com").await?;
     children.sort();
     assert_eq!(children, vec!["macro|child-a@x.com", "macro|child-b@x.com"]);
 
@@ -64,22 +52,10 @@ async fn insert_is_idempotent(pool: Pool<Postgres>) -> anyhow::Result<()> {
     insert_user(&pool, "macro|primary@x.com").await?;
     insert_user(&pool, "macro|child@x.com").await?;
 
-    insert_edge(
-        &pool,
-        "macro|primary@x.com",
-        "macro|child@x.com",
-        Capability::Inbox,
-    )
-    .await?;
-    insert_edge(
-        &pool,
-        "macro|primary@x.com",
-        "macro|child@x.com",
-        Capability::Inbox,
-    )
-    .await?;
+    insert_edge(&pool, "macro|primary@x.com", "macro|child@x.com").await?;
+    insert_edge(&pool, "macro|primary@x.com", "macro|child@x.com").await?;
 
-    let children = inbox_children_for_primary(&pool, "macro|primary@x.com").await?;
+    let children = children_for_primary(&pool, "macro|primary@x.com").await?;
     assert_eq!(children, vec!["macro|child@x.com"]);
 
     Ok(())
@@ -90,22 +66,10 @@ async fn delete_edge_removes_row(pool: Pool<Postgres>) -> anyhow::Result<()> {
     insert_user(&pool, "macro|primary@x.com").await?;
     insert_user(&pool, "macro|child@x.com").await?;
 
-    insert_edge(
-        &pool,
-        "macro|primary@x.com",
-        "macro|child@x.com",
-        Capability::Inbox,
-    )
-    .await?;
-    delete_edge(
-        &pool,
-        "macro|primary@x.com",
-        "macro|child@x.com",
-        Capability::Inbox,
-    )
-    .await?;
+    insert_edge(&pool, "macro|primary@x.com", "macro|child@x.com").await?;
+    delete_edge(&pool, "macro|primary@x.com", "macro|child@x.com").await?;
 
-    let children = inbox_children_for_primary(&pool, "macro|primary@x.com").await?;
+    let children = children_for_primary(&pool, "macro|primary@x.com").await?;
     assert!(children.is_empty());
 
     Ok(())
@@ -115,13 +79,7 @@ async fn delete_edge_removes_row(pool: Pool<Postgres>) -> anyhow::Result<()> {
 async fn self_referential_edge_rejected(pool: Pool<Postgres>) -> anyhow::Result<()> {
     insert_user(&pool, "macro|primary@x.com").await?;
 
-    let result = insert_edge(
-        &pool,
-        "macro|primary@x.com",
-        "macro|primary@x.com",
-        Capability::Inbox,
-    )
-    .await;
+    let result = insert_edge(&pool, "macro|primary@x.com", "macro|primary@x.com").await;
     assert!(
         result.is_err(),
         "self-referential edge should be rejected by CHECK constraint"

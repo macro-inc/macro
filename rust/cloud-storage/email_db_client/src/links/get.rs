@@ -64,9 +64,9 @@ pub async fn fetch_link_by_macro_id(
     Ok(db_link.map(service::link::Link::try_from).transpose()?)
 }
 
-/// Fetches all email_links the user can access via their macro_id, including any inboxes
-/// they hold the `inbox` capability over via macro_user_links. The graph union is the read-side
-/// half of the multi-inbox narrow-graph design — it surfaces both the user's own inboxes
+/// Fetches all email_links the user can access via their macro_id, including any
+/// inboxes delegated via macro_user_links. The union is the read-side half of the
+/// multi-inbox narrow-graph design — it surfaces both the user's own inboxes
 /// (same macro_id) and inboxes belonging to other macro users they've been delegated.
 #[tracing::instrument(skip(pool), err)]
 pub async fn fetch_inboxes_for_macro_id(
@@ -97,7 +97,7 @@ pub async fn fetch_inboxes_for_macro_id(
                    el.provider, el.is_sync_active, el.created_at, el.updated_at
             FROM email_links el
             JOIN macro_user_links mul ON el.macro_id = mul.child_macro_id
-            WHERE mul.primary_macro_id = $1 AND mul.capability = 'inbox'
+            WHERE mul.primary_macro_id = $1
         ) AS combined
         ORDER BY created_at DESC
         "#,
