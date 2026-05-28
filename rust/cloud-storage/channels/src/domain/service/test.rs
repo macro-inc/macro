@@ -313,6 +313,15 @@ impl ChannelRepo for FakeMutationRepo {
         Ok(vec![])
     }
 
+    async fn get_attachment_references(
+        &self,
+        _entity_type: &str,
+        _entity_id: &str,
+        _user_id: &str,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, Self::Err> {
+        Ok(vec![])
+    }
+
     async fn resolve_top_level_parent(
         &self,
         _channel_id: Uuid,

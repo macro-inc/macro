@@ -2,8 +2,7 @@ import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer'
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import clickOutside from '@core/directive/clickOutside';
 import Quotes from '@phosphor/quotes.svg';
-import { commsServiceClient } from '@service-comms/client';
-import type { ItemType } from '@service-storage/client';
+import { type ItemType, storageServiceClient } from '@service-storage/client';
 import { Button, Tooltip } from '@ui';
 import { createResource, Suspense } from 'solid-js';
 import { References } from './References';
@@ -86,7 +85,7 @@ function _ReferencesModal(props: ReferencesModalProps) {
     () => props.documentId,
     async (id) => {
       const entityType = props.entityType ?? 'document';
-      const response = await commsServiceClient.attachmentReferences({
+      const response = await storageServiceClient.attachmentReferences({
         entity_type: entityType,
         entity_id: id,
       });

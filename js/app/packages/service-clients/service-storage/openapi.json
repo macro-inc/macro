@@ -1295,6 +1295,75 @@
         }
       }
     },
+    "/channels/attachments/{entity_type}/{entity_id}/references": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/attachments/{entity_type}/{entity_id}/references`.",
+        "operationId": "get_attachment_references",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Type of the attachment entity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "Id of the attachment entity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAttachmentReferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/get_or_create_dm": {
       "post": {
         "tags": ["channels"],
@@ -7602,6 +7671,132 @@
           }
         ]
       },
+      "ApiAttachmentChannelReference": {
+        "type": "object",
+        "description": "A reference to an attachment entity from a channel message.",
+        "required": [
+          "channel_id",
+          "message_id",
+          "sender_id",
+          "message_content",
+          "message_created_at",
+          "attachment_created_at"
+        ],
+        "properties": {
+          "attachment_created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the attachment row was created."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel that contains the message."
+          },
+          "channel_name": {
+            "type": ["string", "null"],
+            "description": "Optional channel name (DMs do not have a name)."
+          },
+          "message_content": {
+            "type": "string",
+            "description": "Full message content (might be used for preview/snippet)."
+          },
+          "message_created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the message itself was created."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message that contains the attachment reference."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Sender of the message."
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "If the message belongs to a thread this is the parent id."
+          }
+        }
+      },
+      "ApiAttachmentEntityReference": {
+        "oneOf": [
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/ApiAttachmentChannelReference" },
+              {
+                "type": "object",
+                "required": ["reference_type"],
+                "properties": {
+                  "reference_type": {
+                    "type": "string",
+                    "enum": ["channel"]
+                  }
+                }
+              }
+            ],
+            "description": "Referenced from a channel message."
+          },
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/ApiAttachmentGenericReference" },
+              {
+                "type": "object",
+                "required": ["reference_type"],
+                "properties": {
+                  "reference_type": {
+                    "type": "string",
+                    "enum": ["generic"]
+                  }
+                }
+              }
+            ],
+            "description": "Referenced from any non-message source entity."
+          }
+        ],
+        "description": "An attachment reference, tagged by source kind."
+      },
+      "ApiAttachmentGenericReference": {
+        "type": "object",
+        "description": "A reference to an attachment entity from a non-message source.",
+        "required": [
+          "source_entity_type",
+          "source_entity_id",
+          "entity_type",
+          "entity_id",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this reference was created."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "ID of the referenced entity."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Type of the referenced entity."
+          },
+          "source_entity_id": {
+            "type": "string",
+            "description": "ID of the source entity."
+          },
+          "source_entity_type": {
+            "type": "string",
+            "description": "Type of the source entity (e.g., \"document\", \"chat\", etc.)."
+          },
+          "user_id": {
+            "type": ["string", "null"],
+            "description": "User who created this reference (optional for non-user sources)."
+          }
+        }
+      },
       "ApiChannelAttachment": {
         "type": "object",
         "description": "A channel-level attachment.",
@@ -11267,6 +11462,20 @@
           "success": {
             "type": "boolean",
             "description": "Indicates if the request was successful"
+          }
+        }
+      },
+      "GetAttachmentReferencesResponse": {
+        "type": "object",
+        "description": "Response from the attachment-references endpoint.",
+        "required": ["references"],
+        "properties": {
+          "references": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiAttachmentEntityReference"
+            },
+            "description": "References to the requested entity, newest-first."
           }
         }
       },

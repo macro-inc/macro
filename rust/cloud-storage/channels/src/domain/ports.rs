@@ -1,13 +1,14 @@
 use crate::domain::events::ChannelEvent;
 use crate::domain::models::{
-    AddParticipantsRequest, ChannelAttachment, ChannelAttachmentType, ChannelContextMessage,
-    ChannelInfo, ChannelMessageFilters, ChannelMetadata, ChannelParticipant, CountedReaction,
-    CreateChannelRequest, CreateChannelResponse, DeleteMessageQuery, GetOrCreateChannelResponse,
-    GetOrCreateDmRequest, GetOrCreatePrivateRequest, MessageAttachment, MessagePageDirection,
-    MutatedAttachment, MutatedMessage, NewChannelAttachment, PatchChannelRequest,
-    PatchMessageRequest, PostMessageRequest, PostMessageResponse, PostReactionRequest,
-    PostTypingRequest, ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage,
-    SimpleMention, ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+    AddParticipantsRequest, AttachmentEntityReference, ChannelAttachment, ChannelAttachmentType,
+    ChannelContextMessage, ChannelInfo, ChannelMessageFilters, ChannelMetadata, ChannelParticipant,
+    CountedReaction, CreateChannelRequest, CreateChannelResponse, DeleteMessageQuery,
+    GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest, MessageAttachment,
+    MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
+    PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostMessageResponse,
+    PostReactionRequest, PostTypingRequest, ReferencedShareItem, RemoveParticipantsRequest,
+    ResolvedChannelMessage, SimpleMention, ThreadData, ThreadReply, ThreadReplyRow,
+    TopLevelMessageRow,
 };
 use crate::domain::side_effects::{
     ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
@@ -86,6 +87,14 @@ pub trait ChannelRepo: Send + Sync + 'static {
         before: i64,
         after: i64,
     ) -> impl Future<Output = Result<Vec<ChannelContextMessage>, Self::Err>> + Send;
+
+    /// Fetch attachment references for an entity, scoped to channels the user belongs to.
+    fn get_attachment_references(
+        &self,
+        entity_type: &str,
+        entity_id: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<AttachmentEntityReference>, Self::Err>> + Send;
 
     /// Resolve a message id to its top-level parent row. If the message is a thread reply,
     /// returns the parent; if already top-level, returns itself. Returns `None` if not found.
@@ -353,6 +362,17 @@ pub trait ChannelService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<ChannelContextMessage>, ChannelMessagesErr>> + Send {
         let _ = (channel_id, before, after);
         async move { Err(ChannelMessagesErr::MessageNotFound(message_id)) }
+    }
+
+    /// Fetch attachment references for an entity visible to a user.
+    fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> impl Future<Output = Result<Vec<AttachmentEntityReference>, ChannelMessagesErr>> + Send
+    {
+        async move { Ok(Vec::new()) }
     }
 
     /// Fetch a centered window of messages around a specific message id.

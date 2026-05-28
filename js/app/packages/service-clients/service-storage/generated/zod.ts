@@ -1897,6 +1897,94 @@ export const postChannelMessagesResponse = zod
   .describe('Paginated response of channel messages.');
 
 /**
+ * @summary Handler for `GET /channels/attachments/{entity_type}/{entity_id}/references`.
+ */
+export const getAttachmentReferencesParams = zod.object({
+  entity_type: zod.string().describe('Type of the attachment entity'),
+  entity_id: zod.string().describe('Id of the attachment entity'),
+});
+
+export const getAttachmentReferencesResponseReferencesItemChannelReferenceType =
+  ['channel'] as const;
+
+export const getAttachmentReferencesResponseReferencesItemGenericReferenceType =
+  ['generic'] as const;
+
+export const getAttachmentReferencesResponse = zod
+  .object({
+    references: zod
+      .array(
+        zod.union([
+          zod
+            .object({
+              attachment_created_at: zod.iso
+                .datetime({})
+                .describe('When the attachment row was created.'),
+              channel_id: zod
+                .uuid()
+                .describe('Channel that contains the message.'),
+              channel_name: zod
+                .string()
+                .nullish()
+                .describe('Optional channel name (DMs do not have a name).'),
+              message_content: zod
+                .string()
+                .describe(
+                  'Full message content (might be used for preview/snippet).'
+                ),
+              message_created_at: zod.iso
+                .datetime({})
+                .describe('When the message itself was created.'),
+              message_id: zod
+                .uuid()
+                .describe('Message that contains the attachment reference.'),
+              sender_id: zod.string().describe('Sender of the message.'),
+              thread_id: zod
+                .uuid()
+                .nullish()
+                .describe(
+                  'If the message belongs to a thread this is the parent id.'
+                ),
+              reference_type: zod.enum(
+                getAttachmentReferencesResponseReferencesItemChannelReferenceType
+              ),
+            })
+            .describe('Referenced from a channel message.'),
+          zod
+            .object({
+              created_at: zod.iso
+                .datetime({})
+                .describe('When this reference was created.'),
+              entity_id: zod.string().describe('ID of the referenced entity.'),
+              entity_type: zod
+                .string()
+                .describe('Type of the referenced entity.'),
+              source_entity_id: zod
+                .string()
+                .describe('ID of the source entity.'),
+              source_entity_type: zod
+                .string()
+                .describe(
+                  'Type of the source entity (e.g., "document", "chat", etc.).'
+                ),
+              user_id: zod
+                .string()
+                .nullish()
+                .describe(
+                  'User who created this reference (optional for non-user sources).'
+                ),
+              reference_type: zod.enum(
+                getAttachmentReferencesResponseReferencesItemGenericReferenceType
+              ),
+            })
+            .describe('Referenced from any non-message source entity.'),
+        ])
+      )
+      .describe('References to the requested entity, newest-first.'),
+  })
+  .describe('Response from the attachment-references endpoint.');
+
+/**
  * @summary Handler for `GET /channels/{channel_id}/messages/{message_id}/context`.
  */
 export const getMessageWithContextParams = zod.object({

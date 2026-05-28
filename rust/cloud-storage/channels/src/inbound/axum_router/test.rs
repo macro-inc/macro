@@ -262,6 +262,39 @@ impl ChannelService for MockService {
             deleted_at: None,
         }])
     }
+
+    async fn get_attachment_references(
+        &self,
+        entity_type: String,
+        entity_id: String,
+        _user_id: String,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, ChannelMessagesErr> {
+        let now = chrono::Utc::now();
+        Ok(vec![
+            crate::domain::models::AttachmentEntityReference::Channel(
+                crate::domain::models::AttachmentChannelReference {
+                    channel_id: Uuid::new_v4(),
+                    channel_name: Some("test-channel".to_string()),
+                    message_id: Uuid::new_v4(),
+                    thread_id: None,
+                    sender_id: "macro|user@example.com".to_string(),
+                    message_content: "look at this".to_string(),
+                    message_created_at: now,
+                    attachment_created_at: now,
+                },
+            ),
+            crate::domain::models::AttachmentEntityReference::Generic(
+                crate::domain::models::AttachmentGenericReference {
+                    source_entity_type: "doc".to_string(),
+                    source_entity_id: "src-doc".to_string(),
+                    entity_type,
+                    entity_id,
+                    user_id: None,
+                    created_at: now,
+                },
+            ),
+        ])
+    }
 }
 
 struct ErrorService;
@@ -1385,6 +1418,28 @@ async fn thread_replies_returns_404_when_not_found() {
     let bytes = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(json["message"], "Message not found");
+}
+
+#[tokio::test]
+async fn attachment_references_returns_tagged_references() {
+    let router = mock_router();
+    let request = Request::builder()
+        .uri("/attachments/document/doc1/references")
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let references = json["references"].as_array().unwrap();
+    assert_eq!(references.len(), 2);
+    assert_eq!(references[0]["reference_type"], "channel");
+    assert_eq!(references[0]["message_content"], "look at this");
+    assert_eq!(references[1]["reference_type"], "generic");
+    assert_eq!(references[1]["entity_id"], "doc1");
+    assert_eq!(references[1]["source_entity_type"], "doc");
 }
 
 #[tokio::test]

@@ -3,6 +3,7 @@ mod tests;
 
 use crate::domain::{
     models::{
+        AttachmentChannelReference, AttachmentEntityReference, AttachmentGenericReference,
         ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelInfo,
         ChannelMessageFilters, ChannelMessageKind, ChannelMetadata, ChannelParticipant,
         ChannelType, CountedReaction, CreateChannelRequest, MessageAttachment,
@@ -1232,6 +1233,137 @@ impl ChannelRepo for PgChannelsRepo {
             .into_iter()
             .map(ChannelContextMessage::from)
             .collect())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_attachment_references(
+        &self,
+        entity_type: &str,
+        entity_id: &str,
+        user_id: &str,
+    ) -> Result<Vec<AttachmentEntityReference>, Self::Err> {
+        let attachment_references = sqlx::query_as!(
+            AttachmentChannelReference,
+            r#"
+                SELECT 
+                    a.channel_id                     AS "channel_id: uuid::Uuid",
+                    c.name                           AS "channel_name?",            -- Option<String>
+                    a.message_id                     AS "message_id: uuid::Uuid",
+                    m.thread_id                      AS "thread_id?: uuid::Uuid",
+                    m.sender_id                      AS "sender_id!",               -- String
+                    m.content                        AS "message_content!",         -- String
+                    m.created_at                     AS "message_created_at!: chrono::DateTime<chrono::Utc>",
+                    a.created_at                     AS "attachment_created_at!: chrono::DateTime<chrono::Utc>"
+                FROM comms_attachments a
+                JOIN comms_messages m ON a.message_id = m.id
+                JOIN comms_channels c ON a.channel_id = c.id
+                JOIN comms_channel_participants cp ON cp.channel_id = c.id
+                WHERE a.entity_type = $1
+                  AND a.entity_id  = $2
+                  AND cp.user_id   = $3
+                  AND cp.left_at  IS NULL
+                  AND m.deleted_at IS NULL
+                ORDER BY a.created_at DESC
+                "#,
+            entity_type,
+            entity_id,
+            user_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to get attachment references")?;
+
+        let mention_references = sqlx::query_as!(
+            AttachmentChannelReference,
+            r#"
+                SELECT 
+                    m.channel_id                     AS "channel_id: uuid::Uuid",
+                    c.name                           AS "channel_name?",            -- Option<String>
+                    m.id                             AS "message_id: uuid::Uuid",
+                    m.thread_id                      AS "thread_id?: uuid::Uuid",
+                    m.sender_id                      AS "sender_id!",               -- String
+                    m.content                        AS "message_content!",         -- String
+                    m.created_at                     AS "message_created_at!: chrono::DateTime<chrono::Utc>",
+                    em.created_at                    AS "attachment_created_at!: chrono::DateTime<chrono::Utc>"
+                FROM comms_entity_mentions em
+                JOIN comms_messages m ON (em.source_entity_id = m.id::text AND em.source_entity_type = 'message')
+                JOIN comms_channels c ON m.channel_id = c.id
+                JOIN comms_channel_participants cp ON cp.channel_id = c.id
+                WHERE em.entity_type = $1
+                  AND em.entity_id  = $2
+                  AND cp.user_id   = $3
+                  AND cp.left_at  IS NULL
+                  AND m.deleted_at IS NULL
+                ORDER BY em.created_at DESC
+                "#,
+            entity_type,
+            entity_id,
+            user_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to get mention references")?;
+
+        let generic_references = sqlx::query!(
+            r#"
+                SELECT 
+                    em.source_entity_type,
+                    em.source_entity_id,
+                    em.entity_type,
+                    em.entity_id,
+                    em.user_id,
+                    em.created_at
+                FROM comms_entity_mentions em
+                WHERE em.entity_type = $1
+                  AND em.entity_id  = $2
+                  AND em.source_entity_type != 'message'
+                ORDER BY em.created_at DESC
+                "#,
+            entity_type,
+            entity_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to get generic entity references")?
+        .into_iter()
+        .map(|row| AttachmentGenericReference {
+            source_entity_type: row.source_entity_type,
+            source_entity_id: row.source_entity_id,
+            entity_type: row.entity_type,
+            entity_id: row.entity_id,
+            user_id: row.user_id,
+            created_at: row.created_at,
+        })
+        .collect::<Vec<_>>();
+
+        let mut references: Vec<AttachmentEntityReference> = attachment_references
+            .into_iter()
+            .map(AttachmentEntityReference::Channel)
+            .collect();
+        references.extend(
+            mention_references
+                .into_iter()
+                .map(AttachmentEntityReference::Channel),
+        );
+        references.extend(
+            generic_references
+                .into_iter()
+                .map(AttachmentEntityReference::Generic),
+        );
+
+        references.sort_by(|a, b| {
+            let a_time = match a {
+                AttachmentEntityReference::Channel(c) => c.attachment_created_at,
+                AttachmentEntityReference::Generic(g) => g.created_at,
+            };
+            let b_time = match b {
+                AttachmentEntityReference::Channel(c) => c.attachment_created_at,
+                AttachmentEntityReference::Generic(g) => g.created_at,
+            };
+            b_time.cmp(&a_time)
+        });
+
+        Ok(references)
     }
 
     #[tracing::instrument(err, skip(self))]

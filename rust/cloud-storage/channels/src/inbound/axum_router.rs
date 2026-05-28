@@ -8,6 +8,7 @@ pub use crate::domain::models::{
     PostReactionRequest, PostTypingRequest, RemoveParticipantsRequest,
 };
 use crate::domain::models::{
+    AttachmentChannelReference, AttachmentEntityReference, AttachmentGenericReference,
     ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelMessage,
     ChannelMessageKind, ChannelParticipant, CountedReaction, MessageAttachment,
     MessagePageDirection, ParticipantRole, ResolvedChannelMessage, ThreadInfo, ThreadReply,
@@ -171,6 +172,15 @@ pub struct ChannelPath {
     channel_id: Uuid,
 }
 
+/// Path params for the attachment-references endpoint.
+#[derive(Debug, Deserialize)]
+pub struct AttachmentReferencesPath {
+    /// Type of the attachment entity.
+    entity_type: String,
+    /// Id of the attachment entity.
+    entity_id: String,
+}
+
 fn parse_messages_query(
     cursor: Option<BidirectionalCursor<Uuid, CreatedAt, ()>>,
 ) -> (
@@ -291,6 +301,10 @@ where
         .route(
             "/{channel_id}/participants",
             get(get_channel_participants_handler::<S, Svc>),
+        )
+        .route(
+            "/attachments/{entity_type}/{entity_id}/references",
+            get(get_attachment_references_handler::<S, Svc>),
         )
         .with_state(state)
 }
@@ -1118,6 +1132,54 @@ pub async fn get_channel_participants_handler<S: ChannelService, Svc: EntityAcce
     ))
 }
 
+/// Handler for `GET /channels/attachments/{entity_type}/{entity_id}/references`.
+#[utoipa::path(
+    get,
+    operation_id = "get_attachment_references",
+    path = "/channels/attachments/{entity_type}/{entity_id}/references",
+    params(
+        ("entity_type" = String, Path, description = "Type of the attachment entity"),
+        ("entity_id" = String, Path, description = "Id of the attachment entity"),
+    ),
+    responses(
+        (status = 200, body = GetAttachmentReferencesResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(
+    err,
+    skip_all,
+    fields(
+        entity_type = tracing::field::Empty,
+        entity_id = tracing::field::Empty,
+        user_id = tracing::field::Empty,
+    )
+)]
+pub async fn get_attachment_references_handler<S: ChannelService, Svc: EntityAccessService>(
+    State(state): State<ChannelsRouterState<S, Svc>>,
+    Extension(user_context): Extension<UserContext>,
+    Path(path): Path<AttachmentReferencesPath>,
+) -> Result<Json<GetAttachmentReferencesResponse>, ChannelsHandlerErr> {
+    let span = tracing::Span::current();
+    span.record("entity_type", tracing::field::display(&path.entity_type));
+    span.record("entity_id", tracing::field::display(&path.entity_id));
+    span.record("user_id", tracing::field::display(&user_context.user_id));
+
+    let references = state
+        .service
+        .get_attachment_references(path.entity_type, path.entity_id, user_context.user_id)
+        .await?;
+
+    Ok(Json(GetAttachmentReferencesResponse {
+        references: references
+            .into_iter()
+            .map(ApiAttachmentEntityReference::from)
+            .collect(),
+    }))
+}
+
 /// Paginated response of channel messages.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ApiChannelMessagesPage {
@@ -1224,6 +1286,102 @@ impl From<ChannelContextMessage> for ApiChannelContextMessage {
             updated_at: message.updated_at,
             edited_at: message.edited_at,
             deleted_at: message.deleted_at,
+        }
+    }
+}
+
+/// Response from the attachment-references endpoint.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct GetAttachmentReferencesResponse {
+    /// References to the requested entity, newest-first.
+    pub references: Vec<ApiAttachmentEntityReference>,
+}
+
+/// An attachment reference, tagged by source kind.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(tag = "reference_type", rename_all = "snake_case")]
+pub enum ApiAttachmentEntityReference {
+    /// Referenced from a channel message.
+    Channel(ApiAttachmentChannelReference),
+    /// Referenced from any non-message source entity.
+    Generic(ApiAttachmentGenericReference),
+}
+
+impl From<AttachmentEntityReference> for ApiAttachmentEntityReference {
+    fn from(reference: AttachmentEntityReference) -> Self {
+        match reference {
+            AttachmentEntityReference::Channel(c) => {
+                Self::Channel(ApiAttachmentChannelReference::from(c))
+            }
+            AttachmentEntityReference::Generic(g) => {
+                Self::Generic(ApiAttachmentGenericReference::from(g))
+            }
+        }
+    }
+}
+
+/// A reference to an attachment entity from a channel message.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ApiAttachmentChannelReference {
+    /// Channel that contains the message.
+    pub channel_id: Uuid,
+    /// Optional channel name (DMs do not have a name).
+    pub channel_name: Option<String>,
+    /// Message that contains the attachment reference.
+    pub message_id: Uuid,
+    /// If the message belongs to a thread this is the parent id.
+    pub thread_id: Option<Uuid>,
+    /// Sender of the message.
+    pub sender_id: String,
+    /// Full message content (might be used for preview/snippet).
+    pub message_content: String,
+    /// When the message itself was created.
+    pub message_created_at: DateTime<Utc>,
+    /// When the attachment row was created.
+    pub attachment_created_at: DateTime<Utc>,
+}
+
+impl From<AttachmentChannelReference> for ApiAttachmentChannelReference {
+    fn from(r: AttachmentChannelReference) -> Self {
+        Self {
+            channel_id: r.channel_id,
+            channel_name: r.channel_name,
+            message_id: r.message_id,
+            thread_id: r.thread_id,
+            sender_id: r.sender_id,
+            message_content: r.message_content,
+            message_created_at: r.message_created_at,
+            attachment_created_at: r.attachment_created_at,
+        }
+    }
+}
+
+/// A reference to an attachment entity from a non-message source.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ApiAttachmentGenericReference {
+    /// Type of the source entity (e.g., "document", "chat", etc.).
+    pub source_entity_type: String,
+    /// ID of the source entity.
+    pub source_entity_id: String,
+    /// Type of the referenced entity.
+    pub entity_type: String,
+    /// ID of the referenced entity.
+    pub entity_id: String,
+    /// User who created this reference (optional for non-user sources).
+    pub user_id: Option<String>,
+    /// When this reference was created.
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<AttachmentGenericReference> for ApiAttachmentGenericReference {
+    fn from(r: AttachmentGenericReference) -> Self {
+        Self {
+            source_entity_type: r.source_entity_type,
+            source_entity_id: r.source_entity_id,
+            entity_type: r.entity_type,
+            entity_id: r.entity_id,
+            user_id: r.user_id,
+            created_at: r.created_at,
         }
     }
 }
