@@ -8,7 +8,6 @@ pub mod attachments;
 pub mod channels;
 pub mod context;
 pub mod extractors;
-pub mod mentions;
 pub mod middleware;
 pub mod preview;
 pub mod swagger;
@@ -25,6 +24,5 @@ pub fn router(app_state: &AppState) -> Router<AppState> {
         .nest("/channels", channels::router())
         .nest("/preview", preview::router())
         .nest("/attachments", attachments::router())
-        .nest("/mentions", mentions::router())
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
 }

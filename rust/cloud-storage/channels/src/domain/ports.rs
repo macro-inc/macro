@@ -2,12 +2,13 @@ use crate::domain::events::ChannelEvent;
 use crate::domain::models::{
     AddParticipantsRequest, ChannelAttachment, ChannelAttachmentType, ChannelContextMessage,
     ChannelInfo, ChannelMessageFilters, ChannelMetadata, ChannelParticipant, CountedReaction,
-    CreateChannelRequest, CreateChannelResponse, DeleteMessageQuery, GetOrCreateChannelResponse,
-    GetOrCreateDmRequest, GetOrCreatePrivateRequest, MessageAttachment, MessagePageDirection,
-    MutatedAttachment, MutatedMessage, NewChannelAttachment, PatchChannelRequest,
-    PatchMessageRequest, PostMessageRequest, PostMessageResponse, PostReactionRequest,
-    PostTypingRequest, ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage,
-    SimpleMention, ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+    CreateChannelRequest, CreateChannelResponse, CreateEntityMentionOptions, DeleteMessageQuery,
+    EntityMention, GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest,
+    MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
+    NewChannelAttachment, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
+    PostMessageResponse, PostReactionRequest, PostTypingRequest, ReferencedShareItem,
+    RemoveParticipantsRequest, ResolvedChannelMessage, SimpleMention, ThreadData, ThreadReply,
+    ThreadReplyRow, TopLevelMessageRow,
 };
 use crate::domain::side_effects::{
     ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
@@ -238,6 +239,24 @@ pub trait ChannelRepo: Send + Sync + 'static {
         entity_ids: Vec<String>,
         source_entity_id: String,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Create a single entity mention.
+    fn create_entity_mention(
+        &self,
+        options: CreateEntityMentionOptions,
+    ) -> impl Future<Output = Result<EntityMention, Self::Err>> + Send;
+
+    /// Fetch an entity mention by id.
+    fn get_entity_mention_by_id(
+        &self,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<EntityMention>, Self::Err>> + Send;
+
+    /// Delete an entity mention by id. Returns whether a row was removed.
+    fn delete_entity_mention_by_id(
+        &self,
+        id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Patch message attachment state.
     fn patch_message_attachments(
@@ -574,6 +593,42 @@ pub trait ChannelService: Send + Sync + 'static {
         _actor: MacroUserIdStr<'static>,
         _channel_id: Uuid,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Create an entity mention.
+    fn create_entity_mention(
+        &self,
+        _options: CreateEntityMentionOptions,
+    ) -> impl Future<Output = Result<EntityMention, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Fetch an entity mention by id.
+    fn get_entity_mention(
+        &self,
+        _id: Uuid,
+    ) -> impl Future<Output = Result<Option<EntityMention>, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Delete an entity mention by id. Returns whether a row was removed.
+    fn delete_entity_mention(
+        &self,
+        _id: Uuid,
+    ) -> impl Future<Output = Result<bool, ChannelMutationErr>> + Send {
         async move {
             Err(ChannelMutationErr::NotFound(
                 "channel mutations are not configured".to_string(),

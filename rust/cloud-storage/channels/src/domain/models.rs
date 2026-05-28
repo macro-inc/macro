@@ -738,3 +738,80 @@ pub struct ChannelInfo {
     /// Team id.
     pub team_id: Option<Uuid>,
 }
+
+/// Persisted entity-to-entity mention.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct EntityMention {
+    /// Mention id.
+    pub id: Uuid,
+    /// Type of the entity that owns the mention.
+    pub source_entity_type: String,
+    /// Id of the entity that owns the mention.
+    pub source_entity_id: String,
+    /// Type of the mentioned entity.
+    pub entity_type: String,
+    /// Id of the mentioned entity.
+    pub entity_id: String,
+    /// User who recorded the mention.
+    pub user_id: Option<String>,
+    /// Created timestamp.
+    pub created_at: DateTime<Utc>,
+}
+
+/// Options for creating an entity mention.
+#[derive(Debug, Clone)]
+pub struct CreateEntityMentionOptions {
+    /// Type of the entity that owns the mention.
+    pub source_entity_type: String,
+    /// Id of the entity that owns the mention.
+    pub source_entity_id: String,
+    /// Type of the mentioned entity.
+    pub entity_type: String,
+    /// Id of the mentioned entity.
+    pub entity_id: String,
+    /// User who recorded the mention.
+    pub user_id: Option<String>,
+}
+
+/// Request body for `POST /channels/mentions`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct CreateEntityMentionRequest {
+    /// Type of the entity that owns the mention.
+    pub source_entity_type: String,
+    /// Id of the entity that owns the mention.
+    pub source_entity_id: String,
+    /// Type of the mentioned entity.
+    pub entity_type: String,
+    /// Id of the mentioned entity.
+    pub entity_id: String,
+}
+
+/// Response body for `POST /channels/mentions`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct CreateEntityMentionResponse {
+    /// Mention id.
+    pub id: String,
+    /// Type of the entity that owns the mention.
+    pub source_entity_type: String,
+    /// Id of the entity that owns the mention.
+    pub source_entity_id: String,
+    /// Type of the mentioned entity.
+    pub entity_type: String,
+    /// Id of the mentioned entity.
+    pub entity_id: String,
+    /// User who recorded the mention.
+    pub user_id: Option<String>,
+    /// Created timestamp.
+    pub created_at: DateTime<Utc>,
+}
+
+/// Response body for `DELETE /channels/mentions/{mention_id}`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct DeleteEntityMentionResponse {
+    /// Whether the mention was deleted.
+    pub deleted: bool,
+}

@@ -1355,81 +1355,6 @@
         }
       }
     },
-    "/comms/mentions": {
-      "post": {
-        "tags": ["mentions"],
-        "operationId": "create_mention_handler",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateEntityMentionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Entity mention created successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateEntityMentionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request parameters"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/comms/mentions/{mention_id}": {
-      "delete": {
-        "tags": ["mentions"],
-        "operationId": "delete_mention_handler",
-        "parameters": [
-          {
-            "name": "mention_id",
-            "in": "path",
-            "description": "UUID of the entity mention to delete",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Entity mention deleted successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeleteEntityMentionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request parameters"
-          },
-          "403": {
-            "description": "Insufficient permissions"
-          },
-          "404": {
-            "description": "Entity mention not found"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
     "/comms/preview": {
       "post": {
         "tags": ["preview"],
@@ -1967,82 +1892,6 @@
           }
         }
       },
-      "CreateEntityMentionRequest": {
-        "type": "object",
-        "required": [
-          "source_entity_type",
-          "source_entity_id",
-          "entity_type",
-          "entity_id"
-        ],
-        "properties": {
-          "entity_id": {
-            "type": "string"
-          },
-          "entity_type": {
-            "type": "string"
-          },
-          "source_entity_id": {
-            "type": "string"
-          },
-          "source_entity_type": {
-            "type": "string"
-          }
-        }
-      },
-      "CreateEntityMentionResponse": {
-        "type": "object",
-        "required": [
-          "id",
-          "source_entity_type",
-          "source_entity_id",
-          "entity_type",
-          "entity_id",
-          "created_at"
-        ],
-        "properties": {
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "entity_id": {
-            "type": "string"
-          },
-          "entity_type": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "source_entity_id": {
-            "type": "string"
-          },
-          "source_entity_type": {
-            "type": "string"
-          },
-          "user_id": {
-            "type": ["string", "null"]
-          }
-        }
-      },
-      "DeleteEntityMentionRequest": {
-        "type": "object",
-        "required": ["entity_mention_id"],
-        "properties": {
-          "entity_mention_id": {
-            "type": "string"
-          }
-        }
-      },
-      "DeleteEntityMentionResponse": {
-        "type": "object",
-        "required": ["deleted"],
-        "properties": {
-          "deleted": {
-            "type": "boolean"
-          }
-        }
-      },
       "DeleteMessageParams": {
         "type": "object",
         "required": ["channel_id", "message_id"],
@@ -2052,42 +1901,6 @@
           },
           "message_id": {
             "type": "string"
-          }
-        }
-      },
-      "EntityMention": {
-        "type": "object",
-        "required": [
-          "id",
-          "source_entity_type",
-          "source_entity_id",
-          "entity_type",
-          "entity_id",
-          "created_at"
-        ],
-        "properties": {
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "entity_id": {
-            "type": "string"
-          },
-          "entity_type": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "source_entity_id": {
-            "type": "string"
-          },
-          "source_entity_type": {
-            "type": "string"
-          },
-          "user_id": {
-            "type": ["string", "null"]
           }
         }
       },

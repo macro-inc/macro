@@ -2,13 +2,13 @@ use crate::domain::{
     events::ChannelEvent,
     models::{
         AddParticipantsRequest, ChannelAttachmentType, ChannelContextMessage, ChannelMessage,
-        ChannelMessageFilters, ChannelParticipant, ChannelType, DeleteMessageQuery,
-        GetOrCreateAction, GetOrCreateChannelResponse, GetOrCreateDmRequest,
-        GetOrCreatePrivateRequest, MessagePageDirection, NewChannelAttachment, ParticipantRole,
-        PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostMessageResponse,
-        PostReactionRequest, PostTypingRequest, ReactionAction, ReferencedShareItem,
-        RemoveParticipantsRequest, ResolvedChannelMessage, SimpleMention, ThreadInfo, ThreadReply,
-        TopLevelMessageRow,
+        ChannelMessageFilters, ChannelParticipant, ChannelType, CreateEntityMentionOptions,
+        DeleteMessageQuery, EntityMention, GetOrCreateAction, GetOrCreateChannelResponse,
+        GetOrCreateDmRequest, GetOrCreatePrivateRequest, MessagePageDirection,
+        NewChannelAttachment, ParticipantRole, PatchChannelRequest, PatchMessageRequest,
+        PostMessageRequest, PostMessageResponse, PostReactionRequest, PostTypingRequest,
+        ReactionAction, ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage,
+        SimpleMention, ThreadInfo, ThreadReply, TopLevelMessageRow,
     },
     ports::{
         ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr,
@@ -1465,5 +1465,38 @@ where
         channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
         ChannelServiceImpl::leave_channel(self, actor, channel_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn create_entity_mention(
+        &self,
+        options: CreateEntityMentionOptions,
+    ) -> Result<EntityMention, ChannelMutationErr> {
+        self.repo
+            .create_entity_mention(options)
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(ChannelMutationErr::Repo)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_entity_mention(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<EntityMention>, ChannelMutationErr> {
+        self.repo
+            .get_entity_mention_by_id(id)
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(ChannelMutationErr::Repo)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn delete_entity_mention(&self, id: Uuid) -> Result<bool, ChannelMutationErr> {
+        self.repo
+            .delete_entity_mention_by_id(id)
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(ChannelMutationErr::Repo)
     }
 }

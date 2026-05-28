@@ -1963,6 +1963,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "http-body-util",
+ "jsonwebtoken 10.3.0",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
