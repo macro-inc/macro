@@ -1,26 +1,10 @@
 import { useGlobalNotificationSource } from "@app/component/GlobalAppState";
 import { globalSplitManager } from "@app/signal/splitLayout";
 import { setAutomationComposerOpen } from "@block-automation/component";
-import { CustomScrollbar } from "@core/component/CustomScrollbar";
-import { EntityIcon } from "@core/component/EntityIcon";
-import { StaticMarkdown } from "@core/component/LexicalMarkdown/component/core/StaticMarkdown";
-import { UserIcon } from "@core/component/UserIcon";
-import {
-  createTheme,
-  theme as markdownTheme,
-} from "@core/component/LexicalMarkdown/theme";
-import { tryMacroId, useDisplayName } from "@core/user";
+import { DashboardNotificationList } from "@app/component/dashboard/sections/notifications";
 import type { AutomationEntity } from "@entity";
-import { Entity } from "@entity";
 import { formatDateAndTime } from "@entity/utils/timestamp";
-import {
-  getNotificationAction,
-  getNotificationContent,
-  getNotificationTargetName,
-  notificationIsRead,
-  openNotification,
-} from "@notifications";
-import type { UnifiedNotification } from "@notifications/types";
+import { notificationIsRead } from "@notifications";
 import { useAutomationEntities } from "@queries/agent-schedule/entities";
 import ArrowRightIcon from "@phosphor/arrow-right.svg";
 import CaretDownIcon from "@phosphor/caret-down.svg";
@@ -125,163 +109,8 @@ function AutomationSummary(props: { automation: AutomationEntity }) {
   );
 }
 
-function metadataContent(notification: UnifiedNotification) {
-  return (
-    notification.notification_metadata as { content?: Record<string, unknown> }
-  ).content;
-}
-
-const compactMarkdownTheme = createTheme(
-  {
-    paragraph: "m-0 md-p text-[1em]",
-    list: {
-      listitem: "m-0",
-    },
-  },
-  markdownTheme,
-);
-
-function NotificationSummary(props: { notification: UnifiedNotification }) {
-  const notificationSource = useGlobalNotificationSource();
-  const actorId = () => props.notification.sender_id ?? "";
-  const macroId = () => tryMacroId(actorId());
-  const [actorName] = useDisplayName(macroId());
-  const actor = () => {
-    const content = metadataContent(props.notification);
-    return (
-      actorName() ||
-      (content?.senderName as string | undefined) ||
-      (content?.fromName as string | undefined) ||
-      (content?.from as string | undefined) ||
-      (content?.senderEmail as string | undefined) ||
-      "Someone"
-    );
-  };
-  const unread = () => !notificationIsRead(props.notification);
-  const target = () => getNotificationTargetName(props.notification);
-  const notificationContent = () => metadataContent(props.notification);
-  const channelName = () =>
-    notificationContent()?.channelName as string | undefined;
-  const isDirectMessage = () =>
-    notificationContent()?.channelType === "directMessage";
-  const content = () => getNotificationContent(props.notification);
-  const tag = () => props.notification.notification_metadata.tag;
-  const action = () => getNotificationAction(props.notification).replace(/\s+in$/, "");
-  const title = () => {
-    if (tag() === "task_assigned") return target() || content() || "Task";
-    if (tag() === "new_email" || isDirectMessage()) return actor();
-    return channelName() || actor();
-  };
-  const description = () => {
-    if (tag() === "new_email") return content();
-    if (tag() === "task_assigned") return target() || content();
-    return content();
-  };
-
-  const open = () => {
-    const manager = globalSplitManager();
-    if (!manager) return;
-    void openNotification(props.notification, manager, false);
-    if (unread()) void notificationSource.markAsRead(props.notification);
-  };
-
-  return (
-    <button
-      class="group relative w-full rounded-lg p-2.5 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset"
-      onClick={open}
-    >
-      <Show when={unread()}>
-        <span class="absolute right-2.5 top-2.5 size-1.5 rounded-full bg-accent" />
-      </Show>
-      <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 pr-3">
-        <Show
-          when={isDirectMessage() && actorId()}
-          fallback={
-            <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-hover transition group-hover:bg-active">
-              <Show
-                when={tag() === "task_assigned"}
-                fallback={
-                  <Entity.Notification.Icon
-                    notification={props.notification as any}
-                    class="shrink-0"
-                  />
-                }
-              >
-                <EntityIcon targetType="task" size="sm" class="shrink-0" />
-              </Show>
-            </div>
-          }
-        >
-          {(id) => (
-            <UserIcon
-              id={id()}
-              size="md"
-              suppressClick
-              showTooltip={false}
-            />
-          )}
-        </Show>
-
-        <div class="flex min-w-0 items-center gap-1.5">
-          <p class="flex min-w-0 items-center gap-1.5 truncate text-xs font-semibold text-ink">
-            <span class="truncate">{title()}</span>
-          </p>
-        </div>
-
-        <Show
-          when={tag() === "task_assigned"}
-          fallback={
-            <Show when={description()}>
-              {(markdown) => (
-                <div class="col-start-2 flex min-w-0 items-start gap-1.5 text-xs/5 text-ink-muted [&_*]:text-xs [&_*]:leading-5">
-                  <Show when={channelName() && !isDirectMessage() && actorId()}>
-                    {(id) => (
-                      <span class="inline-flex shrink-0 items-center gap-1 font-medium text-ink-muted">
-                        <UserIcon
-                          id={id()}
-                          size="xs"
-                          suppressClick
-                          showTooltip={false}
-                        />
-                        <span>{actor()}</span>
-                      </span>
-                    )}
-                  </Show>
-                  <div class="line-clamp-2 min-w-0">
-                    <StaticMarkdown
-                      markdown={markdown()}
-                      theme={compactMarkdownTheme}
-                    />
-                  </div>
-                </div>
-              )}
-            </Show>
-          }
-        >
-          <div class="col-start-2 flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
-            <Show when={actorId()}>
-              {(id) => (
-                <UserIcon
-                  id={id()}
-                  size="xs"
-                  suppressClick
-                  showTooltip={false}
-                />
-              )}
-            </Show>
-            <span class="truncate">
-              <span class="font-medium">{actor()}</span> assigned you
-            </span>
-          </div>
-        </Show>
-      </div>
-    </button>
-  );
-}
-
 function NotificationsColumnSection() {
   const notificationSource = useGlobalNotificationSource();
-  const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
   const notifications = createMemo(() =>
     notificationSource
       .notifications()
@@ -315,25 +144,10 @@ function NotificationsColumnSection() {
           </div>
         }
       >
-        <div class="relative max-h-[28rem] min-h-0 overflow-hidden">
-          <div
-            ref={setScrollContainer}
-            class="scrollbar-hidden max-h-[28rem] overflow-y-auto pr-2"
-          >
-            <div class="flex flex-col">
-              <For each={notifications()}>
-                {(notification) => (
-                  <NotificationSummary notification={notification} />
-                )}
-              </For>
-            </div>
-          </div>
-          <CustomScrollbar
-            scrollContainer={scrollContainer}
-            labelVisibilityDebounceMs={Infinity}
-            class="right-0.5"
-          />
-        </div>
+        <DashboardNotificationList
+          notifications={notifications()}
+          class="max-h-[28rem]"
+        />
       </Show>
     </SideColumnSection>
   );
