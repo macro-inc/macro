@@ -9,14 +9,14 @@ import type {
 import { createMobileSplitMotion } from './createMobileSplitMotion';
 import type { MobileSwipeLayout } from './createMobileSwipeLayout';
 
-export type MobileSwipeBackContainerProps = {
+export type MobileSplitContainerProps = {
   splitManager: SplitManager;
   mobileSwipeLayout: MobileSwipeLayout;
   splits: Accessor<ReadonlyArray<SplitState>>;
   panelRefs: Map<SplitId, HTMLDivElement>;
 };
 
-export function MobileSwipeBackContainer(props: MobileSwipeBackContainerProps) {
+export function MobileSplitContainer(props: MobileSplitContainerProps) {
   const { splitManager, mobileSwipeLayout } = props;
 
   const motion = createMobileSplitMotion({

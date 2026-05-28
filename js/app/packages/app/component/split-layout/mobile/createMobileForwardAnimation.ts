@@ -24,6 +24,7 @@ export function createMobileForwardAnimation(
 
   let forwardStartFrame: ReturnType<typeof requestAnimationFrame> | undefined;
   let forwardSettleFrame: ReturnType<typeof requestAnimationFrame> | undefined;
+  let forwardCompletionTimer: ReturnType<typeof setTimeout> | undefined;
 
   const cancelFrame = (
     frame: ReturnType<typeof requestAnimationFrame> | undefined
@@ -37,6 +38,8 @@ export function createMobileForwardAnimation(
   function clearScheduledAnimation() {
     forwardStartFrame = cancelFrame(forwardStartFrame);
     forwardSettleFrame = cancelFrame(forwardSettleFrame);
+    clearTimeout(forwardCompletionTimer);
+    forwardCompletionTimer = undefined;
   }
 
   onCleanup(clearScheduledAnimation);
@@ -78,6 +81,19 @@ export function createMobileForwardAnimation(
     clearScheduledAnimation();
     setPhase('preparing');
     scheduleAnimationStartIfReady();
+    forwardCompletionTimer = setTimeout(() => {
+      if (phase() === 'idle') return;
+      completeForwardNavigation();
+    }, options.animationMs + 250);
+  }
+
+  function completeForwardNavigation() {
+    if (phase() === 'idle') return;
+    clearScheduledAnimation();
+    batch(() => {
+      setPhase('idle');
+      options.mobileSwipeLayout.completeNavigateForward();
+    });
   }
 
   function handleTransitionEnd(e: TransitionEvent, isForeground: boolean) {
@@ -86,10 +102,7 @@ export function createMobileForwardAnimation(
     if (e.propertyName !== 'transform') return;
     if (phase() !== 'animating') return;
 
-    batch(() => {
-      setPhase('idle');
-      options.mobileSwipeLayout.completeNavigateForward();
-    });
+    completeForwardNavigation();
   }
 
   function handlePanelRef(

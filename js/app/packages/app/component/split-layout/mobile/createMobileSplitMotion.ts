@@ -47,7 +47,9 @@ export function createMobileSplitMotion(options: MobileSplitMotionOptions) {
     mobileSwipeLayout.setForwardNavigationTrigger(undefined);
   });
 
-  const forwardIsActive = () => forwardAnimation.phase() !== 'idle';
+  const forwardPhase = forwardAnimation.phase;
+  const forwardIsActive = () => forwardPhase() !== 'idle';
+  const forwardIsAnimating = () => forwardPhase() === 'animating';
 
   function styleForSlot(isForeground: boolean) {
     if (forwardIsActive()) {
@@ -63,7 +65,7 @@ export function createMobileSplitMotion(options: MobileSplitMotionOptions) {
         'z-10': isForeground && !forwardIsActive(),
         'z-0 pointer-events-none':
           (!isForeground && !forwardIsActive()) ||
-          (isForeground && forwardIsActive()),
+          (isForeground && forwardIsAnimating()),
         'z-user-highlight pointer-events-none':
           !isForeground && forwardIsActive(),
       },
