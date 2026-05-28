@@ -9,14 +9,14 @@ export function Dashboard() {
     <main class="relative h-full overflow-y-auto bg-surface">
       <Hero />
 
-      <div class="px-6 pb-10 sm:px-8">
-        <div class="grid w-full gap-x-8 gap-y-10 xl:grid-cols-[minmax(0,1fr)_24rem]">
+      <div class="@container/dashboard px-6 pb-10 sm:px-8">
+        <div class="grid w-full gap-x-8 gap-y-10 @6xl/dashboard:grid-cols-[minmax(0,1fr)_24rem]">
           <div class="space-y-10">
             <QuickLinksSection />
 
             <RecentChannelsSection />
 
-            <div class="grid gap-8 lg:grid-cols-2">
+            <div class="@container/dashboard-row grid gap-8 @3xl/dashboard-row:grid-cols-2">
               <section>
                 <div class="mb-4 flex items-center justify-between gap-4">
                   <h2 class="text-lg font-semibold tracking-tight text-ink">
@@ -87,7 +87,7 @@ export function Dashboard() {
               </section>
             </div>
 
-            <div class="grid gap-8 lg:grid-cols-2">
+            <div class="@container/dashboard-row grid gap-8 @3xl/dashboard-row:grid-cols-2">
               <section>
                 <div class="mb-4 flex items-center justify-between gap-4">
                   <h2 class="text-lg font-semibold tracking-tight text-ink">
@@ -169,7 +169,7 @@ export function Dashboard() {
               </section>
             </div>
 
-            <div class="grid gap-8 lg:grid-cols-2">
+            <div class="@container/dashboard-row grid gap-8 @3xl/dashboard-row:grid-cols-2">
               <section>
                 <div class="mb-4 flex items-center justify-between gap-4">
                   <h2 class="text-lg font-semibold tracking-tight text-ink">

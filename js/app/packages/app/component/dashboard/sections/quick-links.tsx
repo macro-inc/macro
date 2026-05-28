@@ -109,8 +109,8 @@ export function QuickLinksSection() {
   );
 
   return (
-    <section>
-      <div class="grid grid-cols-4 gap-2 xl:grid-cols-8">
+    <section class="@container/quick-links">
+      <div class="grid grid-cols-2 gap-3 @md/quick-links:grid-cols-3 @2xl/quick-links:grid-cols-4">
         <QuickLinkButton
           label="Inbox"
           icon={AnimatedInboxIcon}

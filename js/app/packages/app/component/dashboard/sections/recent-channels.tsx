@@ -239,7 +239,7 @@ export function RecentChannelsSection() {
   };
 
   return (
-    <section>
+    <section class="@container/recent-channels">
       <div class="mb-4 flex items-center justify-between gap-4">
         <h2 class="text-lg font-semibold tracking-tight text-ink">
           Recent channels
@@ -247,7 +247,7 @@ export function RecentChannelsSection() {
 
       </div>
 
-      <div class="grid w-full grid-cols-7 gap-3">
+      <div class="grid w-full grid-cols-2 gap-3 @lg/recent-channels:grid-cols-3 @2xl/recent-channels:grid-cols-4 @4xl/recent-channels:grid-cols-5 @5xl/recent-channels:grid-cols-7">
         <Show
           when={!channelsQuery.isLoading}
           fallback={
