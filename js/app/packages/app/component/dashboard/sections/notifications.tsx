@@ -18,8 +18,9 @@ import {
   openNotification,
 } from '@notifications';
 import type { UnifiedNotification } from '@notifications/types';
+import CheckIcon from '@phosphor/check.svg';
 import BellIcon from '@phosphor/bell.svg';
-import { cn, Layer } from '@ui';
+import { Button, cn, Layer, Tooltip } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 
 const compactMarkdownTheme = createTheme(
@@ -96,12 +97,43 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
     if (unread()) void notificationSource.markAsRead(props.notification);
   };
 
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    open();
+  };
+
+  const markDone = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    void notificationSource.markAsDone(props.notification);
+  };
+
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       class="group relative w-full rounded-lg p-2.5 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset"
       onClick={open}
+      onKeyDown={onKeyDown}
     >
-      <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1 pr-3">
+      <div class="absolute right-2 top-2 z-10 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+        <Tooltip label="Mark done">
+          <Button
+            type="button"
+            variant="base"
+            size="icon-sm"
+            depth={4}
+            class="rounded-md bg-surface shadow-sm"
+            aria-label="Mark notification done"
+            onClick={markDone}
+          >
+            <CheckIcon class="size-3" />
+          </Button>
+        </Tooltip>
+      </div>
+
+      <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1">
         <div class="relative shrink-0">
           <Show
             when={isDirectMessage() && actorId()}
@@ -186,7 +218,7 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
           </div>
         </Show>
       </div>
-    </button>
+    </div>
   );
 }
 
