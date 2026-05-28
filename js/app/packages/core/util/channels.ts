@@ -5,7 +5,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { invalidateContacts } from '@core/user/contactService';
 
 import { invalidateListChannels } from '@queries/channel/channels';
-import { commsServiceClient, type IdResponse } from '@service-comms/client';
+import { storageServiceClient } from '@service-storage/client';
 import type {
   NewAttachment,
   SimpleMention,
@@ -44,7 +44,7 @@ export function useSendMessageToPeople() {
     attachments: NewAttachment[],
     navigate?: NavigationOptions
   ) {
-    const message = await commsServiceClient.postMessage({
+    const message = await storageServiceClient.postMessage({
       channel_id: channelId,
       message: {
         content,
@@ -59,7 +59,7 @@ export function useSendMessageToPeople() {
       return;
     }
 
-    const messageResponse = message.value as IdResponse;
+    const messageResponse = message.value;
 
     invalidateListChannels();
     invalidateContacts();
@@ -88,10 +88,10 @@ export function useSendMessageToPeople() {
   async function sendToUsers(args: SendToUsersArgs) {
     const result =
       args.users.length === 1
-        ? await commsServiceClient.getOrCreateDirectMessage({
+        ? await storageServiceClient.getOrCreateDirectMessage({
             recipient_id: args.users[0],
           })
-        : await commsServiceClient.getOrCreatePrivateChannel({
+        : await storageServiceClient.getOrCreatePrivateChannel({
             recipients: args.users,
           });
 

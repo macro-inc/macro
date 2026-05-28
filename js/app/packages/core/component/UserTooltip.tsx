@@ -5,7 +5,7 @@ import WideChat from '@icon/wide-chat.svg';
 import WideCopy from '@icon/wide-copy.svg';
 import WideTask from '@icon/wide-task.svg';
 import IconCheck from '@phosphor/check.svg';
-import { commsServiceClient } from '@service-comms/client';
+import { storageServiceClient } from '@service-storage/client';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, Surface } from '@ui';
 import { createSignal, Show } from 'solid-js';
@@ -42,7 +42,7 @@ export function UserTooltip(props: UserTooltipProps) {
     props.onClose?.();
     if (props.id) {
       try {
-        const result = await commsServiceClient.getOrCreateDirectMessage({
+        const result = await storageServiceClient.getOrCreateDirectMessage({
           recipient_id: props.id,
         });
         const channelId = result.isOk() && result.value?.channel_id;

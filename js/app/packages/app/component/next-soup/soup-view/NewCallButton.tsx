@@ -7,7 +7,7 @@ import { getDestinationFromOptions } from '@core/util/destination';
 import PhoneCallIcon from '@icon/wide-call.svg';
 import PlusCircleIcon from '@phosphor/plus.svg';
 import XIcon from '@phosphor/x.svg';
-import { commsServiceClient } from '@service-comms/client';
+import { storageServiceClient } from '@service-storage/client';
 import { Button, Dialog, Surface } from '@ui';
 import { createSignal } from 'solid-js';
 
@@ -45,10 +45,10 @@ export function NewCallButton() {
       } else {
         const result =
           destination.users.length === 1
-            ? await commsServiceClient.getOrCreateDirectMessage({
+            ? await storageServiceClient.getOrCreateDirectMessage({
                 recipient_id: destination.users[0],
               })
-            : await commsServiceClient.getOrCreatePrivateChannel({
+            : await storageServiceClient.getOrCreatePrivateChannel({
                 recipients: destination.users,
               });
 

@@ -9,7 +9,7 @@ import {
   useDisplayNameParts,
 } from '@core/user';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
-import { commsServiceClient } from '@service-comms/client';
+import { storageServiceClient } from '@service-storage/client';
 import { Avatar, type AvatarSize } from '@ui';
 import {
   createMemo,
@@ -151,7 +151,7 @@ export function UserIcon(props: UserIconProps) {
   const getOrCreateDm = async () => {
     if (!props.id) return;
 
-    const result = await commsServiceClient.getOrCreateDirectMessage({
+    const result = await storageServiceClient.getOrCreateDirectMessage({
       recipient_id: props.id,
     });
 

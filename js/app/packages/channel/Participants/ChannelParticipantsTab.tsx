@@ -8,7 +8,7 @@ import {
   useAddParticipantsMutation,
   useRemoveParticipantsMutation,
 } from '@queries/channel/participants';
-import { commsServiceClient } from '@service-comms/client';
+import { storageServiceClient } from '@service-storage/client';
 import { ChannelType } from '@service-comms/generated/models/channelType';
 import { Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
@@ -62,7 +62,7 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
   };
 
   const openDirectMessage = async (participantId: string) => {
-    const result = await commsServiceClient.getOrCreateDirectMessage({
+    const result = await storageServiceClient.getOrCreateDirectMessage({
       recipient_id: participantId,
     });
     const channelId = result.isOk() && result.value?.channel_id;

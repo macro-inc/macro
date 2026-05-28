@@ -9,7 +9,6 @@ import {
 } from '@queries/storage/deleted';
 import { callServiceClient } from '@service-call/client';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { commsServiceClient } from '@service-comms/client';
 import { emailClient } from '@service-email/client';
 import { type ItemType, storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
@@ -106,7 +105,7 @@ export async function renameItem(args: {
       break;
     }
     case 'channel': {
-      result = await commsServiceClient.patchChannel({
+      result = await storageServiceClient.patchChannel({
         channel_id: id,
         channel_name: newName,
       });

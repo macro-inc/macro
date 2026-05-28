@@ -37,7 +37,7 @@ import {
   uploadFile,
 } from '@core/util/upload';
 import InfoIcon from '@phosphor/info.svg';
-import { commsServiceClient } from '@service-comms/client';
+import { storageServiceClient } from '@service-storage/client';
 import { Surface } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 
@@ -126,7 +126,7 @@ export function ChannelCompose() {
         channelName() &&
         destination.users.length > 1
       ) {
-        const res = await commsServiceClient.createChannel({
+        const res = await storageServiceClient.createChannel({
           channel_type: 'private',
           name: channelName() ?? null,
           participants: destination.users,

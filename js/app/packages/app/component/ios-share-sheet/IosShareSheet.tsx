@@ -39,7 +39,7 @@ import type {
 } from '@macro/tauri';
 import { useShareTarget, useTauri } from '@macro/tauri';
 import { invalidateListChannels } from '@queries/channel/channels';
-import { commsServiceClient } from '@service-comms/client';
+import { storageServiceClient } from '@service-storage/client';
 import { staticFileClient } from '@service-static-files/client';
 import { isIOS } from '@solid-primitives/platform';
 import { Button } from '@ui';
@@ -280,10 +280,10 @@ function IosShareSheetComposer(props: {
 
     const result =
       destination.users.length === 1
-        ? await commsServiceClient.getOrCreateDirectMessage({
+        ? await storageServiceClient.getOrCreateDirectMessage({
             recipient_id: destination.users[0],
           })
-        : await commsServiceClient.getOrCreatePrivateChannel({
+        : await storageServiceClient.getOrCreatePrivateChannel({
             recipients: destination.users,
           });
 
@@ -305,7 +305,7 @@ function IosShareSheetComposer(props: {
     const channelId = await resolveDestinationChannelId();
     const message = buildPostMessageRequest({ snapshot });
 
-    const result = await commsServiceClient.postMessage({
+    const result = await storageServiceClient.postMessage({
       channel_id: channelId,
       message,
     });

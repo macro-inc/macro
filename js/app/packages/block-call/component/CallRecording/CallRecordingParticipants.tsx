@@ -2,7 +2,7 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
 
-import { commsServiceClient } from '@service-comms/client';
+import { storageServiceClient } from '@service-storage/client';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { Accessor } from 'solid-js';
 import { createMemo, For } from 'solid-js';
@@ -20,7 +20,7 @@ export function CallRecordingParticipantsSection(props: {
   );
 
   const openDirectMessage = async (participantId: string) => {
-    const result = await commsServiceClient.getOrCreateDirectMessage({
+    const result = await storageServiceClient.getOrCreateDirectMessage({
       recipient_id: participantId,
     });
     const channelId = result.isOk() && result.value?.channel_id;
