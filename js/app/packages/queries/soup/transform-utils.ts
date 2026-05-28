@@ -47,6 +47,11 @@ type InnerSearchResult =
   | ProjectSearchResult
   | CallRecordSearchResult;
 
+type DisplayableSoupItem = Exclude<
+  SoupPage['items'][number],
+  { tag: 'foreignEntity' }
+>;
+
 type TypedInnerSearchResult =
   | { results: InnerSearchResult[]; type?: undefined }
   | { results: DocumentSearchResult[]; type: 'pdf'; searchQuery: string }
@@ -458,10 +463,11 @@ export const mapSoupPageToEntityList: (
 )[] = (data, options) => {
   return data.items
     .filter(
-      (item) =>
-        item.tag !== 'document' ||
-        !options.instructionsIdQuery.isSuccess ||
-        item.data.id !== options.instructionsIdQuery.data
+      (item): item is DisplayableSoupItem =>
+        item.tag !== 'foreignEntity' &&
+        (item.tag !== 'document' ||
+          !options.instructionsIdQuery.isSuccess ||
+          item.data.id !== options.instructionsIdQuery.data)
     )
     .map(
       (

@@ -41,15 +41,19 @@ export function useRecentlyViewedSoupQuery() {
             },
           })
       );
-      return page.items
-        .filter((item) => item.tag !== 'call')
-        .map((item) => ({
-          id: item.tag === 'channel' ? item.data.channel.id : item.data.id,
-          viewedAt:
-            (item.tag === 'channel'
-              ? item.data.viewed_at
-              : item.data.viewedAt) ?? undefined,
-        }));
+      return page.items.flatMap((item): RecentlyViewedItem[] => {
+        if (item.tag === 'call' || item.tag === 'foreignEntity') return [];
+
+        return [
+          {
+            id: item.tag === 'channel' ? item.data.channel.id : item.data.id,
+            viewedAt:
+              (item.tag === 'channel'
+                ? item.data.viewed_at
+                : item.data.viewedAt) ?? undefined,
+          },
+        ];
+      });
     },
     staleTime: RECENTLY_VIEWED_STALE_TIME,
     gcTime: RECENTLY_VIEWED_GC_TIME,

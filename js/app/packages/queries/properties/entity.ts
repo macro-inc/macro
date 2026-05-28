@@ -86,6 +86,7 @@ function optimisticUpdateSoupEntityProperty(
     !current ||
     current.tag === 'channel' ||
     current.tag === 'call' ||
+    current.tag === 'foreignEntity' ||
     !current.data.properties
   ) {
     return undefined;

@@ -13,6 +13,7 @@ export const QUERY_FILTERS_BASE: SoupItemsQueryFilters = {
   chat_filters: { chat_ids: EXCLUDE },
   document_filters: { document_ids: EXCLUDE },
   email_filters: { email_thread_ids: EXCLUDE },
+  foreign_entity_filters: { ids: EXCLUDE },
   project_filters: { project_ids: EXCLUDE },
 };
 
@@ -77,6 +78,19 @@ export function filterSoupItemByRequestBody(
       ({ data }) =>
         !isIdFilteredOut(body.call_filters?.call_ids, data.callId) &&
         !isAttendedFilteredOut(body.call_filters?.attended, data.attended)
+    )
+    .with(
+      { tag: 'foreignEntity' },
+      ({ data }) =>
+        !isIdFilteredOut(body.foreign_entity_filters?.ids, data.id) &&
+        !isIdFilteredOut(
+          body.foreign_entity_filters?.foreign_entity_ids,
+          data.foreignEntityId
+        ) &&
+        !isValueFilteredOut(
+          body.foreign_entity_filters?.foreign_entity_sources,
+          data.foreignEntitySource
+        )
     )
     .exhaustive();
 }
