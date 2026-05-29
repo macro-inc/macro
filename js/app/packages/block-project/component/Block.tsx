@@ -18,8 +18,9 @@ import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { ENABLE_PROJECT_VIEW_PREVIEW } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import {
   handleFileFolderDrop,
   type UploadInput,
@@ -31,7 +32,6 @@ import { toast } from 'core/component/Toast/Toast';
 import { type Component, createSignal, Show } from 'solid-js';
 import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
-import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 
 // HACK: prevent lint error on custom directive
 false && fileFolderDrop;
