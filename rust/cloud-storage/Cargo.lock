@@ -4460,17 +4460,23 @@ name = "foreign_entity"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "chrono",
+ "entity_access",
  "filter_ast",
+ "http-body-util",
  "item_filters",
  "macro_db_migrator",
+ "macro_user_id",
  "macro_uuid",
+ "model-error-response",
  "models_pagination",
  "serde",
  "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "uuid",
 ]

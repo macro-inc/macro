@@ -60,7 +60,7 @@ use email::{
     outbound::EmailPgRepo,
 };
 use foreign_entity::{
-    domain::service::ForeignEntityServiceImpl,
+    domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
@@ -406,9 +406,14 @@ async fn main() -> anyhow::Result<()> {
             sync_app_client_id: config.vars.github_sync_app_client_id.to_string(),
         },
         document_service.clone(),
-        foreign_entity_service,
+        foreign_entity_service.clone(),
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
+    );
+
+    let foreign_entity_state = ForeignEntityRouterState::new(
+        foreign_entity_service.clone(),
+        entity_access_service.clone(),
     );
 
     // Cal.com webhooks → Meta Lead events. Both secrets are loaded here
@@ -592,6 +597,7 @@ async fn main() -> anyhow::Result<()> {
             entity_access_service.clone(),
         ),
         github_sync_service: Arc::new(github_sync_service_impl),
+        foreign_entity_state,
         db: db.clone(),
         readonly_db: readonly_pool::ReadOnlyPool(readonly_db.clone()),
         redis_client: Arc::new(Redis::new(redis_client)),

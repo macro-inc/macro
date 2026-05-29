@@ -4,6 +4,7 @@
 
 use std::future::Future;
 
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use item_filters::ast::{LiteralTree, foreign_entity::ForeignEntityLiteral};
 use models_pagination::{Query, SimpleSortMethod};
 use uuid::Uuid;
@@ -77,6 +78,12 @@ pub trait ForeignEntityRepository: Send + Sync + 'static {
 /// The service owns validation, ID generation, and mapping repository misses to
 /// domain errors.
 pub trait ForeignEntityService: Send + Sync + 'static {
+    /// Fetch an authorized foreign entity record using an access receipt.
+    fn get_foreign_entity(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<ForeignEntity, ForeignEntityError>> + Send;
+
     /// Fetch a foreign entity record by its internal primary key.
     fn get_foreign_entity_by_id(
         &self,

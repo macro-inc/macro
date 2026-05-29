@@ -21,7 +21,7 @@ use documents::domain::{
     },
 };
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+    EditAccessLevel, EntityAccessReceipt, EntityType, OwnerAccessLevel, ViewAccessLevel,
 };
 use foreign_entity::domain::{
     models::{
@@ -513,6 +513,22 @@ impl GithubSyncClient for StubSyncClient {
     }
 }
 
+fn foreign_entity_id_from_receipt(
+    receipt: EntityAccessReceipt<ViewAccessLevel>,
+) -> Result<uuid::Uuid, ForeignEntityError> {
+    let entity = receipt.entity();
+    if entity.entity_type != EntityType::ForeignEntity {
+        return Err(ForeignEntityError::BadRequest(format!(
+            "expected ForeignEntity receipt, got {:?}",
+            entity.entity_type
+        )));
+    }
+
+    uuid::Uuid::parse_str(&entity.entity_id).map_err(|_| {
+        ForeignEntityError::BadRequest("foreign entity receipt id must be a valid UUID".to_string())
+    })
+}
+
 struct StubForeignEntityService {
     foreign_entities: Mutex<Vec<ForeignEntity>>,
     create_calls: Mutex<Vec<CreateForeignEntity>>,
@@ -542,6 +558,14 @@ impl StubForeignEntityService {
 }
 
 impl ForeignEntityService for StubForeignEntityService {
+    async fn get_foreign_entity(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        let id = foreign_entity_id_from_receipt(receipt)?;
+        self.get_foreign_entity_by_id(id).await
+    }
+
     async fn get_foreign_entity_by_id(
         &self,
         id: uuid::Uuid,

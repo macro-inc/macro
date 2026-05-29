@@ -56,7 +56,7 @@ dynamodb_client = { path = "../dynamodb_client" }
 email = { path = "../email", features = ["outbound", "ports"] }
 entity_access = { path = "../entity_access", features = ["inbound", "schema"] }
 entity_access_management = { path = "../entity_access_management" }
-foreign_entity = { path = "../foreign_entity" }
+foreign_entity = { path = "../foreign_entity", features = ["inbound"] }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
 github = { path = "../github", default-features = false, features = [
