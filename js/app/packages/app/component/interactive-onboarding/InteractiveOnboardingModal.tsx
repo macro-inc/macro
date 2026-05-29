@@ -4,14 +4,7 @@ import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { Button, Dialog, Hotkey } from '@ui';
-import {
-  type Accessor,
-  type Component,
-  createSignal,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { type Component, createSignal, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import InteractiveOnboarding from './InteractiveOnboarding';
 import { OnboardingProgress } from './OnboardingProgress';
@@ -56,10 +49,7 @@ function DemoFallback() {
 
 type ModalPhase = 'start' | 'lessons' | 'end';
 
-function ModalHeader(props: { phase: Accessor<ModalPhase> }) {
-  const onboarding = useOnboarding();
-  const currentLesson = () => onboarding.state.currentLesson();
-
+function ModalHeader() {
   return (
     <div class="shrink-0 flex items-center justify-between gap-4">
       <Dialog.CloseButton
@@ -248,7 +238,7 @@ function InteractiveOnboardingModalLayout(props: { onClose: () => void }) {
 
   return (
     <div class="size-full flex flex-col gap-4 bg-surface text-ink">
-      <ModalHeader phase={phase} />
+      <ModalHeader />
       <Switch>
         <Match when={phase() === 'start'}>
           <StartScreen

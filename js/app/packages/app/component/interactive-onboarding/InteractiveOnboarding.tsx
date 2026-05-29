@@ -1,14 +1,10 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { CommandState } from '@app/component/command';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
-import { useIsAuthenticated } from '@core/auth';
-import { toast } from '@core/component/Toast/Toast';
 import { useTutorialCompleted } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fetchToken } from '@core/util/fetchWithToken';
-import { useSendMobileWelcomeEmail } from '@queries/auth';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
@@ -19,13 +15,10 @@ import {
   on,
   onCleanup,
   onMount,
-  Show,
 } from 'solid-js';
 import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
 import { commandKOpen, setCommandKOpen } from './lessons/command-k';
-import MobileWebSignupSent from './MobileWebSignupSent';
-import MobileWebWelcome from './MobileWebWelcome';
 import { OnboardingProvider } from './onboarding-context';
 import { resetSandbox } from './sandbox/sandbox-store';
 
@@ -38,65 +31,13 @@ interface InteractiveOnboardingProps {
 export default function InteractiveOnboarding(
   props: InteractiveOnboardingProps
 ) {
-  const isAuthenticated = useIsAuthenticated();
-  const [mobileWebStep, setMobileWebStep] = createSignal<
-    'welcome' | 'signup-sent'
-  >('welcome');
-  const [submittedEmail, setSubmittedEmail] = createSignal<string | undefined>(
-    undefined
-  );
-  const sendMobileWelcomeEmail = useSendMobileWelcomeEmail();
-
-  // Mobile web users who aren't authenticated get a dedicated welcome screen
-  // with email signup instead of the full lesson flow.
-  const isMobileWeb = isTouchDevice() && !isNativeMobilePlatform();
-
-  const handleMobileSignUp = async (email: string) => {
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast.failure('Invalid email address.');
-      return;
-    }
-
-    const result = await sendMobileWelcomeEmail.mutateAsync(email);
-
-    if (result.isOk()) {
-      if (result.value.sent) {
-        setSubmittedEmail(email);
-        setMobileWebStep('signup-sent');
-      } else {
-        toast.alert('Email already sent.');
-      }
-    } else {
-      const code = result.error?.[0]?.code;
-      if (code === 'RATE_LIMITED') {
-        toast.failure('Rate limit exceeded.');
-      } else if (code === 'INVALID_EMAIL') {
-        toast.failure('Invalid email address.');
-      } else {
-        toast.failure('Internal error. Please try again.');
-      }
-    }
-  };
-
   return (
-    <Show
-      when={!isMobileWeb || isAuthenticated() === true}
-      fallback={
-        <Show
-          when={mobileWebStep() === 'welcome'}
-          fallback={<MobileWebSignupSent email={submittedEmail()} />}
-        >
-          <MobileWebWelcome onSignUp={handleMobileSignUp} />
-        </Show>
-      }
+    <InteractiveOnboardingInner
+      onDismiss={props.onDismiss}
+      ignoreTutorialCompleted={props.ignoreTutorialCompleted}
     >
-      <InteractiveOnboardingInner
-        onDismiss={props.onDismiss}
-        ignoreTutorialCompleted={props.ignoreTutorialCompleted}
-      >
-        {props.children}
-      </InteractiveOnboardingInner>
-    </Show>
+      {props.children}
+    </InteractiveOnboardingInner>
   );
 }
 
