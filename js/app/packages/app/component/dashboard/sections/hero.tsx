@@ -115,14 +115,12 @@ export function Hero() {
     <section class="relative py-8 sm:py-14">
       <div class="mx-auto flex max-w-3xl flex-col items-center gap-6">
         <div class="flex w-full items-start justify-between gap-3 sm:justify-center">
-          <h1 class="flex min-w-0 items-center gap-2 text-balance text-4xl font-semibold tracking-tight text-ink sm:justify-center sm:text-center lg:text-5xl">
-            <Dynamic
-              component={GreetingIcon()}
-              class="hidden sm:block mt-1 self-start size-8 lg:size-10 shrink-0 text-accent"
-            />
-            <span>
-              {greeting()}, <span class="capitalize">{firstName()}.</span>
-            </span>
+          <Dynamic
+            component={GreetingIcon()}
+            class="hidden @max-sm:hidden sm:size-12 text-accent sm:block"
+          />
+          <h1 class="relative min-w-0 text-balance text-4xl font-semibold tracking-tight text-ink @xl::text-center @lg:text-5xl">
+            {greeting()}, <span class="capitalize">{firstName()}.</span>
           </h1>
           <Button
             variant="base"
@@ -193,7 +191,7 @@ export function Hero() {
           <Button
             variant="cta"
             size="lg"
-            class="h-10 rounded-lg px-4 text-sm"
+            class="px-4 text-sm"
             onClick={() => setCreateMenuOpen(true)}
           >
             <PlusIcon />
@@ -202,20 +200,20 @@ export function Hero() {
           <Button
             variant="base"
             size="lg"
-            class="h-10 rounded-lg px-4 text-sm"
+            class="px-4 text-sm"
             onClick={() => CommandState.open()}
           >
-            <SearchIcon class="size-4" />
+            <SearchIcon />
             <span class="hidden sm:inline">Search</span>
           </Button>
           <Button
             variant="base"
             size="lg"
-            class="h-10 rounded-lg px-3 text-sm sm:hidden"
+            class="px-3 text-sm sm:hidden"
             aria-label="More dashboard actions"
             onClick={() => setMoreDrawerOpen(true)}
           >
-            <MoreIcon class="size-4" />
+            <MoreIcon />
           </Button>
 
           <MobileDrawer
@@ -292,10 +290,10 @@ export function Hero() {
               <Dropdown.Trigger
                 variant="base"
                 size="lg"
-                class="hidden h-10 rounded-lg px-3 text-sm sm:inline-flex"
+                class="hidden text-sm sm:inline-flex"
                 aria-label="More dashboard actions"
               >
-                <MoreIcon class="size-4" />
+                <MoreIcon />
                 <span>More</span>
               </Dropdown.Trigger>
               <Dropdown.Content class="min-w-48">
