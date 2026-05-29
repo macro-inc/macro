@@ -67,7 +67,7 @@ function MarkdownMentionsDemo(props: LessonContentProps) {
     .withSkipPreviewFetch();
 
   return (
-    <MockAppChrome>
+    <MockAppChrome scopeId={props.scopeId}>
       <div class="h-full flex flex-col px-8 py-6">
         <h1 class="text-3xl font-semibold text-ink mb-4">Daily Note</h1>
         <MarkdownShell

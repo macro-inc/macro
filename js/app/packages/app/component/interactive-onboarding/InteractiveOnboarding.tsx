@@ -3,7 +3,6 @@ import { CommandState } from '@app/component/command';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useIsAuthenticated } from '@core/auth';
 import MacroLogo from '@core/component/MacroLogo';
-import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { toast } from '@core/component/Toast/Toast';
 import { useTutorialCompleted } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -279,12 +278,29 @@ function InteractiveOnboardingInner() {
 
   // cmd+enter hotkey to continue
   let shellRef: HTMLDivElement | undefined;
-  const [attachHotkeys, scopeId] = useHotkeyDOMScope('onboarding-shell');
+  // Detached so onboarding hotkeys do not bubble up to app/global hotkeys.
+  // Any lesson hotkeys registered with this scope still work while this shell
+  // is focused, but unhandled keys stop at this scope instead of falling back
+  // to the app-level handlers.
+  const [attachHotkeys, scopeId] = useHotkeyDOMScope('onboarding-shell', true);
 
   onMount(() => {
     if (shellRef) {
       attachHotkeys(shellRef);
       shellRef.focus();
+
+      // Keep raw bubbling keyboard events inside onboarding without blocking
+      // target-level handlers like Lexical's editor input/mentions handling.
+      // App-level hotkeys are handled separately by the detached hotkey scope.
+      const stopKeyboardPropagation = (event: KeyboardEvent) => {
+        event.stopPropagation();
+      };
+      shellRef.addEventListener('keydown', stopKeyboardPropagation);
+      shellRef.addEventListener('keyup', stopKeyboardPropagation);
+      onCleanup(() => {
+        shellRef?.removeEventListener('keydown', stopKeyboardPropagation);
+        shellRef?.removeEventListener('keyup', stopKeyboardPropagation);
+      });
     }
 
     // When returning from an external flow, clean the return param from the URL

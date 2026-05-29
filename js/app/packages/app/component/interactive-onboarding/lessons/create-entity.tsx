@@ -175,6 +175,7 @@ function CreateEntityDemo(props: LessonContentProps) {
       <MockAppChrome
         onCreateClick={() => setLauncherOpen((v) => !v)}
         highlightCreate
+        scopeId={props.scopeId}
       >
         <Show when={sharedSoup()}>
           {(s) => <OnboardingEntityList soup={s()} />}

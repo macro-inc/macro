@@ -149,6 +149,7 @@ function CommandKDemo(props: LessonContentProps) {
       <MockAppChrome
         onCommandClick={() => setCommandKOpen((v) => !v)}
         highlightCommand
+        scopeId={props.scopeId}
       >
         <OnboardingEntityList soup={soup} />
       </MockAppChrome>

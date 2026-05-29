@@ -47,7 +47,7 @@ function SidebarNavContent(props: LessonContentProps) {
   );
 }
 
-function SidebarNavDemo() {
+function SidebarNavDemo(props: LessonContentProps) {
   const soup = createSoupState({ wrapNavigation: true });
 
   createEffect(() => {
@@ -59,7 +59,7 @@ function SidebarNavDemo() {
   });
 
   return (
-    <MockAppChrome highlightId="mail">
+    <MockAppChrome highlightId="mail" scopeId={props.scopeId}>
       <OnboardingEntityList soup={soup} />
     </MockAppChrome>
   );
