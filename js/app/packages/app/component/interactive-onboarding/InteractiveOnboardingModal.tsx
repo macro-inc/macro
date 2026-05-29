@@ -14,6 +14,7 @@ import type { LessonContentProps, LessonState } from './types';
 interface InteractiveOnboardingModalProps {
   open?: boolean;
   defaultOpen?: boolean;
+  isFirstTimeOnboarding?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -221,13 +222,18 @@ function LessonsScreen(props: { onFinish: () => void; onReplay: () => void }) {
   );
 }
 
-function InteractiveOnboardingModalLayout(props: { onClose: () => void }) {
+function InteractiveOnboardingModalLayout(props: {
+  isFirstTimeOnboarding: boolean;
+  onClose: () => void;
+}) {
   const [phase, setPhase] = createSignal<ModalPhase>('start');
   const completeTutorial = useCompleteTutorialMutation();
   const onboarding = useOnboarding();
 
   const handleSkip = () => {
-    completeTutorial.mutate(undefined);
+    if (props.isFirstTimeOnboarding) {
+      completeTutorial.mutate(undefined);
+    }
     setPhase('end');
   };
 
@@ -283,8 +289,12 @@ export function InteractiveOnboardingModal(
           <InteractiveOnboarding
             onDismiss={() => setOpen(false)}
             ignoreTutorialCompleted
+            isFirstTimeOnboarding={props.isFirstTimeOnboarding}
           >
-            <InteractiveOnboardingModalLayout onClose={() => setOpen(false)} />
+            <InteractiveOnboardingModalLayout
+              isFirstTimeOnboarding={props.isFirstTimeOnboarding === true}
+              onClose={() => setOpen(false)}
+            />
           </InteractiveOnboarding>
         </Show>
       </div>

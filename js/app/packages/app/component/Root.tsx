@@ -89,6 +89,7 @@ import { setCookie } from './auth/Shared';
 import { Signup } from './auth/Signup';
 import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
+import { InteractiveOnboardingModal } from './interactive-onboarding/InteractiveOnboardingModal';
 import { Layout } from './Layout';
 import { SearchProvider } from './next-soup/search-context';
 import { usePendingNotificationNavigationEffect } from './PendingNotificationNavigationEffect';
@@ -445,6 +446,23 @@ function QuerySyncProviderWithUserId() {
   return <QuerySyncProvider userId={userId} />;
 }
 
+function InitialInteractiveOnboardingModal() {
+  const userInfoQuery = useUserInfoQuery();
+  const [open, setOpen] = createSignal(true);
+
+  return (
+    <InteractiveOnboardingModal
+      open={
+        open() &&
+        userInfoQuery.data?.authenticated === true &&
+        userInfoQuery.data.tutorialComplete === false
+      }
+      isFirstTimeOnboarding
+      onOpenChange={setOpen}
+    />
+  );
+}
+
 export function Root() {
   setHotkeyRoot(useHotKeyRoot());
 
@@ -502,6 +520,7 @@ export function Root() {
                                 }}
                               </IsomorphicRouter>
                             </Suspense>
+                            <InitialInteractiveOnboardingModal />
                             <ToastRegion />
                           </SearchProvider>
                         </QuickAccessProvider>

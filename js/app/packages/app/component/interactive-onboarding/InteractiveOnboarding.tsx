@@ -25,6 +25,7 @@ import { resetSandbox } from './sandbox/sandbox-store';
 interface InteractiveOnboardingProps {
   onDismiss?: () => void;
   ignoreTutorialCompleted?: boolean;
+  isFirstTimeOnboarding?: boolean;
   children: JSX.Element;
 }
 
@@ -35,6 +36,7 @@ export default function InteractiveOnboarding(
     <InteractiveOnboardingInner
       onDismiss={props.onDismiss}
       ignoreTutorialCompleted={props.ignoreTutorialCompleted}
+      isFirstTimeOnboarding={props.isFirstTimeOnboarding}
     >
       {props.children}
     </InteractiveOnboardingInner>
@@ -367,8 +369,10 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
       () => state.isFinished(),
       (finished) => {
         if (finished && !testMode) {
-          analytics.track('onboarding_completed');
-          completeTutorial.mutate(undefined);
+          if (props.isFirstTimeOnboarding) {
+            analytics.track('onboarding_completed');
+            completeTutorial.mutate(undefined);
+          }
         }
       }
     )
