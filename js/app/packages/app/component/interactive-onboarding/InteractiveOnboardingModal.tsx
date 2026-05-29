@@ -4,7 +4,14 @@ import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { Button, Dialog, Hotkey } from '@ui';
-import { type Accessor, type Component, createSignal, Show } from 'solid-js';
+import {
+  type Accessor,
+  type Component,
+  createSignal,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import InteractiveOnboarding from './InteractiveOnboarding';
 import { OnboardingProgress } from './OnboardingProgress';
@@ -241,23 +248,23 @@ function InteractiveOnboardingModalLayout(props: { onClose: () => void }) {
     setPhase('lessons');
   };
 
-  const content = () => {
-    if (phase() === 'start') {
-      return (
-        <StartScreen onStart={() => setPhase('lessons')} onSkip={handleSkip} />
-      );
-    }
-    if (onboarding.state.isFinished()) {
-      if (phase() !== 'end') setPhase('end');
-      return <EndScreen onFinish={props.onClose} onReplay={handleReplay} />;
-    }
-    return <LessonsScreen onFinish={props.onClose} onReplay={handleReplay} />;
-  };
-
   return (
     <div class="size-full flex flex-col bg-surface text-ink">
       <ModalHeader phase={phase} />
-      {content()}
+      <Switch>
+        <Match when={phase() === 'start'}>
+          <StartScreen
+            onStart={() => setPhase('lessons')}
+            onSkip={handleSkip}
+          />
+        </Match>
+        <Match when={phase() === 'end' || onboarding.state.isFinished()}>
+          <EndScreen onFinish={props.onClose} onReplay={handleReplay} />
+        </Match>
+        <Match when={true}>
+          <LessonsScreen onFinish={props.onClose} onReplay={handleReplay} />
+        </Match>
+      </Switch>
     </div>
   );
 }
