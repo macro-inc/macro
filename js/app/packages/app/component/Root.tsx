@@ -1,11 +1,19 @@
+import {
+  AnalyticsContextProvider,
+  useAnalytics,
+} from '@app/component/analytics-context';
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
+import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { CallProvider } from '@channel/Call/CallContext';
+import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
+import { QuickAccessProvider } from '@core/context/quickAccess';
 import {
   UserContextProvider,
   useUserId,
@@ -54,13 +62,13 @@ import {
   type RouterProps,
   useSearchParams,
 } from '@solidjs/router';
+import { Button } from '@ui';
 import { useHotKeyRoot } from 'core/hotkey/hotkeys';
 import { detect } from 'detect-browser';
 import {
   createEffect,
   createSignal,
   type JSX,
-  lazy,
   Match,
   on,
   onCleanup,
@@ -87,26 +95,6 @@ import { usePendingNotificationNavigationEffect } from './PendingNotificationNav
 import { ReactiveFavicon } from './ReactiveFavicon';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import { TeamInviteAcceptance } from './TeamInviteAcceptance';
-
-const NewOnboarding = lazy(() => import('./onboarding/onboarding'));
-const OldOnboarding = lazy(
-  () => import('./interactive-onboarding/InteractiveOnboarding')
-);
-
-import {
-  AnalyticsContextProvider,
-  useAnalytics,
-} from '@app/component/analytics-context';
-import {
-  PosthogProvider,
-  ShowFeatureFlag,
-  usePosthog,
-} from '@app/lib/analytics/posthog';
-import { CallProvider } from '@channel/Call/CallContext';
-import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
-import { ENABLE_NEW_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
-import { QuickAccessProvider } from '@core/context/quickAccess';
-import { Button } from '@ui';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
 function useSyncLoginCookie() {
@@ -355,17 +343,7 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/welcome',
-    component: () => (
-      <div class="flex *:flex-1 size-full overflow-y-hidden">
-        <ShowFeatureFlag
-          key="enable-new-onboarding"
-          enabledOverride={ENABLE_NEW_ONBOARDING_OVERRIDE}
-          fallback={<OldOnboarding />}
-        >
-          <NewOnboarding />
-        </ShowFeatureFlag>
-      </div>
-    ),
+    component: () => <Navigate href="/login" />,
   },
   {
     path: '/team-invite',
