@@ -3,7 +3,18 @@ import { DashboardSectionBoundary } from "@app/component/dashboard/dashboard-sec
 import { globalSplitManager } from "@app/signal/splitLayout";
 import { setAutomationComposerOpen } from "@block-automation/component";
 import { DashboardNotificationList } from "@app/component/dashboard/sections/notifications";
+import { getChannelParams } from "@channel/Channel/link";
+import {
+  StaticMarkdown,
+  StaticMarkdownContext,
+} from "@core/component/LexicalMarkdown/component/core/StaticMarkdown";
+import {
+  createTheme,
+  theme as markdownTheme,
+} from "@core/component/LexicalMarkdown/theme";
 import { EntityIcon } from "@core/component/EntityIcon";
+import { UserIcon } from "@core/component/UserIcon";
+import { useUserId } from "@core/context/user";
 import { formatDate } from "@core/util/date";
 import type { AutomationEntity, ChannelEntity } from "@entity";
 import { formatDateAndTime } from "@entity/utils/timestamp";
@@ -16,6 +27,16 @@ import BellIcon from "@phosphor/bell.svg";
 import RobotIcon from "@phosphor/robot.svg";
 import { Button, Layer } from "@ui";
 import { createMemo, createSignal, For, type JSX, Show } from "solid-js";
+
+const compactMarkdownTheme = createTheme(
+  {
+    paragraph: "m-0 text-[1em] leading-5",
+    list: {
+      listitem: "m-0 leading-5",
+    },
+  },
+  markdownTheme,
+);
 
 function SideColumnSection(props: {
   title: string;
@@ -128,9 +149,16 @@ function openChannelsView() {
   );
 }
 
-function openChannel(channelId: string) {
+function openChannel(channel: ChannelEntity) {
+  const params = channel.latestMessage?.messageId
+    ? getChannelParams(
+        channel.latestMessage.messageId,
+        channel.latestMessage.threadId,
+      )
+    : undefined;
+
   globalSplitManager()?.openWithSplit(
-    { type: "channel", id: channelId },
+    { type: "channel", id: channel.id, params },
     { activate: true, referredFrom: "dashboard" },
   );
 }
@@ -142,6 +170,7 @@ function channelDisplayName(name: string | null | undefined) {
 
 function ChannelSummary(props: {
   channel: ChannelEntity;
+  currentUserId?: string;
   unreadCount: number;
 }) {
   const latest = () => props.channel.latestMessage;
@@ -153,20 +182,41 @@ function ChannelSummary(props: {
         props.channel.updatedAt,
       { shortWeekday: true },
     );
+  const dmUserId = () =>
+    props.channel.channelType === "direct_message"
+      ? (props.channel.participantIds?.find(
+          (id) => id !== props.currentUserId,
+        ) ?? latest()?.senderId)
+      : undefined;
 
   return (
     <button
       class="group w-full rounded-lg p-2.5 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset"
-      onClick={() => openChannel(props.channel.id)}
+      onClick={() => openChannel(props.channel)}
     >
       <div class="flex items-start gap-2">
-        <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-hover transition group-hover:bg-active">
-          <EntityIcon
-            targetType={props.channel.channelType || "channel"}
-            size="sm"
-            class="shrink-0"
-          />
-        </div>
+        <Show
+          when={dmUserId()}
+          fallback={
+            <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-hover transition group-hover:bg-active">
+              <EntityIcon
+                targetType={props.channel.channelType || "channel"}
+                size="sm"
+                class="shrink-0"
+              />
+            </div>
+          }
+        >
+          {(id) => (
+            <UserIcon
+              id={id()}
+              size="md"
+              suppressClick
+              showTooltip={false}
+              class="shrink-0"
+            />
+          )}
+        </Show>
         <div class="flex min-w-0 flex-1 flex-col gap-0.5">
           <div class="flex min-w-0 items-center gap-1.5">
             <div class="flex min-w-0 flex-1 items-center gap-1.5">
@@ -181,7 +231,12 @@ function ChannelSummary(props: {
             </div>
             <span class="shrink-0 text-xxs text-ink-extra-muted">{time()}</span>
           </div>
-          <p class="line-clamp-2 text-xs/5 text-ink-muted">{latestText()}</p>
+          <div class="line-clamp-2 text-xs/5 text-ink-muted [&_*]:text-xs [&_*]:leading-5">
+            <StaticMarkdown
+              markdown={latestText()}
+              theme={compactMarkdownTheme}
+            />
+          </div>
         </div>
       </div>
     </button>
@@ -190,6 +245,7 @@ function ChannelSummary(props: {
 
 function RecentChannelsColumnSection() {
   const notificationSource = useGlobalNotificationSource();
+  const currentUserId = useUserId();
 
   const unreadByChannelId = createMemo(() => {
     const counts = new Map<string, number>();
@@ -211,7 +267,7 @@ function RecentChannelsColumnSection() {
 
   const channelsQuery = useSoupItemsQuery(
     () => ({
-      params: { limit: 5, sort_method: "viewed_updated" },
+      params: { limit: 50, sort_method: "viewed_updated" },
       body: {
         call_filters: { call_ids: ["00000000-0000-0000-0000-000000000000"] },
         chat_filters: { chat_ids: ["00000000-0000-0000-0000-000000000000"] },
@@ -225,7 +281,13 @@ function RecentChannelsColumnSection() {
           project_ids: ["00000000-0000-0000-0000-000000000000"],
         },
         channel_filters: {
-          channel_types: ["public", "organization", "private", "team"],
+          channel_types: [
+            "public",
+            "organization",
+            "private",
+            "team",
+            "direct_message",
+          ],
         },
       },
     }),
@@ -233,16 +295,22 @@ function RecentChannelsColumnSection() {
   );
 
   const channels = createMemo(() =>
-    (channelsQuery.data ?? []).filter(
-      (entity): entity is ChannelEntity => entity.type === "channel",
-    ),
+    (channelsQuery.data ?? [])
+      .filter(
+        (entity): entity is ChannelEntity =>
+          entity.type === "channel" &&
+          (entity.channelType === "direct_message" ||
+            !!entity.latestMessage?.threadId ||
+            !!entity.interactedAt),
+      )
+      .slice(0, 10),
   );
 
   return (
     <SideColumnSection
-      title="Recent channels"
+      title="Recent conversations"
       count={channels().length}
-      viewAllLabel="View channels"
+      viewAllLabel="View threads & DMs"
       onViewAll={openChannelsView}
     >
       <Show
@@ -259,20 +327,23 @@ function RecentChannelsColumnSection() {
           when={channels().length > 0}
           fallback={
             <div class="rounded-lg p-2.5 text-xs text-ink-muted">
-              No recent channels
+              No recent conversations
             </div>
           }
         >
-          <div class="flex flex-col gap-1">
-            <For each={channels()}>
-              {(channel) => (
-                <ChannelSummary
-                  channel={channel}
-                  unreadCount={unreadByChannelId().get(channel.id) ?? 0}
-                />
-              )}
-            </For>
-          </div>
+          <StaticMarkdownContext>
+            <div class="flex flex-col gap-1">
+              <For each={channels()}>
+                {(channel) => (
+                  <ChannelSummary
+                    channel={channel}
+                    currentUserId={currentUserId()}
+                    unreadCount={unreadByChannelId().get(channel.id) ?? 0}
+                  />
+                )}
+              </For>
+            </div>
+          </StaticMarkdownContext>
         </Show>
       </Show>
     </SideColumnSection>
@@ -375,7 +446,7 @@ function AutomationsColumnSection() {
 export function DashboardSideColumn() {
   return (
     <aside class="hidden min-w-0 flex-col gap-8 pt-8 text-left @6xl/dashboard:flex">
-      <DashboardSectionBoundary title="recent channels">
+      <DashboardSectionBoundary title="recent conversations">
         <RecentChannelsColumnSection />
       </DashboardSectionBoundary>
       <DashboardSectionBoundary title="automations">

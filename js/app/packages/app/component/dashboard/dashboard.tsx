@@ -42,7 +42,7 @@ export function Dashboard() {
             </DashboardSectionBoundary>
 
             <div class="@6xl/dashboard:hidden">
-              <DashboardSectionBoundary title="recent channels">
+              <DashboardSectionBoundary title="recent conversations">
                 <RecentChannelsSection />
               </DashboardSectionBoundary>
             </div>
@@ -59,7 +59,7 @@ export function Dashboard() {
               </DashboardSectionBoundary>
             </div>
 
-            <div class="px-4 sm:px-0">
+            <div class="px-4 sm:px-0 @6xl/dashboard:hidden">
               <DashboardSectionBoundary title="quick links">
                 <QuickLinksSection />
               </DashboardSectionBoundary>

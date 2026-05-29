@@ -1,32 +1,33 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { AdaptiveScroller } from '@app/component/dashboard/adaptive-scroller';
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { getChannelParams } from '@channel/Channel/link';
 import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { UserIcon } from '@core/component/UserIcon';
-import { useUserId } from '@core/context/user';
-import { formatDate } from '@core/util/date';
 import {
   createTheme,
   theme as markdownTheme,
 } from '@core/component/LexicalMarkdown/theme';
+import { UserIcon } from '@core/component/UserIcon';
+import { useUserId } from '@core/context/user';
 import { useDisplayName } from '@core/user/displayName';
-import type { ChannelEntity } from '@entity';
+import { formatDate } from '@core/util/date';
+import type { ChannelEntity, EntityData } from '@entity';
+import ArrowRightIcon from '@phosphor/arrow-right.svg';
+import BuildingIcon from '@phosphor/building.svg';
+import UsersIcon from '@phosphor/users.svg';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import { ChannelType } from '@service-comms/generated/models/channelType';
-import BuildingIcon from '@phosphor/building.svg';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import UsersIcon from '@phosphor/users.svg';
 import { Avatar, Button, Layer, Tooltip } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 
 const compactMarkdownTheme = createTheme(
   {
-    paragraph: 'm-0 md-p text-[1em]',
+    paragraph: 'm-0 text-[1em] leading-5',
     list: {
-      listitem: 'm-0',
+      listitem: 'm-0 leading-5',
     },
   },
   markdownTheme
@@ -36,12 +37,16 @@ type ChannelCardData = {
   id: string;
   name: string;
   type: string;
-  latest: string;
-  latestFromMe: boolean;
-  latestSenderId?: string;
+  latest: {
+    content: string;
+    senderId?: string;
+    messageId?: string;
+    threadId?: string | null;
+  };
   updatedAt: string;
   unreadCount: number;
   participantCount: number;
+  dmUserId?: string;
 };
 
 function channelDisplayName(name: string | null | undefined) {
@@ -64,13 +69,17 @@ function ChannelCard(props: {
   channel: ChannelCardData;
   onOpen: (channelId: string, event: MouseEvent) => void;
 }) {
-  const [senderName] = useDisplayName(props.channel.latestSenderId as any);
-  const senderLabel = () =>
-    props.channel.latestSenderId
-      ? props.channel.latestFromMe
-        ? 'You'
-        : senderName()
-      : undefined;
+  const [senderName] = useDisplayName(props.channel.latest.senderId as any);
+  const currentUserId = useUserId();
+  const senderLabel = () => {
+    const senderId = props.channel.latest.senderId;
+
+    if (!senderId) return;
+
+    if (senderId === currentUserId()) return 'You';
+
+    return senderName();
+  };
 
   return (
     <button
@@ -79,9 +88,29 @@ function ChannelCard(props: {
     >
       <div class="flex items-start justify-between gap-3">
         <div class="flex min-w-0 items-center gap-3">
-          <Avatar size="md" class="bg-default/20 px-1 text-default @md/recent-channels:size-10">
-            <Avatar.Fallback>{initials(props.channel.name)}</Avatar.Fallback>
-          </Avatar>
+          <Show
+            when={props.channel.dmUserId}
+            fallback={
+              <Avatar
+                size="md"
+                class="bg-default/20 px-1 text-default @md/recent-channels:size-10"
+              >
+                <Avatar.Fallback>
+                  {initials(props.channel.name)}
+                </Avatar.Fallback>
+              </Avatar>
+            }
+          >
+            {(dmUserId) => (
+              <UserIcon
+                id={dmUserId()}
+                size="md"
+                suppressClick
+                showTooltip={false}
+                class="@md/recent-channels:size-10"
+              />
+            )}
+          </Show>
           <div class="flex min-w-0 flex-col gap-0.5">
             <div class="flex min-w-0 items-center gap-1.5">
               <Show when={props.channel.type === ChannelType.organization}>
@@ -115,7 +144,7 @@ function ChannelCard(props: {
         <Show when={senderLabel()}>
           {(label) => (
             <div class="flex items-center gap-1.5 text-xxs font-medium text-ink-muted">
-              <Show when={props.channel.latestSenderId}>
+              <Show when={props.channel.latest.senderId}>
                 {(senderId) => (
                   <UserIcon
                     id={senderId()}
@@ -136,11 +165,10 @@ function ChannelCard(props: {
         </Show>
         <div class="line-clamp-2 text-xs/5 text-ink-muted [&_*]:text-xs [&_*]:leading-5">
           <StaticMarkdown
-            markdown={props.channel.latest}
+            markdown={props.channel.latest.content}
             theme={compactMarkdownTheme}
           />
         </div>
-
       </div>
     </button>
   );
@@ -171,7 +199,7 @@ export function RecentChannelsSection() {
 
   const channelsQuery = useSoupItemsQuery(
     () => ({
-      params: { limit: 6, sort_method: 'viewed_updated' },
+      params: { limit: 50, sort_method: 'viewed_updated' },
       body: {
         call_filters: { call_ids: ['00000000-0000-0000-0000-000000000000'] },
         chat_filters: { chat_ids: ['00000000-0000-0000-0000-000000000000'] },
@@ -185,41 +213,79 @@ export function RecentChannelsSection() {
           project_ids: ['00000000-0000-0000-0000-000000000000'],
         },
         channel_filters: {
-          channel_types: ['public', 'organization', 'private', 'team'],
+          channel_types: [
+            'public',
+            'organization',
+            'private',
+            'team',
+            'direct_message',
+          ],
         },
       },
     }),
     () => ({ staleTime: 5 * 60 * 1000 })
   );
 
-  const channels = createMemo<ChannelCardData[]>(() =>
-    ((channelsQuery.data ?? []).filter(
-      (entity): entity is ChannelEntity => entity.type === 'channel'
-    ) as ChannelEntity[]).map((channel) => {
-      const latest = channel.latestMessage;
-      const latestFromMe = latest?.senderId === currentUserId();
-      const latestText = latest?.content?.trim();
+  const shouldShowChannel = (entity: EntityData): entity is ChannelEntity => {
+    if (entity.type !== 'channel') return false;
+
+    return (
+      entity.channelType === ChannelType.direct_message ||
+      !!entity.latestMessage?.threadId ||
+      !!entity.interactedAt
+    );
+  };
+
+  const getDmUserId = (channel: ChannelEntity) => {
+    if (channel.channelType !== ChannelType.direct_message) return;
+
+    return (
+      channel.participantIds?.find((id) => id !== currentUserId()) ??
+      channel.latestMessage?.senderId
+    );
+  };
+
+  const channels = createMemo(() => {
+    const visibleChannels = (channelsQuery.data ?? [])
+      .filter(shouldShowChannel)
+      .slice(0, 10);
+
+    return visibleChannels.map((channel) => {
+      const latestMessage = channel.latestMessage;
+
+      const latest = {
+        content: latestMessage?.content?.trim() ?? 'No recent messages',
+        senderId: latestMessage?.senderId,
+        messageId: latestMessage?.messageId,
+        threadId: latestMessage?.threadId,
+      };
+
+      const updatedAt = formatDate(
+        channel.interactedAt ?? latestMessage?.createdAt ?? channel.updatedAt,
+        { shortWeekday: true }
+      );
 
       return {
         id: channel.id,
         name: channelDisplayName(channel.name),
         type: channel.channelType,
-        latest: latestText ?? 'No recent messages',
-        latestFromMe,
-        latestSenderId: latest?.senderId,
-        updatedAt: formatDate(
-          channel.interactedAt ?? latest?.createdAt ?? channel.updatedAt,
-          { shortWeekday: true }
-        ),
+        latest,
+        updatedAt,
         unreadCount: unreadByChannelId().get(channel.id) ?? 0,
         participantCount: channel.participantIds?.length ?? 0,
+        dmUserId: getDmUserId(channel),
       };
-    })
-  );
+    });
+  });
 
   const openChannel = (channelId: string, event: MouseEvent) => {
+    const channel = channels().find((item) => item.id === channelId);
+    const params = channel?.latest.messageId
+      ? getChannelParams(channel.latest.messageId, channel.latest.threadId)
+      : undefined;
+
     splitLayout.openWithSplit(
-      { type: 'channel' as const, id: channelId },
+      { type: 'channel' as const, id: channelId, params },
       {
         activate: true,
         preferNewSplit: event.shiftKey,
@@ -243,7 +309,7 @@ export function RecentChannelsSection() {
     <section class="@container/recent-channels">
       <div class="mb-4 flex items-center justify-between gap-4 px-4 sm:px-0">
         <h2 class="text-lg font-semibold tracking-tight text-ink">
-          Recent channels
+          Recent conversations
         </h2>
         <Button
           variant="ghost"
@@ -261,7 +327,7 @@ export function RecentChannelsSection() {
           <Show
             when={!channelsQuery.isLoading}
             fallback={
-              <For each={[0, 1, 2, 3, 4, 5, 6]}>
+              <For each={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}>
                 {() => (
                   <div class="skeleton-shimmer h-28 w-64 shrink-0 snap-start rounded-2xl border border-edge-muted bg-hover/60 p-3 @md/recent-channels:h-36 @md/recent-channels:w-auto">
                     <div class="skeleton-shimmer size-9 rounded-xl bg-surface" />
@@ -275,7 +341,7 @@ export function RecentChannelsSection() {
             }
           >
             <StaticMarkdownContext>
-              <For each={channels()}>
+              <For each={channels().slice(0, 10)}>
                 {(channel) => (
                   <ChannelCard channel={channel} onOpen={openChannel} />
                 )}
