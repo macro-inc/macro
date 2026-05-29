@@ -1,32 +1,32 @@
-import { useGlobalNotificationSource } from "@app/component/GlobalAppState";
-import { DashboardSectionBoundary } from "@app/component/dashboard/dashboard-section-boundary";
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { DashboardSectionBoundary } from '@app/component/dashboard/dashboard-section-boundary';
 import {
   channelDisplayName,
   compactMarkdownTheme,
-} from "@app/component/dashboard/utils";
-import { globalSplitManager } from "@app/signal/splitLayout";
-import { setAutomationComposerOpen } from "@block-automation/component";
-import { DashboardNotificationList } from "@app/component/dashboard/sections/notifications";
-import { getChannelParams } from "@channel/Channel/link";
+} from '@app/component/dashboard/utils';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { setAutomationComposerOpen } from '@block-automation/component';
+import { DashboardNotificationList } from '@app/component/dashboard/sections/notifications';
+import { getChannelParams } from '@channel/Channel/link';
 import {
   StaticMarkdown,
   StaticMarkdownContext,
-} from "@core/component/LexicalMarkdown/component/core/StaticMarkdown";
-import { EntityIcon } from "@core/component/EntityIcon";
-import { UserIcon } from "@core/component/UserIcon";
-import { useUserId } from "@core/context/user";
-import { formatDate } from "@core/util/date";
-import type { AutomationEntity, ChannelEntity } from "@entity";
-import { formatDateAndTime } from "@entity/utils/timestamp";
-import { notificationIsRead } from "@notifications";
-import { useAutomationEntities } from "@queries/agent-schedule/entities";
-import { useSoupItemsQuery } from "@queries/soup/items";
-import ArrowRightIcon from "@phosphor/arrow-right.svg";
-import CaretDownIcon from "@phosphor/caret-down.svg";
-import BellIcon from "@phosphor/bell.svg";
-import RobotIcon from "@phosphor/robot.svg";
-import { Button, Layer } from "@ui";
-import { createMemo, createSignal, For, type JSX, Show } from "solid-js";
+} from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { UserIcon } from '@core/component/UserIcon';
+import { useUserId } from '@core/context/user';
+import { formatDate } from '@core/util/date';
+import type { AutomationEntity, ChannelEntity } from '@entity';
+import { formatDateAndTime } from '@entity/utils/timestamp';
+import { notificationIsRead } from '@notifications';
+import { useAutomationEntities } from '@queries/agent-schedule/entities';
+import { useSoupItemsQuery } from '@queries/soup/items';
+import ArrowRightIcon from '@phosphor/arrow-right.svg';
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import BellIcon from '@phosphor/bell.svg';
+import RobotIcon from '@phosphor/robot.svg';
+import { Button, Layer } from '@ui';
+import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 
 function SideColumnSection(props: {
   title: string;
@@ -45,14 +45,14 @@ function SideColumnSection(props: {
             class="peer/collapse absolute inset-0 rounded-lg border border-transparent bg-transparent transition hover:border-edge-muted hover:bg-surface focus:outline-none focus-visible:border-edge-muted focus-visible:bg-surface"
             onClick={() => setCollapsed((value) => !value)}
             aria-expanded={!collapsed()}
-            aria-label={`${collapsed() ? "Expand" : "Collapse"} ${props.title}`}
+            aria-label={`${collapsed() ? 'Expand' : 'Collapse'} ${props.title}`}
           />
           <div class="pointer-events-none relative flex min-w-0 flex-1 items-center gap-2.5 pr-20">
             <Layer depth={3}>
               <div class="flex size-4.5 items-center justify-center rounded-md bg-transparent peer-hover/collapse:bg-active peer-focus-visible/collapse:bg-active">
                 <CaretDownIcon
                   class="size-2.5 transition"
-                  classList={{ "-rotate-90": collapsed() }}
+                  classList={{ '-rotate-90': collapsed() }}
                 />
               </div>
             </Layer>
@@ -84,32 +84,32 @@ function SideColumnSection(props: {
 
 function openInboxView() {
   globalSplitManager()?.openWithSplit(
-    { type: "component", id: "inbox" },
-    { activate: true, referredFrom: "dashboard" },
+    { type: 'component', id: 'inbox' },
+    { activate: true, referredFrom: 'dashboard' }
   );
 }
 
 function openAutomationsView() {
   globalSplitManager()?.openWithSplit(
-    { type: "component", id: "agents" },
-    { activate: true, referredFrom: "dashboard" },
+    { type: 'component', id: 'agents' },
+    { activate: true, referredFrom: 'dashboard' }
   );
 }
 
 function openAutomation(automation: AutomationEntity) {
   globalSplitManager()?.openWithSplit(
-    { type: "automation", id: automation.id },
-    { activate: true, referredFrom: "dashboard" },
+    { type: 'automation', id: automation.id },
+    { activate: true, referredFrom: 'dashboard' }
   );
 }
 
 function AutomationSummary(props: { automation: AutomationEntity }) {
   const status = () => {
-    if (props.automation.isRunning) return "Running";
-    if (!props.automation.enabled) return "Paused";
+    if (props.automation.isRunning) return 'Running';
+    if (!props.automation.enabled) return 'Paused';
     return props.automation.nextRunAt
       ? `Next ${formatDateAndTime(props.automation.nextRunAt)}`
-      : "Active";
+      : 'Active';
   };
 
   return (
@@ -134,8 +134,8 @@ function AutomationSummary(props: { automation: AutomationEntity }) {
 
 function openChannelsView() {
   globalSplitManager()?.openWithSplit(
-    { type: "component", id: "channels" },
-    { activate: true, referredFrom: "dashboard" },
+    { type: 'component', id: 'channels' },
+    { activate: true, referredFrom: 'dashboard' }
   );
 }
 
@@ -143,13 +143,13 @@ function openChannel(channel: ChannelEntity) {
   const params = channel.latestMessage?.messageId
     ? getChannelParams(
         channel.latestMessage.messageId,
-        channel.latestMessage.threadId,
+        channel.latestMessage.threadId
       )
     : undefined;
 
   globalSplitManager()?.openWithSplit(
-    { type: "channel", id: channel.id, params },
-    { activate: true, referredFrom: "dashboard" },
+    { type: 'channel', id: channel.id, params },
+    { activate: true, referredFrom: 'dashboard' }
   );
 }
 
@@ -159,18 +159,18 @@ function ChannelSummary(props: {
   unreadCount: number;
 }) {
   const latest = () => props.channel.latestMessage;
-  const latestText = () => latest()?.content?.trim() || "No recent messages";
+  const latestText = () => latest()?.content?.trim() || 'No recent messages';
   const time = () =>
     formatDate(
       props.channel.interactedAt ??
         latest()?.createdAt ??
         props.channel.updatedAt,
-      { shortWeekday: true },
+      { shortWeekday: true }
     );
   const dmUserId = () =>
-    props.channel.channelType === "direct_message"
+    props.channel.channelType === 'direct_message'
       ? (props.channel.participantIds?.find(
-          (id) => id !== props.currentUserId,
+          (id) => id !== props.currentUserId
         ) ?? latest()?.senderId)
       : undefined;
 
@@ -185,7 +185,7 @@ function ChannelSummary(props: {
           fallback={
             <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-hover transition group-hover:bg-active">
               <EntityIcon
-                targetType={props.channel.channelType || "channel"}
+                targetType={props.channel.channelType || 'channel'}
                 size="sm"
                 class="shrink-0"
               />
@@ -209,7 +209,7 @@ function ChannelSummary(props: {
                 {channelDisplayName(props.channel.name)}
               </p>
               <Show when={props.unreadCount > 0}>
-                <span class="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-accent px-1 text-[0.625rem] font-bold text-surface">
+                <span class="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-sm bg-accent px-1 text-[0.625rem] font-bold text-surface">
                   {props.unreadCount}
                 </span>
               </Show>
@@ -236,7 +236,7 @@ function RecentChannelsColumnSection() {
     const counts = new Map<string, number>();
     for (const notification of notificationSource.notifications()) {
       if (
-        notification.entity_type !== "channel" ||
+        notification.entity_type !== 'channel' ||
         notification.done ||
         notificationIsRead(notification)
       ) {
@@ -244,7 +244,7 @@ function RecentChannelsColumnSection() {
       }
       counts.set(
         notification.entity_id,
-        (counts.get(notification.entity_id) ?? 0) + 1,
+        (counts.get(notification.entity_id) ?? 0) + 1
       );
     }
     return counts;
@@ -252,43 +252,43 @@ function RecentChannelsColumnSection() {
 
   const channelsQuery = useSoupItemsQuery(
     () => ({
-      params: { limit: 50, sort_method: "viewed_updated" },
+      params: { limit: 50, sort_method: 'viewed_updated' },
       body: {
-        call_filters: { call_ids: ["00000000-0000-0000-0000-000000000000"] },
-        chat_filters: { chat_ids: ["00000000-0000-0000-0000-000000000000"] },
+        call_filters: { call_ids: ['00000000-0000-0000-0000-000000000000'] },
+        chat_filters: { chat_ids: ['00000000-0000-0000-0000-000000000000'] },
         document_filters: {
-          document_ids: ["00000000-0000-0000-0000-000000000000"],
+          document_ids: ['00000000-0000-0000-0000-000000000000'],
         },
         email_filters: {
-          email_thread_ids: ["00000000-0000-0000-0000-000000000000"],
+          email_thread_ids: ['00000000-0000-0000-0000-000000000000'],
         },
         project_filters: {
-          project_ids: ["00000000-0000-0000-0000-000000000000"],
+          project_ids: ['00000000-0000-0000-0000-000000000000'],
         },
         channel_filters: {
           channel_types: [
-            "public",
-            "organization",
-            "private",
-            "team",
-            "direct_message",
+            'public',
+            'organization',
+            'private',
+            'team',
+            'direct_message',
           ],
         },
       },
     }),
-    () => ({ staleTime: 5 * 60 * 1000 }),
+    () => ({ staleTime: 5 * 60 * 1000 })
   );
 
   const channels = createMemo(() =>
     (channelsQuery.data ?? [])
       .filter(
         (entity): entity is ChannelEntity =>
-          entity.type === "channel" &&
-          (entity.channelType === "direct_message" ||
+          entity.type === 'channel' &&
+          (entity.channelType === 'direct_message' ||
             !!entity.latestMessage?.threadId ||
-            !!entity.interactedAt),
+            !!entity.interactedAt)
       )
-      .slice(0, 10),
+      .slice(0, 10)
   );
 
   return (
@@ -342,12 +342,12 @@ function NotificationsColumnSection() {
       .notifications()
       .filter(
         (notification) =>
-          !notification.done && !notificationIsRead(notification),
+          !notification.done && !notificationIsRead(notification)
       )
       .sort(
         (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      ),
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
   );
 
   return (
@@ -391,7 +391,7 @@ function AutomationsColumnSection() {
         const bNext = b.nextRunAt ? new Date(b.nextRunAt).getTime() : Infinity;
         return aNext - bNext;
       })
-      .slice(0, 4),
+      .slice(0, 4)
   );
 
   return (

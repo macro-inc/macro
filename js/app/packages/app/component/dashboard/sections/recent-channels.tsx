@@ -16,10 +16,16 @@ import { useUserId } from '@core/context/user';
 import { useDisplayName } from '@core/user/displayName';
 import { formatDate } from '@core/util/date';
 import type { ChannelEntity, EntityData } from '@entity';
+import { createEffectOnEntityTypeNotification } from '@notifications';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import BuildingIcon from '@phosphor/building.svg';
 import UsersIcon from '@phosphor/users.svg';
+import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { useSoupItemsQuery } from '@queries/soup/items';
+import {
+  refetchSoupEntity,
+  invalidateSoupEntity,
+} from '@queries/soup/normalized-cache';
 import { ChannelType } from '@service-comms/generated/models/channelType';
 import { Avatar, Button, Layer, Tooltip } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
@@ -102,7 +108,7 @@ function ChannelCard(props: {
           </div>
         </div>
         <Show when={props.channel.unreadCount > 0}>
-          <span class="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md bg-accent px-1.5 text-xxs font-semibold text-surface">
+          <span class="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-sm bg-accent px-1.5 text-xxs font-semibold text-surface">
             {props.channel.unreadCount}
           </span>
         </Show>
@@ -110,7 +116,7 @@ function ChannelCard(props: {
 
       <div class="relative mt-2 flex min-w-0 flex-col gap-1 @md/recent-channels:mt-0">
         <div class="pointer-events-none absolute bottom-0 right-0 opacity-0 transition group-hover:opacity-100">
-          <Layer depth={3} class="rounded-xl">
+          <Layer depth={3}>
             <div class="flex size-8 items-center justify-center rounded-xl bg-hover text-ink-muted transition group-hover:text-ink">
               <ArrowRightIcon class="size-4" />
             </div>
@@ -154,6 +160,16 @@ export function RecentChannelsSection() {
   const currentUserId = useUserId();
   const splitLayout = useSplitLayout();
 
+  createEffectOnEntityTypeNotification(
+    notificationSource,
+    'channel',
+    (notification) => {
+      refetchSoupEntity(notification.entity_id, 'channel');
+      invalidateSoupEntity(notification.entity_id);
+      invalidateEntityNotifications(notification.entity_id);
+    }
+  );
+
   const unreadByChannelId = createMemo(() => {
     const counts = new Map<string, number>();
     for (const notification of notificationSource.notifications()) {
@@ -164,11 +180,13 @@ export function RecentChannelsSection() {
       ) {
         continue;
       }
+
       counts.set(
         notification.entity_id,
         (counts.get(notification.entity_id) ?? 0) + 1
       );
     }
+
     return counts;
   });
 
