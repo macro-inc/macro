@@ -7,7 +7,7 @@ import type { AgentStatusDecoratorProps } from '@lexical-core';
 export function AgentStatus(props: AgentStatusDecoratorProps) {
   return (
     <span
-      class="inline-flex items-center text-accent animate-pulse"
+      class="inline-flex items-center text-ink-muted animate-pulse"
       aria-live="polite"
     >
       {props.statusText}

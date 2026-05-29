@@ -24,14 +24,7 @@ export function SenderName(props: SenderNameProps) {
 
   return (
     <Show when={!props.hidden}>
-      <span
-        class={cn(
-          'text-sm font-medium truncate',
-          // Accent the name for bots so it's clear the sender is an agent.
-          agentName() && 'text-accent',
-          props.class
-        )}
-      >
+      <span class={cn('text-sm font-medium truncate', props.class)}>
         {agentName() ?? displayName()}
       </span>
     </Show>
