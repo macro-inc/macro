@@ -15,6 +15,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  type JSX,
   on,
   onCleanup,
   onMount,
@@ -25,13 +26,13 @@ import { LESSONS } from './lessons';
 import { commandKOpen, setCommandKOpen } from './lessons/command-k';
 import MobileWebSignupSent from './MobileWebSignupSent';
 import MobileWebWelcome from './MobileWebWelcome';
-import { OnboardingModalLayout } from './OnboardingModalLayout';
 import { OnboardingProvider } from './onboarding-context';
 import { resetSandbox } from './sandbox/sandbox-store';
 
 interface InteractiveOnboardingProps {
   onDismiss?: () => void;
   ignoreTutorialCompleted?: boolean;
+  children: JSX.Element;
 }
 
 export default function InteractiveOnboarding(
@@ -92,7 +93,9 @@ export default function InteractiveOnboarding(
       <InteractiveOnboardingInner
         onDismiss={props.onDismiss}
         ignoreTutorialCompleted={props.ignoreTutorialCompleted}
-      />
+      >
+        {props.children}
+      </InteractiveOnboardingInner>
     </Show>
   );
 }
@@ -152,7 +155,6 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
   const [continueLabel, setContinueLabel] = createSignal<string | undefined>(
     undefined
   );
-  const [lessonKey, setLessonKey] = createSignal(0);
 
   const navigate = useNavigate();
 
@@ -217,7 +219,6 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
     state.completeLesson(current.definition.id);
     setReadyToContinue(false);
     setContinueLabel(undefined);
-    setLessonKey((k) => k + 1);
   };
 
   const handleSkipLesson = () => {
@@ -236,7 +237,6 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
     state.skipLesson(current.definition.id);
     setReadyToContinue(false);
     setContinueLabel(undefined);
-    setLessonKey((k) => k + 1);
   };
 
   const handleContinue = () => {
@@ -262,7 +262,6 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
             state.completeLesson(current.definition.id);
             setReadyToContinue(false);
             setContinueLabel(undefined);
-            setLessonKey((k) => k + 1);
           }
         });
       }
@@ -272,7 +271,6 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
     state.completeLesson(current.definition.id);
     setReadyToContinue(false);
     setContinueLabel(undefined);
-    setLessonKey((k) => k + 1);
   };
 
   const getBackContext = () => ({
@@ -422,7 +420,6 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
         if (finished && !testMode) {
           analytics.track('onboarding_completed');
           completeTutorial.mutate(undefined);
-          navigateAway();
         }
       }
     )
@@ -465,11 +462,6 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
       }
     )
   );
-
-  const bodyStyle = () => ({
-    animation: `onboarding-fade-up 300ms ease-out both`,
-    '--onboarding-key': String(lessonKey()),
-  });
 
   const setContinueButtonRef = (el: HTMLButtonElement) => {
     continueButtonRef = el;
@@ -519,34 +511,7 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
         `
         }</style>
 
-        <div class="size-full max-w-400 max-h-225 flex">
-          <Show
-            when={state.currentLesson()}
-            fallback={
-              <Show when={testMode && state.isFinished()}>
-                <div
-                  class="flex flex-col items-center justify-center w-full gap-4"
-                  style={{
-                    animation: 'onboarding-scale-in 300ms ease-out both',
-                  }}
-                >
-                  <p class="text-sm text-ink/60">All lessons complete.</p>
-                  <button
-                    type="button"
-                    class="px-3 py-1.5 text-sm bg-accent text-white rounded hover:bg-accent/80 transition-colors"
-                    onClick={() => window.location.reload()}
-                  >
-                    Replay
-                  </button>
-                </div>
-              </Show>
-            }
-          >
-            {(lesson) => (
-              <OnboardingModalLayout lesson={lesson()} bodyStyle={bodyStyle} />
-            )}
-          </Show>
-        </div>
+        <div class="size-full max-w-400 max-h-225 flex">{props.children}</div>
       </div>
     </OnboardingProvider>
   );
