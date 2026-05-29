@@ -16,7 +16,16 @@ type BackendAst =
   | { '!': BackendAst }
   | { l: unknown };
 
-type QueryTarget = 'df' | 'ef' | 'chanf' | 'cf' | 'pf' | 'callf' | 'propf';
+type QueryTarget =
+  | 'df'
+  | 'ef'
+  | 'chanf'
+  | 'cf'
+  | 'pf'
+  | 'callf'
+  | 'fef'
+  | 'ccf'
+  | 'propf';
 
 export type TargetAstMap = {
   [K in QueryTarget]?: BackendAst;
@@ -102,6 +111,8 @@ const FIELD_CONFIG: Record<
   callChannelId: { target: 'callf', field: 'ChannelId' },
   callSpeakerId: { target: 'callf', field: 'Speaker' },
   callAttended: { target: 'callf', field: 'Attended' },
+  foreignEntityRecordId: { target: 'fef', field: 'id' },
+  crmCompanyId: { target: 'ccf', field: 'id' },
 };
 
 const DATE_RANGE_FIELDS: Record<
@@ -151,6 +162,8 @@ export function compileToAst(state: QueryState): TargetAstMap {
     cf: [],
     pf: [],
     callf: [],
+    fef: [],
+    ccf: [],
     propf: [],
   };
 
@@ -274,6 +287,11 @@ export function compileToAst(state: QueryState): TargetAstMap {
     result.emailView = state.emailView;
   }
 
+  // crm companies are opt-in: excluded unless a view sets `crmCompanyId`.
+  if (!result.ccf) {
+    result.ccf = AST.literal('id', NIL_UUID);
+  }
+
   return result;
 }
 
@@ -284,6 +302,8 @@ const ID_FIELD_NAMES: Partial<Record<QueryTarget, FieldName>> = {
   cf: 'chatId',
   pf: 'folderId',
   callf: 'callId',
+  fef: 'foreignEntityRecordId',
+  ccf: 'crmCompanyId',
 };
 
 type DefineQueryFiltersOptions = {

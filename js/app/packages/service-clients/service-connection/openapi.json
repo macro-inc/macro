@@ -238,7 +238,9 @@
           "email_thread",
           "team",
           "call",
-          "static_file"
+          "foreign_entity",
+          "static_file",
+          "crm_company"
         ]
       },
       "GenericErrorResponse": {

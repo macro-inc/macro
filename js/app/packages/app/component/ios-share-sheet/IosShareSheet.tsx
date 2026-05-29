@@ -39,8 +39,12 @@ import type {
 } from '@macro/tauri';
 import { useShareTarget, useTauri } from '@macro/tauri';
 import { invalidateListChannels } from '@queries/channel/channels';
-import { commsServiceClient } from '@service-comms/client';
+import {
+  useGetOrCreateDirectMessageMutation,
+  useGetOrCreatePrivateChannelMutation,
+} from '@queries/channel/get-or-create-dm';
 import { staticFileClient } from '@service-static-files/client';
+import { storageServiceClient } from '@service-storage/client';
 import { isIOS } from '@solid-primitives/platform';
 import { Button } from '@ui';
 import {
@@ -220,6 +224,9 @@ function IosShareSheetComposer(props: {
   const composerId = crypto.randomUUID();
   const mentionsTracker = createMentionsTracker();
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
+  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
+  const getOrCreatePrivateChannelMutation =
+    useGetOrCreatePrivateChannelMutation();
   let clearComposer = () => {};
 
   const [selectedOptions, setSelectedOptions] = createSignal<
@@ -278,21 +285,20 @@ function IosShareSheetComposer(props: {
       throw new Error('No valid recipients selected for iOS share sheet');
     }
 
-    const result =
-      destination.users.length === 1
-        ? await commsServiceClient.getOrCreateDirectMessage({
-            recipient_id: destination.users[0],
-          })
-        : await commsServiceClient.getOrCreatePrivateChannel({
-            recipients: destination.users,
-          });
-
-    if (result.isErr()) {
+    try {
+      const result =
+        destination.users.length === 1
+          ? await getOrCreateDmMutation.mutateAsync({
+              recipient_id: destination.users[0],
+            })
+          : await getOrCreatePrivateChannelMutation.mutateAsync({
+              recipients: destination.users,
+            });
+      return result.channel_id;
+    } catch {
       toast.failure('Failed to open channel');
       throw new Error('Failed to resolve share destination channel');
     }
-
-    return result.value.channel_id;
   };
 
   const handleSend = async (snapshot: InputSnapshot) => {
@@ -305,7 +311,7 @@ function IosShareSheetComposer(props: {
     const channelId = await resolveDestinationChannelId();
     const message = buildPostMessageRequest({ snapshot });
 
-    const result = await commsServiceClient.postMessage({
+    const result = await storageServiceClient.postMessage({
       channel_id: channelId,
       message,
     });

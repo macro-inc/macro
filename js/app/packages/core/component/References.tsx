@@ -1,4 +1,5 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
+import { SidePanel } from '@app/component/side-panel';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { getChannelParams } from '@block-channel/utils/link';
 import type { BlockAlias, BlockName } from '@core/block';
@@ -6,7 +7,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
 import { compareDateDesc, type DateValue } from '@core/util/date';
-
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { formatRelativeTimestamp } from '@entity';
 import {
@@ -14,10 +14,9 @@ import {
   type PreviewItem,
   useItemPreview,
 } from '@queries/preview';
-import { commsServiceClient } from '@service-comms/client';
-import type { EntityReference } from '@service-comms/generated/models/entityReference';
-import type { GenericReference } from '@service-comms/generated/models/genericReference';
-import type { ItemType } from '@service-storage/client';
+import { type ItemType, storageServiceClient } from '@service-storage/client';
+import type { ApiAttachmentEntityReference as EntityReference } from '@service-storage/generated/schemas/apiAttachmentEntityReference';
+import type { ApiAttachmentGenericReference as GenericReference } from '@service-storage/generated/schemas/apiAttachmentGenericReference';
 import { createMemo, createResource, For, type JSX, Show } from 'solid-js';
 import { InlineItemPreview } from './ItemPreview';
 import { StaticMarkdown } from './LexicalMarkdown/component/core/StaticMarkdown';
@@ -123,14 +122,6 @@ function ReferenceRow(props: ReferenceRowProps) {
   );
 }
 
-function ReferencesCard(props: { children: JSX.Element }) {
-  return (
-    <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden">
-      <div class="divide-y divide-ink-muted/8">{props.children}</div>
-    </div>
-  );
-}
-
 // A message that is only mention tags adds no info — the row's source chip
 // already links to the same target.
 const MENTION_TAG_RE = /<m-\w+-mention>[\s\S]*?<\/m-\w+-mention>/g;
@@ -220,7 +211,7 @@ function GenericReferenceRow(props: {
 export function References(props: ReferenceProps) {
   const [references] = createResource(async () => {
     const entityType = props.entityType ?? 'document';
-    const response = await commsServiceClient.attachmentReferences({
+    const response = await storageServiceClient.attachmentReferences({
       entity_type: entityType,
       entity_id: props.documentId,
     });
@@ -313,7 +304,7 @@ export function References(props: ReferenceProps) {
         </div>
       }
     >
-      <ReferencesCard>
+      <SidePanel.Card>
         <For each={sortedReferences()}>
           {(ref) => {
             if (isChannelReference(ref)) {
@@ -346,7 +337,7 @@ export function References(props: ReferenceProps) {
             );
           }}
         </For>
-      </ReferencesCard>
+      </SidePanel.Card>
     </Show>
   );
 }

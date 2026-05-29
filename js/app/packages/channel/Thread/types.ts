@@ -1,6 +1,6 @@
 import type { MessageEditor } from '@channel/Channel/create-message-editor';
 import type { NewMessageCheckable } from '@channel/Channel/util';
-import type { InputSnapshot } from '@channel/Input';
+import type { InputHandle, InputSnapshot } from '@channel/Input';
 import type { ApiChannelMessage } from '@service-comms/client';
 import type { Accessor, Setter } from 'solid-js';
 import type {
@@ -22,6 +22,8 @@ export type ThreadState = {
   setReplyInputState: Setter<InputSnapshot | undefined>;
   replyInputEl?: Accessor<HTMLElement | undefined>;
   setReplyInputEl?: Setter<HTMLElement | undefined>;
+  replyInputHandle?: Accessor<InputHandle | undefined>;
+  setReplyInputHandle?: Setter<InputHandle | undefined>;
 };
 
 export type MessageEditState = {

@@ -6,14 +6,17 @@ version = "0.1.0"
 
 [features]
 default = ["outbound", "ports", "service"]
-outbound = ["dep:sqlx", "ports"]
-ports = ["dep:tokio"]
+outbound = ["dep:filter_ast", "dep:sqlx", "ports"]
+ports = ["dep:item_filters", "dep:models_pagination", "dep:tokio"]
 service = ["ports"]
 
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true }
+filter_ast = { path = "../filter_ast", optional = true }
+item_filters = { path = "../item_filters", optional = true }
 macro_uuid = { path = "../macro_uuid" }
+models_pagination = { path = "../models_pagination", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }

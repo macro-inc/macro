@@ -76,6 +76,8 @@ export function buildAttachmentEntityFilters(
     call_filters: {
       call_ids: callIds.length > 0 ? callIds : [NIL_ID],
     },
+    // Attachments are never crm companies; exclude them.
+    crm_company_filters: { company_ids: [NIL_ID] },
   };
 }
 

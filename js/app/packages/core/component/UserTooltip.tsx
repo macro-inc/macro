@@ -5,7 +5,7 @@ import WideChat from '@icon/wide-chat.svg';
 import WideCopy from '@icon/wide-copy.svg';
 import WideTask from '@icon/wide-task.svg';
 import IconCheck from '@phosphor/check.svg';
-import { commsServiceClient } from '@service-comms/client';
+import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, Surface } from '@ui';
 import { createSignal, Show } from 'solid-js';
@@ -35,29 +35,27 @@ export function UserTooltip(props: UserTooltipProps) {
   }
   const currentUserId = useUserId();
   const { openWithSplit, popoverSplit } = useSplitLayout();
+  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation({
+    onError: () => toast.failure('Failed to open direct message'),
+  });
 
-  const openDM = async (e: PointerEvent | MouseEvent) => {
+  const openDM = (e: PointerEvent | MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     props.onClose?.();
-    if (props.id) {
-      try {
-        const result = await commsServiceClient.getOrCreateDirectMessage({
-          recipient_id: props.id,
-        });
-        const channelId = result.isOk() && result.value?.channel_id;
-        if (channelId) {
+    if (!props.id) return;
+    const preferNewSplit = e.shiftKey;
+    getOrCreateDmMutation.mutate(
+      { recipient_id: props.id },
+      {
+        onSuccess: ({ channel_id }) => {
           openWithSplit(
-            { type: 'channel', id: channelId },
-            { preferNewSplit: e.shiftKey }
+            { type: 'channel', id: channel_id },
+            { preferNewSplit }
           );
-        } else {
-          toast.failure('Failed to open direct message');
-        }
-      } catch {
-        toast.failure('Failed to open direct message');
+        },
       }
-    }
+    );
   };
 
   const openTaskComposer = (e: MouseEvent) => {

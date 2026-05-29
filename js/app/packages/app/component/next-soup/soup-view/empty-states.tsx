@@ -1,194 +1,190 @@
+import { runCreateAction } from '@app/component/Launcher';
 import type { ListView } from '@app/constants/list-views';
-import { useHandleFileUpload } from '@app/util/handleFileUpload';
-import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
-import { fileSelector } from '@core/directive/fileSelector';
-import { folderSelector } from '@core/directive/folderSelector';
-import { useEmailLinksStatus } from '@core/email-link';
-import { isMobile } from '@core/mobile/isMobile';
-import type { ViewId } from '@core/types/view';
-import { handleFolderSelect } from '@core/util/upload';
+import { toast } from '@core/component/Toast/Toast';
+import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
 import Arcanum01 from '@design/arcanum-01.svg';
-import Arcanum02 from '@design/arcanum-02.svg';
-import Arcanum04 from '@design/arcanum-04.svg';
-import Arcanum05 from '@design/arcanum-05.svg';
-import Arcanum06 from '@design/arcanum-06.svg';
-import Arcanum07 from '@design/arcanum-07.svg';
-import Arcanum09 from '@design/arcanum-09.svg';
-import { createMemo, Match, Show, Switch } from 'solid-js';
+import EmptyStateDoneIcon from '@design/empty-state-done.svg';
+import EmptyStateEmailIcon from '@design/empty-state-email.svg';
+import EmptyStateFolderIcon from '@design/empty-state-folder.svg';
+import EmptyStateInboxZeroIcon from '@design/empty-state-inbox-zero.svg';
+import EmptyStateNoFilterMatchIcon from '@design/empty-state-no-filter-match.svg';
+import EmptyStateNoSearchMatchIcon from '@design/empty-state-no-search-match.svg';
+import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
+import { Match, Switch } from 'solid-js';
+import { FolderDropZone } from './FolderDropZone';
 import { useSoupView } from './soup-view-context';
 
-false && fileSelector;
-false && folderSelector;
+type FallbackContent = {
+  plural: string;
+  create?: { label: string; blockName: BlockName | BlockAlias };
+};
 
-const DEFAULT_EMPTY_MESSAGE = 'No items to show.';
+const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
+  documents: {
+    plural: 'documents',
+    create: { label: 'Create document', blockName: 'md' },
+  },
+  channels: {
+    plural: 'channels',
+    create: { label: 'Create channel', blockName: 'channel' },
+  },
+  calls: { plural: 'calls' },
+  search: { plural: 'items' },
+};
 
-function getRandomArcanumGraphic(
-  className = 'h-72 m-8 mt-32 @max-sm:mt-20 opacity-60'
-) {
-  const arcanumComponents = [
-    Arcanum01,
-    Arcanum02,
-    Arcanum04,
-    Arcanum05,
-    Arcanum06,
-    Arcanum07,
-    Arcanum09,
-  ];
-  const RandomGraphic =
-    arcanumComponents[Math.floor(Math.random() * arcanumComponents.length)];
-  return <RandomGraphic class={className} />;
+function InboxZeroNumber(props: { class?: string }) {
+  return (
+    <div
+      class={`flex items-center justify-center font-mono text-[9rem] font-thin leading-none text-ink-muted opacity-50 ${props.class ?? ''}`}
+    >
+      0
+    </div>
+  );
 }
 
 export function EmptyState(props: {
-  viewId?: ViewId;
   listView?: ListView;
   search?: boolean;
   hasRefinementsFromBase?: boolean;
   onClearFilters?: () => void;
 }) {
   const emailActive = useEmailLinksStatus();
+  const { connect } = useEmailLinks();
+  const soup = useSoupView();
+
+  const onConnectEmail = () => {
+    connect().match(
+      () => {},
+      () => toast.failure('Failed to connect email')
+    );
+  };
 
   return (
     <Switch>
       <Match when={props.search}>
-        <EmptyStateInner message={'No results.'} />
-      </Match>
-      <Match when={props.hasRefinementsFromBase}>
-        <EmptyStateInner
-          message="No items match your filters."
-          cta={
-            props.onClearFilters
-              ? { label: 'Clear filters', onClick: props.onClearFilters }
-              : undefined
+        <EmptyStatePanel
+          align="center"
+          graphic={EmptyStateNoSearchMatchIcon}
+          title={
+            soup.searchText().trim().length > 0
+              ? `No results for "${soup.searchText()}"`
+              : 'No results'
           }
         />
       </Match>
+
+      <Match when={props.hasRefinementsFromBase}>
+        <EmptyStatePanel
+          align="center"
+          graphic={EmptyStateNoFilterMatchIcon}
+          title="No items matching the filters"
+        >
+          {props.onClearFilters && (
+            <FilteredHiddenBanner onClearFilters={props.onClearFilters} />
+          )}
+        </EmptyStatePanel>
+      </Match>
+
       <Match
         when={
-          props.listView === 'agents' &&
-          useSoupView().activeTab() === 'automations'
+          (props.listView === 'inbox' || props.listView === 'mail') &&
+          !emailActive()
         }
       >
-        <EmptyStateInner message="No automations to show." />
+        <EmptyStatePanel
+          graphic={EmptyStateEmailIcon}
+          title="Connect your email"
+          description="Bring your inbox into Macro to triage signal from noise, reply faster, and let agents work alongside your mail."
+          primaryAction={{
+            label: 'Connect email',
+            onClick: onConnectEmail,
+          }}
+        />
       </Match>
+
+      <Match when={props.listView === 'inbox' && emailActive()}>
+        <EmptyStatePanel
+          align="center"
+          graphic={InboxZeroNumber}
+          title="Inbox zero"
+          description="You're all caught up. Important items will appear here as they arrive."
+        />
+      </Match>
+
+      <Match when={props.listView === 'mail' && emailActive()}>
+        <EmptyStatePanel
+          align="center"
+          graphic={InboxZeroNumber}
+          title="Inbox zero"
+          description="You're all caught up. New email will appear here as it arrives."
+        />
+      </Match>
+
+      <Match when={props.listView === 'tasks'}>
+        <EmptyStatePanel
+          align="center"
+          graphic={EmptyStateDoneIcon}
+          graphicClass="opacity-50"
+          title="Nothing to do"
+          description="Tasks you create or that get assigned to you will show up here."
+        />
+      </Match>
+
+      <Match
+        when={props.listView === 'agents' && soup.activeTab() === 'automations'}
+      >
+        <EmptyStatePanel
+          align="center"
+          graphic={EmptyStateInboxZeroIcon}
+          title="No automations to show"
+          primaryAction={{
+            label: 'Create automation',
+            onClick: () => runCreateAction('automation'),
+          }}
+        />
+      </Match>
+
       <Match when={props.listView === 'agents'}>
         <AgentsEmptyState />
       </Match>
-      <Match when={props.viewId === 'noise' && !emailActive()}>
-        <EmptyStateInner message={'Email not connected.'} />
+
+      <Match when={props.listView === 'folders'}>
+        <EmptyStatePanel
+          graphic={EmptyStateFolderIcon}
+          title="No folders"
+          description="Create a folder or drop files below to get started."
+        >
+          <FolderDropZone />
+        </EmptyStatePanel>
       </Match>
-      <Match
-        when={
-          (props.viewId === 'noise' ||
-            props.viewId === 'signal' ||
-            props.viewId === 'email') &&
-          emailActive()
-        }
-      >
-        <EmptyStateInner message={'Inbox zero.'} />
-      </Match>
-      <Match when={props.viewId === 'signal' && !emailActive()}>
-        <EmptyStateInner message={'Nothing to show. Email not connected.'} />
-      </Match>
-      <Match when={props.viewId === 'email' && !emailActive()}>
-        <EmptyStateInner message={'Nothing to show. Email not connected.'} />
-      </Match>
-      <Match when={props.viewId === 'people'}>
-        <EmptyStateInner message={'No messages to show.'} />
-      </Match>
-      <Match when={props.viewId === 'folders'}>
-        <EmptyStateInner message={'No folders to show.'} showDropZone />
-      </Match>
-      <Match when={props.viewId === 'tasks'}>
-        <EmptyStateInner message={'No tasks to show.'} />
-      </Match>
-      <Match when={props.viewId === 'all'}>
-        <EmptyStateInner />
-      </Match>
+
       <Match when={true}>
-        <EmptyStateInner />
+        {(() => {
+          const fallback = (props.listView &&
+            FALLBACK_CONTENT[props.listView]) ?? {
+            plural: 'items',
+          };
+          return (
+            <EmptyStatePanel
+              align="center"
+              graphic={EmptyStateInboxZeroIcon}
+              title={`No ${fallback.plural} to show`}
+              primaryAction={
+                fallback.create
+                  ? {
+                      label: fallback.create.label,
+                      onClick: () =>
+                        runCreateAction(fallback.create!.blockName),
+                    }
+                  : undefined
+              }
+            />
+          );
+        })()}
       </Match>
     </Switch>
-  );
-}
-
-interface EmptyStateInnerProps {
-  message?: string;
-  showDropZone?: boolean;
-  cta?: {
-    label: string;
-    onClick: () => void;
-  };
-}
-
-function EmptyStateInner(props: EmptyStateInnerProps) {
-  const blockName = useMaybeBlockName();
-  const blockId = useMaybeBlockId();
-  const projectId = createMemo(() => {
-    if (blockName === 'project' && blockId) {
-      return blockId;
-    }
-    return undefined;
-  });
-
-  const handleFileUpload = useHandleFileUpload({ projectId: projectId() });
-
-  return (
-    <div
-      class="size-full flex items-center justify-center p-4 text-ink-muted"
-      data-soup-empty-state
-    >
-      <div class="panel w-full flex flex-col items-center size-full">
-        {getRandomArcanumGraphic()}
-        <p class="text-ink-muted font-mono">
-          {props.message ?? DEFAULT_EMPTY_MESSAGE}
-        </p>
-        <Show when={props.cta}>
-          {(cta) => (
-            <div class="w-full flex justify-center pt-4">
-              <button
-                onMouseDown={cta().onClick}
-                class="py-2 px-4 rounded-md bg-accent/15 text-accent hover:bg-accent/25 transition-colors"
-              >
-                <span class="font-medium text-sm">{cta().label}</span>
-              </button>
-            </div>
-          )}
-        </Show>
-        <Show when={props.showDropZone && !isMobile()}>
-          <div class="drop-zone flex flex-col items-center justify-center w-full py-8 border border-dashed border-edge-muted bg-hover">
-            <p class="text-ink-muted">Drag & drop files and folders here</p>
-            <p class="text-ink-muted">
-              or{' '}
-              <span
-                use:fileSelector={{
-                  multiple: true,
-                  onSelect: (files) => {
-                    handleFileUpload(files);
-                  },
-                }}
-                class="underline"
-              >
-                Upload files
-              </span>{' '}
-              /{' '}
-              <span
-                use:folderSelector={{
-                  onSelect: async (files) => {
-                    await handleFolderSelect(files, handleFileUpload);
-                  },
-                }}
-                class="underline"
-              >
-                Upload folders
-              </span>
-            </p>
-            <p class="text-ink-muted"></p>
-          </div>
-        </Show>
-      </div>
-    </div>
   );
 }
 
@@ -196,7 +192,9 @@ function AgentsEmptyState() {
   return (
     <div class="size-full relative overflow-hidden" data-soup-empty-state>
       <div class="absolute inset-0 flex flex-col items-center pointer-events-none p-4">
-        {getRandomArcanumGraphic('h-72 m-8 mt-32 @max-sm:mt-20 opacity-5')}
+        <div class="h-72 m-8 mt-32 @max-sm:mt-20 opacity-5 text-ink-muted">
+          <Arcanum01 class="size-full" />
+        </div>
       </div>
       <div class="relative size-full flex flex-col items-center overflow-y-auto p-4">
         <div class="w-full max-w-2xl mt-32 @max-sm:mt-20 px-4 pb-8 flex flex-col gap-4">

@@ -48,8 +48,12 @@ pub enum EntityType {
     Team,
     /// The entity is a voice/video call
     Call,
+    /// The entity is a foreign entity stored from an external system
+    ForeignEntity,
     /// A public file in the static file service
     StaticFile,
+    /// The entity is a CRM company tracked by a team
+    CrmCompany,
 }
 
 impl EntityType {
@@ -67,7 +71,10 @@ impl EntityType {
             // Calls are handled by entity_access by resolving through the call's
             // owning channel (access is inherited from channel membership).
             EntityType::Call => true,
+            EntityType::ForeignEntity => false,
             EntityType::StaticFile => false,
+            // CRM companies are gated by team membership, not entity_access.
+            EntityType::CrmCompany => false,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

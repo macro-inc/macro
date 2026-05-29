@@ -59,6 +59,10 @@ use email::{
     domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
     outbound::EmailPgRepo,
 };
+use foreign_entity::{
+    domain::service::ForeignEntityServiceImpl,
+    outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
+};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
 use github::outbound::github_sync_client::GithubSyncClientImpl;
@@ -390,6 +394,10 @@ async fn main() -> anyhow::Result<()> {
         .get_maybe_secret_value(env, GithubSyncAppPemSecretKey::new()?)
         .await?;
 
+    let foreign_entity_service = Arc::new(ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
+        db.clone(),
+    )));
+
     let github_sync_service_impl = GithubSyncServiceImpl::new(
         GithubSyncConfig {
             webhook_secret: github_webhook_secret.as_ref().to_string(),
@@ -398,6 +406,7 @@ async fn main() -> anyhow::Result<()> {
             sync_app_client_id: config.vars.github_sync_app_client_id.to_string(),
         },
         document_service.clone(),
+        foreign_entity_service,
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
     );
@@ -549,6 +558,8 @@ async fn main() -> anyhow::Result<()> {
     let call_record_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
         PgCallRepo::new(readonly_db.clone()),
     );
+    let foreign_entity_service_for_soup =
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone()));
 
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
@@ -575,6 +586,8 @@ async fn main() -> anyhow::Result<()> {
                 readonly_email_service,
                 channel_service_for_soup,
                 call_record_query_service,
+                crm_service.clone(),
+                foreign_entity_service_for_soup,
             ),
             email_service,
             entity_access_service.clone(),
@@ -611,7 +624,10 @@ async fn main() -> anyhow::Result<()> {
                 documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
             ),
         },
-        channels_state: ChannelsRouterState::new(channels_service, (*entity_access_service).clone()),
+        channels_state: ChannelsRouterState::new(
+            channels_service,
+            (*entity_access_service).clone(),
+        ),
         call_state,
         call_webhook_state,
         call_internal_state,

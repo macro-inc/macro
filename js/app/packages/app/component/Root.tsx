@@ -83,6 +83,7 @@ import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
 import { Layout } from './Layout';
 import { SearchProvider } from './next-soup/search-context';
+import { usePendingNotificationNavigationEffect } from './PendingNotificationNavigationEffect';
 import { ReactiveFavicon } from './ReactiveFavicon';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import { TeamInviteAcceptance } from './TeamInviteAcceptance';
@@ -254,10 +255,12 @@ function NotFound() {
   return '';
 }
 
-const { EmailCallback, CALLBACK_PATH } = makeEmailAuthComponents({
-  callbackPath: '/email-signup-callback',
-  successPath: '/',
-});
+const { EmailCallback, CALLBACK_PATH, EmailLinkCallback, LINK_CALLBACK_PATH } =
+  makeEmailAuthComponents({
+    callbackPath: '/email-signup-callback',
+    linkCallbackPath: '/inbox-link-callback',
+    successPath: '/',
+  });
 
 const ROUTES: RouteDefinition[] = [
   LAYOUT_ROUTE,
@@ -307,6 +310,10 @@ const ROUTES: RouteDefinition[] = [
   {
     path: CALLBACK_PATH,
     component: EmailCallback,
+  },
+  {
+    path: LINK_CALLBACK_PATH,
+    component: EmailLinkCallback,
   },
   {
     path: '/login/popup/success',
@@ -403,6 +410,7 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   }
 
   const blockOrchestrator = createBlockOrchestrator();
+  usePendingNotificationNavigationEffect(notificationSource);
 
   return (
     <GlobalAppStateProvider

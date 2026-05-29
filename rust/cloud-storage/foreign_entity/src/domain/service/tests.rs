@@ -1,15 +1,31 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
+use models_pagination::{Query, SimpleSortMethod};
 use serde_json::json;
 use uuid::Uuid;
 
+use crate::domain::ports::ForeignEntityListQuery;
+
 use super::*;
+
+type CreateForeignEntityEdit = fn(&mut CreateForeignEntity);
+
+#[derive(Debug, Clone)]
+struct ListForeignEntitiesCall {
+    source_ids: Vec<SourceId>,
+    limit: u32,
+    sort_method: String,
+    cursor_id: Option<Uuid>,
+    cursor_value: Option<DateTime<Utc>>,
+}
 
 #[derive(Clone, Default)]
 struct FakeForeignEntityRepository {
     records: Arc<Mutex<HashMap<Uuid, ForeignEntity>>>,
+    list_calls: Arc<Mutex<Vec<ListForeignEntitiesCall>>>,
+    fail_listings: Arc<Mutex<bool>>,
 }
 
 impl FakeForeignEntityRepository {
@@ -17,6 +33,20 @@ impl FakeForeignEntityRepository {
         self.records
             .lock()
             .expect("fake foreign entity repository lock poisoned")
+    }
+
+    fn list_calls(&self) -> Vec<ListForeignEntitiesCall> {
+        self.list_calls
+            .lock()
+            .expect("fake foreign entity repository list call lock poisoned")
+            .clone()
+    }
+
+    fn fail_listings(&self) {
+        *self
+            .fail_listings
+            .lock()
+            .expect("fake foreign entity repository failure lock poisoned") = true;
     }
 }
 
@@ -41,6 +71,48 @@ impl ForeignEntityRepository for FakeForeignEntityRepository {
                         .map(|source| record.foreign_entity_source == source)
                         .unwrap_or(true)
             })
+            .cloned()
+            .collect();
+
+        Ok(records)
+    }
+
+    async fn get_foreign_entities_for_user(
+        &self,
+        source_ids: Vec<SourceId>,
+        limit: u32,
+        query: ForeignEntityListQuery,
+    ) -> Result<Vec<ForeignEntity>, Self::Err> {
+        if *self
+            .fail_listings
+            .lock()
+            .expect("fake foreign entity repository failure lock poisoned")
+        {
+            anyhow::bail!("listing failed");
+        }
+
+        let (cursor_id, cursor_value) = query.vals();
+        self.list_calls
+            .lock()
+            .expect("fake foreign entity repository list call lock poisoned")
+            .push(ListForeignEntitiesCall {
+                source_ids: source_ids.clone(),
+                limit,
+                sort_method: query.sort_method().to_string(),
+                cursor_id: cursor_id.copied(),
+                cursor_value: cursor_value.copied(),
+            });
+
+        let records = self
+            .records()
+            .values()
+            .filter(|record| {
+                source_ids.iter().any(|source_id| {
+                    record.stored_for_id.as_str() == source_id.id.as_str()
+                        && record.stored_for_auth_entity.as_str() == source_id.auth_entity.as_str()
+                })
+            })
+            .take(limit as usize)
             .cloned()
             .collect();
 
@@ -119,6 +191,25 @@ fn valid_create() -> CreateForeignEntity {
     }
 }
 
+fn foreign_entity_for_source(stored_for_id: &str, stored_for_auth_entity: &str) -> ForeignEntity {
+    let now = Utc::now();
+
+    ForeignEntity {
+        id: Uuid::new_v4(),
+        foreign_entity_id: format!("external-{stored_for_id}"),
+        foreign_entity_source: "github_pull_request".to_string(),
+        metadata: json!({}),
+        stored_for_id: stored_for_id.to_string(),
+        stored_for_auth_entity: stored_for_auth_entity.to_string(),
+        created_at: now,
+        updated_at: now,
+    }
+}
+
+fn listing_query(sort_method: SimpleSortMethod) -> ForeignEntityListQuery {
+    Query::Sort(sort_method, None)
+}
+
 fn assert_bad_request(error: ForeignEntityError, expected_message: &str) {
     let ForeignEntityError::BadRequest(message) = error else {
         panic!("expected bad request error, got {error:?}");
@@ -192,6 +283,111 @@ async fn get_by_foreign_entity_id_returns_all_matching_records() {
 }
 
 #[tokio::test]
+async fn get_foreign_entities_for_user_returns_matching_sources() {
+    let repo = FakeForeignEntityRepository::default();
+    let matching_user = foreign_entity_for_source("macro|user@example.com", "user");
+    let matching_team = foreign_entity_for_source("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "team");
+    let unrelated = foreign_entity_for_source("macro|other@example.com", "user");
+
+    repo.records()
+        .insert(matching_user.id, matching_user.clone());
+    repo.records()
+        .insert(matching_team.id, matching_team.clone());
+    repo.records().insert(unrelated.id, unrelated);
+
+    let service = ForeignEntityServiceImpl::new(repo);
+    let entities = service
+        .get_foreign_entities_for_user(
+            vec![
+                SourceId::user("macro|user@example.com"),
+                SourceId::new("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "team"),
+            ],
+            10,
+            listing_query(SimpleSortMethod::UpdatedAt),
+        )
+        .await
+        .expect("matching foreign entities should be returned");
+
+    let mut ids = entities.iter().map(|entity| entity.id).collect::<Vec<_>>();
+    ids.sort_unstable();
+    let mut expected_ids = vec![matching_user.id, matching_team.id];
+    expected_ids.sort_unstable();
+
+    assert_eq!(ids, expected_ids);
+}
+
+#[tokio::test]
+async fn get_foreign_entities_for_user_empty_sources_returns_empty_without_repo_call() {
+    let repo = FakeForeignEntityRepository::default();
+    let service = ForeignEntityServiceImpl::new(repo.clone());
+
+    let entities = service
+        .get_foreign_entities_for_user(Vec::new(), 10, listing_query(SimpleSortMethod::UpdatedAt))
+        .await
+        .expect("empty source list should return an empty listing");
+
+    assert!(entities.is_empty());
+    assert!(repo.list_calls().is_empty());
+}
+
+#[tokio::test]
+async fn get_foreign_entities_for_user_forwards_limit_and_query() {
+    let repo = FakeForeignEntityRepository::default();
+    let service = ForeignEntityServiceImpl::new(repo.clone());
+    let cursor_id = Uuid::new_v4();
+    let cursor_value = Utc::now();
+
+    service
+        .get_foreign_entities_for_user(
+            vec![SourceId::user("macro|user@example.com")],
+            37,
+            Query::Cursor(models_pagination::Cursor {
+                id: cursor_id,
+                limit: 37,
+                val: models_pagination::CursorVal {
+                    sort_type: SimpleSortMethod::CreatedAt,
+                    last_val: cursor_value,
+                },
+                filter: None,
+            }),
+        )
+        .await
+        .expect("listing should be forwarded to repository");
+
+    let calls = repo.list_calls();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(
+        calls[0].source_ids,
+        vec![SourceId::user("macro|user@example.com")]
+    );
+    assert_eq!(calls[0].limit, 37);
+    assert_eq!(calls[0].sort_method, "created_at");
+    assert_eq!(calls[0].cursor_id, Some(cursor_id));
+    assert_eq!(calls[0].cursor_value, Some(cursor_value));
+}
+
+#[tokio::test]
+async fn get_foreign_entities_for_user_maps_repo_errors_to_internal() {
+    let repo = FakeForeignEntityRepository::default();
+    repo.fail_listings();
+    let service = ForeignEntityServiceImpl::new(repo);
+
+    let error = service
+        .get_foreign_entities_for_user(
+            vec![SourceId::user("macro|user@example.com")],
+            10,
+            listing_query(SimpleSortMethod::UpdatedAt),
+        )
+        .await
+        .expect_err("repository errors should map to internal errors");
+
+    let ForeignEntityError::Internal(error) = error else {
+        panic!("expected internal error, got {error:?}");
+    };
+    assert!(error.to_string().contains("listing failed"));
+}
+
+#[tokio::test]
 async fn get_missing_foreign_entity_by_id_returns_not_found() {
     let service = service();
     let id = Uuid::new_v4();
@@ -207,7 +403,7 @@ async fn get_missing_foreign_entity_by_id_returns_not_found() {
 #[tokio::test]
 async fn create_rejects_blank_required_fields() {
     let service = service();
-    let cases: Vec<(&str, fn(&mut CreateForeignEntity))> = vec![
+    let cases: Vec<(&str, CreateForeignEntityEdit)> = vec![
         ("foreignEntityId", |create| {
             create.foreign_entity_id = " \t".to_string();
         }),

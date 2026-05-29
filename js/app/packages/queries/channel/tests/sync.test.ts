@@ -24,7 +24,11 @@ vi.mock('@service-storage/client', () => ({
 
 import type { ChannelMessagesData } from '../channel-messages';
 import { getChannelMessagesQueryKey } from '../channel-messages';
-import { handleCommsAttachment, handleCommsReaction } from '../sync';
+import {
+  handleCommsAttachment,
+  handleCommsMessage,
+  handleCommsReaction,
+} from '../sync';
 import { getThreadRepliesQueryKey } from '../thread-replies';
 
 function createPaginatedMessage(
@@ -135,6 +139,66 @@ describe('channel sync', () => {
     expect(cached?.pages[0].items[0].attachments).toEqual([
       expect.objectContaining({ id: 'att-1', message_id: 'msg-1' }),
     ]);
+  });
+
+  it('soft-deletes a top-level message with replies on external delete', () => {
+    testQueryClient.setQueryData(
+      getChannelMessagesQueryKey('channel-1'),
+      createChannelMessagesData([
+        [
+          createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z', {
+            thread: {
+              preview: [
+                createThreadReply('reply-1', '2024-01-03T01:00:00.000Z'),
+              ],
+              reply_count: 1,
+              latest_reply_at: '2024-01-03T01:00:00.000Z',
+            },
+          }),
+        ],
+      ])
+    );
+
+    handleCommsMessage({
+      channel_id: 'channel-1',
+      id: 'parent-1',
+      thread_id: null,
+      deleted_at: '2024-01-03T03:00:00.000Z',
+      nonce: 'external-delete',
+    } as Parameters<typeof handleCommsMessage>[0]);
+
+    const cached = testQueryClient.getQueryData<ChannelMessagesData>(
+      getChannelMessagesQueryKey('channel-1')
+    );
+    const message = cached?.pages[0].items[0];
+    expect(message?.id).toBe('parent-1');
+    expect(message?.deleted_at).toBe('2024-01-03T03:00:00.000Z');
+    expect(message?.thread.preview).toHaveLength(1);
+  });
+
+  it('removes a top-level message without replies on external delete', () => {
+    testQueryClient.setQueryData(
+      getChannelMessagesQueryKey('channel-1'),
+      createChannelMessagesData([
+        [
+          createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z'),
+          createPaginatedMessage('parent-2', '2024-01-03T01:00:00.000Z'),
+        ],
+      ])
+    );
+
+    handleCommsMessage({
+      channel_id: 'channel-1',
+      id: 'parent-1',
+      thread_id: null,
+      deleted_at: '2024-01-03T03:00:00.000Z',
+      nonce: 'external-delete',
+    } as Parameters<typeof handleCommsMessage>[0]);
+
+    const cached = testQueryClient.getQueryData<ChannelMessagesData>(
+      getChannelMessagesQueryKey('channel-1')
+    );
+    expect(cached?.pages[0].items.map((item) => item.id)).toEqual(['parent-2']);
   });
 
   it('updates thread reply reactions without the legacy channel cache', () => {

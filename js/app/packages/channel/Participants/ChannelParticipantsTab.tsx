@@ -4,11 +4,11 @@ import { useUserId } from '@core/context/user';
 import { idToEmail } from '@core/user';
 
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
+import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import {
   useAddParticipantsMutation,
   useRemoveParticipantsMutation,
 } from '@queries/channel/participants';
-import { commsServiceClient } from '@service-comms/client';
 import { ChannelType } from '@service-comms/generated/models/channelType';
 import { Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
@@ -23,6 +23,7 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const addParticipantsMutation = useAddParticipantsMutation();
   const removeParticipantsMutation = useRemoveParticipantsMutation();
+  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
   const [searchQuery, setSearchQuery] = createSignal('');
 
   const participants = () => participantsQuery.data ?? [];
@@ -61,18 +62,15 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
     });
   };
 
-  const openDirectMessage = async (participantId: string) => {
-    const result = await commsServiceClient.getOrCreateDirectMessage({
-      recipient_id: participantId,
-    });
-    const channelId = result.isOk() && result.value?.channel_id;
-
-    if (channelId) {
-      replaceOrInsertSplit({
-        type: 'channel',
-        id: channelId,
-      });
-    }
+  const openDirectMessage = (participantId: string) => {
+    getOrCreateDmMutation.mutate(
+      { recipient_id: participantId },
+      {
+        onSuccess: ({ channel_id }) => {
+          replaceOrInsertSplit({ type: 'channel', id: channel_id });
+        },
+      }
+    );
   };
 
   return (

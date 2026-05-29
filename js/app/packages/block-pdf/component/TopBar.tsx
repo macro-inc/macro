@@ -168,14 +168,13 @@ export function TopBar() {
       icon: Info,
       action: detailsControl.toggle,
     },
-    { op: 'rename', divideAbove: true },
+    { op: 'rename' },
     { op: 'copy' },
     { op: 'moveToProject' },
     {
       label: 'Print',
       icon: Printer,
       action: () => printFile(),
-      divideAbove: true,
     },
     {
       label: 'Download',
@@ -191,7 +190,7 @@ export function TopBar() {
           } as const,
         ]
       : []),
-    { op: 'delete', divideAbove: true },
+    { op: 'delete' },
   ];
 
   const tools: BlockTool[] = [
@@ -218,7 +217,6 @@ export function TopBar() {
           name: fileName(),
           fileType,
         }),
-      divideAbove: true,
       buttonComponent: () => (
         <ChatWithAgentButton
           entity={{

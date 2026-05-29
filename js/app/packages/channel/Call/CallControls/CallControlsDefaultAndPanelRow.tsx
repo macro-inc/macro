@@ -6,13 +6,10 @@ import MicrophoneSlash from '@phosphor/microphone-slash.svg';
 import Screencast from '@phosphor/screencast.svg';
 import VideoCamera from '@phosphor/video-camera.svg';
 import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
-import { Button, Dropdown } from '@ui';
+import { Button, Dropdown, SingleSelectCheck } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
-import { match } from 'ts-pattern';
 import { BACKGROUND_IMAGES, useCallContext } from '../CallContext';
 import { CallDeviceList } from '../CallDeviceList';
-
-import { MenuDivider, MenuLabel } from './CallMenuPrimitives';
 
 export type CallControlsDefaultAndPanelRowProps = {
   onLeave: () => void | Promise<void>;
@@ -84,26 +81,55 @@ function BackgroundEffectSelector() {
   };
 
   return (
-    <Dropdown.RadioGroup value={currentEffectValue()} onChange={handleChange}>
-      <MenuLabel>Background</MenuLabel>
-      <Dropdown.RadioItem value="none">None</Dropdown.RadioItem>
-      <MenuDivider />
-      <MenuLabel>Blur</MenuLabel>
-      <Dropdown.RadioItem value="blur-light">Light</Dropdown.RadioItem>
-      <Dropdown.RadioItem value="blur-medium">Medium</Dropdown.RadioItem>
-      <Dropdown.RadioItem value="blur-heavy">Heavy</Dropdown.RadioItem>
-      <Show when={BACKGROUND_IMAGES.length}>
-        <MenuDivider />
-        <MenuLabel>Image</MenuLabel>
-        <For each={BACKGROUND_IMAGES}>
-          {(bg) => (
-            <Dropdown.RadioItem value={`image-${bg.id}`}>
-              {bg.label}
-            </Dropdown.RadioItem>
-          )}
+    <>
+      <Dropdown.Group>
+        <Dropdown.GroupLabel>Background</Dropdown.GroupLabel>
+        <Dropdown.Item
+          closeOnSelect={false}
+          onSelect={() => handleChange('none')}
+        >
+          <span class="flex-1 truncate">None</span>
+          <SingleSelectCheck active={currentEffectValue() === 'none'} />
+        </Dropdown.Item>
+      </Dropdown.Group>
+      <Dropdown.Group>
+        <Dropdown.GroupLabel>Blur</Dropdown.GroupLabel>
+        <For each={['light', 'medium', 'heavy'] as const}>
+          {(intensity) => {
+            const value = `blur-${intensity}`;
+            const label = intensity[0]!.toUpperCase() + intensity.slice(1);
+            return (
+              <Dropdown.Item
+                closeOnSelect={false}
+                onSelect={() => handleChange(value)}
+              >
+                <span class="flex-1 truncate">{label}</span>
+                <SingleSelectCheck active={currentEffectValue() === value} />
+              </Dropdown.Item>
+            );
+          }}
         </For>
+      </Dropdown.Group>
+      <Show when={BACKGROUND_IMAGES.length}>
+        <Dropdown.Group>
+          <Dropdown.GroupLabel>Image</Dropdown.GroupLabel>
+          <For each={BACKGROUND_IMAGES}>
+            {(bg) => {
+              const value = `image-${bg.id}`;
+              return (
+                <Dropdown.Item
+                  closeOnSelect={false}
+                  onSelect={() => handleChange(value)}
+                >
+                  <span class="flex-1 truncate">{bg.label}</span>
+                  <SingleSelectCheck active={currentEffectValue() === value} />
+                </Dropdown.Item>
+              );
+            }}
+          </For>
+        </Dropdown.Group>
       </Show>
-    </Dropdown.RadioGroup>
+    </>
   );
 }
 
@@ -122,12 +148,6 @@ export function CallControlsDefaultAndPanelRow(
 ) {
   const callCtx = useCallContext();
   const isConnecting = () => callCtx.isConnecting();
-  const noiseSuppressionModeLabel = () =>
-    match(callCtx.noiseSuppressionMode())
-      .with('krisp', () => 'Krisp')
-      .with('browser', () => 'Browser')
-      .with('off', () => 'Off')
-      .exhaustive();
 
   return (
     <div class="inline-flex items-center overflow-hidden rounded-lg border border-ink-muted/[0.08] bg-ink-muted/[0.025] divide-x divide-ink-muted/[0.08]">
@@ -195,38 +215,40 @@ export function CallControlsDefaultAndPanelRow(
                 activeDeviceId={callCtx.activeAudioInputDeviceId()}
                 onSelect={(id) => callCtx.switchAudioInput(id)}
               />
-              <Show when={callCtx.audioOutputDevices().length > 0}>
-                <MenuDivider />
+            </Dropdown.Group>
+            <Show when={callCtx.audioOutputDevices().length > 0}>
+              <Dropdown.Group>
                 <CallDeviceList
                   label="Speaker"
                   devices={callCtx.audioOutputDevices()}
                   activeDeviceId={callCtx.activeAudioOutputDeviceId()}
                   onSelect={(id) => callCtx.switchAudioOutput(id)}
                 />
-              </Show>
-              <MenuDivider />
+              </Dropdown.Group>
+            </Show>
+            <Dropdown.Group>
               <CallDeviceList
                 label="Camera"
                 devices={callCtx.videoInputDevices()}
                 activeDeviceId={callCtx.activeVideoInputDeviceId()}
                 onSelect={(id) => callCtx.switchVideoInput(id)}
               />
-              <MenuDivider />
-              <MenuLabel>Audio processing</MenuLabel>
+            </Dropdown.Group>
+            <Dropdown.Group>
+              <Dropdown.GroupLabel>Audio processing</Dropdown.GroupLabel>
               <Dropdown.Item
                 closeOnSelect={false}
                 onSelect={() => void callCtx.toggleNoiseSuppression()}
               >
                 <span class="flex-1 truncate">Noise suppression</span>
-                <span class="text-xs text-ink-muted">
-                  {noiseSuppressionModeLabel()}
-                </span>
+                <SingleSelectCheck
+                  active={callCtx.noiseSuppressionMode() !== 'off'}
+                />
               </Dropdown.Item>
-              <Show when={isBackgroundBlurSupported()}>
-                <MenuDivider />
-                <BackgroundEffectSelector />
-              </Show>
             </Dropdown.Group>
+            <Show when={isBackgroundBlurSupported()}>
+              <BackgroundEffectSelector />
+            </Show>
           </Dropdown.Content>
         </Dropdown>
       </Cell>

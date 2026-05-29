@@ -115,6 +115,7 @@ dependencies = [
  "email_service_client",
  "entity_access",
  "entity_access_management",
+ "foreign_entity",
  "frecency",
  "futures",
  "item_filters",
@@ -151,6 +152,7 @@ dependencies = [
  "sqs_client",
  "strum",
  "sync_service_client",
+ "system_properties",
  "teams",
  "tokio",
  "tracing",
@@ -2080,7 +2082,7 @@ checksum = "0b023947811758c97c59bf9d1c188fd619ad4718dcaa767947df1cadb14f39f4"
 dependencies = [
  "glob",
  "libc",
- "libloading 0.8.9",
+ "libloading",
 ]
 
 [[package]]
@@ -2697,6 +2699,7 @@ dependencies = [
  "macro_uuid",
  "model-error-response",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -3334,6 +3337,7 @@ dependencies = [
  "email_service_client",
  "entity_access",
  "entity_access_management",
+ "foreign_entity",
  "frecency",
  "futures",
  "http 1.4.0",
@@ -3432,6 +3436,7 @@ dependencies = [
  "email",
  "entity_access",
  "entity_access_management",
+ "foreign_entity",
  "frecency",
  "futures",
  "github",
@@ -4013,6 +4018,7 @@ dependencies = [
  "macro_auth",
  "macro_aws_config",
  "macro_cors",
+ "macro_db_client",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -4456,8 +4462,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "filter_ast",
+ "item_filters",
  "macro_db_migrator",
  "macro_uuid",
+ "models_pagination",
  "serde",
  "serde_json",
  "sqlx",
@@ -4797,6 +4806,7 @@ dependencies = [
  "document_sub_type",
  "documents",
  "entity_access",
+ "foreign_entity",
  "fusionauth",
  "hex",
  "hmac 0.12.1",
@@ -6131,16 +6141,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libloading"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "754ca22de805bb5744484a5b151a9e1a8e837d5dc232c2d7d8c2e3492edc8b60"
-dependencies = [
- "cfg-if",
- "windows-link",
-]
-
-[[package]]
 name = "libm"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6787,12 +6787,14 @@ dependencies = [
  "email_service_client",
  "entity_access",
  "entity_access_management",
+ "foreign_entity",
  "frecency",
  "fusionauth",
  "http 1.4.0",
  "lexical_client",
  "macro_auth",
  "macro_aws_config",
+ "macro_db_client",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -6804,6 +6806,7 @@ dependencies = [
  "readonly_pool",
  "redis",
  "rmcp",
+ "roles_and_permissions",
  "search_service_client",
  "secretsmanager_client",
  "serde_json",
@@ -6859,6 +6862,7 @@ dependencies = [
  "email_service_client",
  "entity_access",
  "entity_access_management",
+ "foreign_entity",
  "frecency",
  "futures",
  "lexical_client",
@@ -7281,6 +7285,7 @@ dependencies = [
  "call",
  "chrono",
  "comms",
+ "crm",
  "document_sub_type",
  "doppleganger",
  "email",
@@ -7289,6 +7294,7 @@ dependencies = [
  "models_pagination",
  "models_properties",
  "serde",
+ "serde_json",
  "strum",
  "utoipa",
  "uuid",
@@ -8284,10 +8290,9 @@ dependencies = [
  "chrono",
  "console_error_panic_hook",
  "console_log",
- "image",
- "itertools 0.14.0",
+ "itertools 0.11.0",
  "js-sys",
- "libloading 0.9.0",
+ "libloading",
  "log",
  "maybe-owned",
  "once_cell",
@@ -8941,7 +8946,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27c6023962132f4b30eb4c172c91ce92d933da334c59c23cddee82358ddafb0b"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -10847,6 +10852,7 @@ dependencies = [
  "email",
  "entity_access",
  "filter_ast",
+ "foreign_entity",
  "frecency",
  "futures",
  "http-body-util",

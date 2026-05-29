@@ -134,12 +134,23 @@ pub async fn get_thread_access(
         SELECT EXISTS (
             SELECT 1
             FROM shared_teams st
-            WHERE EXISTS (SELECT 1 FROM participants)
+            -- Require at least one *external* participant (outside the
+            -- requester's own email domain). Internal colleagues don't
+            -- need to be tracked CRM contacts, but a purely-internal
+            -- thread shouldn't grant CRM access either.
+            WHERE EXISTS (
+                SELECT 1
+                FROM participants p
+                WHERE split_part(p.email, '@', 2) <> split_part(LOWER($2), '@', 2)
+            )
               AND NOT EXISTS (
-                  -- A participant with no qualifying contact in this team.
+                  -- An external participant with no qualifying contact in
+                  -- this team. Participants on the requester's own domain
+                  -- are skipped (they're internal, not CRM contacts).
                   SELECT 1
                   FROM participants p
-                  WHERE NOT EXISTS (
+                  WHERE split_part(p.email, '@', 2) <> split_part(LOWER($2), '@', 2)
+                    AND NOT EXISTS (
                       SELECT 1
                       FROM crm_contacts ct
                       JOIN crm_companies c ON c.id = ct.company_id

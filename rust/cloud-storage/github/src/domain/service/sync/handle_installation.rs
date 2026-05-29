@@ -5,10 +5,13 @@ use crate::domain::{
     ports::{GithubSyncClient, GithubSyncRepo},
 };
 use documents::domain::ports::DocumentService;
+use foreign_entity::domain::ports::ForeignEntityService;
 
 use super::GithubSyncServiceImpl;
 
-impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServiceImpl<D, R, C> {
+impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntityService>
+    GithubSyncServiceImpl<D, R, C, F>
+{
     /// Handle `installation` events with action `created`.
     ///
     /// Associates the GitHub App installation with the installer's team or user source.

@@ -1,0 +1,67 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                c.id,\n                c.name,\n                c.channel_type AS \"channel_type: ChannelType\",\n                c.org_id,\n                c.team_id,\n                CASE WHEN (\n                    c.channel_type = 'public'\n                    OR\n                    (c.channel_type = 'organization' AND $3::bigint IS NOT NULL AND c.org_id = $3)\n                    OR\n                    (c.channel_type IN ('private', 'direct_message', 'team') AND EXISTS (\n                        SELECT 1 FROM comms_channel_participants cp\n                        WHERE cp.channel_id = c.id\n                        AND cp.user_id = $2\n                        AND cp.left_at IS NULL\n                    ))\n                ) THEN true ELSE false END AS \"has_access!: bool\"\n            FROM comms_channels c\n            WHERE c.id::text = ANY($1)\n              AND (c.channel_type != 'organization' OR $3::bigint IS NOT NULL)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_type: ChannelType",
+        "type_info": {
+          "Custom": {
+            "name": "comms_channel_type",
+            "kind": {
+              "Enum": [
+                "public",
+                "organization",
+                "private",
+                "direct_message",
+                "team"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "org_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "has_access!: bool",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "5c47456f9d7becea7d008197fd7693632c755978abb9b4ff9cff3fd95b09b535"
+}

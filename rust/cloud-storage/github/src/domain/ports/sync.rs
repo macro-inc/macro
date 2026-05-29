@@ -61,6 +61,12 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
         macro_id: &str,
     ) -> impl Future<Output = Result<Vec<uuid::Uuid>, Self::Err>> + Send;
 
+    /// Returns the Macro sources associated with a GitHub App installation.
+    fn get_installation_sources(
+        &self,
+        installation_id: &str,
+    ) -> impl Future<Output = Result<Vec<GithubAppInstallationSource>, Self::Err>> + Send;
+
     /// Upserts associations between a GitHub App installation and its sources.
     /// Ignores conflicts (idempotent).
     fn upsert_installation_sources(

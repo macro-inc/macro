@@ -4,9 +4,16 @@
 
 use std::future::Future;
 
+use item_filters::ast::{LiteralTree, foreign_entity::ForeignEntityLiteral};
+use models_pagination::{Query, SimpleSortMethod};
 use uuid::Uuid;
 
-use super::models::{CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity};
+use super::models::{
+    CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity, SourceId,
+};
+
+/// Query type used when listing foreign entities for source ids.
+pub type ForeignEntityListQuery = Query<Uuid, SimpleSortMethod, LiteralTree<ForeignEntityLiteral>>;
 
 /// Repository for persisting and fetching foreign entity records.
 ///
@@ -30,6 +37,14 @@ pub trait ForeignEntityRepository: Send + Sync + 'static {
         &self,
         foreign_entity_id: &str,
         foreign_entity_source: Option<&str>,
+    ) -> impl Future<Output = Result<Vec<ForeignEntity>, Self::Err>> + Send;
+
+    /// List foreign entities visible through the supplied source identifiers.
+    fn get_foreign_entities_for_user(
+        &self,
+        source_ids: Vec<SourceId>,
+        limit: u32,
+        query: ForeignEntityListQuery,
     ) -> impl Future<Output = Result<Vec<ForeignEntity>, Self::Err>> + Send;
 
     /// Create a foreign entity record using the supplied internal primary key.
@@ -76,6 +91,14 @@ pub trait ForeignEntityService: Send + Sync + 'static {
         &self,
         foreign_entity_id: &str,
         foreign_entity_source: Option<&str>,
+    ) -> impl Future<Output = Result<Vec<ForeignEntity>, ForeignEntityError>> + Send;
+
+    /// List foreign entities visible through the supplied source identifiers.
+    fn get_foreign_entities_for_user(
+        &self,
+        source_ids: Vec<SourceId>,
+        limit: u32,
+        query: ForeignEntityListQuery,
     ) -> impl Future<Output = Result<Vec<ForeignEntity>, ForeignEntityError>> + Send;
 
     /// Create a foreign entity record.

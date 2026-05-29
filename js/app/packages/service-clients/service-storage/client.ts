@@ -24,6 +24,7 @@ import type { ResultError } from '@core/util/result';
 
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
+import type { ApiChannelWithLatest } from '@service-comms/generated/models/apiChannelWithLatest';
 import { platformFetch } from 'core/util/platformFetch';
 import { err, ok, type Result } from 'neverthrow';
 import type {
@@ -39,6 +40,7 @@ import type {
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
+import type { ApiActivity } from './generated/schemas/apiActivity';
 import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
 import type { ApiChannelMessagesPage } from './generated/schemas/apiChannelMessagesPage';
 import type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
@@ -55,6 +57,8 @@ import type { CreateChannelResponse } from './generated/schemas/createChannelRes
 import type { CreateCommentResponse } from './generated/schemas/createCommentResponse';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
+import type { CreateEntityMentionRequest } from './generated/schemas/createEntityMentionRequest';
+import type { CreateEntityMentionResponse } from './generated/schemas/createEntityMentionResponse';
 import type { CreateInstructionsDocumentResponse } from './generated/schemas/createInstructionsDocumentResponse';
 import type { CreateMarkdownDocumentRequest } from './generated/schemas/createMarkdownDocumentRequest';
 import type { CreateMarkdownHandler200 } from './generated/schemas/createMarkdownHandler200';
@@ -63,6 +67,7 @@ import type { CreateTaskHandler200 } from './generated/schemas/createTaskHandler
 import type { CreateTaskRequest } from './generated/schemas/createTaskRequest';
 import type { CreateUnthreadedAnchorResponse } from './generated/schemas/createUnthreadedAnchorResponse';
 import type { DeleteCommentResponse } from './generated/schemas/deleteCommentResponse';
+import type { DeleteEntityMentionResponse } from './generated/schemas/deleteEntityMentionResponse';
 import type { DeleteUnthreadedAnchorResponse } from './generated/schemas/deleteUnthreadedAnchorResponse';
 import type { DocumentMetadata } from './generated/schemas/documentMetadata';
 import type { DocumentPreview } from './generated/schemas/documentPreview';
@@ -70,6 +75,9 @@ import type { DocumentResponseMetadataWithContent } from './generated/schemas/do
 import type { EditAnchorResponse } from './generated/schemas/editAnchorResponse';
 import type { EditCommentResponse } from './generated/schemas/editCommentResponse';
 import type { ExportDocumentResponse } from './generated/schemas/exportDocumentResponse';
+import type { GetAttachmentReferencesResponse } from './generated/schemas/getAttachmentReferencesResponse';
+import type { GetBatchChannelPreviewRequest } from './generated/schemas/getBatchChannelPreviewRequest';
+import type { GetBatchChannelPreviewResponse } from './generated/schemas/getBatchChannelPreviewResponse';
 import type { GetBatchProjectPreviewResponse } from './generated/schemas/getBatchProjectPreviewResponse';
 import type { GetDocumentPermissionsResponseDataV2 } from './generated/schemas/getDocumentPermissionsResponseDataV2';
 import type { GetDocumentProcessingResultResponse } from './generated/schemas/getDocumentProcessingResultResponse';
@@ -89,6 +97,7 @@ import type { LocationResponseV3 } from './generated/schemas/locationResponseV3'
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchMessageRequest } from './generated/schemas/patchMessageRequest';
 import type { PinRequest } from './generated/schemas/pinRequest';
+import type { PostActivityRequest } from './generated/schemas/postActivityRequest';
 import type { PostMessageRequest } from './generated/schemas/postMessageRequest';
 import type { PostMessageResponse } from './generated/schemas/postMessageResponse';
 import type { PostReactionRequest } from './generated/schemas/postReactionRequest';
@@ -158,6 +167,9 @@ export type ItemType =
 
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 
+export type { ApiAttachmentChannelReference } from './generated/schemas/apiAttachmentChannelReference';
+export type { ApiAttachmentEntityReference } from './generated/schemas/apiAttachmentEntityReference';
+export type { ApiAttachmentGenericReference } from './generated/schemas/apiAttachmentGenericReference';
 export type { ApiChannelAttachment } from './generated/schemas/apiChannelAttachment';
 export type { ApiChannelAttachmentsPage as ChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
 export type { ApiChannelContextMessage } from './generated/schemas/apiChannelContextMessage';
@@ -172,6 +184,8 @@ export type MessageResponse = { message: string };
 
 type WithChannelId = { channel_id: string };
 type WithMessageId = { message_id: string };
+type WithMentionId = { mention_id: string };
+type WithEntity = { entity_type: string; entity_id: string };
 export type ChannelAttachmentType = 'static' | 'dss';
 
 export const ChannelTypeEnum = {
@@ -346,6 +360,17 @@ export const storageServiceClient = {
       await dssFetch<CreateChannelResponse>(`/channels`, {
         method: 'POST',
         body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
+
+  // The channel list is still served by the comms hex, mounted at
+  // `/comms/channels` on the same DSS host. Repoint to `/channels` once the
+  // list moves into the channels hex (alongside the comms teardown).
+  async getChannels() {
+    return (
+      await dssFetch<ApiChannelWithLatest[]>(`/comms/channels`, {
+        method: 'GET',
       })
     ).map((result) => result);
   },
@@ -528,6 +553,16 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
+  async getBatchChannelPreviews(args: GetBatchChannelPreviewRequest) {
+    const { channel_ids } = args;
+    return (
+      await dssFetch<GetBatchChannelPreviewResponse>(`/channels/preview`, {
+        method: 'POST',
+        body: JSON.stringify({ channel_ids }),
+      })
+    ).map((result) => result);
+  },
+
   async getChannelMessages(
     args: WithChannelId & {
       limit: number;
@@ -644,6 +679,56 @@ export const storageServiceClient = {
         `/channels/${channel_id}/participants`,
         { method: 'GET' }
       )
+    ).map((result) => result);
+  },
+
+  async createEntityMention(args: CreateEntityMentionRequest, token?: string) {
+    return (
+      await dssFetch<CreateEntityMentionResponse>(`/channels/mentions`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+        headers: token ? { 'x-permissions-token': token } : undefined,
+      })
+    ).map((result) => result);
+  },
+
+  async deleteEntityMention(args: WithMentionId, token?: string) {
+    return (
+      await dssFetch<DeleteEntityMentionResponse>(
+        `/channels/mentions/${args.mention_id}`,
+        {
+          method: 'DELETE',
+          headers: token ? { 'x-permissions-token': token } : undefined,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  async attachmentReferences(args: WithEntity) {
+    const { entity_type, entity_id } = args;
+    return (
+      await dssFetch<GetAttachmentReferencesResponse>(
+        `/channels/attachments/${entity_type}/${entity_id}/references`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async getActivity() {
+    return (
+      await dssFetch<Array<ApiActivity>>(`/channels/activity`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async postActivity(args: PostActivityRequest) {
+    const { activity_type, channel_id } = args;
+    return (
+      await dssFetch<ApiActivity>(`/channels/activity`, {
+        method: 'POST',
+        body: JSON.stringify({ activity_type, channel_id }),
+      })
     ).map((result) => result);
   },
 

@@ -37,6 +37,21 @@ impl EmailPgRepo {
     pub fn new(pool: PgPool) -> Self {
         EmailPgRepo { pool }
     }
+
+    pub async fn link_by_fusionauth_email_provider(
+        &self,
+        fusionauth_user_id: &str,
+        email_address: &str,
+        provider: UserProvider,
+    ) -> Result<Option<Link>, sqlx::Error> {
+        link::link_by_fusionauth_email_provider(
+            &self.pool,
+            fusionauth_user_id,
+            email_address,
+            provider,
+        )
+        .await
+    }
 }
 
 impl EmailRepo for EmailPgRepo {

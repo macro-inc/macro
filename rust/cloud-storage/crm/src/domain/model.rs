@@ -2,6 +2,20 @@
 
 use chrono::{DateTime, Utc};
 
+/// A [`CrmCompany`] bundled with display metadata resolved from
+/// `crm_domain_directory` against the primary (earliest-created) domain.
+/// `name` / `description` are `None` when no directory row exists or
+/// the row is in negative-cache state (NULL fields).
+#[derive(Debug, Clone)]
+pub struct CrmCompanyForSoup {
+    /// The underlying company record.
+    pub company: CrmCompany,
+    /// Display name from the primary domain's directory entry.
+    pub name: Option<String>,
+    /// Display description from the primary domain's directory entry.
+    pub description: Option<String>,
+}
+
 /// A known external company tracked by a team (CRM-style record). A company
 /// aggregates one or more email domains and individual contacts that are
 /// considered to belong to the same external party.
@@ -62,6 +76,29 @@ pub struct CrmDomain {
     pub domain: String,
     /// When the domain record was created
     pub created_at: DateTime<Utc>,
+}
+
+/// A contact (individual external party) belonging to a [`CrmCompany`].
+/// Tracked per `(company_id, email)`; `name` is the first non-NULL display
+/// name observed across the team's populates.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CrmContact {
+    /// The id of the contact record
+    pub id: uuid::Uuid,
+    /// The id of the company the contact belongs to
+    pub company_id: uuid::Uuid,
+    /// The contact's email address
+    pub email: String,
+    /// Display name observed for the contact, if any
+    pub name: Option<String>,
+    /// Earliest known interaction with this contact
+    pub first_interaction: DateTime<Utc>,
+    /// Most recent known interaction with this contact
+    pub last_interaction: DateTime<Utc>,
+    /// When the contact record was created
+    pub created_at: DateTime<Utc>,
+    /// When the contact record was last updated
+    pub updated_at: DateTime<Utc>,
 }
 
 /// Result of [`crate::domain::companies_repo::CompaniesRepository::crm_scope_precheck`].
@@ -131,6 +168,16 @@ pub enum CrmError {
     /// Contact id is not owned by the requesting team.
     #[error("crm contact not found for team")]
     ContactNotFoundForTeam,
+    /// Comment thread id does not exist, is deleted, or does not belong
+    /// to the addressed entity / team.
+    #[error("crm comment thread not found")]
+    ThreadNotFound,
+    /// Comment id does not exist or does not belong to the team.
+    #[error("crm comment not found for team")]
+    CommentNotFound,
+    /// Request rejected for a client-side reason (e.g. blank comment text).
+    #[error("{0}")]
+    InvalidRequest(String),
     /// Tried to mutate a CRM company in a way that contradicts its
     /// `hidden = true` state — currently raised when attempting to
     /// re-enable `email_sync` on a hidden company.

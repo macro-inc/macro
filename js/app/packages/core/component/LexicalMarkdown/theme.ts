@@ -1,7 +1,7 @@
 import './styles.css';
 import type { EditorThemeClasses } from 'lexical';
 
-const vertical = 'my-1.5';
+const VERTICAL_GAP = 'my-4';
 
 // SCUFFED THEMING: we have to figure out what to do about code highlighting.
 const codeHighlight: Record<string, string> = {
@@ -47,7 +47,7 @@ export const theme: EditorThemeClasses = {
     underline: 'md-underline',
     highlight: 'text-accent font-semibold',
   },
-  paragraph: `${vertical} md-p text-[1em]`,
+  paragraph: `${VERTICAL_GAP} md-p text-[1em]`,
   heading: {
     h1: 'text-xl text-[1.25em] font-semibold mb-3',
     h2: 'text-lg text-[1.125em] font-semibold mb-2',
@@ -57,9 +57,9 @@ export const theme: EditorThemeClasses = {
     h6: 'text-base text-[1em] font-medium',
   },
   list: {
-    ul: 'list-none md-list md-bullet',
-    ol: 'list-decimal md-list md-number',
-    listitem: `${vertical}`,
+    ul: `${VERTICAL_GAP} list-none md-list md-bullet`,
+    ol: `${VERTICAL_GAP} list-decimal md-list md-number`,
+    listitem: 'my-[0.25em]',
     nested: {
       listitem: 'list-none nested',
     },

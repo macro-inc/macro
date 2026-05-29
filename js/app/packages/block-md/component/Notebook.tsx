@@ -1,4 +1,3 @@
-import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
   commentsStore,
@@ -84,7 +83,6 @@ export function Notebook() {
   const [layoutMode, setLayoutMode] = createSignal(CommentLayoutMode.none);
   const [width, setWidth] = createSignal(0);
   const [leftFloatX, setLeftFloatX] = createSignal(0);
-  const { navigatedFromJK } = useNavigatedFromJK();
 
   const comments = commentsStore.get;
   const hasComment = createMemo(() => {
@@ -264,14 +262,14 @@ export function Notebook() {
   return (
     <div class={containerClasses()} ref={notebookRef}>
       <div class={contentDivClasses()} ref={contentRef}>
-        <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
+        <TitleEditor autoFocusOnMount />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
           <InlineTaskProperties />
           <InlineTaskGithubPullRequests />
         </div>
         <ParamsProvider>
-          <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
+          <MarkdownEditor />
           <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
             <TaskDiscussion />
           </Show>
