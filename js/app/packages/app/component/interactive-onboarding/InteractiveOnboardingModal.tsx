@@ -61,36 +61,23 @@ function ModalHeader(props: { phase: Accessor<ModalPhase> }) {
   const currentLesson = () => onboarding.state.currentLesson();
 
   return (
-    <header class="shrink-0 flex items-center justify-between gap-4 px-4 py-4">
-      <Show
-        when={props.phase() === 'lessons' && currentLesson()}
-        fallback={<div />}
-      >
-        <div class="min-w-0">
-          <Dialog.Title as="h2" class="text-4xl font-semibold text-ink m-0">
-            {currentLesson()?.definition.title}
-          </Dialog.Title>
-          <Dialog.Description as="p" class="text-sm text-ink-extra-muted">
-            {currentLesson()?.definition.subtitle}
-          </Dialog.Description>
-        </div>
-      </Show>
+    <div class="shrink-0 flex items-center justify-between gap-4">
       <Dialog.CloseButton
         as={Button}
         variant="ghost"
         size="icon-sm"
-        class="self-start"
+        class="ml-auto"
       >
         <CloseIcon class="size-4" />
       </Dialog.CloseButton>
-    </header>
+    </div>
   );
 }
 
 function StartScreen(props: { onStart: () => void; onSkip: () => void }) {
   return (
     <div class="flex-1 flex items-center justify-center px-6">
-      <div class="max-w-2xl flex flex-col items-center text-center gap-5 -translate-y-10 onboarding-stagger">
+      <div class="max-w-2xl flex flex-col items-center text-center gap-5 onboarding-stagger">
         <LogoIcon class="size-16 text-accent" />
         <div class="flex flex-col gap-2">
           <h3 class="text-3xl font-semibold text-ink">Welcome to Macro</h3>
@@ -115,7 +102,7 @@ function StartScreen(props: { onStart: () => void; onSkip: () => void }) {
 function EndScreen(props: { onFinish: () => void; onReplay: () => void }) {
   return (
     <div class="flex-1 flex items-center justify-center px-6">
-      <div class="max-w-xl flex flex-col items-center text-center gap-5 -translate-y-10 onboarding-stagger">
+      <div class="max-w-xl flex flex-col items-center text-center gap-5 onboarding-stagger">
         <LogoIcon class="size-16 text-accent" />
         <div class="flex flex-col gap-2">
           <h3 class="text-3xl font-semibold text-ink">You’re ready to go</h3>
@@ -196,8 +183,19 @@ function LessonsScreen(props: { onFinish: () => void; onReplay: () => void }) {
         <>
           <div class="flex-1 min-h-0 flex gap-12">
             <aside class="w-105 shrink-0 flex flex-col">
-              <div class="flex-1 overflow-y-auto px-4">
+              <div class="flex-1 overflow-y-auto p-4">
                 <div style={bodyStyle()}>
+                  <div class="bg-ink text-surface text-xs font-mono size-4 flex items-center justify-center font-bold rounded-xs mb-8">
+                    {currentLesson().index + 1}
+                  </div>
+                  <h3 class="text-3xl font-semibold text-ink-muted">
+                    {currentLesson().definition.title}
+                  </h3>
+                  <Show when={currentLesson().definition.subtitle}>
+                    <p class="text-sm text-ink/60 mt-4">
+                      {currentLesson().definition.subtitle}
+                    </p>
+                  </Show>
                   <div class="mt-5">
                     <LessonContent
                       lesson={currentLesson()}
@@ -249,7 +247,7 @@ function InteractiveOnboardingModalLayout(props: { onClose: () => void }) {
   };
 
   return (
-    <div class="size-full flex flex-col bg-surface text-ink">
+    <div class="size-full flex flex-col gap-4 bg-surface text-ink">
       <ModalHeader phase={phase} />
       <Switch>
         <Match when={phase() === 'start'}>
