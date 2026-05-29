@@ -1,4 +1,9 @@
 import { AdaptiveScroller } from '@app/component/dashboard/adaptive-scroller';
+import {
+  channelDisplayName,
+  channelInitials,
+  compactMarkdownTheme,
+} from '@app/component/dashboard/utils';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { getChannelParams } from '@channel/Channel/link';
@@ -6,10 +11,6 @@ import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import {
-  createTheme,
-  theme as markdownTheme,
-} from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { useDisplayName } from '@core/user/displayName';
@@ -22,16 +23,6 @@ import { useSoupItemsQuery } from '@queries/soup/items';
 import { ChannelType } from '@service-comms/generated/models/channelType';
 import { Avatar, Button, Layer, Tooltip } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
-
-const compactMarkdownTheme = createTheme(
-  {
-    paragraph: 'm-0 text-[1em] leading-5',
-    list: {
-      listitem: 'm-0 leading-5',
-    },
-  },
-  markdownTheme
-);
 
 type ChannelCardData = {
   id: string;
@@ -48,22 +39,6 @@ type ChannelCardData = {
   participantCount: number;
   dmUserId?: string;
 };
-
-function channelDisplayName(name: string | null | undefined) {
-  const trimmed = name?.trim().replace(/^#+/, '').trim();
-  return trimmed || 'Untitled channel';
-}
-
-function initials(name: string) {
-  const letters = channelDisplayName(name)
-    .replace(/[,_./\\-]+/g, ' ')
-    .split(/\s+/)
-    .flatMap((part) => part.match(/[a-zA-Z0-9]/)?.[0] ?? [])
-    .slice(0, 2)
-    .map((letter) => letter.toUpperCase());
-
-  return letters.join('') || '?';
-}
 
 function ChannelCard(props: {
   channel: ChannelCardData;
@@ -96,7 +71,7 @@ function ChannelCard(props: {
                 class="bg-default/20 px-1 text-default @md/recent-channels:size-10"
               >
                 <Avatar.Fallback>
-                  {initials(props.channel.name)}
+                  {channelInitials(props.channel.name)}
                 </Avatar.Fallback>
               </Avatar>
             }

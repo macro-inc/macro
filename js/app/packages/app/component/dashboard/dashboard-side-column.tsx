@@ -1,5 +1,9 @@
 import { useGlobalNotificationSource } from "@app/component/GlobalAppState";
 import { DashboardSectionBoundary } from "@app/component/dashboard/dashboard-section-boundary";
+import {
+  channelDisplayName,
+  compactMarkdownTheme,
+} from "@app/component/dashboard/utils";
 import { globalSplitManager } from "@app/signal/splitLayout";
 import { setAutomationComposerOpen } from "@block-automation/component";
 import { DashboardNotificationList } from "@app/component/dashboard/sections/notifications";
@@ -8,10 +12,6 @@ import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from "@core/component/LexicalMarkdown/component/core/StaticMarkdown";
-import {
-  createTheme,
-  theme as markdownTheme,
-} from "@core/component/LexicalMarkdown/theme";
 import { EntityIcon } from "@core/component/EntityIcon";
 import { UserIcon } from "@core/component/UserIcon";
 import { useUserId } from "@core/context/user";
@@ -27,16 +27,6 @@ import BellIcon from "@phosphor/bell.svg";
 import RobotIcon from "@phosphor/robot.svg";
 import { Button, Layer } from "@ui";
 import { createMemo, createSignal, For, type JSX, Show } from "solid-js";
-
-const compactMarkdownTheme = createTheme(
-  {
-    paragraph: "m-0 text-[1em] leading-5",
-    list: {
-      listitem: "m-0 leading-5",
-    },
-  },
-  markdownTheme,
-);
 
 function SideColumnSection(props: {
   title: string;
@@ -161,11 +151,6 @@ function openChannel(channel: ChannelEntity) {
     { type: "channel", id: channel.id, params },
     { activate: true, referredFrom: "dashboard" },
   );
-}
-
-function channelDisplayName(name: string | null | undefined) {
-  const trimmed = name?.trim().replace(/^#+/, "").trim();
-  return trimmed || "Untitled channel";
 }
 
 function ChannelSummary(props: {

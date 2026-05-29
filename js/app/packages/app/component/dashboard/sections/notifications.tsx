@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { compactMarkdownTheme } from '@app/component/dashboard/utils';
 import { EntityRow, EntityRowProvider } from '@app/component/mobile/EntityRow';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
@@ -7,10 +8,6 @@ import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import {
-  createTheme,
-  theme as markdownTheme,
-} from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { Entity } from '@entity';
@@ -26,16 +23,6 @@ import BellIcon from '@phosphor/bell.svg';
 import CheckIcon from '@phosphor/check.svg';
 import { Button, cn, Layer, Tooltip } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-
-const compactMarkdownTheme = createTheme(
-  {
-    paragraph: 'm-0 md-p text-[1em]',
-    list: {
-      listitem: 'm-0',
-    },
-  },
-  markdownTheme
-);
 
 function NotificationRow(props: { notification: UnifiedNotification }) {
   const notificationSource = useGlobalNotificationSource();
