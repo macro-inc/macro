@@ -595,7 +595,6 @@ async fn main() -> anyhow::Result<()> {
     // resolves mentioned bots and runs their handlers, posting replies through
     // the channel service we just built.
     let cognition_service_url = config::CognitionServiceUrl::new()
-        .ok()
         .map(|v| v.as_ref().to_string())
         .unwrap_or_else(|| config.environment.cognition_service().to_string());
     let dcs_client = DocumentCognitionServiceClient::new(
