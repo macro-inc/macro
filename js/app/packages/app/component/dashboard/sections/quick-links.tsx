@@ -1,5 +1,4 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { TOKENS } from '@core/hotkey/tokens';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
@@ -10,7 +9,7 @@ import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import { notificationIsRead } from '@notifications/notification-helpers';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import { Hotkey, Layer } from '@ui';
+import { Layer } from '@ui';
 import { type Component, createMemo, createSignal } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -18,8 +17,6 @@ function QuickLinkButton(props: {
   label: string;
   icon: Component<{ class?: string; triggerAnimation?: boolean }>;
   color?: 'agent' | 'document' | 'folder' | 'task';
-  hotkey: string;
-  standaloneHotkey?: boolean;
   notificationCount?: number;
 }) {
   const [hovering, setHovering] = createSignal(false);
@@ -55,9 +52,7 @@ function QuickLinkButton(props: {
             <span class="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-hover bg-accent" />
           )}
         </div>
-        <span class="flex shrink-0 items-center gap-1 transition group-hover:opacity-0">
-          <Hotkey shortcut={props.hotkey} theme="subtle" />
-        </span>
+
       </div>
       <div class="flex w-full min-w-0 items-end justify-between gap-2">
         <span class="min-w-0 truncate text-sm font-medium text-ink">
@@ -119,51 +114,42 @@ export function QuickLinksSection() {
         <QuickLinkButton
           label="Inbox"
           icon={AnimatedInboxIcon}
-          hotkey="i"
           notificationCount={inboxNotificationCount()}
         />
         <QuickLinkButton
           label="Search"
           icon={AnimatedSearchIcon}
-          hotkey="/"
-          standaloneHotkey
         />
         <QuickLinkButton
           label="Agents"
           icon={AnimatedStarIcon}
           color="agent"
-          hotkey="a"
         />
         <QuickLinkButton
           label="Email"
           icon={AnimatedEmailIcon}
-          hotkey="e"
           notificationCount={emailNotificationCount()}
         />
         <QuickLinkButton
           label="Docs"
           icon={AnimatedFileMdIcon}
           color="document"
-          hotkey="d"
         />
         <QuickLinkButton
           label="Tasks"
           icon={AnimatedTaskIcon}
           color="task"
-          hotkey="t"
           notificationCount={taskNotificationCount()}
         />
         <QuickLinkButton
           label="Channels"
           icon={AnimatedChannelIcon}
-          hotkey="c"
           notificationCount={channelNotificationCount()}
         />
         <QuickLinkButton
           label="Folders"
           icon={AnimatedFolderIcon}
           color="folder"
-          hotkey="f"
         />
       </div>
     </section>
