@@ -1,3 +1,4 @@
+use macro_env_var::VarNameErr;
 use thiserror::Error;
 
 /// Domain errors for the MCP client.
@@ -24,6 +25,9 @@ pub enum Error {
     /// An internal or infrastructure error.
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
+    /// A required env var is missing
+    #[error("required environment variable not provided: {0}")]
+    RequiredEnvironmentVariable(VarNameErr),
 }
 
 /// Domain result type.

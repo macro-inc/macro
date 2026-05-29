@@ -1,10 +1,7 @@
 import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
 import { TaskListEntity } from '@app/component/next-soup/soup-view/views/tasks/TaskListEntity';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  ENABLE_TASK_DUPLICATES_FLAG,
-  ENABLE_TASK_DUPLICATES_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { ENABLE_TASK_DUPLICATES_FLAG } from '@core/constant/featureFlags';
 import { ListLayoutProvider } from '@entity';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CopyIcon from '@phosphor/copy.svg';
@@ -127,9 +124,7 @@ export function SimilarTasksSection(props: {
   content: Accessor<string>;
   onOpenTask: (taskId: string) => void;
 }) {
-  const flag = useFeatureFlag(ENABLE_TASK_DUPLICATES_FLAG, {
-    enabledOverride: ENABLE_TASK_DUPLICATES_OVERRIDE,
-  });
+  const flag = useFeatureFlag(ENABLE_TASK_DUPLICATES_FLAG);
 
   const [debounced, setDebounced] = createSignal<DebouncedInput>({
     title: props.title(),
