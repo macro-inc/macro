@@ -231,48 +231,36 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(move |app_handle, event| {
-            match &event {
-                RunEvent::Ready => {
-                    let app = app_handle.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Err(e) = retry_waiting_for_wifi(&app).await {
-                            tracing::warn!(
-                                "Failed to retry bundle update Wi-Fi wait on ready: {e}"
-                            );
-                        }
-                    });
-                    #[cfg(feature = "auto_apply_update")]
-                    {
-                        let app = app_handle.clone();
-                        tauri::async_runtime::spawn(async move {
-                            match apply_completed_update(&app).await {
-                                Ok(_) => {}
-                                Err(e) => {
-                                    tracing::error!(
-                                        "Failed to auto-apply bundle update on ready: {e}"
-                                    );
-                                }
-                            }
-                        });
+        .run(move |app_handle, event| match &event {
+            RunEvent::Ready => {
+                let app = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = retry_waiting_for_wifi(&app).await {
+                        tracing::warn!("Failed to retry bundle update Wi-Fi wait on ready: {e}");
                     }
-                }
-                RunEvent::Resumed => {
+                });
+                #[cfg(feature = "auto_apply_update")]
+                {
                     let app = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
-                        if let Err(e) = retry_waiting_for_wifi(&app).await {
-                            tracing::warn!(
-                                "Failed to retry bundle update Wi-Fi wait on resume: {e}"
-                            );
+                        match apply_completed_update(&app).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                tracing::error!("Failed to auto-apply bundle update on ready: {e}");
+                            }
                         }
                     });
                 }
-                _ => {}
             }
-
-            #[cfg(feature = "auto_apply_update")]
-            {
-                if let RunEvent::Resumed = event {
+            RunEvent::Resumed => {
+                let app = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = retry_waiting_for_wifi(&app).await {
+                        tracing::warn!("Failed to retry bundle update Wi-Fi wait on resume: {e}");
+                    }
+                });
+                #[cfg(feature = "auto_apply_update")]
+                {
                     let app = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
                         match apply_completed_update(&app).await {
@@ -284,6 +272,7 @@ pub fn run() {
                     });
                 }
             }
+            _ => {}
         });
 }
 

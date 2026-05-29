@@ -84,6 +84,10 @@ impl BundleUpdateEvent {
     }
 }
 
+fn is_waiting_for_wifi(cur: &Result<UpdateStatus, Report<UpdateError>>) -> bool {
+    matches!(cur, Ok(UpdateStatus::WaitingForWifi(_)))
+}
+
 /// Tauri plugin that manages OTA bundle updates.
 pub struct MacroBundleUpdaterPlugin {
     base_url: Url,
@@ -241,6 +245,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
 
         let service = Service::new(client, fs, system_info);
         let mut status_rx = service.status().clone();
+        let mut wifi_retry_status_rx = service.status().clone();
 
         let _ = service.start();
         app.manage(tokio::sync::Mutex::new(service));
@@ -265,15 +270,34 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
         let app_handle = app.clone();
         tauri::async_runtime::spawn(async move {
             loop {
-                tokio::time::sleep(WIFI_RETRY_INTERVAL).await;
-                match retry_waiting_for_wifi(&app_handle).await {
-                    Ok(true) => {
-                        tracing::info!("[bundle-update] retrying bundle download after Wi-Fi wait")
+                while !is_waiting_for_wifi(&wifi_retry_status_rx.borrow()) {
+                    if wifi_retry_status_rx.changed().await.is_err() {
+                        return;
                     }
-                    Ok(false) => {}
-                    Err(e) => tracing::warn!(
-                        "[bundle-update] failed to retry bundle download after Wi-Fi wait: {e}"
-                    ),
+                }
+
+                loop {
+                    tokio::select! {
+                        _ = tokio::time::sleep(WIFI_RETRY_INTERVAL) => {
+                            match retry_waiting_for_wifi(&app_handle).await {
+                                Ok(true) => tracing::info!(
+                                    "[bundle-update] retrying bundle download after Wi-Fi wait"
+                                ),
+                                Ok(false) => {}
+                                Err(e) => tracing::warn!(
+                                    "[bundle-update] failed to retry bundle download after Wi-Fi wait: {e}"
+                                ),
+                            }
+                        }
+                        changed = wifi_retry_status_rx.changed() => {
+                            if changed.is_err() {
+                                return;
+                            }
+                            if !is_waiting_for_wifi(&wifi_retry_status_rx.borrow()) {
+                                break;
+                            }
+                        }
+                    }
                 }
             }
         });
