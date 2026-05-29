@@ -7458,6 +7458,12 @@ export const postItemsSoupBody = zod
           .describe(
             'Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.'
           ),
+        link_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Restrict to specific inboxes by email_links.id. Empty means \"any inbox the\ncaller can access\" (soup expands to the full set at the router edge).'
+          ),
         notification_filters: zod
           .object({
             done: zod

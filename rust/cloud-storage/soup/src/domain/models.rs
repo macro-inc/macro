@@ -214,7 +214,10 @@ pub struct SoupRequest<T> {
     pub cursor: SoupQuery<T>,
     pub user: MacroUserIdStr<'static>,
     pub email_preview_view: PreviewView,
-    pub link_id: Option<Uuid>,
+    /// Every inbox the caller can read (own + delegated via macro_user_links).
+    /// Empty when the caller has no inboxes — `build_email_request` returns
+    /// `None` so the email branch is skipped.
+    pub link_ids: Vec<Uuid>,
 }
 
 /// trait which defines a type which can be fallibly converted into a SoupRequest with ast
@@ -231,7 +234,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilters> {
             cursor,
             user,
             email_preview_view,
-            link_id,
+            link_ids,
         } = self;
 
         Ok(SoupRequest {
@@ -240,7 +243,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilters> {
             cursor: cursor.into_ast()?,
             user,
             email_preview_view,
-            link_id,
+            link_ids,
         })
     }
 }
@@ -253,7 +256,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilterAst> {
             cursor,
             user,
             email_preview_view,
-            link_id,
+            link_ids,
         } = self;
 
         Ok(SoupRequest {
@@ -262,7 +265,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilterAst> {
             cursor: cursor.map(|f| if f.is_empty() { None } else { Some(f) }),
             user,
             email_preview_view,
-            link_id,
+            link_ids,
         })
     }
 }
@@ -296,9 +299,13 @@ impl SoupRequest<Option<EntityFilterAst>> {
         };
         let crm_scope = entity_ast.and_then(|a| a.email_filter.crm_scope.clone());
 
+        if self.link_ids.is_empty() {
+            return None;
+        }
+
         Some(GetEmailsRequest {
             view: self.email_preview_view.clone(),
-            link_id: self.link_id?,
+            link_ids: self.link_ids.clone(),
             macro_id: self.user.clone(),
             limit: Some(self.limit as u32),
             query: match &self.cursor {

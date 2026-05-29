@@ -42,29 +42,29 @@ const CATEGORY_TO_BUCKETS: Record<CategoryFilter, string[] | null> = {
 
 function CommandKContent(_props: LessonContentProps) {
   return (
-    <div class="flex flex-col gap-3 onboarding-stagger">
-      <p>
+    <div class="flex flex-col gap-8 onboarding-stagger">
+      <p class="text-ink-muted mt-2">
         The Command Menu allows you to search for documents, tasks, channels,
         and more — and navigate to them instantly.
       </p>
-      <div class="mt-2">
+      <div class="flex flex-col gap-3">
         <HotkeyCallout
           keys={[IS_MAC ? '⌘' : 'Ctrl', 'K']}
           separator="+"
           label=""
           completed={completed()}
         />
+        <div class="flex items-center gap-3 text-sm text-ink/40">
+          <div class="h-px w-8 bg-edge-muted" />
+          or
+          <div class="h-px flex-1 bg-edge-muted" />
+        </div>
+        <ClickCallout
+          icon={AnimatedCommandIcon}
+          label="in the sidebar (bottom)"
+          completed={completed()}
+        />
       </div>
-      <div class="flex items-center gap-3 text-sm text-ink/40">
-        <div class="h-px w-8 bg-edge-muted" />
-        or
-        <div class="h-px flex-1 bg-edge-muted" />
-      </div>
-      <ClickCallout
-        icon={AnimatedCommandIcon}
-        label="in the sidebar (bottom)"
-        completed={completed()}
-      />
     </div>
   );
 }
@@ -149,6 +149,7 @@ function CommandKDemo(props: LessonContentProps) {
       <MockAppChrome
         onCommandClick={() => setCommandKOpen((v) => !v)}
         highlightCommand
+        scopeId={props.scopeId}
       >
         <OnboardingEntityList soup={soup} />
       </MockAppChrome>

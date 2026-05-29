@@ -5,25 +5,28 @@ import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
 import { toast } from '@core/component/Toast/Toast';
 import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
 import Arcanum01 from '@design/arcanum-01.svg';
-import EmptyStateDoneIcon from '@design/empty-state-done.svg';
+import EmptyStateDocIcon from '@design/empty-state-doc.svg';
 import EmptyStateEmailIcon from '@design/empty-state-email.svg';
 import EmptyStateFolderIcon from '@design/empty-state-folder.svg';
 import EmptyStateInboxZeroIcon from '@design/empty-state-inbox-zero.svg';
 import EmptyStateNoFilterMatchIcon from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchIcon from '@design/empty-state-no-search-match.svg';
+import EmptyStateTasksIcon from '@design/empty-state-tasks.svg';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
-import { Match, Switch } from 'solid-js';
+import { type Component, Match, Switch } from 'solid-js';
 import { FolderDropZone } from './FolderDropZone';
 import { useSoupView } from './soup-view-context';
 
 type FallbackContent = {
   plural: string;
+  graphic?: Component<{ class?: string }>;
   create?: { label: string; blockName: BlockName | BlockAlias };
 };
 
 const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
   documents: {
     plural: 'documents',
+    graphic: EmptyStateDocIcon,
     create: { label: 'Create document', blockName: 'md' },
   },
   channels: {
@@ -48,6 +51,7 @@ export function EmptyState(props: {
   listView?: ListView;
   search?: boolean;
   hasRefinementsFromBase?: boolean;
+  hasHiddenItems?: boolean;
   onClearFilters?: () => void;
 }) {
   const emailActive = useEmailLinksStatus();
@@ -82,7 +86,10 @@ export function EmptyState(props: {
           title="No items matching the filters"
         >
           {props.onClearFilters && (
-            <FilteredHiddenBanner onClearFilters={props.onClearFilters} />
+            <FilteredHiddenBanner
+              hasHiddenItems={props.hasHiddenItems}
+              onClearFilters={props.onClearFilters}
+            />
           )}
         </EmptyStatePanel>
       </Match>
@@ -125,8 +132,7 @@ export function EmptyState(props: {
       <Match when={props.listView === 'tasks'}>
         <EmptyStatePanel
           align="center"
-          graphic={EmptyStateDoneIcon}
-          graphicClass="opacity-50"
+          graphic={EmptyStateTasksIcon}
           title="Nothing to do"
           description="Tasks you create or that get assigned to you will show up here."
         />
@@ -169,7 +175,7 @@ export function EmptyState(props: {
           return (
             <EmptyStatePanel
               align="center"
-              graphic={EmptyStateInboxZeroIcon}
+              graphic={fallback.graphic ?? EmptyStateInboxZeroIcon}
               title={`No ${fallback.plural} to show`}
               primaryAction={
                 fallback.create

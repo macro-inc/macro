@@ -374,15 +374,17 @@ where
             .unwrap_or(RESULT_LIMIT)
             .clamp(1, MAX_RESULT_LIMIT);
 
-        let link_id = service_context
+        let link_ids: Vec<uuid::Uuid> = service_context
             .email_service
-            .get_link_by_macro_id(request_context.user_id.copied())
+            .get_inboxes_for_macro_id(request_context.user_id.copied())
             .await
             .map_err(|e| ToolCallError {
-                description: format!("Failed to resolve email link: {e}"),
+                description: format!("Failed to resolve email links: {e}"),
                 internal_error: e.into(),
             })?
-            .map(|link| link.id);
+            .into_iter()
+            .map(|link| link.id)
+            .collect();
 
         let result = service_context
             .service
@@ -393,7 +395,7 @@ where
                     cursor: SoupQuery::new_sort_simple(sort_method, filters),
                     user: request_context.user_id,
                     email_preview_view,
-                    link_id,
+                    link_ids,
                 },
                 None,
             )

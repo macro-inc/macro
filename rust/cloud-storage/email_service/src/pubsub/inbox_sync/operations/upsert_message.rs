@@ -650,7 +650,7 @@ async fn filter_notifiable_message(
 
     let query = PreviewCursorQuery {
         view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
-        link_id: link.id,
+        link_ids: vec![link.id],
         limit: 1,
         query: models_pagination::Query::Sort(
             models_pagination::SimpleSortMethod::UpdatedAt,

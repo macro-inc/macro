@@ -95,6 +95,13 @@ export function createOnboardingState(options: OnboardingStateOptions) {
     }
   };
 
+  const reset = () => {
+    for (let i = 0; i < store.length; i++) {
+      setStore(i, 'skipped', false);
+      setStore(i, 'completed', false);
+    }
+  };
+
   const dismiss = () => {
     setDismissed(true);
   };
@@ -110,6 +117,7 @@ export function createOnboardingState(options: OnboardingStateOptions) {
     advanceToNext,
     goToLesson,
     goToLessonById,
+    reset,
     dismiss,
   };
 }

@@ -218,6 +218,11 @@ pub struct EmailFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub email_thread_ids: Vec<String>,
 
+    /// Restrict to specific inboxes by email_links.id. Empty means "any inbox the
+    /// caller can access" (soup expands to the full set at the router edge).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub link_ids: Vec<String>,
+
     /// A list of project ids to search within. Empty to ignore project filtering.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub project_ids: Vec<String>,
@@ -280,6 +285,7 @@ impl IsEmpty for EmailFilters {
             bcc,
             recipients,
             email_thread_ids,
+            link_ids,
             project_ids,
             importance,
             notification_filters,
@@ -295,6 +301,7 @@ impl IsEmpty for EmailFilters {
             && bcc.is_empty()
             && recipients.is_empty()
             && email_thread_ids.is_empty()
+            && link_ids.is_empty()
             && project_ids.is_empty()
             && importance.is_none()
             && notification_filters.is_empty()

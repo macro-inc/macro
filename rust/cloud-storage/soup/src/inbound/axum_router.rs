@@ -15,13 +15,10 @@ use axum::{
 use axum_extra::{either::Either, extract::Cached};
 use email::{
     domain::{
-        models::{Link, PreviewView},
+        models::{EmailErr, PreviewView},
         ports::EmailService,
     },
-    inbound::axum::{
-        axum_impls::{EmailLinkErr, EmailLinkExtractor},
-        previews_router::EmailRouterState,
-    },
+    inbound::axum::previews_router::EmailRouterState,
 };
 use entity_access::{
     domain::{
@@ -313,7 +310,7 @@ where
     async fn handle<R>(
         &self,
         macro_user_id: MacroUserIdStr<'static>,
-        email_link: Option<Link>,
+        link_ids: Vec<Uuid>,
         team_receipt_option: Option<EntityAccessReceipt<MemberTeamRole>>,
         ApiSoupRequestInner {
             filters,
@@ -369,7 +366,7 @@ where
                     cursor,
                     user: macro_user_id,
                     email_preview_view: email_view,
-                    link_id: email_link.map(|l| l.id),
+                    link_ids,
                 },
                 team_receipt,
             )
@@ -546,7 +543,7 @@ pub enum SoupHandlerErr {
     #[error("An internal server error has occurred")]
     Internal(SoupErr),
     #[error("An internal email server error has occurred")]
-    EmailLinkErr(#[from] EmailLinkErr),
+    EmailErr(#[from] EmailErr),
     #[error("Invalid filter arguments provided")]
     ExpandErr(ExpandErr),
     #[error("Invalid compound filter could not be expanded")]
@@ -585,6 +582,28 @@ impl IntoResponse for SoupHandlerErr {
     }
 }
 
+async fn fetch_caller_link_ids<T, U, EAS>(
+    service: &SoupRouterState<T, U, EAS>,
+    macro_user_id: &str,
+) -> Result<Vec<Uuid>, SoupHandlerErr>
+where
+    T: SoupService,
+    U: EmailService,
+    EAS: EntityAccessService,
+{
+    let macro_id = MacroUserIdStr::parse_from_str(macro_user_id).map_err(|e| {
+        SoupHandlerErr::Internal(SoupErr::SoupDbErr(anyhow::anyhow!(
+            "invalid macro_user_id from extractor: {e}"
+        )))
+    })?;
+    let links = service
+        .email
+        .service()
+        .get_inboxes_for_macro_id(macro_id)
+        .await?;
+    Ok(links.into_iter().map(|l| l.id).collect())
+}
+
 /// Gets the items the user has access to
 #[utoipa::path(
     get,
@@ -603,7 +622,6 @@ impl IntoResponse for SoupHandlerErr {
 pub async fn get_soup_handler<T, U, EAS>(
     State(service): State<SoupRouterState<T, U, EAS>>,
     Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
-    email_link: Result<Cached<EmailLinkExtractor<U>>, EmailLinkErr>,
     team: OptionalMacroUserTeamExtractor<MemberTeamRole, EAS>,
     Query(params): Query<Params>,
     cursor: SoupCursor<EntityFilters>,
@@ -613,18 +631,14 @@ where
     U: EmailService,
     EAS: EntityAccessService,
 {
-    let link = match email_link {
-        Ok(l) => Some(l.0.0),
-        Err(EmailLinkErr::NotFound) => None,
-        Err(e) => Err(e)?,
-    };
+    let link_ids = fetch_caller_link_ids(&service, macro_user_id.as_ref()).await?;
     // Team receipt is plumbed through even for GET so that paginating a
     // team-scoped query via a cursor (which carries the original filter)
     // continues to authorize correctly.
     service
         .handle(
             macro_user_id,
-            link,
+            link_ids,
             team.entity_access_receipt,
             ApiSoupRequestInner {
                 params,
@@ -678,7 +692,6 @@ type SoupCursor<R> = axum_extra::either::Either<
 pub async fn post_soup_handler<T, U, EAS>(
     State(service): State<SoupRouterState<T, U, EAS>>,
     Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
-    email_link: Result<Cached<EmailLinkExtractor<U>>, EmailLinkErr>,
     team: OptionalMacroUserTeamExtractor<MemberTeamRole, EAS>,
     cursor: SoupCursor<EntityFilters>,
     Json(PostSoupRequest {
@@ -692,18 +705,14 @@ where
     U: EmailService,
     EAS: EntityAccessService,
 {
-    let link = match email_link {
-        Ok(l) => Some(l.0.0),
-        Err(EmailLinkErr::NotFound) => None,
-        Err(e) => Err(e)?,
-    };
+    let link_ids = fetch_caller_link_ids(&service, macro_user_id.as_ref()).await?;
     // Pass the raw extractor receipt through — `handle` resolves the
     // CRM-scope check against the *effective* filter (which may come from
     // the cursor on follow-up pages), not the request body.
     service
         .handle(
             macro_user_id,
-            link,
+            link_ids,
             team.entity_access_receipt,
             ApiSoupRequestInner {
                 filters,
@@ -747,7 +756,6 @@ pub struct PostSoupAstRequest {
 pub async fn post_soup_ast_handler<T, U, EAS>(
     State(service): State<SoupRouterState<T, U, EAS>>,
     Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
-    email_link: Result<Cached<EmailLinkExtractor<U>>, EmailLinkErr>,
     team: OptionalMacroUserTeamExtractor<MemberTeamRole, EAS>,
     cursor: SoupCursor<ApiEntityFilterAst>,
     Json(PostSoupAstRequest {
@@ -761,18 +769,14 @@ where
     U: EmailService,
     EAS: EntityAccessService,
 {
-    let link = match email_link {
-        Ok(l) => Some(l.0.0),
-        Err(EmailLinkErr::NotFound) => None,
-        Err(e) => Err(e)?,
-    };
+    let link_ids = fetch_caller_link_ids(&service, macro_user_id.as_ref()).await?;
     // Pass the raw extractor receipt through — `handle` resolves the
     // CRM-scope check against the *effective* filter (which may come from
     // the cursor on follow-up pages), not the request body.
     service
         .handle(
             macro_user_id,
-            link,
+            link_ids,
             team.entity_access_receipt,
             ApiSoupRequestInner {
                 filters,
@@ -966,7 +970,7 @@ impl IntoSoupReqAst for SoupRequest<ApiEntityFilterAst> {
             cursor,
             user,
             email_preview_view,
-            link_id,
+            link_ids,
         } = self;
 
         let cursor = match cursor {
@@ -986,7 +990,7 @@ impl IntoSoupReqAst for SoupRequest<ApiEntityFilterAst> {
             cursor,
             user,
             email_preview_view,
-            link_id,
+            link_ids,
         })
     }
 }

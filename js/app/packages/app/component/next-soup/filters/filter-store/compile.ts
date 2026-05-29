@@ -81,6 +81,7 @@ const FIELD_CONFIG: Record<
   documentDone: { target: 'df', field: 'nd' },
   isEmailAttachment: { target: 'df', field: 'iea' },
   threadId: { target: 'ef', field: 'ThreadId' },
+  emailLinkId: { target: 'ef', field: 'Owner' },
   emailSeen: { target: 'ef', field: 'NotificationSeen' },
   emailDone: { target: 'ef', field: 'NotificationDone' },
   emailImportance: { target: 'ef', field: 'Importance' },

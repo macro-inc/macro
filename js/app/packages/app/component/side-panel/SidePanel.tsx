@@ -167,13 +167,15 @@ function SidePanelLayoutInner(
       </Show>
       <Show when={showOverlay()}>
         <div class="absolute inset-0 z-10 flex flex-col bg-surface">
-          <div class="w-full max-w-2xl mx-auto min-w-0">
-            <SidePanelOutlet
-              sections={props.sections}
-              openIds={props.openIds}
-              setOpenIds={props.setOpenIds}
-            />
-          </div>
+          <Scroll>
+            <div class="w-full max-w-2xl mx-auto min-w-0">
+              <SidePanelOutlet
+                sections={props.sections}
+                openIds={props.openIds}
+                setOpenIds={props.setOpenIds}
+              />
+            </div>
+          </Scroll>
         </div>
       </Show>
     </>

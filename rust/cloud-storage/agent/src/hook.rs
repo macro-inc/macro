@@ -1,27 +1,43 @@
-use crate::AgentError;
 /// A [`rig_core::agent::PromptHook`] that bridges RIG lifecycle events into
 /// [`StreamPart`] items sent through a channel.
-use crate::stream::{StreamPart, ToolCall, ToolResponse, Usage};
+use crate::AgentError;
+use crate::stream::{McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
+use ai_toolset::ToolInfo;
 use rig_core::agent::{HookAction, PromptHook, ToolCallHookAction};
 use rig_core::completion::{CompletionModel, GetTokenUsage};
 use rig_core::message::Message;
+use std::sync::Arc;
 use tokio::sync::mpsc;
+
+/// Resolves a tool name to its routing [`ToolInfo`] via the session's toolset.
+///
+/// rig only hands the hook a tool's (mangled) name, so this closure lets the
+/// bridge ask the authoritative source — [`ai_toolset::ToolSet::routing_description`]
+/// — whether a call is an external/MCP tool and recover its service, original
+/// name, and display name. Returns `None` for native tools.
+pub type ToolRouter = Arc<dyn Fn(&str) -> Option<ToolInfo> + Send + Sync>;
 
 /// Sends [`StreamPart`] items through an unbounded channel as the RIG agentic
 /// loop produces events.
 #[derive(Clone)]
 pub struct StreamBridge {
     tx: mpsc::UnboundedSender<Result<StreamPart, AgentError>>,
+    routing: ToolRouter,
 }
 
 impl StreamBridge {
     /// Create a bridge and its receiving half.
-    pub fn channel() -> (
+    ///
+    /// `routing` resolves tool names to [`ToolInfo`] so MCP calls can be
+    /// tagged as such (see [`ToolRouter`]).
+    pub fn channel(
+        routing: ToolRouter,
+    ) -> (
         Self,
         mpsc::UnboundedReceiver<Result<StreamPart, AgentError>>,
     ) {
         let (tx, rx) = mpsc::unbounded_channel();
-        (Self { tx }, rx)
+        (Self { tx, routing }, rx)
     }
 }
 
@@ -44,11 +60,22 @@ where
     ) -> ToolCallHookAction {
         let json = serde_json::from_str(args).unwrap_or(serde_json::Value::Null);
         let id = tool_call_id.unwrap_or_else(|| internal_call_id.to_owned());
+        let mcp = (self.routing)(tool_name).map(|i| match i {
+            ToolInfo::ExternalTool {
+                service_name,
+                tool_name,
+                display_name,
+            } => McpInfo {
+                service: service_name,
+                tool_name,
+                display_name,
+            },
+        });
         let _ = self.tx.send(Ok(StreamPart::ToolCall(ToolCall {
             id,
             name: tool_name.to_owned(),
             json,
-            mcp: None,
+            mcp,
         })));
         ToolCallHookAction::Continue
     }
