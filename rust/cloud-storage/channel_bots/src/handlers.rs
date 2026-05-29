@@ -100,7 +100,7 @@ impl BotHandler for MacroAiHandler {
             Ok(_) => EMPTY_RESPONSE_FALLBACK.to_string(),
             Err(err) => {
                 tracing::error!(error=?err, "macro ai responder failed");
-                ERROR_FALLBACK.to_string()
+                format!("{ERROR_FALLBACK}\n\n```\n{err:#}\n```")
             }
         };
 

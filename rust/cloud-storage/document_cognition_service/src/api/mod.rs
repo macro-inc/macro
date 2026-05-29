@@ -55,6 +55,17 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                 )),
         )
         .merge(health::router().layer(cors))
+        // Service-to-service route, authenticated with the internal API key and
+        // mounted outside the api-version layer (like health). Used by the
+        // document storage service to run Macro AI in channels.
+        .merge(
+            Router::new()
+                .route(
+                    "/internal/agent/channel-respond",
+                    post(internal_agent::channel_respond),
+                )
+                .with_state(state.clone()),
+        )
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
@@ -115,18 +126,8 @@ fn api_router(api_context: ApiContext) -> Router {
                 )),
         );
 
-    // Service-to-service route authenticated with the internal API key (no user
-    // JWT). Used by the document storage service to run Macro AI in channels.
-    let internal_service_router = Router::new()
-        .route(
-            "/internal/agent/channel-respond",
-            post(internal_agent::channel_respond),
-        )
-        .with_state(api_context.clone());
-
     Router::new()
         .nest("/{version}", internal_router.clone())
         .merge(internal_router)
-        .merge(internal_service_router)
         .merge(mcp_client::inbound::mcp_oauth_callback_router(mcp_state))
 }
