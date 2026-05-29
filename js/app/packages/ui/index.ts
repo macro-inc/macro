@@ -26,8 +26,6 @@ export type { ToggleSwitchProps } from './components/ToggleSwitch';
 export type { SendButtonProps } from './components/SendButton';
 export type { ButtonProps } from './components/Button';
 export type { DialogProps } from './components/Dialog';
-export type { EmptyStatePanelProps, EmptyStateAction } from './components/EmptyStatePanel';
-export type { FilteredHiddenBannerProps } from './components/FilteredHiddenBanner';
 
 /* utils */
 export { cn } from './utils/classname';
