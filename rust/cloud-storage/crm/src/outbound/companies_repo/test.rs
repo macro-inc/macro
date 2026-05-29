@@ -1791,6 +1791,71 @@ async fn list_for_soup_paginates_past_cursor(pool: PgPool) -> anyhow::Result<()>
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_for_soup_pagination_breaks_ties_on_id(pool: PgPool) -> anyhow::Result<()> {
+    let team = Uuid::now_v7();
+    seed_team(&pool, team, "macro|owner@test.com").await?;
+    enable_crm_for_team(&pool, team).await?;
+
+    // One newest company, then a tied pair, then two older. At limit=2
+    // the tied pair straddles the page-1/page-2 boundary, so pagination
+    // must lean on the `id` half of the keyset — a timestamp-only seek
+    // would skip the second tied row (its ts is not `< cursor_ts`).
+    let newest: chrono::DateTime<chrono::Utc> = "2024-01-05T00:00:00Z".parse()?;
+    let tie: chrono::DateTime<chrono::Utc> = "2024-01-04T00:00:00Z".parse()?;
+    let mid: chrono::DateTime<chrono::Utc> = "2024-01-03T00:00:00Z".parse()?;
+    let oldest: chrono::DateTime<chrono::Utc> = "2024-01-02T00:00:00Z".parse()?;
+
+    let mut want: Vec<(chrono::DateTime<chrono::Utc>, Uuid)> = Vec::new();
+    for (idx, ts) in [newest, tie, tie, mid, oldest].into_iter().enumerate() {
+        let domain = format!("tie{idx}.com");
+        let id = insert_company(&pool, team, true, &[domain.as_str()]).await?;
+        sqlx::query(
+            r#"UPDATE crm_companies
+               SET first_interaction = $2, last_interaction = $2
+               WHERE id = $1"#,
+        )
+        .bind(id)
+        .bind(ts)
+        .execute(&pool)
+        .await?;
+        want.push((ts, id));
+    }
+    // Expected DB order: last_interaction DESC, then id DESC. Computed
+    // from the ids actually generated, so it holds regardless of which
+    // tied row drew the larger uuid.
+    want.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)));
+    let expected: Vec<Uuid> = want.iter().map(|(_, id)| *id).collect();
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let mut seen: Vec<Uuid> = Vec::new();
+    let mut cursor: Option<CrmCompanySoupCursor> = None;
+    for _ in 0..10 {
+        let page = repo
+            .list_companies_for_soup(&team, &[], CrmCompanyListSort::UpdatedAt, cursor, 2)
+            .await?;
+        if page.is_empty() {
+            break;
+        }
+        let last = page.last().unwrap();
+        cursor = Some(CrmCompanySoupCursor {
+            last_sort_ts: last.company.updated_at,
+            last_id: last.company.id,
+        });
+        let exhausted = page.len() < 2;
+        seen.extend(page.iter().map(|c| c.company.id));
+        if exhausted {
+            break;
+        }
+    }
+
+    assert_eq!(
+        seen, expected,
+        "tied timestamps must paginate by id without skipping or repeating across the boundary"
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn list_contacts_returns_visible_ordered_alphabetically(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
     let owner_id = "macro|owner@test.com";
