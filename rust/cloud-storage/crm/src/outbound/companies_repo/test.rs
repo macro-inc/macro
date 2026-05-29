@@ -1559,7 +1559,7 @@ async fn list_for_soup_returns_empty_when_killswitch_missing(pool: PgPool) -> an
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let result = repo
-        .list_companies_for_soup(&team, &[], CrmCompanyListSort::UpdatedAt, 100)
+        .list_companies_for_soup(&team, &[], CrmCompanyListSort::UpdatedAt, None, 100)
         .await?;
     assert!(
         result.is_empty(),
@@ -1581,7 +1581,7 @@ async fn list_for_soup_returns_empty_when_killswitch_off(pool: PgPool) -> anyhow
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let result = repo
-        .list_companies_for_soup(&team, &[], CrmCompanyListSort::UpdatedAt, 100)
+        .list_companies_for_soup(&team, &[], CrmCompanyListSort::UpdatedAt, None, 100)
         .await?;
     assert!(result.is_empty());
     Ok(())
@@ -1602,7 +1602,7 @@ async fn list_for_soup_excludes_hidden_rows(pool: PgPool) -> anyhow::Result<()> 
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let result = repo
-        .list_companies_for_soup(&team, &[], CrmCompanyListSort::UpdatedAt, 100)
+        .list_companies_for_soup(&team, &[], CrmCompanyListSort::UpdatedAt, None, 100)
         .await?;
     let ids: Vec<Uuid> = result.iter().map(|c| c.company.id).collect();
     assert_eq!(ids, vec![visible], "hidden = TRUE rows must not appear");
@@ -1637,7 +1637,7 @@ async fn list_for_soup_hydrates_name_and_description_from_directory(
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let result = repo
-        .list_companies_for_soup(&team, &[], CrmCompanyListSort::UpdatedAt, 100)
+        .list_companies_for_soup(&team, &[], CrmCompanyListSort::UpdatedAt, None, 100)
         .await?;
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].name.as_deref(), Some("Acme Inc."));
@@ -1672,7 +1672,7 @@ async fn list_for_soup_returns_none_for_negative_cache_directory_row(
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let result = repo
-        .list_companies_for_soup(&team, &[], CrmCompanyListSort::UpdatedAt, 100)
+        .list_companies_for_soup(&team, &[], CrmCompanyListSort::UpdatedAt, None, 100)
         .await?;
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].name, None);
@@ -1691,7 +1691,7 @@ async fn list_for_soup_filters_by_company_ids_when_non_empty(pool: PgPool) -> an
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let result = repo
-        .list_companies_for_soup(&team, &[wanted], CrmCompanyListSort::UpdatedAt, 100)
+        .list_companies_for_soup(&team, &[wanted], CrmCompanyListSort::UpdatedAt, None, 100)
         .await?;
     let ids: Vec<Uuid> = result.iter().map(|c| c.company.id).collect();
     assert_eq!(ids, vec![wanted]);
@@ -1711,10 +1711,82 @@ async fn list_for_soup_does_not_leak_other_team_rows(pool: PgPool) -> anyhow::Re
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let result = repo
-        .list_companies_for_soup(&team_b, &[], CrmCompanyListSort::UpdatedAt, 100)
+        .list_companies_for_soup(&team_b, &[], CrmCompanyListSort::UpdatedAt, None, 100)
         .await?;
     let ids: Vec<Uuid> = result.iter().map(|c| c.company.id).collect();
     assert_eq!(ids, vec![b_only]);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_for_soup_paginates_past_cursor(pool: PgPool) -> anyhow::Result<()> {
+    let team = Uuid::now_v7();
+    seed_team(&pool, team, "macro|owner@test.com").await?;
+    enable_crm_for_team(&pool, team).await?;
+
+    // Five companies with strictly increasing interaction timestamps.
+    // Parsed (not `now()`) so they carry no sub-microsecond precision
+    // that Postgres would truncate out from under the cursor compare.
+    let mut companies = Vec::new();
+    for day in 1..=5 {
+        let domain = format!("c{day}.com");
+        let id = insert_company(&pool, team, true, &[domain.as_str()]).await?;
+        let ts: chrono::DateTime<chrono::Utc> = format!("2024-01-0{day}T00:00:00Z").parse()?;
+        sqlx::query(
+            r#"UPDATE crm_companies
+               SET first_interaction = $2, last_interaction = $2
+               WHERE id = $1"#,
+        )
+        .bind(id)
+        .bind(ts)
+        .execute(&pool)
+        .await?;
+        companies.push(id);
+    }
+    // Descending by timestamp → newest (day 5) first.
+    let expected: Vec<Uuid> = companies.iter().rev().copied().collect();
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+
+    // Walk every page with limit=2, threading the keyset cursor from the
+    // last row of each page — exactly how the soup paginator drives it.
+    let mut seen: Vec<Uuid> = Vec::new();
+    let mut cursor: Option<CrmCompanySoupCursor> = None;
+    let mut first_page: Vec<Uuid> = Vec::new();
+    for page_idx in 0..10 {
+        let page = repo
+            .list_companies_for_soup(&team, &[], CrmCompanyListSort::UpdatedAt, cursor, 2)
+            .await?;
+        if page.is_empty() {
+            break;
+        }
+        let page_ids: Vec<Uuid> = page.iter().map(|c| c.company.id).collect();
+        if page_idx == 0 {
+            first_page = page_ids.clone();
+        } else {
+            // Regression: a follow-up page must not re-serve page one.
+            // (The pre-fix query ignored the cursor and always did this.)
+            assert_ne!(
+                page_ids, first_page,
+                "cursor did not advance — page {page_idx} repeated the first page"
+            );
+        }
+        let last = page.last().unwrap();
+        cursor = Some(CrmCompanySoupCursor {
+            last_sort_ts: last.company.updated_at,
+            last_id: last.company.id,
+        });
+        let exhausted = page.len() < 2;
+        seen.extend(page_ids);
+        if exhausted {
+            break;
+        }
+    }
+
+    assert_eq!(
+        seen, expected,
+        "pagination must yield every company exactly once in descending interaction order"
+    );
     Ok(())
 }
 

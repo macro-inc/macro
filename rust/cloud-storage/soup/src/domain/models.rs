@@ -7,7 +7,7 @@ pub use grouping::{
 
 use call::domain::models::GetCallRecordsRequest;
 use comms::domain::models::GetChannelsRequest;
-use crm::domain::companies_repo::CrmCompanyListSort;
+use crm::domain::companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor};
 use email::domain::models::{GetEmailsRequest, PreviewView};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use filter_ast::Expr;
@@ -367,16 +367,31 @@ impl SoupRequest<Option<EntityFilterAst>> {
             })
             .ok()?;
 
-        let (sort_method, filter_ast): (SimpleSortMethod, Option<&EntityFilterAst>) =
-            match &self.cursor {
-                SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => (*t, f.as_ref()),
-                SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
-                    val,
-                    filter,
-                    ..
-                }))) => (val.sort_type, filter.as_ref()),
-                SoupQuery::Frecency(_) => return None,
-            };
+        // Follow-up pages carry a keyset cursor (sort_ts + id of the
+        // previous page's last row); the first page has none. Without
+        // this the CRM sub-query always returned offset 0, so every
+        // page re-served the same top companies.
+        let (sort_method, filter_ast, cursor): (
+            SimpleSortMethod,
+            Option<&EntityFilterAst>,
+            Option<CrmCompanySoupCursor>,
+        ) = match &self.cursor {
+            SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => (*t, f.as_ref(), None),
+            SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
+                id,
+                val,
+                filter,
+                ..
+            }))) => (
+                val.sort_type,
+                filter.as_ref(),
+                Some(CrmCompanySoupCursor {
+                    last_sort_ts: val.last_val,
+                    last_id: *id,
+                }),
+            ),
+            SoupQuery::Frecency(_) => return None,
+        };
 
         // No viewed_at signal for crm_company yet — ViewedAt/ViewedUpdated
         // fall back to updated_at.
@@ -400,6 +415,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
             team_id,
             company_ids,
             sort,
+            cursor,
             // Match the soup paginator's bounds so the CRM layer doesn't
             // overfetch on an oversized client limit.
             limit: self.limit.clamp(20, 500) as i64,
@@ -481,6 +497,8 @@ pub struct GetCrmCompaniesRequest {
     pub company_ids: Vec<Uuid>,
     /// Which timestamp column to sort by.
     pub sort: CrmCompanyListSort,
+    /// Keyset cursor to seek past the previous page (`None` = first page).
+    pub cursor: Option<CrmCompanySoupCursor>,
     /// Upper bound on rows returned — the soup paginator re-slices.
     pub limit: i64,
 }
