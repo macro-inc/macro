@@ -5,8 +5,8 @@ mod tests;
 
 use crate::domain::{
     models::{
-        AuthenticatedBot, Bot, BotId, BotKind, BotOwner, BotToken, CreateBotRequest,
-        CreateBotTokenRequest, PatchBotRequest,
+        AuthenticatedBot, Bot, BotId, BotKind, BotOwner, BotToken, BotTokenCandidate,
+        CreateBotRequest, CreateBotTokenRequest, PatchBotRequest,
     },
     ports::BotRepo,
 };
@@ -121,7 +121,7 @@ struct TokenCandidateRow {
 }
 
 impl TokenCandidateRow {
-    fn into_candidate(self) -> anyhow::Result<(BotToken, Vec<u8>, AuthenticatedBot)> {
+    fn into_candidate(self) -> anyhow::Result<BotTokenCandidate> {
         let bot_id = BotId::from_uuid(self.bot_id);
         let kind = self
             .kind
@@ -138,7 +138,11 @@ impl TokenCandidateRow {
             created_at: self.created_at,
         };
 
-        Ok((token, self.token_hash, AuthenticatedBot { bot_id, kind }))
+        Ok(BotTokenCandidate {
+            token,
+            token_hash: self.token_hash,
+            bot: AuthenticatedBot { bot_id, kind },
+        })
     }
 }
 
@@ -510,7 +514,7 @@ impl BotRepo for PgBotsRepo {
     async fn token_candidates(
         &self,
         token_prefix: &str,
-    ) -> Result<Vec<(BotToken, Vec<u8>, AuthenticatedBot)>, Self::Err> {
+    ) -> Result<Vec<BotTokenCandidate>, Self::Err> {
         let rows = sqlx::query_as!(
             TokenCandidateRow,
             r#"

@@ -116,6 +116,17 @@ pub struct AuthenticatedBot {
     pub kind: BotKind,
 }
 
+/// Candidate token row used during bearer-token authentication.
+#[derive(Debug, Clone)]
+pub struct BotTokenCandidate {
+    /// Token metadata.
+    pub token: BotToken,
+    /// Stored token hash.
+    pub token_hash: Vec<u8>,
+    /// Authenticated bot principal associated with the token.
+    pub bot: AuthenticatedBot,
+}
+
 /// Request to create a bot.
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]

@@ -253,23 +253,24 @@ where
     async fn authenticate_token(&self, token: &str) -> Result<AuthenticatedBot, BotError> {
         let prefix = tokens::token_prefix(token).ok_or(BotError::Unauthorized)?;
         let hash = tokens::hash_token(token);
-        for (token_row, token_hash, bot) in self
+        for candidate in self
             .repo
             .token_candidates(prefix)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
         {
-            if token_row.revoked_at.is_none()
-                && token_row
+            if candidate.token.revoked_at.is_none()
+                && candidate
+                    .token
                     .expires_at
                     .is_none_or(|expires_at| expires_at > Utc::now())
-                && tokens::verify_hash(&token_hash, &hash)
+                && tokens::verify_hash(&candidate.token_hash, &hash)
             {
                 self.repo
-                    .mark_token_used(token_row.id)
+                    .mark_token_used(candidate.token.id)
                     .await
                     .map_err(|err| BotError::Repo(err.into()))?;
-                return Ok(bot);
+                return Ok(candidate.bot);
             }
         }
         Err(BotError::Unauthorized)

@@ -1,8 +1,8 @@
 //! Bot ports.
 
 use super::models::{
-    AuthenticatedBot, Bot, BotId, BotOwner, BotToken, CreateBotRequest, CreateBotTokenRequest,
-    CreateBotTokenResponse, PatchBotRequest,
+    AuthenticatedBot, Bot, BotId, BotOwner, BotToken, BotTokenCandidate, CreateBotRequest,
+    CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::future::Future;
@@ -94,7 +94,7 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
     fn token_candidates(
         &self,
         token_prefix: &str,
-    ) -> impl Future<Output = Result<Vec<(BotToken, Vec<u8>, AuthenticatedBot)>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<BotTokenCandidate>, Self::Err>> + Send;
 
     /// Mark a token as used.
     fn mark_token_used(&self, token_id: Uuid)
