@@ -429,7 +429,6 @@
               };
               crateToDir = {
                 document_storage_service = "service-storage";
-                comms_service = "service-comms";
                 properties_service = "service-properties";
                 document_cognition_service = "service-cognition";
                 authentication_service = "service-auth";
