@@ -39,12 +39,29 @@ pub struct ChannelBotTrigger {
 pub type SharedBotDispatcher = Arc<OnceLock<Arc<dyn ChannelBotDispatcher>>>;
 
 /// Collect the bot ids mentioned in a message.
+///
+/// Bot mentions normally arrive tagged `bot`, but Macro AI is surfaced through
+/// the user-mention UI, so a `user` mention whose id is exactly the Macro AI
+/// bot is recognized as a bot mention too.
 fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
     mentions
         .iter()
-        .filter(|mention| mention.entity_type == BOT_MENTION_ENTITY_TYPE)
-        .filter_map(|mention| BotId::parse_uuid_str(&mention.entity_id).ok())
+        .filter_map(|mention| match mention.entity_type.as_str() {
+            BOT_MENTION_ENTITY_TYPE => BotId::parse_uuid_str(&mention.entity_id).ok(),
+            "user" => BotId::parse_uuid_str(&mention.entity_id)
+                .ok()
+                .filter(|id| *id == bot_id::MACRO_AI_BOT_ID),
+            _ => None,
+        })
         .collect()
+}
+
+/// Whether a `user`-tagged mention actually targets a bot (and so must not be
+/// treated as a user recipient). Real user ids are not bare UUIDs, so this only
+/// matches the Macro AI bot surfaced through the user-mention UI.
+fn is_bot_user_mention(mention: &SimpleMention) -> bool {
+    mention.entity_type == "user"
+        && BotId::parse_uuid_str(&mention.entity_id).ok() == Some(bot_id::MACRO_AI_BOT_ID)
 }
 
 /// Realtime update requested by the channel domain.
@@ -639,7 +656,9 @@ where
             (Vec::new(), Vec::new()),
             |(mut users, mut docs), mention| {
                 match mention.entity_type.as_str() {
-                    "user" => users.push(mention.entity_id),
+                    // The Macro AI bot is mentioned via the user-mention UI; it
+                    // is handled as a bot trigger, not a user notification.
+                    "user" if !is_bot_user_mention(&mention) => users.push(mention.entity_id),
                     "document" => docs.push(mention.entity_id),
                     _ => {}
                 }
@@ -941,9 +960,17 @@ struct PostedMessageNotificationContext {
     is_first_top_level_message: bool,
 }
 
+/// Whether a participant principal id refers to a bot (e.g. `bot|<uuid>`).
+/// Bots are not user recipients and are not valid `MacroUserIdStr`s, so they are
+/// skipped before parsing to avoid spurious parse warnings.
+fn is_bot_principal(id: &str) -> bool {
+    BotId::parse_storage_str(id).is_ok()
+}
+
 fn participant_ids(participants: &[ChannelParticipant]) -> Vec<MacroUserIdStr<'static>> {
     participants
         .iter()
+        .filter(|p| !is_bot_principal(&p.user_id))
         .filter_map(|p| MacroUserIdStr::parse_from_str(&p.user_id).ok())
         .map(|id| id.into_owned())
         .collect()
@@ -957,6 +984,7 @@ fn recipients_excluding<'a>(
     recipients
         .into_iter()
         .filter(move |id| !exclude_set.contains(id))
+        .filter(|id| !is_bot_principal(id))
         .filter_map(|id| MacroUserIdStr::parse_from_str(id).ok())
         .map(|u| u.into_owned())
 }
@@ -1448,5 +1476,47 @@ mod tests {
         };
 
         assert!(contact_sync_users_for_event(&event).is_none());
+    }
+
+    fn mention(entity_type: &str, entity_id: &str) -> SimpleMention {
+        SimpleMention {
+            entity_type: entity_type.to_string(),
+            entity_id: entity_id.to_string(),
+        }
+    }
+
+    #[test]
+    fn bot_mentions_recognize_bot_and_macro_ai_user_tags() {
+        let macro_ai = bot_id::MACRO_AI_BOT_ID.as_uuid().to_string();
+        let other_bot = Uuid::new_v4().to_string();
+        let mentions = vec![
+            // Macro AI surfaced through the user-mention UI.
+            mention("user", &macro_ai),
+            // A real user mention is ignored.
+            mention("user", "macro|teo@macro.com"),
+            // An explicitly bot-tagged mention.
+            mention(BOT_MENTION_ENTITY_TYPE, &other_bot),
+        ];
+
+        let bots = bot_mention_ids(&mentions);
+        assert_eq!(bots.len(), 2);
+        assert!(bots.contains(&bot_id::MACRO_AI_BOT_ID));
+        assert!(bots.contains(&BotId::parse_uuid_str(&other_bot).unwrap()));
+    }
+
+    #[test]
+    fn macro_ai_user_mention_is_not_a_user_recipient() {
+        assert!(is_bot_user_mention(&mention(
+            "user",
+            &bot_id::MACRO_AI_BOT_ID.as_uuid().to_string()
+        )));
+        assert!(!is_bot_user_mention(&mention(
+            "user",
+            "macro|teo@macro.com"
+        )));
+        assert!(is_bot_principal(
+            &bot_id::MACRO_AI_BOT_ID.to_storage_string()
+        ));
+        assert!(!is_bot_principal("macro|teo@macro.com"));
     }
 }
