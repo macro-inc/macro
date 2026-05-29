@@ -1,32 +1,24 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { CommandState } from '@app/component/command';
-import { PLANS } from '@app/component/paywall/plans';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useIsAuthenticated } from '@core/auth';
-import { useHasPaidAccess } from '@core/auth/license';
 import MacroLogo from '@core/component/MacroLogo';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
 import { useTutorialCompleted } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fetchToken } from '@core/util/fetchWithToken';
-import LogoIcon from '@icon/macro-logo.svg';
 import ArrowLeftIcon from '@phosphor/arrow-left.svg';
-import InfoIcon from '@phosphor/info.svg';
 import { useSendMobileWelcomeEmail } from '@queries/auth';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
-import { useUserTeamsQuery } from '@queries/team';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Button, cn, Surface, Tooltip } from '@ui';
+import { Button, cn, Surface } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
-  For,
   on,
   onCleanup,
   onMount,
@@ -103,96 +95,6 @@ export default function InteractiveOnboarding() {
   );
 }
 
-function OnboardingCostSummary() {
-  const onboarding = useOnboarding();
-
-  const selectedPlan = () => {
-    const tier = onboarding.selectedPlan();
-    return PLANS.find((p) => p.tier === tier);
-  };
-
-  const teamByTier = () => {
-    const groups: Record<
-      string,
-      { plan: (typeof PLANS)[number]; count: number }
-    > = {};
-    const order: string[] = [];
-    for (const member of onboarding.invitedMembers()) {
-      const plan = PLANS.find((p) => p.tier === member.tier);
-      if (plan) {
-        if (groups[member.tier]) {
-          groups[member.tier].count++;
-        } else {
-          groups[member.tier] = { plan, count: 1 };
-          order.push(member.tier);
-        }
-      }
-    }
-    return order.map((tier) => groups[tier]);
-  };
-
-  const hasTeam = () =>
-    onboarding.invitedMembers().length > 0 ||
-    onboarding.teamName().trim() !== '';
-
-  return (
-    <Show when={selectedPlan() && selectedPlan()!.price > 0}>
-      <div class="px-4 py-3 border-t border-ink/10">
-        <div class="flex items-center justify-between">
-          <div class="flex items-baseline gap-1">
-            <span class="text-3xl font-bold text-accent">
-              ${onboarding.userSeatCost()}
-            </span>
-            <span class="text-ink/40">/mo</span>
-          </div>
-          <div class="flex items-center gap-1.5 min-w-0 ml-4">
-            <Show when={hasTeam() && onboarding.teamName()}>
-              <span class="text-xs text-ink/50 truncate max-w-[50ch]">
-                {onboarding.teamName()}
-              </span>
-              <span class="text-ink/30">·</span>
-            </Show>
-            <span class="px-2 py-0.5 rounded-xs bg-accent/15 text-accent text-xs font-medium shrink-0">
-              {hasTeam() ? 'Team plan' : selectedPlan()?.name}
-            </span>
-          </div>
-        </div>
-        <Show when={hasTeam()}>
-          <div class="flex flex-col gap-1.5 mt-1.5 text-xs text-ink/40">
-            <div class="flex justify-between">
-              <span>{selectedPlan()?.name}</span>
-              <span>${onboarding.userSeatCost()}/mo</span>
-            </div>
-            <For each={teamByTier()}>
-              {(group) => (
-                <div class="flex justify-between italic">
-                  <span>
-                    Team · {group.plan.name} ×{group.count}
-                  </span>
-                  <span class="border-b border-dashed border-ink/40">
-                    ${group.plan.price * group.count}/mo
-                  </span>
-                </div>
-              )}
-            </For>
-          </div>
-          <div class="flex justify-between items-center mt-2 pt-2 border-t border-ink/10 text-xs">
-            <span class="text-ink/40 flex items-center gap-1">
-              Total with team
-              <Tooltip label="Team charges begin when members accept their invite">
-                <InfoIcon class="size-3 text-ink/30" />
-              </Tooltip>
-            </span>
-            <span class="text-ink/50 font-medium">
-              ${onboarding.totalCost()}/mo
-            </span>
-          </div>
-        </Show>
-      </div>
-    </Show>
-  );
-}
-
 function InteractiveOnboardingInner() {
   const analytics = useAnalytics();
 
@@ -203,46 +105,7 @@ function InteractiveOnboardingInner() {
 
   const isTouch = isTouchDevice();
 
-  const hasPaid = useHasPaidAccess();
-  const isAuthenticated = useIsAuthenticated();
-  const userTeamsQuery = useUserTeamsQuery();
-  const hasExistingTeam = () => (userTeamsQuery.data?.length ?? 0) > 0;
-  const inviteTeamEnabled = useFeatureFlag('enable-teams-onboarding', {
-    enabledOverride: ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE,
-  });
-  const allLessons = createMemo(() =>
-    LESSONS.filter((l) => {
-      if (l.id === 'choose-plan' && hasPaid()) return false;
-      if (l.id === 'about-us' && isAuthenticated()) return false;
-      // Skip team/payment lessons when feature flag disabled
-      if (
-        (l.id === 'team-choice' ||
-          l.id === 'invite-team' ||
-          l.id === 'review-pay') &&
-        !inviteTeamEnabled().enabled
-      )
-        return false;
-      // Skip review-pay if user already has subscription
-      if (l.id === 'review-pay' && hasPaid()) return false;
-      // Skip invite-team if user already has a team
-      if (l.id === 'invite-team' && hasExistingTeam()) return false;
-      // Skip team-choice if user has both subscription and team
-      if (l.id === 'team-choice' && hasPaid() && hasExistingTeam())
-        return false;
-      return true;
-    })
-  );
-  const lessons = createMemo(() =>
-    isTouch
-      ? allLessons().filter(
-          (l) =>
-            l.id === 'welcome' ||
-            l.id === 'about-us' ||
-            l.id === 'choose-plan' ||
-            l.id === 'launch'
-        )
-      : allLessons()
-  );
+  const lessons = createMemo(() => LESSONS);
 
   const testMode = new URLSearchParams(location.search).has('test');
 
@@ -265,8 +128,8 @@ function InteractiveOnboardingInner() {
 
   // Detect a return-from-external-flow param synchronously so we can pre-populate
   // completed lessons before the first render, avoiding a flash of the first slide.
-  // Search the unfiltered LESSONS list — the returning lesson (e.g. about-us) may
-  // have been filtered out now that the user is authenticated.
+  // Search the unfiltered LESSONS list so return params can still complete
+  // lessons even if the visible lesson list changes.
   const returningLesson = LESSONS.findLast(
     (l) => l.completeOnParam && params.has(l.completeOnParam)
   );
@@ -305,7 +168,7 @@ function InteractiveOnboardingInner() {
   // Skip the redirect when returning from external flow — we just marked it
   // complete ourselves and still have remaining lessons to show.
   createEffect(() => {
-    if (tutorialCompleted() && hasPaid() && !returningLesson && !testMode) {
+    if (tutorialCompleted() && !returningLesson && !testMode) {
       navigateAway();
     }
   });
@@ -390,7 +253,7 @@ function InteractiveOnboardingInner() {
     onboarding,
     isLessonSkipped: (id: string) =>
       state.lessons().find((l) => l.definition.id === id)?.skipped ?? false,
-    hasPaidAccess: hasPaid(),
+    hasPaidAccess: false,
   });
 
   const getPreviousLesson = () => {
@@ -510,25 +373,13 @@ function InteractiveOnboardingInner() {
     })
   );
 
-  // Mark tutorial complete on the backend the moment the user lands on the
-  // Launch screen — the semantic end of the onboarding experience. Guarded so
-  // the effect fires the mutation at most once.
-  let tutorialMarkedComplete = false;
-  createEffect(() => {
-    if (testMode || tutorialMarkedComplete) return;
-    const current = state.currentLesson();
-    if (current?.definition.id === 'launch') {
-      tutorialMarkedComplete = true;
-      completeTutorial.mutate(undefined);
-    }
-  });
-
   createEffect(
     on(
       () => state.isFinished(),
       (finished) => {
         if (finished && !testMode) {
           analytics.track('onboarding_completed');
+          completeTutorial.mutate(undefined);
           navigateAway();
         }
       }
@@ -660,14 +511,6 @@ function InteractiveOnboardingInner() {
                         style={bodyStyle()}
                         class="flex flex-col items-start text-left gap-6 w-full max-w-md mt-4"
                       >
-                        <Show
-                          when={
-                            lesson().definition.id === 'welcome' ||
-                            lesson().definition.id === 'launch'
-                          }
-                        >
-                          <LogoIcon class="size-16 text-accent self-center" />
-                        </Show>
                         <h2 class="text-3xl font-semibold text-ink">
                           {lesson().definition.title}
                         </h2>
@@ -814,11 +657,6 @@ function InteractiveOnboardingInner() {
                         </div>
                       </Show>
                     </div>
-
-                    {/* Cost Summary */}
-                    <Show when={lesson().definition.id !== 'review-pay'}>
-                      <OnboardingCostSummary />
-                    </Show>
 
                     {/* Footer */}
                     <div class="flex flex-col gap-3 px-4 py-3 border-t border-ink/10">
