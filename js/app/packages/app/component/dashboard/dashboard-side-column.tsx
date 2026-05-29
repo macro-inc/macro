@@ -1,22 +1,16 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { DashboardSectionBoundary } from '@app/component/dashboard/dashboard-section-boundary';
 import {
-  RecentConversationCard,
-  type RecentConversationCardData,
+  RecentConversationsList,
+  useRecentConversations,
 } from '@app/component/dashboard/sections/recent-conversations';
-import { channelDisplayName } from '@app/component/dashboard/utils';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { setAutomationComposerOpen } from '@block-automation/component';
 import { DashboardNotificationList } from '@app/component/dashboard/sections/notifications';
-import { getChannelParams } from '@channel/Channel/link';
-import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { useUserId } from '@core/context/user';
-import { formatDate } from '@core/util/date';
-import type { AutomationEntity, ChannelEntity } from '@entity';
+import type { AutomationEntity } from '@entity';
 import { formatDateAndTime } from '@entity/utils/timestamp';
 import { notificationIsRead } from '@notifications';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
-import { useSoupItemsQuery } from '@queries/soup/items';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import BellIcon from '@phosphor/bell.svg';
@@ -135,160 +129,17 @@ function openChannelsView() {
   );
 }
 
-function openChannel(
-  conversations: RecentConversationCardData[],
-  conversationId: string,
-  event: MouseEvent
-) {
-  const conversation = conversations.find((item) => item.id === conversationId);
-  const params = conversation?.latest.messageId
-    ? getChannelParams(conversation.latest.messageId, conversation.latest.threadId)
-    : undefined;
-
-  globalSplitManager()?.openWithSplit(
-    { type: 'channel', id: conversationId, params },
-    {
-      activate: true,
-      preferNewSplit: event.shiftKey,
-      referredFrom: 'dashboard',
-    }
-  );
-}
-
 function RecentConversationsColumnSection() {
-  const notificationSource = useGlobalNotificationSource();
-  const currentUserId = useUserId();
-
-  const unreadByChannelId = createMemo(() => {
-    const counts = new Map<string, number>();
-    for (const notification of notificationSource.notifications()) {
-      if (
-        notification.entity_type !== 'channel' ||
-        notification.done ||
-        notificationIsRead(notification)
-      ) {
-        continue;
-      }
-      counts.set(
-        notification.entity_id,
-        (counts.get(notification.entity_id) ?? 0) + 1
-      );
-    }
-    return counts;
-  });
-
-  const channelsQuery = useSoupItemsQuery(
-    () => ({
-      params: { limit: 50, sort_method: 'viewed_updated' },
-      body: {
-        call_filters: { call_ids: ['00000000-0000-0000-0000-000000000000'] },
-        chat_filters: { chat_ids: ['00000000-0000-0000-0000-000000000000'] },
-        document_filters: {
-          document_ids: ['00000000-0000-0000-0000-000000000000'],
-        },
-        email_filters: {
-          email_thread_ids: ['00000000-0000-0000-0000-000000000000'],
-        },
-        project_filters: {
-          project_ids: ['00000000-0000-0000-0000-000000000000'],
-        },
-        channel_filters: {
-          channel_types: [
-            'public',
-            'organization',
-            'private',
-            'team',
-            'direct_message',
-          ],
-        },
-      },
-    }),
-    () => ({ staleTime: 5 * 60 * 1000 })
-  );
-
-  const channels = createMemo(() => {
-    const visibleChannels = (channelsQuery.data ?? [])
-      .filter(
-        (entity): entity is ChannelEntity =>
-          entity.type === 'channel' &&
-          (entity.channelType === 'direct_message' ||
-            !!entity.latestMessage?.threadId ||
-            !!entity.interactedAt)
-      )
-      .slice(0, 10);
-
-    return visibleChannels.map((channel): RecentConversationCardData => {
-      const latestMessage = channel.latestMessage;
-      const latest = {
-        content: latestMessage?.content?.trim() ?? 'No recent messages',
-        senderId: latestMessage?.senderId,
-        messageId: latestMessage?.messageId,
-        threadId: latestMessage?.threadId,
-      };
-      const updatedAt = formatDate(
-        channel.interactedAt ?? latestMessage?.createdAt ?? channel.updatedAt,
-        { shortWeekday: true }
-      );
-      const dmUserId =
-        channel.channelType === 'direct_message'
-          ? (channel.participantIds?.find((id) => id !== currentUserId()) ??
-            latestMessage?.senderId)
-          : undefined;
-
-      return {
-        id: channel.id,
-        name: channelDisplayName(channel.name),
-        type: channel.channelType,
-        latest,
-        updatedAt,
-        unreadCount: unreadByChannelId().get(channel.id) ?? 0,
-        participantCount: channel.participantIds?.length ?? 0,
-        dmUserId,
-      };
-    });
-  });
+  const { conversations, isLoading } = useRecentConversations();
 
   return (
     <SideColumnSection
       title="Recent conversations"
-      count={channels().length}
+      count={conversations().length}
       viewAllLabel="View threads & DMs"
       onViewAll={openChannelsView}
     >
-      <Show
-        when={!channelsQuery.isLoading}
-        fallback={
-          <div class="flex flex-col gap-1">
-            <For each={[0, 1, 2]}>
-              {() => <div class="h-16 rounded-lg bg-hover" />}
-            </For>
-          </div>
-        }
-      >
-        <Show
-          when={channels().length > 0}
-          fallback={
-            <div class="rounded-lg p-2.5 text-xs text-ink-muted">
-              No recent conversations
-            </div>
-          }
-        >
-          <StaticMarkdownContext>
-            <div class="flex flex-col gap-1">
-              <For each={channels()}>
-                {(channel) => (
-                  <RecentConversationCard
-                    conversation={channel}
-                    onOpen={(conversationId, event) =>
-                      openChannel(channels(), conversationId, event)
-                    }
-                  />
-                )}
-              </For>
-            </div>
-          </StaticMarkdownContext>
-        </Show>
-      </Show>
+      <RecentConversationsList />
     </SideColumnSection>
   );
 }

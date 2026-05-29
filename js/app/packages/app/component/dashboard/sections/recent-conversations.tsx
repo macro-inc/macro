@@ -16,7 +16,10 @@ import { useUserId } from '@core/context/user';
 import { useDisplayName } from '@core/user/displayName';
 import { formatDate } from '@core/util/date';
 import type { ChannelEntity, EntityData } from '@entity';
-import { createEffectOnEntityTypeNotification } from '@notifications';
+import {
+  createEffectOnEntityTypeNotification,
+  notificationIsRead,
+} from '@notifications';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { useSoupItemsQuery } from '@queries/soup/items';
@@ -138,10 +141,9 @@ export function RecentConversationCard(props: {
   );
 }
 
-export function RecentConversationsSection() {
+export function useRecentConversations() {
   const notificationSource = useGlobalNotificationSource();
   const currentUserId = useUserId();
-  const splitLayout = useSplitLayout();
 
   createEffectOnEntityTypeNotification(
     notificationSource,
@@ -159,7 +161,7 @@ export function RecentConversationsSection() {
       if (
         notification.entity_type !== 'channel' ||
         notification.done ||
-        notification.viewed_at
+        notificationIsRead(notification)
       ) {
         continue;
       }
@@ -254,14 +256,26 @@ export function RecentConversationsSection() {
     });
   });
 
-  const openChannel = (channelId: string, event: MouseEvent) => {
-    const channel = channels().find((item) => item.id === channelId);
-    const params = channel?.latest.messageId
-      ? getChannelParams(channel.latest.messageId, channel.latest.threadId)
+  return {
+    conversations: channels,
+    isLoading: () => channelsQuery.isLoading,
+  };
+}
+
+export function RecentConversationsList(props: { variant?: 'card' | 'row' }) {
+  const { conversations, isLoading } = useRecentConversations();
+  const splitLayout = useSplitLayout();
+
+  const openConversation = (
+    conversation: RecentConversationCardData,
+    event: MouseEvent
+  ) => {
+    const params = conversation.latest.messageId
+      ? getChannelParams(conversation.latest.messageId, conversation.latest.threadId)
       : undefined;
 
     splitLayout.openWithSplit(
-      { type: 'channel' as const, id: channelId, params },
+      { type: 'channel' as const, id: conversation.id, params },
       {
         activate: true,
         preferNewSplit: event.shiftKey,
@@ -269,6 +283,68 @@ export function RecentConversationsSection() {
       }
     );
   };
+
+  return (
+    <Show
+      when={!isLoading()}
+      fallback={
+        props.variant === 'card' ? (
+          <For each={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}>
+            {() => (
+              <div class="skeleton-shimmer h-20 w-72 shrink-0 snap-start rounded-xl border border-edge-muted bg-hover/60 p-2.5 @md/recent-conversations:w-auto">
+                <div class="skeleton-shimmer size-9 rounded-xl bg-surface" />
+                <div class="flex flex-col gap-2 pt-6">
+                  <div class="skeleton-shimmer h-3 w-3/4 rounded-full bg-ink/10" />
+                  <div class="skeleton-shimmer h-2.5 w-1/2 rounded-full bg-ink/5" />
+                </div>
+              </div>
+            )}
+          </For>
+        ) : (
+          <div class="flex flex-col gap-1">
+            <For each={[0, 1, 2]}>
+              {() => <div class="h-16 rounded-lg bg-hover" />}
+            </For>
+          </div>
+        )
+      }
+    >
+      <Show
+        when={conversations().length > 0}
+        fallback={
+          <div class="rounded-lg p-2.5 text-xs text-ink-muted">
+            No recent conversations
+          </div>
+        }
+      >
+        <StaticMarkdownContext>
+          <div
+            class={cn(
+              props.variant === 'card'
+                ? 'contents'
+                : 'flex flex-col gap-1'
+            )}
+          >
+            <For each={conversations()}>
+              {(conversation) => (
+                <RecentConversationCard
+                  conversation={conversation}
+                  onOpen={(_, event) =>
+                    openConversation(conversation, event)
+                  }
+                  variant={props.variant}
+                />
+              )}
+            </For>
+          </div>
+        </StaticMarkdownContext>
+      </Show>
+    </Show>
+  );
+}
+
+export function RecentConversationsSection() {
+  const splitLayout = useSplitLayout();
 
   const openChannelsView = (event: MouseEvent) => {
     splitLayout.openWithSplit(
@@ -300,34 +376,7 @@ export function RecentConversationsSection() {
 
       <AdaptiveScroller scrollAmount={280} class="relative">
         <AdaptiveScroller.Viewport class="w-full scroll-pl-4 px-4 pb-1 sm:px-0 @md/recent-conversations:grid @md/recent-conversations:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] @md/recent-conversations:gap-3 @md/recent-conversations:overflow-visible @md/recent-conversations:pb-0">
-          <Show
-            when={!channelsQuery.isLoading}
-            fallback={
-              <For each={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}>
-                {() => (
-                  <div class="skeleton-shimmer h-20 w-72 shrink-0 snap-start rounded-xl border border-edge-muted bg-hover/60 p-2.5 @md/recent-conversations:w-auto">
-                    <div class="skeleton-shimmer size-9 rounded-xl bg-surface" />
-                    <div class="flex flex-col gap-2 pt-6">
-                      <div class="skeleton-shimmer h-3 w-3/4 rounded-full bg-ink/10" />
-                      <div class="skeleton-shimmer h-2.5 w-1/2 rounded-full bg-ink/5" />
-                    </div>
-                  </div>
-                )}
-              </For>
-            }
-          >
-            <StaticMarkdownContext>
-              <For each={channels().slice(0, 10)}>
-                {(channel) => (
-                  <RecentConversationCard
-                    conversation={channel}
-                    onOpen={openChannel}
-                    variant="card"
-                  />
-                )}
-              </For>
-            </StaticMarkdownContext>
-          </Show>
+          <RecentConversationsList variant="card" />
         </AdaptiveScroller.Viewport>
         <AdaptiveScroller.FadeEdges class="bottom-10 top-0 hidden sm:block @md/recent-conversations:hidden" />
         <AdaptiveScroller.Controls class="mt-2 @md/recent-conversations:hidden">
