@@ -60,7 +60,7 @@ use email::{
     outbound::EmailPgRepo,
 };
 use foreign_entity::{
-    domain::service::ForeignEntityServiceImpl,
+    domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
@@ -401,9 +401,14 @@ async fn main() -> anyhow::Result<()> {
             sync_app_client_id: config.vars.github_sync_app_client_id.to_string(),
         },
         document_service.clone(),
-        foreign_entity_service,
+        foreign_entity_service.clone(),
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
+    );
+
+    let foreign_entity_state = ForeignEntityRouterState::new(
+        foreign_entity_service.clone(),
+        entity_access_service.clone(),
     );
 
     // Cal.com webhooks → Meta Lead events. Both secrets are loaded here
@@ -553,10 +558,15 @@ async fn main() -> anyhow::Result<()> {
     let call_record_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
         PgCallRepo::new(readonly_db.clone()),
     );
+    let foreign_entity_service_for_soup =
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone()));
 
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
     let channels_repo = PgChannelsRepo::new(db.clone());
+    let bots_service = bots::domain::service::BotServiceImpl::new(
+        bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone()),
+    );
 
     let channels_service = ChannelServiceImpl::with_dependencies(
         channels_repo,
@@ -579,11 +589,14 @@ async fn main() -> anyhow::Result<()> {
                 readonly_email_service,
                 channel_service_for_soup,
                 call_record_query_service,
+                crm_service.clone(),
+                foreign_entity_service_for_soup,
             ),
             email_service,
             entity_access_service.clone(),
         ),
         github_sync_service: Arc::new(github_sync_service_impl),
+        foreign_entity_state,
         db: db.clone(),
         readonly_db: readonly_pool::ReadOnlyPool(readonly_db.clone()),
         redis_client: Arc::new(Redis::new(redis_client)),
@@ -616,6 +629,10 @@ async fn main() -> anyhow::Result<()> {
         },
         channels_state: ChannelsRouterState::new(
             channels_service,
+            (*entity_access_service).clone(),
+        ),
+        bots_state: bots::inbound::axum_router::BotsRouterState::new(
+            bots_service.clone(),
             (*entity_access_service).clone(),
         ),
         call_state,

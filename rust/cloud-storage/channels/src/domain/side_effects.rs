@@ -4,7 +4,7 @@ use crate::domain::{
     events::ChannelEvent,
     models::{
         ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction, MutatedAttachment,
-        MutatedMessage, SimpleMention, TypingAction,
+        MutatedMessage, Sender, SimpleMention, TypingAction,
     },
     ports::{
         ChannelContactsDispatcher, ChannelEventDispatcher, ChannelEventHandler,
@@ -276,7 +276,7 @@ where
 
         match event {
             ChannelEvent::ChannelCreated { .. } => {}
-            ChannelEvent::ChannelDeleted { channel_id } => {
+            ChannelEvent::ChannelDeleted { channel_id, .. } => {
                 self.search.remove_message(channel_id, None).await;
             }
             ChannelEvent::MessagePosted {
@@ -307,6 +307,7 @@ where
                 attachments,
                 recipients,
                 nonce,
+                ..
             } => {
                 self.publish_realtime(ChannelRealtimeEffect::Attachments {
                     recipients,
@@ -323,6 +324,7 @@ where
                 message,
                 recipients,
                 nonce,
+                ..
             } => {
                 let message_id = message.id;
                 self.publish_realtime(ChannelRealtimeEffect::Message {
@@ -338,6 +340,7 @@ where
                 message,
                 recipients,
                 nonce,
+                ..
             } => {
                 let message_id = message.id;
                 self.publish_realtime(ChannelRealtimeEffect::Message {
@@ -356,6 +359,7 @@ where
                 reactions,
                 recipients,
                 nonce,
+                ..
             } => {
                 self.publish_realtime(ChannelRealtimeEffect::Reaction {
                     recipients,
@@ -368,7 +372,7 @@ where
             }
             ChannelEvent::TypingChanged {
                 channel_id,
-                user_id,
+                actor,
                 action,
                 thread_id,
                 recipients,
@@ -377,7 +381,7 @@ where
                 self.publish_realtime(ChannelRealtimeEffect::Typing {
                     recipients,
                     channel_id,
-                    user_id,
+                    user_id: actor.to_storage_string(),
                     action,
                     thread_id,
                     nonce,
@@ -386,20 +390,22 @@ where
             }
             ChannelEvent::ParticipantsAdded {
                 channel_id,
-                invited_by_user_id,
+                invited_by,
                 recipient_user_ids,
                 metadata,
                 message_content,
                 ..
             } => {
-                self.send_participants_added_notification(
-                    channel_id,
-                    invited_by_user_id,
-                    recipient_user_ids,
-                    metadata,
-                    message_content,
-                )
-                .await;
+                if let Some(invited_by_user_id) = invited_by.as_user().cloned() {
+                    self.send_participants_added_notification(
+                        channel_id,
+                        invited_by_user_id,
+                        recipient_user_ids,
+                        metadata,
+                        message_content,
+                    )
+                    .await;
+                }
             }
             ChannelEvent::ParticipantJoined { .. } => {}
         }
@@ -452,6 +458,9 @@ where
         }
 
         self.search.index_message(channel_id, message.id).await;
+        if message.sender_id.is_bot() {
+            return;
+        }
         self.send_message_posted_notifications(
             channel_id,
             metadata,
@@ -486,8 +495,18 @@ where
         mentions: Vec<SimpleMention>,
         has_attachments: bool,
     ) {
+        let Some(sender_id) = message.sender_id.as_user().cloned() else {
+            return;
+        };
         let context = match self
-            .build_posted_message_context(channel_id, metadata, &participants, &message, mentions)
+            .build_posted_message_context(
+                channel_id,
+                metadata,
+                &participants,
+                &message,
+                sender_id,
+                mentions,
+            )
             .await
         {
             Ok(context) => context,
@@ -526,6 +545,7 @@ where
         metadata: ChannelMetadata,
         participants: &[ChannelParticipant],
         message: &MutatedMessage,
+        sender_id: MacroUserIdStr<'static>,
         mentions: Vec<SimpleMention>,
     ) -> anyhow::Result<PostedMessageNotificationContext> {
         let message_count = self
@@ -565,17 +585,17 @@ where
             .await;
         let sender_profile_picture_url = self
             .context
-            .get_sender_profile_picture_url(message.sender_id.clone())
+            .get_sender_profile_picture_url(sender_id.clone())
             .await;
 
-        let excluded_user_ids = std::iter::once(message.sender_id.as_ref().to_string())
+        let excluded_user_ids = std::iter::once(sender_id.as_ref().to_string())
             .chain(user_mentions.iter().cloned())
             .collect::<Vec<_>>();
         let recipients_without_sender = recipients_excluding(
             participants
                 .iter()
                 .map(|participant| participant.user_id.as_str()),
-            std::iter::once(message.sender_id.as_ref()),
+            std::iter::once(sender_id.as_ref()),
         )
         .collect();
         let recipients_without_sender_and_mentions = recipients_excluding(
@@ -588,6 +608,7 @@ where
 
         Ok(PostedMessageNotificationContext {
             metadata,
+            sender_id,
             sender_profile_picture_url,
             user_mentions,
             document_mentions,
@@ -656,11 +677,11 @@ where
                 thread_id: message.thread_id,
                 metadata: context.metadata.clone(),
                 sender_profile_picture_url: context.sender_profile_picture_url.clone(),
-                sender_id: message.sender_id.clone(),
+                sender_id: context.sender_id.clone(),
             },
             recipient_ids: recipients_excluding(
                 context.user_mentions.iter().map(String::as_str),
-                std::iter::once(message.sender_id.as_ref()),
+                std::iter::once(context.sender_id.as_ref()),
             )
             .collect(),
         })
@@ -688,7 +709,7 @@ where
                     thread_id: message.thread_id,
                     metadata: context.metadata.clone(),
                     sender_profile_picture_url: context.sender_profile_picture_url.clone(),
-                    sender_id: message.sender_id.clone(),
+                    sender_id: context.sender_id.clone(),
                 },
                 document: document.clone(),
                 recipient_ids: context.recipients_without_sender.clone(),
@@ -714,7 +735,7 @@ where
             channel_id,
             thread_id,
             message_id: message.id,
-            sender_id: message.sender_id.clone(),
+            sender_id: context.sender_id.clone(),
             message_content: message.content.clone(),
             has_attachments,
             thread_parent_sender_id: context.thread_context.parent_sender_id.clone(),
@@ -741,7 +762,7 @@ where
     ) {
         self.send_invite_notification(InviteNotificationRequest {
             channel_id,
-            invited_by_user_id: message.sender_id.clone(),
+            invited_by_user_id: context.sender_id.clone(),
             recipient_user_ids: context
                 .recipients_without_sender_and_mentions
                 .into_iter()
@@ -764,7 +785,7 @@ where
         self.send_notification(ChannelNotificationEffect::ChannelMessage {
             channel_id,
             message_id: message.id,
-            sender_id: message.sender_id.clone(),
+            sender_id: context.sender_id.clone(),
             message_content: message.content.clone(),
             has_attachments,
             metadata: context.metadata.clone(),
@@ -841,6 +862,7 @@ where
 
 struct PostedMessageNotificationContext {
     metadata: ChannelMetadata,
+    sender_id: MacroUserIdStr<'static>,
     sender_profile_picture_url: Option<String>,
     user_mentions: Vec<String>,
     document_mentions: Vec<ChannelDocumentMention>,
@@ -876,16 +898,19 @@ fn contact_sync_users_for_event(event: &ChannelEvent) -> Option<HashSet<MacroUse
     match event {
         ChannelEvent::ChannelCreated {
             channel_type: ChannelType::Private | ChannelType::DirectMessage,
+            actor: Sender::User(_),
             participant_user_ids,
             ..
         } => Some(participant_user_ids.iter().cloned().collect()),
         ChannelEvent::ParticipantsAdded {
             channel_type: ChannelType::Private | ChannelType::Team,
+            invited_by: Sender::User(_),
             active_participant_user_ids,
             ..
         } => Some(active_participant_user_ids.iter().cloned().collect()),
         ChannelEvent::ParticipantJoined {
             channel_type: ChannelType::Public | ChannelType::Private | ChannelType::Team,
+            user_id: Sender::User(_),
             active_participant_user_ids,
             ..
         } if active_participant_user_ids.len() > 1 => {
@@ -899,7 +924,7 @@ fn contact_sync_users_for_event(event: &ChannelEvent) -> Option<HashSet<MacroUse
 mod tests {
     use super::*;
     use crate::domain::{
-        models::ParticipantRole,
+        models::{BotId, ParticipantRole, Sender},
         ports::{
             ChannelEventHandler, ChannelNotificationSender, ChannelRealtimePublisher,
             ChannelSearchIndexer, ChannelSideEffectContext,
@@ -1074,7 +1099,7 @@ mod tests {
                     id: message_id,
                     channel_id,
                     thread_id: None,
-                    sender_id: sender.clone(),
+                    sender_id: Sender::User(sender.clone()),
                     content: "hello".to_string(),
                     created_at: now,
                     updated_at: now,
@@ -1123,6 +1148,66 @@ mod tests {
         assert_eq!(metadata.channel_name, "Project");
         assert_eq!(recipient_ids.len(), 1);
         assert!(recipient_ids.contains(&recipient));
+    }
+
+    #[tokio::test]
+    async fn bot_message_posted_keeps_realtime_and_search_but_skips_notifications() {
+        let channel_id = Uuid::new_v4();
+        let message_id = Uuid::new_v4();
+        let recipient = user("recipient@example.com");
+        let realtime = FakeRealtime::default();
+        let notifications = FakeNotifications::default();
+        let search = FakeSearch::default();
+        let service = ChannelSideEffectService::new(
+            FakeContext {
+                message_count: 2,
+                document_mentions: Vec::new(),
+            },
+            realtime.clone(),
+            notifications.clone(),
+            search.clone(),
+            FakeContacts::default(),
+        );
+        let now = Utc::now();
+
+        service
+            .handle(ChannelEvent::MessagePosted {
+                channel_id,
+                metadata: ChannelMetadata {
+                    channel_type: ChannelType::Private,
+                    channel_name: "Project".to_string(),
+                },
+                participants: vec![ChannelParticipant {
+                    channel_id,
+                    user_id: recipient.as_ref().to_string(),
+                    role: ParticipantRole::Member,
+                    joined_at: now,
+                    left_at: None,
+                }],
+                message: MutatedMessage {
+                    id: message_id,
+                    channel_id,
+                    thread_id: None,
+                    sender_id: Sender::Bot(BotId::from_uuid(Uuid::new_v4())),
+                    content: "hello".to_string(),
+                    created_at: now,
+                    updated_at: now,
+                    edited_at: None,
+                    deleted_at: None,
+                },
+                mentions: Vec::new(),
+                has_attachments: false,
+                attachments: Vec::new(),
+                nonce: None,
+            })
+            .await;
+
+        assert_eq!(realtime.effects.lock().unwrap().len(), 1);
+        assert_eq!(
+            *search.indexed.lock().unwrap(),
+            vec![(channel_id, message_id)]
+        );
+        assert!(notifications.effects.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -1184,7 +1269,7 @@ mod tests {
                     id: message_id,
                     channel_id,
                     thread_id: None,
-                    sender_id: sender.clone(),
+                    sender_id: Sender::User(sender.clone()),
                     content: "hello".to_string(),
                     created_at: now,
                     updated_at: now,
@@ -1226,6 +1311,7 @@ mod tests {
     fn contact_sync_is_derived_from_private_channel_created() {
         let event = ChannelEvent::ChannelCreated {
             channel_id: Uuid::nil(),
+            actor: Sender::User(user("alice@example.com")),
             channel_type: ChannelType::Private,
             participant_user_ids: users(&["alice@example.com", "bob@example.com"]),
         };
@@ -1241,8 +1327,27 @@ mod tests {
     fn contact_sync_ignores_public_channel_created() {
         let event = ChannelEvent::ChannelCreated {
             channel_id: Uuid::nil(),
+            actor: Sender::User(user("alice@example.com")),
             channel_type: ChannelType::Public,
             participant_user_ids: users(&["alice@example.com", "bob@example.com"]),
+        };
+
+        assert!(contact_sync_users_for_event(&event).is_none());
+    }
+
+    #[test]
+    fn contact_sync_ignores_bot_actor() {
+        let event = ChannelEvent::ParticipantsAdded {
+            channel_id: Uuid::nil(),
+            channel_type: ChannelType::Team,
+            active_participant_user_ids: users(&["alice@example.com", "bob@example.com"]),
+            invited_by: Sender::Bot(BotId::from_uuid(Uuid::new_v4())),
+            recipient_user_ids: users(&["bob@example.com"]),
+            metadata: ChannelMetadata {
+                channel_type: ChannelType::Team,
+                channel_name: "team".to_string(),
+            },
+            message_content: None,
         };
 
         assert!(contact_sync_users_for_event(&event).is_none());
@@ -1254,7 +1359,7 @@ mod tests {
             channel_id: Uuid::nil(),
             channel_type: ChannelType::Team,
             active_participant_user_ids: users(&["alice@example.com", "bob@example.com"]),
-            invited_by_user_id: user("alice@example.com"),
+            invited_by: Sender::User(user("alice@example.com")),
             recipient_user_ids: users(&["bob@example.com"]),
             metadata: ChannelMetadata {
                 channel_type: ChannelType::Team,
@@ -1271,7 +1376,7 @@ mod tests {
         let event = ChannelEvent::ParticipantJoined {
             channel_id: Uuid::nil(),
             channel_type: ChannelType::Public,
-            user_id: user("alice@example.com"),
+            user_id: Sender::User(user("alice@example.com")),
             active_participant_user_ids: users(&["alice@example.com"]),
         };
 

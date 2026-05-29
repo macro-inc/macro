@@ -21,11 +21,13 @@ use documents::domain::{
     },
 };
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+    EditAccessLevel, EntityAccessReceipt, EntityType, OwnerAccessLevel, ViewAccessLevel,
 };
 use foreign_entity::domain::{
-    models::{CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity},
-    ports::ForeignEntityService,
+    models::{
+        CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity, SourceId,
+    },
+    ports::{ForeignEntityListQuery, ForeignEntityService},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentBasic, DocumentMetadata};
@@ -511,6 +513,22 @@ impl GithubSyncClient for StubSyncClient {
     }
 }
 
+fn foreign_entity_id_from_receipt(
+    receipt: EntityAccessReceipt<ViewAccessLevel>,
+) -> Result<uuid::Uuid, ForeignEntityError> {
+    let entity = receipt.entity();
+    if entity.entity_type != EntityType::ForeignEntity {
+        return Err(ForeignEntityError::BadRequest(format!(
+            "expected ForeignEntity receipt, got {:?}",
+            entity.entity_type
+        )));
+    }
+
+    uuid::Uuid::parse_str(&entity.entity_id).map_err(|_| {
+        ForeignEntityError::BadRequest("foreign entity receipt id must be a valid UUID".to_string())
+    })
+}
+
 struct StubForeignEntityService {
     foreign_entities: Mutex<Vec<ForeignEntity>>,
     create_calls: Mutex<Vec<CreateForeignEntity>>,
@@ -540,6 +558,14 @@ impl StubForeignEntityService {
 }
 
 impl ForeignEntityService for StubForeignEntityService {
+    async fn get_foreign_entity(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        let id = foreign_entity_id_from_receipt(receipt)?;
+        self.get_foreign_entity_by_id(id).await
+    }
+
     async fn get_foreign_entity_by_id(
         &self,
         id: uuid::Uuid,
@@ -569,6 +595,28 @@ impl ForeignEntityService for StubForeignEntityService {
                     .map(|source| entity.foreign_entity_source == source)
                     .unwrap_or(true)
             })
+            .cloned()
+            .collect())
+    }
+
+    async fn get_foreign_entities_for_user(
+        &self,
+        source_ids: Vec<SourceId>,
+        limit: u32,
+        _query: ForeignEntityListQuery,
+    ) -> Result<Vec<ForeignEntity>, ForeignEntityError> {
+        Ok(self
+            .foreign_entities
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|entity| {
+                source_ids.iter().any(|source_id| {
+                    entity.stored_for_id.as_str() == source_id.id.as_str()
+                        && entity.stored_for_auth_entity.as_str() == source_id.auth_entity.as_str()
+                })
+            })
+            .take(limit as usize)
             .cloned()
             .collect())
     }

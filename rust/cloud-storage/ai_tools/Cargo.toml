@@ -32,6 +32,7 @@ email = { path = "../email", features = ["ai_schema", "ai_tools", "axum", "outbo
 email_service_client = { path = "../email_service_client" }
 entity_access = { path = "../entity_access" }
 entity_access_management = { path = "../entity_access_management" }
+foreign_entity = { path = "../foreign_entity" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 futures.workspace = true
 item_filters = { path = "../item_filters" }

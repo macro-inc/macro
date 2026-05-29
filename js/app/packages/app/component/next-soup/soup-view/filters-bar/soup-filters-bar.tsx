@@ -60,7 +60,7 @@ export function SoupFiltersBar() {
   return (
     <Show when={!isMobile()}>
       <SplitToolbarLeft>
-        <div class="flex items-start gap-2 min-w-0 flex-1">
+        <div class="flex items-start gap-1 min-w-0 flex-1">
           <Show when={!isSearchView()}>
             <SoupViewContextSort />
             <SoupViewContextGroup />

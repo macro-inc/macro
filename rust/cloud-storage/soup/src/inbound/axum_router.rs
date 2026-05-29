@@ -38,8 +38,10 @@ use item_filters::{
         call::CallLiteral,
         channel::ChannelLiteral,
         chat::ChatLiteral,
+        crm_company::CrmCompanyLiteral,
         document::DocumentLiteral,
         email::EmailLiteral,
+        foreign_entity::ForeignEntityLiteral,
         project::ProjectLiteral,
         properties::{PropertiesLiteral, PropertyEntityType},
     },
@@ -842,10 +844,19 @@ pub struct ApiEntityFilterAst {
     #[serde(default, rename = "chanf")]
     #[schema(value_type = serde_json::Value)]
     pub channel_filter: LiteralTree<ChannelLiteral>,
+    /// the filters that should be applied to foreign entity records
+    #[serde(default, rename = "fef")]
+    #[schema(value_type = serde_json::Value)]
+    pub foreign_entity_filter: LiteralTree<ForeignEntityLiteral>,
     /// the filters that should be applied to the call entity
     #[serde(default, rename = "callf")]
     #[schema(value_type = serde_json::Value)]
     pub call_filter: LiteralTree<CallLiteral>,
+    /// Filters applied to the crm_company entity (wire key `ccf`).
+    /// Empty/omitted = team's full visible list.
+    #[serde(default, rename = "ccf")]
+    #[schema(value_type = serde_json::Value)]
+    pub crm_company_filter: LiteralTree<CrmCompanyLiteral>,
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
     #[schema(value_type = serde_json::Value)]
@@ -926,7 +937,9 @@ impl ApiEntityFilterAst {
             chat_filter,
             email_filter,
             channel_filter,
+            foreign_entity_filter,
             call_filter,
+            crm_company_filter,
             properties_filter,
             email_crm_domains,
             email_crm_addresses,
@@ -991,6 +1004,8 @@ impl ApiEntityFilterAst {
             },
             channel_filter,
             call_filter,
+            crm_company_filter,
+            foreign_entity_filter,
             properties_filter,
         })
     }

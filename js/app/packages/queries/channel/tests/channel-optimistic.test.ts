@@ -43,6 +43,10 @@ import {
   rollbackUpdateChannelMessage,
 } from '../message';
 import {
+  normalizeChannelMessageSender,
+  normalizeThreadReplySender,
+} from '../message-sender';
+import {
   optimisticAddReaction,
   optimisticRemoveReaction,
   rollbackAddReaction,
@@ -55,7 +59,7 @@ function createPaginatedMessage(
   createdAt: string,
   overrides: Partial<ApiChannelMessage> = {}
 ): ApiChannelMessage {
-  return {
+  return normalizeChannelMessageSender({
     id,
     channel_id: 'channel-1',
     sender_id: 'user-1',
@@ -72,7 +76,7 @@ function createPaginatedMessage(
       latest_reply_at: null,
     },
     ...overrides,
-  };
+  });
 }
 
 function createThreadReply(
@@ -80,7 +84,7 @@ function createThreadReply(
   createdAt: string,
   overrides: Partial<ApiThreadReply> = {}
 ): ApiThreadReply {
-  return {
+  return normalizeThreadReplySender({
     id,
     sender_id: 'user-1',
     content: `Reply ${id}`,
@@ -90,7 +94,7 @@ function createThreadReply(
     attachments: [],
     reactions: [],
     ...overrides,
-  };
+  });
 }
 
 function createChannelMessagesData(

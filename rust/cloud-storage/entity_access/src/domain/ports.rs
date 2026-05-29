@@ -51,6 +51,16 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
+    /// Check whether a user has access to a foreign entity.
+    ///
+    /// Foreign entity access is boolean because it only maps to [`AccessLevel::View`]
+    /// at the service layer.
+    fn has_foreign_entity_access(
+        &self,
+        foreign_entity_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<bool, AccessError>> + Send;
+
     /// Check if a user is a member of the specified channels.
     ///
     /// Returns the subset of channel_ids that the user is a participant of.

@@ -77,6 +77,7 @@ use documents_hex::inbound::axum_router::{
     edit_document::EditDocumentResponse, get_branch_name::BranchNameResponse,
     get_short_id::ShortIdResponse,
 };
+use foreign_entity::domain::models::ForeignEntity;
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
     DocumentResponseMetadata,
@@ -118,6 +119,7 @@ use models_soup::email_thread::{
     SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview, SoupLabel,
     SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
 };
+use models_soup::foreign_entity::SoupForeignEntity;
 use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
 use soup::inbound::axum_router::{PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage};
@@ -263,6 +265,9 @@ use utoipa::OpenApi;
 
         entity::get_entity_permission::handler,
 
+        // foreign_entity
+        foreign_entity::inbound::axum_router::get_foreign_entity_handler,
+
         // threads
         threads::edit_thread::edit_thread_handler,
 
@@ -284,6 +289,11 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::set_email_sync::handler,
         crm::inbound::axum_router::set_company_hidden::handler,
         crm::inbound::axum_router::set_contact_hidden::handler,
+        crm::inbound::axum_router::list_company_contacts::handler,
+        crm::inbound::axum_router::comments::list_handler,
+        crm::inbound::axum_router::comments::create_handler,
+        crm::inbound::axum_router::comments::edit_handler,
+        crm::inbound::axum_router::comments::delete_handler,
     ),
     components(
         schemas(
@@ -362,6 +372,8 @@ use utoipa::OpenApi;
             SoupDocument,
             SoupChat,
             SoupProject,
+            SoupForeignEntity,
+            ForeignEntity,
             SoupApiSort,
             SoupPage,
             SoupEnrichedEmailThreadPreview,
@@ -510,6 +522,14 @@ use utoipa::OpenApi;
             crm::inbound::axum_router::set_email_sync::SetEmailSyncRequest,
             crm::inbound::axum_router::set_company_hidden::SetCompanyHiddenRequest,
             crm::inbound::axum_router::set_contact_hidden::SetContactHiddenRequest,
+            crm::inbound::axum_router::list_company_contacts::CrmContactResponse,
+            crm::inbound::axum_router::comments::CreateCrmCommentRequest,
+            crm::inbound::axum_router::comments::EditCrmCommentRequest,
+            crm::domain::comment::CrmCommentEntityType,
+            crm::domain::comment::CrmThread,
+            crm::domain::comment::CrmComment,
+            crm::domain::comment::CrmCommentThread,
+            crm::domain::comment::DeleteCrmCommentResult,
         ),
     ),
     tags(

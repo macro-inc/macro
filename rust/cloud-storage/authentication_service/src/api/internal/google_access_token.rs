@@ -14,7 +14,10 @@ use std::sync::Arc;
 #[derive(serde::Deserialize, Debug)]
 pub struct GoogleAccessTokenParams {
     fusionauth_user_id: String,
-    macro_id: String,
+    /// The linked Google account's email — what FusionAuth stores as
+    /// `display_name` on the IdP link. Discriminates one Google account from
+    /// another when the FA user has multiple Google IdP links.
+    email: String,
 }
 
 /// Gets link between user and identity provider
@@ -35,7 +38,7 @@ async fn get_access_token(
     identity_provider_name: &str,
 ) -> Result<Response, Response> {
     let fusionauth_user_id = params.fusionauth_user_id.as_str();
-    let email = params.macro_id.replace("macro|", "");
+    let email = params.email.as_str();
 
     // get identity provider id
     let idp_id = auth_client
@@ -71,7 +74,7 @@ async fn get_access_token(
     // addresses, but can only have one link with a given email
     let link = links
         .into_iter()
-        .find(|l| l.display_name == email)
+        .find(|l| l.display_name.as_str() == email)
         .ok_or_else(|| {
             tracing::error!(
                 "link not found for user id {} and idp id {}",

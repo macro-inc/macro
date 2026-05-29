@@ -115,6 +115,7 @@ dependencies = [
  "email_service_client",
  "entity_access",
  "entity_access_management",
+ "foreign_entity",
  "frecency",
  "futures",
  "item_filters",
@@ -1703,6 +1704,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "bot_id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "sqlx",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "bots"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bot_id",
+ "chrono",
+ "entity_access",
+ "hex",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-error-response",
+ "model_user",
+ "rand 0.9.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "bs58"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1958,6 +1998,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "bot_id",
  "chrono",
  "connection_gateway_client",
  "contacts",
@@ -2625,6 +2666,7 @@ dependencies = [
  "macro_uuid",
  "model-error-response",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -3261,6 +3303,7 @@ dependencies = [
  "email_service_client",
  "entity_access",
  "entity_access_management",
+ "foreign_entity",
  "frecency",
  "futures",
  "http 1.4.0",
@@ -3337,6 +3380,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64 0.22.1",
+ "bots",
  "bytes",
  "bzip2",
  "cal",
@@ -4383,15 +4427,25 @@ name = "foreign_entity"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "chrono",
+ "entity_access",
+ "filter_ast",
+ "http-body-util",
+ "item_filters",
  "macro_db_migrator",
+ "macro_user_id",
  "macro_uuid",
+ "model-error-response",
+ "models_pagination",
  "serde",
  "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
+ "utoipa",
  "uuid",
 ]
 
@@ -6706,6 +6760,7 @@ dependencies = [
  "email_service_client",
  "entity_access",
  "entity_access_management",
+ "foreign_entity",
  "frecency",
  "fusionauth",
  "http 1.4.0",
@@ -6780,6 +6835,7 @@ dependencies = [
  "email_service_client",
  "entity_access",
  "entity_access_management",
+ "foreign_entity",
  "frecency",
  "futures",
  "lexical_client",
@@ -7202,6 +7258,7 @@ dependencies = [
  "call",
  "chrono",
  "comms",
+ "crm",
  "document_sub_type",
  "doppleganger",
  "email",
@@ -7210,6 +7267,7 @@ dependencies = [
  "models_pagination",
  "models_properties",
  "serde",
+ "serde_json",
  "strum",
  "utoipa",
  "uuid",
@@ -10767,6 +10825,7 @@ dependencies = [
  "email",
  "entity_access",
  "filter_ast",
+ "foreign_entity",
  "frecency",
  "futures",
  "http-body-util",

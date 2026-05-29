@@ -38,7 +38,7 @@ pub use tool_context::{
     ToolChannelMessagesService, ToolChannelToolContext, ToolChatService, ToolChatToolContext,
     ToolCommsService, ToolDocumentService, ToolDocumentToolContext, ToolEmailService,
     ToolEmailToolContext, ToolEntityAccessManagementService, ToolEntityAccessService,
-    ToolFrecencyService, ToolNotificationQueue, ToolNotificationService,
+    ToolForeignEntityService, ToolFrecencyService, ToolNotificationQueue, ToolNotificationService,
     ToolNotificationToolContext, ToolPropertiesService, ToolPropertiesToolContext,
     ToolServiceContext, ToolSoupService, ToolSystemPropertiesService, ToolTeamService,
     ToolTeamToolContext, ToolUserEmailService, build_channel_tool_context,

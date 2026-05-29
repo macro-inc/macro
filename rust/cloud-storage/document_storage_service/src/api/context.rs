@@ -3,6 +3,10 @@ use contacts::outbound::ingress::SqsContactsQueue;
 
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
+use bots::{
+    domain::service::BotServiceImpl, inbound::axum_router::BotsRouterState,
+    outbound::pg_bots_repo::PgBotsRepo,
+};
 use cal::{
     domain::service::CalWebhookServiceImpl, inbound::cal_webhook_router::CalWebhookRouterState,
     outbound::analytics_client::AnalyticsClientSink,
@@ -49,7 +53,7 @@ use email::{
 };
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use foreign_entity::{
-    domain::service::ForeignEntityServiceImpl,
+    domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
@@ -109,6 +113,8 @@ type DssSoupState = SoupRouterState<
         ReadonlyEmailPreviewAdapter<DssEmailService>,
         CommsChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>,
         call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
+        DssCrmService,
+        ForeignEntityServiceType,
     >,
     DssEmailService,
     EntityAccessService,
@@ -225,6 +231,12 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
 /// Type alias for the channels router state.
 pub(crate) type DssChannelsState = ChannelsRouterState<DssChannelService, EntityAccessService>;
 
+/// Type alias for the bots service wired into DSS.
+pub(crate) type DssBotService = BotServiceImpl<PgBotsRepo>;
+
+/// Type alias for the bots router state.
+pub(crate) type DssBotsState = BotsRouterState<DssBotService, EntityAccessService>;
+
 /// Type alias for the call connection service.
 pub(crate) type CallConnectionService =
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>;
@@ -263,6 +275,10 @@ pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 /// Type alias for the foreign entity service.
 pub(crate) type ForeignEntityServiceType = ForeignEntityServiceImpl<PgForeignEntityRepo>;
 
+/// Type alias for the foreign entity router state.
+pub(crate) type DssForeignEntityState =
+    ForeignEntityRouterState<ForeignEntityServiceType, EntityAccessService>;
+
 /// Type alias for the github sync service.
 pub(crate) type GithubSyncServiceType = GithubSyncServiceImpl<
     DocumentService,
@@ -287,6 +303,7 @@ pub(crate) struct ApiContext {
     pub dynamodb_client: Arc<DynamodbClient>,
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,
+    pub foreign_entity_state: DssForeignEntityState,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
@@ -304,6 +321,7 @@ pub(crate) struct ApiContext {
     pub entity_access_service: Arc<EntityAccessService>,
     pub documents_state: DocumentsState,
     pub channels_state: DssChannelsState,
+    pub bots_state: DssBotsState,
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,
     pub call_internal_state: DssCallInternalState,

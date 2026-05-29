@@ -18,8 +18,9 @@ import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { ENABLE_PROJECT_VIEW_PREVIEW } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import {
   handleFileFolderDrop,
   type UploadInput,
@@ -130,12 +131,9 @@ const Block: Component = () => {
     });
   }
 
-  const [attachHotkeys, projectViewScope] = useHotkeyDOMScope('project-view');
-
   return (
     <DocumentBlockContainer>
       <div
-        ref={attachHotkeys}
         class="size-full bg-surface flex flex-col relative"
         use:fileFolderDrop={{
           onDragStart: () => setIsDragging(true),
@@ -157,7 +155,9 @@ const Block: Component = () => {
               <ProjectEntityList
                 projectId={projectId}
                 soup={projectSoup}
-                scopeId={projectViewScope}
+                // Scope is already attached by the block container so we can use that
+                // Change this when we remove blocks
+                scopeId={blockHotkeyScopeSignal.get()}
               />
             }
           >
@@ -174,7 +174,9 @@ const Block: Component = () => {
                 <ProjectEntityList
                   projectId={projectId}
                   soup={projectSoup}
-                  scopeId={projectViewScope}
+                  // Scope is already attached by the block container so we can use that
+                  // Change this when we remove blocks
+                  scopeId={blockHotkeyScopeSignal.get()}
                 />
               </SplitPanelContext.Provider>
             </div>

@@ -819,6 +819,19 @@
         ],
         "description": "ChatSearchResponse object with channel metadata we fetch from macrodb. we don't store these\ntimestamps in opensearch as they would require us to update each chat message record for the chat\nevery time the chat updates (specifically for updated_at and viewed_at)"
       },
+      "CrmCompanyFilters": {
+        "type": "object",
+        "description": "The crm company filters used to narrow which CRM companies appear in soup.",
+        "properties": {
+          "company_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM company ids to filter by. Examples: ['11111111-...']. Empty to\ninclude all of the team's visible CRM companies."
+          }
+        }
+      },
       "DataType": {
         "type": "string",
         "description": "Data type for property values, determining storage and validation.",
@@ -1444,6 +1457,10 @@
             "$ref": "#/components/schemas/ChatFilters",
             "description": "the bundled [ChatFilters]"
           },
+          "crm_company_filters": {
+            "$ref": "#/components/schemas/CrmCompanyFilters",
+            "description": "the bundled [CrmCompanyFilters]"
+          },
           "document_filters": {
             "$ref": "#/components/schemas/DocumentFilters",
             "description": "the bundled [DocumentFilters]"
@@ -1451,6 +1468,10 @@
           "email_filters": {
             "$ref": "#/components/schemas/EmailFilters",
             "description": "the bundled [EmailFilters]"
+          },
+          "foreign_entity_filters": {
+            "$ref": "#/components/schemas/ForeignEntityFilters",
+            "description": "the bundled [ForeignEntityFilters]"
           },
           "project_filters": {
             "$ref": "#/components/schemas/ProjectFilters",
@@ -1935,6 +1956,33 @@
           "img",
           "swf"
         ]
+      },
+      "ForeignEntityFilters": {
+        "type": "object",
+        "description": "Filters for foreign entity records.",
+        "properties": {
+          "foreign_entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "External entity identifiers to filter by. Empty to include all external IDs."
+          },
+          "foreign_entity_sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "External source names to filter by. Empty to include all sources."
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Internal foreign entity record IDs to filter by. Empty to include all records."
+          }
+        }
       },
       "MatchType": {
         "type": "string",

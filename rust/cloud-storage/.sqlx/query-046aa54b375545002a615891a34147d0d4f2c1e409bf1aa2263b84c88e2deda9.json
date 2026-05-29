@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO comms_messages (id, channel_id, sender_id, content, thread_id)\n            VALUES ($1, $2, $3, $4, $5)\n            RETURNING\n                id,\n                channel_id,\n                sender_id AS \"sender_id: MacroUserIdStr\",\n                content,\n                created_at,\n                updated_at,\n                thread_id,\n                edited_at::timestamptz AS \"edited_at?\",\n                deleted_at::timestamptz AS \"deleted_at?\"\n            ",
+  "query": "\n            INSERT INTO comms_messages (id, channel_id, sender_id, content, thread_id)\n            VALUES ($1, $2, $3, $4, $5)\n            RETURNING\n                id,\n                channel_id,\n                sender_id,\n                content,\n                created_at,\n                updated_at,\n                thread_id,\n                edited_at::timestamptz AS \"edited_at?\",\n                deleted_at::timestamptz AS \"deleted_at?\"\n            ",
   "describe": {
     "columns": [
       {
@@ -15,7 +15,7 @@
       },
       {
         "ordinal": 2,
-        "name": "sender_id: MacroUserIdStr",
+        "name": "sender_id",
         "type_info": "Text"
       },
       {
@@ -70,5 +70,5 @@
       null
     ]
   },
-  "hash": "2849c75501e874a2056d63e028c97cece3f7605b12f4c6f904c7ba8c718844f7"
+  "hash": "046aa54b375545002a615891a34147d0d4f2c1e409bf1aa2263b84c88e2deda9"
 }

@@ -34,6 +34,8 @@ export type ArrayFieldFilters = {
   callId?: string[];
   callChannelId?: string[];
   callSpeakerId?: string[];
+  foreignEntityRecordId?: string[];
+  crmCompanyId?: string[];
   properties?: PropertyFilter[];
 };
 
