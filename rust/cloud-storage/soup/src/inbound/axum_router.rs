@@ -596,6 +596,7 @@ impl IntoResponse for SoupHandlerErr {
     ),
     responses(
             (status = 200, body=SoupPage),
+            (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
 )]
@@ -669,6 +670,7 @@ type SoupCursor<R> = axum_extra::either::Either<
     ),
     responses(
             (status = 200, body=SoupPage),
+            (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
 )]
@@ -737,6 +739,7 @@ pub struct PostSoupAstRequest {
     request_body = PostSoupAstRequest,
     responses(
         (status = 200, body=SoupPage),
+        (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
         (status = 500, body=ErrorResponse),
     )
 )]
@@ -804,6 +807,7 @@ pub struct PostGroupedSoupAstRequest {
     request_body = PostGroupedSoupAstRequest,
     responses(
         (status = 200, body=GroupedSoupPage),
+        (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
         (status = 500, body=ErrorResponse),
     )
 )]
