@@ -74,6 +74,26 @@ where
         }
     }
 
+    /// Get access level for a foreign entity.
+    ///
+    /// Foreign entity access is binary and always maps to View access.
+    async fn get_foreign_entity_access(
+        &self,
+        entity_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let has_access = self
+            .repo
+            .has_foreign_entity_access(entity_id, user_id)
+            .await?;
+
+        if has_access {
+            Ok(Some(AccessLevel::View))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Resolve a call id string to the channel id that owns it.
     ///
     /// Looks up both the active `calls` table and the archived `call_records`
@@ -139,10 +159,11 @@ where
                     .await
             }
             EntityType::Channel => self.get_channel_access(entity_id, user_id).await,
+            EntityType::ForeignEntity => self.get_foreign_entity_access(entity_id, user_id).await,
             // Static files are always viewable. This is wrong for owners
             EntityType::StaticFile => Ok(Some(AccessLevel::View)),
             // These entity types don't have access checks implemented yet.
-            EntityType::ForeignEntity | EntityType::Team | EntityType::User => Ok(None),
+            EntityType::Team | EntityType::User => Ok(None),
         }
     }
 
@@ -197,6 +218,15 @@ where
                 let access = self
                     .get_optimized_access(entity_id, user_id, entity_type)
                     .await?;
+                match access {
+                    Some(level) => Ok(EntityPermission::AccessLevel {
+                        access_level: level,
+                    }),
+                    None => Err(AccessError::Unauthorized),
+                }
+            }
+            EntityType::ForeignEntity => {
+                let access = self.get_foreign_entity_access(entity_id, user_id).await?;
                 match access {
                     Some(level) => Ok(EntityPermission::AccessLevel {
                         access_level: level,

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH source_pairs AS (\n            SELECT DISTINCT stored_for_id, stored_for_auth_entity\n            FROM UNNEST($2::text[], $3::text[])\n                AS source_rows(stored_for_id, stored_for_auth_entity)\n        )\n        SELECT EXISTS (\n            SELECT 1\n            FROM foreign_entity fe\n            WHERE fe.id = $1\n              AND EXISTS (\n                SELECT 1\n                FROM source_pairs s\n                WHERE s.stored_for_id = fe.stored_for_id\n                  AND s.stored_for_auth_entity = fe.stored_for_auth_entity\n              )\n        ) AS \"has_access!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "has_access!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "31d2504654072ca22b3fc69edcfda0a7c112bb86527c7200c38326cd920f94e8"
+}
