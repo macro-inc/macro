@@ -411,6 +411,7 @@ where
         let GetCrmCompaniesRequest {
             team_id,
             company_ids,
+            hidden,
             sort,
             cursor,
             limit,
@@ -418,7 +419,7 @@ where
 
         Ok(Either::Right(
             self.crm_service
-                .list_companies_for_soup(&team_id, &company_ids, sort, cursor, limit)
+                .list_companies_for_soup(&team_id, &company_ids, hidden, sort, cursor, limit)
                 .await
                 .map_err(|_| SoupErr::CrmErr)?
                 .into_iter()

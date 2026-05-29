@@ -269,6 +269,7 @@ export * from './crmCommentOrder';
 export * from './crmCommentSender';
 export * from './crmCommentThread';
 export * from './crmCompanyFilters';
+export * from './crmCompanyFiltersHidden';
 export * from './crmContactResponse';
 export * from './crmContactResponseName';
 export * from './crmThread';

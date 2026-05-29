@@ -402,9 +402,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
             | SimpleSortMethod::ViewedUpdated => CrmCompanyListSort::UpdatedAt,
         };
 
-        let mut company_ids = Vec::new();
+        let mut extract = CrmCompanyFilterExtract::default();
         if let Some(tree) = filter_ast.and_then(|a| a.crm_company_filter.as_ref())
-            && !collect_crm_company_ids(tree, &mut company_ids)
+            && !extract_crm_company_filter(tree, &mut extract)
         {
             // Fail closed: unsupported AST shape would widen the result
             // set. Skip the CRM sub-request rather than over-include.
@@ -413,7 +413,8 @@ impl SoupRequest<Option<EntityFilterAst>> {
 
         Some(GetCrmCompaniesRequest {
             team_id,
-            company_ids,
+            company_ids: extract.ids,
+            hidden: extract.hidden,
             sort,
             cursor,
             // Match the soup paginator's bounds so the CRM layer doesn't
@@ -493,8 +494,13 @@ pub struct GetCrmCompaniesRequest {
     /// Team whose CRM companies to list. Derived from the team receipt.
     pub team_id: Uuid,
     /// Filter to specific company ids. Empty = all of the team's
-    /// non-hidden companies (subject to the killswitch).
+    /// companies matching `hidden` (subject to the killswitch).
     pub company_ids: Vec<Uuid>,
+    /// Optional `crm_companies.hidden` filter. `None` = visible only
+    /// (default); `Some(false)` = visible only (explicit); `Some(true)`
+    /// = hidden only. The admin/owner role check is enforced upstream
+    /// in soup's axum router before reaching this request.
+    pub hidden: Option<bool>,
     /// Which timestamp column to sort by.
     pub sort: CrmCompanyListSort,
     /// Keyset cursor to seek past the previous page (`None` = first page).
@@ -503,19 +509,59 @@ pub struct GetCrmCompaniesRequest {
     pub limit: i64,
 }
 
-/// Walks a `CrmCompanyLiteral` AST collecting every `Id(uuid)` literal.
-/// Returns `false` when the AST contains `And` or `Not` — both shapes
-/// would change set semantics (`And` would intersect, `Not` would
-/// invert) but a flat collector can't represent that, so the caller
-/// fails closed rather than widening the result.
-fn collect_crm_company_ids(expr: &Expr<CrmCompanyLiteral>, out: &mut Vec<Uuid>) -> bool {
+/// Outcome of walking a `CrmCompanyLiteral` AST: the ids and the
+/// optional `hidden` constraint pulled out of the tree.
+#[derive(Debug, Default)]
+pub(crate) struct CrmCompanyFilterExtract {
+    pub ids: Vec<Uuid>,
+    pub hidden: Option<bool>,
+}
+
+/// Walks a `CrmCompanyLiteral` AST collecting `Id(uuid)` literals into
+/// `out.ids` and a single `Hidden(bool)` constraint into `out.hidden`.
+/// Returns `false` (fail closed) when:
+///   - `Not(_)` appears (would invert set semantics),
+///   - two `Hidden(_)` literals conflict (e.g. `Hidden(true) AND Hidden(false)`),
+///   - an `Or(_, _)` branch mixes ids and a hidden literal (would change
+///     set semantics in ways the simple extractor can't represent).
+fn extract_crm_company_filter(
+    expr: &Expr<CrmCompanyLiteral>,
+    out: &mut CrmCompanyFilterExtract,
+) -> bool {
     match expr {
-        Expr::Or(a, b) => collect_crm_company_ids(a, out) && collect_crm_company_ids(b, out),
         Expr::Literal(CrmCompanyLiteral::Id(id)) => {
-            out.push(*id);
+            out.ids.push(*id);
             true
         }
-        Expr::And(_, _) | Expr::Not(_) => false,
+        Expr::Literal(CrmCompanyLiteral::Hidden(b)) => match out.hidden {
+            Some(prev) if prev != *b => false,
+            _ => {
+                out.hidden = Some(*b);
+                true
+            }
+        },
+        // `And` of arbitrary sub-trees: each side contributes independently
+        // (e.g. id-OR AND Hidden).
+        Expr::And(a, b) => extract_crm_company_filter(a, out) && extract_crm_company_filter(b, out),
+        // `Or` is only safe over ids — mixing a Hidden literal under an Or
+        // would change semantics ("these ids OR all hidden") that the flat
+        // extract can't represent.
+        Expr::Or(a, b) => or_is_ids_only(a, out) && or_is_ids_only(b, out),
+        Expr::Not(_) => false,
+    }
+}
+
+/// Helper for [`extract_crm_company_filter`]: an `Or` branch must be a
+/// pure id sub-tree (nested `Or` of `Id` literals) — any `Hidden`, `And`,
+/// or `Not` inside fails closed.
+fn or_is_ids_only(expr: &Expr<CrmCompanyLiteral>, out: &mut CrmCompanyFilterExtract) -> bool {
+    match expr {
+        Expr::Literal(CrmCompanyLiteral::Id(id)) => {
+            out.ids.push(*id);
+            true
+        }
+        Expr::Or(a, b) => or_is_ids_only(a, out) && or_is_ids_only(b, out),
+        _ => false,
     }
 }
 

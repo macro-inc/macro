@@ -185,6 +185,7 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
         company_ids: &[uuid::Uuid],
+        hidden: Option<bool>,
         sort: CrmCompanyListSort,
         cursor: Option<CrmCompanySoupCursor>,
         limit: i64,
@@ -493,12 +494,13 @@ where
         &self,
         team_id: &uuid::Uuid,
         company_ids: &[uuid::Uuid],
+        hidden: Option<bool>,
         sort: CrmCompanyListSort,
         cursor: Option<CrmCompanySoupCursor>,
         limit: i64,
     ) -> Result<Vec<CrmCompanyForSoup>, CrmError> {
         self.companies_repository
-            .list_companies_for_soup(team_id, company_ids, sort, cursor, limit)
+            .list_companies_for_soup(team_id, company_ids, hidden, sort, cursor, limit)
             .await
     }
 
@@ -667,6 +669,7 @@ impl CrmService for NoOpCrmService {
         &self,
         _team_id: &uuid::Uuid,
         _company_ids: &[uuid::Uuid],
+        _hidden: Option<bool>,
         _sort: CrmCompanyListSort,
         _cursor: Option<CrmCompanySoupCursor>,
         _limit: i64,

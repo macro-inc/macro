@@ -466,12 +466,21 @@ pub struct CrmCompanyFilters {
     /// include all of the team's visible CRM companies.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub company_ids: Vec<String>,
+    /// Optional `crm_companies.hidden` filter. `None` = visible only
+    /// (default for back-compat with non-admin callers). `Some(false)` =
+    /// visible only (explicit). `Some(true)` = hidden only — requires
+    /// admin/owner team role; enforced upstream in soup's axum router.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hidden: Option<bool>,
 }
 
 impl IsEmpty for CrmCompanyFilters {
     fn is_empty(&self) -> bool {
-        let CrmCompanyFilters { company_ids } = self;
-        company_ids.is_empty()
+        let CrmCompanyFilters {
+            company_ids,
+            hidden,
+        } = self;
+        company_ids.is_empty() && hidden.is_none()
     }
 }
 
