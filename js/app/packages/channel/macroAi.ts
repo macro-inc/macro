@@ -1,32 +1,27 @@
+import {
+  MACRO_AGENT_BOT_ID,
+  MACRO_AGENT_NAME,
+} from '@core/constant/macroAgent';
 import type { IUser } from '@core/user/types';
 
-/**
- * Stable identity for the first-party "Macro AI" system bot. Mirrors
- * `bot_id::MACRO_AI_BOT_ID` on the backend. Macro AI is a participant in every
- * channel; mentioning it triggers an AI reply in a thread.
- */
-export const MACRO_AI_BOT_ID = '00000000-0000-0000-0000-00000000a1a1';
-
-/** Handle shown for Macro AI mentions (renders as `@macro`). */
-export const MACRO_AI_HANDLE = 'macro';
-
-/** Display name for Macro AI. */
-export const MACRO_AI_NAME = 'Macro AI';
-
-/** Whether an id refers to the Macro AI bot. */
-export function isMacroAiId(id: string): boolean {
-  return id === MACRO_AI_BOT_ID;
-}
+// Re-export the shared Macro Agent identity under the names used in this package.
+export {
+  MACRO_AGENT_BOT_ID as MACRO_AI_BOT_ID,
+  MACRO_AGENT_NAME as MACRO_AI_NAME,
+  MACRO_AGENT_HANDLE as MACRO_AI_HANDLE,
+  isMacroAgentId as isMacroAiId,
+} from '@core/constant/macroAgent';
 
 /**
- * A synthetic [`IUser`] entry so Macro AI appears in the channel `@`-mention
+ * A synthetic [`IUser`] entry so Macro Agent appears in the channel `@`-mention
  * typeahead. The mention rides the existing user-mention machinery and is
- * re-tagged as a bot mention at send time (see `expandMentions`).
+ * re-tagged as a bot mention at send time (see `expandMentions`). `email` is set
+ * to the display name so the typeahead shows just "Macro Agent".
  */
 export function macroAiMentionUser(): IUser {
   return {
-    id: MACRO_AI_BOT_ID,
-    name: MACRO_AI_NAME,
-    email: MACRO_AI_HANDLE,
+    id: MACRO_AGENT_BOT_ID,
+    name: MACRO_AGENT_NAME,
+    email: MACRO_AGENT_NAME,
   };
 }

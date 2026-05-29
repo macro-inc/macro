@@ -12,6 +12,7 @@ bots = { path = "../bots" }
 channels = { path = "../channels", features = ["inbound", "outbound"] }
 document_cognition_service_client = { path = "../document_cognition_service_client" }
 macro_user_id = { path = "../macro_user_id" }
+models_pagination = { path = "../models_pagination" }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

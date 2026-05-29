@@ -19,8 +19,8 @@ pub const MACRO_AI_BOT_ID: BotId = BotId::from_uuid(MACRO_AI_BOT_UUID);
 /// Stable handle for the "Macro AI" system bot (used for `@` mentions).
 pub const MACRO_AI_HANDLE: &str = "macro";
 
-/// Display name for the "Macro AI" system bot.
-pub const MACRO_AI_NAME: &str = "Macro AI";
+/// Display name for the "Macro Agent" system bot.
+pub const MACRO_AI_NAME: &str = "Macro Agent";
 
 /// A bot id.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

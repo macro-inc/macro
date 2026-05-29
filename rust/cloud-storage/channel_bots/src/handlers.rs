@@ -1,5 +1,6 @@
 //! Bot trigger events and the built-in handlers.
 
+use std::fmt::Write as _;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -10,8 +11,50 @@ use channels::domain::models::{
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use crate::poster::ChannelBotPoster;
+use crate::poster::{ChannelBotPoster, ContextMessage};
 use crate::responder::AgentResponder;
+
+/// How many recent channel messages to include as context.
+const RECENT_CONTEXT_LIMIT: u16 = 10;
+
+/// Human-readable label for a message sender storage id.
+fn sender_label(sender_id: &str) -> String {
+    if let Ok(bot) = bot_id::BotId::parse_storage_str(sender_id) {
+        return if bot == bot_id::MACRO_AI_BOT_ID {
+            bot_id::MACRO_AI_NAME.to_string()
+        } else {
+            "Bot".to_string()
+        };
+    }
+    // User ids look like `macro|<email>`; show the email's local part.
+    sender_id
+        .rsplit('|')
+        .next()
+        .unwrap_or(sender_id)
+        .split('@')
+        .next()
+        .unwrap_or(sender_id)
+        .to_string()
+}
+
+fn append_messages(prompt: &mut String, heading: &str, messages: &[ContextMessage], skip: Uuid) {
+    let mut wrote_heading = false;
+    for message in messages {
+        if message.id == skip || message.content.trim().is_empty() {
+            continue;
+        }
+        if !wrote_heading {
+            let _ = write!(prompt, "\n{heading}\n");
+            wrote_heading = true;
+        }
+        let _ = writeln!(
+            prompt,
+            "{}: {}",
+            sender_label(&message.sender_id),
+            message.content
+        );
+    }
+}
 
 /// The kind of event that triggered a bot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,8 +86,8 @@ pub trait BotHandler: Send + Sync {
     async fn handle(&self, bot: &Bot, event: &BotEvent) -> anyhow::Result<()>;
 }
 
-/// Message Macro AI posts immediately, then replaces with its answer.
-const THINKING_MESSAGE: &str = "_Macro AI is thinking…_";
+/// Message Macro Agent posts immediately, then replaces with its answer.
+const THINKING_MESSAGE: &str = "_Macro Agent is thinking…_";
 const EMPTY_RESPONSE_FALLBACK: &str = "I wasn't able to come up with a response.";
 const ERROR_FALLBACK: &str = "Sorry — I ran into an error while responding.";
 
@@ -62,6 +105,52 @@ impl MacroAiHandler {
     pub fn new(poster: Arc<dyn ChannelBotPoster>, responder: Arc<dyn AgentResponder>) -> Self {
         Self { poster, responder }
     }
+
+    /// Build the prompt: who mentioned the agent, recent channel context, the
+    /// thread it was mentioned in, and the triggering message.
+    async fn build_prompt(&self, event: &BotEvent) -> String {
+        let mentioner = sender_label(event.requesting_user.as_ref());
+        let trigger_id = event.message.id;
+
+        let recent = self
+            .poster
+            .recent_messages(event.channel_id, RECENT_CONTEXT_LIMIT)
+            .await
+            .inspect_err(|err| tracing::warn!(error=?err, "failed to load recent channel context"))
+            .unwrap_or_default();
+
+        // Include the thread's messages when the mention happened inside a thread.
+        let thread = if event.message.thread_id.is_some() {
+            self.poster
+                .thread_messages(event.channel_id, event.reply_thread_id)
+                .await
+                .inspect_err(|err| tracing::warn!(error=?err, "failed to load thread context"))
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+
+        let mut prompt = String::new();
+        let _ = writeln!(prompt, "{mentioner} mentioned you (@macro) in a channel.");
+        append_messages(
+            &mut prompt,
+            "Recent channel messages (oldest to newest):",
+            &recent,
+            trigger_id,
+        );
+        append_messages(
+            &mut prompt,
+            "Messages in the thread you were mentioned in:",
+            &thread,
+            trigger_id,
+        );
+        let _ = write!(
+            prompt,
+            "\n{mentioner} said:\n{}\n\nReply to {mentioner}.",
+            event.message.content.trim()
+        );
+        prompt
+    }
 }
 
 #[async_trait]
@@ -70,7 +159,11 @@ impl BotHandler for MacroAiHandler {
     async fn handle(&self, _bot: &Bot, event: &BotEvent) -> anyhow::Result<()> {
         let actor = Sender::Bot(bot_id::MACRO_AI_BOT_ID);
 
-        // 1. Post the immediate "thinking" message in the thread.
+        // 1. Gather conversational context (before posting, so our own
+        //    "thinking" message is not included).
+        let prompt = self.build_prompt(event).await;
+
+        // 2. Post the immediate "thinking" message in the thread.
         let thinking = self
             .poster
             .post_message(
@@ -87,13 +180,10 @@ impl BotHandler for MacroAiHandler {
             .await?;
         let message_id = Uuid::parse_str(&thinking.id)?;
 
-        // 2. Run the agent loop to produce the reply.
+        // 3. Run the agent loop to produce the reply.
         let reply = match self
             .responder
-            .respond(
-                event.requesting_user.as_ref(),
-                event.message.content.clone(),
-            )
+            .respond(event.requesting_user.as_ref(), prompt)
             .await
         {
             Ok(text) if !text.trim().is_empty() => text,
@@ -104,7 +194,7 @@ impl BotHandler for MacroAiHandler {
             }
         };
 
-        // 3. Replace the "thinking" message with the answer.
+        // 4. Replace the "thinking" message with the answer.
         self.poster
             .patch_message(
                 actor,
