@@ -1,4 +1,5 @@
 import MacroLogo from '@core/component/MacroLogo';
+import { isMobile } from '@core/mobile/isMobile';
 import LogoIcon from '@icon/macro-logo.svg';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import CloseIcon from '@phosphor/x.svg';
@@ -70,21 +71,43 @@ function StartScreen(props: { onStart: () => void; onSkip: () => void }) {
     <div class="flex-1 flex items-center justify-center px-6">
       <div class="max-w-2xl flex flex-col items-center text-center gap-5 onboarding-stagger">
         <LogoIcon class="size-16 text-accent" />
-        <div class="flex flex-col gap-2">
-          <h3 class="text-3xl font-semibold text-ink">Welcome to Macro</h3>
-          <p class="text-base text-ink/60 text-balance">
-            Take a quick tour of Macro’s core features.
-          </p>
-        </div>
-        <div class="w-full max-w-xs flex flex-col gap-2 pt-2">
-          <Button variant="cta" size="lg" onClick={props.onStart}>
-            Play tutorial
-            <ArrowRightIcon />
-          </Button>
-          <Button variant="ghost" size="lg" onClick={props.onSkip}>
-            Skip tutorial
-          </Button>
-        </div>
+        <Show
+          when={!isMobile()}
+          fallback={
+            <>
+              <div class="flex flex-col gap-2">
+                <h3 class="text-3xl font-semibold text-ink">
+                  Tutorial unavailable on mobile
+                </h3>
+                <p class="text-base text-ink/60 text-balance">
+                  Try the tutorial on web for the best interactive experience.
+                </p>
+              </div>
+              <div class="w-full max-w-xs flex flex-col gap-2 pt-2">
+                <Button variant="cta" size="lg" onClick={props.onSkip}>
+                  Continue
+                  <ArrowRightIcon />
+                </Button>
+              </div>
+            </>
+          }
+        >
+          <div class="flex flex-col gap-2">
+            <h3 class="text-3xl font-semibold text-ink">Welcome to Macro</h3>
+            <p class="text-base text-ink/60 text-balance">
+              Take a quick tour of Macro’s core features.
+            </p>
+          </div>
+          <div class="w-full max-w-xs flex flex-col gap-2 pt-2">
+            <Button variant="cta" size="lg" onClick={props.onStart}>
+              Play tutorial
+              <ArrowRightIcon />
+            </Button>
+            <Button variant="ghost" size="lg" onClick={props.onSkip}>
+              Skip tutorial
+            </Button>
+          </div>
+        </Show>
       </div>
     </div>
   );
