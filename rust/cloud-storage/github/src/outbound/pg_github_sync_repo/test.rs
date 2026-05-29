@@ -265,6 +265,41 @@ async fn test_filter_duplicate_tasks_different_key_not_filtered(pool: Pool<Postg
 }
 
 // ---------------------------------------------------------------------------
+// get_installation_sources
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("github_team_task_test_data"))
+)]
+async fn test_get_installation_sources_returns_sources(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    let sources = repo.get_installation_sources("12345").await.unwrap();
+
+    assert_eq!(
+        sources,
+        vec![
+            GithubAppInstallationSource::Team(
+                "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap()
+            ),
+            GithubAppInstallationSource::Team(
+                "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee".parse().unwrap()
+            ),
+        ]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_installation_sources_empty(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    let sources = repo.get_installation_sources("missing").await.unwrap();
+
+    assert!(sources.is_empty());
+}
+
+// ---------------------------------------------------------------------------
 // get_macro_id_by_github_user_id
 // ---------------------------------------------------------------------------
 

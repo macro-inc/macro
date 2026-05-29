@@ -4,7 +4,7 @@ use std::future::Future;
 
 use crate::domain::models::{
     GithubAppInstallationSource, GithubError, GithubInstallationAccessToken, GithubKey,
-    MacroTaskId, TeamTaskReference, ValidatedGithubWebhookEvent,
+    GithubPullRequestDetails, MacroTaskId, TeamTaskReference, ValidatedGithubWebhookEvent,
 };
 
 /// Repository for accessing github sync data from the database.
@@ -61,6 +61,12 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
         macro_id: &str,
     ) -> impl Future<Output = Result<Vec<uuid::Uuid>, Self::Err>> + Send;
 
+    /// Returns the Macro sources associated with a GitHub App installation.
+    fn get_installation_sources(
+        &self,
+        installation_id: &str,
+    ) -> impl Future<Output = Result<Vec<GithubAppInstallationSource>, Self::Err>> + Send;
+
     /// Upserts associations between a GitHub App installation and its sources.
     /// Ignores conflicts (idempotent).
     fn upsert_installation_sources(
@@ -91,6 +97,15 @@ pub trait GithubSyncClient: Send + Sync + 'static {
         pull_number: u64,
         body: &str,
     ) -> impl Future<Output = Result<(), GithubError>> + Send;
+
+    /// Fetches enriched pull request details using a GitHub App installation token.
+    fn get_pull_request_details(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> impl Future<Output = Result<GithubPullRequestDetails, GithubError>> + Send;
 }
 
 /// Service interface for github sync operations (webhooks and sync app).

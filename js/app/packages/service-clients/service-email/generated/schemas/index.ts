@@ -174,6 +174,8 @@ export * from './getThreadMessagesHandlerParams';
 export * from './getThreadParams';
 export * from './getThreadResponse';
 export * from './initResponse';
+export * from './initResponseBackfillJobId';
+export * from './initUserParams';
 export * from './label';
 export * from './labelId';
 export * from './labelInfo';

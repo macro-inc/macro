@@ -44,9 +44,15 @@ const SearchableMultiSelectItem = (itemProps: {
     item={itemProps.item}
     class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left text-xs data-highlighted:bg-ink/5 group cursor-default"
   >
-    <span class="size-4 flex items-center justify-center shrink-0 rounded-xs border border-edge group-data-selected:bg-accent group-data-selected:border-accent">
+    <span
+      class={cn(
+        'size-3.5 flex items-center justify-center shrink-0 rounded-sm border text-surface',
+        'border-transparent group-hover:not-hover:border-edge-muted group-data-highlighted:not-hover:border-edge-muted hover:border-accent',
+        'group-data-selected:bg-accent group-data-selected:border-accent'
+      )}
+    >
       <Combobox.ItemIndicator>
-        <CheckIcon class="size-2.5 text-surface" />
+        <CheckIcon class="size-2.5" />
       </Combobox.ItemIndicator>
     </span>
     <Show when={itemProps.item.rawValue.icon}>

@@ -26,7 +26,6 @@ from the cloud-storage folder.
 
 **Communication Services:**
 
-- `comms_service`: Internal communication handling
 - `email_service`: Email processing and management
 - `notification_service`: User notifications
 

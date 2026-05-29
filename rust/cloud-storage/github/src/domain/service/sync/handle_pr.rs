@@ -5,11 +5,14 @@ use crate::domain::{
     ports::{GithubSyncClient, GithubSyncRepo},
 };
 use documents::domain::ports::DocumentService;
+use foreign_entity::domain::ports::ForeignEntityService;
 use std::collections::HashSet;
 
 use super::GithubSyncServiceImpl;
 
-impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServiceImpl<D, R, C> {
+impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntityService>
+    GithubSyncServiceImpl<D, R, C, F>
+{
     /// Handle `pull_request` events with action `opened` or `reopened`.
     #[tracing::instrument(skip(self, event), err)]
     pub(crate) async fn handle_pr_open(

@@ -7,6 +7,7 @@
 import type { ApiChannelContextMessageDeletedAt } from './apiChannelContextMessageDeletedAt';
 import type { ApiChannelContextMessageEditedAt } from './apiChannelContextMessageEditedAt';
 import type { ApiChannelContextMessageThreadId } from './apiChannelContextMessageThreadId';
+import type { ApiMessageSender } from './apiMessageSender';
 
 /**
  * A channel message returned by the message-context endpoint.
@@ -24,6 +25,8 @@ export interface ApiChannelContextMessage {
   edited_at?: ApiChannelContextMessageEditedAt;
   /** Message id. */
   id: string;
+  /** Structured sender identity. */
+  sender: ApiMessageSender;
   /** Sender user id. */
   sender_id: string;
   /** Parent thread id for replies. */

@@ -22,7 +22,6 @@ import type {
   SearchData,
   WithSearch,
 } from '@entity';
-import type { ChannelType } from '@service-comms/generated/models';
 import type {
   CallRecordSearchResult,
   ChannelSearchResult,
@@ -36,6 +35,7 @@ import type {
   SoupDocument,
   SoupPage,
 } from '@service-storage/generated/schemas';
+import type { ChannelType } from '@service-storage/generated/schemas/channelType';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
 
@@ -46,6 +46,11 @@ type InnerSearchResult =
   | ChannelSearchResult
   | ProjectSearchResult
   | CallRecordSearchResult;
+
+type DisplayableSoupItem = Exclude<
+  SoupPage['items'][number],
+  { tag: 'foreignEntity' } | { tag: 'crmCompany' }
+>;
 
 type TypedInnerSearchResult =
   | { results: InnerSearchResult[]; type?: undefined }
@@ -458,10 +463,12 @@ export const mapSoupPageToEntityList: (
 )[] = (data, options) => {
   return data.items
     .filter(
-      (item) =>
-        item.tag !== 'document' ||
-        !options.instructionsIdQuery.isSuccess ||
-        item.data.id !== options.instructionsIdQuery.data
+      (item): item is DisplayableSoupItem =>
+        item.tag !== 'foreignEntity' &&
+        item.tag !== 'crmCompany' &&
+        (item.tag !== 'document' ||
+          !options.instructionsIdQuery.isSuccess ||
+          item.data.id !== options.instructionsIdQuery.data)
     )
     .map(
       (

@@ -29,8 +29,14 @@ mod tests;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct OAuthCbParams {
-    code: String,
+    code: Option<String>,
     state: Option<JsonEncoded<SsoState>>,
+    #[serde(default)]
+    error: Option<String>,
+    #[serde(default)]
+    error_description: Option<String>,
+    #[serde(default)]
+    error_reason: Option<String>,
 }
 
 /// Handles oauth redirect
@@ -52,6 +58,25 @@ pub async fn handler(
     cookies: Cookies,
     extract::Query(params): extract::Query<OAuthCbParams>,
 ) -> Result<Response, Response> {
+    let code = match params.code {
+        Some(c) => c,
+        None => {
+            tracing::warn!(
+                error = ?params.error,
+                error_reason = ?params.error_reason,
+                error_description = ?params.error_description,
+                "oauth redirect received without code",
+            );
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "Sign-in failed. Please try again or contact support.".into(),
+                }),
+            )
+                .into_response());
+        }
+    };
+
     // Perform the oauth code grant
     // NOTE: rust is so blazingly fast (super crazy, I know) that we actually need to sleep here temporarily
     // to ensure we give time for the oauth authorization code to be setup in the backend.
@@ -60,7 +85,7 @@ pub async fn handler(
 
     let (access_token, refresh_token) = match ctx
         .auth_client
-        .complete_authorization_code_grant(&params.code)
+        .complete_authorization_code_grant(&code)
         .await
     {
         Ok(tokens) => tokens,

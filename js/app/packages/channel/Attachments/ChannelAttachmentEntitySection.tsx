@@ -6,7 +6,7 @@ import {
   useChannelDocumentAttachmentsQuery,
 } from '@queries/channel/channel-attachments';
 import { useSoupItemsQuery } from '@queries/soup/items';
-import type { ApiChannelAttachment } from '@service-comms/client';
+import type { ApiChannelAttachment } from '@service-storage/generated/schemas/apiChannelAttachment';
 import { createMemo } from 'solid-js';
 import {
   AttachmentEntityList,

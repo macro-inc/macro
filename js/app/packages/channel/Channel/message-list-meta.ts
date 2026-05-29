@@ -1,4 +1,4 @@
-import type { ApiChannelMessage } from '@service-comms/client';
+import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import type { ChannelMessageListMeta } from '../Message/list-meta';
 import { shouldGroupWithPreviousMessage } from './message-grouping-meta';
 

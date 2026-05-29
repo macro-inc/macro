@@ -111,12 +111,15 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use comms::domain::service::ChannelServiceImpl;
     use comms::outbound::postgres::comms_repo::PgCommsRepo;
     use comms::outbound::postgres::user_repo::PgUserRepo;
-    use comms_service_client::CommsServiceClient;
     use document_storage_service_client::DocumentStorageServiceClient;
     use email::domain::ports::ReadonlyEmailPreviewAdapter;
     use email::domain::service::EmailServiceImpl;
     use email::outbound::EmailPgRepo;
     use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
+    use foreign_entity::{
+        domain::service::ForeignEntityServiceImpl,
+        outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
+    };
     use frecency::domain::services::FrecencyQueryServiceImpl;
     use frecency::outbound::postgres::FrecencyPgStorage;
     use lexical_client::LexicalClient;
@@ -141,7 +144,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         "dummy_auth_key".into(),
         "http://localhost".into(),
     ));
-    let comms_service_client = Arc::new(CommsServiceClient::new("http://localhost".into()));
     let search_service_client =
         SearchServiceClient::new("dummy_auth_key".into(), "http://localhost".into());
     let sync_service_client = Arc::new(SyncServiceClient::new(
@@ -177,12 +179,16 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         frecency_storage,
     );
     let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
+    let foreign_entity_service =
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone()));
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(pool.clone())),
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
         call::domain::ports::NoOpCallRecordQueryService,
+        crm::domain::service::NoOpCrmService,
+        foreign_entity_service,
     ));
 
     let ingress_queue = SqsQueue::new(
@@ -229,20 +235,24 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         presigned_url_expiry_seconds: 3600,
         browser_cache_expiry_seconds: 86400,
     };
+    let entity_access_service = Arc::new(
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(pool.clone()),
+        ),
+    );
+    let properties_service =
+        ai_tools::build_properties_service(pool.clone(), entity_access_service.clone());
+    let task_properties_service =
+        ai_tools::build_task_properties_adapter(pool.clone(), properties_service.clone());
     let document_service = documents::domain::service::DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
         sync_service_client.as_ref().clone(),
         s3_upload_adapter,
-        ai_tools::NoOpTaskProperties,
+        task_properties_service,
         ai_tools::NoOpConnectionService,
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(pool.clone()),
-        ),
-    );
-    let entity_access_service = Arc::new(
-        entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
     let test_lexical_client = LexicalClient::new("test".into(), "http://nofileshere".into());
@@ -256,16 +266,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let search_service_client = Arc::new(search_service_client);
 
     // Build properties tool context
-    let properties_service = properties::PropertiesServiceImpl::new(
-        properties::PropertiesPgRepo::new(pool.clone()),
-        Some(properties::PermissionServiceImpl::new(
-            pool.clone(),
-            entity_access_service.clone(),
-        )),
-        Some(ai_tools::NoOpNotificationService),
-    );
-    let properties_tool_context =
-        properties::inbound::toolset::PropertiesToolContext::new(properties_service);
+    let properties_tool_context = ai_tools::build_properties_tool_context(properties_service);
 
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
         Arc::new(email::domain::service::EmailServiceImpl::new(
@@ -343,7 +344,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         db: pool.clone(),
         sqs_client: Arc::new(sqs_client),
         document_storage_client,
-        comms_service_client,
         search_service_client,
         email_service_client_external,
         jwt_args: JwtValidationArgs::new_testing(),

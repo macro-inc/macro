@@ -13,7 +13,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 struct QueryParams {
-    link_id: Uuid,
+    link_ids: Vec<Uuid>,
     sort_method_str: String,
     query_limit: i64,
     cursor_timestamp: Option<DateTime<Utc>>,
@@ -23,8 +23,8 @@ struct QueryParams {
     user_id: String,
     resolved: ResolvedFilters,
     /// When `Some(team_id)`, the "Owned" candidate source expands from
-    /// `t.link_id = $link_id` to `t.link_id IN (links of every member of
-    /// $team_id)`. Set only after CRM scope has been validated upstream.
+    /// `t.link_id = ANY($link_ids)` to `t.link_id IN (links of every member
+    /// of $team_id)`. Set only after CRM scope has been validated upstream.
     team_id: Option<Uuid>,
 }
 
@@ -117,8 +117,9 @@ fn push_thread_candidate_select(
         ThreadCandidateSource::Owned => match params.team_id {
             // Normal per-mailbox query.
             None => {
-                builder.push("t.link_id = ");
-                builder.push_bind(params.link_id);
+                builder.push("t.link_id = ANY(");
+                builder.push_bind(params.link_ids.clone());
+                builder.push(")");
             }
             // CRM-scoped query: expand to every email_link owned by any
             // member of the team. The receipt has already been validated
@@ -401,7 +402,7 @@ pub(super) fn debug_build_query_sql_with_resolved(
         view,
         email_filter,
         QueryParams {
-            link_id: Uuid::nil(),
+            link_ids: vec![Uuid::nil()],
             sort_method_str: SimpleSortMethod::UpdatedAt.to_string(),
             query_limit: 50,
             cursor_timestamp: None,
@@ -460,7 +461,7 @@ fn extract_shared_filter(ast: &Expr<EmailLiteral>) -> SharedEmailFilter {
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn dynamic_email_thread_cursor(
     pool: &PgPool,
-    link_id: &Uuid,
+    link_ids: &[Uuid],
     limit: u32,
     view: &PreviewView,
     query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
@@ -487,7 +488,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
     //
     // When team_id is set, resolution spans every team-member's link so the
     // resulting contact_id / TRASH label_id sets cover all team mailboxes.
-    let resolved = resolve_filters(pool, *link_id, team_id, email_filter).await?;
+    let resolved = resolve_filters(pool, link_ids, team_id, email_filter).await?;
     if can_short_circuit(email_filter, &resolved) {
         return Ok(Vec::new());
     }
@@ -496,7 +497,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
         view,
         email_filter,
         QueryParams {
-            link_id: *link_id,
+            link_ids: link_ids.to_vec(),
             sort_method_str,
             query_limit,
             cursor_timestamp: cursor_timestamp.copied(),

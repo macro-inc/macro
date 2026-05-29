@@ -29,6 +29,7 @@ import type {
   GetThreadParams,
   GetThreadResponse,
   InitResponse,
+  InitUserParams,
   ListBlockedResponse,
   ListContactsResponse,
   ListEmailFiltersResponse,
@@ -1458,14 +1459,27 @@ export type initUserResponseError = (
 
 export type initUserResponse = initUserResponseSuccess | initUserResponseError;
 
-export const getInitUserUrl = () => {
-  return `/email/init`;
+export const getInitUserUrl = (params?: InitUserParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/init?${stringifiedParams}`
+    : `/email/init`;
 };
 
 export const initUser = async (
+  params?: InitUserParams,
   options?: RequestInit
 ): Promise<initUserResponse> => {
-  const res = await fetch(getInitUserUrl(), {
+  const res = await fetch(getInitUserUrl(params), {
     ...options,
     method: 'POST',
   });

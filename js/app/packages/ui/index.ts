@@ -1,4 +1,5 @@
 /* components */
+export { Checkbox, SingleSelectCheck } from './components/Checkbox';
 export { SegmentedControl } from './components/SegmentedControl';
 export { TabbedControl } from './components/TabbedControl';
 export { Avatar, AvatarGroup } from './components/Avatar';
@@ -16,14 +17,19 @@ export { Hotkey } from './components/Hotkey';
 export { Scroll } from './components/Scroll';
 export { Panel  } from './components/Panel';
 export { Layer } from './components/Layer';
+export { EmptyStatePanel } from './components/EmptyStatePanel';
+export { FilteredHiddenBanner } from './components/FilteredHiddenBanner';
 
 /* types */
 export type { AvatarSize, AvatarProps, AvatarGroupSize, AvatarGroupProps } from './components/Avatar';
 export type { ChatInputRows, ChatInputProps } from './components/ChatInput';
 export type { ToggleSwitchProps } from './components/ToggleSwitch';
 export type { SendButtonProps } from './components/SendButton';
+export type { CheckboxProps } from './components/Checkbox';
 export type { ButtonProps } from './components/Button';
 export type { DialogProps } from './components/Dialog';
+export type { EmptyStatePanelProps, EmptyStateAction } from './components/EmptyStatePanel';
+export type { FilteredHiddenBannerProps } from './components/FilteredHiddenBanner';
 
 /* utils */
 export { cn } from './utils/classname';

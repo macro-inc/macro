@@ -22,11 +22,11 @@ import { TOKENS } from '@core/hotkey/tokens';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import CircleDashedIcon from '@phosphor/circle-dashed.svg';
-import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
+import FilterIcon from '@phosphor/funnel-simple.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useContacts } from '@queries/contacts/contacts';
-import { cn, Dropdown, Tooltip } from '@ui';
+import { cn, Dropdown, SingleSelectCheck, Tooltip } from '@ui';
 import {
   type Accessor,
   batch,
@@ -51,15 +51,17 @@ import {
 } from './search-filter-controls';
 import { SearchableMultiSelectInline } from './searchable-multi-select';
 
-const TypeIndicator = (props: { active: boolean }) => (
+export const TypeIndicator = (props: { active: boolean }) => (
   <span
     class={cn(
-      'size-4 flex items-center justify-center shrink-0 rounded-full border',
-      props.active ? 'bg-accent border-accent' : 'border-edge'
+      'size-3.5 flex items-center justify-center shrink-0 rounded-sm border text-surface',
+      props.active
+        ? 'bg-accent border-accent'
+        : 'border-transparent group-hover:not-hover:border-edge-muted group-data-highlighted:not-hover:border-edge-muted hover:border-accent'
     )}
   >
     <Show when={props.active}>
-      <CheckIcon class="size-2.5 text-surface" />
+      <CheckIcon class="size-2.5" />
     </Show>
   </span>
 );
@@ -476,15 +478,8 @@ function SingleValueSubmenu<T>(props: {
                   onSelect={() => props.onSelect(option.value)}
                   closeOnSelect
                 >
-                  <TypeIndicator active={active()} />
-                  <span
-                    class={cn(
-                      'flex-1 truncate',
-                      active() ? 'text-ink' : 'text-ink-muted'
-                    )}
-                  >
-                    {option.label}
-                  </span>
+                  <span class="flex-1 truncate">{option.label}</span>
+                  <SingleSelectCheck active={active()} />
                 </Dropdown.Item>
               );
             }}
@@ -600,7 +595,6 @@ const SearchIndexRowLabel = (props: {
   active: Accessor<boolean>;
 }) => (
   <>
-    <TypeIndicator active={props.active()} />
     <Show when={props.option.icon}>
       {(icon) => (
         <span class="size-4 flex items-center justify-center shrink-0">
@@ -608,14 +602,8 @@ const SearchIndexRowLabel = (props: {
         </span>
       )}
     </Show>
-    <span
-      class={cn(
-        'flex-1 truncate',
-        props.active() ? 'text-ink' : 'text-ink-muted'
-      )}
-    >
-      {props.option.label}
-    </span>
+    <span class="flex-1 truncate">{props.option.label}</span>
+    <SingleSelectCheck active={props.active()} />
   </>
 );
 
@@ -883,7 +871,7 @@ export const UnifiedFilterDropdown = (
             <Match when={true}>
               <Tooltip label="Filter" hotkey={TOKENS.soup.filter}>
                 <Dropdown.Trigger depth={2} class="bg-surface">
-                  <SlidersHorizontalIcon />
+                  <FilterIcon />
                   <span>Filter</span>
                 </Dropdown.Trigger>
               </Tooltip>
@@ -917,18 +905,7 @@ export const UnifiedFilterDropdown = (
                                     onSelect={() => toggleFilter(option.id)}
                                     closeOnSelect={!category.multiple}
                                   >
-                                    <span
-                                      class={cn(
-                                        'size-4 flex items-center justify-center shrink-0 rounded border',
-                                        active()
-                                          ? 'bg-accent border-accent'
-                                          : 'border-edge'
-                                      )}
-                                    >
-                                      <Show when={active()}>
-                                        <CheckIcon class="size-2.5 text-surface" />
-                                      </Show>
-                                    </span>
+                                    <TypeIndicator active={active()} />
 
                                     <Show when={option.icon}>
                                       {(icon) => (
@@ -1012,15 +989,8 @@ export const UnifiedFilterDropdown = (
                       onSelect={() => handleIndexChange('all')}
                       closeOnSelect
                     >
-                      <TypeIndicator active={!hasActiveIndex()} />
-                      <span
-                        class={cn(
-                          'flex-1 truncate',
-                          !hasActiveIndex() ? 'text-ink' : 'text-ink-muted'
-                        )}
-                      >
-                        All
-                      </span>
+                      <span class="flex-1 truncate">All</span>
+                      <SingleSelectCheck active={!hasActiveIndex()} />
                     </Dropdown.Item>
                   </Show>
                 </>
@@ -1035,16 +1005,7 @@ export const UnifiedFilterDropdown = (
                       onSelect={() => toggleFilter(option.id)}
                       closeOnSelect={!categories()[0]!.multiple}
                     >
-                      <span
-                        class={cn(
-                          'size-4 flex items-center justify-center shrink-0 rounded border',
-                          active() ? 'bg-accent border-accent' : 'border-edge'
-                        )}
-                      >
-                        <Show when={active()}>
-                          <CheckIcon class="size-2.5 text-surface" />
-                        </Show>
-                      </span>
+                      <TypeIndicator active={active()} />
 
                       <Show when={option.icon}>
                         {(icon) => (

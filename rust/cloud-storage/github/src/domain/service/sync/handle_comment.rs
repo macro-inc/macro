@@ -5,10 +5,13 @@ use crate::domain::{
     ports::{GithubSyncClient, GithubSyncRepo},
 };
 use documents::domain::ports::DocumentService;
+use foreign_entity::domain::ports::ForeignEntityService;
 
 use super::GithubSyncServiceImpl;
 
-impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServiceImpl<D, R, C> {
+impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntityService>
+    GithubSyncServiceImpl<D, R, C, F>
+{
     /// Handle `issue_comment`, `pull_request_review`, and
     /// `pull_request_review_comment` events.
     ///

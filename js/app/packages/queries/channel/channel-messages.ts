@@ -17,6 +17,10 @@ import { createStore, reconcile } from 'solid-js/store';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
 import {
+  normalizeChannelMessageSender,
+  normalizeChannelMessagesPageSenders,
+} from './message-sender';
+import {
   captureThreadPreviewReplySnapshot,
   insertReplyIntoThreadPreview,
   removeReplyFromThreadPreview,
@@ -68,7 +72,7 @@ export function channelMessagesQueryOptions(
     }: {
       pageParam: ChannelMessagesPageParam | null;
     }) => {
-      return await throwOnErr(
+      const page = await throwOnErr(
         async () =>
           await storageServiceClient.getChannelMessages({
             channel_id: channelId,
@@ -78,6 +82,7 @@ export function channelMessagesQueryOptions(
             load_around_message_id: !pageParam ? loadAroundMessageId : null,
           })
       );
+      return normalizeChannelMessagesPageSenders(page);
     },
     initialPageParam: null as ChannelMessagesPageParam | null,
     getNextPageParam: (lastPage: ChannelMessagesPage) =>
@@ -130,7 +135,7 @@ export function useChannelMessagesByIdsQuery(
             filters: { message_ids: resolvedMessageIds },
           })
         );
-        return page.items;
+        return page.items.map(normalizeChannelMessageSender);
       },
       enabled: resolvedMessageIds.length > 0,
       staleTime: Infinity,

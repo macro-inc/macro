@@ -7,7 +7,10 @@ import { getDestinationFromOptions } from '@core/util/destination';
 import PhoneCallIcon from '@icon/wide-call.svg';
 import PlusCircleIcon from '@phosphor/plus.svg';
 import XIcon from '@phosphor/x.svg';
-import { commsServiceClient } from '@service-comms/client';
+import {
+  useGetOrCreateDirectMessageMutation,
+  useGetOrCreatePrivateChannelMutation,
+} from '@queries/channel/get-or-create-dm';
 import { Button, Dialog, Surface } from '@ui';
 import { createSignal } from 'solid-js';
 
@@ -20,6 +23,9 @@ export function NewCallButton() {
   const [triedToSubmit, setTriedToSubmit] = createSignal(false);
   const [isSubmitting, setIsSubmitting] = createSignal(false);
   const { replaceSplit } = useSplitLayout();
+  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
+  const getOrCreatePrivateChannelMutation =
+    useGetOrCreatePrivateChannelMutation();
 
   function reset() {
     setSelectedOptions([]);
@@ -43,22 +49,21 @@ export function NewCallButton() {
       if (destination.type === 'channel') {
         channelId = destination.id;
       } else {
-        const result =
-          destination.users.length === 1
-            ? await commsServiceClient.getOrCreateDirectMessage({
-                recipient_id: destination.users[0],
-              })
-            : await commsServiceClient.getOrCreatePrivateChannel({
-                recipients: destination.users,
-              });
-
-        if (result.isErr()) {
+        try {
+          const result =
+            destination.users.length === 1
+              ? await getOrCreateDmMutation.mutateAsync({
+                  recipient_id: destination.users[0],
+                })
+              : await getOrCreatePrivateChannelMutation.mutateAsync({
+                  recipients: destination.users,
+                });
+          channelId = result.channel_id;
+        } catch {
           toast.failure('Failed to create channel for call');
           setIsSubmitting(false);
           return;
         }
-
-        channelId = result.value.channel_id;
       }
 
       setIsOpen(false);

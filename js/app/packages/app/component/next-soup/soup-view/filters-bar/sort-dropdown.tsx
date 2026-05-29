@@ -3,9 +3,8 @@ import type {
   SystemSortOption,
 } from '@app/component/next-soup/soup-view/sort-options';
 import { TOKENS } from '@core/hotkey/tokens';
-import CheckIcon from '@phosphor/check.svg';
-import SortIcon from '@phosphor-icons/core/regular/funnel-simple.svg?component-solid';
-import { Dropdown, Tooltip } from '@ui';
+import SortIcon from '@phosphor/sort-ascending.svg';
+import { Dropdown, SingleSelectCheck, Tooltip } from '@ui';
 import { type Component, For, Show } from 'solid-js';
 
 interface SortDropdownProps {
@@ -48,20 +47,8 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
                     </span>
                   )}
                 </Show>
-                <span
-                  class="flex-1 truncate"
-                  classList={{
-                    'text-ink font-medium': props.value() === option.value,
-                    'text-ink-muted': props.value() !== option.value,
-                  }}
-                >
-                  {option.label}
-                </span>
-                <span class="size-3.5 flex items-center justify-center shrink-0">
-                  <Show when={props.value() === option.value}>
-                    <CheckIcon class="size-3 text-accent" />
-                  </Show>
-                </span>
+                <span class="flex-1 truncate">{option.label}</span>
+                <SingleSelectCheck active={props.value() === option.value} />
               </Dropdown.Item>
             )}
           </For>

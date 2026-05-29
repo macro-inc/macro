@@ -30,6 +30,7 @@ aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["macros", "multipart", "tower-log"] }
 axum-extra = { workspace = true }
 base64 = { workspace = true }
+bots = { path = "../bots" }
 bytes = { workspace = true }
 bzip2 = { workspace = true, default-features = false, features = [
   "libbz2-rs-sys",
@@ -40,9 +41,8 @@ call = { path = "../call" }
 channels = { path = "../channels", features = ["inbound", "outbound"] }
 chrono = { workspace = true }
 cloudfront_sign = { workspace = true }
-comms = { path = "../comms", features = ["outbound"] }
+comms = { path = "../comms", features = ["inbound", "outbound"] }
 comms_db_client = { path = "../comms_db_client" }
-comms_service = { path = "../comms_service" }
 contacts = { path = "../contacts" }
 connection = { path = "../connection", default-features = false, features = [
   "outbound",
@@ -56,6 +56,7 @@ dynamodb_client = { path = "../dynamodb_client" }
 email = { path = "../email", features = ["outbound", "ports"] }
 entity_access = { path = "../entity_access", features = ["inbound", "schema"] }
 entity_access_management = { path = "../entity_access_management" }
+foreign_entity = { path = "../foreign_entity", features = ["inbound"] }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
 github = { path = "../github", default-features = false, features = [

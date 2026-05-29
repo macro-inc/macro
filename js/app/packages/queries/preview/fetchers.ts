@@ -1,17 +1,17 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
 
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { commsServiceClient } from '@service-comms/client';
 import { emailClient } from '@service-email/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { formatDocumentName } from '@service-storage/util/filename';
+import { normalizeMessageSender } from '../channel/message-sender';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
 
 async function fetchChannelPreviews(
   channelIds: string[]
 ): Promise<PreviewItem[]> {
-  const result = await commsServiceClient.getBatchChannelPreviews({
+  const result = await storageServiceClient.getBatchChannelPreviews({
     channel_ids: channelIds,
   });
 
@@ -70,7 +70,7 @@ export async function fetchMessageContext(
     return null;
   }
 
-  return message;
+  return normalizeMessageSender(message);
 }
 
 async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {

@@ -67,14 +67,15 @@ where
 
         let parsed_type = parse_entity_type(&entity_type)?;
 
-        let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
-            parts
-                .extract()
-                .await
-                .map_err(|_| ExtractorError::Internal)?
-        } else {
-            None
-        };
+        let internal_user: Option<Extension<InternalUser>> =
+            if macro_user_id.is_none() || parsed_type == EntityType::ForeignEntity {
+                parts
+                    .extract()
+                    .await
+                    .map_err(|_| ExtractorError::Internal)?
+            } else {
+                None
+            };
 
         if internal_user.is_some() {
             return Ok(Self {
@@ -85,7 +86,7 @@ where
                     },
                     auth: EntityAccessAuth::Internal,
                     entity_permission: EntityPermission::AccessLevel {
-                        access_level: AccessLevel::Owner,
+                        access_level: internal_access_level(parsed_type),
                     },
                     _marker: PhantomData,
                 },
@@ -128,6 +129,13 @@ where
             },
             _marker: PhantomData,
         })
+    }
+}
+
+fn internal_access_level(entity_type: EntityType) -> AccessLevel {
+    match entity_type {
+        EntityType::ForeignEntity => AccessLevel::View,
+        _ => AccessLevel::Owner,
     }
 }
 

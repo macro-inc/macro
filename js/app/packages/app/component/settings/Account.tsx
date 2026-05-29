@@ -16,6 +16,7 @@ import {
   DEV_MODE_ENV,
   ENABLE_AUTO_UPDATE_UI,
   ENABLE_EMAIL,
+  ENABLE_MULTI_INBOX,
   ENABLE_PROFILE_PICTURES,
   ENABLE_NEW_PRICING_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -45,10 +46,9 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import PaywallComponent from '../paywall/PaywallComponent';
 import PaywallTeamMemberView from '../paywall/PaywallTeamMemberView';
 import PaywallTeamOwnerView from '../paywall/PaywallTeamOwnerView';
-import {
-    useEmailLinks,
-  useEmailLinksStatus,
-} from '@core/email-link';
+import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
+import { useInitGmailLink } from '@queries/auth';
 import {
   type SupportedNotificationSettings,
   useNotificationSettings,
@@ -150,6 +150,17 @@ export function Account() {
   >(undefined);
 
   const emailActive = useEmailLinksStatus();
+
+  const initGmailLink = useInitGmailLink();
+  const handleAddInbox = async () => {
+    const callbackUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}inbox-link-callback`;
+    const result = await initGmailLink.mutateAsync(callbackUrl);
+    if (result.isOk()) {
+      window.location.href = result.value.authorization_url;
+    } else {
+      toast.failure('Failed to start Gmail link flow');
+    }
+  };
 
   const [githubLinkExists, { refetch: refetchGithubLink }] = createResource(async () => {
     const response = await authServiceClient.checkLinkExists({ idp_name: 'github' });
@@ -333,14 +344,26 @@ export function Account() {
                   <Show
                     when={!emailActive()}
                     fallback={
-                      <Button
-                        variant="base"
-                        size="sm"
-                        depth={3}
-                        onClick={() => setShowEmailModal(true)}
-                      >
-                        Disable
-                      </Button>
+                      <div class="flex items-center gap-2">
+                        <Show when={ENABLE_MULTI_INBOX}>
+                          <Button
+                            variant="base"
+                            size="sm"
+                            depth={3}
+                            onClick={handleAddInbox}
+                          >
+                            Add Inbox
+                          </Button>
+                        </Show>
+                        <Button
+                          variant="base"
+                          size="sm"
+                          depth={3}
+                          onClick={() => setShowEmailModal(true)}
+                        >
+                          Disable
+                        </Button>
+                      </div>
                     }
                   >
                     <Show when={!showEnableEmailModal()}>
@@ -655,17 +678,19 @@ function NotificationNotSupported() {
 
 function bundleUpdateAction(
   status: BundleUpdateStatus,
-  cancelWifiWait: () => void,
 ): { label: string; action: () => void } | null {
+  const grantBundleUpdate = () =>
+    invoke('grant_bundle_update', { approved: true }).catch(console.error);
+
   switch (status.status) {
     case 'Idle':
       return { label: 'Check for Update', action: () => invoke('check_for_update') };
     case 'Error':
       return { label: 'Retry', action: () => invoke('check_for_update') };
     case 'UpdateFound':
-      return { label: 'Download', action: () => invoke('grant_bundle_update', { approved: true }).catch(console.error) };
+      return { label: 'Download', action: grantBundleUpdate };
     case 'WaitingForWifi':
-      return { label: 'Download anyway', action: cancelWifiWait };
+      return { label: 'Download anyway', action: grantBundleUpdate };
     case 'Completed':
       return { label: 'Update', action: () => invoke('perform_update') };
     default:
@@ -679,7 +704,7 @@ function BundleUpdateRow() {
     <Show when={tauri}>
       {(ctx) => {
         const status = () => ctx().bundleUpdateStatus();
-        const action = () => bundleUpdateAction(status(), ctx().cancelWifiWait);
+        const action = () => bundleUpdateAction(status());
         return (
           <Row label="App Update">
             <div class="flex items-center gap-3">

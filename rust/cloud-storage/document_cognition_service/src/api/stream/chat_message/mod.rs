@@ -179,10 +179,12 @@ async fn send_chat_message_inner(
     // Determine chat_id - use provided or we'll create a new chat
     let requested_chat_id = request.chat_id.clone().unwrap_or_default();
 
+    let model = model_access.model();
+
     // Try to get the chat first - if it doesn't exist or no chat_id provided, create it
     let (chat, actual_chat_id) = if requested_chat_id.is_empty() {
         // No chat_id provided - create a new chat
-        create_new_chat(&ctx, &user_id, request.model, &stream_id).await?
+        create_new_chat(&ctx, &user_id, model, &stream_id).await?
     } else {
         match get_chat(&ctx, &requested_chat_id, user_id.0.as_ref()).await {
             Ok(chat) => {
@@ -221,19 +223,17 @@ async fn send_chat_message_inner(
                     requested_chat_id = %requested_chat_id,
                     "Chat not found, creating new chat"
                 );
-                create_new_chat(&ctx, &user_id, request.model, &stream_id).await?
+                create_new_chat(&ctx, &user_id, model, &stream_id).await?
             }
         }
     };
-
-    let model = model_access.model();
 
     // Convert HTTP request to internal payload for existing functions
     let payload = SendChatMessagePayload {
         stream_id: stream_id.clone(),
         content: request.content.clone(),
         chat_id: actual_chat_id.clone(),
-        model: request.model,
+        model,
         additional_instructions: request.additional_instructions.clone(),
         attachments: request.attachments.clone(),
         toolset: request.toolset.clone(),

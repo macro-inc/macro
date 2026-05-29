@@ -1,6 +1,7 @@
 use github::domain::models::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
-    EnrichedGithubPullRequest, GithubPullRequestRef, GithubPullRequestStatus,
+    EnrichedGithubPullRequest, GithubPullRequestCheckRun, GithubPullRequestComment,
+    GithubPullRequestRef, GithubPullRequestStatus,
 };
 use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
 use teams::domain::model::{
@@ -181,6 +182,8 @@ use model::user::{
                         EnrichGithubPullRequestsProxyRequest,
                         EnrichGithubPullRequestsResponse,
                         EnrichedGithubPullRequest,
+                        GithubPullRequestCheckRun,
+                        GithubPullRequestComment,
                         GithubPullRequestRef,
                         GithubPullRequestStatus,
 
@@ -260,6 +263,8 @@ mod tests {
             "EnrichGithubPullRequestsProxyRequest",
             "EnrichGithubPullRequestsResponse",
             "EnrichedGithubPullRequest",
+            "GithubPullRequestCheckRun",
+            "GithubPullRequestComment",
             "GithubPullRequestRef",
             "GithubPullRequestStatus",
         ] {
@@ -272,5 +277,9 @@ mod tests {
         let request_properties = &schemas["EnrichGithubPullRequestsProxyRequest"]["properties"];
         assert!(request_properties.get("pullRequests").is_some());
         assert!(request_properties.get("macroUserId").is_none());
+
+        let response_properties = &schemas["EnrichedGithubPullRequest"]["properties"];
+        assert!(response_properties.get("comments").is_some());
+        assert!(response_properties.get("checks").is_some());
     }
 }

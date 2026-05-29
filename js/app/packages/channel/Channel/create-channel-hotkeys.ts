@@ -1,6 +1,6 @@
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { ApiChannelMessage } from '@service-comms/client';
+import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import type { Accessor } from 'solid-js';
 import type { MessageActions, MessageData } from '../Message';
 import type { MessageSelection } from './create-message-selection';

@@ -93,7 +93,7 @@ async fn cursor_handler<T: EmailService>(
             .inner
             .get_email_thread_previews(GetEmailsRequest {
                 view: preview_view,
-                link_id: link.id,
+                link_ids: vec![link.id],
                 macro_id: macro_user.macro_user_id,
                 limit: params.limit,
                 query: cursor

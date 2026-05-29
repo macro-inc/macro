@@ -8,7 +8,13 @@ import {
   type FilterID,
   NO_ASSIGNEE,
 } from '@app/component/next-soup/filters';
-import { NIL_UUID } from '@app/component/next-soup/filters/filter-store';
+import {
+  defineQueryFilters,
+  NIL_UUID,
+  type Query,
+  queryStateFrom,
+} from '@app/component/next-soup/filters/filter-store';
+import { mergeQuery } from '@app/component/next-soup/filters/filter-store/query-store';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
@@ -371,25 +377,46 @@ export function useFilterRefinements() {
           multiple: group.multiple,
           isValueActive: (id) => soup.predicates.isActive(id),
           onToggleValue: (id) => {
-            const query = getFilterQuery(id);
+            const isInboxTypeFilter =
+              currentView() === 'inbox' && categoryId === 'type';
             batch(() => {
               soup.predicates.toggle({ or: [id as FilterID] });
-              if (query) {
-                if (soup.predicates.isActive(id)) {
-                  queryFilters.add(query);
-                } else {
-                  queryFilters.remove(query);
-                }
+
+              if (isInboxTypeFilter) {
+                const activeTypeIds = group.allOptions
+                  .filter((option) => soup.predicates.isActive(option.id))
+                  .map((option) => option.id);
+                queryFilters.replace(getInboxTypeQuery(activeTypeIds) ?? null);
+                return;
+              }
+
+              const query = getFilterQuery(id);
+              if (!query) return;
+
+              if (soup.predicates.isActive(id)) {
+                queryFilters.add(query);
+              } else {
+                queryFilters.remove(query);
               }
             });
           },
           onRemoveAll: () => {
             // Compute current active values at removal time
             const currentValues = getActiveValues();
+            const isInboxTypeFilter =
+              currentView() === 'inbox' && categoryId === 'type';
             batch(() => {
               for (const value of currentValues) {
-                const query = getFilterQuery(value.id);
                 soup.predicates.toggle({ or: [value.id as FilterID] });
+              }
+
+              if (isInboxTypeFilter) {
+                queryFilters.replace(getInboxTypeQuery([]) ?? null);
+                return;
+              }
+
+              for (const value of currentValues) {
+                const query = getFilterQuery(value.id);
                 if (query) queryFilters.remove(query);
               }
             });
@@ -725,6 +752,25 @@ export function useFilterRefinements() {
     return typeof filter.query === 'function'
       ? filter.query(getFilterContext())
       : filter.query;
+  };
+
+  const getInboxTypeQuery = (activeTypeIds: string[]): Query | undefined => {
+    const preset = currentPreset();
+    if (currentView() !== 'inbox' || !preset) return undefined;
+
+    let targetQuery: Query = {};
+    for (const id of activeTypeIds) {
+      const query = getFilterQuery(id);
+      if (!query) continue;
+      targetQuery = mergeQuery(queryStateFrom(targetQuery), query);
+    }
+
+    if (!activeTypeIds.length) return preset.filters;
+
+    return mergeQuery(
+      queryStateFrom(preset.filters),
+      defineQueryFilters({}, { skipTargetsFrom: targetQuery })
+    );
   };
 
   const resetToTabDefaults = () => {

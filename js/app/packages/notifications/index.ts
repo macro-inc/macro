@@ -47,6 +47,11 @@ export {
   openNotificationFromId,
   openSingleStackNotification,
 } from './notification-navigation';
+export {
+  pendingNotificationNavigationId,
+  setPendingNotificationNavigationId,
+  triggerNotificationNavigation,
+} from './notification-navigation-intent';
 export type {
   PlatformNotificationData,
   PlatformNotificationHandle,

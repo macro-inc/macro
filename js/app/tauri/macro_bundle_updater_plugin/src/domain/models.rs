@@ -331,19 +331,6 @@ pub enum UpdateError {
 #[derive(Debug, Clone, Default)]
 pub struct UpdateGranted(());
 
-/// denotes that an update was denied
-#[derive(Debug, Clone, Copy, Default)]
-pub struct UpdateDenied(());
-
-/// Whether the user approved or denied a pending update.
-#[derive(Debug, Clone)]
-pub enum UpdateApproval {
-    /// User approved the update.
-    Granted(UpdateGranted),
-    /// User denied the update.
-    Denied(UpdateDenied),
-}
-
 /// An available update has been found.
 #[derive(Debug, Clone)]
 pub struct UpdateFoundStatus {
@@ -389,6 +376,8 @@ pub enum UpdateStatus {
     CheckingForDownload(AppInfo),
     /// An update is available and awaiting approval.
     UpdateFound(UpdateFoundStatus),
+    /// An update is available, but download is deferred until Wi-Fi or Ethernet is available.
+    WaitingForWifi(UpdateFoundStatus),
     /// The app is already on the latest version.
     NoUpdateNeeded,
     /// The bundle zip is being downloaded.

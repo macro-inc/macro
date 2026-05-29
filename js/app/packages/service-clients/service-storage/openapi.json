@@ -1295,6 +1295,194 @@
         }
       }
     },
+    "/channels/activity": {
+      "get": {
+        "tags": ["channels"],
+        "summary": "Handler for `GET /channels/activity`.",
+        "operationId": "get_activity",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApiActivity"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["channels"],
+        "summary": "Handler for `POST /channels/activity`.",
+        "operationId": "post_activity",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostActivityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiActivity"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/attachments/{entity_type}/{entity_id}/references": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/attachments/{entity_type}/{entity_id}/references`.",
+        "operationId": "get_attachment_references",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Type of the attachment entity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "Id of the attachment entity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAttachmentReferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/get_or_create_dm": {
       "post": {
         "tags": ["channels"],
@@ -1433,7 +1621,276 @@
         }
       }
     },
+    "/channels/mentions": {
+      "post": {
+        "tags": ["channels"],
+        "summary": "Handler for `POST /channels/mentions`.",
+        "operationId": "create_entity_mention",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEntityMentionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateEntityMentionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/mentions/{mention_id}": {
+      "delete": {
+        "tags": ["channels"],
+        "summary": "Handler for `DELETE /channels/mentions/{mention_id}`.",
+        "operationId": "delete_entity_mention",
+        "parameters": [
+          {
+            "name": "mention_id",
+            "in": "path",
+            "description": "Entity mention id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteEntityMentionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/preview": {
+      "post": {
+        "tags": ["channels"],
+        "summary": "Handler for `POST /channels/preview`.",
+        "operationId": "get_batch_channel_preview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetBatchChannelPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetBatchChannelPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel_id}": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/{channel_id}`.",
+        "operationId": "get_channel",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Recent message page size (1-100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiChannelDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": ["channels"],
         "summary": "Handler for `DELETE /channels/{channel_id}`.",
@@ -2963,6 +3420,351 @@
             }
           },
           "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/comment/{comment_id}": {
+      "delete": {
+        "tags": ["crm::inbound::axum_router::comments"],
+        "summary": "Soft-delete a CRM comment, scoped to the requesting user's team. When it\nwas the thread's last live comment, the thread is soft-deleted too\n(reported via `threadDeleted`).",
+        "operationId": "delete_crm_comment",
+        "parameters": [
+          {
+            "name": "comment_id",
+            "in": "path",
+            "description": "The CRM comment to delete",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteCrmCommentResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["crm::inbound::axum_router::comments"],
+        "summary": "Edit a CRM comment's text, scoped to the requesting user's team via the\ncomment's thread → entity → company. Returns the updated comment.",
+        "operationId": "edit_crm_comment",
+        "parameters": [
+          {
+            "name": "comment_id",
+            "in": "path",
+            "description": "The CRM comment to edit",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditCrmCommentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmComment"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/comments/{entity_type}/{entity_id}": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::comments"],
+        "summary": "List the comment threads on a CRM company or contact, scoped to the\nrequesting user's team. Returns 404 when the entity isn't owned by the\nteam; an owned entity with no threads returns `200 []`.",
+        "operationId": "list_crm_comments",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Which CRM entity kind the threads hang off",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CrmCommentEntityType"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "The CRM company or contact id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CrmCommentThread"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["crm::inbound::axum_router::comments"],
+        "summary": "Create a comment on a CRM company or contact — a new thread, or a reply\nwhen `threadId` is supplied. Returns the full thread (with all comments)\nafter the insert. Team-scoped; 404 when the entity isn't owned by the\nteam or `threadId` doesn't belong to it.",
+        "operationId": "create_crm_comment",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Which CRM entity kind the thread hangs off",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CrmCommentEntityType"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "The CRM company or contact id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCrmCommentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmCommentThread"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/companies/{company_id}/contacts": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::list_company_contacts"],
+        "summary": "List the non-hidden contacts of a CRM company, scoped to the\nrequesting user's team. Returns 404 when the company isn't owned by\nthe team (so existence doesn't leak across teams); an owned company\nwith no visible contacts returns `200 []`.",
+        "operationId": "list_company_contacts",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The CRM company whose contacts to list",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CrmContactResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
             "description": "",
             "content": {
               "application/json": {
@@ -5186,6 +5988,77 @@
         }
       }
     },
+    "/foreign_entity/{id}": {
+      "get": {
+        "tags": ["foreign_entity"],
+        "summary": "Get a visible foreign entity by its internal ID.",
+        "operationId": "get_foreign_entity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Foreign entity ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForeignEntity"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/github/install-sync": {
       "get": {
         "tags": ["github::inbound::github_sync_router"],
@@ -5544,6 +6417,16 @@
               }
             }
           },
+          "403": {
+            "description": "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -5588,6 +6471,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SoupPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -5638,6 +6531,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SoupPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -7358,6 +8261,11 @@
           }
         ]
       },
+      "ActivityType": {
+        "type": "string",
+        "description": "The kind of activity a user performs in a channel.",
+        "enum": ["view", "interact"]
+      },
       "AddParticipantsRequest": {
         "type": "object",
         "description": "Request to add participants.",
@@ -7602,6 +8510,179 @@
           }
         ]
       },
+      "ApiActivity": {
+        "type": "object",
+        "description": "A user's activity (view/interaction) within a channel.",
+        "required": ["id", "user_id", "channel_id", "created_at", "updated_at"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the activity row was created."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Activity id."
+          },
+          "interacted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "The last time the user interacted with the channel."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the activity row was last updated."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User id."
+          },
+          "viewed_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "The last time the user viewed the channel."
+          }
+        }
+      },
+      "ApiAttachmentChannelReference": {
+        "type": "object",
+        "description": "A reference to an attachment entity from a channel message.",
+        "required": [
+          "channel_id",
+          "message_id",
+          "sender_id",
+          "message_content",
+          "message_created_at",
+          "attachment_created_at"
+        ],
+        "properties": {
+          "attachment_created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the attachment row was created."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel that contains the message."
+          },
+          "channel_name": {
+            "type": ["string", "null"],
+            "description": "Optional channel name (DMs do not have a name)."
+          },
+          "message_content": {
+            "type": "string",
+            "description": "Full message content (might be used for preview/snippet)."
+          },
+          "message_created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the message itself was created."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message that contains the attachment reference."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Sender of the message."
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "If the message belongs to a thread this is the parent id."
+          }
+        }
+      },
+      "ApiAttachmentEntityReference": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ApiAttachmentChannelReference",
+                "description": "Referenced from a channel message."
+              },
+              {
+                "type": "object",
+                "required": ["reference_type"],
+                "properties": {
+                  "reference_type": {
+                    "type": "string",
+                    "enum": ["channel"]
+                  }
+                }
+              }
+            ],
+            "description": "Referenced from a channel message."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ApiAttachmentGenericReference",
+                "description": "Referenced from any non-message source entity."
+              },
+              {
+                "type": "object",
+                "required": ["reference_type"],
+                "properties": {
+                  "reference_type": {
+                    "type": "string",
+                    "enum": ["generic"]
+                  }
+                }
+              }
+            ],
+            "description": "Referenced from any non-message source entity."
+          }
+        ],
+        "description": "An attachment reference, tagged by source kind."
+      },
+      "ApiAttachmentGenericReference": {
+        "type": "object",
+        "description": "A reference to an attachment entity from a non-message source.",
+        "required": [
+          "source_entity_type",
+          "source_entity_id",
+          "entity_type",
+          "entity_id",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this reference was created."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "ID of the referenced entity."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Type of the referenced entity."
+          },
+          "source_entity_id": {
+            "type": "string",
+            "description": "ID of the source entity."
+          },
+          "source_entity_type": {
+            "type": "string",
+            "description": "Type of the source entity (e.g., \"document\", \"chat\", etc.)."
+          },
+          "user_id": {
+            "type": ["string", "null"],
+            "description": "User who created this reference (optional for non-user sources)."
+          }
+        }
+      },
       "ApiChannelAttachment": {
         "type": "object",
         "description": "A channel-level attachment.",
@@ -7684,6 +8765,7 @@
           "id",
           "channel_id",
           "sender_id",
+          "sender",
           "content",
           "created_at",
           "updated_at"
@@ -7718,6 +8800,10 @@
             "format": "uuid",
             "description": "Message id."
           },
+          "sender": {
+            "$ref": "#/components/schemas/ApiMessageSender",
+            "description": "Structured sender identity."
+          },
           "sender_id": {
             "type": "string",
             "description": "Sender user id."
@@ -7734,6 +8820,46 @@
           }
         }
       },
+      "ApiChannelDetail": {
+        "type": "object",
+        "description": "Channel detail: metadata, active participants, and a recent page of messages.\n\n`messages` is the newest-first first page (size controlled by `limit`); use the\ndedicated `/{channel_id}/messages` endpoint for cursor pagination.",
+        "required": [
+          "channel_id",
+          "channel_type",
+          "channel_name",
+          "participants",
+          "messages"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "channel_name": {
+            "type": "string",
+            "description": "Resolved display name from the viewer's perspective."
+          },
+          "channel_type": {
+            "$ref": "#/components/schemas/ChannelType",
+            "description": "Channel type."
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiChannelMessage"
+            },
+            "description": "Recent messages (newest-first first page)."
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiChannelParticipant"
+            },
+            "description": "Active participants."
+          }
+        }
+      },
       "ApiChannelMessage": {
         "type": "object",
         "description": "A top-level channel message with thread info.",
@@ -7741,6 +8867,7 @@
           "id",
           "channel_id",
           "sender_id",
+          "sender",
           "content",
           "created_at",
           "updated_at",
@@ -7791,6 +8918,10 @@
               "$ref": "#/components/schemas/ApiCountedReaction"
             },
             "description": "Reactions on this message."
+          },
+          "sender": {
+            "$ref": "#/components/schemas/ApiMessageSender",
+            "description": "Structured sender identity."
           },
           "sender_id": {
             "type": "string",
@@ -7883,6 +9014,9 @@
           "callf": {
             "description": "the filters that should be applied to the call entity"
           },
+          "ccf": {
+            "description": "Filters applied to the crm_company entity (wire key `ccf`).\nEmpty/omitted = team's full visible list."
+          },
           "cf": {
             "description": "the filters that should be applied to the chat entity"
           },
@@ -7908,6 +9042,9 @@
           },
           "ef": {
             "description": "the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` / `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors."
+          },
+          "fef": {
+            "description": "the filters that should be applied to foreign entity records"
           },
           "pf": {
             "description": "the filters that should be applied to the project entity"
@@ -7951,6 +9088,26 @@
             "description": "Width (for images)."
           }
         }
+      },
+      "ApiMessageSender": {
+        "type": "object",
+        "description": "Public sender identity for channel messages.",
+        "required": ["type", "id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Sender id without the storage namespace prefix."
+          },
+          "type": {
+            "$ref": "#/components/schemas/ApiMessageSenderType",
+            "description": "Sender type."
+          }
+        }
+      },
+      "ApiMessageSenderType": {
+        "type": "string",
+        "description": "Public sender type.",
+        "enum": ["user", "bot"]
       },
       "ApiParticipantRole": {
         "type": "string",
@@ -8024,6 +9181,7 @@
         "required": [
           "id",
           "sender_id",
+          "sender",
           "content",
           "created_at",
           "updated_at",
@@ -8063,6 +9221,10 @@
               "$ref": "#/components/schemas/ApiCountedReaction"
             },
             "description": "Reactions on this reply."
+          },
+          "sender": {
+            "$ref": "#/components/schemas/ApiMessageSender",
+            "description": "Structured sender identity."
           },
           "sender_id": {
             "type": "string",
@@ -8764,6 +9926,87 @@
           }
         }
       },
+      "ChannelPreview": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChannelPreviewData",
+                "description": "Viewer can access the channel."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["access"]
+                  }
+                }
+              }
+            ],
+            "description": "Viewer can access the channel."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WithChannelId",
+                "description": "Viewer cannot access the channel."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["no_access"]
+                  }
+                }
+              }
+            ],
+            "description": "Viewer cannot access the channel."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WithChannelId",
+                "description": "Channel does not exist."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["does_not_exist"]
+                  }
+                }
+              }
+            ],
+            "description": "Channel does not exist."
+          }
+        ],
+        "description": "Preview entry for a single channel id."
+      },
+      "ChannelPreviewData": {
+        "type": "object",
+        "description": "Preview payload returned for accessible channels.",
+        "required": ["channel_id", "channel_name", "channel_type"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "description": "Channel id."
+          },
+          "channel_name": {
+            "type": "string",
+            "description": "Resolved channel display name."
+          },
+          "channel_type": {
+            "$ref": "#/components/schemas/ChannelType",
+            "description": "Channel type."
+          }
+        }
+      },
       "ChannelSharePermission": {
         "type": "object",
         "description": "The channel share permission",
@@ -9144,6 +10387,28 @@
           }
         ]
       },
+      "CreateCrmCommentRequest": {
+        "type": "object",
+        "description": "Request body for `POST /crm/comments/{entity_type}/{entity_id}`.",
+        "required": ["text"],
+        "properties": {
+          "metadata": {
+            "description": "Arbitrary client metadata for the comment."
+          },
+          "text": {
+            "type": "string",
+            "description": "The comment body (markdown)."
+          },
+          "threadId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Existing thread to append to. Omit to start a new thread on the\naddressed entity."
+          },
+          "threadMetadata": {
+            "description": "Metadata to set on a newly created thread (ignored when replying\nwithout a value)."
+          }
+        }
+      },
       "CreateDocumentRequest": {
         "type": "object",
         "required": ["sha", "documentName"],
@@ -9236,6 +10501,77 @@
             }
           }
         ]
+      },
+      "CreateEntityMentionRequest": {
+        "type": "object",
+        "description": "Request body for `POST /channels/mentions`.",
+        "required": [
+          "source_entity_type",
+          "source_entity_id",
+          "entity_type",
+          "entity_id"
+        ],
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "Id of the mentioned entity."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Type of the mentioned entity."
+          },
+          "source_entity_id": {
+            "type": "string",
+            "description": "Id of the entity that owns the mention."
+          },
+          "source_entity_type": {
+            "type": "string",
+            "description": "Type of the entity that owns the mention."
+          }
+        }
+      },
+      "CreateEntityMentionResponse": {
+        "type": "object",
+        "description": "Response body for `POST /channels/mentions`.",
+        "required": [
+          "id",
+          "source_entity_type",
+          "source_entity_id",
+          "entity_type",
+          "entity_id",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Created timestamp."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "Id of the mentioned entity."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Type of the mentioned entity."
+          },
+          "id": {
+            "type": "string",
+            "description": "Mention id."
+          },
+          "source_entity_id": {
+            "type": "string",
+            "description": "Id of the entity that owns the mention."
+          },
+          "source_entity_type": {
+            "type": "string",
+            "description": "Type of the entity that owns the mention."
+          },
+          "user_id": {
+            "type": ["string", "null"],
+            "description": "User who recorded the mention."
+          }
+        }
       },
       "CreateInstructionsDocumentResponse": {
         "type": "object",
@@ -9435,6 +10771,213 @@
           }
         }
       },
+      "CrmComment": {
+        "type": "object",
+        "description": "A single comment within a [`CrmThread`].",
+        "required": [
+          "commentId",
+          "threadId",
+          "owner",
+          "text",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "commentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The comment id."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the comment was created."
+          },
+          "deletedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the comment was soft-deleted, if ever."
+          },
+          "metadata": {
+            "description": "Arbitrary client metadata."
+          },
+          "order": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Optional explicit ordering within the thread; the frontend falls\nback to `createdAt` when absent."
+          },
+          "owner": {
+            "type": "string",
+            "description": "Macro user id of the comment author."
+          },
+          "sender": {
+            "type": ["string", "null"],
+            "description": "Macro user id of the actual sender, when distinct from `owner`."
+          },
+          "text": {
+            "type": "string",
+            "description": "The comment body (markdown)."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the thread this comment belongs to."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the comment was last updated."
+          }
+        }
+      },
+      "CrmCommentEntityType": {
+        "type": "string",
+        "description": "Which CRM entity a comment thread is attached to. Serializes to\n`crm_company` / `crm_contact` — matching the `entityType` the frontend\nuses elsewhere when building entity URLs — and is parsed from the\n`{entity_type}` path segment on the comment routes.",
+        "enum": ["crm_company", "crm_contact"]
+      },
+      "CrmCommentThread": {
+        "type": "object",
+        "description": "A [`CrmThread`] with its comments nested under it — the unit the\nfrontend renders.",
+        "required": ["thread", "comments"],
+        "properties": {
+          "comments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmComment"
+            },
+            "description": "The thread's comments, oldest first."
+          },
+          "thread": {
+            "$ref": "#/components/schemas/CrmThread",
+            "description": "The thread."
+          }
+        }
+      },
+      "CrmCompanyFilters": {
+        "type": "object",
+        "description": "The crm company filters used to narrow which CRM companies appear in soup.",
+        "properties": {
+          "company_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM company ids to filter by. Examples: ['11111111-...']. Empty to\ninclude all of the team's visible CRM companies."
+          },
+          "hidden": {
+            "type": ["boolean", "null"],
+            "description": "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin/owner team role; enforced upstream in soup's axum router."
+          }
+        }
+      },
+      "CrmContactResponse": {
+        "type": "object",
+        "description": "A CRM contact as returned by `GET /crm/companies/{company_id}/contacts`.",
+        "required": [
+          "id",
+          "companyId",
+          "email",
+          "firstInteraction",
+          "lastInteraction",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the company the contact belongs to."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the contact record was created."
+          },
+          "email": {
+            "type": "string",
+            "description": "The contact's email address."
+          },
+          "firstInteraction": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Earliest known interaction with this contact."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the contact record."
+          },
+          "lastInteraction": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Most recent known interaction with this contact."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name observed for the contact, if any."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the contact record was last updated."
+          }
+        }
+      },
+      "CrmThread": {
+        "type": "object",
+        "description": "A CRM comment thread: the parent record one or more comments hang off.",
+        "required": [
+          "threadId",
+          "entityType",
+          "entityId",
+          "owner",
+          "resolved",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the thread was created."
+          },
+          "deletedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the thread was soft-deleted, if ever."
+          },
+          "entityId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the CRM company or contact this thread belongs to."
+          },
+          "entityType": {
+            "$ref": "#/components/schemas/CrmCommentEntityType",
+            "description": "Which CRM entity kind this thread belongs to."
+          },
+          "metadata": {
+            "description": "Arbitrary client metadata."
+          },
+          "owner": {
+            "type": "string",
+            "description": "Macro user id of the thread creator."
+          },
+          "resolved": {
+            "type": "boolean",
+            "description": "Whether the thread is resolved."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread id."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the thread was last updated."
+          }
+        }
+      },
       "CustomSpeakerAssignment": {
         "type": "object",
         "description": "One per-diarized-speaker override, used in [`EditCallTranscriptRequest`].\n\n`custom_speaker = None` clears any existing override for this\n`diarized_speaker_id`; `Some(macro_user_id)` sets it. The string is\nexpected to parse as a `MacroUserId` (e.g. `macro|alice@example.com`);\nthe service layer rejects malformed values with `400 Bad Request`.",
@@ -9512,6 +11055,38 @@
           },
           "thread": {
             "$ref": "#/components/schemas/DeleteThreadInfo"
+          }
+        }
+      },
+      "DeleteCrmCommentResult": {
+        "type": "object",
+        "description": "Outcome of soft-deleting a CRM comment: reports whether the parent thread\nwas soft-deleted too (it is when the deleted comment was its last live one).",
+        "required": ["commentId", "threadId", "threadDeleted"],
+        "properties": {
+          "commentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The deleted comment's id."
+          },
+          "threadDeleted": {
+            "type": "boolean",
+            "description": "Whether the thread itself was soft-deleted because no live comments\nremained."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread the comment belonged to."
+          }
+        }
+      },
+      "DeleteEntityMentionResponse": {
+        "type": "object",
+        "description": "Response body for `DELETE /channels/mentions/{mention_id}`.",
+        "required": ["deleted"],
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "description": "Whether the mention was deleted."
           }
         }
       },
@@ -10291,6 +11866,17 @@
           }
         ]
       },
+      "EditCrmCommentRequest": {
+        "type": "object",
+        "description": "Request body for `PATCH /crm/comments/comment/{comment_id}`.",
+        "required": ["text"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The new comment body (markdown)."
+          }
+        }
+      },
       "EditDocumentResponse": {
         "type": "object",
         "description": "Edit document response.",
@@ -10476,6 +12062,13 @@
             },
             "description": "Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter."
           },
+          "link_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Restrict to specific inboxes by email_links.id. Empty means \"any inbox the\ncaller can access\" (soup expands to the full set at the router edge)."
+          },
           "notification_filters": {
             "$ref": "#/components/schemas/NotificationFilters",
             "description": "Filter by email notification state."
@@ -10527,6 +12120,10 @@
             "$ref": "#/components/schemas/ChatFilters",
             "description": "the bundled [ChatFilters]"
           },
+          "crm_company_filters": {
+            "$ref": "#/components/schemas/CrmCompanyFilters",
+            "description": "the bundled [CrmCompanyFilters]"
+          },
           "document_filters": {
             "$ref": "#/components/schemas/DocumentFilters",
             "description": "the bundled [DocumentFilters]"
@@ -10534,6 +12131,10 @@
           "email_filters": {
             "$ref": "#/components/schemas/EmailFilters",
             "description": "the bundled [EmailFilters]"
+          },
+          "foreign_entity_filters": {
+            "$ref": "#/components/schemas/ForeignEntityFilters",
+            "description": "the bundled [ForeignEntityFilters]"
           },
           "project_filters": {
             "$ref": "#/components/schemas/ProjectFilters",
@@ -11229,6 +12830,83 @@
           }
         }
       },
+      "ForeignEntity": {
+        "type": "object",
+        "description": "A persisted mapping to an entity owned by an external system.",
+        "required": [
+          "id",
+          "foreignEntityId",
+          "foreignEntitySource",
+          "metadata",
+          "storedForId",
+          "storedForAuthEntity",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the record was created."
+          },
+          "foreignEntityId": {
+            "type": "string",
+            "description": "Identifier assigned by the external system."
+          },
+          "foreignEntitySource": {
+            "type": "string",
+            "description": "Source system that owns the external identifier."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Internal primary key for this foreign entity record."
+          },
+          "metadata": {
+            "description": "Arbitrary metadata stored with the mapping."
+          },
+          "storedForAuthEntity": {
+            "type": "string",
+            "description": "Internal auth entity namespace this foreign entity is stored for."
+          },
+          "storedForId": {
+            "type": "string",
+            "description": "Internal entity identifier this foreign entity is stored for."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the record was last updated."
+          }
+        }
+      },
+      "ForeignEntityFilters": {
+        "type": "object",
+        "description": "Filters for foreign entity records.",
+        "properties": {
+          "foreign_entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "External entity identifiers to filter by. Empty to include all external IDs."
+          },
+          "foreign_entity_sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "External source names to filter by. Empty to include all sources."
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Internal foreign entity record IDs to filter by. Empty to include all records."
+          }
+        }
+      },
       "GenericErrorResponse": {
         "type": "object",
         "required": ["error", "message"],
@@ -11292,6 +12970,20 @@
         },
         "deprecated": true
       },
+      "GetAttachmentReferencesResponse": {
+        "type": "object",
+        "description": "Response from the attachment-references endpoint.",
+        "required": ["references"],
+        "properties": {
+          "references": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiAttachmentEntityReference"
+            },
+            "description": "References to the requested entity, newest-first."
+          }
+        }
+      },
       "GetBatchCallRecordPreviewRequest": {
         "type": "object",
         "description": "Request body for `POST /call/record/preview`.\n\nThe `call_ids` list is bounded at [`MAX_BATCH_CALL_IDS`]; the handler\nrejects anything larger with a 400 before touching the database.",
@@ -11318,6 +13010,34 @@
               "$ref": "#/components/schemas/CallRecordPreview"
             },
             "description": "One entry per deduplicated input id."
+          }
+        }
+      },
+      "GetBatchChannelPreviewRequest": {
+        "type": "object",
+        "description": "Request for a batched channel preview lookup.",
+        "required": ["channel_ids"],
+        "properties": {
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel ids to look up."
+          }
+        }
+      },
+      "GetBatchChannelPreviewResponse": {
+        "type": "object",
+        "description": "Response for a batched channel preview lookup.",
+        "required": ["previews"],
+        "properties": {
+          "previews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelPreview"
+            },
+            "description": "Resolved channel previews, one per requested channel id."
           }
         }
       },
@@ -11754,6 +13474,20 @@
             "description": "The number of added lines in the pull request, when enrichment data is available.",
             "minimum": 0
           },
+          "checks": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestCheckRun"
+            },
+            "description": "Check runs collected from the pull request head commit, when enrichment data is available."
+          },
+          "comments": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestComment"
+            },
+            "description": "Comments collected from the pull request, when enrichment data is available."
+          },
           "deletions": {
             "type": ["integer", "null"],
             "format": "int64",
@@ -11793,6 +13527,88 @@
           "url": {
             "type": "string",
             "description": "The public GitHub URL for the pull request."
+          }
+        }
+      },
+      "GithubPullRequestCheckRun": {
+        "type": "object",
+        "description": "A check run associated with a GitHub pull request.",
+        "required": ["id", "name", "status"],
+        "properties": {
+          "completedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the check run completed, when available."
+          },
+          "conclusion": {
+            "type": ["string", "null"],
+            "description": "The raw GitHub check run conclusion, when the run has completed."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The unique GitHub identifier for the check run.",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string",
+            "description": "The check run name."
+          },
+          "startedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the check run started, when available."
+          },
+          "status": {
+            "type": "string",
+            "description": "The raw GitHub check run status."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "The public GitHub URL for the check run, when available."
+          }
+        }
+      },
+      "GithubPullRequestComment": {
+        "type": "object",
+        "description": "A comment associated with a GitHub pull request.",
+        "required": ["id", "body", "source"],
+        "properties": {
+          "authorAssociation": {
+            "type": ["string", "null"],
+            "description": "GitHub's relationship label for the author, when available."
+          },
+          "authorLogin": {
+            "type": ["string", "null"],
+            "description": "The GitHub login for the comment author, when available."
+          },
+          "body": {
+            "type": "string",
+            "description": "The comment or review body text."
+          },
+          "createdAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the comment was created or the review was submitted."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The unique GitHub identifier for the comment or review.",
+            "minimum": 0
+          },
+          "source": {
+            "type": "string",
+            "description": "The GitHub source for the comment, such as `issue_comment` or `review_comment`."
+          },
+          "updatedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the comment or review was last updated."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "The public GitHub URL for the comment or review, when available."
           }
         }
       },
@@ -12691,6 +14507,21 @@
             "type": "integer",
             "format": "int32",
             "description": "The pin index"
+          }
+        }
+      },
+      "PostActivityRequest": {
+        "type": "object",
+        "description": "Request body for `POST /channels/activity`.",
+        "required": ["channel_id", "activity_type"],
+        "properties": {
+          "activity_type": {
+            "$ref": "#/components/schemas/ActivityType",
+            "description": "The kind of activity to record."
+          },
+          "channel_id": {
+            "type": "string",
+            "description": "Channel id to record activity for."
           }
         }
       },
@@ -13996,6 +15827,90 @@
           }
         }
       },
+      "SoupCrmCompany": {
+        "type": "object",
+        "description": "A CRM company as displayed in Soup. Carries the core company\nfields plus display metadata resolved from `crm_domain_directory`\nagainst the primary (earliest-created) domain.",
+        "required": [
+          "id",
+          "teamId",
+          "emailSync",
+          "hidden",
+          "createdAt",
+          "updatedAt",
+          "domains"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the company was created."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Display description from the primary domain's directory entry."
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoupCrmDomain"
+            },
+            "description": "Domains associated with this company, ordered by creation time\nascending (primary first)."
+          },
+          "emailSync": {
+            "type": "boolean",
+            "description": "Whether email sync is enabled for this company."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Whether the company is hidden from CRM listings. Soup filters\nthese out by default."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the company."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the team that owns this company record."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the company was last updated."
+          }
+        }
+      },
+      "SoupCrmDomain": {
+        "type": "object",
+        "description": "A CRM domain as displayed in Soup. Mirrors the crm crate's\n[`CrmDomain`] with a stable wire shape that the FE can rely on.",
+        "required": ["id", "companyId", "domain", "createdAt"],
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the company the domain belongs to."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the domain record was created."
+          },
+          "domain": {
+            "type": "string",
+            "description": "The domain (lowercased, e.g. \"acme.com\")."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the domain record."
+          }
+        }
+      },
       "SoupDocument": {
         "type": "object",
         "required": [
@@ -14223,6 +16138,57 @@
           }
         ]
       },
+      "SoupForeignEntity": {
+        "type": "object",
+        "description": "A foreign entity record as displayed in Soup.",
+        "required": [
+          "id",
+          "foreignEntityId",
+          "foreignEntitySource",
+          "metadata",
+          "storedForId",
+          "storedForAuthEntity",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the record was created."
+          },
+          "foreignEntityId": {
+            "type": "string",
+            "description": "Identifier assigned by the external system."
+          },
+          "foreignEntitySource": {
+            "type": "string",
+            "description": "Source system that owns the external identifier."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Internal primary key for this foreign entity record."
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Arbitrary metadata stored with the mapping."
+          },
+          "storedForAuthEntity": {
+            "type": "string",
+            "description": "Internal auth entity namespace this foreign entity is stored for."
+          },
+          "storedForId": {
+            "type": "string",
+            "description": "Internal entity identifier this foreign entity is stored for."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the record was last updated."
+          }
+        }
+      },
       "SoupItem": {
         "oneOf": [
           {
@@ -14300,6 +16266,32 @@
               "tag": {
                 "type": "string",
                 "enum": ["call"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupCrmCompany"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["crmCompany"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupForeignEntity"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["foreignEntity"]
               }
             }
           }
@@ -14928,6 +16920,17 @@
             "type": "string",
             "format": "uuid",
             "description": "The call identifier."
+          }
+        }
+      },
+      "WithChannelId": {
+        "type": "object",
+        "description": "Preview payload returned for channels with only id information.",
+        "required": ["channel_id"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "description": "Channel id."
           }
         }
       },

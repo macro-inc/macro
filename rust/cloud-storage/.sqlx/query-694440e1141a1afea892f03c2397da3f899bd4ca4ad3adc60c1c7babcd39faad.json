@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH limited_companies AS (\n                SELECT\n                    c.id,\n                    c.team_id,\n                    c.email_sync,\n                    c.hidden,\n                    c.first_interaction,\n                    c.last_interaction\n                FROM crm_companies c\n                WHERE c.team_id = $1\n                  AND c.hidden = COALESCE($5::bool, FALSE)\n                  AND EXISTS (\n                      SELECT 1 FROM team_crm_settings tcs\n                      WHERE tcs.team_id = $1 AND tcs.crm_enabled\n                  )\n                  AND (cardinality($2::uuid[]) = 0 OR c.id = ANY($2::uuid[]))\n                  -- Keyset seek (NULL = first page): keep only rows that\n                  -- sort strictly after the cursor.\n                  AND (\n                      $6::timestamptz IS NULL\n                      OR (\n                          CASE $4\n                              WHEN 'created_at' THEN c.first_interaction\n                              ELSE c.last_interaction\n                          END,\n                          c.id::text\n                      ) < ($6, $7)\n                  )\n                ORDER BY\n                    CASE $4\n                        WHEN 'created_at' THEN c.first_interaction\n                        ELSE c.last_interaction\n                    END DESC,\n                    c.id DESC\n                LIMIT $3\n            )\n            SELECT\n                lc.id                AS \"company_id!\",\n                lc.team_id           AS \"company_team_id!\",\n                lc.email_sync        AS \"company_email_sync!\",\n                lc.hidden            AS \"company_hidden!\",\n                lc.first_interaction AS \"company_created_at!\",\n                lc.last_interaction  AS \"company_updated_at!\",\n                d.id                 AS \"domain_id?\",\n                d.domain             AS \"domain?\",\n                d.created_at       AS \"domain_created_at?\",\n                dd.name            AS \"dir_name?\",\n                dd.description     AS \"dir_description?\"\n            FROM limited_companies lc\n            LEFT JOIN crm_domains d ON d.company_id = lc.id\n            LEFT JOIN crm_domain_directory dd\n                ON LOWER(dd.domain) = LOWER(d.domain)\n            ORDER BY\n                CASE $4\n                    WHEN 'created_at' THEN lc.first_interaction\n                    ELSE lc.last_interaction\n                END DESC,\n                lc.id DESC,\n                d.created_at ASC NULLS LAST\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "company_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "company_team_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "company_email_sync!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "company_hidden!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "company_created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "company_updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "domain_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "domain?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "domain_created_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "dir_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "dir_description?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Int8",
+        "Text",
+        "Bool",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "694440e1141a1afea892f03c2397da3f899bd4ca4ad3adc60c1c7babcd39faad"
+}
