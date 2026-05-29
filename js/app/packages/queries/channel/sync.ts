@@ -1,8 +1,6 @@
-import type {
-  Attachment as ApiAttachment,
-  Message as ApiMessage,
-  CountedReaction,
-} from '@service-comms/generated/models';
+import type { ApiChannelContextMessage as ApiMessage } from '@service-storage/generated/schemas/apiChannelContextMessage';
+import type { ApiCountedReaction as CountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
+import type { ApiMessageAttachment as ApiAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import type { ApiThreadReply } from '@service-storage/client';
 import { consumeNonce } from '../nonce';
 import { ChannelNonceKeys } from './keys';

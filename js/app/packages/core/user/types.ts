@@ -1,7 +1,7 @@
 import type { DateValue } from '@core/util/date';
 import type { Accessor } from 'solid-js';
 
-export type { ChannelWithParticipants } from '@service-comms/generated/models';
+export type { ChannelWithParticipants } from '@service-storage/generated/schemas/channelWithParticipants';
 export type { ContactInfo } from '@service-email/generated/schemas';
 
 export type IUser = {

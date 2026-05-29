@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import type { Attachment as ApiAttachment } from '@service-comms/generated/models';
+import type { ApiChannelAttachment as ApiAttachment } from '@service-storage/generated/schemas/apiChannelAttachment';
 import type {
   ApiChannelMessage,
   ApiThreadReply,

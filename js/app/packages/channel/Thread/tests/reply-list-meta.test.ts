@@ -1,4 +1,4 @@
-import type { ApiThreadReply } from '@service-comms/client';
+import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
 import { describe, expect, it } from 'vitest';
 import { buildThreadReplyListMeta } from '../reply-list-meta';
 

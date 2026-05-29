@@ -22,7 +22,7 @@ import type {
   SearchData,
   WithSearch,
 } from '@entity';
-import type { ChannelType } from '@service-comms/generated/models';
+import type { ChannelType } from '@service-storage/generated/schemas/channelType';
 import type {
   CallRecordSearchResult,
   ChannelSearchResult,

@@ -4,12 +4,10 @@ import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import type {
-  Attachment,
-  ChannelMessage,
-  CountedReaction,
-  Message,
-} from '@service-comms/generated/models';
+import type { ApiChannelAttachment as Attachment } from '@service-storage/generated/schemas/apiChannelAttachment';
+import type { ApiChannelContextMessage as Message } from '@service-storage/generated/schemas/apiChannelContextMessage';
+import type { ApiCountedReaction as CountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
+import type { ChannelMessage } from '@service-storage/generated/schemas/channelMessage';
 import {
   type ApiChannelMessage,
   type ApiThreadReply,

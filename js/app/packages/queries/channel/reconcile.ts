@@ -1,7 +1,5 @@
-import type {
-  Attachment as ApiAttachment,
-  CountedReaction,
-} from '@service-comms/generated/models';
+import type { ApiCountedReaction as CountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
+import type { ApiMessageAttachment as ApiAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import type {
   ApiChannelMessage,
   ApiThreadReply,

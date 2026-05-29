@@ -24,7 +24,7 @@ import type { ResultError } from '@core/util/result';
 
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
-import type { ApiChannelWithLatest } from '@service-comms/generated/models/apiChannelWithLatest';
+import type { SoupChannel as ApiChannelWithLatest } from './generated/schemas/soupChannel';
 import { platformFetch } from 'core/util/platformFetch';
 import { err, ok, type Result } from 'neverthrow';
 import type {

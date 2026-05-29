@@ -27,19 +27,6 @@ export default defineConfig({
       target: './service-cognition/openapi.json',
     },
   },
-  commsService: {
-    output: {
-      client: 'fetch',
-      target: './service-comms/generated/client.ts',
-      schemas: './service-comms/generated/models',
-      override: {
-        useDates: false,
-      },
-    },
-    input: {
-      target: './service-comms/openapi.json',
-    },
-  },
   connectionGateway: {
     output: {
       client: 'fetch',

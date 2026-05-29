@@ -3,7 +3,7 @@ import { Thread } from '@channel/Thread/Thread';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { formatVideoTimestamp } from '@core/util/duration';
 import Subtitles from '@phosphor/subtitles.svg';
-import type { ApiChannelMessage } from '@service-comms/client';
+import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';
 import {
   createEffect,
