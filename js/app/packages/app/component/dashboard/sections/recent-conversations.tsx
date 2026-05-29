@@ -68,7 +68,7 @@ export function RecentConversationCard(props: {
       class={cn(
         'group grid min-w-0 snap-start grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_1fr] gap-x-3 gap-y-1.5 rounded-xl text-left transition',
         isCard()
-          ? 'w-72 shrink-0 border border-edge-muted bg-hover/40 p-2.5 hover:border-edge hover:bg-hover focus-visible:border-accent @md/recent-channels:w-auto'
+          ? 'w-72 shrink-0 border border-edge-muted bg-hover/40 p-2.5 hover:border-edge hover:bg-hover focus-visible:border-accent @md/recent-conversations:w-auto'
           : 'w-full p-2.5 hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset',
         'focus:outline-none'
       )}
@@ -111,7 +111,7 @@ export function RecentConversationCard(props: {
 
         <div class="flex shrink-0 items-center gap-1.5 text-xxs text-ink-extra-muted">
           <span>{props.conversation.updatedAt}</span>
-          <div class="hidden opacity-0 transition group-hover:opacity-100 @md/recent-channels:block">
+          <div class="hidden opacity-0 transition group-hover:opacity-100 @md/recent-conversations:block">
             <ArrowRightIcon class="size-3.5" />
           </div>
         </div>
@@ -138,7 +138,7 @@ export function RecentConversationCard(props: {
   );
 }
 
-export function RecentChannelsSection() {
+export function RecentConversationsSection() {
   const notificationSource = useGlobalNotificationSource();
   const currentUserId = useUserId();
   const splitLayout = useSplitLayout();
@@ -282,7 +282,7 @@ export function RecentChannelsSection() {
   };
 
   return (
-    <section class="@container/recent-channels">
+    <section class="@container/recent-conversations">
       <div class="mb-4 flex items-center justify-between gap-4 px-4 sm:px-0">
         <h2 class="text-lg font-semibold tracking-tight text-ink">
           Recent conversations
@@ -299,13 +299,13 @@ export function RecentChannelsSection() {
       </div>
 
       <AdaptiveScroller scrollAmount={280} class="relative">
-        <AdaptiveScroller.Viewport class="w-full scroll-pl-4 px-4 pb-1 sm:px-0 @md/recent-channels:grid @md/recent-channels:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] @md/recent-channels:gap-3 @md/recent-channels:overflow-visible @md/recent-channels:pb-0">
+        <AdaptiveScroller.Viewport class="w-full scroll-pl-4 px-4 pb-1 sm:px-0 @md/recent-conversations:grid @md/recent-conversations:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] @md/recent-conversations:gap-3 @md/recent-conversations:overflow-visible @md/recent-conversations:pb-0">
           <Show
             when={!channelsQuery.isLoading}
             fallback={
               <For each={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}>
                 {() => (
-                  <div class="skeleton-shimmer h-20 w-72 shrink-0 snap-start rounded-xl border border-edge-muted bg-hover/60 p-2.5 @md/recent-channels:w-auto">
+                  <div class="skeleton-shimmer h-20 w-72 shrink-0 snap-start rounded-xl border border-edge-muted bg-hover/60 p-2.5 @md/recent-conversations:w-auto">
                     <div class="skeleton-shimmer size-9 rounded-xl bg-surface" />
                     <div class="flex flex-col gap-2 pt-6">
                       <div class="skeleton-shimmer h-3 w-3/4 rounded-full bg-ink/10" />
@@ -329,15 +329,15 @@ export function RecentChannelsSection() {
             </StaticMarkdownContext>
           </Show>
         </AdaptiveScroller.Viewport>
-        <AdaptiveScroller.FadeEdges class="bottom-10 top-0 hidden sm:block @md/recent-channels:hidden" />
-        <AdaptiveScroller.Controls class="mt-2 @md/recent-channels:hidden">
+        <AdaptiveScroller.FadeEdges class="bottom-10 top-0 hidden sm:block @md/recent-conversations:hidden" />
+        <AdaptiveScroller.Controls class="mt-2 @md/recent-conversations:hidden">
           <AdaptiveScroller.Control
             direction="left"
-            class="hidden sm:inline-flex @md/recent-channels:hidden"
+            class="hidden sm:inline-flex @md/recent-conversations:hidden"
           />
           <AdaptiveScroller.Control
             direction="right"
-            class="hidden sm:inline-flex @md/recent-channels:hidden"
+            class="hidden sm:inline-flex @md/recent-conversations:hidden"
           />
         </AdaptiveScroller.Controls>
       </AdaptiveScroller>

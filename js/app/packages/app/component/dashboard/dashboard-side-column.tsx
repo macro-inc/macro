@@ -3,7 +3,7 @@ import { DashboardSectionBoundary } from '@app/component/dashboard/dashboard-sec
 import {
   RecentConversationCard,
   type RecentConversationCardData,
-} from '@app/component/dashboard/sections/recent-channels';
+} from '@app/component/dashboard/sections/recent-conversations';
 import { channelDisplayName } from '@app/component/dashboard/utils';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { setAutomationComposerOpen } from '@block-automation/component';
@@ -155,7 +155,7 @@ function openChannel(
   );
 }
 
-function RecentChannelsColumnSection() {
+function RecentConversationsColumnSection() {
   const notificationSource = useGlobalNotificationSource();
   const currentUserId = useUserId();
 
@@ -390,7 +390,7 @@ export function DashboardSideColumn() {
   return (
     <aside class="hidden min-w-0 flex-col gap-8 pt-8 text-left @6xl/dashboard:flex">
       <DashboardSectionBoundary title="recent conversations">
-        <RecentChannelsColumnSection />
+        <RecentConversationsColumnSection />
       </DashboardSectionBoundary>
       <DashboardSectionBoundary title="automations">
         <AutomationsColumnSection />

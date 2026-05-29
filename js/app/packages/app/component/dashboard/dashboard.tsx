@@ -5,7 +5,7 @@ import { DashboardSideColumn } from './dashboard-side-column';
 import { Hero } from './sections/hero';
 import { NotificationsSection } from './sections/notifications';
 import { QuickLinksSection } from './sections/quick-links';
-import { RecentChannelsSection } from './sections/recent-channels';
+import { RecentConversationsSection } from './sections/recent-conversations';
 import { RecentSharedSection } from './sections/recent-shared';
 import { TeamPulseSection } from './sections/team-pulse';
 
@@ -43,7 +43,7 @@ export function Dashboard() {
 
             <div class="@6xl/dashboard:hidden">
               <DashboardSectionBoundary title="recent conversations">
-                <RecentChannelsSection />
+                <RecentConversationsSection />
               </DashboardSectionBoundary>
             </div>
 
