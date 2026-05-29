@@ -35,7 +35,6 @@ import { DevStatusBar } from './DevStatusBar';
 import GlobalShortcuts from './GlobalHotkeys';
 import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
 import { ItemDndProvider } from './ItemDragAndDrop';
-import { InteractiveOnboardingModal } from './interactive-onboarding/InteractiveOnboardingModal';
 import { IosShareSheet } from './ios-share-sheet/IosShareSheet';
 import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { MacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
@@ -91,9 +90,6 @@ function LayoutInner(props: RouteSectionProps) {
       isAuthenticated() === true &&
       !AUTH_URLS.includes(location.pathname)
   );
-  const [showInteractiveOnboardingModal, setShowInteractiveOnboardingModal] =
-    createSignal(true);
-
   useAppSquishHandlers();
 
   // save last_path to cookie
@@ -153,13 +149,6 @@ function LayoutInner(props: RouteSectionProps) {
           <GlobalShareModal />
           <IosShareSheet />
           <MacroMcpSetupModal />
-          <InteractiveOnboardingModal
-            open={
-              showInteractiveOnboardingModal() &&
-              !AUTH_URLS.includes(location.pathname)
-            }
-            onOpenChange={setShowInteractiveOnboardingModal}
-          />
         </Show>
         <Show
           when={

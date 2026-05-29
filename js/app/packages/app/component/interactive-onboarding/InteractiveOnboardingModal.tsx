@@ -77,7 +77,7 @@ function StartScreen(props: { onStart: () => void; onSkip: () => void }) {
         </div>
         <div class="w-full max-w-xs flex flex-col gap-2 pt-2">
           <Button variant="cta" size="lg" onClick={props.onStart}>
-            See tutorial
+            Play tutorial
             <ArrowRightIcon />
           </Button>
           <Button variant="ghost" size="lg" onClick={props.onSkip}>
