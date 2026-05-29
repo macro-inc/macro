@@ -16,7 +16,12 @@ export function UserMenu(props: UserMenuProps) {
   return (
     <DropdownMenu>
       <DropdownMenu.Trigger class="rounded-lg cursor-pointer">
-        <UserIcon id={props.userId} size={props.size ?? 'md'} suppressClick showTooltip={false} />
+        <UserIcon
+          id={props.userId}
+          size={props.size ?? 'md'}
+          suppressClick
+          showTooltip={false}
+        />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content class="z-action-menu bg-surface border border-edge-muted rounded-lg shadow-lg min-w-40 p-1">

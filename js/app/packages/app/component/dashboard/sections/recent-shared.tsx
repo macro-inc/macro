@@ -152,7 +152,9 @@ export function RecentSharedSection() {
     },
   }));
 
-  const relevantItems = createMemo(() => (relevantQuery.data ?? []).slice(0, 20));
+  const relevantItems = createMemo(() =>
+    (relevantQuery.data ?? []).slice(0, 20)
+  );
   const sharedItems = createMemo(() =>
     (sharedQuery.data ?? [])
       .filter((entity) => !!userId() && entity.ownerId !== userId())

@@ -129,13 +129,23 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
                     />
                   }
                 >
-                  <EntityIcon targetType="task" size="sm" class="shrink-0 touch:size-5" />
+                  <EntityIcon
+                    targetType="task"
+                    size="sm"
+                    class="shrink-0 touch:size-5"
+                  />
                 </Show>
               </div>
             }
           >
             {(id) => (
-              <UserIcon id={id()} size="md" class="touch:size-9" suppressClick showTooltip={false} />
+              <UserIcon
+                id={id()}
+                size="md"
+                class="touch:size-9"
+                suppressClick
+                showTooltip={false}
+              />
             )}
           </Show>
           <Show when={unread()}>
@@ -149,7 +159,9 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
               <span class="truncate">{title()}</span>
             </p>
             <span class="shrink-0 text-xxs font-light text-ink-extra-muted">
-              <Entity.Notification.Timestamp notification={props.notification} />
+              <Entity.Notification.Timestamp
+                notification={props.notification}
+              />
             </span>
           </div>
 
@@ -159,7 +171,9 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
               <Show when={description()}>
                 {(markdown) => (
                   <div class="flex min-w-0 items-start gap-1.5 text-xs/5 text-ink-muted [&_*]:text-xs [&_*]:leading-5">
-                    <Show when={channelName() && !isDirectMessage() && actorId()}>
+                    <Show
+                      when={channelName() && !isDirectMessage() && actorId()}
+                    >
                       {(id) => (
                         <span class="inline-flex shrink-0 items-center gap-1 font-medium text-ink-muted">
                           <UserIcon
@@ -200,16 +214,16 @@ function NotificationRow(props: { notification: UnifiedNotification }) {
               </Show>
               <span class="truncate">
                 <span class="font-medium">
-                  <Entity.Notification.Sender notification={props.notification} />
+                  <Entity.Notification.Sender
+                    notification={props.notification}
+                  />
                 </span>{' '}
                 assigned you
               </span>
             </div>
           </Show>
         </div>
-
       </div>
-
     </div>
   );
 }
@@ -231,22 +245,22 @@ export function DashboardNotificationList(props: {
         <StaticMarkdownContext>
           <div class="flex flex-col gap-1 sm:gap-0">
             <EntityRowProvider container={scrollContainer}>
-            <For each={props.notifications}>
-              {(notification) => (
-                <EntityRow
-                  entityId={notification.id}
-                  swipeLeftColor="bg-success-bg"
-                  swipeLeftRevealedComponent={
-                    <CheckIcon class="size-5 text-success" />
-                  }
-                  onSwipeLeft={() =>
-                    void notificationSource.markAsDone(notification)
-                  }
-                >
-                  <NotificationRow notification={notification} />
-                </EntityRow>
-              )}
-            </For>
+              <For each={props.notifications}>
+                {(notification) => (
+                  <EntityRow
+                    entityId={notification.id}
+                    swipeLeftColor="bg-success-bg"
+                    swipeLeftRevealedComponent={
+                      <CheckIcon class="size-5 text-success" />
+                    }
+                    onSwipeLeft={() =>
+                      void notificationSource.markAsDone(notification)
+                    }
+                  >
+                    <NotificationRow notification={notification} />
+                  </EntityRow>
+                )}
+              </For>
             </EntityRowProvider>
           </div>
         </StaticMarkdownContext>

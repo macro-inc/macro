@@ -16,13 +16,13 @@ function getYearGrid(): Date[][] {
 
   const grid: Date[][] = [];
   const startDate = new Date(today);
-  startDate.setDate(today.getDate() - (WEEKS_IN_YEAR * 7) + (7 - today.getDay()));
+  startDate.setDate(today.getDate() - WEEKS_IN_YEAR * 7 + (7 - today.getDay()));
 
   for (let week = 0; week < WEEKS_IN_YEAR; week++) {
     const weekDates: Date[] = [];
     for (let day = 0; day < 7; day++) {
       const date = new Date(startDate);
-      date.setDate(startDate.getDate() + (week * 7) + day);
+      date.setDate(startDate.getDate() + week * 7 + day);
       weekDates.push(date);
     }
     grid.push(weekDates);
@@ -39,7 +39,11 @@ function getThisMonthGrid(): { month: string; year: number; weeks: Date[][] } {
   const monthName = monthDate.toLocaleDateString('en', { month: 'long' });
   const year = monthDate.getFullYear();
 
-  const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+  const daysInMonth = new Date(
+    monthDate.getFullYear(),
+    monthDate.getMonth() + 1,
+    0
+  ).getDate();
   const firstDayOfWeek = monthDate.getDay();
 
   const weeks: Date[][] = [];
@@ -80,7 +84,10 @@ export interface HeatmapProps {
   view?: HeatmapViewMode;
   onViewChange?: (view: HeatmapViewMode) => void;
   onDayClick?: (date: Date, data: HeatmapDataItem | undefined) => void;
-  renderPopover?: (date: Date, data: HeatmapDataItem | undefined) => JSX.Element;
+  renderPopover?: (
+    date: Date,
+    data: HeatmapDataItem | undefined
+  ) => JSX.Element;
   class?: string;
   showViewToggle?: boolean;
   showLegend?: boolean;
@@ -88,7 +95,9 @@ export interface HeatmapProps {
 }
 
 export function Heatmap(props: HeatmapProps) {
-  const [internalView, setInternalView] = createSignal<HeatmapViewMode>(props.view ?? 'year');
+  const [internalView, setInternalView] = createSignal<HeatmapViewMode>(
+    props.view ?? 'year'
+  );
 
   const view = () => props.view ?? internalView();
   const setView = (v: HeatmapViewMode) => {
@@ -227,7 +236,9 @@ export function Heatmap(props: HeatmapProps) {
         const monthStr = d.toLocaleDateString('en', { month: 'short' });
         const showYear = view() === 'all' && d.getMonth() === 0;
         markers.push({
-          label: showYear ? `${monthStr} '${String(d.getFullYear()).slice(2)}` : monthStr,
+          label: showYear
+            ? `${monthStr} '${String(d.getFullYear()).slice(2)}`
+            : monthStr,
           row: i,
         });
       }
@@ -241,14 +252,16 @@ export function Heatmap(props: HeatmapProps) {
     <div class={cn('flex flex-col gap-3', props.class)}>
       <Show when={props.showViewToggle !== false}>
         <div class="flex items-center gap-1 bg-ink/5 rounded-md p-0.5 self-end">
-          <For each={(['all', 'year', 'month'] as const)}>
+          <For each={['all', 'year', 'month'] as const}>
             {(mode) => (
               <button
                 type="button"
                 onClick={() => setView(mode)}
                 class={cn(
                   'px-2 py-0.5 text-xs rounded capitalize',
-                  view() === mode ? 'bg-surface text-ink shadow-sm' : 'text-ink-muted'
+                  view() === mode
+                    ? 'bg-surface text-ink shadow-sm'
+                    : 'text-ink-muted'
                 )}
               >
                 {mode}
@@ -263,7 +276,11 @@ export function Heatmap(props: HeatmapProps) {
           <div class="grid grid-cols-[auto_repeat(7,_1fr)] gap-[2px]">
             <div class="w-7" />
             <For each={DAY_LABELS}>
-              {(d) => <div class="text-center text-[8px] text-ink-extra-muted leading-none">{d}</div>}
+              {(d) => (
+                <div class="text-center text-[8px] text-ink-extra-muted leading-none">
+                  {d}
+                </div>
+              )}
             </For>
           </div>
         </Show>
@@ -272,24 +289,29 @@ export function Heatmap(props: HeatmapProps) {
           <div class="grid grid-cols-[auto_repeat(7,_1fr)] gap-[2px]">
             <For each={activeGrid()}>
               {(week, weekIdx) => {
-                const marker = () => monthMarkers().find((m) => m.row === weekIdx());
+                const marker = () =>
+                  monthMarkers().find((m) => m.row === weekIdx());
                 return (
                   <>
                     <div class="w-7 flex items-center justify-end pr-1">
                       <Show when={marker()}>
-                        <span class="text-[8px] text-ink-extra-muted leading-none">{marker()!.label}</span>
+                        <span class="text-[8px] text-ink-extra-muted leading-none">
+                          {marker()!.label}
+                        </span>
                       </Show>
                     </div>
                     <For each={week}>
                       {(date) => {
-                        if (!date) return (
-                          <div
-                            class="size-2.5 rounded-[1px] opacity-[0.07]"
-                            style={{
-                              'background-image': 'repeating-linear-gradient(135deg, currentColor 0px, currentColor 1px, transparent 1px, transparent 4px)',
-                            }}
-                          />
-                        );
+                        if (!date)
+                          return (
+                            <div
+                              class="size-2.5 rounded-[1px] opacity-[0.07]"
+                              style={{
+                                'background-image':
+                                  'repeating-linear-gradient(135deg, currentColor 0px, currentColor 1px, transparent 1px, transparent 4px)',
+                              }}
+                            />
+                          );
                         return <DayCell date={date} />;
                       }}
                     </For>

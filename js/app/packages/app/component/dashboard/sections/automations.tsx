@@ -62,7 +62,9 @@ function AutomationRow(props: { automation: AutomationEntity }) {
         <p class="mt-0.5 truncate text-xs text-ink-muted">
           <Show
             when={props.automation.enabled && props.automation.nextRunAt}
-            fallback={props.automation.enabled ? props.automation.cron : 'Not scheduled'}
+            fallback={
+              props.automation.enabled ? props.automation.cron : 'Not scheduled'
+            }
           >
             {(nextRunAt) => <>Next run {formatDateAndTime(nextRunAt())}</>}
           </Show>

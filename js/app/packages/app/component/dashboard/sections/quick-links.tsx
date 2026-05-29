@@ -52,7 +52,6 @@ function QuickLinkButton(props: {
             <span class="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-hover bg-accent" />
           )}
         </div>
-
       </div>
       <div class="flex w-full min-w-0 items-end justify-between gap-2">
         <span class="min-w-0 truncate text-sm font-medium text-ink">
@@ -116,15 +115,8 @@ export function QuickLinksSection() {
           icon={AnimatedInboxIcon}
           notificationCount={inboxNotificationCount()}
         />
-        <QuickLinkButton
-          label="Search"
-          icon={AnimatedSearchIcon}
-        />
-        <QuickLinkButton
-          label="Agents"
-          icon={AnimatedStarIcon}
-          color="agent"
-        />
+        <QuickLinkButton label="Search" icon={AnimatedSearchIcon} />
+        <QuickLinkButton label="Agents" icon={AnimatedStarIcon} color="agent" />
         <QuickLinkButton
           label="Email"
           icon={AnimatedEmailIcon}

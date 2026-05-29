@@ -27,9 +27,9 @@ import {
   refetchSoupEntity,
   invalidateSoupEntity,
 } from '@queries/soup/normalized-cache';
-import { ChannelType } from '@service-comms/generated/models/channelType';
 import { Button, cn, Tooltip } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
+import { ChannelType } from '@service-storage/generated/schemas';
 
 export type RecentConversationCardData = {
   id: string;
@@ -271,7 +271,10 @@ export function RecentConversationsList(props: { variant?: 'card' | 'row' }) {
     event: MouseEvent
   ) => {
     const params = conversation.latest.messageId
-      ? getChannelParams(conversation.latest.messageId, conversation.latest.threadId)
+      ? getChannelParams(
+          conversation.latest.messageId,
+          conversation.latest.threadId
+        )
       : undefined;
 
     splitLayout.openWithSplit(
@@ -320,18 +323,14 @@ export function RecentConversationsList(props: { variant?: 'card' | 'row' }) {
         <StaticMarkdownContext>
           <div
             class={cn(
-              props.variant === 'card'
-                ? 'contents'
-                : 'flex flex-col gap-1'
+              props.variant === 'card' ? 'contents' : 'flex flex-col gap-1'
             )}
           >
             <For each={conversations()}>
               {(conversation) => (
                 <RecentConversationCard
                   conversation={conversation}
-                  onOpen={(_, event) =>
-                    openConversation(conversation, event)
-                  }
+                  onOpen={(_, event) => openConversation(conversation, event)}
                   variant={props.variant}
                 />
               )}

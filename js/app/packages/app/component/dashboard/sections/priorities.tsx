@@ -127,7 +127,10 @@ export function PrioritiesSection() {
   );
 
   const unreadCount = createMemo(
-    () => notifications().filter((notification) => !notificationIsRead(notification)).length
+    () =>
+      notifications().filter(
+        (notification) => !notificationIsRead(notification)
+      ).length
   );
 
   return (
@@ -142,7 +145,11 @@ export function PrioritiesSection() {
               Priorities
             </h2>
           </div>
-          <Button variant="ghost" size="md" class="hidden rounded-lg sm:inline-flex">
+          <Button
+            variant="ghost"
+            size="md"
+            class="hidden rounded-lg sm:inline-flex"
+          >
             Open inbox
             <ArrowRightIcon />
           </Button>

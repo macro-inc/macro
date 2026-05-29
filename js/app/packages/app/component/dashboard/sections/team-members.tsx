@@ -42,7 +42,9 @@ function MemberRow(props: { member: TeamMember; isCurrentUser: boolean }) {
           </Show>
         </div>
         <Show when={email() && email() !== label()}>
-          <div class="select-text truncate text-xs text-ink-muted">{email()}</div>
+          <div class="select-text truncate text-xs text-ink-muted">
+            {email()}
+          </div>
         </Show>
       </div>
       <span class="shrink-0 rounded-md bg-hover px-1.5 py-1 text-xxs font-semibold capitalize text-ink-muted">
@@ -85,7 +87,6 @@ export function TeamMembersSection() {
                 <h2 class="truncate text-lg font-semibold tracking-tight text-ink">
                   {firstTeam()?.name ?? 'Team'}
                 </h2>
-
               </div>
               <Show when={firstTeam()}>
                 {(team) => (
@@ -154,16 +155,19 @@ export function TeamMembersSection() {
             >
               <div class="px-3 pb-3">
                 <div class="relative">
-                  <div ref={setScrollContainer} class="max-h-64 overflow-y-auto">
+                  <div
+                    ref={setScrollContainer}
+                    class="max-h-64 overflow-y-auto"
+                  >
                     <div class="space-y-1 pb-1">
-                    <For each={members()}>
-                      {(member) => (
-                        <MemberRow
-                          member={member}
-                          isCurrentUser={member.user_id === userId()}
-                        />
-                      )}
-                    </For>
+                      <For each={members()}>
+                        {(member) => (
+                          <MemberRow
+                            member={member}
+                            isCurrentUser={member.user_id === userId()}
+                          />
+                        )}
+                      </For>
                     </div>
                   </div>
                   <CustomScrollbar

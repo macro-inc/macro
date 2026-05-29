@@ -2,7 +2,10 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { AdaptiveScroller } from '@app/component/dashboard/adaptive-scroller';
 import { DashboardSectionError } from '@app/component/dashboard/dashboard-section-error';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { EntityIcon, type EntityIconSelector } from '@core/component/EntityIcon';
+import {
+  EntityIcon,
+  type EntityIconSelector,
+} from '@core/component/EntityIcon';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import {
@@ -246,16 +249,16 @@ function TeamPulseSkeleton() {
     <div>
       <div class="px-4 sm:px-0">
         <div class="skeleton-shimmer rounded-xl bg-hover/50 p-3">
-        <div class="flex items-start gap-2">
-          <PulsingStar kind="streamIndicator" animate />
-          <div class="min-w-0 flex-1">
-            <div class="skeleton-shimmer mb-3 h-3 w-2/3 rounded-full bg-ink/10" />
-            <div class="space-y-2">
-              <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-ink/5" />
-              <div class="skeleton-shimmer h-2.5 w-4/5 rounded-full bg-ink/5" />
+          <div class="flex items-start gap-2">
+            <PulsingStar kind="streamIndicator" animate />
+            <div class="min-w-0 flex-1">
+              <div class="skeleton-shimmer mb-3 h-3 w-2/3 rounded-full bg-ink/10" />
+              <div class="space-y-2">
+                <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-ink/5" />
+                <div class="skeleton-shimmer h-2.5 w-4/5 rounded-full bg-ink/5" />
+              </div>
             </div>
           </div>
-        </div>
         </div>
       </div>
       <div class="mt-3 flex snap-x scroll-pl-4 gap-2 overflow-x-auto px-4 pb-1 scrollbar-hidden sm:px-0 @3xl/dashboard:grid @3xl/dashboard:grid-cols-2 @3xl/dashboard:overflow-visible @3xl/dashboard:pb-0 @6xl/dashboard:grid-cols-4">
@@ -333,14 +336,16 @@ function TeamPulseContent(props: { refreshToken: Accessor<number> }) {
       })),
       availableEntities: [
         ...notificationSignals,
-        ...automations().slice(0, 10).map((automation) => ({
-          id: automation.id,
-          type: 'automation',
-          label: automation.name,
-          enabled: automation.enabled,
-          running: automation.isRunning,
-          nextRunAt: automation.nextRunAt,
-        })),
+        ...automations()
+          .slice(0, 10)
+          .map((automation) => ({
+            id: automation.id,
+            type: 'automation',
+            label: automation.name,
+            enabled: automation.enabled,
+            running: automation.isRunning,
+            nextRunAt: automation.nextRunAt,
+          })),
       ],
     });
   });
@@ -410,20 +415,18 @@ JSON context:\n${source.context}`,
               <div>
                 <div class="px-4 sm:px-0">
                   <div class="rounded-xl bg-hover/50 p-3">
-                  <div class="flex min-w-0 items-start gap-2">
-                    <AnimatedStarIcon
-                      class="size-4 shrink-0 translate-y-px text-accent"
-                      triggerAnimation
-                    />
-                    <div class="flex min-w-0 flex-col gap-3">
-                      <p class="text-xs text-ink-muted">
-                        {data().health}
-                      </p>
-                      <p class="text-sm leading-6 text-ink">
-                        {data().overview}
-                      </p>
+                    <div class="flex min-w-0 items-start gap-2">
+                      <AnimatedStarIcon
+                        class="size-4 shrink-0 translate-y-px text-accent"
+                        triggerAnimation
+                      />
+                      <div class="flex min-w-0 flex-col gap-3">
+                        <p class="text-xs text-ink-muted">{data().health}</p>
+                        <p class="text-sm leading-6 text-ink">
+                          {data().overview}
+                        </p>
+                      </div>
                     </div>
-                  </div>
                   </div>
                 </div>
 
@@ -445,7 +448,6 @@ JSON context:\n${source.context}`,
                     />
                   </AdaptiveScroller.Controls>
                 </AdaptiveScroller>
-
               </div>
             )}
           </Match>

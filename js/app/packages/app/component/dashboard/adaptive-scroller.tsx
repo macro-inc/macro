@@ -27,7 +27,9 @@ const AdaptiveScrollerContext = createContext<AdaptiveScrollerContextValue>();
 function useAdaptiveScroller() {
   const context = useContext(AdaptiveScrollerContext);
   if (!context) {
-    throw new Error('AdaptiveScroller components must be used inside AdaptiveScroller');
+    throw new Error(
+      'AdaptiveScroller components must be used inside AdaptiveScroller'
+    );
   }
   return context;
 }
@@ -197,7 +199,10 @@ function AdaptiveScrollerFadeEdges(props: {
 
   return (
     <div
-      class={cn('pointer-events-none absolute inset-y-0 inset-x-0', props.class)}
+      class={cn(
+        'pointer-events-none absolute inset-y-0 inset-x-0',
+        props.class
+      )}
       aria-hidden="true"
     >
       <div
