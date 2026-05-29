@@ -135,29 +135,12 @@ async fn fetch_comments(
     repo: &str,
     number: u64,
 ) -> Option<Vec<GithubPullRequestComment>> {
-    let mut comments = Vec::new();
-    let mut fetched_any_comments = false;
+    let mut comments = fetch_issue_comments(client, access_token, owner, repo, number).await?;
 
-    if let Some(mut issue_comments) =
-        fetch_issue_comments(client, access_token, owner, repo, number).await
-    {
-        fetched_any_comments = true;
-        comments.append(&mut issue_comments);
-    }
+    comments.extend(fetch_review_comments(client, access_token, owner, repo, number).await?);
+    comments.extend(fetch_reviews(client, access_token, owner, repo, number).await?);
 
-    if let Some(mut review_comments) =
-        fetch_review_comments(client, access_token, owner, repo, number).await
-    {
-        fetched_any_comments = true;
-        comments.append(&mut review_comments);
-    }
-
-    if let Some(mut reviews) = fetch_reviews(client, access_token, owner, repo, number).await {
-        fetched_any_comments = true;
-        comments.append(&mut reviews);
-    }
-
-    fetched_any_comments.then_some(comments)
+    Some(comments)
 }
 
 async fn fetch_issue_comments(
@@ -167,15 +150,16 @@ async fn fetch_issue_comments(
     repo: &str,
     number: u64,
 ) -> Option<Vec<GithubPullRequestComment>> {
-    let url = format!(
-        "{GITHUB_API_BASE_URL}/repos/{owner}/{repo}/issues/{number}/comments?per_page={METADATA_PAGE_SIZE}"
-    );
-
-    match fetch_github_json::<Vec<GithubCommentResponse>>(
+    match fetch_paginated_github_items(
         client,
         access_token,
-        url,
+        |page| {
+            format!(
+                "{GITHUB_API_BASE_URL}/repos/{owner}/{repo}/issues/{number}/comments?per_page={METADATA_PAGE_SIZE}&page={page}"
+            )
+        },
         "pull request issue comments",
+        |comments: Vec<GithubCommentResponse>| comments,
     )
     .await
     {
@@ -205,15 +189,16 @@ async fn fetch_review_comments(
     repo: &str,
     number: u64,
 ) -> Option<Vec<GithubPullRequestComment>> {
-    let url = format!(
-        "{GITHUB_API_BASE_URL}/repos/{owner}/{repo}/pulls/{number}/comments?per_page={METADATA_PAGE_SIZE}"
-    );
-
-    match fetch_github_json::<Vec<GithubCommentResponse>>(
+    match fetch_paginated_github_items(
         client,
         access_token,
-        url,
+        |page| {
+            format!(
+                "{GITHUB_API_BASE_URL}/repos/{owner}/{repo}/pulls/{number}/comments?per_page={METADATA_PAGE_SIZE}&page={page}"
+            )
+        },
         "pull request review comments",
+        |comments: Vec<GithubCommentResponse>| comments,
     )
     .await
     {
@@ -243,15 +228,16 @@ async fn fetch_reviews(
     repo: &str,
     number: u64,
 ) -> Option<Vec<GithubPullRequestComment>> {
-    let url = format!(
-        "{GITHUB_API_BASE_URL}/repos/{owner}/{repo}/pulls/{number}/reviews?per_page={METADATA_PAGE_SIZE}"
-    );
-
-    match fetch_github_json::<Vec<GithubReviewResponse>>(
+    match fetch_paginated_github_items(
         client,
         access_token,
-        url,
+        |page| {
+            format!(
+                "{GITHUB_API_BASE_URL}/repos/{owner}/{repo}/pulls/{number}/reviews?per_page={METADATA_PAGE_SIZE}&page={page}"
+            )
+        },
         "pull request reviews",
+        |reviews: Vec<GithubReviewResponse>| reviews,
     )
     .await
     {
@@ -281,16 +267,21 @@ async fn fetch_check_runs(
     repo: &str,
     head_sha: &str,
 ) -> Option<Vec<GithubPullRequestCheckRun>> {
-    let url = format!(
-        "{GITHUB_API_BASE_URL}/repos/{owner}/{repo}/commits/{head_sha}/check-runs?per_page={METADATA_PAGE_SIZE}"
-    );
-
-    match fetch_github_json::<GithubCheckRunsResponse>(client, access_token, url, "check runs")
-        .await
+    match fetch_paginated_github_items(
+        client,
+        access_token,
+        |page| {
+            format!(
+                "{GITHUB_API_BASE_URL}/repos/{owner}/{repo}/commits/{head_sha}/check-runs?per_page={METADATA_PAGE_SIZE}&page={page}"
+            )
+        },
+        "check runs",
+        |response: GithubCheckRunsResponse| response.check_runs,
+    )
+    .await
     {
-        Ok(response) => Some(
-            response
-                .check_runs
+        Ok(check_runs) => Some(
+            check_runs
                 .into_iter()
                 .map(GithubCheckRunResponse::into_pull_request_check_run)
                 .collect(),
@@ -306,6 +297,40 @@ async fn fetch_check_runs(
             None
         }
     }
+}
+
+async fn fetch_paginated_github_items<Response, Item, UrlForPage, ItemsFromResponse>(
+    client: &reqwest::Client,
+    access_token: &str,
+    mut url_for_page: UrlForPage,
+    description: &str,
+    mut items_from_response: ItemsFromResponse,
+) -> Result<Vec<Item>, anyhow::Error>
+where
+    Response: DeserializeOwned,
+    UrlForPage: FnMut(u32) -> String,
+    ItemsFromResponse: FnMut(Response) -> Vec<Item>,
+{
+    let mut all_items = Vec::new();
+    let mut page = 1;
+
+    loop {
+        let response =
+            fetch_github_json::<Response>(client, access_token, url_for_page(page), description)
+                .await?;
+        let page_items = items_from_response(response);
+        let is_last_page = page_items.len() < usize::from(METADATA_PAGE_SIZE);
+
+        all_items.extend(page_items);
+
+        if is_last_page {
+            break;
+        }
+
+        page += 1;
+    }
+
+    Ok(all_items)
 }
 
 async fn fetch_github_json<T>(
