@@ -19,6 +19,7 @@ struct MockRepo {
     project_access: Arc<Mutex<Option<AccessLevel>>>,
     thread_access: Arc<Mutex<Option<AccessLevel>>>,
     call_access: Arc<Mutex<Option<AccessLevel>>>,
+    foreign_entity_access: Arc<Mutex<bool>>,
     channel_membership: Arc<Mutex<Vec<Uuid>>>,
     channel_role: Arc<Mutex<ChannelRoleResult>>,
     document_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
@@ -38,6 +39,7 @@ impl MockRepo {
             project_access: Arc::new(Mutex::new(None)),
             thread_access: Arc::new(Mutex::new(None)),
             call_access: Arc::new(Mutex::new(None)),
+            foreign_entity_access: Arc::new(Mutex::new(false)),
             channel_membership: Arc::new(Mutex::new(vec![])),
             channel_role: Arc::new(Mutex::new(ChannelRoleResult::NotFound)),
             document_users: Arc::new(Mutex::new(vec![])),
@@ -73,6 +75,11 @@ impl MockRepo {
     #[allow(dead_code)]
     fn with_call_access(mut self, level: AccessLevel) -> Self {
         self.call_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_foreign_entity_access(mut self, has_access: bool) -> Self {
+        self.foreign_entity_access = Arc::new(Mutex::new(has_access));
         self
     }
 
@@ -165,6 +172,14 @@ impl AccessRepository for MockRepo {
         Ok(*self.call_access.lock().await)
     }
 
+    async fn has_foreign_entity_access(
+        &self,
+        _foreign_entity_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<bool, AccessError> {
+        Ok(*self.foreign_entity_access.lock().await)
+    }
+
     async fn get_entity_users(
         &self,
         _entity_id: &uuid::Uuid,
@@ -215,6 +230,8 @@ fn test_user_id() -> MacroUserIdStr<'static> {
 fn user_id(s: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(s.to_string()).unwrap()
 }
+
+const FOREIGN_ENTITY_ID: &str = "22222222-2222-2222-2222-222222222222";
 
 #[tokio::test]
 async fn test_get_document_access_returns_level_from_repo() {
@@ -314,6 +331,32 @@ async fn test_get_channel_access_with_invalid_uuid_returns_error() {
         .await;
 
     assert!(matches!(result, Err(AccessError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn test_get_foreign_entity_access_returns_view_when_repo_grants_access() {
+    let repo = MockRepo::new().with_foreign_entity_access(true);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_access_level(Some(&user_id), FOREIGN_ENTITY_ID, EntityType::ForeignEntity)
+        .await;
+
+    assert_eq!(result.unwrap(), Some(AccessLevel::View));
+}
+
+#[tokio::test]
+async fn test_get_foreign_entity_access_returns_none_when_repo_denies_access() {
+    let repo = MockRepo::new().with_foreign_entity_access(false);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_access_level(Some(&user_id), FOREIGN_ENTITY_ID, EntityType::ForeignEntity)
+        .await;
+
+    assert_eq!(result.unwrap(), None);
 }
 
 #[tokio::test]
@@ -420,6 +463,30 @@ async fn test_get_entity_permission_document_no_access_returns_unauthorized() {
         .await;
 
     assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_get_entity_permission_foreign_entity_returns_view_access_level() {
+    let repo = MockRepo::new().with_foreign_entity_access(true);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            FOREIGN_ENTITY_ID,
+            EntityType::ForeignEntity,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
+        }
+    ));
 }
 
 #[tokio::test]
@@ -623,6 +690,49 @@ async fn test_generate_receipt_document_no_access_returns_unauthorized() {
             None,
             "doc-1",
             EntityType::Document,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_foreign_entity_view_requirement_succeeds() {
+    let repo = MockRepo::new().with_foreign_entity_access(true);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let receipt = service
+        .generate_entity_access_receipt::<ViewAccessLevel>(
+            &user_id,
+            None,
+            FOREIGN_ENTITY_ID,
+            EntityType::ForeignEntity,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(receipt.entity().entity_id, FOREIGN_ENTITY_ID);
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_foreign_entity_view_access_fails_comment_requirement() {
+    let repo = MockRepo::new().with_foreign_entity_access(true);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .generate_entity_access_receipt::<CommentAccessLevel>(
+            &user_id,
+            None,
+            FOREIGN_ENTITY_ID,
+            EntityType::ForeignEntity,
         )
         .await;
 

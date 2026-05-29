@@ -295,6 +295,10 @@ export function buildSingleEntityFilter(
       ...base,
       call_filters: { call_ids: [entityId] },
     }))
+    .with('crmCompany', () => ({
+      ...base,
+      crm_company_filters: { company_ids: [entityId] },
+    }))
     .with('foreignEntity', () => ({
       ...base,
       foreign_entity_filters: { ids: [entityId] },

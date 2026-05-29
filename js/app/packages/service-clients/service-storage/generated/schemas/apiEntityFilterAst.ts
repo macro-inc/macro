@@ -8,6 +8,9 @@
 export interface ApiEntityFilterAst {
   /** the filters that should be applied to the call entity */
   callf?: unknown;
+  /** Filters applied to the crm_company entity (wire key `ccf`).
+Empty/omitted = team's full visible list. */
+  ccf?: unknown;
   /** the filters that should be applied to the chat entity */
   cf?: unknown;
   /** the filters that should be applied to the channel entity */

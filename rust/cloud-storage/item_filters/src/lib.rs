@@ -458,6 +458,23 @@ impl IsEmpty for PropertyFilter {
     }
 }
 
+/// The crm company filters used to narrow which CRM companies appear in soup.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct CrmCompanyFilters {
+    /// CRM company ids to filter by. Examples: ['11111111-...']. Empty to
+    /// include all of the team's visible CRM companies.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub company_ids: Vec<String>,
+}
+
+impl IsEmpty for CrmCompanyFilters {
+    fn is_empty(&self) -> bool {
+        let CrmCompanyFilters { company_ids } = self;
+        company_ids.is_empty()
+    }
+}
+
 /// The project filters used to filter down what projects you search over.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -522,6 +539,9 @@ pub struct EntityFilters {
     /// the bundled [EmailFilters]
     #[serde(default)]
     pub email_filters: EmailFilters,
+    /// the bundled [CrmCompanyFilters]
+    #[serde(default)]
+    pub crm_company_filters: CrmCompanyFilters,
     /// the bundled [ForeignEntityFilters]
     #[serde(default)]
     pub foreign_entity_filters: ForeignEntityFilters,
@@ -539,6 +559,7 @@ impl IsEmpty for EntityFilters {
             channel_filters,
             call_filters,
             email_filters,
+            crm_company_filters,
             foreign_entity_filters,
             property_filters,
         } = self;
@@ -548,6 +569,7 @@ impl IsEmpty for EntityFilters {
             && channel_filters.is_empty()
             && call_filters.is_empty()
             && email_filters.is_empty()
+            && crm_company_filters.is_empty()
             && foreign_entity_filters.is_empty()
             && property_filters.iter().all(IsEmpty::is_empty)
     }

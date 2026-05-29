@@ -1,6 +1,6 @@
 import type { DateValue } from '@core/util/date';
 import type { ChannelMessagesData } from '@queries/channel/channel-messages';
-import type { ApiChannelMessage } from '@service-comms/client';
+import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 
 /** Minimal shape needed by isNewMessage — satisfied by both ApiChannelMessage and ApiThreadReply. */
 export type NewMessageCheckable = { created_at: string; sender_id: string };

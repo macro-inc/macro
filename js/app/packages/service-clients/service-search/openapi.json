@@ -819,6 +819,19 @@
         ],
         "description": "ChatSearchResponse object with channel metadata we fetch from macrodb. we don't store these\ntimestamps in opensearch as they would require us to update each chat message record for the chat\nevery time the chat updates (specifically for updated_at and viewed_at)"
       },
+      "CrmCompanyFilters": {
+        "type": "object",
+        "description": "The crm company filters used to narrow which CRM companies appear in soup.",
+        "properties": {
+          "company_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM company ids to filter by. Examples: ['11111111-...']. Empty to\ninclude all of the team's visible CRM companies."
+          }
+        }
+      },
       "DataType": {
         "type": "string",
         "description": "Data type for property values, determining storage and validation.",
@@ -1443,6 +1456,10 @@
           "chat_filters": {
             "$ref": "#/components/schemas/ChatFilters",
             "description": "the bundled [ChatFilters]"
+          },
+          "crm_company_filters": {
+            "$ref": "#/components/schemas/CrmCompanyFilters",
+            "description": "the bundled [CrmCompanyFilters]"
           },
           "document_filters": {
             "$ref": "#/components/schemas/DocumentFilters",

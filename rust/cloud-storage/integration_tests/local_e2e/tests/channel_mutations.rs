@@ -34,7 +34,7 @@ struct ChannelApiClient {
 impl ChannelApiClient {
     /// Channels API under test.
     /// Override mutations with `LOCAL_E2E_CHANNELS_BASE_URL=http://.../channels`.
-    /// Override the read-model API with `LOCAL_E2E_CHANNELS_READ_BASE_URL=http://.../comms/channels`.
+    /// Override the read-model API with `LOCAL_E2E_CHANNELS_READ_BASE_URL=http://.../channels`.
     fn from_config(config: &LocalE2eConfig, services: &LocalE2eServices) -> Self {
         let mutation_base_url = config
             .get("LOCAL_E2E_CHANNELS_BASE_URL")
@@ -45,7 +45,7 @@ impl ChannelApiClient {
             .get("LOCAL_E2E_CHANNELS_READ_BASE_URL")
             .or_else(|| config.get("LOCAL_E2E_NEW_CHANNELS_READ_BASE_URL"))
             .map(str::to_string)
-            .unwrap_or_else(|| format!("{}/comms/channels", services.document_storage_url()));
+            .unwrap_or_else(|| format!("{}/channels", services.document_storage_url()));
         Self {
             label: "channels".to_string(),
             mutation_base_url: trim_trailing_slash(&mutation_base_url),

@@ -1,4 +1,5 @@
 import type { MessageData } from '@channel/Message/types';
+import { senderFromStorageId } from '@queries/channel/message-sender';
 import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import type { Comment } from '@service-storage/generated/schemas/comment';
 
@@ -25,6 +26,7 @@ export function commentToApiChannelMessage(
   return {
     id: String(comment.commentId),
     content: comment.text,
+    sender: senderFromStorageId(comment.sender ?? comment.owner),
     sender_id: comment.sender ?? comment.owner,
     created_at: comment.createdAt ?? '',
     updated_at: comment.updatedAt ?? comment.createdAt ?? '',

@@ -95,6 +95,7 @@ pub async fn build_tool_service_context(
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
         call::domain::ports::NoOpCallRecordQueryService,
+        crm::domain::service::NoOpCrmService,
         foreign_entity_service,
     ));
 

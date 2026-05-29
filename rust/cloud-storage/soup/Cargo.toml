@@ -32,7 +32,7 @@ axum = [
 ]
 inbound = ["email/inbound", "entity_access/inbound", "ports"]
 outbound = ["crm/outbound", "dep:readonly_pool", "dep:sqlx", "ports"]
-ports = ["dep:tokio", "frecency/ports"]
+ports = ["crm/ports", "dep:tokio", "frecency/ports"]
 
 
 [dependencies]

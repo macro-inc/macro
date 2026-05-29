@@ -9,7 +9,7 @@ import {
   useAddParticipantsMutation,
   useRemoveParticipantsMutation,
 } from '@queries/channel/participants';
-import { ChannelType } from '@service-comms/generated/models/channelType';
+import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { ParticipantsAddPanel } from './ParticipantsAddPanel';

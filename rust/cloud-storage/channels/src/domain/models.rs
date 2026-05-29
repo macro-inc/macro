@@ -1,8 +1,97 @@
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use uuid::Uuid;
+
+pub use bot_id::BotId;
+
+/// Error returned when a sender storage string is not a user or bot id.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("invalid sender id: {value}")]
+pub struct SenderParseError {
+    value: String,
+}
+
+impl SenderParseError {
+    fn invalid(value: &str) -> Self {
+        Self {
+            value: value.to_string(),
+        }
+    }
+}
+
+/// Actor identity for channel mutations.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Sender {
+    /// A first-party Macro user.
+    User(MacroUserIdStr<'static>),
+    /// A channel-scoped or system bot.
+    Bot(BotId),
+}
+
+impl Sender {
+    /// Parse a sender id from the existing TEXT storage representation.
+    pub fn parse_storage_str(value: &str) -> Result<Self, SenderParseError> {
+        if let Ok(bot_id) = BotId::parse_storage_str(value) {
+            return Ok(Self::Bot(bot_id));
+        }
+
+        MacroUserIdStr::try_from(value.to_string())
+            .map(Self::User)
+            .map_err(|_| SenderParseError::invalid(value))
+    }
+
+    /// Canonical storage representation for existing TEXT sender/participant columns.
+    pub fn to_storage_string(&self) -> String {
+        match self {
+            Self::User(user_id) => user_id.as_ref().to_string(),
+            Self::Bot(bot_id) => bot_id.to_storage_string(),
+        }
+    }
+
+    /// Return the authenticated user id when the sender is a user.
+    pub fn as_user(&self) -> Option<&MacroUserIdStr<'static>> {
+        match self {
+            Self::User(user_id) => Some(user_id),
+            Self::Bot(_) => None,
+        }
+    }
+
+    /// Whether this sender is a bot.
+    pub const fn is_bot(&self) -> bool {
+        matches!(self, Self::Bot(_))
+    }
+}
+
+impl From<MacroUserIdStr<'static>> for Sender {
+    fn from(user_id: MacroUserIdStr<'static>) -> Self {
+        Self::User(user_id)
+    }
+}
+
+impl std::str::FromStr for Sender {
+    type Err = SenderParseError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse_storage_str(value)
+    }
+}
+
+impl std::fmt::Display for Sender {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.to_storage_string())
+    }
+}
+
+impl Serialize for Sender {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_storage_string())
+    }
+}
 
 /// Request to fetch a page of channel messages.
 #[derive(Debug)]
@@ -767,8 +856,8 @@ pub struct MutatedMessage {
     pub channel_id: Uuid,
     /// Thread parent id.
     pub thread_id: Option<Uuid>,
-    /// Sender user id.
-    pub sender_id: MacroUserIdStr<'static>,
+    /// Sender actor id.
+    pub sender_id: Sender,
     /// Message body.
     pub content: String,
     /// Created timestamp.
@@ -950,4 +1039,27 @@ pub struct CreateEntityMentionResponse {
 pub struct DeleteEntityMentionResponse {
     /// Whether the mention was deleted.
     pub deleted: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sender_round_trips_user_storage_string() {
+        let sender = Sender::parse_storage_str("macro|alice@example.com").unwrap();
+
+        assert_eq!(sender.to_storage_string(), "macro|alice@example.com");
+        assert!(matches!(sender, Sender::User(_)));
+    }
+
+    #[test]
+    fn sender_round_trips_bot_storage_string() {
+        let id = Uuid::new_v4();
+        let storage = format!("bot|{id}");
+        let sender = Sender::parse_storage_str(&storage).unwrap();
+
+        assert_eq!(sender.to_storage_string(), storage);
+        assert_eq!(serde_json::to_value(&sender).unwrap(), storage);
+    }
 }

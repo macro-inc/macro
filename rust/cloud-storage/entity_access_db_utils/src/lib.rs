@@ -224,9 +224,8 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Team
             | EntityType::Channel
             | EntityType::StaticFile
-            | EntityType::ForeignEntity => {
-                unreachable!()
-            }
+            | EntityType::CrmCompany
+            | EntityType::ForeignEntity => unreachable!(),
             EntityType::Project => {
                 // Get all items in project
                 let project_items = get_nested_project_entities(transaction, entity_id).await?;
@@ -283,9 +282,8 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Team
             | EntityType::Channel
             | EntityType::StaticFile
-            | EntityType::ForeignEntity => {
-                unreachable!()
-            }
+            | EntityType::CrmCompany
+            | EntityType::ForeignEntity => unreachable!(),
             EntityType::Project => {
                 // (a) Direct grant on the project itself (granted_from_project_id IS NULL)
                 let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
