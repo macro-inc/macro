@@ -51,21 +51,20 @@ type ModalPhase = 'start' | 'lessons' | 'end';
 
 function ModalHeader(props: { phase: Accessor<ModalPhase> }) {
   const onboarding = useOnboarding();
-  const title = () => {
-    if (props.phase() === 'start') return 'Welcome to Macro';
-    if (onboarding.state.isFinished()) return 'You’re ready to go';
-    return onboarding.state.currentLesson()?.definition.title ?? 'Learn Macro';
-  };
+  const currentLesson = () => onboarding.state.currentLesson();
 
   return (
-    <header class="shrink-0 flex items-center justify-between gap-4 px-5 py-4">
-      <Show when={props.phase() === 'lessons'} fallback={<div />}>
+    <header class="shrink-0 flex items-center justify-between gap-4 px-4 py-4">
+      <Show
+        when={props.phase() === 'lessons' && currentLesson()}
+        fallback={<div />}
+      >
         <div class="min-w-0">
           <Dialog.Title as="h2" class="text-4xl font-semibold text-ink m-0">
-            {title()}
+            {currentLesson()?.definition.title}
           </Dialog.Title>
           <Dialog.Description as="p" class="text-sm text-ink-extra-muted">
-            Learn the essentials in a few quick steps.
+            {currentLesson()?.definition.subtitle}
           </Dialog.Description>
         </div>
       </Show>
@@ -84,7 +83,7 @@ function ModalHeader(props: { phase: Accessor<ModalPhase> }) {
 function StartScreen(props: { onStart: () => void; onSkip: () => void }) {
   return (
     <div class="flex-1 flex items-center justify-center px-6">
-      <div class="max-w-2xl flex flex-col items-center text-center gap-5 -translate-y-10">
+      <div class="max-w-2xl flex flex-col items-center text-center gap-5 -translate-y-10 onboarding-stagger">
         <LogoIcon class="size-16 text-accent" />
         <div class="flex flex-col gap-2">
           <h3 class="text-3xl font-semibold text-ink">Welcome to Macro</h3>
@@ -106,10 +105,10 @@ function StartScreen(props: { onStart: () => void; onSkip: () => void }) {
   );
 }
 
-function EndScreen(props: { onFinish: () => void }) {
+function EndScreen(props: { onFinish: () => void; onReplay: () => void }) {
   return (
     <div class="flex-1 flex items-center justify-center px-6">
-      <div class="max-w-xl flex flex-col items-center text-center gap-5 -translate-y-10">
+      <div class="max-w-xl flex flex-col items-center text-center gap-5 -translate-y-10 onboarding-stagger">
         <LogoIcon class="size-16 text-accent" />
         <div class="flex flex-col gap-2">
           <h3 class="text-3xl font-semibold text-ink">You’re ready to go</h3>
@@ -117,10 +116,15 @@ function EndScreen(props: { onFinish: () => void }) {
             You can revisit these lessons anytime if you want a refresher.
           </p>
         </div>
-        <Button variant="cta" size="lg" onClick={props.onFinish}>
-          Let’s go
-          <ArrowRightIcon />
-        </Button>
+        <div class="w-full max-w-xs flex flex-col gap-2 pt-2">
+          <Button variant="cta" size="lg" onClick={props.onFinish}>
+            Let’s go
+            <ArrowRightIcon />
+          </Button>
+          <Button variant="ghost" size="lg" onClick={props.onReplay}>
+            Replay tutorial
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -167,7 +171,7 @@ function ModalFooter(props: { lesson: LessonState }) {
   );
 }
 
-function LessonsScreen(props: { onFinish: () => void }) {
+function LessonsScreen(props: { onFinish: () => void; onReplay: () => void }) {
   const onboarding = useOnboarding();
   const lesson = () => onboarding.state.currentLesson();
   const bodyStyle = () => ({
@@ -175,7 +179,12 @@ function LessonsScreen(props: { onFinish: () => void }) {
   });
 
   return (
-    <Show when={lesson()} fallback={<EndScreen onFinish={props.onFinish} />}>
+    <Show
+      when={lesson()}
+      fallback={
+        <EndScreen onFinish={props.onFinish} onReplay={props.onReplay} />
+      }
+    >
       {(currentLesson) => (
         <>
           <div class="flex-1 min-h-0 flex gap-12">
@@ -224,7 +233,12 @@ function InteractiveOnboardingModalLayout(props: { onClose: () => void }) {
 
   const handleSkip = () => {
     completeTutorial.mutate(undefined);
-    props.onClose();
+    setPhase('end');
+  };
+
+  const handleReplay = () => {
+    onboarding.resetTutorial();
+    setPhase('lessons');
   };
 
   const content = () => {
@@ -235,9 +249,9 @@ function InteractiveOnboardingModalLayout(props: { onClose: () => void }) {
     }
     if (onboarding.state.isFinished()) {
       if (phase() !== 'end') setPhase('end');
-      return <EndScreen onFinish={props.onClose} />;
+      return <EndScreen onFinish={props.onClose} onReplay={handleReplay} />;
     }
-    return <LessonsScreen onFinish={props.onClose} />;
+    return <LessonsScreen onFinish={props.onClose} onReplay={handleReplay} />;
   };
 
   return (

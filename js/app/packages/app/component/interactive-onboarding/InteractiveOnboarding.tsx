@@ -300,6 +300,14 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
     state.goToLessonById(targetLesson);
   };
 
+  const resetTutorial = () => {
+    const firstLesson = sortedLessons()[0];
+    if (!firstLesson) return;
+    state.goToLessonById(firstLesson.id);
+    setReadyToContinue(false);
+    setContinueLabel(undefined);
+  };
+
   // cmd+enter hotkey to continue
   let shellRef: HTMLDivElement | undefined;
   // Detached so onboarding hotkeys do not bubble up to app/global hotkeys.
@@ -479,6 +487,7 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
     advanceLesson,
     handleSkipLesson,
     handleContinue,
+    resetTutorial,
     getPreviousLesson,
     handleBack,
   };

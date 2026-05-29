@@ -16,6 +16,7 @@ export interface OnboardingContextValue {
   advanceLesson: LessonContentProps['advance'];
   handleSkipLesson: () => void;
   handleContinue: () => void;
+  resetTutorial: () => void;
   getPreviousLesson: () => LessonId | undefined;
   handleBack: (targetLesson: LessonId) => void;
 }
