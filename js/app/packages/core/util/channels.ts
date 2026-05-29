@@ -9,9 +9,9 @@ import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
+import { storageServiceClient } from '@service-storage/client';
 import type { NewChannelAttachment as NewAttachment } from '@service-storage/generated/schemas/newChannelAttachment';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
-import { storageServiceClient } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 
 type SendContent = {

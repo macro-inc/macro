@@ -11,7 +11,7 @@ import { queryReadyGate } from '@queries/gate';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
 import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import type { SoupChannel as ApiChannelWithLatest } from '@service-storage/generated/schemas/soupChannel';
+import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { toDate } from 'date-fns';
