@@ -509,6 +509,8 @@ use utoipa::OpenApi;
             BranchNameResponse,
             ShortIdResponse,
             documents_hex::domain::models::GithubPullRequest,
+            documents_hex::domain::models::GithubPullRequestCheckRun,
+            documents_hex::domain::models::GithubPullRequestComment,
             documents_hex::domain::models::GithubPullRequestsResponse,
 
             // Sync service

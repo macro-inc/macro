@@ -1,7 +1,9 @@
 //! Github Sync Client implementation of the [`GithubSyncClient`] port.
 
+use super::pull_request_metadata::fetch_pull_request_metadata;
+
 use crate::domain::{
-    models::{GithubError, GithubInstallationAccessToken},
+    models::{GithubError, GithubInstallationAccessToken, GithubPullRequestDetails},
     ports::GithubSyncClient,
 };
 
@@ -86,5 +88,18 @@ impl GithubSyncClient for GithubSyncClientImpl {
         }
 
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self, access_token), err)]
+    async fn get_pull_request_details(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<GithubPullRequestDetails, GithubError> {
+        fetch_pull_request_metadata(&self.client, access_token, owner, repo, number)
+            .await
+            .map_err(GithubError::Internal)
     }
 }

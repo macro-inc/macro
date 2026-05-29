@@ -66,6 +66,70 @@ impl fmt::Display for GithubPullRequestStatus {
     }
 }
 
+fn deserialize_optional_array<'de, D, T>(deserializer: D) -> Result<Option<Vec<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+
+    if value.is_null() {
+        return Ok(None);
+    }
+
+    if !value.is_array() {
+        return Ok(None);
+    }
+
+    Vec::<T>::deserialize(value)
+        .map(Some)
+        .map_err(serde::de::Error::custom)
+}
+
+/// A comment associated with a GitHub pull request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestComment {
+    /// The unique GitHub identifier for the comment or review.
+    pub id: u64,
+    /// The comment or review body text.
+    pub body: String,
+    /// The GitHub login for the comment author, when available.
+    pub author_login: Option<String>,
+    /// GitHub's relationship label for the author, when available.
+    pub author_association: Option<String>,
+    /// The public GitHub URL for the comment or review, when available.
+    pub url: Option<String>,
+    /// When the comment was created or the review was submitted.
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// When the comment or review was last updated.
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// The GitHub source for the comment, such as `issue_comment` or `review_comment`.
+    pub source: String,
+}
+
+/// A check run associated with a GitHub pull request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestCheckRun {
+    /// The unique GitHub identifier for the check run.
+    pub id: u64,
+    /// The check run name.
+    pub name: String,
+    /// The raw GitHub check run status.
+    pub status: String,
+    /// The raw GitHub check run conclusion, when the run has completed.
+    pub conclusion: Option<String>,
+    /// The public GitHub URL for the check run, when available.
+    pub url: Option<String>,
+    /// When the check run started, when available.
+    pub started_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// When the check run completed, when available.
+    pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
 /// GitHub API pull request details used to enrich a pull request reference.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -80,6 +144,20 @@ pub struct GithubPullRequestDetails {
     pub additions: u64,
     /// The number of deleted lines reported by GitHub.
     pub deletions: u64,
+    /// Comments collected from the pull request, when enrichment includes them.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_array"
+    )]
+    pub comments: Option<Vec<GithubPullRequestComment>>,
+    /// Check runs collected from the pull request head commit, when enrichment includes them.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_array"
+    )]
+    pub checks: Option<Vec<GithubPullRequestCheckRun>>,
 }
 
 impl GithubPullRequestDetails {
@@ -114,6 +192,12 @@ pub struct EnrichedGithubPullRequest {
     pub additions: Option<u64>,
     /// The number of deleted lines reported by GitHub, when enrichment succeeds.
     pub deletions: Option<u64>,
+    /// Comments collected from the pull request, when enrichment includes them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comments: Option<Vec<GithubPullRequestComment>>,
+    /// Check runs collected from the pull request head commit, when enrichment includes them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checks: Option<Vec<GithubPullRequestCheckRun>>,
 }
 
 impl EnrichedGithubPullRequest {
@@ -130,6 +214,8 @@ impl EnrichedGithubPullRequest {
             status: None,
             additions: None,
             deletions: None,
+            comments: None,
+            checks: None,
         }
     }
 
@@ -151,6 +237,8 @@ impl EnrichedGithubPullRequest {
             status: Some(status),
             additions: Some(details.additions),
             deletions: Some(details.deletions),
+            comments: details.comments,
+            checks: details.checks,
         }
     }
 }

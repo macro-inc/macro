@@ -13323,6 +13323,20 @@
             "description": "The number of added lines in the pull request, when enrichment data is available.",
             "minimum": 0
           },
+          "checks": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestCheckRun"
+            },
+            "description": "Check runs collected from the pull request head commit, when enrichment data is available."
+          },
+          "comments": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestComment"
+            },
+            "description": "Comments collected from the pull request, when enrichment data is available."
+          },
           "deletions": {
             "type": ["integer", "null"],
             "format": "int64",
@@ -13362,6 +13376,88 @@
           "url": {
             "type": "string",
             "description": "The public GitHub URL for the pull request."
+          }
+        }
+      },
+      "GithubPullRequestCheckRun": {
+        "type": "object",
+        "description": "A check run associated with a GitHub pull request.",
+        "required": ["id", "name", "status"],
+        "properties": {
+          "completedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the check run completed, when available."
+          },
+          "conclusion": {
+            "type": ["string", "null"],
+            "description": "The raw GitHub check run conclusion, when the run has completed."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The unique GitHub identifier for the check run.",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string",
+            "description": "The check run name."
+          },
+          "startedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the check run started, when available."
+          },
+          "status": {
+            "type": "string",
+            "description": "The raw GitHub check run status."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "The public GitHub URL for the check run, when available."
+          }
+        }
+      },
+      "GithubPullRequestComment": {
+        "type": "object",
+        "description": "A comment associated with a GitHub pull request.",
+        "required": ["id", "body", "source"],
+        "properties": {
+          "authorAssociation": {
+            "type": ["string", "null"],
+            "description": "GitHub's relationship label for the author, when available."
+          },
+          "authorLogin": {
+            "type": ["string", "null"],
+            "description": "The GitHub login for the comment author, when available."
+          },
+          "body": {
+            "type": "string",
+            "description": "The comment or review body text."
+          },
+          "createdAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the comment was created or the review was submitted."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The unique GitHub identifier for the comment or review.",
+            "minimum": 0
+          },
+          "source": {
+            "type": "string",
+            "description": "The GitHub source for the comment, such as `issue_comment` or `review_comment`."
+          },
+          "updatedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the comment or review was last updated."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "The public GitHub URL for the comment or review, when available."
           }
         }
       },

@@ -4583,6 +4583,10 @@ export const getDocumentGithubPullRequestsParams = zod.object({
 
 export const getDocumentGithubPullRequestsResponsePullRequestsItemAdditionsMin = 0;
 
+export const getDocumentGithubPullRequestsResponsePullRequestsItemChecksItemIdMin = 0;
+
+export const getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemIdMin = 0;
+
 export const getDocumentGithubPullRequestsResponsePullRequestsItemDeletionsMin = 0;
 
 export const getDocumentGithubPullRequestsResponsePullRequestsItemNumberMin = 0;
@@ -4601,6 +4605,108 @@ export const getDocumentGithubPullRequestsResponse = zod
               .nullish()
               .describe(
                 'The number of added lines in the pull request, when enrichment data is available.'
+              ),
+            checks: zod
+              .array(
+                zod
+                  .object({
+                    completedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the check run completed, when available.'
+                      ),
+                    conclusion: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The raw GitHub check run conclusion, when the run has completed.'
+                      ),
+                    id: zod
+                      .number()
+                      .min(
+                        getDocumentGithubPullRequestsResponsePullRequestsItemChecksItemIdMin
+                      )
+                      .describe(
+                        'The unique GitHub identifier for the check run.'
+                      ),
+                    name: zod.string().describe('The check run name.'),
+                    startedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('When the check run started, when available.'),
+                    status: zod
+                      .string()
+                      .describe('The raw GitHub check run status.'),
+                    url: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The public GitHub URL for the check run, when available.'
+                      ),
+                  })
+                  .describe(
+                    'A check run associated with a GitHub pull request.'
+                  )
+              )
+              .nullish()
+              .describe(
+                'Check runs collected from the pull request head commit, when enrichment data is available.'
+              ),
+            comments: zod
+              .array(
+                zod
+                  .object({
+                    authorAssociation: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "GitHub's relationship label for the author, when available."
+                      ),
+                    authorLogin: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The GitHub login for the comment author, when available.'
+                      ),
+                    body: zod
+                      .string()
+                      .describe('The comment or review body text.'),
+                    createdAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the comment was created or the review was submitted.'
+                      ),
+                    id: zod
+                      .number()
+                      .min(
+                        getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemIdMin
+                      )
+                      .describe(
+                        'The unique GitHub identifier for the comment or review.'
+                      ),
+                    source: zod
+                      .string()
+                      .describe(
+                        'The GitHub source for the comment, such as `issue_comment` or `review_comment`.'
+                      ),
+                    updatedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('When the comment or review was last updated.'),
+                    url: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The public GitHub URL for the comment or review, when available.'
+                      ),
+                  })
+                  .describe('A comment associated with a GitHub pull request.')
+              )
+              .nullish()
+              .describe(
+                'Comments collected from the pull request, when enrichment data is available.'
               ),
             deletions: zod
               .number()
