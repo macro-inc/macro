@@ -30,7 +30,14 @@ let pointerPosition: { x: number; y: number } | undefined;
 const pointerWithin: CollisionDetector = (_draggable, droppables, context) => {
   if (!pointerPosition) return null;
 
-  const hits = droppables.filter((droppable) => {
+  const enabledDroppables = droppables.filter((droppable) => {
+    const isDisabled = droppable.data.isDropTargetDisabled as
+      | (() => boolean)
+      | undefined;
+    return !isDisabled?.();
+  });
+
+  const hits = enabledDroppables.filter((droppable) => {
     const layout = droppable.layout;
     return (
       pointerPosition !== undefined &&
@@ -109,8 +116,14 @@ export function ItemDndProvider(props: { children: JSXElement }) {
     pointerPosition = { x: e.clientX, y: e.clientY };
   };
 
+  const handleMouseMove = (e: MouseEvent) => {
+    pointerPosition = { x: e.clientX, y: e.clientY };
+  };
+
   const handlePointerEnd = () => {
-    pointerPosition = undefined;
+    queueMicrotask(() => {
+      pointerPosition = undefined;
+    });
   };
 
   window.addEventListener('keydown', handleKeyDown);
@@ -118,6 +131,8 @@ export function ItemDndProvider(props: { children: JSXElement }) {
   window.addEventListener('pointermove', handlePointerMove, { capture: true });
   window.addEventListener('pointerup', handlePointerEnd, { capture: true });
   window.addEventListener('pointercancel', handlePointerEnd, { capture: true });
+  window.addEventListener('mousemove', handleMouseMove, { capture: true });
+  window.addEventListener('mouseup', handlePointerEnd, { capture: true });
 
   onCleanup(() => {
     window.removeEventListener('keydown', handleKeyDown);
@@ -129,6 +144,12 @@ export function ItemDndProvider(props: { children: JSXElement }) {
       capture: true,
     });
     window.removeEventListener('pointercancel', handlePointerEnd, {
+      capture: true,
+    });
+    window.removeEventListener('mousemove', handleMouseMove, {
+      capture: true,
+    });
+    window.removeEventListener('mouseup', handlePointerEnd, {
       capture: true,
     });
   });

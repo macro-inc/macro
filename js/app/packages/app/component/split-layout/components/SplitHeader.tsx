@@ -1,7 +1,9 @@
 import { isListViewID } from '@app/constants/list-views';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import type { BlockName } from '@core/block';
 import type { EntityDragEvent } from '@entity';
 import CollapseIcon from '@phosphor/arrows-in.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
@@ -21,6 +23,27 @@ import {
 import { Portal } from 'solid-js/web';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { canSpotlight } from '../utils/canSpotlight';
+import type { SplitContent } from '../layoutManager';
+
+function getEntitySplitContent(data: EntityDragEvent['draggable']['data']): {
+  type: SplitContent['type'];
+  id: string;
+} {
+  if (data.type === 'document') {
+    return {
+      type: fileTypeToBlockName(data.subType?.type ?? data.fileType) as
+        | BlockName
+        | 'unknown',
+      id: data.id,
+    };
+  }
+
+  if (data.type === 'channel_message') {
+    return { type: 'channel', id: data.channelId };
+  }
+
+  return { type: data.type, id: data.id };
+}
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
@@ -134,6 +157,10 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
 
     const data = event.draggable?.data;
     if (!data || data.dragType !== 'entity') return;
+
+    const current = panel.handle.content();
+    const next = getEntitySplitContent(data);
+    if (current.type === next.type && current.id === next.id) return;
 
     void openEntityInSplitFromUnifiedList(data, {
       splitHandle: panel.handle,

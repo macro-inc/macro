@@ -1,11 +1,14 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
+import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { isSidebarVisible } from '@app/component/sidebarVisibility';
 import { activeElement } from '@app/signal/focus';
 import { Resize } from '@core/component/Resize';
 import { splitContainerSelector } from '@core/dom-selectors';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { tabTitleSignal } from '@core/signal/tabTitle';
+import type { EntityDragEvent } from '@entity';
 import { useNavigate } from '@solidjs/router';
+import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { cn } from '@ui';
 import {
   type Accessor,
@@ -42,6 +45,70 @@ type SplitLayoutContainerProps = {
   pairs: string[];
   setManager: Setter<SplitManager | undefined>;
 };
+
+function RightEdgeSplitDropTarget(props: { splitManager: SplitManager }) {
+  const droppableId = 'split-right-edge-new-split';
+  const [dragDropState, { onDragEnd }] = useDragDropContext() ?? [
+    undefined,
+    { onDragEnd: () => {} },
+  ];
+
+  const isEntityDragging = createMemo(
+    () => dragDropState?.active.draggable?.data?.dragType === 'entity'
+  );
+
+  const shouldShow = createMemo(
+    () =>
+      !isNativeMobilePlatform() &&
+      isEntityDragging() &&
+      props.splitManager.canAppendSplit()
+  );
+
+  const droppable = createDroppable(droppableId, {
+    type: 'split-right-edge-new-split',
+    isDropTargetDisabled: () => !shouldShow(),
+  });
+
+  const isActive = createMemo(
+    () => shouldShow() && dragDropState?.active.droppable?.id === droppableId
+  );
+
+  onDragEnd((event: EntityDragEvent) => {
+    if (event.droppable?.id !== droppableId) return;
+    if (!props.splitManager.canAppendSplit()) return;
+
+    const data = event.draggable?.data;
+    if (!data || data.dragType !== 'entity') return;
+
+    void openEntityInSplitFromUnifiedList(data, {
+      openInNewSplit: true,
+    });
+  });
+
+  return (
+    <div
+      ref={droppable}
+        class={cn(
+          'fixed right-0 top-0 h-screen w-48 z-modal-overlay pointer-events-none transition-opacity',
+          shouldShow() ? 'opacity-95' : 'opacity-0',
+          isActive() && 'opacity-100'
+        )}
+      data-split-right-edge-drop-target
+    >
+      <div
+        class={cn(
+          'absolute top-8 bottom-8 right-8 left-8 rounded-xl bg-surface border border-dashed border-accent/50 ring ring-accent/10 flex items-center justify-center transition-transform',
+          isActive() && 'scale-[1.02]'
+        )}
+      >
+        <div class="bg-surface border border-edge rounded-lg shadow-lg shadow-drop-shadow px-4 py-3 text-sm text-ink-muted flex flex-col items-center gap-2 whitespace-nowrap">
+          <div class="text-3xl leading-none text-ink">+</div>
+          <div>New split</div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function getParentSplitId(element: Element | null) {
   if (!element || !element.isConnected) return null;
@@ -357,6 +424,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
           />
         </Show>
       </div>
+      <RightEdgeSplitDropTarget splitManager={splitManager} />
       <PopoverSplitRenderer
         popovers={splitManager.popovers}
         onClosePopover={(id) => {
