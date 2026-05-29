@@ -1,42 +1,43 @@
 use crate::domain::{
     models::{
-        BundleRoot, CompletedStatus, ProgressPercentage, UnzipRequest, UnzipStatus, UpdateApproval,
-        UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateStatus,
+        BundleRoot, CompletedStatus, ProgressPercentage, UnzipRequest, UnzipStatus,
+        UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateGranted, UpdateStatus,
     },
     ports::{AutoUpdateService, FsRepo, SystemQuery, UpdateRepo},
 };
 use rootcause::{Report, prelude::ResultExt, report};
 use std::path::{Path, PathBuf};
+use tokio::sync::mpsc::error::TrySendError;
 
 /// Manages the update worker and the active bundle root.
 pub struct Service<Fs: FsRepo> {
     handle: WorkerHandle,
     fs_repo: Fs,
     bundle_root: BundleRoot,
+    reload_pending: bool,
 }
 
-/// Sender half the worker uses to offer a oneshot back to the main thread.
-type GrantOfferTx = tokio::sync::mpsc::Sender<tokio::sync::oneshot::Sender<UpdateApproval>>;
-/// Receiver half the main thread uses to obtain the oneshot sender.
-type GrantOfferRx = tokio::sync::mpsc::Receiver<tokio::sync::oneshot::Sender<UpdateApproval>>;
+enum WorkerCommand {
+    Restart,
+    Continue,
+}
 
 /// Main thread sends on this to start the checker loop.
-type StartTx = tokio::sync::mpsc::Sender<()>;
+type StartTx = tokio::sync::mpsc::Sender<WorkerCommand>;
 /// Worker receives on this to know when to run the checker loop.
-type StartRx = tokio::sync::mpsc::Receiver<()>;
+type StartRx = tokio::sync::mpsc::Receiver<WorkerCommand>;
 
 struct Worker<U, Fs, Q> {
     update_repo: U,
     fs_repo: Fs,
     system_query: Q,
     status_tx: tokio::sync::watch::Sender<Result<UpdateStatus, Report<UpdateError>>>,
-    grant_offer_tx: GrantOfferTx,
     start_rx: StartRx,
 }
 
 struct WorkerHandle {
     status_rx: tokio::sync::watch::Receiver<Result<UpdateStatus, Report<UpdateError>>>,
-    grant_offer_rx: GrantOfferRx,
+    status_tx: tokio::sync::watch::Sender<Result<UpdateStatus, Report<UpdateError>>>,
     start_tx: StartTx,
 }
 
@@ -46,22 +47,20 @@ const ENTRYPOINT_NAME: &str = "index.html";
 impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
     fn new_handle(update_repo: U, fs_repo: Fs, system_query: Q) -> WorkerHandle {
         let (status_tx, status_rx) = tokio::sync::watch::channel(Ok(UpdateStatus::Idle));
-        let (grant_offer_tx, grant_offer_rx) = tokio::sync::mpsc::channel(1);
         let (start_tx, start_rx) = tokio::sync::mpsc::channel(1);
 
         Worker {
             update_repo,
             fs_repo,
             system_query,
-            status_tx,
-            grant_offer_tx,
+            status_tx: status_tx.clone(),
             start_rx,
         }
         .run_background();
 
         WorkerHandle {
             status_rx,
-            grant_offer_rx,
+            status_tx,
             start_tx,
         }
     }
@@ -70,10 +69,12 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
         tauri::async_runtime::spawn(async move {
             // Run the checker loop once on startup, then again each time we
             // receive a restart signal from the main thread.
-            while let Some(()) = self.start_rx.recv().await {
-                // Reset status to Idle for the new run
-                if self.status_tx.send(Ok(UpdateStatus::Idle)).is_err() {
-                    break;
+            while let Some(command) = self.start_rx.recv().await {
+                if matches!(command, WorkerCommand::Restart) {
+                    // Reset status to Idle for the new run.
+                    if self.status_tx.send(Ok(UpdateStatus::Idle)).is_err() {
+                        break;
+                    }
                 }
 
                 self.run_check_loop().await;
@@ -91,10 +92,20 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
             }
 
             let next = self.next_status(status).await;
+            let should_stop = matches!(
+                &next,
+                Ok(UpdateStatus::NoUpdateNeeded)
+                    | Ok(UpdateStatus::WaitingForWifi(_))
+                    | Ok(UpdateStatus::Completed(_))
+                    | Err(_)
+            );
 
             let Ok(()) = self.status_tx.send(next) else {
                 break;
             };
+            if should_stop {
+                break;
+            }
         }
     }
 
@@ -138,25 +149,22 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                 }
             }
             UpdateStatus::UpdateFound(update_found_status) => {
-                let (tx, rx) = tokio::sync::oneshot::channel();
-                // Send the oneshot sender to the main thread so it can respond
-                self.grant_offer_tx.send(tx).await.map_err(|_| {
-                    report!("Grant offer receiver was dropped").context(UpdateError::GrantErr)
-                })?;
-                // Wait for the main thread to send approval back
-                let res = rx.await.map_err(|e| {
-                    rootcause::report!("Failed to receive grant {e:?}. The sender was dropped")
-                        .context(UpdateError::GrantErr)
-                })?;
-                match res {
-                    UpdateApproval::Granted(grant) => {
-                        Ok(UpdateStatus::DownloadingBundle(UpdateDownloadingStatus {
-                            grant,
-                            update: update_found_status.bundle,
-                            progress: ProgressPercentage::default(),
-                        }))
+                match self.should_download_now().await {
+                    Ok(true) => Ok(start_download(update_found_status)),
+                    Ok(false) => Ok(UpdateStatus::WaitingForWifi(update_found_status)),
+                    Err(e) => {
+                        tracing::warn!(
+                            error = %e,
+                            "Network check failed; approving bundle download"
+                        );
+                        Ok(start_download(update_found_status))
                     }
-                    UpdateApproval::Denied(_update_denied) => Ok(UpdateStatus::NoUpdateNeeded),
+                }
+            }
+            UpdateStatus::WaitingForWifi(update_found_status) => {
+                match self.should_download_now().await {
+                    Ok(true) => Ok(start_download(update_found_status)),
+                    Ok(false) | Err(_) => Ok(UpdateStatus::WaitingForWifi(update_found_status)),
                 }
             }
             UpdateStatus::NoUpdateNeeded => Ok(UpdateStatus::NoUpdateNeeded),
@@ -225,6 +233,18 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
         }
     }
 
+    async fn should_download_now(&self) -> Result<bool, Report> {
+        let network_type = self.system_query.get_network_type().await?;
+        tracing::info!(
+            network_type = network_type.as_deref().unwrap_or("unknown"),
+            "Bundle update network check"
+        );
+        Ok(matches!(
+            network_type.as_deref(),
+            Some("wifi") | Some("ethernet")
+        ))
+    }
+
     /// Create a monotonically increasing download directory and return the
     /// path where the zip should be placed.
     async fn create_download_directory(
@@ -237,6 +257,14 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
         bundle.push("bundle.zip");
         Ok(bundle)
     }
+}
+
+fn start_download(update_found_status: UpdateFoundStatus) -> UpdateStatus {
+    UpdateStatus::DownloadingBundle(UpdateDownloadingStatus {
+        grant: UpdateGranted::default(),
+        update: update_found_status.bundle,
+        progress: ProgressPercentage::default(),
+    })
 }
 
 /// Determine the next monotonic bundle index from a list of directory names.
@@ -318,6 +346,7 @@ impl<Fs: FsRepo> Service<Fs> {
             handle,
             fs_repo,
             bundle_root: BundleRoot::new(),
+            reload_pending: false,
         }
     }
 
@@ -331,11 +360,16 @@ impl<Fs: FsRepo> Service<Fs> {
         self.bundle_root.path()
     }
 
-    /// Apply the update by modifying the bundle root and resetting the worker thread to the initial state.
+    /// Apply the update by modifying the bundle root.
     ///
-    /// Returns `Ok(false)` when there is no pending update or another caller
-    /// is already applying one.
+    /// Returns `Ok(true)` when a webview reload should be dispatched. The
+    /// worker remains in `Completed` until the reloaded webview acknowledges
+    /// that it mounted with the new bundle root.
     pub async fn apply_update(&mut self, cache_dir: &Path) -> Result<bool, Report> {
+        if self.reload_pending {
+            return Ok(true);
+        }
+
         let entrypoint = {
             let status = self.status().borrow();
             match status.as_ref() {
@@ -344,12 +378,6 @@ impl<Fs: FsRepo> Service<Fs> {
             }
         };
 
-        // Claim the worker restart slot before doing any work. If the channel
-        // is full another apply_update is already in flight — short-circuit.
-        if self.start().is_err() {
-            return Ok(false);
-        }
-
         let bundle_dir = entrypoint
             .parent()
             .ok_or_else(|| report!("entrypoint {entrypoint:?} has no parent directory"))?
@@ -357,10 +385,25 @@ impl<Fs: FsRepo> Service<Fs> {
 
         tracing::info!("Setting bundle root to {bundle_dir:?}");
         self.set_bundle_root(bundle_dir.clone(), cache_dir).await?;
+        self.reload_pending = true;
 
         // Remove old bundle directories now that we've switched to the new one
         self.cleanup_old_bundles(cache_dir, &bundle_dir).await;
 
+        Ok(true)
+    }
+
+    /// Acknowledge that the webview has reloaded after applying an update.
+    ///
+    /// Returns `Ok(true)` if a pending reload was acknowledged and the updater
+    /// worker was restarted, or `Ok(false)` when no reload was pending.
+    pub fn acknowledge_update_reload(&mut self) -> Result<bool, Report> {
+        if !self.reload_pending {
+            return Ok(false);
+        }
+
+        self.start()?;
+        self.reload_pending = false;
         Ok(true)
     }
 
@@ -417,20 +460,404 @@ impl<Fs: FsRepo> AutoUpdateService for Service<Fs> {
         &self.handle.status_rx
     }
 
-    fn try_recv_grant_sender(
-        &mut self,
-    ) -> Result<tokio::sync::oneshot::Sender<UpdateApproval>, Report> {
-        self.handle
-            .grant_offer_rx
-            .try_recv()
-            .map_err(|e| report!("No pending grant offer: {e}"))
+    fn approve_pending_update(&self, approved: bool) -> Result<(), Report> {
+        let mut updated = false;
+        self.handle.status_tx.send_if_modified(|cur| {
+            let Ok(status) = cur else {
+                return false;
+            };
+            let pending = match status {
+                UpdateStatus::UpdateFound(found) | UpdateStatus::WaitingForWifi(found) => {
+                    Some(found.clone())
+                }
+                _ => None,
+            };
+            let Some(found) = pending else {
+                return false;
+            };
+
+            *status = if approved {
+                start_download(found)
+            } else {
+                UpdateStatus::NoUpdateNeeded
+            };
+            updated = true;
+            true
+        });
+
+        if !updated {
+            return Err(report!("No pending bundle update to approve"));
+        }
+
+        if approved {
+            self.continue_run()?;
+        }
+        Ok(())
+    }
+
+    fn retry_waiting_for_wifi(&self) -> Result<bool, Report> {
+        let waiting = matches!(
+            &*self.handle.status_rx.borrow(),
+            Ok(UpdateStatus::WaitingForWifi(_))
+        );
+        if waiting {
+            self.continue_run()?;
+        }
+        Ok(waiting)
     }
 
     #[tracing::instrument(err, skip(self))]
     fn start(&self) -> Result<(), Report> {
         self.handle
             .start_tx
-            .try_send(())
+            .try_send(WorkerCommand::Restart)
             .map_err(|e| report!("Failed to send start signal: {e}"))
+    }
+}
+
+impl<Fs: FsRepo> Service<Fs> {
+    fn continue_run(&self) -> Result<(), Report> {
+        match self.handle.start_tx.try_send(WorkerCommand::Continue) {
+            Ok(()) | Err(TrySendError::Full(_)) => Ok(()),
+            Err(e) => Err(report!("Failed to send continue signal: {e}")),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::{
+        models::{
+            AppInfo, Arch, BundleUpdate, DownloadBundleError, DownloadBundleRequest, Target,
+            UnzipError,
+        },
+        ports::AutoUpdateService,
+    };
+    use std::{
+        future::pending,
+        sync::{Arc, Mutex as StdMutex},
+        time::Duration,
+    };
+
+    #[derive(Clone)]
+    struct FakeUpdateRepo {
+        update: Option<BundleUpdate>,
+        block_download: bool,
+    }
+
+    impl UpdateRepo for FakeUpdateRepo {
+        async fn check_for_update(
+            &self,
+            _request: AppInfo,
+        ) -> Result<Option<BundleUpdate>, rootcause::Report> {
+            Ok(self.update.clone())
+        }
+
+        async fn get_update_bundle<P: AsRef<Path> + Send>(
+            &self,
+            _request: DownloadBundleRequest<P>,
+        ) -> Result<(), Report<DownloadBundleError>> {
+            if self.block_download {
+                pending::<()>().await;
+            }
+            Ok(())
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct FakeFs;
+
+    impl FsRepo for FakeFs {
+        async fn verify_checksum<P: AsRef<Path> + Send>(
+            &self,
+            _path: P,
+            _expected: &str,
+        ) -> Result<(), UnzipError> {
+            Ok(())
+        }
+
+        async fn unzip(&self, request: UnzipRequest) -> Result<PathBuf, UnzipError> {
+            Ok(request.archive_target)
+        }
+
+        async fn create_dir_all<P: AsRef<Path> + Send>(
+            &self,
+            _path: P,
+        ) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+
+        async fn list_dir_names(&self, _dir: &Path) -> Vec<String> {
+            Vec::new()
+        }
+
+        async fn remove_dir_all(&self, _dir: &Path) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+
+        async fn read_to_string(&self, _path: &Path) -> Result<String, std::io::Error> {
+            Err(std::io::Error::new(std::io::ErrorKind::NotFound, "missing"))
+        }
+
+        async fn write(&self, _path: &Path, _contents: &[u8]) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+
+        async fn remove_file(&self, _path: &Path) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+    }
+
+    #[derive(Clone)]
+    struct FakeSystemQuery {
+        network_type: Arc<StdMutex<Option<String>>>,
+        update_dir: PathBuf,
+    }
+
+    impl FakeSystemQuery {
+        fn new(network_type: &str) -> Self {
+            Self {
+                network_type: Arc::new(StdMutex::new(Some(network_type.to_string()))),
+                update_dir: std::env::temp_dir().join("macro_bundle_updater_plugin_tests"),
+            }
+        }
+
+        fn set_network_type(&self, network_type: &str) {
+            *self.network_type.lock().unwrap() = Some(network_type.to_string());
+        }
+    }
+
+    impl SystemQuery for FakeSystemQuery {
+        async fn get_system_info(&self) -> Result<AppInfo, rootcause::Report> {
+            Ok(AppInfo {
+                current_version: semver::Version::new(0, 0, 0),
+                arch: Arch::Aarch64,
+                target: Target::Ios,
+            })
+        }
+
+        async fn get_network_type(&self) -> Result<Option<String>, rootcause::Report> {
+            Ok(self.network_type.lock().unwrap().clone())
+        }
+
+        async fn get_update_dir(&self) -> Result<PathBuf, std::io::Error> {
+            Ok(self.update_dir.clone())
+        }
+    }
+
+    fn bundle_update() -> BundleUpdate {
+        BundleUpdate {
+            version: semver::Version::new(1, 2, 3),
+            notes: None,
+            url: "https://example.com/bundle.zip".parse().unwrap(),
+            checksum: "checksum".to_string(),
+        }
+    }
+
+    fn service_with_network(network_type: &str) -> (Service<FakeFs>, FakeSystemQuery) {
+        let system_query = FakeSystemQuery::new(network_type);
+        let service = Service::new(
+            FakeUpdateRepo {
+                update: Some(bundle_update()),
+                block_download: true,
+            },
+            FakeFs,
+            system_query.clone(),
+        );
+        (service, system_query)
+    }
+
+    fn service_with_status(status: UpdateStatus) -> (Service<FakeFs>, StartRx) {
+        let (status_tx, status_rx) = tokio::sync::watch::channel(Ok(status));
+        let (start_tx, start_rx) = tokio::sync::mpsc::channel(1);
+        (
+            Service {
+                handle: WorkerHandle {
+                    status_rx,
+                    status_tx,
+                    start_tx,
+                },
+                fs_repo: FakeFs,
+                bundle_root: BundleRoot::new(),
+                reload_pending: false,
+            },
+            start_rx,
+        )
+    }
+
+    fn completed_status() -> UpdateStatus {
+        UpdateStatus::Completed(CompletedStatus {
+            entrypoint: PathBuf::from("/tmp/macro-bundle-test/1/index.html"),
+        })
+    }
+
+    async fn wait_for_status(
+        service: &Service<FakeFs>,
+        mut predicate: impl FnMut(&UpdateStatus) -> bool,
+    ) -> UpdateStatus {
+        let mut rx = service.status().clone();
+        tokio::time::timeout(Duration::from_secs(1), async move {
+            loop {
+                {
+                    let borrowed = rx.borrow();
+                    if let Ok(status) = &*borrowed
+                        && predicate(status)
+                    {
+                        return status.clone();
+                    }
+                }
+                rx.changed().await.expect("status sender dropped");
+            }
+        })
+        .await
+        .expect("timed out waiting for status")
+    }
+
+    #[tokio::test]
+    async fn update_found_on_wifi_advances_to_downloading() {
+        let (service, _system_query) = service_with_network("wifi");
+
+        service.start().unwrap();
+
+        let status = wait_for_status(&service, |status| {
+            matches!(status, UpdateStatus::DownloadingBundle(_))
+        })
+        .await;
+        assert!(matches!(status, UpdateStatus::DownloadingBundle(_)));
+    }
+
+    #[tokio::test]
+    async fn update_found_on_ethernet_advances_to_downloading() {
+        let (service, _system_query) = service_with_network("ethernet");
+
+        service.start().unwrap();
+
+        let status = wait_for_status(&service, |status| {
+            matches!(status, UpdateStatus::DownloadingBundle(_))
+        })
+        .await;
+        assert!(matches!(status, UpdateStatus::DownloadingBundle(_)));
+    }
+
+    #[tokio::test]
+    async fn update_found_on_cellular_waits_for_wifi() {
+        let (service, _system_query) = service_with_network("cellular");
+
+        service.start().unwrap();
+
+        let status = wait_for_status(&service, |status| {
+            matches!(status, UpdateStatus::WaitingForWifi(_))
+        })
+        .await;
+        assert!(matches!(status, UpdateStatus::WaitingForWifi(_)));
+    }
+
+    #[tokio::test]
+    async fn retry_waiting_for_wifi_stays_waiting_on_cellular() {
+        let (service, _system_query) = service_with_network("cellular");
+
+        service.start().unwrap();
+        wait_for_status(&service, |status| {
+            matches!(status, UpdateStatus::WaitingForWifi(_))
+        })
+        .await;
+
+        assert!(service.retry_waiting_for_wifi().unwrap());
+        let status = wait_for_status(&service, |status| {
+            matches!(status, UpdateStatus::WaitingForWifi(_))
+        })
+        .await;
+        assert!(matches!(status, UpdateStatus::WaitingForWifi(_)));
+    }
+
+    #[tokio::test]
+    async fn retry_waiting_for_wifi_advances_when_wifi_becomes_available() {
+        let (service, system_query) = service_with_network("cellular");
+
+        service.start().unwrap();
+        wait_for_status(&service, |status| {
+            matches!(status, UpdateStatus::WaitingForWifi(_))
+        })
+        .await;
+
+        system_query.set_network_type("wifi");
+        assert!(service.retry_waiting_for_wifi().unwrap());
+
+        let status = wait_for_status(&service, |status| {
+            matches!(status, UpdateStatus::DownloadingBundle(_))
+        })
+        .await;
+        assert!(matches!(status, UpdateStatus::DownloadingBundle(_)));
+    }
+
+    #[tokio::test]
+    async fn duplicate_retry_nudge_is_benign_when_command_already_queued() {
+        let (status_tx, status_rx) =
+            tokio::sync::watch::channel(Ok(UpdateStatus::WaitingForWifi(UpdateFoundStatus {
+                bundle: bundle_update(),
+            })));
+        let (start_tx, _start_rx) = tokio::sync::mpsc::channel(1);
+        start_tx.try_send(WorkerCommand::Continue).unwrap();
+        let service = Service {
+            handle: WorkerHandle {
+                status_rx,
+                status_tx,
+                start_tx,
+            },
+            fs_repo: FakeFs,
+            bundle_root: BundleRoot::new(),
+            reload_pending: false,
+        };
+
+        assert!(service.retry_waiting_for_wifi().unwrap());
+    }
+
+    #[tokio::test]
+    async fn apply_update_returns_false_when_status_is_not_completed() {
+        let (mut service, _system_query) = service_with_network("wifi");
+
+        let applied = service.apply_update(Path::new("/tmp")).await.unwrap();
+
+        assert!(!applied);
+    }
+
+    #[tokio::test]
+    async fn apply_update_keeps_worker_completed_until_reload_ack() {
+        let (mut service, mut start_rx) = service_with_status(completed_status());
+
+        let applied = service.apply_update(Path::new("/tmp")).await.unwrap();
+
+        assert!(applied);
+        assert!(service.reload_pending);
+        assert!(matches!(
+            &*service.status().borrow(),
+            Ok(UpdateStatus::Completed(_))
+        ));
+        assert!(start_rx.try_recv().is_err());
+
+        assert!(service.acknowledge_update_reload().unwrap());
+        assert!(!service.reload_pending);
+        assert!(matches!(
+            start_rx.try_recv().unwrap(),
+            WorkerCommand::Restart
+        ));
+    }
+
+    #[tokio::test]
+    async fn apply_update_returns_true_while_reload_ack_is_pending() {
+        let (mut service, _start_rx) = service_with_status(UpdateStatus::Idle);
+        service.reload_pending = true;
+
+        let applied = service.apply_update(Path::new("/tmp")).await.unwrap();
+
+        assert!(applied);
+    }
+
+    #[test]
+    fn acknowledge_update_reload_returns_false_without_pending_reload() {
+        let (mut service, _start_rx) = service_with_status(UpdateStatus::Idle);
+
+        assert!(!service.acknowledge_update_reload().unwrap());
     }
 }

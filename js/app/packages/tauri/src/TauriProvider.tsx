@@ -7,16 +7,13 @@ import { listen } from '@tauri-apps/api/event';
 import { type OsType, type as osType } from '@tauri-apps/plugin-os';
 import {
   type Accessor,
-  batch,
   createContext,
-  createEffect,
   createSignal,
   type JSX,
   onCleanup,
   onMount,
   useContext,
 } from 'solid-js';
-import { getNetworkInfo } from 'tauri-plugin-device-info-api';
 import { getInsets, type Insets } from 'tauri-plugin-safe-area-insets';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
@@ -51,7 +48,6 @@ function TauriProvider(props: { children: JSX.Element }) {
   const [insets, setInsets] = createSignal<NotAndroid | Insets>('not-android');
   const [bundleUpdateStatus, setBundleUpdateStatus] =
     createSignal<BundleUpdateStatus>({ status: 'Idle' });
-  const [waitingForWifi, setWaitingForWifi] = createSignal(false);
 
   function grantBundleUpdate() {
     invoke('grant_bundle_update', { approved: true }).catch((e) =>
@@ -60,11 +56,21 @@ function TauriProvider(props: { children: JSX.Element }) {
   }
 
   function cancelWifiWait() {
-    batch(() => {
-      setWaitingForWifi(false);
-      setBundleUpdateStatus({ status: 'CheckingForUpdate' });
-    });
     grantBundleUpdate();
+  }
+
+  let applyingBundleUpdate = false;
+  function performBundleUpdate() {
+    if (applyingBundleUpdate) return;
+    applyingBundleUpdate = true;
+    invoke<boolean>('perform_update')
+      .then((applied) => {
+        if (!applied) applyingBundleUpdate = false;
+      })
+      .catch((e) => {
+        applyingBundleUpdate = false;
+        console.error('[bundle-update] perform_update failed', e);
+      });
   }
 
   if (isTauri() && isPlatform('ios')) useCallKitSetup();
@@ -75,74 +81,6 @@ function TauriProvider(props: { children: JSX.Element }) {
     bundleUpdateStatus,
     cancelWifiWait,
   };
-
-  // When an update is found, only approve the download if we're on wifi/ethernet.
-  // On cellular, wait and poll until a suitable connection is available.
-  createEffect(() => {
-    const status = bundleUpdateStatus();
-    if (status.status !== 'UpdateFound') return;
-
-    let aborted = false;
-    onCleanup(() => {
-      aborted = true;
-    });
-
-    console.info('[bundle-update] update found, checking network');
-    getNetworkInfo()
-      .then((info) => {
-        if (aborted) return;
-        if (['wifi', 'ethernet'].includes(info.networkType ?? '')) {
-          console.info('[bundle-update] network ok, approving download');
-          grantBundleUpdate();
-        } else {
-          console.info('[bundle-update] cellular network, waiting for wifi');
-          batch(() => {
-            setBundleUpdateStatus({ status: 'WaitingForWifi' });
-            setWaitingForWifi(true);
-          });
-        }
-      })
-      .catch((e) => {
-        if (aborted) return;
-        // If network detection fails, allow the download rather than blocking it.
-        console.warn(
-          '[bundle-update] network check failed, approving download',
-          e
-        );
-        grantBundleUpdate();
-      });
-  });
-
-  // While waiting for wifi, poll on a 30s interval and on app foreground.
-  createEffect(() => {
-    if (!waitingForWifi()) return;
-
-    async function tryGrant() {
-      try {
-        const info = await getNetworkInfo();
-        // Re-check after the async gap — cancelWifiWait or a prior tick may have already fired.
-        if (!waitingForWifi()) return;
-        if (['wifi', 'ethernet'].includes(info.networkType ?? '')) {
-          setWaitingForWifi(false);
-          console.info('[bundle-update] wifi detected, approving download');
-          grantBundleUpdate();
-        }
-      } catch {
-        // Ignore — will retry on next tick.
-      }
-    }
-
-    const intervalId = setInterval(() => void tryGrant(), 30_000);
-    const onVisibilityChange = () => {
-      if (!document.hidden) void tryGrant();
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    onCleanup(() => {
-      clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    });
-  });
 
   onMount(() => {
     console.info('[bundle-update] registering listener');
@@ -162,11 +100,11 @@ function TauriProvider(props: { children: JSX.Element }) {
           console.info('[bundle-update] received', JSON.stringify(ev.payload));
           loggedDownloading = false;
         }
-        batch(() => {
-          setBundleUpdateStatus(ev.payload);
-          if (ev.payload.status !== 'WaitingForWifi') setWaitingForWifi(false);
-        });
+        setBundleUpdateStatus(ev.payload);
       }
+    );
+    invoke<boolean>('ack_bundle_update_reload').catch((e) =>
+      console.error('[bundle-update] ack_bundle_update_reload failed', e)
     );
     // Fetch current status since events emitted before the listener registered are missed
     invoke<BundleUpdateStatus>('get_bundle_update_status').then((status) => {
@@ -202,6 +140,22 @@ function TauriProvider(props: { children: JSX.Element }) {
 
     document.body.classList.add('tauri');
     document.body.classList.add(`tauri-${value.os}`);
+
+    const onBundleUpdateVisibilityChange = () => {
+      if (document.hidden) {
+        performBundleUpdate();
+      }
+    };
+    document.addEventListener(
+      'visibilitychange',
+      onBundleUpdateVisibilityChange
+    );
+    onCleanup(() => {
+      document.removeEventListener(
+        'visibilitychange',
+        onBundleUpdateVisibilityChange
+      );
+    });
   });
 
   return (
