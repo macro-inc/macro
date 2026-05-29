@@ -4,7 +4,6 @@ import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useTutorialCompleted } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { fetchToken } from '@core/util/fetchWithToken';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
@@ -78,20 +77,9 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
   // completed lessons before the first render, avoiding a flash of the first slide.
   // Search the unfiltered LESSONS list so return params can still complete
   // lessons even if the visible lesson list changes.
-  const returningLesson = LESSONS.findLast(
-    (l) => l.completeOnParam && params.has(l.completeOnParam)
-  );
-  const returnCompleted = returningLesson
-    ? new Set(
-        sortedLessons()
-          .filter((l) => (l.order ?? 0) <= (returningLesson.order ?? 0))
-          .map((l) => l.id)
-      )
-    : undefined;
-
   const state = createOnboardingState({
     definitions: lessons,
-    initialCompleted: debugCompleted ?? returnCompleted ?? new Set(),
+    initialCompleted: debugCompleted ?? new Set(),
   });
 
   const [readyToContinue, setReadyToContinue] = createSignal(false);
@@ -117,12 +105,7 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
   // Skip the redirect when returning from external flow — we just marked it
   // complete ourselves and still have remaining lessons to show.
   createEffect(() => {
-    if (
-      tutorialCompleted() &&
-      !props.ignoreTutorialCompleted &&
-      !returningLesson &&
-      !testMode
-    ) {
+    if (tutorialCompleted() && !props.ignoreTutorialCompleted && !testMode) {
       navigateAway();
     }
   });
@@ -147,7 +130,7 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
   };
 
   // Programmatic advance for lessons that progress on their own interaction
-  // (e.g. clicking a plan card) rather than the Continue button.
+  // rather than the Continue button.
   const advanceLesson = () => {
     const current = state.currentLesson();
     if (!current) return;
@@ -194,22 +177,6 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
         state: 'completed',
       }
     );
-
-    if (current.definition.onContinue) {
-      // On web this redirects (returns void). On native mobile it resolves
-      // with true after inline auth succeeds, so we advance the lesson.
-      const result = current.definition.onContinue();
-      if (result instanceof Promise) {
-        result.then((shouldAdvance) => {
-          if (shouldAdvance) {
-            state.completeLesson(current.definition.id);
-            setReadyToContinue(false);
-            setContinueLabel(undefined);
-          }
-        });
-      }
-      return;
-    }
 
     state.completeLesson(current.definition.id);
     setReadyToContinue(false);
@@ -276,26 +243,6 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
         shellRef?.removeEventListener('keydown', stopKeyboardPropagation);
         shellRef?.removeEventListener('keyup', stopKeyboardPropagation);
       });
-    }
-
-    // When returning from an external flow, clean the return param from the URL
-    // and run side-effects. The lessons are already pre-completed synchronously.
-    if (returningLesson?.completeOnParam) {
-      const cleanParams = new URLSearchParams(window.location.search);
-      cleanParams.delete(returningLesson.completeOnParam);
-      const qs = cleanParams.toString();
-      window.history.replaceState(
-        null,
-        '',
-        qs ? `${window.location.pathname}?${qs}` : window.location.pathname
-      );
-
-      // Ensure the JWT is refreshed before making authenticated API calls.
-      // On a fresh page load after OAuth redirect, the session cookie is set
-      // but no fetchWithToken call has triggered a token refresh yet.
-      if (returningLesson.onCompleteParam) {
-        fetchToken().then(() => returningLesson.onCompleteParam!());
-      }
     }
   });
 
@@ -381,12 +328,7 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
   onMount(() => {
     if (state.currentIndex() > 0) return;
 
-    analytics.track('onboarding_start', {
-      source:
-        params.get('mobile_welcome_email') === 'true'
-          ? 'mobile_welcome_email'
-          : undefined,
-    });
+    analytics.track('onboarding_start');
   });
 
   createEffect(
