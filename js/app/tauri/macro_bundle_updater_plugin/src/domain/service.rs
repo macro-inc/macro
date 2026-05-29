@@ -172,16 +172,23 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                     Err(e) => {
                         tracing::warn!(
                             error = %e,
-                            "Network check failed; approving bundle download"
+                            "Network check failed; waiting for Wi-Fi"
                         );
-                        Ok(start_download(update_found_status))
+                        Ok(UpdateStatus::WaitingForWifi(update_found_status))
                     }
                 }
             }
             UpdateStatus::WaitingForWifi(update_found_status) => {
                 match self.should_download_now().await {
                     Ok(true) => Ok(start_download(update_found_status)),
-                    Ok(false) | Err(_) => Ok(UpdateStatus::WaitingForWifi(update_found_status)),
+                    Ok(false) => Ok(UpdateStatus::WaitingForWifi(update_found_status)),
+                    Err(e) => {
+                        tracing::warn!(
+                            error = %e,
+                            "Network check failed while waiting for Wi-Fi"
+                        );
+                        Ok(UpdateStatus::WaitingForWifi(update_found_status))
+                    }
                 }
             }
             UpdateStatus::NoUpdateNeeded => Ok(UpdateStatus::NoUpdateNeeded),
@@ -678,6 +685,7 @@ mod tests {
     #[derive(Clone)]
     struct FakeSystemQuery {
         network_type: Arc<StdMutex<Option<String>>>,
+        network_type_error: Arc<StdMutex<bool>>,
         update_dir: PathBuf,
     }
 
@@ -685,12 +693,17 @@ mod tests {
         fn new(network_type: &str) -> Self {
             Self {
                 network_type: Arc::new(StdMutex::new(Some(network_type.to_string()))),
+                network_type_error: Arc::new(StdMutex::new(false)),
                 update_dir: std::env::temp_dir().join("macro_bundle_updater_plugin_tests"),
             }
         }
 
         fn set_network_type(&self, network_type: &str) {
             *self.network_type.lock().unwrap() = Some(network_type.to_string());
+        }
+
+        fn set_network_type_error(&self, should_error: bool) {
+            *self.network_type_error.lock().unwrap() = should_error;
         }
     }
 
@@ -704,6 +717,9 @@ mod tests {
         }
 
         async fn get_network_type(&self) -> Result<Option<String>, rootcause::Report> {
+            if *self.network_type_error.lock().unwrap() {
+                return Err(report!("network info unavailable"));
+            }
             Ok(self.network_type.lock().unwrap().clone())
         }
 
@@ -856,6 +872,26 @@ mod tests {
         })
         .await;
         assert!(matches!(status, UpdateStatus::DownloadingBundle(_)));
+    }
+
+    #[tokio::test]
+    async fn retry_waiting_for_wifi_stays_waiting_when_network_check_fails() {
+        let (service, system_query) = service_with_network("cellular");
+
+        service.start().unwrap();
+        wait_for_status(&service, |status| {
+            matches!(status, UpdateStatus::WaitingForWifi(_))
+        })
+        .await;
+
+        system_query.set_network_type_error(true);
+        assert!(service.retry_waiting_for_wifi().unwrap());
+
+        let status = wait_for_status(&service, |status| {
+            matches!(status, UpdateStatus::WaitingForWifi(_))
+        })
+        .await;
+        assert!(matches!(status, UpdateStatus::WaitingForWifi(_)));
     }
 
     #[tokio::test]
