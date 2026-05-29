@@ -86,7 +86,6 @@ impl CallRecordQueryService for NoopCallRecordQueryService {
     }
 }
 
-<<<<<<< hutch/feat-foreign-entity-router
 fn foreign_entity_id_from_receipt(
     receipt: EntityAccessReceipt<ViewAccessLevel>,
 ) -> Result<Uuid, ForeignEntityError> {
@@ -102,9 +101,7 @@ fn foreign_entity_id_from_receipt(
         ForeignEntityError::BadRequest("foreign entity receipt id must be a valid UUID".to_string())
     })
 }
-=======
 use crm::domain::service::NoOpCrmService;
->>>>>>> main
 
 #[derive(Clone)]
 struct NoopForeignEntityService;
