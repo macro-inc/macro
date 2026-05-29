@@ -1,10 +1,8 @@
 import type { Component } from 'solid-js';
-import type { OnboardingContextValue } from './onboarding-context';
 
 export type LessonId = string;
 
 export interface BackContext {
-  onboarding: OnboardingContextValue;
   isLessonSkipped: (id: LessonId) => boolean;
   hasPaidAccess: boolean;
 }
