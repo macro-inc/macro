@@ -16,7 +16,7 @@ axum = [
 ]
 default = ["inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
-outbound = ["dep:sqlx", "dep:unfurl", "ports"]
+outbound = ["dep:reqwest", "dep:sqlx", "dep:unfurl", "ports"]
 ports = []
 
 [dependencies]
@@ -37,6 +37,7 @@ model-error-response = { path = "../model-error-response", optional = true }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies
+reqwest = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 unfurl = { path = "../unfurl", features = ["ports"], optional = true }
 

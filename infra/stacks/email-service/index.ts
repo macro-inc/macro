@@ -44,6 +44,8 @@ const AUDIENCE = aws.secretsmanager
   .apply((secret) => secret.secretString);
 const ISSUER = config.require(`fusionauth_issuer`);
 const NOTIFICATIONS_ENABLED = config.require(`notifications_enabled`);
+const USE_APOLLO_CRM_ENRICHMENT = config.require(`use_apollo_crm_enrichment`);
+const APOLLO_API_KEY_SECRET_NAME = config.require(`apollo_api_key_secret_name`);
 const SENT_UNDO_DELAY_SECS = config.require(`sent_undo_delay_secs`);
 const REDIS_RATE_LIMIT_REQS = config.require(`redis_rate_limit_reqs`);
 const REDIS_RATE_LIMIT_REQS_BACKFILL = config.require(
@@ -163,6 +165,10 @@ const macroDbUrlArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: MACRO_DB_URL_SECRET_NAME })
   .apply((secret) => secret.arn);
 
+const apolloApiKeySecretArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: APOLLO_API_KEY_SECRET_NAME })
+  .apply((secret) => secret.arn);
+
 const inbox_sync_queue = new Queue('email-service-gmail-webhook', {
   tags,
   maxReceiveCount: 3,
@@ -273,6 +279,7 @@ const secretKeyArns = [
   macroDbUrlArn,
   MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
   cloudfrontSecretKey.arn,
+  apolloApiKeySecretArn,
 ];
 
 const queueArns = [
@@ -474,6 +481,14 @@ const containerEnvVars = [
   {
     name: 'NOTIFICATIONS_ENABLED',
     value: pulumi.interpolate`${NOTIFICATIONS_ENABLED}`,
+  },
+  {
+    name: 'USE_APOLLO_CRM_ENRICHMENT',
+    value: pulumi.interpolate`${USE_APOLLO_CRM_ENRICHMENT}`,
+  },
+  {
+    name: 'APOLLO_API_KEY',
+    value: pulumi.interpolate`${APOLLO_API_KEY_SECRET_NAME}`,
   },
   {
     name: 'SEARCH_EVENT_QUEUE',

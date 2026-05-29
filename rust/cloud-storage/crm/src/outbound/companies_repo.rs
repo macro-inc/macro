@@ -619,7 +619,15 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         let normalized_domain = domain.to_ascii_lowercase();
         let row = sqlx::query!(
             r#"
-            SELECT name, description, icon_url
+            SELECT
+                name, description, icon_url,
+                apollo_organization_id, website_url, linkedin_url, twitter_url,
+                facebook_url, industry, keywords, technologies,
+                estimated_num_employees, annual_revenue, annual_revenue_printed,
+                total_funding, total_funding_printed, latest_funding_stage,
+                latest_funding_round_date, founded_year, publicly_traded_symbol,
+                publicly_traded_exchange, phone, raw_address, street_address,
+                city, state, postal_code, country, raw
             FROM crm_domain_directory
             WHERE LOWER(domain) = $1
             LIMIT 1
@@ -634,6 +642,32 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             name: r.name,
             description: r.description,
             icon_url: r.icon_url,
+            apollo_organization_id: r.apollo_organization_id,
+            website_url: r.website_url,
+            linkedin_url: r.linkedin_url,
+            twitter_url: r.twitter_url,
+            facebook_url: r.facebook_url,
+            industry: r.industry,
+            keywords: r.keywords.unwrap_or_default(),
+            technologies: r.technologies.unwrap_or_default(),
+            estimated_num_employees: r.estimated_num_employees,
+            annual_revenue: r.annual_revenue,
+            annual_revenue_printed: r.annual_revenue_printed,
+            total_funding: r.total_funding,
+            total_funding_printed: r.total_funding_printed,
+            latest_funding_stage: r.latest_funding_stage,
+            latest_funding_round_date: r.latest_funding_round_date,
+            founded_year: r.founded_year,
+            publicly_traded_symbol: r.publicly_traded_symbol,
+            publicly_traded_exchange: r.publicly_traded_exchange,
+            phone: r.phone,
+            raw_address: r.raw_address,
+            street_address: r.street_address,
+            city: r.city,
+            state: r.state,
+            postal_code: r.postal_code,
+            country: r.country,
+            raw: r.raw,
         }))
     }
 
@@ -644,18 +678,62 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         metadata: &DomainMetadata,
     ) -> Result<(), CrmError> {
         let normalized_domain = domain.to_ascii_lowercase();
-        // First-write-wins. Negative cache entries (all-NULL) are
-        // preserved to suppress future resolver calls.
+        // First-write-wins. All-empty rows are negative-cache entries that
+        // suppress future resolver calls; `enriched_at` stamps resolve time.
         sqlx::query!(
             r#"
-            INSERT INTO crm_domain_directory (domain, name, description, icon_url)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO crm_domain_directory (
+                domain, name, description, icon_url,
+                apollo_organization_id, website_url, linkedin_url, twitter_url,
+                facebook_url, industry, keywords, technologies,
+                estimated_num_employees, annual_revenue, annual_revenue_printed,
+                total_funding, total_funding_printed, latest_funding_stage,
+                latest_funding_round_date, founded_year, publicly_traded_symbol,
+                publicly_traded_exchange, phone, raw_address, street_address,
+                city, state, postal_code, country, raw, enriched_at
+            )
+            VALUES (
+                $1, $2, $3, $4,
+                $5, $6, $7, $8,
+                $9, $10, $11, $12,
+                $13, $14, $15,
+                $16, $17, $18,
+                $19, $20, $21,
+                $22, $23, $24, $25,
+                $26, $27, $28, $29, $30, now()
+            )
             ON CONFLICT (LOWER(domain)) DO NOTHING
             "#,
             normalized_domain,
             metadata.name,
             metadata.description,
             metadata.icon_url,
+            metadata.apollo_organization_id,
+            metadata.website_url,
+            metadata.linkedin_url,
+            metadata.twitter_url,
+            metadata.facebook_url,
+            metadata.industry,
+            &metadata.keywords,
+            &metadata.technologies,
+            metadata.estimated_num_employees,
+            metadata.annual_revenue,
+            metadata.annual_revenue_printed,
+            metadata.total_funding,
+            metadata.total_funding_printed,
+            metadata.latest_funding_stage,
+            metadata.latest_funding_round_date,
+            metadata.founded_year,
+            metadata.publicly_traded_symbol,
+            metadata.publicly_traded_exchange,
+            metadata.phone,
+            metadata.raw_address,
+            metadata.street_address,
+            metadata.city,
+            metadata.state,
+            metadata.postal_code,
+            metadata.country,
+            metadata.raw,
         )
         .execute(&self.pool)
         .await
