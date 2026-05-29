@@ -9,8 +9,14 @@ type EditedIndicatorProps = {
 export function EditedIndicator(props: EditedIndicatorProps) {
   const message = useMessage();
 
+  // Macro Agent edits its own "thinking" message into the answer; that isn't a
+  // user edit, so don't surface an "(edited)" marker for bot senders.
   return (
-    <Show when={message().edited_at != null}>
+    <Show
+      when={
+        message().edited_at != null && !message().sender_id.startsWith('bot|')
+      }
+    >
       <span class={cn('text-xs text-ink-placeholder', props.class)}>
         (edited)
       </span>
