@@ -79,11 +79,20 @@ pub struct BotEvent {
     pub requesting_user: MacroUserIdStr<'static>,
 }
 
-/// Handles a bot trigger. New bot behaviors implement this trait.
+/// Handles a trigger for an external bot (one defined by a database row, e.g. a
+/// webhook bot). New external bot behaviors implement this trait.
 #[async_trait]
 pub trait BotHandler: Send + Sync {
     /// React to a trigger for `bot`.
     async fn handle(&self, bot: &Bot, event: &BotEvent) -> anyhow::Result<()>;
+}
+
+/// Handles a trigger for a system bot. System bots are defined in code and
+/// require no database row, so the handler is given only the event.
+#[async_trait]
+pub trait SystemBotHandler: Send + Sync {
+    /// React to a trigger for this system bot.
+    async fn handle(&self, event: &BotEvent) -> anyhow::Result<()>;
 }
 
 /// Message Macro Agent posts immediately, then replaces with its answer.
@@ -158,9 +167,9 @@ impl MacroAiHandler {
 }
 
 #[async_trait]
-impl BotHandler for MacroAiHandler {
-    #[tracing::instrument(skip(self, _bot, event), fields(channel_id = %event.channel_id), err)]
-    async fn handle(&self, _bot: &Bot, event: &BotEvent) -> anyhow::Result<()> {
+impl SystemBotHandler for MacroAiHandler {
+    #[tracing::instrument(skip(self, event), fields(channel_id = %event.channel_id), err)]
+    async fn handle(&self, event: &BotEvent) -> anyhow::Result<()> {
         let actor = Sender::Bot(bot_id::MACRO_AI_BOT_ID);
 
         // 1. Gather conversational context (before posting, so our own

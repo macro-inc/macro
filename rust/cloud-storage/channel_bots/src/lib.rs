@@ -21,7 +21,9 @@ mod responder;
 mod router;
 
 pub use directory::BotDirectory;
-pub use handlers::{BotEvent, BotHandler, BotTrigger, MacroAiHandler, WebhookBotHandler};
+pub use handlers::{
+    BotEvent, BotHandler, BotTrigger, MacroAiHandler, SystemBotHandler, WebhookBotHandler,
+};
 pub use poster::ChannelBotPoster;
 pub use responder::{AgentResponder, DcsAgentResponder};
 pub use router::BotTriggerRouter;
