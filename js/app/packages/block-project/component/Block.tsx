@@ -31,6 +31,7 @@ import { toast } from 'core/component/Toast/Toast';
 import { type Component, createSignal, Show } from 'solid-js';
 import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
+import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 
 // HACK: prevent lint error on custom directive
 false && fileFolderDrop;
@@ -130,12 +131,9 @@ const Block: Component = () => {
     });
   }
 
-  const [attachHotkeys, projectViewScope] = useHotkeyDOMScope('project-view');
-
   return (
     <DocumentBlockContainer>
       <div
-        ref={attachHotkeys}
         class="size-full bg-surface flex flex-col relative"
         use:fileFolderDrop={{
           onDragStart: () => setIsDragging(true),
@@ -157,7 +155,9 @@ const Block: Component = () => {
               <ProjectEntityList
                 projectId={projectId}
                 soup={projectSoup}
-                scopeId={projectViewScope}
+                // Scope is already attached by the block container so we can use that
+                // Change this when we remove blocks
+                scopeId={blockHotkeyScopeSignal.get()}
               />
             }
           >
@@ -174,7 +174,9 @@ const Block: Component = () => {
                 <ProjectEntityList
                   projectId={projectId}
                   soup={projectSoup}
-                  scopeId={projectViewScope}
+                  // Scope is already attached by the block container so we can use that
+                  // Change this when we remove blocks
+                  scopeId={blockHotkeyScopeSignal.get()}
                 />
               </SplitPanelContext.Provider>
             </div>
