@@ -14,7 +14,7 @@ import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import { useSendMobileWelcomeEmail } from '@queries/auth';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Button, cn, Surface } from '@ui';
+import { Button, cn } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -461,67 +461,65 @@ function InteractiveOnboardingInner() {
         .onboarding-stagger > *:nth-child(5) { animation-delay: 330ms; }
       `
       }</style>
-      <div class="inset-0 absolute text-edge bg-surface opacity-10 -z-1">
-        <PcNoiseGrid
-          cellSize={30}
-          warp={0}
-          crunch={0.2}
-          freq={0.001}
-          size={[0, 0.3]}
-          rounding={0}
-          fill={0}
-          stroke={1}
-          speed={[0.017, 0.209]}
-        />
-      </div>
 
-      {/* Centered card */}
-      <div class="size-full max-w-400 max-h-225">
-        <Surface depth={1}>
-          <div class="size-full flex">
+      <div class="size-full max-w-400 max-h-225 flex">
+        <Show
+          when={state.currentLesson()}
+          fallback={
+            <Show when={testMode && state.isFinished()}>
+              <div
+                class="flex flex-col items-center justify-center w-full gap-4"
+                style={{
+                  animation: 'onboarding-scale-in 300ms ease-out both',
+                }}
+              >
+                <p class="text-sm text-ink/60">All lessons complete.</p>
+                <button
+                  type="button"
+                  class="px-3 py-1.5 text-sm bg-accent text-white rounded hover:bg-accent/80 transition-colors"
+                  onClick={() => window.location.reload()}
+                >
+                  Replay
+                </button>
+              </div>
+            </Show>
+          }
+        >
+          {(lesson) => (
             <Show
-              when={state.currentLesson()}
+              when={!isTouch}
               fallback={
-                <Show when={testMode && state.isFinished()}>
+                /* Touch layout — single vertical column */
+                <div class="size-full flex flex-col items-center overflow-y-auto p-6">
                   <div
-                    class="flex flex-col items-center justify-center w-full gap-4"
-                    style={{
-                      animation: 'onboarding-scale-in 300ms ease-out both',
-                    }}
+                    style={bodyStyle()}
+                    class="flex flex-col items-start text-left gap-6 w-full max-w-md mt-4"
                   >
-                    <p class="text-sm text-ink/60">All lessons complete.</p>
-                    <button
-                      type="button"
-                      class="px-3 py-1.5 text-sm bg-accent text-white rounded hover:bg-accent/80 transition-colors"
-                      onClick={() => window.location.reload()}
-                    >
-                      Replay
-                    </button>
-                  </div>
-                </Show>
-              }
-            >
-              {(lesson) => (
-                <Show
-                  when={!isTouch}
-                  fallback={
-                    /* Touch layout — single vertical column */
-                    <div class="size-full flex flex-col items-center overflow-y-auto p-6">
-                      <div
-                        style={bodyStyle()}
-                        class="flex flex-col items-start text-left gap-6 w-full max-w-md mt-4"
-                      >
-                        <h2 class="text-3xl font-semibold text-ink">
-                          {lesson().definition.title}
-                        </h2>
-                        <Show when={lesson().definition.subtitle}>
-                          <p class="text-base text-ink/60">
-                            {lesson().definition.subtitle}
-                          </p>
-                        </Show>
-                        <div class="onboarding-stagger">
+                    <h2 class="text-3xl font-semibold text-ink">
+                      {lesson().definition.title}
+                    </h2>
+                    <Show when={lesson().definition.subtitle}>
+                      <p class="text-base text-ink/60">
+                        {lesson().definition.subtitle}
+                      </p>
+                    </Show>
+                    <div class="onboarding-stagger">
+                      <Dynamic
+                        component={lesson().definition.content}
+                        onComplete={handleLessonComplete}
+                        onUnready={handleLessonUnready}
+                        advance={advanceLesson}
+                        skipLesson={state.skipLesson}
+                        goToLesson={state.goToLessonById}
+                        isActive={true}
+                        scopeId={scopeId}
+                      />
+                    </div>
+                    <Show when={lesson().definition.demo}>
+                      {(Demo) => (
+                        <div class="w-full">
                           <Dynamic
-                            component={lesson().definition.content}
+                            component={Demo()}
                             onComplete={handleLessonComplete}
                             onUnready={handleLessonUnready}
                             advance={advanceLesson}
@@ -531,163 +529,105 @@ function InteractiveOnboardingInner() {
                             scopeId={scopeId}
                           />
                         </div>
-                        <Show when={lesson().definition.demo}>
-                          {(Demo) => (
-                            <div class="w-full">
-                              <Dynamic
-                                component={Demo()}
-                                onComplete={handleLessonComplete}
-                                onUnready={handleLessonUnready}
-                                advance={advanceLesson}
-                                skipLesson={state.skipLesson}
-                                goToLesson={state.goToLessonById}
-                                isActive={true}
-                                scopeId={scopeId}
-                              />
-                            </div>
-                          )}
-                        </Show>
-                        <Show when={!lesson().definition.hideContinue}>
-                          <div class="w-full flex flex-col gap-2 mt-2">
-                            <ContinueButton
-                              ref={(el) => {
-                                continueButtonRef = el;
-                              }}
-                              onClick={handleContinue}
-                              label={continueLabel()}
-                              disabled={!readyToContinue()}
-                              centered={lesson().definition.centeredButton}
+                      )}
+                    </Show>
+                    <Show when={!lesson().definition.hideContinue}>
+                      <div class="w-full flex flex-col gap-2 mt-2">
+                        <ContinueButton
+                          ref={(el) => {
+                            continueButtonRef = el;
+                          }}
+                          onClick={handleContinue}
+                          label={continueLabel()}
+                          disabled={!readyToContinue()}
+                          centered={lesson().definition.centeredButton}
+                        />
+                        <Show when={lesson().definition.secondaryAction}>
+                          {(Action) => (
+                            <Dynamic
+                              component={Action()}
+                              onComplete={handleLessonComplete}
+                              onUnready={handleLessonUnready}
+                              advance={advanceLesson}
+                              skipLesson={state.skipLesson}
+                              goToLesson={state.goToLessonById}
+                              isActive={true}
+                              scopeId={scopeId}
                             />
-                            <Show when={lesson().definition.secondaryAction}>
-                              {(Action) => (
-                                <Dynamic
-                                  component={Action()}
-                                  onComplete={handleLessonComplete}
-                                  onUnready={handleLessonUnready}
-                                  advance={advanceLesson}
-                                  skipLesson={state.skipLesson}
-                                  goToLesson={state.goToLessonById}
-                                  isActive={true}
-                                  scopeId={scopeId}
-                                />
-                              )}
-                            </Show>
-                          </div>
-                        </Show>
-                      </div>
-                    </div>
-                  }
-                >
-                  {/* Left panel — text content (~1/3) */}
-                  <div class="w-1/3 h-full min-w-0 flex flex-col border-r border-edge-muted">
-                    {/* Header */}
-                    <div class="p-4">
-                      <div style={headerStyle()}>
-                        <div class="bg-ink text-surface text-xs font-mono size-4 flex items-center justify-center font-bold rounded-xs">
-                          {lesson().index + 1}
-                        </div>
-                        <Show when={getPreviousLesson()}>
-                          {(prevLesson) => (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleBack(prevLesson())}
-                              class="mt-6 gap-1.5 rounded-xs"
-                            >
-                              <ArrowLeftIcon class="size-4" />
-                              Back
-                            </Button>
                           )}
                         </Show>
-                        <h2
-                          class={cn(
-                            'text-3xl font-semibold text-ink-muted',
-                            getPreviousLesson() ? 'mt-4' : 'mt-12'
-                          )}
-                        >
-                          {lesson().definition.title}
-                        </h2>
                       </div>
-                    </div>
-
-                    {/* Body */}
-                    <div class="flex-1 overflow-y-auto px-4 flex flex-col">
-                      <div style={bodyStyle()}>
-                        <Show when={lesson().definition.subtitle}>
-                          <p class="text-sm text-ink/60 mb-4">
-                            {lesson().definition.subtitle}
-                          </p>
-                        </Show>
-                        <Dynamic
-                          component={lesson().definition.content}
-                          onComplete={handleLessonComplete}
-                          onUnready={handleLessonUnready}
-                          advance={advanceLesson}
-                          skipLesson={state.skipLesson}
-                          goToLesson={state.goToLessonById}
-                          isActive={true}
-                          scopeId={scopeId}
-                        />
-                      </div>
-                      <Show when={!lesson().definition.hideContinue}>
-                        <div class="mt-8 pt-4 flex flex-col gap-2">
-                          <ContinueButton
-                            ref={(el) => {
-                              continueButtonRef = el;
-                            }}
-                            onClick={handleContinue}
-                            label={continueLabel()}
-                            disabled={!readyToContinue()}
-                            centered={lesson().definition.centeredButton}
-                          />
-                          <Show when={lesson().definition.secondaryAction}>
-                            {(Action) => (
-                              <Dynamic
-                                component={Action()}
-                                onComplete={handleLessonComplete}
-                                onUnready={handleLessonUnready}
-                                advance={advanceLesson}
-                                skipLesson={state.skipLesson}
-                                goToLesson={state.goToLessonById}
-                                isActive={true}
-                                scopeId={scopeId}
-                              />
-                            )}
-                          </Show>
-                        </div>
-                      </Show>
-                    </div>
-
-                    {/* Footer */}
-                    <div class="flex flex-col gap-3 px-4 py-3 border-t border-ink/10">
-                      <div class="flex items-center justify-between gap-2">
-                        <OnboardingProgress
-                          lessons={[...state.lessons()]}
-                          currentIndex={state.currentIndex()}
-                        />
-                        <span class="text-xs text-ink-extra-muted/50 font-mono">
-                          {state.currentIndex() + 1} / {state.lessons().length}
-                        </span>
-                      </div>
-                    </div>
+                    </Show>
                   </div>
+                </div>
+              }
+            >
+              {/* Left panel — text content (~1/3) */}
+              <div class="w-1/3 h-full min-w-0 flex flex-col">
+                {/* Header */}
+                <div class="p-4">
+                  <div style={headerStyle()}>
+                    <div class="bg-ink text-surface text-xs font-mono size-4 flex items-center justify-center font-bold rounded-xs">
+                      {lesson().index + 1}
+                    </div>
+                    <Show when={getPreviousLesson()}>
+                      {(prevLesson) => (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleBack(prevLesson())}
+                          class="mt-6 gap-1.5 rounded-xs"
+                        >
+                          <ArrowLeftIcon class="size-4" />
+                          Back
+                        </Button>
+                      )}
+                    </Show>
+                    <h2
+                      class={cn(
+                        'text-3xl font-semibold text-ink-muted',
+                        getPreviousLesson() ? 'mt-4' : 'mt-12'
+                      )}
+                    >
+                      {lesson().definition.title}
+                    </h2>
+                  </div>
+                </div>
 
-                  {/* Right panel — demo (~2/3) */}
-                  <div class="flex-1 min-w-0 flex items-center justify-center bg-surface-secondary/30 overflow-hidden">
-                    <div style={bodyStyle()} class="size-full">
-                      <Show
-                        when={lesson().definition.demo}
-                        fallback={
-                          <div class="flex items-center justify-center h-full">
-                            <div class="w-full m-12 opacity-10 max-w-80">
-                              <MacroLogo class="fill-ink" />
-                            </div>
-                          </div>
-                        }
-                      >
-                        {(Demo) => (
+                {/* Body */}
+                <div class="flex-1 overflow-y-auto px-4 flex flex-col">
+                  <div style={bodyStyle()}>
+                    <Show when={lesson().definition.subtitle}>
+                      <p class="text-sm text-ink/60 mb-4">
+                        {lesson().definition.subtitle}
+                      </p>
+                    </Show>
+                    <Dynamic
+                      component={lesson().definition.content}
+                      onComplete={handleLessonComplete}
+                      onUnready={handleLessonUnready}
+                      advance={advanceLesson}
+                      skipLesson={state.skipLesson}
+                      goToLesson={state.goToLessonById}
+                      isActive={true}
+                      scopeId={scopeId}
+                    />
+                  </div>
+                  <Show when={!lesson().definition.hideContinue}>
+                    <div class="mt-8 pt-4 flex flex-col gap-2">
+                      <ContinueButton
+                        ref={(el) => {
+                          continueButtonRef = el;
+                        }}
+                        onClick={handleContinue}
+                        label={continueLabel()}
+                        disabled={!readyToContinue()}
+                        centered={lesson().definition.centeredButton}
+                      />
+                      <Show when={lesson().definition.secondaryAction}>
+                        {(Action) => (
                           <Dynamic
-                            component={Demo()}
+                            component={Action()}
                             onComplete={handleLessonComplete}
                             onUnready={handleLessonUnready}
                             advance={advanceLesson}
@@ -699,12 +639,54 @@ function InteractiveOnboardingInner() {
                         )}
                       </Show>
                     </div>
+                  </Show>
+                </div>
+
+                {/* Footer */}
+                <div class="flex flex-col gap-3 px-4 py-3">
+                  <div class="flex items-center justify-between gap-2">
+                    <OnboardingProgress
+                      lessons={[...state.lessons()]}
+                      currentIndex={state.currentIndex()}
+                    />
+                    <span class="text-xs text-ink-extra-muted/50 font-mono">
+                      {state.currentIndex() + 1} / {state.lessons().length}
+                    </span>
                   </div>
-                </Show>
-              )}
+                </div>
+              </div>
+
+              {/* Right panel — demo (~2/3) */}
+              <div class="flex-1 min-w-0 flex items-center justify-center bg-surface-secondary/30 overflow-hidden">
+                <div style={bodyStyle()} class="size-full">
+                  <Show
+                    when={lesson().definition.demo}
+                    fallback={
+                      <div class="flex items-center justify-center h-full">
+                        <div class="w-full m-12 opacity-10 max-w-80">
+                          <MacroLogo class="fill-ink" />
+                        </div>
+                      </div>
+                    }
+                  >
+                    {(Demo) => (
+                      <Dynamic
+                        component={Demo()}
+                        onComplete={handleLessonComplete}
+                        onUnready={handleLessonUnready}
+                        advance={advanceLesson}
+                        skipLesson={state.skipLesson}
+                        goToLesson={state.goToLessonById}
+                        isActive={true}
+                        scopeId={scopeId}
+                      />
+                    )}
+                  </Show>
+                </div>
+              </div>
             </Show>
-          </div>
-        </Surface>
+          )}
+        </Show>
       </div>
     </div>
   );
