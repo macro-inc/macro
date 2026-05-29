@@ -14,6 +14,8 @@
 #[cfg(test)]
 mod test;
 
+use std::time::Duration;
+
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
@@ -21,6 +23,18 @@ use crate::domain::{company_metadata_resolver::CompanyMetadataResolver, model::D
 
 /// Default Apollo API base URL.
 const DEFAULT_BASE_URL: &str = "https://api.apollo.io";
+
+/// Request timeout for Apollo calls — a stalled connection must not block
+/// the populate worker indefinitely.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Build the reqwest client with the request timeout applied.
+fn build_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .build()
+        .expect("apollo reqwest client should build")
+}
 
 /// Adapter that resolves [`DomainMetadata`] via Apollo.io organization
 /// enrichment. Cheap to [`Clone`] — the inner [`reqwest::Client`] is
@@ -36,7 +50,7 @@ impl ApolloCompanyMetadataResolver {
     /// Build a resolver with the given Apollo API key and a fresh HTTP client.
     pub fn new(api_key: String) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: build_client(),
             api_key,
             base_url: DEFAULT_BASE_URL.to_string(),
         }
@@ -45,7 +59,7 @@ impl ApolloCompanyMetadataResolver {
     /// Build a resolver pointed at a custom base URL (used in tests).
     pub fn with_base_url(api_key: String, base_url: String) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: build_client(),
             api_key,
             base_url,
         }

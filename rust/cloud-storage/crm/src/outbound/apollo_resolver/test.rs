@@ -118,7 +118,7 @@ fn tolerates_mistyped_and_blank_fields() {
 /// Live smoke test against the real Apollo API. Ignored by default — it
 /// makes a network call and consumes an Apollo credit. Run with:
 ///   APOLLO_API_KEY=<key> cargo test -p crm apollo_live -- --ignored --nocapture
-/// Optionally set APOLLO_TEST_DOMAIN (defaults to "apollo.io").
+/// Optionally set APOLLO_TEST_DOMAIN (defaults to "macro.com").
 #[tokio::test]
 #[ignore = "hits the live Apollo API; requires APOLLO_API_KEY"]
 async fn apollo_live_enrich() {
