@@ -1,7 +1,6 @@
 import { AdaptiveScroller } from '@app/component/dashboard/adaptive-scroller';
 import {
   channelDisplayName,
-  channelInitials,
   compactMarkdownTheme,
 } from '@app/component/dashboard/utils';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
@@ -11,6 +10,7 @@ import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { useDisplayName } from '@core/user/displayName';
@@ -18,8 +18,6 @@ import { formatDate } from '@core/util/date';
 import type { ChannelEntity, EntityData } from '@entity';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import BuildingIcon from '@phosphor/building.svg';
-import UsersIcon from '@phosphor/users.svg';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import {
@@ -27,10 +25,10 @@ import {
   invalidateSoupEntity,
 } from '@queries/soup/normalized-cache';
 import { ChannelType } from '@service-comms/generated/models/channelType';
-import { Avatar, Button, Layer, Tooltip } from '@ui';
+import { Button, cn, Tooltip } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 
-type ChannelCardData = {
+export type RecentConversationCardData = {
   id: string;
   name: string;
   type: string;
@@ -46,107 +44,92 @@ type ChannelCardData = {
   dmUserId?: string;
 };
 
-function ChannelCard(props: {
-  channel: ChannelCardData;
-  onOpen: (channelId: string, event: MouseEvent) => void;
+export function RecentConversationCard(props: {
+  conversation: RecentConversationCardData;
+  onOpen: (conversationId: string, event: MouseEvent) => void;
+  variant?: 'card' | 'row';
 }) {
-  const [senderName] = useDisplayName(props.channel.latest.senderId as any);
+  const [senderName] = useDisplayName(
+    props.conversation.latest.senderId as any
+  );
   const currentUserId = useUserId();
   const senderLabel = () => {
-    const senderId = props.channel.latest.senderId;
+    const senderId = props.conversation.latest.senderId;
 
     if (!senderId) return;
-
     if (senderId === currentUserId()) return 'You';
 
     return senderName();
   };
+  const isCard = () => props.variant === 'card';
 
   return (
     <button
-      class="group flex min-h-20 w-64 shrink-0 snap-start flex-col justify-between rounded-2xl border border-edge-muted bg-hover/60 p-3 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent @md/recent-channels:h-36 @md/recent-channels:w-auto @md/recent-channels:min-w-0"
-      onClick={(event) => props.onOpen(props.channel.id, event)}
+      class={cn(
+        'group grid min-w-0 snap-start grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_1fr] gap-x-3 gap-y-1.5 rounded-xl text-left transition',
+        isCard()
+          ? 'w-72 shrink-0 border border-edge-muted bg-hover/40 p-2.5 hover:border-edge hover:bg-hover focus-visible:border-accent @md/recent-channels:w-auto'
+          : 'w-full p-2.5 hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset',
+        'focus:outline-none'
+      )}
+      onClick={(event) => props.onOpen(props.conversation.id, event)}
     >
-      <div class="flex items-start justify-between gap-3">
-        <div class="flex min-w-0 items-center gap-3">
-          <Show
-            when={props.channel.dmUserId}
-            fallback={
-              <Avatar
-                size="md"
-                class="bg-default/20 px-1 text-default @md/recent-channels:size-10"
-              >
-                <Avatar.Fallback>
-                  {channelInitials(props.channel.name)}
-                </Avatar.Fallback>
-              </Avatar>
-            }
-          >
-            {(dmUserId) => (
-              <UserIcon
-                id={dmUserId()}
-                size="md"
-                suppressClick
-                showTooltip={false}
-                class="@md/recent-channels:size-10"
-              />
-            )}
-          </Show>
-          <div class="flex min-w-0 flex-col gap-0.5">
-            <div class="flex min-w-0 items-center gap-1.5">
-              <Show when={props.channel.type === ChannelType.organization}>
-                <BuildingIcon class="size-3 shrink-0 text-ink-extra-muted" />
-              </Show>
-              <h3 class="truncate text-xs font-semibold text-ink">
-                {props.channel.name}
-              </h3>
-            </div>
-            <span class="flex items-center gap-1.5 text-xxs text-ink-extra-muted">
-              <UsersIcon class="size-3" />
-              {props.channel.participantCount}
+      <Show
+        when={props.conversation.dmUserId}
+        fallback={
+          <div class="col-start-1 row-span-2 row-start-1 flex size-9 shrink-0 items-center justify-center rounded-lg bg-hover text-ink-muted transition group-hover:bg-active group-hover:text-ink">
+            <EntityIcon
+              targetType={props.conversation.type || 'channel'}
+              size="sm"
+              class="shrink-0"
+            />
+          </div>
+        }
+      >
+        {(dmUserId) => (
+          <UserIcon
+            id={dmUserId()}
+            size="md"
+            suppressClick
+            showTooltip={false}
+            class="col-start-1 row-span-2 row-start-1 shrink-0"
+          />
+        )}
+      </Show>
+
+      <div class="col-start-2 row-start-1 flex min-h-0 min-w-0 items-start justify-between gap-2">
+        <div class="flex min-w-0 items-center gap-1.5">
+          <h3 class="min-w-0 truncate text-sm font-medium text-ink">
+            {props.conversation.name}
+          </h3>
+          <Show when={props.conversation.unreadCount > 0}>
+            <span class="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-sm bg-accent px-1 text-xxs font-bold text-surface">
+              {props.conversation.unreadCount}
             </span>
+          </Show>
+        </div>
+
+        <div class="flex shrink-0 items-center gap-1.5 text-xxs text-ink-extra-muted">
+          <span>{props.conversation.updatedAt}</span>
+          <div class="hidden opacity-0 transition group-hover:opacity-100 @md/recent-channels:block">
+            <ArrowRightIcon class="size-3.5" />
           </div>
         </div>
-        <Show when={props.channel.unreadCount > 0}>
-          <span class="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-sm bg-accent px-1.5 text-xxs font-semibold text-surface">
-            {props.channel.unreadCount}
-          </span>
-        </Show>
       </div>
 
-      <div class="relative mt-2 flex min-w-0 flex-col gap-1 @md/recent-channels:mt-0">
-        <div class="pointer-events-none absolute bottom-0 right-0 opacity-0 transition group-hover:opacity-100">
-          <Layer depth={3}>
-            <div class="flex size-8 items-center justify-center rounded-xl bg-hover text-ink-muted transition group-hover:text-ink">
-              <ArrowRightIcon class="size-4" />
-            </div>
-          </Layer>
-        </div>
-        <Show when={senderLabel()}>
+      <div class="col-start-2 row-start-2 flex min-w-0 flex-col gap-0.5 text-xs/5 text-ink-muted">
+        <Show when={!props.conversation.dmUserId && senderLabel()}>
           {(label) => (
-            <div class="flex items-center gap-1.5 text-xxs font-medium text-ink-muted">
-              <Show when={props.channel.latest.senderId}>
-                {(senderId) => (
-                  <UserIcon
-                    id={senderId()}
-                    size="sm"
-                    suppressClick
-                    showTooltip={false}
-                  />
-                )}
-              </Show>
-              <Tooltip label={label()}>
-                <span class="min-w-0 truncate">{label()}</span>
-              </Tooltip>
-              <span class="shrink-0 text-ink-extra-muted/70">
-                {props.channel.updatedAt}
+            <Tooltip label={label()}>
+              <span class="min-w-0 truncate text-xs font-semibold text-ink-muted">
+                {label()}
               </span>
-            </div>
+            </Tooltip>
           )}
         </Show>
-        <div class="line-clamp-2 text-xs/5 text-ink-muted [&_*]:text-xs [&_*]:leading-5">
+        <div class="line-clamp-2 min-w-0 [&_*]:text-xs [&_*]:leading-5">
           <StaticMarkdown
-            markdown={props.channel.latest.content}
+            markdown={props.conversation.latest.content}
             theme={compactMarkdownTheme}
           />
         </div>
@@ -243,7 +226,7 @@ export function RecentChannelsSection() {
       .filter(shouldShowChannel)
       .slice(0, 10);
 
-    return visibleChannels.map((channel) => {
+    return visibleChannels.map((channel): RecentConversationCardData => {
       const latestMessage = channel.latestMessage;
 
       const latest = {
@@ -316,13 +299,13 @@ export function RecentChannelsSection() {
       </div>
 
       <AdaptiveScroller scrollAmount={280} class="relative">
-        <AdaptiveScroller.Viewport class="w-full scroll-pl-4 px-4 pb-1 sm:px-0 @md/recent-channels:grid @md/recent-channels:grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] @md/recent-channels:gap-3 @md/recent-channels:overflow-visible @md/recent-channels:pb-0">
+        <AdaptiveScroller.Viewport class="w-full scroll-pl-4 px-4 pb-1 sm:px-0 @md/recent-channels:grid @md/recent-channels:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] @md/recent-channels:gap-3 @md/recent-channels:overflow-visible @md/recent-channels:pb-0">
           <Show
             when={!channelsQuery.isLoading}
             fallback={
               <For each={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}>
                 {() => (
-                  <div class="skeleton-shimmer h-28 w-64 shrink-0 snap-start rounded-2xl border border-edge-muted bg-hover/60 p-3 @md/recent-channels:h-36 @md/recent-channels:w-auto">
+                  <div class="skeleton-shimmer h-20 w-72 shrink-0 snap-start rounded-xl border border-edge-muted bg-hover/60 p-2.5 @md/recent-channels:w-auto">
                     <div class="skeleton-shimmer size-9 rounded-xl bg-surface" />
                     <div class="flex flex-col gap-2 pt-6">
                       <div class="skeleton-shimmer h-3 w-3/4 rounded-full bg-ink/10" />
@@ -336,7 +319,11 @@ export function RecentChannelsSection() {
             <StaticMarkdownContext>
               <For each={channels().slice(0, 10)}>
                 {(channel) => (
-                  <ChannelCard channel={channel} onOpen={openChannel} />
+                  <RecentConversationCard
+                    conversation={channel}
+                    onOpen={openChannel}
+                    variant="card"
+                  />
                 )}
               </For>
             </StaticMarkdownContext>
