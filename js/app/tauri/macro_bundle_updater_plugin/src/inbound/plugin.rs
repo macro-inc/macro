@@ -10,7 +10,7 @@ use crate::{
     domain::{
         models::{UpdateError, UpdateStatus},
         ports::AutoUpdateService,
-        service::Service,
+        service::{ApplyUpdateResult, Service},
     },
     outbound::{api_client::BundleClient, fs::FileSystem, system_info::SystemInfo},
 };
@@ -84,10 +84,6 @@ impl BundleUpdateEvent {
     }
 }
 
-fn is_waiting_for_wifi(cur: &Result<UpdateStatus, Report<UpdateError>>) -> bool {
-    matches!(cur, Ok(UpdateStatus::WaitingForWifi(_)))
-}
-
 /// Tauri plugin that manages OTA bundle updates.
 pub struct MacroBundleUpdaterPlugin {
     base_url: Url,
@@ -142,20 +138,20 @@ pub async fn apply_completed_update<R: Runtime>(
 
     let mut service = service_state.lock().await;
 
-    let applied = service
+    let apply_result = service
         .apply_update(&cache_dir)
         .await
         .map_err(|e| e.to_string())?;
 
-    drop(service);
-
-    if applied {
+    if apply_result == ApplyUpdateResult::ReloadNeeded {
         // Reload to pick up the new bundle. Using location.reload() instead of
         // navigating to a new URL preserves WKWebView's cookie store.
         if let Some(webview) = app_handle.webview_windows().values().next() {
             tracing::info!("Bundle update complete, reloading to pick up new assets");
             if let Err(e) = webview.eval("window.location.reload();") {
                 tracing::warn!(error=?e, "Failed to dispatch bundle update reload");
+            } else {
+                service.mark_update_reload_dispatched();
             }
         } else {
             tracing::warn!(
@@ -163,7 +159,7 @@ pub async fn apply_completed_update<R: Runtime>(
             );
         }
     }
-    Ok(applied)
+    Ok(apply_result != ApplyUpdateResult::NoUpdate)
 }
 
 /// Apply a completed bundle update: set the bundle root and navigate to it.
@@ -273,32 +269,31 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
         let app_handle = app.clone();
         tauri::async_runtime::spawn(async move {
             loop {
-                while !is_waiting_for_wifi(&wifi_retry_status_rx.borrow()) {
+                if !matches!(
+                    &*wifi_retry_status_rx.borrow(),
+                    Ok(UpdateStatus::WaitingForWifi(_))
+                ) {
                     if wifi_retry_status_rx.changed().await.is_err() {
                         return;
                     }
+                    continue;
                 }
 
-                loop {
-                    tokio::select! {
-                        _ = tokio::time::sleep(WIFI_RETRY_INTERVAL) => {
-                            match retry_waiting_for_wifi(&app_handle).await {
-                                Ok(true) => tracing::info!(
-                                    "[bundle-update] retrying bundle download after Wi-Fi wait"
-                                ),
-                                Ok(false) => {}
-                                Err(e) => tracing::warn!(
-                                    "[bundle-update] failed to retry bundle download after Wi-Fi wait: {e}"
-                                ),
-                            }
+                tokio::select! {
+                    _ = tokio::time::sleep(WIFI_RETRY_INTERVAL) => {
+                        match retry_waiting_for_wifi(&app_handle).await {
+                            Ok(true) => tracing::info!(
+                                "[bundle-update] retrying bundle download after Wi-Fi wait"
+                            ),
+                            Ok(false) => {}
+                            Err(e) => tracing::warn!(
+                                "[bundle-update] failed to retry bundle download after Wi-Fi wait: {e}"
+                            ),
                         }
-                        changed = wifi_retry_status_rx.changed() => {
-                            if changed.is_err() {
-                                return;
-                            }
-                            if !is_waiting_for_wifi(&wifi_retry_status_rx.borrow()) {
-                                break;
-                            }
+                    }
+                    changed = wifi_retry_status_rx.changed() => {
+                        if changed.is_err() {
+                            return;
                         }
                     }
                 }

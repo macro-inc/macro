@@ -15,11 +15,23 @@ pub struct Service<Fs: FsRepo> {
     fs_repo: Fs,
     bundle_root: BundleRoot,
     reload_pending: bool,
+    reload_dispatched: bool,
 }
 
 enum WorkerCommand {
     Restart,
     Continue,
+}
+
+/// Result of attempting to apply a completed bundle update.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApplyUpdateResult {
+    /// There is no completed update to apply.
+    NoUpdate,
+    /// The bundle root was applied, or remains applied, and a reload should be dispatched.
+    ReloadNeeded,
+    /// The bundle root was already applied and a reload has already been dispatched.
+    ReloadAlreadyDispatched,
 }
 
 /// Main thread sends on this to start the checker loop.
@@ -347,6 +359,7 @@ impl<Fs: FsRepo> Service<Fs> {
             fs_repo,
             bundle_root: BundleRoot::new(),
             reload_pending: false,
+            reload_dispatched: false,
         }
     }
 
@@ -362,19 +375,23 @@ impl<Fs: FsRepo> Service<Fs> {
 
     /// Apply the update by modifying the bundle root.
     ///
-    /// Returns `Ok(true)` when a webview reload should be dispatched. The
-    /// worker remains in `Completed` until the reloaded webview acknowledges
+    /// Returns `Ok(ReloadNeeded)` when a webview reload should be dispatched.
+    /// The worker remains in `Completed` until the reloaded webview acknowledges
     /// that it mounted with the new bundle root.
-    pub async fn apply_update(&mut self, cache_dir: &Path) -> Result<bool, Report> {
+    pub async fn apply_update(&mut self, cache_dir: &Path) -> Result<ApplyUpdateResult, Report> {
         if self.reload_pending {
-            return Ok(true);
+            return Ok(if self.reload_dispatched {
+                ApplyUpdateResult::ReloadAlreadyDispatched
+            } else {
+                ApplyUpdateResult::ReloadNeeded
+            });
         }
 
         let entrypoint = {
             let status = self.status().borrow();
             match status.as_ref() {
                 Ok(UpdateStatus::Completed(bundle_location)) => bundle_location.entrypoint.clone(),
-                _ => return Ok(false),
+                _ => return Ok(ApplyUpdateResult::NoUpdate),
             }
         };
 
@@ -386,11 +403,19 @@ impl<Fs: FsRepo> Service<Fs> {
         tracing::info!("Setting bundle root to {bundle_dir:?}");
         self.set_bundle_root(bundle_dir.clone(), cache_dir).await?;
         self.reload_pending = true;
+        self.reload_dispatched = false;
 
         // Remove old bundle directories now that we've switched to the new one
         self.cleanup_old_bundles(cache_dir, &bundle_dir).await;
 
-        Ok(true)
+        Ok(ApplyUpdateResult::ReloadNeeded)
+    }
+
+    /// Record that the pending reload was successfully dispatched to the webview.
+    pub fn mark_update_reload_dispatched(&mut self) {
+        if self.reload_pending {
+            self.reload_dispatched = true;
+        }
     }
 
     /// Acknowledge that the webview has reloaded after applying an update.
@@ -404,6 +429,7 @@ impl<Fs: FsRepo> Service<Fs> {
 
         self.restart_run_after_reload_ack()?;
         self.reload_pending = false;
+        self.reload_dispatched = false;
         Ok(true)
     }
 
@@ -689,6 +715,7 @@ mod tests {
                 fs_repo: FakeFs,
                 bundle_root: BundleRoot::new(),
                 reload_pending: false,
+                reload_dispatched: false,
             },
             start_rx,
         )
@@ -816,18 +843,19 @@ mod tests {
             fs_repo: FakeFs,
             bundle_root: BundleRoot::new(),
             reload_pending: false,
+            reload_dispatched: false,
         };
 
         assert!(service.retry_waiting_for_wifi().unwrap());
     }
 
     #[tokio::test]
-    async fn apply_update_returns_false_when_status_is_not_completed() {
+    async fn apply_update_returns_no_update_when_status_is_not_completed() {
         let (mut service, _system_query) = service_with_network("wifi");
 
         let applied = service.apply_update(Path::new("/tmp")).await.unwrap();
 
-        assert!(!applied);
+        assert_eq!(applied, ApplyUpdateResult::NoUpdate);
     }
 
     #[tokio::test]
@@ -836,8 +864,9 @@ mod tests {
 
         let applied = service.apply_update(Path::new("/tmp")).await.unwrap();
 
-        assert!(applied);
+        assert_eq!(applied, ApplyUpdateResult::ReloadNeeded);
         assert!(service.reload_pending);
+        assert!(!service.reload_dispatched);
         assert!(matches!(
             &*service.status().borrow(),
             Ok(UpdateStatus::Completed(_))
@@ -846,6 +875,7 @@ mod tests {
 
         assert!(service.acknowledge_update_reload().unwrap());
         assert!(!service.reload_pending);
+        assert!(!service.reload_dispatched);
         assert!(matches!(
             &*service.status().borrow(),
             Ok(UpdateStatus::Idle)
@@ -857,13 +887,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn apply_update_returns_true_while_reload_ack_is_pending() {
+    async fn apply_update_requests_reload_while_dispatch_is_pending() {
         let (mut service, _start_rx) = service_with_status(UpdateStatus::Idle);
         service.reload_pending = true;
 
         let applied = service.apply_update(Path::new("/tmp")).await.unwrap();
 
-        assert!(applied);
+        assert_eq!(applied, ApplyUpdateResult::ReloadNeeded);
+    }
+
+    #[tokio::test]
+    async fn apply_update_does_not_request_second_reload_after_dispatch() {
+        let (mut service, _start_rx) = service_with_status(completed_status());
+
+        let applied = service.apply_update(Path::new("/tmp")).await.unwrap();
+        assert_eq!(applied, ApplyUpdateResult::ReloadNeeded);
+
+        service.mark_update_reload_dispatched();
+
+        let applied = service.apply_update(Path::new("/tmp")).await.unwrap();
+        assert_eq!(applied, ApplyUpdateResult::ReloadAlreadyDispatched);
     }
 
     #[test]
@@ -885,6 +928,7 @@ mod tests {
 
         assert!(service.acknowledge_update_reload().unwrap());
         assert!(!service.reload_pending);
+        assert!(!service.reload_dispatched);
         assert!(matches!(
             &*service.status().borrow(),
             Ok(UpdateStatus::Idle)

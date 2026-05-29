@@ -88,3 +88,4 @@ fn transform_external_url_preserves_other_query_params() {
         Some((Cow::Borrowed("is_mobile"), Cow::Borrowed("true")))
     );
 }
+
