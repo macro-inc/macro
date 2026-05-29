@@ -233,12 +233,6 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(move |app_handle, event| match &event {
             RunEvent::Ready => {
-                let app = app_handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    if let Err(e) = retry_waiting_for_wifi(&app).await {
-                        tracing::warn!("Failed to retry bundle update Wi-Fi wait on ready: {e}");
-                    }
-                });
                 #[cfg(feature = "auto_apply_update")]
                 {
                     let app = app_handle.clone();

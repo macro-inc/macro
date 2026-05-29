@@ -396,13 +396,13 @@ impl<Fs: FsRepo> Service<Fs> {
     /// Acknowledge that the webview has reloaded after applying an update.
     ///
     /// Returns `Ok(true)` if a pending reload was acknowledged and the updater
-    /// worker was restarted, or `Ok(false)` when no reload was pending.
+    /// worker was nudged to check again, or `Ok(false)` when no reload was pending.
     pub fn acknowledge_update_reload(&mut self) -> Result<bool, Report> {
         if !self.reload_pending {
             return Ok(false);
         }
 
-        self.start()?;
+        self.restart_run_after_reload_ack()?;
         self.reload_pending = false;
         Ok(true)
     }
@@ -521,6 +521,14 @@ impl<Fs: FsRepo> Service<Fs> {
             Ok(()) | Err(TrySendError::Full(_)) => Ok(()),
             Err(e) => Err(report!("Failed to send continue signal: {e}")),
         }
+    }
+
+    fn restart_run_after_reload_ack(&self) -> Result<(), Report> {
+        self.handle
+            .status_tx
+            .send(Ok(UpdateStatus::Idle))
+            .map_err(|e| report!("Failed to reset bundle update status: {e}"))?;
+        self.continue_run()
     }
 }
 
@@ -839,8 +847,12 @@ mod tests {
         assert!(service.acknowledge_update_reload().unwrap());
         assert!(!service.reload_pending);
         assert!(matches!(
+            &*service.status().borrow(),
+            Ok(UpdateStatus::Idle)
+        ));
+        assert!(matches!(
             start_rx.try_recv().unwrap(),
-            WorkerCommand::Restart
+            WorkerCommand::Continue
         ));
     }
 
@@ -859,5 +871,23 @@ mod tests {
         let (mut service, _start_rx) = service_with_status(UpdateStatus::Idle);
 
         assert!(!service.acknowledge_update_reload().unwrap());
+    }
+
+    #[test]
+    fn acknowledge_update_reload_treats_full_command_queue_as_acknowledged() {
+        let (mut service, _start_rx) = service_with_status(UpdateStatus::Idle);
+        service.reload_pending = true;
+        service
+            .handle
+            .start_tx
+            .try_send(WorkerCommand::Continue)
+            .unwrap();
+
+        assert!(service.acknowledge_update_reload().unwrap());
+        assert!(!service.reload_pending);
+        assert!(matches!(
+            &*service.status().borrow(),
+            Ok(UpdateStatus::Idle)
+        ));
     }
 }

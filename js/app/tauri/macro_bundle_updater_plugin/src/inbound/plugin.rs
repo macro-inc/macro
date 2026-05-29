@@ -153,7 +153,10 @@ pub async fn apply_completed_update<R: Runtime>(
         // Reload to pick up the new bundle. Using location.reload() instead of
         // navigating to a new URL preserves WKWebView's cookie store.
         if let Some(webview) = app_handle.webview_windows().values().next() {
-            let _ = webview.eval("window.location.reload();");
+            tracing::info!("Bundle update complete, reloading to pick up new assets");
+            if let Err(e) = webview.eval("window.location.reload();") {
+                tracing::warn!(error=?e, "Failed to dispatch bundle update reload");
+            }
         } else {
             tracing::warn!(
                 "Completed bundle update applied but no webview was available to reload"

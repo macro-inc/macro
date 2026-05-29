@@ -36,10 +36,11 @@ interface TauriContextValue {
   os: OsType;
   runtimeInsets: Accessor<Insets | NotAndroid>;
   bundleUpdateStatus: Accessor<BundleUpdateStatus>;
-  cancelWifiWait: () => void;
+  downloadBundleUpdateAnyway: () => void;
 }
 
 const TauriContext = createContext<TauriContextValue | undefined>(undefined);
+const BUNDLE_UPDATE_RELOAD_GUARD_RESET_MS = 5_000;
 
 function TauriProvider(props: { children: JSX.Element }) {
   // we only care about this value on android.
@@ -55,23 +56,50 @@ function TauriProvider(props: { children: JSX.Element }) {
     );
   }
 
-  function cancelWifiWait() {
+  function downloadBundleUpdateAnyway() {
     grantBundleUpdate();
   }
 
   let applyingBundleUpdate = false;
+  let bundleUpdateReloadGuardTimer: ReturnType<typeof setTimeout> | undefined;
+  function resetBundleUpdateApplyGuard() {
+    applyingBundleUpdate = false;
+    if (bundleUpdateReloadGuardTimer !== undefined) {
+      clearTimeout(bundleUpdateReloadGuardTimer);
+      bundleUpdateReloadGuardTimer = undefined;
+    }
+  }
+
+  function scheduleBundleUpdateApplyGuardReset() {
+    if (bundleUpdateReloadGuardTimer !== undefined) {
+      clearTimeout(bundleUpdateReloadGuardTimer);
+    }
+    bundleUpdateReloadGuardTimer = setTimeout(() => {
+      applyingBundleUpdate = false;
+      bundleUpdateReloadGuardTimer = undefined;
+    }, BUNDLE_UPDATE_RELOAD_GUARD_RESET_MS);
+  }
+
   function performBundleUpdate() {
     if (applyingBundleUpdate) return;
     applyingBundleUpdate = true;
     invoke<boolean>('perform_update')
       .then((applied) => {
-        if (!applied) applyingBundleUpdate = false;
+        if (applied) {
+          scheduleBundleUpdateApplyGuardReset();
+        } else {
+          resetBundleUpdateApplyGuard();
+        }
       })
       .catch((e) => {
-        applyingBundleUpdate = false;
+        resetBundleUpdateApplyGuard();
         console.error('[bundle-update] perform_update failed', e);
       });
   }
+
+  onCleanup(() => {
+    resetBundleUpdateApplyGuard();
+  });
 
   if (isTauri() && isPlatform('ios')) useCallKitSetup();
 
@@ -79,7 +107,7 @@ function TauriProvider(props: { children: JSX.Element }) {
     runtimeInsets: insets,
     os: osType(),
     bundleUpdateStatus,
-    cancelWifiWait,
+    downloadBundleUpdateAnyway,
   };
 
   onMount(() => {
@@ -142,6 +170,9 @@ function TauriProvider(props: { children: JSX.Element }) {
     document.body.classList.add(`tauri-${value.os}`);
 
     const onBundleUpdateVisibilityChange = () => {
+      // iOS gives us a short JS execution window after the app is backgrounded.
+      // Use it to ask Rust to apply a completed bundle before suspension;
+      // native Ready/Resumed handlers cover cases where this window is missed.
       if (document.hidden) {
         performBundleUpdate();
       }
