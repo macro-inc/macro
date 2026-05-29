@@ -36,7 +36,6 @@ interface TauriContextValue {
   os: OsType;
   runtimeInsets: Accessor<Insets | NotAndroid>;
   bundleUpdateStatus: Accessor<BundleUpdateStatus>;
-  downloadBundleUpdateAnyway: () => void;
 }
 
 const TauriContext = createContext<TauriContextValue | undefined>(undefined);
@@ -48,12 +47,6 @@ function TauriProvider(props: { children: JSX.Element }) {
   const [insets, setInsets] = createSignal<NotAndroid | Insets>('not-android');
   const [bundleUpdateStatus, setBundleUpdateStatus] =
     createSignal<BundleUpdateStatus>({ status: 'Idle' });
-
-  function grantBundleUpdate() {
-    invoke('grant_bundle_update', { approved: true }).catch((e) =>
-      console.error('[bundle-update] grant_bundle_update failed', e)
-    );
-  }
 
   function performBundleUpdate() {
     invoke<boolean>('perform_update').catch((e) =>
@@ -67,7 +60,6 @@ function TauriProvider(props: { children: JSX.Element }) {
     runtimeInsets: insets,
     os: osType(),
     bundleUpdateStatus,
-    downloadBundleUpdateAnyway: grantBundleUpdate,
   };
 
   onMount(() => {
