@@ -443,6 +443,7 @@ export * from './fileTypeUpdate';
 export * from './fileTypeUpdateOneOf';
 export * from './folderItem';
 export * from './folderItemFileType';
+export * from './foreignEntity';
 export * from './foreignEntityFilters';
 export * from './genericErrorResponse';
 export * from './genericResponse';

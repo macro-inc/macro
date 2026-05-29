@@ -9,6 +9,7 @@ default = ["outbound", "ports", "service"]
 inbound = [
   "dep:axum",
   "dep:model-error-response",
+  "dep:utoipa",
   "entity_access/inbound",
   "ports",
 ]
@@ -32,6 +33,7 @@ sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 
 [dev-dependencies]

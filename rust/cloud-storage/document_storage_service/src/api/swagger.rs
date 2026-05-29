@@ -76,6 +76,7 @@ use documents_hex::inbound::axum_router::{
     edit_document::EditDocumentResponse, get_branch_name::BranchNameResponse,
     get_short_id::ShortIdResponse,
 };
+use foreign_entity::domain::models::ForeignEntity;
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
     DocumentResponseMetadata,
@@ -262,6 +263,9 @@ use utoipa::OpenApi;
 
         entity::get_entity_permission::handler,
 
+        // foreign_entity
+        foreign_entity::inbound::axum_router::get_foreign_entity_handler,
+
         // threads
         threads::edit_thread::edit_thread_handler,
 
@@ -367,6 +371,7 @@ use utoipa::OpenApi;
             SoupChat,
             SoupProject,
             SoupForeignEntity,
+            ForeignEntity,
             SoupApiSort,
             SoupPage,
             SoupEnrichedEmailThreadPreview,

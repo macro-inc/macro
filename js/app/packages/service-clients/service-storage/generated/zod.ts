@@ -5192,6 +5192,46 @@ export const getEntityPermissionResponse = zod
   .describe('API response envelope for entity permissions.');
 
 /**
+ * @summary Get a visible foreign entity by its internal ID.
+ */
+export const getForeignEntityParams = zod.object({
+  id: zod.uuid().describe('Foreign entity ID'),
+});
+
+export const getForeignEntityResponse = zod
+  .object({
+    createdAt: zod.iso
+      .datetime({})
+      .describe('Timestamp when the record was created.'),
+    foreignEntityId: zod
+      .string()
+      .describe('Identifier assigned by the external system.'),
+    foreignEntitySource: zod
+      .string()
+      .describe('Source system that owns the external identifier.'),
+    id: zod
+      .uuid()
+      .describe('Internal primary key for this foreign entity record.'),
+    metadata: zod
+      .unknown()
+      .describe('Arbitrary metadata stored with the mapping.'),
+    storedForAuthEntity: zod
+      .string()
+      .describe(
+        'Internal auth entity namespace this foreign entity is stored for.'
+      ),
+    storedForId: zod
+      .string()
+      .describe(
+        'Internal entity identifier this foreign entity is stored for.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Timestamp when the record was last updated.'),
+  })
+  .describe('A persisted mapping to an entity owned by an external system.');
+
+/**
  * @summary Gets the users history
  */
 export const getHistoryHandlerResponse = zod.object({

@@ -75,8 +75,25 @@ where
         .with_state(state)
 }
 
+/// Get a visible foreign entity by its internal ID.
+#[utoipa::path(
+    get,
+    tag = "foreign_entity",
+    operation_id = "get_foreign_entity",
+    path = "/foreign_entity/{id}",
+    params(
+        ("id" = uuid::Uuid, Path, description = "Foreign entity ID")
+    ),
+    responses(
+        (status = 200, body = ForeignEntity),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(err, skip_all)]
-async fn get_foreign_entity_handler<S, AccessSvc>(
+pub async fn get_foreign_entity_handler<S, AccessSvc>(
     State(state): State<ForeignEntityRouterState<S, AccessSvc>>,
     access: ForeignEntityAccessLevelExtractor<ViewAccessLevel, AccessSvc>,
 ) -> Result<Json<ForeignEntity>, ForeignEntityError>

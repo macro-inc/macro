@@ -5918,6 +5918,77 @@
         }
       }
     },
+    "/foreign_entity/{id}": {
+      "get": {
+        "tags": ["foreign_entity"],
+        "summary": "Get a visible foreign entity by its internal ID.",
+        "operationId": "get_foreign_entity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Foreign entity ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForeignEntity"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/github/install-sync": {
       "get": {
         "tags": ["github::inbound::github_sync_router"],
@@ -12570,6 +12641,56 @@
           "sha": {
             "type": "string",
             "description": "The sha of the file."
+          }
+        }
+      },
+      "ForeignEntity": {
+        "type": "object",
+        "description": "A persisted mapping to an entity owned by an external system.",
+        "required": [
+          "id",
+          "foreignEntityId",
+          "foreignEntitySource",
+          "metadata",
+          "storedForId",
+          "storedForAuthEntity",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the record was created."
+          },
+          "foreignEntityId": {
+            "type": "string",
+            "description": "Identifier assigned by the external system."
+          },
+          "foreignEntitySource": {
+            "type": "string",
+            "description": "Source system that owns the external identifier."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Internal primary key for this foreign entity record."
+          },
+          "metadata": {
+            "description": "Arbitrary metadata stored with the mapping."
+          },
+          "storedForAuthEntity": {
+            "type": "string",
+            "description": "Internal auth entity namespace this foreign entity is stored for."
+          },
+          "storedForId": {
+            "type": "string",
+            "description": "Internal entity identifier this foreign entity is stored for."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the record was last updated."
           }
         }
       },
