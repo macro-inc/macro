@@ -19,6 +19,7 @@ import { CommentNode } from './nodes/CommentNode';
 import { CompletionNode } from './nodes/CompletionNode';
 import { ContactMentionNode } from './nodes/ContactMentionNode';
 import { CustomCodeNode } from './nodes/CustomCodeNode';
+import { AgentStatusNode } from './nodes/AgentStatusNode';
 import { DateMentionNode } from './nodes/DateMentionNode';
 import { DiffDeleteNode } from './nodes/DiffDeleteNode';
 import { GroupMentionNode } from './nodes/GroupMentionNode';
@@ -74,6 +75,7 @@ export const SupportedNodeTypes = [
   ContactMentionNode,
   DateMentionNode,
   GroupMentionNode,
+  AgentStatusNode,
   InlineSearchNode,
   UnlinkedTextNode,
   CodeHighlightNode,

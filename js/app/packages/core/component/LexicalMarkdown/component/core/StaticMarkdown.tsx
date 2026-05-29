@@ -11,6 +11,7 @@ import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
   $isClassedBlockNode,
+  type AgentStatusNode,
   type ClassedBlockNode,
   type ContactMentionNode,
   type DateMentionNode,
@@ -73,6 +74,7 @@ import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard';
 import { DocumentMention as DocumentMentionDecorator } from '../decorator/DocumentMention';
 import { Equation as EquationDecorator } from '../decorator/Equation';
+import { AgentStatus as AgentStatusDecorator } from '../decorator/AgentStatus';
 import { GroupMention as GroupMentionDecorator } from '../decorator/GroupMention';
 import { LazyDecorator } from '../decorator/LazyDecorator';
 import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
@@ -360,6 +362,20 @@ const GroupMention: RenderableEntity<GroupMentionNode> = {
   render: (props) => (
     <span>
       {GroupMentionDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
+};
+
+const AgentStatus: RenderableEntity<AgentStatusNode> = {
+  guard: (node: LexicalNode): node is AgentStatusNode =>
+    node.__type === 'agent-status',
+  render: (props) => (
+    <span>
+      {AgentStatusDecorator({
         ...props.node.exportComponentProps(),
         key: props.node.getKey(),
         theme: props.theme,
@@ -703,6 +719,7 @@ const InlineEntities: Array<RenderableEntity> = [
   ContactMention,
   DateMention,
   GroupMention,
+  AgentStatus,
   Snapshot,
   Image,
   Video,

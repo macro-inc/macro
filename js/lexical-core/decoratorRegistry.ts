@@ -33,6 +33,10 @@ import type {
   GroupMentionNode,
 } from './nodes/GroupMentionNode';
 import type {
+  AgentStatusDecoratorProps,
+  AgentStatusNode,
+} from './nodes/AgentStatusNode';
+import type {
   HorizontalRuleDecoratorProps,
   HorizontalRuleNode,
 } from './nodes/HorizontalRuleNode';
@@ -81,6 +85,10 @@ export interface NodeDecoratorMap {
   GroupMentionNode: {
     klass: typeof GroupMentionNode;
     props: GroupMentionDecoratorProps;
+  };
+  AgentStatusNode: {
+    klass: typeof AgentStatusNode;
+    props: AgentStatusDecoratorProps;
   };
   DocumentMentionNode: {
     klass: typeof DocumentMentionNode;

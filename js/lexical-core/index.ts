@@ -18,6 +18,7 @@ export * from './nodes/DocumentMentionNode';
 export * from './nodes/EquationNode';
 export * from './nodes/SnapshotNode';
 export * from './nodes/GroupMentionNode';
+export * from './nodes/AgentStatusNode';
 export * from './nodes/HorizontalRuleNode';
 export * from './nodes/HtmlRenderNode';
 export * from './nodes/ImageNode';

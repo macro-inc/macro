@@ -87,7 +87,11 @@ pub trait BotHandler: Send + Sync {
 }
 
 /// Message Macro Agent posts immediately, then replaces with its answer.
-const THINKING_MESSAGE: &str = "_Macro Agent is thinking…_";
+///
+/// Rendered by the channel markdown as a pulsing agent-status node (see the
+/// frontend `AgentStatusNode`).
+const THINKING_MESSAGE: &str =
+    r#"<m-agent-status>{"statusText":"Macro Agent is thinking…"}</m-agent-status>"#;
 const EMPTY_RESPONSE_FALLBACK: &str = "I wasn't able to come up with a response.";
 const ERROR_FALLBACK: &str = "Sorry — I ran into an error while responding.";
 

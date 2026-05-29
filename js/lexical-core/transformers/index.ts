@@ -1,4 +1,5 @@
 import type { Transformer } from '@lexical/markdown';
+import { I_AGENT_STATUS } from './agentStatus';
 import { I_MACRO_QUOTE } from './classedBlock';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
 import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
@@ -62,6 +63,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_DOCUMENT_CARD,
   I_CONTACT_MENTION,
   I_DATE_MENTION,
+  I_AGENT_STATUS,
   I_TABLE_NODE,
   I_MACRO_QUOTE,
   I_EQUATION_NODE,
@@ -129,6 +131,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   E_CONTACT_MENTION,
   I_DATE_MENTION,
   E_DATE_MENTION,
+  I_AGENT_STATUS,
   I_MACRO_QUOTE,
   I_EQUATION_NODE,
   I_THEME_MENTION,
