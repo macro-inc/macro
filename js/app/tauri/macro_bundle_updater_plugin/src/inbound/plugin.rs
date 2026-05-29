@@ -120,6 +120,18 @@ pub async fn retry_waiting_for_wifi<R: Runtime>(
     service.retry_waiting_for_wifi().map_err(|e| e.to_string())
 }
 
+/// Allow a pending bundle update reload to be dispatched again.
+pub async fn allow_update_reload_retry<R: Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+) -> Result<bool, String> {
+    let Some(service_state) = app_handle.try_state::<Mutex<PluginService>>() else {
+        return Ok(false);
+    };
+
+    let mut service = service_state.lock().await;
+    Ok(service.allow_update_reload_retry())
+}
+
 /// Apply a completed bundle update to the live webview.
 ///
 /// Returns `Ok(true)` if an update was applied, `Ok(false)` if the service is
@@ -136,12 +148,17 @@ pub async fn apply_completed_update<R: Runtime>(
         .app_cache_dir()
         .map_err(|e| e.to_string())?;
 
-    let mut service = service_state.lock().await;
-
-    let apply_result = service
-        .apply_update(&cache_dir)
-        .await
-        .map_err(|e| e.to_string())?;
+    let apply_result = {
+        let mut service = service_state.lock().await;
+        let result = service
+            .apply_update(&cache_dir)
+            .await
+            .map_err(|e| e.to_string())?;
+        if result == ApplyUpdateResult::ReloadNeeded {
+            service.mark_update_reload_dispatched();
+        }
+        result
+    };
 
     if apply_result == ApplyUpdateResult::ReloadNeeded {
         // Reload to pick up the new bundle. Using location.reload() instead of
@@ -150,13 +167,19 @@ pub async fn apply_completed_update<R: Runtime>(
             tracing::info!("Bundle update complete, reloading to pick up new assets");
             if let Err(e) = webview.eval("window.location.reload();") {
                 tracing::warn!(error=?e, "Failed to dispatch bundle update reload");
-            } else {
-                service.mark_update_reload_dispatched();
+                service_state
+                    .lock()
+                    .await
+                    .unmark_update_reload_dispatched();
             }
         } else {
             tracing::warn!(
                 "Completed bundle update applied but no webview was available to reload"
             );
+            service_state
+                .lock()
+                .await
+                .unmark_update_reload_dispatched();
         }
     }
     Ok(apply_result != ApplyUpdateResult::NoUpdate)

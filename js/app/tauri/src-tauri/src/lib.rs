@@ -1,6 +1,6 @@
 use logger::Logger;
 use macro_bundle_updater_plugin::inbound::plugin::{
-    PluginService, apply_completed_update, retry_waiting_for_wifi,
+    PluginService, allow_update_reload_retry, apply_completed_update, retry_waiting_for_wifi,
 };
 use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
@@ -257,6 +257,11 @@ pub fn run() {
                 {
                     let app = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
+                        if let Err(e) = allow_update_reload_retry(&app).await {
+                            tracing::warn!(
+                                "Failed to allow bundle update reload retry on resume: {e}"
+                            );
+                        }
                         match apply_completed_update(&app).await {
                             Ok(_) => {}
                             Err(e) => {

@@ -6,8 +6,13 @@ use crate::domain::{
     ports::{AutoUpdateService, FsRepo, SystemQuery, UpdateRepo},
 };
 use rootcause::{Report, prelude::ResultExt, report};
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
+};
 use tokio::sync::mpsc::error::TrySendError;
+
+const RELOAD_DISPATCH_RETRY_DELAY: Duration = Duration::from_secs(5);
 
 /// Manages the update worker and the active bundle root.
 pub struct Service<Fs: FsRepo> {
@@ -15,7 +20,7 @@ pub struct Service<Fs: FsRepo> {
     fs_repo: Fs,
     bundle_root: BundleRoot,
     reload_pending: bool,
-    reload_dispatched: bool,
+    reload_dispatched_at: Option<Instant>,
 }
 
 enum WorkerCommand {
@@ -359,7 +364,7 @@ impl<Fs: FsRepo> Service<Fs> {
             fs_repo,
             bundle_root: BundleRoot::new(),
             reload_pending: false,
-            reload_dispatched: false,
+            reload_dispatched_at: None,
         }
     }
 
@@ -380,7 +385,7 @@ impl<Fs: FsRepo> Service<Fs> {
     /// that it mounted with the new bundle root.
     pub async fn apply_update(&mut self, cache_dir: &Path) -> Result<ApplyUpdateResult, Report> {
         if self.reload_pending {
-            return Ok(if self.reload_dispatched {
+            return Ok(if self.reload_dispatched_at.is_some() {
                 ApplyUpdateResult::ReloadAlreadyDispatched
             } else {
                 ApplyUpdateResult::ReloadNeeded
@@ -403,7 +408,7 @@ impl<Fs: FsRepo> Service<Fs> {
         tracing::info!("Setting bundle root to {bundle_dir:?}");
         self.set_bundle_root(bundle_dir.clone(), cache_dir).await?;
         self.reload_pending = true;
-        self.reload_dispatched = false;
+        self.reload_dispatched_at = None;
 
         // Remove old bundle directories now that we've switched to the new one
         self.cleanup_old_bundles(cache_dir, &bundle_dir).await;
@@ -414,8 +419,35 @@ impl<Fs: FsRepo> Service<Fs> {
     /// Record that the pending reload was successfully dispatched to the webview.
     pub fn mark_update_reload_dispatched(&mut self) {
         if self.reload_pending {
-            self.reload_dispatched = true;
+            self.reload_dispatched_at = Some(Instant::now());
         }
+    }
+
+    /// Clear a pending reload dispatch marker after dispatch failed synchronously.
+    pub fn unmark_update_reload_dispatched(&mut self) -> bool {
+        if !self.reload_pending || self.reload_dispatched_at.is_none() {
+            return false;
+        }
+
+        self.reload_dispatched_at = None;
+        true
+    }
+
+    /// Allow a stale pending reload dispatch to be attempted again.
+    pub fn allow_update_reload_retry(&mut self) -> bool {
+        if !self.reload_pending || self.reload_dispatched_at.is_none() {
+            return false;
+        }
+
+        if self
+            .reload_dispatched_at
+            .is_some_and(|dispatched_at| dispatched_at.elapsed() < RELOAD_DISPATCH_RETRY_DELAY)
+        {
+            return false;
+        }
+
+        self.reload_dispatched_at = None;
+        true
     }
 
     /// Acknowledge that the webview has reloaded after applying an update.
@@ -429,7 +461,7 @@ impl<Fs: FsRepo> Service<Fs> {
 
         self.restart_run_after_reload_ack()?;
         self.reload_pending = false;
-        self.reload_dispatched = false;
+        self.reload_dispatched_at = None;
         Ok(true)
     }
 
@@ -715,7 +747,7 @@ mod tests {
                 fs_repo: FakeFs,
                 bundle_root: BundleRoot::new(),
                 reload_pending: false,
-                reload_dispatched: false,
+                reload_dispatched_at: None,
             },
             start_rx,
         )
@@ -843,7 +875,7 @@ mod tests {
             fs_repo: FakeFs,
             bundle_root: BundleRoot::new(),
             reload_pending: false,
-            reload_dispatched: false,
+            reload_dispatched_at: None,
         };
 
         assert!(service.retry_waiting_for_wifi().unwrap());
@@ -866,7 +898,7 @@ mod tests {
 
         assert_eq!(applied, ApplyUpdateResult::ReloadNeeded);
         assert!(service.reload_pending);
-        assert!(!service.reload_dispatched);
+        assert!(service.reload_dispatched_at.is_none());
         assert!(matches!(
             &*service.status().borrow(),
             Ok(UpdateStatus::Completed(_))
@@ -875,7 +907,7 @@ mod tests {
 
         assert!(service.acknowledge_update_reload().unwrap());
         assert!(!service.reload_pending);
-        assert!(!service.reload_dispatched);
+        assert!(service.reload_dispatched_at.is_none());
         assert!(matches!(
             &*service.status().borrow(),
             Ok(UpdateStatus::Idle)
@@ -909,6 +941,50 @@ mod tests {
         assert_eq!(applied, ApplyUpdateResult::ReloadAlreadyDispatched);
     }
 
+    #[tokio::test]
+    async fn allow_update_reload_retry_waits_for_stale_dispatch() {
+        let (mut service, _start_rx) = service_with_status(completed_status());
+
+        let applied = service.apply_update(Path::new("/tmp")).await.unwrap();
+        assert_eq!(applied, ApplyUpdateResult::ReloadNeeded);
+
+        service.mark_update_reload_dispatched();
+        assert_eq!(
+            service.apply_update(Path::new("/tmp")).await.unwrap(),
+            ApplyUpdateResult::ReloadAlreadyDispatched
+        );
+
+        assert!(!service.allow_update_reload_retry());
+        service.reload_dispatched_at = Some(Instant::now() - RELOAD_DISPATCH_RETRY_DELAY);
+
+        assert!(service.allow_update_reload_retry());
+        assert!(service.reload_dispatched_at.is_none());
+        assert_eq!(
+            service.apply_update(Path::new("/tmp")).await.unwrap(),
+            ApplyUpdateResult::ReloadNeeded
+        );
+    }
+
+    #[tokio::test]
+    async fn unmark_update_reload_dispatched_bypasses_stale_retry_gate() {
+        let (mut service, _start_rx) = service_with_status(completed_status());
+
+        let applied = service.apply_update(Path::new("/tmp")).await.unwrap();
+        assert_eq!(applied, ApplyUpdateResult::ReloadNeeded);
+
+        service.mark_update_reload_dispatched();
+        assert_eq!(
+            service.apply_update(Path::new("/tmp")).await.unwrap(),
+            ApplyUpdateResult::ReloadAlreadyDispatched
+        );
+
+        assert!(service.unmark_update_reload_dispatched());
+        assert_eq!(
+            service.apply_update(Path::new("/tmp")).await.unwrap(),
+            ApplyUpdateResult::ReloadNeeded
+        );
+    }
+
     #[test]
     fn acknowledge_update_reload_returns_false_without_pending_reload() {
         let (mut service, _start_rx) = service_with_status(UpdateStatus::Idle);
@@ -928,7 +1004,7 @@ mod tests {
 
         assert!(service.acknowledge_update_reload().unwrap());
         assert!(!service.reload_pending);
-        assert!(!service.reload_dispatched);
+        assert!(service.reload_dispatched_at.is_none());
         assert!(matches!(
             &*service.status().borrow(),
             Ok(UpdateStatus::Idle)
