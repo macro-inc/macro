@@ -449,16 +449,31 @@ function QuerySyncProviderWithUserId() {
 function InitialInteractiveOnboardingModal() {
   const userInfoQuery = useUserInfoQuery();
   const [open, setOpen] = createSignal(true);
+  const [onboardingStarted, setOnboardingStarted] = createSignal(false);
+
+  const modalOpen = () =>
+    open() &&
+    userInfoQuery.data?.authenticated === true &&
+    (userInfoQuery.data.tutorialComplete === false || onboardingStarted());
+
+  createEffect(() => {
+    if (modalOpen()) {
+      setOnboardingStarted(true);
+    }
+  });
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setOnboardingStarted(false);
+    }
+  };
 
   return (
     <InteractiveOnboardingModal
-      open={
-        open() &&
-        userInfoQuery.data?.authenticated === true &&
-        userInfoQuery.data.tutorialComplete === false
-      }
+      open={modalOpen()}
       isFirstTimeOnboarding
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
     />
   );
 }

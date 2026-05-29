@@ -211,9 +211,7 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
   };
 
   const resetTutorial = () => {
-    const firstLesson = sortedLessons()[0];
-    if (!firstLesson) return;
-    state.goToLessonById(firstLesson.id);
+    state.reset();
     setReadyToContinue(false);
     setContinueLabel(undefined);
   };

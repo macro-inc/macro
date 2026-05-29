@@ -26,7 +26,7 @@ function CalloutShell(props: CalloutShellProps) {
         <div class="flex items-center gap-2.5">{props.children}</div>
         <span class="text-sm text-muted">{props.label}</span>
         <Show when={props.completed}>
-          <div class="bg-accent text-surface size-5 rounded xs flex items-center justify-center ml-auto">
+          <div class="bg-accent text-surface size-5 rounded-xs flex items-center justify-center ml-auto">
             <CheckIcon class="size-4" />
           </div>
         </Show>

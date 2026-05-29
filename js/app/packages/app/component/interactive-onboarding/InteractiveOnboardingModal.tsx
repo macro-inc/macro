@@ -148,7 +148,7 @@ function ModalFooter(props: { lesson: LessonState }) {
             disabled={!onboarding.readyToContinue()}
           >
             {onboarding.continueLabel() ?? 'Continue'}
-            <Hotkey shortcut="enter" />
+            <Hotkey shortcut="cmd+enter" />
           </Button>
         </div>
       </Show>
