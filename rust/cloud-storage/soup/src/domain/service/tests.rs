@@ -401,7 +401,7 @@ async fn simple_soup_includes_foreign_entities() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: None,
+            link_ids: vec![],
             soup_type: SoupType::UnExpanded,
             limit: 20,
             cursor: SoupQuery::new_sort_simple(
@@ -481,7 +481,7 @@ async fn frecency_soup_does_not_query_foreign_entities() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: None,
+            link_ids: vec![],
             soup_type: SoupType::UnExpanded,
             limit: 20,
             cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
@@ -526,7 +526,7 @@ async fn team_receipt_contributes_team_foreign_entity_source_id() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: None,
+            link_ids: vec![],
             soup_type: SoupType::UnExpanded,
             limit: 20,
             cursor: SoupQuery::new_sort_simple(
@@ -581,7 +581,7 @@ async fn foreign_entity_filter_suppresses_non_matching_foreign_entities() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: None,
+            link_ids: vec![],
             soup_type: SoupType::UnExpanded,
             limit: 20,
             cursor: SoupQuery::new_sort_simple(
@@ -653,7 +653,7 @@ async fn it_should_not_query_frecency() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 0,
             cursor: SoupQuery::new_sort_simple(
@@ -739,7 +739,7 @@ async fn it_should_query_frecency() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: u16::MAX,
             cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
@@ -822,7 +822,7 @@ async fn it_should_sort_frecency_descending() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: u16::MAX,
             cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
@@ -919,7 +919,7 @@ async fn frecency_should_fallback() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
@@ -1000,7 +1000,7 @@ async fn frecency_should_paginate() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
@@ -1083,7 +1083,7 @@ async fn frecency_should_resume_cursor() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::new_cursor_frecency(CursorWithValAndFilter {
@@ -1182,7 +1182,7 @@ async fn frecency_fallback_cursor_should_resume() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::new_cursor_frecency(CursorWithValAndFilter {
@@ -1257,7 +1257,7 @@ async fn cursor_should_return_simple_sort() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 0,
             cursor: SoupQuery::new_sort_simple(
@@ -1328,7 +1328,7 @@ async fn cursor_should_return_frecency() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
@@ -1389,7 +1389,7 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 0,
             cursor: SoupQuery::new_sort_simple(
@@ -1440,7 +1440,7 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 0,
             cursor: SoupQuery::new_sort_simple(
@@ -1491,7 +1491,7 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 0,
             cursor: SoupQuery::new_sort_simple(
@@ -1554,7 +1554,7 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 0,
             cursor: SoupQuery::new_sort_simple(
@@ -1636,7 +1636,7 @@ async fn it_should_preserve_is_completed_in_by_ids_queries() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 3,
             cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),

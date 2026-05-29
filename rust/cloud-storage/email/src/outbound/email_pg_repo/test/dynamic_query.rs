@@ -168,7 +168,8 @@ async fn test_static_important_query_includes_drafts(pool: Pool<Postgres>) -> an
     let query = Query::Sort(SimpleSortMethod::UpdatedAt, ());
 
     let results =
-        preview_views::important::important_preview_cursor(&pool, &[link_id], limit, &query).await?;
+        preview_views::important::important_preview_cursor(&pool, &[link_id], limit, &query)
+            .await?;
 
     assert_eq!(
         results.len(),
@@ -1161,7 +1162,8 @@ async fn test_static_important_excludes_trashed(pool: Pool<Postgres>) -> anyhow:
     let query = Query::Sort(SimpleSortMethod::UpdatedAt, ());
 
     let results =
-        preview_views::important::important_preview_cursor(&pool, &[link_id], limit, &query).await?;
+        preview_views::important::important_preview_cursor(&pool, &[link_id], limit, &query)
+            .await?;
 
     let result_ids: std::collections::HashSet<String> =
         results.iter().map(|r| r.id.to_string()).collect();
@@ -1255,7 +1257,11 @@ async fn test_static_user_label_excludes_trashed(pool: Pool<Postgres>) -> anyhow
     let query = Query::Sort(SimpleSortMethod::UpdatedAt, ());
 
     let results = preview_views::user_label::user_label_preview_cursor(
-        &pool, &[link_id], limit, &query, "Work",
+        &pool,
+        &[link_id],
+        limit,
+        &query,
+        "Work",
     )
     .await?;
 
@@ -1633,14 +1639,16 @@ async fn test_dynamic_query_calendar_only_false_is_noop(
             ))),
         ));
         let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
-        dynamic::dynamic_email_thread_cursor(&pool, &[link_id], limit, &view, query, "", None).await?
+        dynamic::dynamic_email_thread_cursor(&pool, &[link_id], limit, &view, query, "", None)
+            .await?
     };
     let baseline = {
         let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
             "example.com".to_string(),
         ))));
         let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
-        dynamic::dynamic_email_thread_cursor(&pool, &[link_id], limit, &view, query, "", None).await?
+        dynamic::dynamic_email_thread_cursor(&pool, &[link_id], limit, &view, query, "", None)
+            .await?
     };
 
     let with_false_ids: std::collections::HashSet<_> = with_false.iter().map(|r| r.id).collect();
