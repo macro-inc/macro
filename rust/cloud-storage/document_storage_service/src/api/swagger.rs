@@ -283,6 +283,11 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::set_email_sync::handler,
         crm::inbound::axum_router::set_company_hidden::handler,
         crm::inbound::axum_router::set_contact_hidden::handler,
+        crm::inbound::axum_router::list_company_contacts::handler,
+        crm::inbound::axum_router::comments::list_handler,
+        crm::inbound::axum_router::comments::create_handler,
+        crm::inbound::axum_router::comments::edit_handler,
+        crm::inbound::axum_router::comments::delete_handler,
     ),
     components(
         schemas(
@@ -509,6 +514,14 @@ use utoipa::OpenApi;
             crm::inbound::axum_router::set_email_sync::SetEmailSyncRequest,
             crm::inbound::axum_router::set_company_hidden::SetCompanyHiddenRequest,
             crm::inbound::axum_router::set_contact_hidden::SetContactHiddenRequest,
+            crm::inbound::axum_router::list_company_contacts::CrmContactResponse,
+            crm::inbound::axum_router::comments::CreateCrmCommentRequest,
+            crm::inbound::axum_router::comments::EditCrmCommentRequest,
+            crm::domain::comment::CrmCommentEntityType,
+            crm::domain::comment::CrmThread,
+            crm::domain::comment::CrmComment,
+            crm::domain::comment::CrmCommentThread,
+            crm::domain::comment::DeleteCrmCommentResult,
         ),
     ),
     tags(

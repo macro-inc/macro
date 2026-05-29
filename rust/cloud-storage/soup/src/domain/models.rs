@@ -7,8 +7,10 @@ pub use grouping::{
 
 use call::domain::models::GetCallRecordsRequest;
 use comms::domain::models::GetChannelsRequest;
+use crm::domain::companies_repo::CrmCompanyListSort;
 use email::domain::models::{GetEmailsRequest, PreviewView};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
+use filter_ast::Expr;
 use foreign_entity::domain::{
     models::{ForeignEntityError, SourceId},
     ports::ForeignEntityListQuery,
@@ -16,7 +18,7 @@ use foreign_entity::domain::{
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
 use item_filters::{
     EntityFilters,
-    ast::{EntityFilterAst, ExpandErr},
+    ast::{EntityFilterAst, ExpandErr, crm_company::CrmCompanyLiteral},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
@@ -349,6 +351,61 @@ impl SoupRequest<Option<EntityFilterAst>> {
         })
     }
 
+    /// Returns `None` (skipping the CRM sub-request) for no-team users,
+    /// Frecency cursors, or a malformed team-receipt uuid.
+    pub(crate) fn build_crm_company_request(
+        &self,
+        team_receipt: &Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Option<GetCrmCompaniesRequest> {
+        let receipt = team_receipt.as_ref()?;
+        let team_id = Uuid::parse_str(&receipt.entity().entity_id)
+            .inspect_err(|e| {
+                tracing::warn!(
+                    error=?e,
+                    "team_receipt entity_id is not a valid uuid; skipping crm_company sub-request"
+                );
+            })
+            .ok()?;
+
+        let (sort_method, filter_ast): (SimpleSortMethod, Option<&EntityFilterAst>) =
+            match &self.cursor {
+                SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => (*t, f.as_ref()),
+                SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
+                    val,
+                    filter,
+                    ..
+                }))) => (val.sort_type, filter.as_ref()),
+                SoupQuery::Frecency(_) => return None,
+            };
+
+        // No viewed_at signal for crm_company yet — ViewedAt/ViewedUpdated
+        // fall back to updated_at.
+        let sort = match sort_method {
+            SimpleSortMethod::CreatedAt => CrmCompanyListSort::CreatedAt,
+            SimpleSortMethod::UpdatedAt
+            | SimpleSortMethod::ViewedAt
+            | SimpleSortMethod::ViewedUpdated => CrmCompanyListSort::UpdatedAt,
+        };
+
+        let mut company_ids = Vec::new();
+        if let Some(tree) = filter_ast.and_then(|a| a.crm_company_filter.as_ref())
+            && !collect_crm_company_ids(tree, &mut company_ids)
+        {
+            // Fail closed: unsupported AST shape would widen the result
+            // set. Skip the CRM sub-request rather than over-include.
+            return None;
+        }
+
+        Some(GetCrmCompaniesRequest {
+            team_id,
+            company_ids,
+            sort,
+            // Match the soup paginator's bounds so the CRM layer doesn't
+            // overfetch on an oversized client limit.
+            limit: self.limit.clamp(20, 500) as i64,
+        })
+    }
+
     pub(crate) fn build_comms_request(&self) -> Option<GetChannelsRequest> {
         Some(GetChannelsRequest {
             macro_id: self.user.clone(),
@@ -411,6 +468,36 @@ impl SoupRequest<Option<EntityFilterAst>> {
         }
 
         source_ids
+    }
+}
+
+/// Parameters for fetching CRM companies to fold into the soup feed.
+#[derive(Debug)]
+pub struct GetCrmCompaniesRequest {
+    /// Team whose CRM companies to list. Derived from the team receipt.
+    pub team_id: Uuid,
+    /// Filter to specific company ids. Empty = all of the team's
+    /// non-hidden companies (subject to the killswitch).
+    pub company_ids: Vec<Uuid>,
+    /// Which timestamp column to sort by.
+    pub sort: CrmCompanyListSort,
+    /// Upper bound on rows returned — the soup paginator re-slices.
+    pub limit: i64,
+}
+
+/// Walks a `CrmCompanyLiteral` AST collecting every `Id(uuid)` literal.
+/// Returns `false` when the AST contains `And` or `Not` — both shapes
+/// would change set semantics (`And` would intersect, `Not` would
+/// invert) but a flat collector can't represent that, so the caller
+/// fails closed rather than widening the result.
+fn collect_crm_company_ids(expr: &Expr<CrmCompanyLiteral>, out: &mut Vec<Uuid>) -> bool {
+    match expr {
+        Expr::Or(a, b) => collect_crm_company_ids(a, out) && collect_crm_company_ids(b, out),
+        Expr::Literal(CrmCompanyLiteral::Id(id)) => {
+            out.push(*id);
+            true
+        }
+        Expr::And(_, _) | Expr::Not(_) => false,
     }
 }
 
@@ -492,6 +579,8 @@ pub enum SoupErr {
     CommsErr,
     #[error("A call error has occurred, see logs for more details")]
     CallErr,
+    #[error("A CRM error has occurred, see logs for more details")]
+    CrmErr,
     #[error(transparent)]
     ForeignEntityErr(#[from] ForeignEntityError),
     #[error(transparent)]

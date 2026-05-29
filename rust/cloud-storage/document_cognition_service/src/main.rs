@@ -229,6 +229,7 @@ async fn main() -> anyhow::Result<()> {
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
         call::domain::ports::NoOpCallRecordQueryService,
+        crm::domain::service::NoOpCrmService,
         foreign_entity_service,
     ));
 

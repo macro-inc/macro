@@ -2368,6 +2368,330 @@ export const postTypingBody = zod
   .describe('Request to emit a typing event.');
 
 /**
+ * @summary Soft-delete a CRM comment, scoped to the requesting user's team. When it
+was the thread's last live comment, the thread is soft-deleted too
+(reported via `threadDeleted`).
+ */
+export const deleteCrmCommentParams = zod.object({
+  comment_id: zod.uuid().describe('The CRM comment to delete'),
+});
+
+export const deleteCrmCommentResponse = zod
+  .object({
+    commentId: zod.uuid().describe("The deleted comment's id."),
+    threadDeleted: zod
+      .boolean()
+      .describe(
+        'Whether the thread itself was soft-deleted because no live comments\nremained.'
+      ),
+    threadId: zod.uuid().describe('The thread the comment belonged to.'),
+  })
+  .describe(
+    'Outcome of soft-deleting a CRM comment: reports whether the parent thread\nwas soft-deleted too (it is when the deleted comment was its last live one).'
+  );
+
+/**
+ * @summary Edit a CRM comment's text, scoped to the requesting user's team via the
+comment's thread → entity → company. Returns the updated comment.
+ */
+export const editCrmCommentParams = zod.object({
+  comment_id: zod.uuid().describe('The CRM comment to edit'),
+});
+
+export const editCrmCommentBody = zod
+  .object({
+    text: zod.string().describe('The new comment body (markdown).'),
+  })
+  .describe('Request body for `PATCH \/crm\/comments\/comment\/{comment_id}`.');
+
+export const editCrmCommentResponse = zod
+  .object({
+    commentId: zod.uuid().describe('The comment id.'),
+    createdAt: zod.iso.datetime({}).describe('When the comment was created.'),
+    deletedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the comment was soft-deleted, if ever.'),
+    metadata: zod.unknown().optional().describe('Arbitrary client metadata.'),
+    order: zod
+      .number()
+      .nullish()
+      .describe(
+        'Optional explicit ordering within the thread; the frontend falls\nback to `createdAt` when absent.'
+      ),
+    owner: zod.string().describe('Macro user id of the comment author.'),
+    sender: zod
+      .string()
+      .nullish()
+      .describe(
+        'Macro user id of the actual sender, when distinct from `owner`.'
+      ),
+    text: zod.string().describe('The comment body (markdown).'),
+    threadId: zod
+      .uuid()
+      .describe('The id of the thread this comment belongs to.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the comment was last updated.'),
+  })
+  .describe('A single comment within a [`CrmThread`].');
+
+/**
+ * @summary List the comment threads on a CRM company or contact, scoped to the
+requesting user's team. Returns 404 when the entity isn't owned by the
+team; an owned entity with no threads returns `200 []`.
+ */
+export const listCrmCommentsParams = zod.object({
+  entity_type: zod
+    .enum(['crm_company', 'crm_contact'])
+    .describe('Which CRM entity kind the threads hang off'),
+  entity_id: zod.uuid().describe('The CRM company or contact id'),
+});
+
+export const listCrmCommentsResponseItem = zod
+  .object({
+    comments: zod
+      .array(
+        zod
+          .object({
+            commentId: zod.uuid().describe('The comment id.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the comment was created.'),
+            deletedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the comment was soft-deleted, if ever.'),
+            metadata: zod
+              .unknown()
+              .optional()
+              .describe('Arbitrary client metadata.'),
+            order: zod
+              .number()
+              .nullish()
+              .describe(
+                'Optional explicit ordering within the thread; the frontend falls\nback to `createdAt` when absent.'
+              ),
+            owner: zod
+              .string()
+              .describe('Macro user id of the comment author.'),
+            sender: zod
+              .string()
+              .nullish()
+              .describe(
+                'Macro user id of the actual sender, when distinct from `owner`.'
+              ),
+            text: zod.string().describe('The comment body (markdown).'),
+            threadId: zod
+              .uuid()
+              .describe('The id of the thread this comment belongs to.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the comment was last updated.'),
+          })
+          .describe('A single comment within a [`CrmThread`].')
+      )
+      .describe("The thread's comments, oldest first."),
+    thread: zod
+      .object({
+        createdAt: zod.iso
+          .datetime({})
+          .describe('When the thread was created.'),
+        deletedAt: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('When the thread was soft-deleted, if ever.'),
+        entityId: zod
+          .uuid()
+          .describe(
+            'The id of the CRM company or contact this thread belongs to.'
+          ),
+        entityType: zod
+          .enum(['crm_company', 'crm_contact'])
+          .describe(
+            'Which CRM entity a comment thread is attached to. Serializes to\n`crm_company` \/ `crm_contact` — matching the `entityType` the frontend\nuses elsewhere when building entity URLs — and is parsed from the\n`{entity_type}` path segment on the comment routes.'
+          ),
+        metadata: zod
+          .unknown()
+          .optional()
+          .describe('Arbitrary client metadata.'),
+        owner: zod.string().describe('Macro user id of the thread creator.'),
+        resolved: zod.boolean().describe('Whether the thread is resolved.'),
+        threadId: zod.uuid().describe('The thread id.'),
+        updatedAt: zod.iso
+          .datetime({})
+          .describe('When the thread was last updated.'),
+      })
+      .describe(
+        'A CRM comment thread: the parent record one or more comments hang off.'
+      ),
+  })
+  .describe(
+    'A [`CrmThread`] with its comments nested under it — the unit the\nfrontend renders.'
+  );
+export const listCrmCommentsResponse = zod.array(listCrmCommentsResponseItem);
+
+/**
+ * @summary Create a comment on a CRM company or contact — a new thread, or a reply
+when `threadId` is supplied. Returns the full thread (with all comments)
+after the insert. Team-scoped; 404 when the entity isn't owned by the
+team or `threadId` doesn't belong to it.
+ */
+export const createCrmCommentParams = zod.object({
+  entity_type: zod
+    .enum(['crm_company', 'crm_contact'])
+    .describe('Which CRM entity kind the thread hangs off'),
+  entity_id: zod.uuid().describe('The CRM company or contact id'),
+});
+
+export const createCrmCommentBody = zod
+  .object({
+    metadata: zod
+      .unknown()
+      .optional()
+      .describe('Arbitrary client metadata for the comment.'),
+    text: zod.string().describe('The comment body (markdown).'),
+    threadId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Existing thread to append to. Omit to start a new thread on the\naddressed entity.'
+      ),
+    threadMetadata: zod
+      .unknown()
+      .optional()
+      .describe(
+        'Metadata to set on a newly created thread (ignored when replying\nwithout a value).'
+      ),
+  })
+  .describe(
+    'Request body for `POST \/crm\/comments\/{entity_type}\/{entity_id}`.'
+  );
+
+export const createCrmCommentResponse = zod
+  .object({
+    comments: zod
+      .array(
+        zod
+          .object({
+            commentId: zod.uuid().describe('The comment id.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the comment was created.'),
+            deletedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the comment was soft-deleted, if ever.'),
+            metadata: zod
+              .unknown()
+              .optional()
+              .describe('Arbitrary client metadata.'),
+            order: zod
+              .number()
+              .nullish()
+              .describe(
+                'Optional explicit ordering within the thread; the frontend falls\nback to `createdAt` when absent.'
+              ),
+            owner: zod
+              .string()
+              .describe('Macro user id of the comment author.'),
+            sender: zod
+              .string()
+              .nullish()
+              .describe(
+                'Macro user id of the actual sender, when distinct from `owner`.'
+              ),
+            text: zod.string().describe('The comment body (markdown).'),
+            threadId: zod
+              .uuid()
+              .describe('The id of the thread this comment belongs to.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the comment was last updated.'),
+          })
+          .describe('A single comment within a [`CrmThread`].')
+      )
+      .describe("The thread's comments, oldest first."),
+    thread: zod
+      .object({
+        createdAt: zod.iso
+          .datetime({})
+          .describe('When the thread was created.'),
+        deletedAt: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('When the thread was soft-deleted, if ever.'),
+        entityId: zod
+          .uuid()
+          .describe(
+            'The id of the CRM company or contact this thread belongs to.'
+          ),
+        entityType: zod
+          .enum(['crm_company', 'crm_contact'])
+          .describe(
+            'Which CRM entity a comment thread is attached to. Serializes to\n`crm_company` \/ `crm_contact` — matching the `entityType` the frontend\nuses elsewhere when building entity URLs — and is parsed from the\n`{entity_type}` path segment on the comment routes.'
+          ),
+        metadata: zod
+          .unknown()
+          .optional()
+          .describe('Arbitrary client metadata.'),
+        owner: zod.string().describe('Macro user id of the thread creator.'),
+        resolved: zod.boolean().describe('Whether the thread is resolved.'),
+        threadId: zod.uuid().describe('The thread id.'),
+        updatedAt: zod.iso
+          .datetime({})
+          .describe('When the thread was last updated.'),
+      })
+      .describe(
+        'A CRM comment thread: the parent record one or more comments hang off.'
+      ),
+  })
+  .describe(
+    'A [`CrmThread`] with its comments nested under it — the unit the\nfrontend renders.'
+  );
+
+/**
+ * @summary List the non-hidden contacts of a CRM company, scoped to the
+requesting user's team. Returns 404 when the company isn't owned by
+the team (so existence doesn't leak across teams); an owned company
+with no visible contacts returns `200 []`.
+ */
+export const listCompanyContactsParams = zod.object({
+  company_id: zod.uuid().describe('The CRM company whose contacts to list'),
+});
+
+export const listCompanyContactsResponseItem = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .describe('The id of the company the contact belongs to.'),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod.string().describe("The contact's email address."),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+export const listCompanyContactsResponse = zod.array(
+  listCompanyContactsResponseItem
+);
+
+/**
  * @summary Toggle `email_sync` on a CRM company. `false` disables CRM email
 sharing for the company and permanently removes its existing CRM
 contacts and contact sources.
@@ -6308,6 +6632,71 @@ export const getItemsSoupResponse = zod.object({
             .object({
               createdAt: zod.iso
                 .datetime({})
+                .describe('When the company was created.'),
+              description: zod
+                .string()
+                .nullish()
+                .describe(
+                  "Display description from the primary domain's directory entry."
+                ),
+              domains: zod
+                .array(
+                  zod
+                    .object({
+                      companyId: zod
+                        .uuid()
+                        .describe(
+                          'The id of the company the domain belongs to.'
+                        ),
+                      createdAt: zod.iso
+                        .datetime({})
+                        .describe('When the domain record was created.'),
+                      domain: zod
+                        .string()
+                        .describe(
+                          'The domain (lowercased, e.g. \"acme.com\").'
+                        ),
+                      id: zod.uuid().describe('The id of the domain record.'),
+                    })
+                    .describe(
+                      "A CRM domain as displayed in Soup. Mirrors the crm crate's\n[`CrmDomain`] with a stable wire shape that the FE can rely on."
+                    )
+                )
+                .describe(
+                  'Domains associated with this company, ordered by creation time\nascending (primary first).'
+                ),
+              emailSync: zod
+                .boolean()
+                .describe('Whether email sync is enabled for this company.'),
+              hidden: zod
+                .boolean()
+                .describe(
+                  'Whether the company is hidden from CRM listings. Soup filters\nthese out by default.'
+                ),
+              id: zod.uuid().describe('The id of the company.'),
+              name: zod
+                .string()
+                .nullish()
+                .describe(
+                  "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+                ),
+              teamId: zod
+                .uuid()
+                .describe('The id of the team that owns this company record.'),
+              updatedAt: zod.iso
+                .datetime({})
+                .describe('When the company was last updated.'),
+            })
+            .describe(
+              'A CRM company as displayed in Soup. Carries the core company\nfields plus display metadata resolved from `crm_domain_directory`\nagainst the primary (earliest-created) domain.'
+            ),
+          tag: zod.enum(['crmCompany']),
+        }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod.iso
+                .datetime({})
                 .describe('Timestamp when the record was created.'),
               foreignEntityId: zod
                 .string()
@@ -6513,6 +6902,19 @@ export const postItemsSoupBody = zod
       .optional()
       .describe(
         'The chat filters used to filter down what chats you search over.'
+      ),
+    crm_company_filters: zod
+      .object({
+        company_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            "CRM company ids to filter by. Examples: ['11111111-...']. Empty to\ninclude all of the team's visible CRM companies."
+          ),
+      })
+      .optional()
+      .describe(
+        'The crm company filters used to narrow which CRM companies appear in soup.'
       ),
     document_filters: zod
       .object({
@@ -8071,6 +8473,71 @@ export const postItemsSoupResponse = zod.object({
             .object({
               createdAt: zod.iso
                 .datetime({})
+                .describe('When the company was created.'),
+              description: zod
+                .string()
+                .nullish()
+                .describe(
+                  "Display description from the primary domain's directory entry."
+                ),
+              domains: zod
+                .array(
+                  zod
+                    .object({
+                      companyId: zod
+                        .uuid()
+                        .describe(
+                          'The id of the company the domain belongs to.'
+                        ),
+                      createdAt: zod.iso
+                        .datetime({})
+                        .describe('When the domain record was created.'),
+                      domain: zod
+                        .string()
+                        .describe(
+                          'The domain (lowercased, e.g. \"acme.com\").'
+                        ),
+                      id: zod.uuid().describe('The id of the domain record.'),
+                    })
+                    .describe(
+                      "A CRM domain as displayed in Soup. Mirrors the crm crate's\n[`CrmDomain`] with a stable wire shape that the FE can rely on."
+                    )
+                )
+                .describe(
+                  'Domains associated with this company, ordered by creation time\nascending (primary first).'
+                ),
+              emailSync: zod
+                .boolean()
+                .describe('Whether email sync is enabled for this company.'),
+              hidden: zod
+                .boolean()
+                .describe(
+                  'Whether the company is hidden from CRM listings. Soup filters\nthese out by default.'
+                ),
+              id: zod.uuid().describe('The id of the company.'),
+              name: zod
+                .string()
+                .nullish()
+                .describe(
+                  "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+                ),
+              teamId: zod
+                .uuid()
+                .describe('The id of the team that owns this company record.'),
+              updatedAt: zod.iso
+                .datetime({})
+                .describe('When the company was last updated.'),
+            })
+            .describe(
+              'A CRM company as displayed in Soup. Carries the core company\nfields plus display metadata resolved from `crm_domain_directory`\nagainst the primary (earliest-created) domain.'
+            ),
+          tag: zod.enum(['crmCompany']),
+        }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod.iso
+                .datetime({})
                 .describe('Timestamp when the record was created.'),
               foreignEntityId: zod
                 .string()
@@ -8128,6 +8595,12 @@ export const postItemsSoupAstBody = zod
       .unknown()
       .optional()
       .describe('the filters that should be applied to the call entity'),
+    ccf: zod
+      .unknown()
+      .optional()
+      .describe(
+        "Filters applied to the crm_company entity (wire key `ccf`).\nEmpty\/omitted = team's full visible list."
+      ),
     cf: zod
       .unknown()
       .optional()
@@ -9440,6 +9913,71 @@ export const postItemsSoupAstResponse = zod.object({
               'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'
             ),
           tag: zod.enum(['call']),
+        }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod.iso
+                .datetime({})
+                .describe('When the company was created.'),
+              description: zod
+                .string()
+                .nullish()
+                .describe(
+                  "Display description from the primary domain's directory entry."
+                ),
+              domains: zod
+                .array(
+                  zod
+                    .object({
+                      companyId: zod
+                        .uuid()
+                        .describe(
+                          'The id of the company the domain belongs to.'
+                        ),
+                      createdAt: zod.iso
+                        .datetime({})
+                        .describe('When the domain record was created.'),
+                      domain: zod
+                        .string()
+                        .describe(
+                          'The domain (lowercased, e.g. \"acme.com\").'
+                        ),
+                      id: zod.uuid().describe('The id of the domain record.'),
+                    })
+                    .describe(
+                      "A CRM domain as displayed in Soup. Mirrors the crm crate's\n[`CrmDomain`] with a stable wire shape that the FE can rely on."
+                    )
+                )
+                .describe(
+                  'Domains associated with this company, ordered by creation time\nascending (primary first).'
+                ),
+              emailSync: zod
+                .boolean()
+                .describe('Whether email sync is enabled for this company.'),
+              hidden: zod
+                .boolean()
+                .describe(
+                  'Whether the company is hidden from CRM listings. Soup filters\nthese out by default.'
+                ),
+              id: zod.uuid().describe('The id of the company.'),
+              name: zod
+                .string()
+                .nullish()
+                .describe(
+                  "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+                ),
+              teamId: zod
+                .uuid()
+                .describe('The id of the team that owns this company record.'),
+              updatedAt: zod.iso
+                .datetime({})
+                .describe('When the company was last updated.'),
+            })
+            .describe(
+              'A CRM company as displayed in Soup. Carries the core company\nfields plus display metadata resolved from `crm_domain_directory`\nagainst the primary (earliest-created) domain.'
+            ),
+          tag: zod.enum(['crmCompany']),
         }),
         zod.object({
           data: zod

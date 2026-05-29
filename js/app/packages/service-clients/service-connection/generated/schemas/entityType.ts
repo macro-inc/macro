@@ -22,4 +22,5 @@ export const EntityType = {
   call: 'call',
   foreign_entity: 'foreign_entity',
   static_file: 'static_file',
+  crm_company: 'crm_company',
 } as const;

@@ -86,6 +86,7 @@ impl CallRecordQueryService for NoopCallRecordQueryService {
     }
 }
 
+<<<<<<< hutch/feat-foreign-entity-router
 fn foreign_entity_id_from_receipt(
     receipt: EntityAccessReceipt<ViewAccessLevel>,
 ) -> Result<Uuid, ForeignEntityError> {
@@ -101,6 +102,9 @@ fn foreign_entity_id_from_receipt(
         ForeignEntityError::BadRequest("foreign entity receipt id must be a valid UUID".to_string())
     })
 }
+=======
+use crm::domain::service::NoOpCrmService;
+>>>>>>> main
 
 #[derive(Clone)]
 struct NoopForeignEntityService;
@@ -427,6 +431,7 @@ async fn simple_soup_includes_foreign_entities() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         foreign_entity_service.clone(),
     )
     .get_user_soup(
@@ -507,6 +512,7 @@ async fn frecency_soup_does_not_query_foreign_entities() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         foreign_entity_service.clone(),
     )
     .get_user_soup(
@@ -552,6 +558,7 @@ async fn team_receipt_contributes_team_foreign_entity_source_id() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         foreign_entity_service.clone(),
     )
     .get_user_soup(
@@ -607,6 +614,7 @@ async fn foreign_entity_filter_suppresses_non_matching_foreign_entities() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         foreign_entity_service.clone(),
     )
     .get_user_soup(
@@ -679,6 +687,7 @@ async fn it_should_not_query_frecency() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -765,6 +774,7 @@ async fn it_should_query_frecency() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -848,6 +858,7 @@ async fn it_should_sort_frecency_descending() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -945,6 +956,7 @@ async fn frecency_should_fallback() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1026,6 +1038,7 @@ async fn frecency_should_paginate() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1109,6 +1122,7 @@ async fn frecency_should_resume_cursor() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1208,6 +1222,7 @@ async fn frecency_fallback_cursor_should_resume() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1283,6 +1298,7 @@ async fn cursor_should_return_simple_sort() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1354,6 +1370,7 @@ async fn cursor_should_return_frecency() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1415,6 +1432,7 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1466,6 +1484,7 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1517,6 +1536,7 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1580,6 +1600,7 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1662,6 +1683,7 @@ async fn it_should_preserve_is_completed_in_by_ids_queries() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(

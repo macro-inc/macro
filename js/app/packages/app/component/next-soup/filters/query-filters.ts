@@ -11,6 +11,7 @@ export const QUERY_FILTERS_BASE: SoupItemsQueryFilters = {
   call_filters: { call_ids: EXCLUDE },
   channel_filters: { channel_ids: EXCLUDE },
   chat_filters: { chat_ids: EXCLUDE },
+  crm_company_filters: { company_ids: EXCLUDE },
   document_filters: { document_ids: EXCLUDE },
   email_filters: { email_thread_ids: EXCLUDE },
   foreign_entity_filters: { ids: EXCLUDE },
@@ -78,6 +79,11 @@ export function filterSoupItemByRequestBody(
       ({ data }) =>
         !isIdFilteredOut(body.call_filters?.call_ids, data.callId) &&
         !isAttendedFilteredOut(body.call_filters?.attended, data.attended)
+    )
+    .with(
+      { tag: 'crmCompany' },
+      ({ data }) =>
+        !isIdFilteredOut(body.crm_company_filters?.company_ids, data.id)
     )
     .with(
       { tag: 'foreignEntity' },

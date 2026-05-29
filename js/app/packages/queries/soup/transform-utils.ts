@@ -49,7 +49,7 @@ type InnerSearchResult =
 
 type DisplayableSoupItem = Exclude<
   SoupPage['items'][number],
-  { tag: 'foreignEntity' }
+  { tag: 'foreignEntity' } | { tag: 'crmCompany' }
 >;
 
 type TypedInnerSearchResult =
@@ -465,6 +465,7 @@ export const mapSoupPageToEntityList: (
     .filter(
       (item): item is DisplayableSoupItem =>
         item.tag !== 'foreignEntity' &&
+        item.tag !== 'crmCompany' &&
         (item.tag !== 'document' ||
           !options.instructionsIdQuery.isSuccess ||
           item.data.id !== options.instructionsIdQuery.data)

@@ -164,6 +164,8 @@ where
             EntityType::StaticFile => Ok(Some(AccessLevel::View)),
             // These entity types don't have access checks implemented yet.
             EntityType::Team | EntityType::User => Ok(None),
+            // CRM companies are gated by team membership, not entity_access.
+            EntityType::CrmCompany => Ok(None),
         }
     }
 

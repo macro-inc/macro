@@ -111,6 +111,7 @@ type DssSoupState = SoupRouterState<
         ReadonlyEmailPreviewAdapter<DssEmailService>,
         CommsChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>,
         call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
+        DssCrmService,
         ForeignEntityServiceType,
     >,
     DssEmailService,
