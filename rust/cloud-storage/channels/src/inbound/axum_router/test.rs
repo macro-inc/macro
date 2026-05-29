@@ -1,10 +1,14 @@
 use super::*;
 use crate::domain::models::{
-    ChannelAttachment, ChannelMessage, ChannelMessageFilters, ChannelParticipant,
-    MessagePageDirection, ParticipantRole,
+    Activity, ActivityType, ChannelAttachment, ChannelContextMessage, ChannelMessage,
+    ChannelMessageFilters, ChannelParticipant, DeleteMessageQuery, GetOrCreateChannelResponse,
+    GetOrCreateDmRequest, GetOrCreatePrivateRequest, MessagePageDirection, ParticipantRole,
+    PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostMessageResponse,
+    PostReactionRequest, PostTypingRequest, RemoveParticipantsRequest, Sender,
 };
 use crate::domain::ports::{
-    ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMessagesService,
+    ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMutationErr,
+    ChannelService,
 };
 use axum::{
     Extension, Router,
@@ -23,6 +27,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use model_user::UserContext;
 use models_pagination::{Base64Str, CreatedAt, Cursor, CursorVal, PaginateOn, Query};
+use std::sync::{Arc, Mutex};
 use tower::util::ServiceExt;
 
 // --- Access service implementations for tests ---
@@ -172,7 +177,7 @@ impl EntityAccessService for TestAccessService {
 
 struct MockService;
 
-impl ChannelMessagesService for MockService {
+impl ChannelService for MockService {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -236,11 +241,65 @@ impl ChannelMessagesService for MockService {
     ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
         Ok(vec![])
     }
+
+    async fn get_message_context(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+        _before: i64,
+        _after: i64,
+    ) -> Result<Vec<ChannelContextMessage>, ChannelMessagesErr> {
+        let now = chrono::Utc::now();
+        Ok(vec![ChannelContextMessage {
+            id: message_id,
+            channel_id,
+            thread_id: None,
+            sender_id: "macro|user@example.com".to_string(),
+            content: "message context".to_string(),
+            created_at: now,
+            updated_at: now,
+            edited_at: None,
+            deleted_at: None,
+        }])
+    }
+
+    async fn get_attachment_references(
+        &self,
+        entity_type: String,
+        entity_id: String,
+        _user_id: String,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, ChannelMessagesErr> {
+        let now = chrono::Utc::now();
+        Ok(vec![
+            crate::domain::models::AttachmentEntityReference::Channel(
+                crate::domain::models::AttachmentChannelReference {
+                    channel_id: Uuid::new_v4(),
+                    channel_name: Some("test-channel".to_string()),
+                    message_id: Uuid::new_v4(),
+                    thread_id: None,
+                    sender_id: "macro|user@example.com".to_string(),
+                    message_content: "look at this".to_string(),
+                    message_created_at: now,
+                    attachment_created_at: now,
+                },
+            ),
+            crate::domain::models::AttachmentEntityReference::Generic(
+                crate::domain::models::AttachmentGenericReference {
+                    source_entity_type: "doc".to_string(),
+                    source_entity_id: "src-doc".to_string(),
+                    entity_type,
+                    entity_id,
+                    user_id: None,
+                    created_at: now,
+                },
+            ),
+        ])
+    }
 }
 
 struct ErrorService;
 
-impl ChannelMessagesService for ErrorService {
+impl ChannelService for ErrorService {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -286,11 +345,20 @@ impl ChannelMessagesService for ErrorService {
     ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
         Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
     }
+
+    async fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, ChannelMessagesErr> {
+        Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
+    }
 }
 
 struct ParticipantsService;
 
-impl ChannelMessagesService for ParticipantsService {
+impl ChannelService for ParticipantsService {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -369,6 +437,226 @@ impl ChannelMessagesService for ParticipantsService {
     ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
         Ok(vec![])
     }
+
+    async fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+}
+
+#[derive(Clone, Default)]
+struct RecordingMutationService {
+    posts: Arc<Mutex<Vec<(Sender, Uuid, PostMessageRequest)>>>,
+}
+
+impl ChannelService for RecordingMutationService {
+    async fn get_channel_messages(
+        &self,
+        _channel_id: Uuid,
+        _query: models_pagination::Query<Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
+        _limit: u16,
+        _filters: &ChannelMessageFilters,
+        _notification_user_id: Option<MacroUserIdStr<'static>>,
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
+    }
+
+    async fn get_channel_attachments(
+        &self,
+        _channel_id: Uuid,
+        _query: models_pagination::Query<Uuid, CreatedAt, ()>,
+        _limit: u16,
+        _attachment_type: Option<ChannelAttachmentType>,
+    ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
+        Ok(Vec::<ChannelAttachment>::new()
+            .into_iter()
+            .paginate_on(50, CreatedAt)
+            .filter_on(())
+            .into_page())
+    }
+
+    async fn get_channel_participants(
+        &self,
+        _channel_id: Uuid,
+    ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn get_channel_messages_around(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _limit: u16,
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
+    }
+
+    async fn get_thread_replies(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn create_channel(
+        &self,
+        _actor: Sender,
+        _actor_org_id: Option<i64>,
+        _req: CreateChannelRequest,
+    ) -> Result<CreateChannelResponse, ChannelMutationErr> {
+        Ok(CreateChannelResponse {
+            id: Uuid::new_v4().to_string(),
+        })
+    }
+
+    async fn get_or_create_dm(
+        &self,
+        _actor: Sender,
+        _req: GetOrCreateDmRequest,
+    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound("unused".to_string()))
+    }
+
+    async fn get_or_create_private(
+        &self,
+        _actor: Sender,
+        _req: GetOrCreatePrivateRequest,
+    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
+        Err(ChannelMutationErr::NotFound("unused".to_string()))
+    }
+
+    async fn patch_channel(
+        &self,
+        _actor: Sender,
+        _channel_id: Uuid,
+        _req: PatchChannelRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn delete_channel(
+        &self,
+        _actor: Sender,
+        _channel_id: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn post_message(
+        &self,
+        actor: Sender,
+        channel_id: Uuid,
+        req: PostMessageRequest,
+    ) -> Result<PostMessageResponse, ChannelMutationErr> {
+        self.posts.lock().unwrap().push((actor, channel_id, req));
+        Ok(PostMessageResponse {
+            id: Uuid::new_v4().to_string(),
+            nonce: Some("n1".to_string()),
+        })
+    }
+
+    async fn patch_message(
+        &self,
+        _actor: Sender,
+        _actor_role: ParticipantRole,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _req: PatchMessageRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn delete_message(
+        &self,
+        _actor: Sender,
+        _actor_role: ParticipantRole,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _query: DeleteMessageQuery,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn post_reaction(
+        &self,
+        _actor: Sender,
+        _channel_id: Uuid,
+        _req: PostReactionRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn post_typing(
+        &self,
+        _actor: Sender,
+        _channel_id: Uuid,
+        _req: PostTypingRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn add_participants(
+        &self,
+        _actor: Sender,
+        _channel_id: Uuid,
+        _req: AddParticipantsRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn remove_participants(
+        &self,
+        _actor: Sender,
+        _channel_id: Uuid,
+        _req: RemoveParticipantsRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn join_channel(
+        &self,
+        _actor: Sender,
+        _channel_id: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn leave_channel(
+        &self,
+        _actor: Sender,
+        _channel_id: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+
+    async fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
 }
 
 fn user_extension() -> Extension<UserContext> {
@@ -410,6 +698,45 @@ fn not_found_router() -> Router {
         TestAccessService::not_found(),
     ))
     .layer(user_extension())
+}
+
+#[tokio::test]
+async fn post_message_route_uses_entity_access_and_mutation_service() {
+    let mutation_service = RecordingMutationService::default();
+    let posts = mutation_service.posts.clone();
+    let router = channels_router(ChannelsRouterState::new(
+        mutation_service,
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+    let channel_id = Uuid::new_v4();
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/{channel_id}/message"))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::json!({
+                "content": "hello",
+                "mentions": [],
+                "thread_id": null,
+                "attachments": [],
+                "nonce": "n1"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(json["nonce"], "n1");
+
+    let posts = posts.lock().unwrap();
+    assert_eq!(posts.len(), 1);
+    assert_eq!(posts[0].0.to_storage_string(), "macro|test@example.com");
+    assert_eq!(posts[0].1, channel_id);
+    assert_eq!(posts[0].2.content, "hello");
 }
 
 #[tokio::test]
@@ -594,7 +921,7 @@ async fn participants_returns_500_on_service_error() {
 
 struct NotFoundService;
 
-impl ChannelMessagesService for NotFoundService {
+impl ChannelService for NotFoundService {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -651,13 +978,22 @@ impl ChannelMessagesService for NotFoundService {
     ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
         Err(ChannelMessagesErr::MessageNotFound(message_id))
     }
+
+    async fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
 }
 
 struct AroundHasItemsService {
     has_more_newer: bool,
 }
 
-impl ChannelMessagesService for AroundHasItemsService {
+impl ChannelService for AroundHasItemsService {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -738,6 +1074,15 @@ impl ChannelMessagesService for AroundHasItemsService {
         _channel_id: Uuid,
         _message_id: Uuid,
     ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, ChannelMessagesErr> {
         Ok(vec![])
     }
 }
@@ -857,7 +1202,7 @@ impl CapturingService {
     }
 }
 
-impl ChannelMessagesService for std::sync::Arc<CapturingService> {
+impl ChannelService for std::sync::Arc<CapturingService> {
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -922,6 +1267,15 @@ impl ChannelMessagesService for std::sync::Arc<CapturingService> {
         _channel_id: Uuid,
         _message_id: Uuid,
     ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, ChannelMessagesErr> {
         Ok(vec![])
     }
 }
@@ -1121,6 +1475,52 @@ async fn thread_replies_returns_404_when_not_found() {
     assert_eq!(json["message"], "Message not found");
 }
 
+#[tokio::test]
+async fn attachment_references_returns_tagged_references() {
+    let router = mock_router();
+    let request = Request::builder()
+        .uri("/attachments/document/doc1/references")
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let references = json["references"].as_array().unwrap();
+    assert_eq!(references.len(), 2);
+    assert_eq!(references[0]["reference_type"], "channel");
+    assert_eq!(references[0]["message_content"], "look at this");
+    assert_eq!(references[1]["reference_type"], "generic");
+    assert_eq!(references[1]["entity_id"], "doc1");
+    assert_eq!(references[1]["source_entity_type"], "doc");
+}
+
+#[tokio::test]
+async fn message_context_returns_flat_context_response() {
+    let router = mock_router();
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let request = Request::builder()
+        .uri(format!(
+            "/{channel_id}/messages/{message_id}/context?before=2&after=3"
+        ))
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let messages = json["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0]["id"], message_id.to_string());
+    assert_eq!(messages[0]["channel_id"], channel_id.to_string());
+    assert_eq!(messages[0]["content"], "message context");
+}
+
 // --- Access control tests ---
 
 #[tokio::test]
@@ -1184,6 +1584,20 @@ async fn non_member_cannot_access_thread_replies() {
 }
 
 #[tokio::test]
+async fn non_member_cannot_access_message_context() {
+    let router = denied_router();
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let request = Request::builder()
+        .uri(format!("/{channel_id}/messages/{message_id}/context"))
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
 async fn missing_channel_returns_404() {
     let router = not_found_router();
     let channel_id = Uuid::new_v4();
@@ -1194,4 +1608,199 @@ async fn missing_channel_returns_404() {
 
     let res = router.oneshot(request).await.unwrap();
     assert_eq!(res.status(), StatusCode::NOT_FOUND);
+}
+
+// --- Activity endpoint tests ---
+
+#[derive(Default)]
+struct ActivityService {
+    posts: Arc<Mutex<Vec<(Sender, Uuid, ActivityType)>>>,
+}
+
+impl ChannelService for ActivityService {
+    async fn get_channel_messages(
+        &self,
+        _channel_id: Uuid,
+        _query: Query<Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
+        _limit: u16,
+        _filters: &ChannelMessageFilters,
+        _notification_user_id: Option<MacroUserIdStr<'static>>,
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
+    }
+
+    async fn get_channel_attachments(
+        &self,
+        _channel_id: Uuid,
+        _query: Query<Uuid, CreatedAt, ()>,
+        _limit: u16,
+        _attachment_type: Option<crate::domain::models::ChannelAttachmentType>,
+    ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
+        Ok(Vec::<ChannelAttachment>::new()
+            .into_iter()
+            .paginate_on(50, CreatedAt)
+            .filter_on(())
+            .into_page())
+    }
+
+    async fn get_channel_participants(
+        &self,
+        _channel_id: Uuid,
+    ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn get_channel_messages_around(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _limit: u16,
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
+    }
+
+    async fn get_thread_replies(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn get_activities(&self, user_id: String) -> Result<Vec<Activity>, ChannelMessagesErr> {
+        Ok(vec![Activity {
+            id: Uuid::nil(),
+            user_id,
+            channel_id: Uuid::nil(),
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            viewed_at: None,
+            interacted_at: None,
+        }])
+    }
+
+    async fn post_activity(
+        &self,
+        actor: Sender,
+        channel_id: Uuid,
+        activity_type: ActivityType,
+    ) -> Result<Activity, ChannelMutationErr> {
+        self.posts
+            .lock()
+            .unwrap()
+            .push((actor.clone(), channel_id, activity_type));
+        Ok(Activity {
+            id: Uuid::nil(),
+            user_id: actor.to_storage_string(),
+            channel_id,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            viewed_at: None,
+            interacted_at: None,
+        })
+    }
+}
+
+#[tokio::test]
+async fn get_activity_returns_user_activities() {
+    let router = channels_router(ChannelsRouterState::new(
+        ActivityService::default(),
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+    let request = Request::builder()
+        .uri("/activity")
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert!(json.is_array());
+    assert_eq!(json[0]["user_id"], "macro|test@example.com");
+}
+
+#[tokio::test]
+async fn post_activity_records_and_returns_activity() {
+    let service = ActivityService::default();
+    let posts = service.posts.clone();
+    let router = channels_router(ChannelsRouterState::new(
+        service,
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+    let channel_id = Uuid::new_v4();
+    let request = Request::builder()
+        .method("POST")
+        .uri("/activity")
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::json!({
+                "channel_id": channel_id.to_string(),
+                "activity_type": "view"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(json["channel_id"], channel_id.to_string());
+
+    let posts = posts.lock().unwrap();
+    assert_eq!(posts.len(), 1);
+    assert_eq!(posts[0].0.to_storage_string(), "macro|test@example.com");
+    assert_eq!(posts[0].1, channel_id);
+    assert!(matches!(posts[0].2, ActivityType::View));
+}
+
+#[tokio::test]
+async fn post_activity_rejects_invalid_channel_id() {
+    let router = channels_router(ChannelsRouterState::new(
+        ActivityService::default(),
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+    let request = Request::builder()
+        .method("POST")
+        .uri("/activity")
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::json!({
+                "channel_id": "not-a-uuid",
+                "activity_type": "interact"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 }

@@ -97,7 +97,8 @@ async function clearSharedFiles(tokens: string[]): Promise<void> {
 async function uploadPendingShareFile(
   args: UploadPendingShareFileArgs
 ): Promise<void> {
-  await invoke('upload_shared_file_to_presigned_url', {
+  await invoke('upload_staged_file_to_presigned_url', {
+    source: 'share',
     token: args.token,
     uploadUrl: args.uploadUrl,
     mimeType: args.mimeType,

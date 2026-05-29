@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import type { OptimisticPostMessageAttachment } from '@channel/Input/message-payload';
 import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
@@ -6,24 +7,23 @@ import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
   type ApiChannelMessage,
   type ApiThreadReply,
-  commsServiceClient,
   type IdResponse,
   type MessageResponse,
-} from '@service-comms/client';
-import type {
-  Attachment,
-  ChannelMessage,
-  CountedReaction,
-  Message,
-  PostMessageRequest,
-} from '@service-comms/generated/models';
-import type { NewAttachment } from '@service-comms/generated/models/newAttachment';
-import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
+  storageServiceClient,
+} from '@service-storage/client';
+import type { ApiChannelContextMessage as Message } from '@service-storage/generated/schemas/apiChannelContextMessage';
+import type { ApiCountedReaction as CountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
+import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
+import type { ChannelMessage } from '@service-storage/generated/schemas/channelMessage';
+import type { NewChannelAttachment as NewAttachment } from '@service-storage/generated/schemas/newChannelAttachment';
+import type { PostMessageRequest } from '@service-storage/generated/schemas/postMessageRequest';
+import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { createMutationNonce, registerNonce } from '../nonce';
 import { getChannelMessagesQueryKeyPrefix } from './channel-messages';
 import { ChannelNonceKeys } from './keys';
+import { senderFromStorageId } from './message-sender';
 import {
   captureDeleteSnapshotForTarget,
   type DeleteTargetSnapshot,
@@ -39,6 +39,15 @@ import {
   softInvalidateTargetCaches,
   topLevelMessageHasReplies,
 } from './reconcile';
+
+/**
+ * A message attachment carrying its channel/message ids — the legacy comms `Attachment`
+ * shape (a message attachment plus channel_id/message_id; no sender_id).
+ */
+type Attachment = ApiMessageAttachment & {
+  channel_id: string;
+  message_id: string;
+};
 
 /**
  * Register nonces for both message and attachment deduplication.
@@ -92,43 +101,41 @@ type UpdateMessageContext = {
   previousAttachments: Attachment[];
 };
 
+type OptimisticApiMessageAttachment = ApiMessageAttachment & {
+  previewSrc?: string;
+};
+
 function makeOptimisticAttachments(
-  channelId: string,
-  optimisticId: string,
-  attachments: PostMessageRequest['attachments'],
+  attachments: readonly OptimisticPostMessageAttachment[],
   now: string
-): Attachment[] {
-  return attachments.map((attachment) => ({
+): OptimisticApiMessageAttachment[] {
+  return attachments.map(({ attachment, previewSrc }) => ({
     id: crypto.randomUUID(),
-    channel_id: channelId,
+    entity_id: attachment.entity_id,
+    entity_type: attachment.entity_type,
     created_at: now,
-    message_id: optimisticId,
-    ...attachment,
+    width: attachment.width ?? undefined,
+    height: attachment.height ?? undefined,
+    previewSrc,
   }));
 }
 
 function makeOptimisticTopLevelMessage(
   vars: WithChannelId<WithOptimisticId<WithSenderId<PostMessageRequest>>>,
-  attachments: Attachment[],
+  attachments: OptimisticApiMessageAttachment[],
   now: string
 ): ApiChannelMessage {
   return {
     id: vars.optimisticId,
     channel_id: vars.channelId,
+    sender: senderFromStorageId(vars.senderId),
     sender_id: vars.senderId,
     content: vars.content,
     created_at: now,
     updated_at: now,
     deleted_at: undefined,
     edited_at: undefined,
-    attachments: attachments.map(
-      ({ id, entity_id, entity_type, created_at }) => ({
-        id,
-        entity_id,
-        entity_type,
-        created_at,
-      })
-    ),
+    attachments,
     reactions: [],
     thread: {
       preview: [],
@@ -140,24 +147,18 @@ function makeOptimisticTopLevelMessage(
 
 function makeOptimisticThreadReply(
   vars: WithChannelId<WithOptimisticId<WithSenderId<PostMessageRequest>>>,
-  attachments: Attachment[],
+  attachments: OptimisticApiMessageAttachment[],
   now: string
 ): ApiThreadReply {
   return {
     id: vars.optimisticId,
+    sender: senderFromStorageId(vars.senderId),
     sender_id: vars.senderId,
     content: vars.content,
     created_at: now,
     updated_at: now,
     edited_at: undefined,
-    attachments: attachments.map(
-      ({ id, entity_id, entity_type, created_at }) => ({
-        id,
-        entity_id,
-        entity_type,
-        created_at,
-      })
-    ),
+    attachments,
     reactions: [],
   };
 }
@@ -167,13 +168,20 @@ function makeOptimisticThreadReply(
  * Returns minimal context for rollback (just the optimistic ID).
  */
 export function optimisticInsertChannelMessage(
-  vars: WithChannelId<WithOptimisticId<WithSenderId<PostMessageRequest>>>
+  vars: WithChannelId<
+    WithOptimisticId<
+      WithSenderId<
+        PostMessageRequest & {
+          optimisticAttachments?: readonly OptimisticPostMessageAttachment[];
+        }
+      >
+    >
+  >
 ): InsertMessageContext | undefined {
   const now = new Date().toISOString();
   const newAttachments = makeOptimisticAttachments(
-    vars.channelId,
-    vars.optimisticId,
-    vars.attachments,
+    vars.optimisticAttachments ??
+      vars.attachments.map((attachment) => ({ attachment })),
     now
   );
   const threadId = vars.thread_id ?? undefined;
@@ -397,6 +405,7 @@ export function rollbackUpdateChannelMessage(
 type SendMessageParams = {
   channelID: string;
   message: PostMessageRequest;
+  optimisticAttachments?: readonly OptimisticPostMessageAttachment[];
   optimisticId: string;
   senderId: string;
 };
@@ -422,7 +431,7 @@ export function useSendMessageMutation(
       // Use optimisticId as nonce - allows server to echo it back for correlation
       return await throwOnErr(
         async () =>
-          await commsServiceClient.postMessage({
+          await storageServiceClient.postMessage({
             channel_id: vars.channelID,
             message: vars.message,
             nonce: vars.optimisticId,
@@ -443,6 +452,7 @@ export function useSendMessageMutation(
             channelId: vars.channelID,
             optimisticId: vars.optimisticId,
             senderId: vars.senderId,
+            optimisticAttachments: vars.optimisticAttachments,
             ...vars.message,
           });
         },
@@ -511,7 +521,7 @@ export function useDeleteMessageMutation(
     mutationFn: async (vars: DeleteMessageParams) => {
       await throwOnErr(
         async () =>
-          await commsServiceClient.deleteMessage({
+          await storageServiceClient.deleteMessage({
             channel_id: vars.channelID,
             message_id: vars.messageID,
             nonce: deleteNonce.use(vars),
@@ -587,7 +597,7 @@ export function usePatchMessageMutation(
     mutationFn: async (vars: PatchMessageParams) => {
       return await throwOnErr(
         async () =>
-          await commsServiceClient.patchMessage({
+          await storageServiceClient.patchMessage({
             channel_id: vars.channelID,
             message_id: vars.messageID,
             content: vars.content,

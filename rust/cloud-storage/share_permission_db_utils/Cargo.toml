@@ -1,0 +1,13 @@
+[package]
+edition = "2024"
+name = "share_permission_db_utils"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+entity_access_db_utils = { path = "../entity_access_db_utils" }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+models_permissions = { path = "../models_permissions" }
+sqlx = { workspace = true }

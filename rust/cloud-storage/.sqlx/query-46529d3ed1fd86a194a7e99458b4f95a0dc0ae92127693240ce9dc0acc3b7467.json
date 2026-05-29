@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"ChannelSharePermission\" (\"share_permission_id\", \"channel_id\", \"access_level\")\n        VALUES ($1, $2, $3)\n        ON CONFLICT (\"share_permission_id\", \"channel_id\") DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "46529d3ed1fd86a194a7e99458b4f95a0dc0ae92127693240ce9dc0acc3b7467"
+}

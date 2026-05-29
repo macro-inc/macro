@@ -1,7 +1,8 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { STATIC_IMAGE, STATIC_VIDEO } from '@core/store/cacheChannelInput';
-import type { PostMessageRequest } from '@service-comms/generated/models';
-import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
+import type { NewChannelAttachment as NewAttachment } from '@service-storage/generated/schemas/newChannelAttachment';
+import type { PostMessageRequest } from '@service-storage/generated/schemas/postMessageRequest';
+import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import { match } from 'ts-pattern';
 import type { InputAttachmentData, InputSnapshot } from './types';
 
@@ -75,20 +76,47 @@ type BuildPostMessageRequestOptions = {
   participantIds?: string[];
 };
 
-export function buildPostMessageRequest(
-  options: BuildPostMessageRequestOptions
-): PostMessageRequest {
-  const { snapshot, threadId, participantIds } = options;
+export type OptimisticPostMessageAttachment = {
+  attachment: NewAttachment;
+  previewSrc?: string;
+};
 
-  return {
-    content: snapshot.value,
-    thread_id: threadId,
-    mentions: expandMentions(snapshot.mentions, participantIds ?? []),
-    attachments: snapshot.attachments.map((attachment) => ({
+export type PostMessageSendPayload = {
+  message: PostMessageRequest;
+  optimisticAttachments: OptimisticPostMessageAttachment[];
+};
+
+export function buildPostMessageSendPayload(
+  options: BuildPostMessageRequestOptions
+): PostMessageSendPayload {
+  const { snapshot, threadId, participantIds } = options;
+  const optimisticAttachments = snapshot.attachments.map((attachment) => {
+    const postAttachment = {
       entity_id: attachment.id,
       entity_type: attachmentEntityType(attachment.kind),
       width: attachment.width ?? null,
       height: attachment.height ?? null,
-    })),
+    };
+
+    return {
+      attachment: postAttachment,
+      previewSrc: attachment.previewSrc,
+    };
+  });
+
+  return {
+    message: {
+      content: snapshot.value,
+      thread_id: threadId,
+      mentions: expandMentions(snapshot.mentions, participantIds ?? []),
+      attachments: optimisticAttachments.map((item) => item.attachment),
+    },
+    optimisticAttachments,
   };
+}
+
+export function buildPostMessageRequest(
+  options: BuildPostMessageRequestOptions
+): PostMessageRequest {
+  return buildPostMessageSendPayload(options).message;
 }

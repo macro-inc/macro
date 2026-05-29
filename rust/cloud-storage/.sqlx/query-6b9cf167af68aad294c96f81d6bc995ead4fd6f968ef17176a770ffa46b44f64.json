@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM comms_channel_participants\n                WHERE channel_id = $1\n                  AND user_id = $2\n                  AND role IN (\n                      'admin'::comms_participant_role,\n                      'owner'::comms_participant_role\n                  )\n            ) AS \"exists!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6b9cf167af68aad294c96f81d6bc995ead4fd6f968ef17176a770ffa46b44f64"
+}

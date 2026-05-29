@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@service-comms/client', () => ({
-  commsServiceClient: {
+vi.mock('@service-storage/client', () => ({
+  storageServiceClient: {
     postTypingUpdate: vi.fn(),
   },
 }));

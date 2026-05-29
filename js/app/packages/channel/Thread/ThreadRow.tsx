@@ -1,4 +1,4 @@
-import type { ApiChannelMessage } from '@service-comms/client';
+import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import type { ParentProps } from 'solid-js';
 import {
   type ChannelMessageListMeta,

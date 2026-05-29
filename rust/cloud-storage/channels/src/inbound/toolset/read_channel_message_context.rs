@@ -6,7 +6,7 @@ use super::types::{
     clamp_max_chars, content_truncation_omissions,
 };
 use crate::domain::models::ChannelMessageKind;
-use crate::domain::ports::ChannelMessagesService;
+use crate::domain::ports::ChannelService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
@@ -111,7 +111,7 @@ pub struct ReadChannelMessageContextResponse {
 #[async_trait]
 impl<Svc, AccessSvc> AsyncTool<ChannelToolContext<Svc, AccessSvc>> for ReadChannelMessageContext
 where
-    Svc: ChannelMessagesService,
+    Svc: ChannelService,
     AccessSvc: EntityAccessService,
 {
     type Output = ReadChannelMessageContextResponse;
@@ -240,7 +240,7 @@ async fn read_reply_context<Svc>(
     args: ReplyContextArgs,
 ) -> Result<ToolThreadReplyContextWindow, ToolCallError>
 where
-    Svc: ChannelMessagesService,
+    Svc: ChannelService,
 {
     let before = usize::from(args.before.unwrap_or(10).min(50));
     let after = usize::from(args.after.unwrap_or(10).min(50));

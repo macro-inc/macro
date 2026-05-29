@@ -14,6 +14,8 @@ export type MediaItem = {
   src: string;
   /** Full-resolution original — used when expanding */
   fullSrc: string;
+  /** Local preview for optimistic media we just uploaded/sent. */
+  previewSrc?: string;
   kind: 'image' | 'video';
   width?: number | null;
   height?: number | null;
@@ -23,6 +25,7 @@ type AttachmentWithMediaFields = {
   id: string;
   entity_id: string;
   entity_type: string;
+  previewSrc?: string;
   width?: number | null;
   height?: number | null;
 };
@@ -71,6 +74,7 @@ function mapAttachmentToMediaItem(
         ? staticFileSizedEndpoint(attachment.entity_id, 'medium')
         : fullSrc,
     fullSrc,
+    previewSrc: attachment.previewSrc,
     kind,
     width: attachment.width ?? undefined,
     height: attachment.height ?? undefined,
@@ -81,30 +85,41 @@ function mapAttachmentsToMediaItems<T extends AttachmentWithMediaFields>(
   attachments: T[],
   previousItems: MediaItem[] = []
 ): MediaItem[] {
-  const previousByAttachmentId = new Map(
-    attachments.map((attachment, index) => [
-      attachment.id,
-      previousItems[index],
-    ])
+  const previousByMediaId = new Map(
+    previousItems.map((item) => [item.id, item])
   );
 
-  return attachments.flatMap((attachment) => {
+  return attachments.flatMap((attachment, index) => {
     const item = mapAttachmentToMediaItem(attachment);
     if (!item) return [];
 
-    const previousItem = previousByAttachmentId.get(attachment.id);
+    const previousItem =
+      previousItems[index]?.id === item.id
+        ? previousItems[index]
+        : previousByMediaId.get(item.id);
+    const nextItem =
+      previousItem && previousItem.id === item.id
+        ? {
+            ...item,
+            previewSrc: item.previewSrc ?? previousItem.previewSrc,
+            width: item.width ?? previousItem.width,
+            height: item.height ?? previousItem.height,
+          }
+        : item;
+
     if (
       previousItem &&
-      previousItem.src === item.src &&
-      previousItem.fullSrc === item.fullSrc &&
-      previousItem.kind === item.kind &&
-      previousItem.width === item.width &&
-      previousItem.height === item.height
+      previousItem.src === nextItem.src &&
+      previousItem.fullSrc === nextItem.fullSrc &&
+      previousItem.previewSrc === nextItem.previewSrc &&
+      previousItem.kind === nextItem.kind &&
+      previousItem.width === nextItem.width &&
+      previousItem.height === nextItem.height
     ) {
       return [previousItem];
     }
 
-    return [item];
+    return [nextItem];
   });
 }
 

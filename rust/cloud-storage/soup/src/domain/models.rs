@@ -7,12 +7,18 @@ pub use grouping::{
 
 use call::domain::models::GetCallRecordsRequest;
 use comms::domain::models::GetChannelsRequest;
+use crm::domain::companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor};
 use email::domain::models::{GetEmailsRequest, PreviewView};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
+use filter_ast::Expr;
+use foreign_entity::domain::{
+    models::{ForeignEntityError, SourceId},
+    ports::ForeignEntityListQuery,
+};
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
 use item_filters::{
     EntityFilters,
-    ast::{EntityFilterAst, ExpandErr},
+    ast::{EntityFilterAst, ExpandErr, crm_company::CrmCompanyLiteral},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
@@ -208,7 +214,10 @@ pub struct SoupRequest<T> {
     pub cursor: SoupQuery<T>,
     pub user: MacroUserIdStr<'static>,
     pub email_preview_view: PreviewView,
-    pub link_id: Option<Uuid>,
+    /// Every inbox the caller can read (own + delegated via macro_user_links).
+    /// Empty when the caller has no inboxes — `build_email_request` returns
+    /// `None` so the email branch is skipped.
+    pub link_ids: Vec<Uuid>,
 }
 
 /// trait which defines a type which can be fallibly converted into a SoupRequest with ast
@@ -225,7 +234,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilters> {
             cursor,
             user,
             email_preview_view,
-            link_id,
+            link_ids,
         } = self;
 
         Ok(SoupRequest {
@@ -234,7 +243,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilters> {
             cursor: cursor.into_ast()?,
             user,
             email_preview_view,
-            link_id,
+            link_ids,
         })
     }
 }
@@ -247,7 +256,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilterAst> {
             cursor,
             user,
             email_preview_view,
-            link_id,
+            link_ids,
         } = self;
 
         Ok(SoupRequest {
@@ -256,7 +265,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilterAst> {
             cursor: cursor.map(|f| if f.is_empty() { None } else { Some(f) }),
             user,
             email_preview_view,
-            link_id,
+            link_ids,
         })
     }
 }
@@ -290,9 +299,13 @@ impl SoupRequest<Option<EntityFilterAst>> {
         };
         let crm_scope = entity_ast.and_then(|a| a.email_filter.crm_scope.clone());
 
+        if self.link_ids.is_empty() {
+            return None;
+        }
+
         Some(GetEmailsRequest {
             view: self.email_preview_view.clone(),
-            link_id: self.link_id?,
+            link_ids: self.link_ids.clone(),
             macro_id: self.user.clone(),
             limit: Some(self.limit as u32),
             query: match &self.cursor {
@@ -345,6 +358,78 @@ impl SoupRequest<Option<EntityFilterAst>> {
         })
     }
 
+    /// Returns `None` (skipping the CRM sub-request) for no-team users,
+    /// Frecency cursors, or a malformed team-receipt uuid.
+    pub(crate) fn build_crm_company_request(
+        &self,
+        team_receipt: &Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Option<GetCrmCompaniesRequest> {
+        let receipt = team_receipt.as_ref()?;
+        let team_id = Uuid::parse_str(&receipt.entity().entity_id)
+            .inspect_err(|e| {
+                tracing::warn!(
+                    error=?e,
+                    "team_receipt entity_id is not a valid uuid; skipping crm_company sub-request"
+                );
+            })
+            .ok()?;
+
+        // Follow-up pages carry a keyset cursor (sort_ts + id of the
+        // previous page's last row); the first page has none. Without
+        // this the CRM sub-query always returned offset 0, so every
+        // page re-served the same top companies.
+        let (sort_method, filter_ast, cursor): (
+            SimpleSortMethod,
+            Option<&EntityFilterAst>,
+            Option<CrmCompanySoupCursor>,
+        ) = match &self.cursor {
+            SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => (*t, f.as_ref(), None),
+            SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
+                id,
+                val,
+                filter,
+                ..
+            }))) => (
+                val.sort_type,
+                filter.as_ref(),
+                Some(CrmCompanySoupCursor {
+                    last_sort_ts: val.last_val,
+                    last_id: *id,
+                }),
+            ),
+            SoupQuery::Frecency(_) => return None,
+        };
+
+        // No viewed_at signal for crm_company yet — ViewedAt/ViewedUpdated
+        // fall back to updated_at.
+        let sort = match sort_method {
+            SimpleSortMethod::CreatedAt => CrmCompanyListSort::CreatedAt,
+            SimpleSortMethod::UpdatedAt
+            | SimpleSortMethod::ViewedAt
+            | SimpleSortMethod::ViewedUpdated => CrmCompanyListSort::UpdatedAt,
+        };
+
+        let mut extract = CrmCompanyFilterExtract::default();
+        if let Some(tree) = filter_ast.and_then(|a| a.crm_company_filter.as_ref())
+            && !extract_crm_company_filter(tree, &mut extract)
+        {
+            // Fail closed: unsupported AST shape would widen the result
+            // set. Skip the CRM sub-request rather than over-include.
+            return None;
+        }
+
+        Some(GetCrmCompaniesRequest {
+            team_id,
+            company_ids: extract.ids,
+            hidden: extract.hidden,
+            sort,
+            cursor,
+            // Match the soup paginator's bounds so the CRM layer doesn't
+            // overfetch on an oversized client limit.
+            limit: self.limit.clamp(20, 500) as i64,
+        })
+    }
+
     pub(crate) fn build_comms_request(&self) -> Option<GetChannelsRequest> {
         Some(GetChannelsRequest {
             macro_id: self.user.clone(),
@@ -369,6 +454,121 @@ impl SoupRequest<Option<EntityFilterAst>> {
                 SoupQuery::Frecency(_) => None,
             }?,
         })
+    }
+
+    pub(crate) fn build_foreign_entity_query(&self) -> Option<ForeignEntityListQuery> {
+        match &self.cursor {
+            SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
+                *t,
+                f.as_ref()
+                    .and_then(|filter| filter.foreign_entity_filter.clone()),
+            )),
+            SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
+                id,
+                limit,
+                val,
+                filter,
+            }))) => Some(Query::Cursor(CursorWithValAndFilter {
+                id: *id,
+                limit: *limit,
+                val: val.clone(),
+                filter: filter
+                    .as_ref()
+                    .and_then(|filter| filter.foreign_entity_filter.clone()),
+            })),
+            // query by frecency is not implemented for foreign entities
+            SoupQuery::Frecency(_) => None,
+        }
+    }
+
+    pub(crate) fn build_foreign_entity_source_ids(
+        &self,
+        team_receipt: Option<&EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Vec<SourceId> {
+        let mut source_ids = vec![SourceId::user(self.user.as_ref())];
+
+        if let Some(receipt) = team_receipt {
+            source_ids.push(SourceId::new(receipt.entity().entity_id.clone(), "team"));
+        }
+
+        source_ids
+    }
+}
+
+/// Parameters for fetching CRM companies to fold into the soup feed.
+#[derive(Debug)]
+pub struct GetCrmCompaniesRequest {
+    /// Team whose CRM companies to list. Derived from the team receipt.
+    pub team_id: Uuid,
+    /// Filter to specific company ids. Empty = all of the team's
+    /// companies matching `hidden` (subject to the killswitch).
+    pub company_ids: Vec<Uuid>,
+    /// Optional `crm_companies.hidden` filter. `None` = visible only
+    /// (default); `Some(false)` = visible only (explicit); `Some(true)`
+    /// = hidden only. The admin/owner role check is enforced upstream
+    /// in soup's axum router before reaching this request.
+    pub hidden: Option<bool>,
+    /// Which timestamp column to sort by.
+    pub sort: CrmCompanyListSort,
+    /// Keyset cursor to seek past the previous page (`None` = first page).
+    pub cursor: Option<CrmCompanySoupCursor>,
+    /// Upper bound on rows returned — the soup paginator re-slices.
+    pub limit: i64,
+}
+
+/// Outcome of walking a `CrmCompanyLiteral` AST: the ids and the
+/// optional `hidden` constraint pulled out of the tree.
+#[derive(Debug, Default)]
+pub(crate) struct CrmCompanyFilterExtract {
+    pub ids: Vec<Uuid>,
+    pub hidden: Option<bool>,
+}
+
+/// Walks a `CrmCompanyLiteral` AST collecting `Id(uuid)` literals into
+/// `out.ids` and a single `Hidden(bool)` constraint into `out.hidden`.
+/// Returns `false` (fail closed) when:
+///   - `Not(_)` appears (would invert set semantics),
+///   - two `Hidden(_)` literals conflict (e.g. `Hidden(true) AND Hidden(false)`),
+///   - an `Or(_, _)` branch mixes ids and a hidden literal (would change
+///     set semantics in ways the simple extractor can't represent).
+fn extract_crm_company_filter(
+    expr: &Expr<CrmCompanyLiteral>,
+    out: &mut CrmCompanyFilterExtract,
+) -> bool {
+    match expr {
+        Expr::Literal(CrmCompanyLiteral::Id(id)) => {
+            out.ids.push(*id);
+            true
+        }
+        Expr::Literal(CrmCompanyLiteral::Hidden(b)) => match out.hidden {
+            Some(prev) if prev != *b => false,
+            _ => {
+                out.hidden = Some(*b);
+                true
+            }
+        },
+        // `And` of arbitrary sub-trees: each side contributes independently
+        // (e.g. id-OR AND Hidden).
+        Expr::And(a, b) => extract_crm_company_filter(a, out) && extract_crm_company_filter(b, out),
+        // `Or` is only safe over ids — mixing a Hidden literal under an Or
+        // would change semantics ("these ids OR all hidden") that the flat
+        // extract can't represent.
+        Expr::Or(a, b) => or_is_ids_only(a, out) && or_is_ids_only(b, out),
+        Expr::Not(_) => false,
+    }
+}
+
+/// Helper for [`extract_crm_company_filter`]: an `Or` branch must be a
+/// pure id sub-tree (nested `Or` of `Id` literals) — any `Hidden`, `And`,
+/// or `Not` inside fails closed.
+fn or_is_ids_only(expr: &Expr<CrmCompanyLiteral>, out: &mut CrmCompanyFilterExtract) -> bool {
+    match expr {
+        Expr::Literal(CrmCompanyLiteral::Id(id)) => {
+            out.ids.push(*id);
+            true
+        }
+        Expr::Or(a, b) => or_is_ids_only(a, out) && or_is_ids_only(b, out),
+        _ => false,
     }
 }
 
@@ -450,6 +650,10 @@ pub enum SoupErr {
     CommsErr,
     #[error("A call error has occurred, see logs for more details")]
     CallErr,
+    #[error("A CRM error has occurred, see logs for more details")]
+    CrmErr,
+    #[error(transparent)]
+    ForeignEntityErr(#[from] ForeignEntityError),
     #[error(transparent)]
     AstErr(#[from] ExpandErr),
 }

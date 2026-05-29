@@ -1,26 +1,32 @@
-import type { ApiThreadReply } from '@service-comms/client';
-import type {
-  Attachment as ApiAttachment,
-  Message as ApiMessage,
-  CountedReaction,
-} from '@service-comms/generated/models';
+import type { ApiThreadReply } from '@service-storage/client';
+import type { ApiChannelContextMessage as ApiMessage } from '@service-storage/generated/schemas/apiChannelContextMessage';
+import type { ApiCountedReaction as CountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
+import type { ApiMessageAttachment as ApiAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
+import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
 import { consumeNonce } from '../nonce';
 import { ChannelNonceKeys } from './keys';
+import { senderFromStorageId } from './message-sender';
 import {
   getTargetMessageState,
   insertMessageIntoTargetCaches,
+  markTopLevelMessageDeletedInTargetCaches,
   removeMessageFromTargetCaches,
   replaceTargetAttachments,
   replaceTargetMessageState,
   replaceTargetReactions,
   resolveMessageTarget,
   softInvalidateTargetCaches,
+  topLevelMessageHasReplies,
 } from './reconcile';
 
 /**
  * Websocket payload types
  */
-type CommsMessagePayload = ApiMessage & { channel_id: string; nonce: string };
+type CommsMessagePayload = ApiMessage & {
+  channel_id: string;
+  nonce: string;
+  sender?: ApiMessageSender;
+};
 
 type CommsReactionPayload = {
   channel_id: string;
@@ -57,14 +63,23 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
   if (isExternalUpdate) {
     try {
       if (payload.deleted_at) {
-        removeMessageFromTargetCaches(
-          payload.channel_id,
-          resolveMessageTarget({
-            channelId: payload.channel_id,
-            messageId: payload.id,
-            threadId: payload.thread_id ?? undefined,
-          })
-        );
+        const target = resolveMessageTarget({
+          channelId: payload.channel_id,
+          messageId: payload.id,
+          threadId: payload.thread_id ?? undefined,
+        });
+        if (
+          target.kind === 'top_level' &&
+          topLevelMessageHasReplies(payload.channel_id, target.messageId)
+        ) {
+          markTopLevelMessageDeletedInTargetCaches(
+            payload.channel_id,
+            target,
+            payload.deleted_at
+          );
+        } else {
+          removeMessageFromTargetCaches(payload.channel_id, target);
+        }
       } else {
         const target = resolveMessageTarget({
           channelId: payload.channel_id,
@@ -83,6 +98,7 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
         } else if (target.kind === 'thread_reply') {
           const reply: ApiThreadReply = {
             id: payload.id,
+            sender: payload.sender ?? senderFromStorageId(payload.sender_id),
             sender_id: payload.sender_id,
             content: payload.content,
             created_at: payload.created_at,
@@ -96,6 +112,7 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
           insertMessageIntoTargetCaches(payload.channel_id, target, {
             id: payload.id,
             channel_id: payload.channel_id,
+            sender: payload.sender ?? senderFromStorageId(payload.sender_id),
             sender_id: payload.sender_id,
             content: payload.content,
             created_at: payload.created_at,

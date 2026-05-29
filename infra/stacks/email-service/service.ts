@@ -124,6 +124,10 @@ export class EmailService extends pulumi.ComponentResource {
           subnets: vpc.privateSubnetIds,
           securityGroups: [this.serviceSg.id],
         },
+        deploymentCircuitBreaker: {
+          enable: true,
+          rollback: true,
+        },
         taskDefinitionArgs: {
           taskRole: {
             roleArn: this.role.arn,
@@ -172,7 +176,9 @@ export class EmailService extends pulumi.ComponentResource {
         },
         desiredCount: stack === 'prod' ? 3 : 1,
       },
-      { parent: this }
+      {
+        parent: this,
+      }
     );
 
     this.service = service;

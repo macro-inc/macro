@@ -16,15 +16,21 @@ export { FormatRibbon } from './FormatRibbon';
 export { Input } from './Input';
 export {
   AttachFilesAction,
+  AttachNativeMediaAction,
   CloseReplyAction,
   DiscardDraftAction,
   ToggleFormatAction,
 } from './InputActions';
 export { Layout } from './Layout';
 export { createMentionsTracker } from './mentions-tracker';
+export type {
+  OptimisticPostMessageAttachment,
+  PostMessageSendPayload,
+} from './message-payload';
 export {
   attachmentEntityType,
   buildPostMessageRequest,
+  buildPostMessageSendPayload,
 } from './message-payload';
 export { Root } from './Root';
 export { SendAction } from './SendAction';

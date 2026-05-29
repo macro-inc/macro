@@ -13,8 +13,8 @@ use item_filters::EntityFilters;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use model_user::UserContext;
 use models_pagination::{
-    CursorVal, Frecency, FrecencyValue, Identify, PaginateOn, Query, SimpleSortMethod, SortOn,
-    TypeEraseCursor,
+    CursorVal, CursorWithValAndFilter, Frecency, FrecencyValue, Identify, PaginateOn, Query,
+    SimpleSortMethod, SortOn, TypeEraseCursor,
 };
 use serde::Serialize;
 use serde_json::json;
@@ -50,7 +50,7 @@ enum MockCursorKind {
 struct MockSoupCall {
     soup_type: SoupType,
     email_preview_view: PreviewView,
-    link_id: Option<Uuid>,
+    link_ids: Vec<Uuid>,
     cursor_kind: MockCursorKind,
     filter: serde_json::Value,
     expanded_filter: serde_json::Value,
@@ -95,14 +95,14 @@ impl SoupService for MockSoup {
         };
         let soup_type = req.soup_type;
         let email_preview_view = req.email_preview_view.clone();
-        let link_id = req.link_id;
+        let link_ids = req.link_ids.clone();
         let filter = serde_json::to_value(req.cursor.filter()).unwrap();
         let expanded_filter = serde_json::to_value(req.into_ast()?.cursor.filter()).unwrap();
         let mut guard = self.called.lock().unwrap();
         guard.push(MockSoupCall {
             soup_type,
             email_preview_view,
-            link_id,
+            link_ids,
             cursor_kind,
             filter,
             expanded_filter,
@@ -158,6 +158,13 @@ impl EmailService for MockEmail {
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
     ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn get_inboxes_for_macro_id(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Vec<email::domain::models::Link>, email::domain::models::EmailErr> {
+        Ok(Vec::new())
     }
 
     async fn get_thread_with_messages(
@@ -434,6 +441,13 @@ impl EmailService for MockEmailLinkResult {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
+    async fn get_inboxes_for_macro_id(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Vec<email::domain::models::Link>, email::domain::models::EmailErr> {
+        (self.get_link_result)().map(|opt| opt.into_iter().collect())
+    }
+
     async fn get_thread_with_messages(
         &self,
         _receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -548,7 +562,7 @@ async fn it_calls_soup_with_missing_link() {
     let guard = inner_counter.lock().unwrap();
 
     assert_eq!(guard.len(), 1);
-    assert!(guard.first().unwrap().link_id.is_none())
+    assert!(guard.first().unwrap().link_ids.is_empty())
 }
 
 #[tokio::test]
@@ -1196,6 +1210,76 @@ async fn ast_endpoint_passes_through_plain_document_literal() {
 }
 
 #[tokio::test]
+async fn ast_endpoint_passes_through_foreign_entity_filter() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = soup_router(SoupRouterState::new(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+        Arc::new(MockEntityAccess),
+    ))
+    .layer(Extension(UserContext {
+        user_id: "macro|test@example.com".to_string(),
+        fusion_user_id: "1234".to_string(),
+        permissions: None,
+        organization_id: None,
+    }));
+
+    let request = Request::builder()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({
+                "fef": { "l": { "feid": "github:123" } }
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+
+    let arg = {
+        let mut guard = inner_counter.lock().unwrap();
+        guard
+            .pop()
+            .expect("SoupService::handle should have been called")
+    };
+
+    let filter: EntityFilterAst = serde_json::from_value(arg.expanded_filter).unwrap();
+    let foreign_entity_tree = filter
+        .foreign_entity_filter
+        .expect("foreign_entity_filter should be set");
+    let foreign_entity_json = serde_json::to_value(foreign_entity_tree.as_ref()).unwrap();
+    assert_eq!(
+        foreign_entity_json,
+        json!({ "l": { "feid": "github:123" } })
+    );
+}
+
+#[test]
+fn ast_cursor_without_foreign_entity_filter_deserializes() {
+    let cursor_json = json!({
+        "id": Uuid::new_v4(),
+        "limit": 20,
+        "val": {
+            "sort_type": "updated_at",
+            "last_val": Utc::now(),
+        },
+        "filter": {
+            "df": { "l": { "id": Uuid::new_v4().to_string() } }
+        }
+    });
+
+    let cursor: CursorWithValAndFilter<Uuid, SimpleSortMethod, ApiEntityFilterAst> =
+        serde_json::from_value(cursor_json).unwrap();
+
+    assert!(cursor.filter.foreign_entity_filter.is_none());
+}
+
+#[tokio::test]
 async fn ast_endpoint_expands_file_assoc_image_to_or_tree() {
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
@@ -1453,7 +1537,7 @@ fn ast_endpoint_email_crm_domains_stamps_scope_and_ands_into_tree() {
         ))),
         user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
         email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
-        link_id: None,
+        link_ids: vec![],
     };
     let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
     let ast = match &req.cursor {
@@ -1481,7 +1565,7 @@ fn ast_endpoint_email_crm_addresses_stamps_scope() {
         ))),
         user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
         email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
-        link_id: None,
+        link_ids: vec![],
     };
     let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
     let ast = match &req.cursor {
@@ -1509,7 +1593,7 @@ fn ast_endpoint_email_crm_both_lists_rejected() {
         ))),
         user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
         email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
-        link_id: None,
+        link_ids: vec![],
     };
     let res = req.into_ast();
     assert!(res.is_err(), "mutual exclusivity must reject both lists");
@@ -1530,7 +1614,7 @@ fn ast_endpoint_empty_crm_lists_leaves_scope_none() {
         ))),
         user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
         email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
-        link_id: None,
+        link_ids: vec![],
     };
     let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
     // ast.is_none() because the whole filter is empty.
@@ -1564,7 +1648,7 @@ fn ast_endpoint_crm_ands_with_existing_freeform_ef() {
         ))),
         user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
         email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
-        link_id: None,
+        link_ids: vec![],
     };
     let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
     let ast = match &req.cursor {
@@ -1619,7 +1703,7 @@ fn ast_endpoint_crm_domains_are_lowercased_in_scope() {
         ))),
         user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
         email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
-        link_id: None,
+        link_ids: vec![],
     };
     let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
     let ast = match &req.cursor {

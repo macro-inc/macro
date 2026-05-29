@@ -120,7 +120,7 @@ local-e2e-seed:
 
 # Start only the services needed by the local E2E suites. Avoid unrelated
 # local services with extra env/dependency requirements blocking E2E.
-local-e2e-services := "authentication-service connection_gateway contacts_service document_storage_service email_service static_file_service static_file_cdn sync_service websocket_service"
+local-e2e-services := "authentication-service connection_gateway contacts_service document_storage_service email_service notification_service static_file_service static_file_cdn sync_service websocket_service"
 
 # Start the local stack, seed deterministic data, and run the Playwright smoke suite.
 local-e2e *ARGS:

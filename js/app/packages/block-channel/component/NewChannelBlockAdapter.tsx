@@ -40,7 +40,7 @@ import { useChannelName, useChannelType } from '@core/context/channels';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
-import { ChannelTypeEnum } from '@service-comms/client';
+import { ChannelTypeEnum } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
 import {
   createComputed,

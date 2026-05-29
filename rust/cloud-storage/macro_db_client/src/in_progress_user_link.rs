@@ -1,5 +1,8 @@
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 pub async fn count_existing_in_progress_user_links_for_user(
     db: &sqlx::Pool<sqlx::Postgres>,
     macro_user_id: &str,
@@ -107,4 +110,58 @@ pub async fn get_macro_user_id_by_link_id(
     .await?;
 
     Ok(link)
+}
+
+pub struct InProgressUserLink {
+    pub macro_user_id: Uuid,
+    pub linked_email: Option<String>,
+}
+
+pub async fn get_in_progress_user_link(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    link_id: &uuid::Uuid,
+) -> anyhow::Result<InProgressUserLink> {
+    let row = sqlx::query!(
+        r#"
+            SELECT
+                macro_user_id,
+                linked_email
+            FROM
+                in_progress_user_link
+            WHERE
+                id = $1
+        "#,
+        link_id
+    )
+    .fetch_one(db)
+    .await?;
+
+    Ok(InProgressUserLink {
+        macro_user_id: row.macro_user_id,
+        linked_email: row.linked_email,
+    })
+}
+
+pub async fn set_linked_email(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    link_id: &uuid::Uuid,
+    linked_email: &str,
+) -> anyhow::Result<()> {
+    let result = sqlx::query!(
+        r#"
+            UPDATE in_progress_user_link
+            SET linked_email = $1
+            WHERE id = $2
+        "#,
+        linked_email,
+        link_id
+    )
+    .execute(db)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        anyhow::bail!("in_progress_user_link not found for link_id={link_id}");
+    }
+
+    Ok(())
 }

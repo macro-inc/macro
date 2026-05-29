@@ -2,9 +2,9 @@ import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
-  commsServiceClient,
   type MessageResponse,
-} from '@service-comms/client';
+  storageServiceClient,
+} from '@service-storage/client';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { softInvalidateChannelParticipants } from './channel-participants';
@@ -180,7 +180,7 @@ export function useAddParticipantsMutation(
     mutationFn: async (vars: AddParticipantsParams) => {
       return await throwOnErr(
         async () =>
-          await commsServiceClient.addParticipantsToChanenl({
+          await storageServiceClient.addParticipantsToChannel({
             channel_id: vars.channelId,
             participants: vars.participants,
           })
@@ -229,7 +229,7 @@ export function useRemoveParticipantsMutation(
     mutationFn: async (vars: RemoveParticipantsParams) => {
       return await throwOnErr(
         async () =>
-          await commsServiceClient.removeParticipantsFromChannel({
+          await storageServiceClient.removeParticipantsFromChannel({
             channel_id: vars.channelId,
             participants: vars.participants,
           })

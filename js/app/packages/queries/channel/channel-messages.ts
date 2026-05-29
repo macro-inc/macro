@@ -3,8 +3,8 @@ import {
   type ApiChannelMessage,
   type ApiThreadReply,
   type ChannelMessagesPage,
-  commsServiceClient,
-} from '@service-comms/client';
+  storageServiceClient,
+} from '@service-storage/client';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import {
@@ -16,6 +16,10 @@ import { type Accessor, createEffect, on } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
+import {
+  normalizeChannelMessageSender,
+  normalizeChannelMessagesPageSenders,
+} from './message-sender';
 import {
   captureThreadPreviewReplySnapshot,
   insertReplyIntoThreadPreview,
@@ -68,9 +72,9 @@ export function channelMessagesQueryOptions(
     }: {
       pageParam: ChannelMessagesPageParam | null;
     }) => {
-      return await throwOnErr(
+      const page = await throwOnErr(
         async () =>
-          await commsServiceClient.getChannelMessages({
+          await storageServiceClient.getChannelMessages({
             channel_id: channelId,
             limit: pageParam ? 100 : 50,
             next_cursor: pageParam?.next_cursor ?? null,
@@ -78,6 +82,7 @@ export function channelMessagesQueryOptions(
             load_around_message_id: !pageParam ? loadAroundMessageId : null,
           })
       );
+      return normalizeChannelMessagesPageSenders(page);
     },
     initialPageParam: null as ChannelMessagesPageParam | null,
     getNextPageParam: (lastPage: ChannelMessagesPage) =>
@@ -125,12 +130,12 @@ export function useChannelMessagesByIdsQuery(
         .queryKey,
       queryFn: async (): Promise<ApiChannelMessage[]> => {
         const page = await throwOnErr(() =>
-          commsServiceClient.postChannelMessages({
+          storageServiceClient.postChannelMessages({
             channel_id: resolvedChannelId,
             filters: { message_ids: resolvedMessageIds },
           })
         );
-        return page.items;
+        return page.items.map(normalizeChannelMessageSender);
       },
       enabled: resolvedMessageIds.length > 0,
       staleTime: Infinity,

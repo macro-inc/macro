@@ -77,6 +77,3 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }
-
-[package.metadata.cargo-machete]
-ignored = ["comms_service"]

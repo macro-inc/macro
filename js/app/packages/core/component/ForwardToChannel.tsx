@@ -17,8 +17,8 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
-import PaperPlane from '@icon/wide-paper-plane-cutout.svg';
 import CheckIcon from '@phosphor/check.svg?component-solid';
+import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
 import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
@@ -440,8 +440,8 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     >
       <Show when={isAuthenticated()}>
         {/* Row 1: Recipient input + ShareOptions */}
-        <div class="flex items-center">
-          <div class="min-w-0 flex-1 px-1 min-h-11">
+        <div class="flex items-center pr-2">
+          <div class="min-w-0 flex-1 min-h-11">
             <RecipientSelector<'user' | 'contact' | 'channel'>
               placeholder="To: Email or group"
               setSelectedOptions={setSelectedOptions}
@@ -483,7 +483,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             <ScrollIndicators scrollRef={mdScrollRef} noBorderStart />
             <CustomScrollbar scrollContainer={mdScrollRef} />
             <div
-              class="grow shrink min-h-20 max-h-40 overflow-y-auto scrollbar-hidden px-3 py-1.5 w-full text-sm"
+              class="grow shrink min-h-20 max-h-40 overflow-y-auto scrollbar-hidden px-4 py-1.5 w-full text-sm"
               onClick={() => markdownEditor.controls.focus()}
               ref={setMdScrollRef}
             >
@@ -497,7 +497,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           </div>
 
           {/* Row 3: Send As Group (optional) + Cancel + Send */}
-          <div class="shrink-0 flex w-full items-center p-3 gap-3 flex-wrap">
+          <div class="shrink-0 flex w-full items-center px-4 py-4 gap-3 flex-wrap">
             <Show when={canSendAsGroup()}>
               <label
                 class={cn(
@@ -555,14 +555,15 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               <Button
                 variant="ghost"
                 size="sm"
+                class="text-ink-extra-muted"
                 onClick={() => props.onCancel?.()}
               >
                 Cancel
               </Button>
               <Button
-                variant={selectedOptions().length > 0 ? 'active' : 'base'}
-                size="sm"
-                class="px-2 rounded-xs flex items-center gap-1"
+                variant={selectedOptions().length > 0 ? 'active' : 'ghost'}
+                depth={3}
+                class="rounded-lg border-0"
                 disabled={selectedOptions().length === 0}
                 onClick={() => {
                   const options = selectedOptions();
@@ -571,7 +572,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                   }
                 }}
               >
-                <PaperPlane class="size-4" />
+                <PaperPlaneTilt class="size-4" />
                 Share
               </Button>
             </div>

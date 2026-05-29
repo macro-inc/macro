@@ -259,7 +259,7 @@ const MOCK_TASK_COMPLETED: TaskEntity = {
 const MOCK_TASK_HIGH_PRIORITY: TaskEntity = {
   type: 'document',
   id: 'task_urgent_1',
-  name: 'Fix Critical Security Bug',
+  name: 'Fix Urgent Security Bug',
   ownerId: MOCK_USER_IDS.owner,
   fileType: 'md',
   subType: { type: 'task', is_completed: false },

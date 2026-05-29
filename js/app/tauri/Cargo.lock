@@ -103,6 +103,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_qs",
+ "staged_upload_constants",
  "tauri",
  "tauri-build",
  "tauri-plugin-auth",
@@ -117,6 +118,8 @@ dependencies = [
  "tauri-plugin-notifications",
  "tauri-plugin-opener",
  "tauri-plugin-os",
+ "tauri-plugin-pasteboard",
+ "tauri-plugin-photo-library",
  "tauri-plugin-safe-area-insets",
  "tauri-plugin-single-instance",
  "tauri-plugin-virtual-keyboard",
@@ -2802,6 +2805,7 @@ dependencies = [
  "sha2",
  "strum",
  "tauri",
+ "tauri-plugin-device-info",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -4993,6 +4997,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
+name = "staged_upload_constants"
+version = "0.1.0"
+
+[[package]]
 name = "string_cache"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5397,7 +5405,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-auth"
 version = "0.1.0"
-source = "git+https://github.com/macro-inc/tauri-plugins?rev=61520093d5c7fcd60a2ed354dc150ca9556519a4#61520093d5c7fcd60a2ed354dc150ca9556519a4"
+source = "git+https://github.com/macro-inc/tauri-plugins?rev=26537c8a46bb8424f9cf4021d08aa76aa7cd66ef#26537c8a46bb8424f9cf4021d08aa76aa7cd66ef"
 dependencies = [
  "serde",
  "tauri",
@@ -5568,7 +5576,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-notifications"
 version = "0.1.0"
-source = "git+https://github.com/macro-inc/tauri-plugins?rev=61520093d5c7fcd60a2ed354dc150ca9556519a4#61520093d5c7fcd60a2ed354dc150ca9556519a4"
+source = "git+https://github.com/macro-inc/tauri-plugins?rev=26537c8a46bb8424f9cf4021d08aa76aa7cd66ef#26537c8a46bb8424f9cf4021d08aa76aa7cd66ef"
 dependencies = [
  "serde",
  "tauri",
@@ -5614,6 +5622,26 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "tauri-plugin-pasteboard"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "staged_upload_constants",
+ "tauri",
+ "tauri-plugin",
+]
+
+[[package]]
+name = "tauri-plugin-photo-library"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "staged_upload_constants",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

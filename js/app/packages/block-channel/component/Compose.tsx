@@ -29,6 +29,7 @@ import {
 } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
+import { isPlatform } from '@core/util/platform';
 
 import {
   chatRuleset,
@@ -36,7 +37,7 @@ import {
   uploadFile,
 } from '@core/util/upload';
 import InfoIcon from '@phosphor/info.svg';
-import { commsServiceClient } from '@service-comms/client';
+import { useCreateChannelMutation } from '@queries/channel/channels';
 import { Surface } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 
@@ -104,6 +105,7 @@ export function ChannelCompose() {
   const [error, setError] = createSignal<string>();
 
   const { sendToUsers, sendToChannel } = useSendMessageToPeople();
+  const createChannelMutation = useCreateChannelMutation();
 
   async function handleSend(snapshot: InputSnapshot) {
     setError(undefined);
@@ -125,15 +127,11 @@ export function ChannelCompose() {
         channelName() &&
         destination.users.length > 1
       ) {
-        const res = await commsServiceClient.createChannel({
+        const { id } = await createChannelMutation.mutateAsync({
           channel_type: 'private',
           name: channelName() ?? null,
           participants: destination.users,
         });
-        if (res.isErr()) {
-          throw new Error('Could not create channel');
-        }
-        const { id } = res.value;
         await sendToChannel({
           channelId: id,
           content,
@@ -312,7 +310,12 @@ export function ChannelCompose() {
                     <Input.Footer>
                       <Input.Actions>
                         <Input.Actions.Left>
-                          <Input.AttachFilesAction />
+                          <Show
+                            when={!isPlatform('ios')}
+                            fallback={<Input.AttachNativeMediaAction />}
+                          >
+                            <Input.AttachFilesAction />
+                          </Show>
                           <Input.ToggleFormatAction />
                         </Input.Actions.Left>
                         <Input.Actions.Right>

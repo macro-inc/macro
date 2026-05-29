@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use sqlx::PgPool;
 
 use crate::domain::{
-    models::{GithubKey, MacroTaskId, TeamTaskReference},
+    models::{GithubAppInstallationSource, GithubKey, MacroTaskId, TeamTaskReference},
     ports::GithubSyncRepo,
 };
 
@@ -124,8 +124,12 @@ impl GithubSyncRepo for PgGithubSyncRepo {
             r#"
             SELECT DISTINCT tt.document_id
             FROM UNNEST($2::text[], $3::int4[]) AS refs(team_slug, task_num)
-            JOIN github_app_installation_team gait ON gait.id = $1
-            JOIN team t ON t.id = gait.team_id AND LOWER(t.slug) = LOWER(refs.team_slug)
+            JOIN github_app_installation gai
+                ON gai.id = $1
+                AND gai.source_type = 'team'::github_app_installation_source_type
+            JOIN team t
+                ON t.id = gai.source_id::uuid
+                AND LOWER(t.slug) = LOWER(refs.team_slug)
             JOIN team_task tt ON tt.team_id = t.id AND tt.task_num = refs.task_num
             "#,
             installation_id,
@@ -190,25 +194,69 @@ impl GithubSyncRepo for PgGithubSyncRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn insert_installation_team_associations(
+    async fn get_installation_sources(
         &self,
         installation_id: &str,
-        team_ids: &[uuid::Uuid],
-        installed_by: &str,
+    ) -> Result<Vec<GithubAppInstallationSource>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT source_id AS "source_id!", source_type::text AS "source_type!"
+            FROM github_app_installation
+            WHERE id = $1
+            ORDER BY source_type, source_id
+            "#,
+            installation_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut sources = Vec::new();
+        for row in rows {
+            let source_id = row.source_id;
+            let source_type = row.source_type;
+            match source_type.as_str() {
+                "team" => match uuid::Uuid::parse_str(&source_id) {
+                    Ok(team_id) => sources.push(GithubAppInstallationSource::Team(team_id)),
+                    Err(error) => tracing::warn!(
+                        installation_id,
+                        source_id,
+                        error=?error,
+                        "github_app_installation team source_id is not a UUID"
+                    ),
+                },
+                "user" => sources.push(GithubAppInstallationSource::User(source_id)),
+                _ => tracing::warn!(
+                    installation_id,
+                    source_id,
+                    source_type,
+                    "github_app_installation has unknown source_type"
+                ),
+            }
+        }
+
+        Ok(sources)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn upsert_installation_sources(
+        &self,
+        installation_id: &str,
+        sources: &[GithubAppInstallationSource],
     ) -> Result<(), Self::Err> {
-        let installation_ids: Vec<&str> =
-            std::iter::repeat_n(installation_id, team_ids.len()).collect();
-        let installed_bys: Vec<&str> = std::iter::repeat_n(installed_by, team_ids.len()).collect();
+        let source_ids: Vec<String> = sources.iter().map(|source| source.source_id()).collect();
+        let source_types: Vec<&str> = sources.iter().map(|source| source.source_type()).collect();
 
         sqlx::query!(
             r#"
-            INSERT INTO github_app_installation_team (id, team_id, installed_by)
-            SELECT * FROM UNNEST($1::text[], $2::uuid[], $3::text[])
-            ON CONFLICT (id, team_id) DO NOTHING
+            INSERT INTO github_app_installation (id, source_id, source_type)
+            SELECT $1::text, source_id, source_type::github_app_installation_source_type
+            FROM UNNEST($2::text[], $3::text[])
+                AS source_rows(source_id, source_type)
+            ON CONFLICT (id, source_id, source_type) DO NOTHING
             "#,
-            &installation_ids as &[&str],
-            team_ids,
-            &installed_bys as &[&str],
+            installation_id,
+            &source_ids,
+            &source_types as &[&str],
         )
         .execute(&self.pool)
         .await?;

@@ -115,6 +115,7 @@ dependencies = [
  "email_service_client",
  "entity_access",
  "entity_access_management",
+ "foreign_entity",
  "frecency",
  "futures",
  "item_filters",
@@ -151,6 +152,7 @@ dependencies = [
  "sqs_client",
  "strum",
  "sync_service_client",
+ "system_properties",
  "teams",
  "tokio",
  "tracing",
@@ -1702,6 +1704,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "bot_id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "sqlx",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "bots"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bot_id",
+ "chrono",
+ "entity_access",
+ "hex",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-error-response",
+ "model_user",
+ "rand 0.9.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "bs58"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1861,6 +1902,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "filter_ast",
+ "futures",
  "item_filters",
  "livekit-api",
  "livekit-protocol",
@@ -1956,19 +1998,30 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "bot_id",
  "chrono",
+ "connection_gateway_client",
+ "contacts",
  "entity_access",
+ "entity_access_db_utils",
  "http-body-util",
  "macro_db_migrator",
  "macro_user_id",
+ "macro_uuid",
  "mockall",
+ "model-entity",
  "model-error-response",
+ "model_notifications",
  "model_user",
  "models_pagination",
+ "models_permissions",
+ "notification",
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "share_permission_db_utils",
  "sqlx",
+ "sqs_client",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
@@ -2069,7 +2122,7 @@ checksum = "0b023947811758c97c59bf9d1c188fd619ad4718dcaa767947df1cadb14f39f4"
 dependencies = [
  "glob",
  "libc",
- "libloading 0.8.9",
+ "libloading",
 ]
 
 [[package]]
@@ -2219,79 +2272,6 @@ dependencies = [
  "strum",
  "tracing",
  "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "comms_service"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "aws-sdk-secretsmanager",
- "aws-sdk-sqs",
- "axum",
- "axum-extra",
- "axum-macros",
- "chrono",
- "comms",
- "comms_db_client",
- "connection_gateway_client",
- "contacts",
- "doppleganger",
- "entity_access",
- "entity_access_db_utils",
- "frecency",
- "futures",
- "http-body-util",
- "jsonwebtoken 10.3.0",
- "last_online_tracker",
- "macro_auth",
- "macro_db_client",
- "macro_env",
- "macro_env_var",
- "macro_middleware",
- "macro_user_id",
- "macro_uuid",
- "model",
- "model-entity",
- "model_notifications",
- "models_comms",
- "models_opensearch",
- "models_permissions",
- "notification",
- "reqwest 0.13.3",
- "rootcause",
- "secretsmanager_client",
- "serde",
- "serde_json",
- "sqlx",
- "sqs_client",
- "thiserror 2.0.18",
- "tokio",
- "tower 0.5.3",
- "tower-http",
- "tracing",
- "utoipa",
- "utoipa-swagger-ui",
- "uuid",
-]
-
-[[package]]
-name = "comms_service_client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "model",
- "models_comms",
- "reqwest 0.13.3",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tracing",
- "urlencoding",
  "uuid",
 ]
 
@@ -2686,6 +2666,7 @@ dependencies = [
  "macro_uuid",
  "model-error-response",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -3312,7 +3293,6 @@ dependencies = [
  "chat",
  "chrono",
  "comms",
- "comms_service_client",
  "connection_gateway",
  "cookie",
  "crm",
@@ -3323,6 +3303,7 @@ dependencies = [
  "email_service_client",
  "entity_access",
  "entity_access_management",
+ "foreign_entity",
  "frecency",
  "futures",
  "http 1.4.0",
@@ -3399,6 +3380,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64 0.22.1",
+ "bots",
  "bytes",
  "bzip2",
  "cal",
@@ -3408,7 +3390,6 @@ dependencies = [
  "cloudfront_sign",
  "comms",
  "comms_db_client",
- "comms_service",
  "connection",
  "connection_gateway_client",
  "contacts",
@@ -3421,6 +3402,7 @@ dependencies = [
  "email",
  "entity_access",
  "entity_access_management",
+ "foreign_entity",
  "frecency",
  "futures",
  "github",
@@ -4002,6 +3984,7 @@ dependencies = [
  "macro_auth",
  "macro_aws_config",
  "macro_cors",
+ "macro_db_client",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -4444,15 +4427,25 @@ name = "foreign_entity"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "chrono",
+ "entity_access",
+ "filter_ast",
+ "http-body-util",
+ "item_filters",
  "macro_db_migrator",
+ "macro_user_id",
  "macro_uuid",
+ "model-error-response",
+ "models_pagination",
  "serde",
  "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
+ "utoipa",
  "uuid",
 ]
 
@@ -4786,6 +4779,7 @@ dependencies = [
  "document_sub_type",
  "documents",
  "entity_access",
+ "foreign_entity",
  "fusionauth",
  "hex",
  "hmac 0.12.1",
@@ -6120,16 +6114,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libloading"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "754ca22de805bb5744484a5b151a9e1a8e837d5dc232c2d7d8c2e3492edc8b60"
-dependencies = [
- "cfg-if",
- "windows-link",
-]
-
-[[package]]
 name = "libm"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6243,8 +6227,10 @@ dependencies = [
  "reqwest 0.13.3",
  "serde",
  "serde_json",
+ "sqlx",
  "tokio",
  "tokio-tungstenite 0.28.0",
+ "uuid",
 ]
 
 [[package]]
@@ -6574,6 +6560,7 @@ dependencies = [
  "doppleganger",
  "nom 8.0.0",
  "serde",
+ "sqlx",
  "thiserror 2.0.18",
  "tracing",
  "utoipa",
@@ -6773,12 +6760,14 @@ dependencies = [
  "email_service_client",
  "entity_access",
  "entity_access_management",
+ "foreign_entity",
  "frecency",
  "fusionauth",
  "http 1.4.0",
  "lexical_client",
  "macro_auth",
  "macro_aws_config",
+ "macro_db_client",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -6790,6 +6779,7 @@ dependencies = [
  "readonly_pool",
  "redis",
  "rmcp",
+ "roles_and_permissions",
  "search_service_client",
  "secretsmanager_client",
  "serde_json",
@@ -6845,6 +6835,7 @@ dependencies = [
  "email_service_client",
  "entity_access",
  "entity_access_management",
+ "foreign_entity",
  "frecency",
  "futures",
  "lexical_client",
@@ -7267,6 +7258,7 @@ dependencies = [
  "call",
  "chrono",
  "comms",
+ "crm",
  "document_sub_type",
  "doppleganger",
  "email",
@@ -7275,6 +7267,7 @@ dependencies = [
  "models_pagination",
  "models_properties",
  "serde",
+ "serde_json",
  "strum",
  "utoipa",
  "uuid",
@@ -8270,10 +8263,9 @@ dependencies = [
  "chrono",
  "console_error_panic_hook",
  "console_log",
- "image",
- "itertools 0.14.0",
+ "itertools 0.11.0",
  "js-sys",
- "libloading 0.9.0",
+ "libloading",
  "log",
  "maybe-owned",
  "once_cell",
@@ -8927,7 +8919,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27c6023962132f4b30eb4c172c91ce92d933da334c59c23cddee82358ddafb0b"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -10623,6 +10615,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "share_permission_db_utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "entity_access_db_utils",
+ "macro_user_id",
+ "macro_uuid",
+ "models_permissions",
+ "sqlx",
+]
+
+[[package]]
 name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10821,6 +10825,7 @@ dependencies = [
  "email",
  "entity_access",
  "filter_ast",
+ "foreign_entity",
  "frecency",
  "futures",
  "http-body-util",

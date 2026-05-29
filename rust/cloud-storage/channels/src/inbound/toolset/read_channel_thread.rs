@@ -5,7 +5,7 @@ use super::types::{
     ToolChannelMessage, ToolOmission, ToolOmissionKind, ToolResolvedMessage, ToolThreadReply,
     clamp_limit, clamp_max_chars, content_truncation_omissions,
 };
-use crate::domain::ports::ChannelMessagesService;
+use crate::domain::ports::ChannelService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -117,7 +117,7 @@ pub struct ReadChannelThreadResponse {
 #[async_trait]
 impl<Svc, AccessSvc> AsyncTool<ChannelToolContext<Svc, AccessSvc>> for ReadChannelThread
 where
-    Svc: ChannelMessagesService,
+    Svc: ChannelService,
     AccessSvc: EntityAccessService,
 {
     type Output = ReadChannelThreadResponse;

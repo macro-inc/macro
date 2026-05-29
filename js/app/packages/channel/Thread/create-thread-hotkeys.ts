@@ -5,7 +5,8 @@ import {
 } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { HOTKEY_PRIORITY_HIGH } from '@core/hotkey/types';
-import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
+import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
 import { type Accessor, onCleanup } from 'solid-js';
 import type { MessageSelection } from '../Channel/create-message-selection';
 import type { MessageActions, MessageData } from '../Message';

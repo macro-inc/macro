@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO github_app_installation (id, source_id, source_type)\n            SELECT $1::text, source_id, source_type::github_app_installation_source_type\n            FROM UNNEST($2::text[], $3::text[])\n                AS source_rows(source_id, source_type)\n            ON CONFLICT (id, source_id, source_type) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6e98cffdfa6200686281b3c2c540f07f517dca38e8a70bad08b4b655cb1cd550"
+}

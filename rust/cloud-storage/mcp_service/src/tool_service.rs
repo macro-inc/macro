@@ -6,19 +6,30 @@ use rmcp::{
         Content, ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerInfo, Tool,
     },
 };
+use roles_and_permissions::domain::model::PermissionId;
+use sqlx::PgPool;
 use std::sync::Arc;
 
 /// MCP server handler that extracts authenticated user identity from HTTP
 /// request parts injected by rmcp's `StreamableHttpService`.
+#[allow(
+    dead_code,
+    reason = "fields used via ServerHandler trait impl dispatched by rmcp"
+)]
 pub struct AuthenticatedToolService<Context> {
     toolset: Arc<AsyncToolCollection<Context>>,
     context: Context,
+    db: PgPool,
 }
 
 impl<Context> AuthenticatedToolService<Context> {
     /// Creates a new authenticated tool service.
-    pub fn new(toolset: Arc<AsyncToolCollection<Context>>, context: Context) -> Self {
-        Self { toolset, context }
+    pub fn new(toolset: Arc<AsyncToolCollection<Context>>, context: Context, db: PgPool) -> Self {
+        Self {
+            toolset,
+            context,
+            db,
+        }
     }
 
     fn tool_definitions(&self) -> Vec<Tool> {
@@ -44,6 +55,35 @@ impl<Context> AuthenticatedToolService<Context> {
             .ok_or_else(|| {
                 rmcp::ErrorData::internal_error("missing user identity — is auth configured?", None)
             })
+    }
+
+    async fn require_paid_subscription(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), rmcp::ErrorData> {
+        let permissions = macro_db_client::user::get_permissions::get_user_permissions(
+            &self.db,
+            user_id.0.as_ref(),
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "failed to check user permissions for MCP access");
+            rmcp::ErrorData::internal_error("failed to check permissions", None)
+        })?;
+
+        let is_paid = permissions.contains(&PermissionId::WriteOpus.to_string())
+            || permissions.contains(&PermissionId::WriteSonnet.to_string())
+            || permissions.contains(&PermissionId::WriteHaiku.to_string());
+
+        if !is_paid {
+            return Err(rmcp::ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_REQUEST,
+                "MCP access requires a paid subscription",
+                None,
+            ));
+        }
+
+        Ok(())
     }
 }
 
@@ -78,8 +118,11 @@ where
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParams>,
-        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
+        let user_id = Self::authenticated_user_id(&context.extensions)?;
+        self.require_paid_subscription(&user_id).await?;
+
         Ok(ListToolsResult {
             tools: self.tool_definitions(),
             ..Default::default()
@@ -92,6 +135,7 @@ where
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
         let user_id = Self::authenticated_user_id(&context.extensions)?;
+        self.require_paid_subscription(&user_id).await?;
 
         let request_context = RequestContext { user_id };
 

@@ -39,6 +39,33 @@ pub struct GithubInstallationAccessToken {
     pub expires_at: String,
 }
 
+/// Source that grants a GitHub App installation access to Macro sync data.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum GithubAppInstallationSource {
+    /// A Macro team source.
+    Team(uuid::Uuid),
+    /// A Macro user source.
+    User(String),
+}
+
+impl GithubAppInstallationSource {
+    /// Returns the value persisted in `github_app_installation.source_id`.
+    pub fn source_id(&self) -> String {
+        match self {
+            Self::Team(team_id) => team_id.to_string(),
+            Self::User(user_id) => user_id.clone(),
+        }
+    }
+
+    /// Returns the value persisted in `github_app_installation.source_type`.
+    pub fn source_type(&self) -> &'static str {
+        match self {
+            Self::Team(_) => "team",
+            Self::User(_) => "user",
+        }
+    }
+}
+
 /// A validated github webhook event
 #[derive(Debug)]
 pub struct ValidatedGithubWebhookEvent {
@@ -104,7 +131,9 @@ impl ValidatedGithubWebhookEvent {
                     texts.push(s.to_string());
                 }
             }
-            GithubWebhookEventType::Installation | GithubWebhookEventType::Unknown(_) => {}
+            GithubWebhookEventType::CheckRun
+            | GithubWebhookEventType::Installation
+            | GithubWebhookEventType::Unknown(_) => {}
         }
         texts
     }
@@ -156,7 +185,9 @@ impl ValidatedGithubWebhookEvent {
 
                 if is_open { Some("In Review") } else { None }
             }
-            GithubWebhookEventType::Installation | GithubWebhookEventType::Unknown(_) => None,
+            GithubWebhookEventType::CheckRun
+            | GithubWebhookEventType::Installation
+            | GithubWebhookEventType::Unknown(_) => None,
         }
     }
 
@@ -170,7 +201,33 @@ impl ValidatedGithubWebhookEvent {
                     .get("issue")
                     .and_then(|issue| issue.get("number"))
             })
+            .or_else(|| {
+                self.payload
+                    .get("check_run")
+                    .and_then(|check_run| check_run.get("pull_requests"))
+                    .and_then(|pull_requests| pull_requests.as_array())
+                    .and_then(|pull_requests| pull_requests.first())
+                    .and_then(|pull_request| pull_request.get("number"))
+            })
             .and_then(|v| v.as_u64())
+    }
+
+    /// Returns whether this webhook payload is associated with a pull request.
+    pub fn is_associated_with_pull_request(&self) -> bool {
+        match self.parsed_event_type() {
+            GithubWebhookEventType::PullRequest => self.payload.get("pull_request").is_some(),
+            GithubWebhookEventType::IssueComment => self
+                .payload
+                .get("issue")
+                .and_then(|issue| issue.get("pull_request"))
+                .is_some(),
+            GithubWebhookEventType::PullRequestReview
+            | GithubWebhookEventType::PullRequestReviewComment => {
+                self.payload.get("pull_request").is_some()
+            }
+            GithubWebhookEventType::CheckRun => self.pull_number().is_some(),
+            GithubWebhookEventType::Installation | GithubWebhookEventType::Unknown(_) => false,
+        }
     }
 
     /// Extract the repository owner login from the webhook payload.
@@ -221,6 +278,7 @@ impl ValidatedGithubWebhookEvent {
         let pr = match self.parsed_event_type() {
             // For PR events, the event itself is the context — nothing to compare against.
             GithubWebhookEventType::PullRequest
+            | GithubWebhookEventType::CheckRun
             | GithubWebhookEventType::Installation
             | GithubWebhookEventType::Unknown(_) => {
                 return texts;
@@ -263,6 +321,8 @@ pub enum GithubWebhookEventType {
     PullRequestReview,
     /// `pull_request_review_comment` events
     PullRequestReviewComment,
+    /// `check_run` events
+    CheckRun,
     /// `installation` events (app installed/uninstalled)
     Installation,
     /// Any event type we don't handle
@@ -277,6 +337,7 @@ impl GithubWebhookEventType {
             "issue_comment" => Self::IssueComment,
             "pull_request_review" => Self::PullRequestReview,
             "pull_request_review_comment" => Self::PullRequestReviewComment,
+            "check_run" => Self::CheckRun,
             "installation" => Self::Installation,
             other => Self::Unknown(other.to_string()),
         }

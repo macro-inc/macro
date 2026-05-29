@@ -54,7 +54,7 @@ async fn run_and_collect_ids(
 
     let results = dynamic::dynamic_email_thread_cursor(
         pool,
-        &link_id,
+        &[link_id],
         limit,
         &view,
         query,
@@ -347,7 +347,7 @@ async fn crm_scope_uses_team_mailboxes_not_caller_link(pool: Pool<Postgres>) -> 
 
     let results = dynamic::dynamic_email_thread_cursor(
         &pool,
-        &carol_link,
+        &[carol_link],
         100,
         &view,
         query,
@@ -650,7 +650,7 @@ async fn crm_scope_pagination_across_team_links(pool: Pool<Postgres>) -> anyhow:
     let query_p1 = Query::new(None, SimpleSortMethod::UpdatedAt, filter_p1);
     let page1 = dynamic::dynamic_email_thread_cursor(
         &pool,
-        &link_id,
+        &[link_id],
         limit,
         &view,
         query_p1,
@@ -687,7 +687,7 @@ async fn crm_scope_pagination_across_team_links(pool: Pool<Postgres>) -> anyhow:
     let query_p2 = Query::new(Some(cursor), SimpleSortMethod::UpdatedAt, filter_p2);
     let page2 = dynamic::dynamic_email_thread_cursor(
         &pool,
-        &link_id,
+        &[link_id],
         limit,
         &view,
         query_p2,

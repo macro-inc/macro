@@ -3,8 +3,8 @@ import {
   type ApiChannelAttachment,
   type ChannelAttachmentsPage,
   type ChannelAttachmentType,
-  commsServiceClient,
-} from '@service-comms/client';
+  storageServiceClient,
+} from '@service-storage/client';
 import { type InfiniteData, useInfiniteQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { queryClient } from '../client';
@@ -34,7 +34,7 @@ export function channelAttachmentsQueryOptions(
     }) => {
       return await throwOnErr(
         async () =>
-          await commsServiceClient.getChannelAttachments({
+          await storageServiceClient.getChannelAttachments({
             channel_id: channelId,
             limit: 100,
             cursor: pageParam,

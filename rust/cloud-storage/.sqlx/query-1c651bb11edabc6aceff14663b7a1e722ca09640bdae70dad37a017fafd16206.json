@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT pp.\"sharePermissionId\" as \"share_permission_id!\"\n                FROM \"ProjectPermission\" pp\n                WHERE pp.\"projectId\" = $1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "share_permission_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1c651bb11edabc6aceff14663b7a1e722ca09640bdae70dad37a017fafd16206"
+}

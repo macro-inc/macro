@@ -230,6 +230,10 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
           subnets: vpc.privateSubnetIds,
           securityGroups: [this.serviceSg.id],
         },
+        deploymentCircuitBreaker: {
+          enable: true,
+          rollback: true,
+        },
         taskDefinitionArgs: {
           taskRole: {
             roleArn: this.role.arn,
@@ -278,7 +282,9 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
         },
         desiredCount: stack === 'prod' ? 4 : 1,
       },
-      { parent: this }
+      {
+        parent: this,
+      }
     );
 
     this.service = service;

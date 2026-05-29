@@ -2,6 +2,9 @@
 
 mod queries;
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::{
     models::{
         AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, EntityType, UserTeamInfo,
@@ -25,6 +28,21 @@ impl PgAccessRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+}
+
+fn foreign_entity_source_pairs(
+    user_id: &MacroUserId<Lowercase<'_>>,
+    user_team: Option<UserTeamInfo>,
+) -> (Vec<String>, Vec<String>) {
+    let mut source_ids = vec![user_id.as_ref().to_string()];
+    let mut source_auth_entities = vec!["user".to_string()];
+
+    if let Some(user_team) = user_team {
+        source_ids.push(user_team.team_id.to_string());
+        source_auth_entities.push("team".to_string());
+    }
+
+    (source_ids, source_auth_entities)
 }
 
 impl AccessRepository for PgAccessRepository {
@@ -113,6 +131,32 @@ impl AccessRepository for PgAccessRepository {
             .await
             .map_err(|_| AccessError::Internal)?;
         Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn has_foreign_entity_access(
+        &self,
+        foreign_entity_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<bool, AccessError> {
+        let foreign_entity_uuid = foreign_entity_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid foreign entity ID format"))?;
+
+        let Some(user_id) = user_id else {
+            return Ok(false);
+        };
+
+        let user_team = queries::team_access::get_user_team(&self.pool, user_id).await?;
+        let (source_ids, source_auth_entities) = foreign_entity_source_pairs(user_id, user_team);
+
+        Ok(queries::foreign_entity_access::has_foreign_entity_access(
+            &self.pool,
+            &foreign_entity_uuid,
+            &source_ids,
+            &source_auth_entities,
+        )
+        .await?)
     }
 
     #[tracing::instrument(err, skip(self))]

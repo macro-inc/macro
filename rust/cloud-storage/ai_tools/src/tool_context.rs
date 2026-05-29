@@ -6,9 +6,9 @@ use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
-use channels::domain::service::ChannelMessagesServiceImpl;
+use channels::domain::service::ChannelServiceImpl;
 use channels::inbound::toolset::ChannelToolContext;
-use channels::outbound::pg_channels_repo::PgChannelMessagesRepo;
+use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use chat::domain::service::ChatServiceImpl;
 use chat::inbound::toolset::ChatToolContext;
 use chat::outbound::postgres::PgChatRepo;
@@ -17,11 +17,19 @@ use documents::{domain::ports::TaskPropertiesPort, inbound::toolset::DocumentToo
 use email::{
     domain::service::EmailServiceImpl, inbound::toolset::EmailToolContext, outbound::EmailPgRepo,
 };
+use foreign_entity::{
+    domain::service::ForeignEntityServiceImpl,
+    outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::inbound::ai_tool::NotificationToolContext;
 use properties::inbound::toolset::PropertiesToolContext;
 use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
 use std::sync::Arc;
+use system_properties::{
+    PgSystemPropertiesRepository, StatusOption, SystemPropertiesService as _,
+    SystemPropertiesServiceImpl,
+};
 use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamRepositoryImpl};
 
 pub use ai_toolset::RequestContext;
@@ -62,7 +70,7 @@ pub type ToolCommsService = comms::domain::service::ChannelServiceImpl<
 >;
 
 /// Type alias for the channel messages service implementation used by AI tools.
-pub type ToolChannelMessagesService = ChannelMessagesServiceImpl<PgChannelMessagesRepo>;
+pub type ToolChannelMessagesService = ChannelServiceImpl<PgChannelsRepo>;
 
 /// Type alias for the channel AI tool context.
 pub type ToolChannelToolContext =
@@ -71,7 +79,7 @@ pub type ToolChannelToolContext =
 /// Build the channel AI tool context from a Postgres pool.
 pub fn build_channel_tool_context(pool: sqlx::PgPool) -> ToolChannelToolContext {
     ChannelToolContext::new(
-        ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(pool.clone())),
+        ChannelServiceImpl::new(PgChannelsRepo::new(pool.clone())),
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool),
         ),
@@ -94,7 +102,7 @@ pub fn build_team_tool_context(pool: sqlx::PgPool) -> ToolTeamToolContext {
     )
 }
 
-/// No-op task properties service (not needed for AI tools)
+/// No-op task properties service for tests and contexts that do not create tasks.
 #[derive(Clone)]
 pub struct NoOpTaskProperties;
 
@@ -120,6 +128,66 @@ impl TaskPropertiesPort for NoOpTaskProperties {
         _to_task_id: &str,
     ) -> anyhow::Result<()> {
         Ok(())
+    }
+}
+
+/// Adapter implementing [`TaskPropertiesPort`] with the real properties services.
+#[derive(Clone)]
+pub struct TaskPropertiesAdapter {
+    /// System properties service used to attach/copy task property rows.
+    pub system_properties: Arc<ToolSystemPropertiesService>,
+    /// Properties service used to assign concrete task property values.
+    pub properties: Arc<ToolPropertiesService>,
+}
+
+impl TaskPropertiesPort for TaskPropertiesAdapter {
+    async fn attach_task_properties(&self, entity_ids: Vec<String>) -> anyhow::Result<()> {
+        self.system_properties
+            .attach_task_properties(entity_ids)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn update_task_status(&self, task_id: &str, status: &str) -> anyhow::Result<()> {
+        let status_option = StatusOption::try_from(status).map_err(|e| anyhow::anyhow!(e))?;
+
+        self.system_properties
+            .update_task_status(task_id, status_option)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn set_entity_property(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        property_definition_id: uuid::Uuid,
+        value: Option<models_properties::api::requests::SetPropertyValue>,
+    ) -> anyhow::Result<()> {
+        use properties::PropertiesService as _;
+
+        self.properties
+            .set_entity_property(
+                user_id,
+                entity_id,
+                models_properties::EntityType::Task,
+                property_definition_id,
+                value,
+            )
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn copy_task_properties(
+        &self,
+        from_task_id: &str,
+        to_task_id: &str,
+    ) -> anyhow::Result<()> {
+        self.system_properties
+            .copy_task_properties(from_task_id, to_task_id)
+            .await
+            .map_err(Into::into)
     }
 }
 
@@ -165,6 +233,16 @@ impl CallRtcClient for NoOpCallRtcClient {
         _participant_identity: MacroUserIdStr<'a>,
     ) -> anyhow::Result<String> {
         anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn build_voip_push_payloads<'a>(
+        &self,
+        _request: call::domain::models::VoipPushPayloadRequest<'a>,
+    ) -> Vec<(
+        MacroUserIdStr<'static>,
+        notification::domain::models::apple::VoipPushPayload,
+    )> {
+        Vec::new()
     }
 
     async fn remove_participant<'a>(
@@ -340,7 +418,7 @@ pub type ToolEntityAccessManagementService =
 pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
     documents::outbound::pg_document_repo::PgDocumentRepo,
     documents::outbound::s3_upload_url::S3UploadUrlAdapter,
-    NoOpTaskProperties,
+    TaskPropertiesAdapter,
     NoOpConnectionService,
     ToolEntityAccessManagementService,
 >;
@@ -354,6 +432,9 @@ pub type ToolEntityAccessService = entity_access::domain::service::EntityAccessS
 pub type ToolDocumentToolContext =
     DocumentToolContext<ToolDocumentService, ToolEntityAccessService>;
 
+/// Type alias for the foreign entity service implementation used by AI tools.
+pub type ToolForeignEntityService = ForeignEntityServiceImpl<PgForeignEntityRepo>;
+
 /// Type alias for the soup service implementation
 pub type ToolSoupService = SoupImpl<
     soup::outbound::pg_soup_repo::PgSoupRepo,
@@ -361,6 +442,8 @@ pub type ToolSoupService = SoupImpl<
     email::domain::ports::ReadonlyEmailPreviewAdapter<ToolEmailService>,
     ToolCommsService,
     call::domain::ports::NoOpCallRecordQueryService,
+    crm::domain::service::NoOpCrmService,
+    ToolForeignEntityService,
 >;
 
 /// No-op notification service for properties (tools don't send assignment notifications)
@@ -382,6 +465,9 @@ impl properties::NotificationService for NoOpNotificationService {
     }
 }
 
+/// Type alias for the system properties service implementation used by AI tools.
+pub type ToolSystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
+
 /// Type alias for the properties service implementation used by AI tools
 pub type ToolPropertiesService = properties::PropertiesServiceImpl<
     properties::PropertiesPgRepo,
@@ -391,6 +477,43 @@ pub type ToolPropertiesService = properties::PropertiesServiceImpl<
 
 /// Type alias for the properties tool context
 pub type ToolPropertiesToolContext = PropertiesToolContext<ToolPropertiesService>;
+
+/// Build the properties service shared by the properties tools and task adapter.
+pub fn build_properties_service(
+    pool: sqlx::PgPool,
+    entity_access_service: Arc<ToolEntityAccessService>,
+) -> Arc<ToolPropertiesService> {
+    Arc::new(properties::PropertiesServiceImpl::new(
+        properties::PropertiesPgRepo::new(pool.clone()),
+        Some(properties::PermissionServiceImpl::new(
+            pool,
+            entity_access_service,
+        )),
+        Some(NoOpNotificationService),
+    ))
+}
+
+/// Build the real task properties adapter used by document creation tools.
+pub fn build_task_properties_adapter(
+    pool: sqlx::PgPool,
+    properties: Arc<ToolPropertiesService>,
+) -> TaskPropertiesAdapter {
+    TaskPropertiesAdapter {
+        system_properties: Arc::new(SystemPropertiesServiceImpl::new(
+            PgSystemPropertiesRepository::new(pool),
+        )),
+        properties,
+    }
+}
+
+/// Build a properties tool context from a shared properties service.
+pub fn build_properties_tool_context(
+    properties: Arc<ToolPropertiesService>,
+) -> ToolPropertiesToolContext {
+    PropertiesToolContext {
+        service: properties,
+    }
+}
 
 /// Type alias for the email tool context
 pub type ToolEmailToolContext = EmailToolContext<ToolUserEmailService>;

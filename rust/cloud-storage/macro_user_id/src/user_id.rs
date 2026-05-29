@@ -173,6 +173,46 @@ impl<'a> From<MacroUserIdStr<'a>> for String {
     }
 }
 
+#[cfg(feature = "sqlx")]
+impl<'a> sqlx::Type<sqlx::Postgres> for MacroUserIdStr<'a> {
+    fn type_info() -> sqlx::postgres::PgTypeInfo {
+        <String as sqlx::Type<sqlx::Postgres>>::type_info()
+    }
+
+    fn compatible(ty: &sqlx::postgres::PgTypeInfo) -> bool {
+        <String as sqlx::Type<sqlx::Postgres>>::compatible(ty)
+    }
+}
+
+#[cfg(feature = "sqlx")]
+impl<'a> sqlx::postgres::PgHasArrayType for MacroUserIdStr<'a> {
+    fn array_type_info() -> sqlx::postgres::PgTypeInfo {
+        <String as sqlx::postgres::PgHasArrayType>::array_type_info()
+    }
+}
+
+#[cfg(feature = "sqlx")]
+impl<'q> sqlx::Encode<'q, sqlx::Postgres> for MacroUserIdStr<'q> {
+    fn encode_by_ref(
+        &self,
+        buf: &mut sqlx::postgres::PgArgumentBuffer,
+    ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
+        <&str as sqlx::Encode<sqlx::Postgres>>::encode_by_ref(&self.as_ref(), buf)
+    }
+
+    fn size_hint(&self) -> usize {
+        <&str as sqlx::Encode<sqlx::Postgres>>::size_hint(&self.as_ref())
+    }
+}
+
+#[cfg(feature = "sqlx")]
+impl<'r> sqlx::Decode<'r, sqlx::Postgres> for MacroUserIdStr<'static> {
+    fn decode(value: sqlx::postgres::PgValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
+        let value = <String as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
+        MacroUserIdStr::try_from(value).map_err(Into::into)
+    }
+}
+
 impl<'a> CowLike<'a> for MacroUserIdStr<'a> {
     type Owned<'b> = MacroUserIdStr<'b>;
 

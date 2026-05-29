@@ -38,13 +38,14 @@ x-local-e2e-env: &local-e2e-env
   GMAIL_OPS_QUEUE: email-service-gmail-ops-queue
   GMAIL_OPS_RETRY_QUEUE: email-service-gmail-ops-retry-queue
   LINK_MANAGER_QUEUE: email-service-refresh-queue
-  NOTIFICATION_QUEUE: notification-queue
+  NOTIFICATION_QUEUE: http://localstack:4566/000000000000/notification-queue
   NOTIFICATION_INGRESS_QUEUE: http://localstack:4566/000000000000/notification-ingress-queue
   PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE: push-delivery-queue
   SEARCH_EVENT_QUEUE: search-event-queue
   SFS_DELETE_QUEUE: email-sfs-delete-queue
   SFS_UPLOADER_QUEUE: email-service-sfs-mapper-queue
   STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL: http://localstack:4566/000000000000/static-file-s3-event-notification-queue
+  EMAIL_BACKFILL_QUEUE: http://localstack:4566/000000000000/email-service-backfill-queue
 
 services:
   authentication-service:

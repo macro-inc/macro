@@ -1,0 +1,16 @@
+[package]
+name = "tauri-plugin-photo-library"
+version = "0.1.0"
+edition = "2024"
+links = "tauri-plugin-photo-library"
+
+[build-dependencies]
+tauri-plugin = { version = "2.4", features = ["build"] }
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+staged_upload_constants = { path = "../staged_upload_constants" }
+tauri = { workspace = true }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri = { workspace = true, features = ["wry"] }

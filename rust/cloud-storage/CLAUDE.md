@@ -26,7 +26,6 @@ from the cloud-storage folder.
 
 **Communication Services:**
 
-- `comms_service`: Internal communication handling
 - `email_service`: Email processing and management
 - `notification_service`: User notifications
 
@@ -137,6 +136,10 @@ Heavy use of AWS services:
 - SQS for message queuing
 - DynamoDB for connection tracking
 - OpenSearch for search capabilities
+
+### Environment Variables
+
+When adding new environment variables for a service or Lambda, also update the related `infra/stacks/<STACK>` configuration for that item so the variable is provisioned in the deployed environment.
 
 ## Development Notes
 

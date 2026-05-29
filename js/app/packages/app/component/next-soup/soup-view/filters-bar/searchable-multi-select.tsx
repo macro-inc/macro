@@ -3,7 +3,7 @@ import type { CollectionNode } from '@kobalte/core';
 import { Combobox } from '@kobalte/core/combobox';
 import CheckIcon from '@phosphor/check.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
-import { cn } from '@ui';
+import { cn, Layer } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -44,9 +44,15 @@ const SearchableMultiSelectItem = (itemProps: {
     item={itemProps.item}
     class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left text-xs data-highlighted:bg-ink/5 group cursor-default"
   >
-    <span class="size-4 flex items-center justify-center shrink-0 rounded-xs border border-edge group-data-selected:bg-accent group-data-selected:border-accent">
+    <span
+      class={cn(
+        'size-3.5 flex items-center justify-center shrink-0 rounded-sm border text-surface',
+        'border-transparent group-hover:not-hover:border-edge-muted group-data-highlighted:not-hover:border-edge-muted hover:border-accent',
+        'group-data-selected:bg-accent group-data-selected:border-accent'
+      )}
+    >
       <Combobox.ItemIndicator>
-        <CheckIcon class="size-2.5 text-surface" />
+        <CheckIcon class="size-2.5" />
       </Combobox.ItemIndicator>
     </span>
     <Show when={itemProps.item.rawValue.icon}>
@@ -176,37 +182,39 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       </Combobox.Control>
 
       <Combobox.Portal>
-        <Combobox.Content
-          class={cn(
-            'z-action-menu bg-surface ring-1 ring-edge-muted rounded-sm shadow-md w-65 max-w-[90vw] overflow-hidden',
-            props.contentClass
-          )}
-        >
-          <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted">
-            <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
-            <Combobox.Input
-              class="flex-1 min-w-0 text-xs bg-transparent outline-none caret-accent placeholder:text-ink-faint"
-              placeholder={props.placeholder ?? 'Search...'}
-            />
-          </div>
-          <div class="p-1">
-            <Show
-              when={hasMatches()}
-              fallback={
-                <div class="py-3 px-2 text-center text-xs text-ink-muted">
-                  {searchQuery().trim()
-                    ? `No options match "${searchQuery()}"`
-                    : 'No options available'}
-                </div>
-              }
-            >
-              <VirtualizedListbox
-                options={sortedOptions()}
-                class={props.listboxClass}
+        <Layer depth={2}>
+          <Combobox.Content
+            class={cn(
+              'z-action-menu bg-surface ring-1 ring-edge-muted rounded-xl shadow-md w-65 max-w-[90vw] overflow-hidden',
+              props.contentClass
+            )}
+          >
+            <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted">
+              <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
+              <Combobox.Input
+                class="flex-1 min-w-0 text-xs bg-transparent outline-none caret-accent placeholder:text-ink-faint"
+                placeholder={props.placeholder ?? 'Search...'}
               />
-            </Show>
-          </div>
-        </Combobox.Content>
+            </div>
+            <div class="p-1">
+              <Show
+                when={hasMatches()}
+                fallback={
+                  <div class="py-3 px-2 text-center text-xs text-ink-muted">
+                    {searchQuery().trim()
+                      ? `No options match "${searchQuery()}"`
+                      : 'No options available'}
+                  </div>
+                }
+              >
+                <VirtualizedListbox
+                  options={sortedOptions()}
+                  class={props.listboxClass}
+                />
+              </Show>
+            </div>
+          </Combobox.Content>
+        </Layer>
       </Combobox.Portal>
     </Combobox>
   );

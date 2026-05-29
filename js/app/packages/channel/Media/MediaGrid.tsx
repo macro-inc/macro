@@ -34,6 +34,7 @@ function MessageImageTile(props: {
     >
       <MediaImage.Image
         src={props.item.src}
+        previewSrc={props.item.previewSrc}
         class="max-h-[80vh] w-full select-none rounded-2xl border border-edge object-contain"
         width={dimensions()?.width ?? props.item.width ?? undefined}
         height={dimensions()?.height ?? props.item.height ?? undefined}
@@ -58,6 +59,7 @@ function AttachmentImageTile(props: { item: MediaItem; onOpen?: () => void }) {
     <MediaImage.Root>
       <MediaImage.Image
         src={props.item.src}
+        previewSrc={props.item.previewSrc}
         class={cn(
           'size-25.5 select-none rounded-2xl border border-edge object-cover',
           props.onOpen && 'hover:opacity-80'

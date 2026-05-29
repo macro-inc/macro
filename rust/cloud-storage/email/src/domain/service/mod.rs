@@ -149,6 +149,16 @@ where
             .map_err(|e| EmailErr::RepoErr(e.into()))
     }
 
+    async fn get_inboxes_for_macro_id(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Vec<crate::domain::models::Link>, EmailErr> {
+        self.email_repo
+            .inboxes_for_macro_id(macro_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(e.into()))
+    }
+
     async fn get_thread_with_messages(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,

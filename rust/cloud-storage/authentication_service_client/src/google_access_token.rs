@@ -3,18 +3,21 @@ use crate::error::{AuthServiceClientError, GenericErrorResponse};
 use model::authentication::google_token::GoogleAccessToken;
 
 impl AuthServiceClient {
-    /// Gets the Google access token for the given fusionauth user id
+    /// Gets the Google access token for the given fusionauth user and linked email.
+    /// `email` corresponds to the `display_name` on the FusionAuth IdP link — i.e.
+    /// the linked Google account's email — which is the discriminator when one FA
+    /// user has multiple IdP links (multi-inbox).
     #[tracing::instrument(skip(self))]
     pub async fn get_google_access_token(
         &self,
         fusionauth_user_id: &str,
-        macro_id: &str,
+        email: &str,
     ) -> Result<GoogleAccessToken, AuthServiceClientError> {
         let res = self
             .client
             .get(format!("{}/internal/google_access_token", self.url))
             .query(&[("fusionauth_user_id", fusionauth_user_id)])
-            .query(&[("macro_id", macro_id)])
+            .query(&[("email", email)])
             .send()
             .await
             .map_err(|e| AuthServiceClientError::RequestBuildError {

@@ -33,7 +33,7 @@ export function NarrowInboxLayout(props: LayoutProps) {
     isChannelEntity(props.entity) &&
     props.entity.channelType === 'direct_message';
 
-  const mostRecentMessageSenderName =
+  const mostRecentMessageSenderName = () =>
     isChannelEntity(props.entity) && props.entity.latestMessage?.senderId
       ? useDisplayNameParts(tryMacroId(props.entity.latestMessage?.senderId))
       : undefined;
@@ -140,7 +140,7 @@ export function NarrowInboxLayout(props: LayoutProps) {
           {(msg) => (
             <ChannelLatestMessageNarrowBody
               message={msg()}
-              senderFirstName={mostRecentMessageSenderName?.firstName()}
+              senderFirstName={mostRecentMessageSenderName()?.firstName()}
             />
           )}
         </Match>

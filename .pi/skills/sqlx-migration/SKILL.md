@@ -18,7 +18,7 @@ Use the SQLx CLI to create migration files instead of manually creating timestam
 4. Run the SQLx CLI from `rust/cloud-storage/macro_db_client` folder:
 
    ```bash
-   sqlx migrate add name_of_migration
+   cargo sqlx migrate add name_of_migration
    ```
 
    Replace `name_of_migration` with the actual snake_case migration name.

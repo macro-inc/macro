@@ -19,8 +19,8 @@ vi.mock('../../client', () => ({
   },
 }));
 
-vi.mock('@service-comms/client', () => ({
-  commsServiceClient: {
+vi.mock('@service-storage/client', () => ({
+  storageServiceClient: {
     getChannelMessages: mocks.getChannelMessages,
   },
 }));

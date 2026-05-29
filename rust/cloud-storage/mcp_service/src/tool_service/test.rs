@@ -1,13 +1,17 @@
 use super::*;
 use ai_toolset::AsyncToolCollection;
 use rmcp::{handler::server::ServerHandler, model::ErrorCode};
+use sqlx::postgres::PgPoolOptions;
 
 fn empty_service() -> AuthenticatedToolService<()> {
-    AuthenticatedToolService::new(Arc::new(AsyncToolCollection::new()), ())
+    let db = PgPoolOptions::new()
+        .connect_lazy("postgres://localhost/unused")
+        .expect("lazy pool creation should not fail");
+    AuthenticatedToolService::new(Arc::new(AsyncToolCollection::new()), (), db)
 }
 
-#[test]
-fn server_info_advertises_macro_tools() {
+#[tokio::test]
+async fn server_info_advertises_macro_tools() {
     let info = empty_service().get_info();
 
     assert_eq!(info.server_info.name, "macro-tools");
@@ -22,8 +26,8 @@ fn server_info_advertises_macro_tools() {
     assert!(info.capabilities.tools.is_some());
 }
 
-#[test]
-fn server_instructions_describe_available_workflows() {
+#[tokio::test]
+async fn server_instructions_describe_available_workflows() {
     let instructions = empty_service()
         .get_info()
         .instructions
@@ -46,8 +50,8 @@ fn server_instructions_describe_available_workflows() {
     }
 }
 
-#[test]
-fn empty_toolset_lists_no_tools() {
+#[tokio::test]
+async fn empty_toolset_lists_no_tools() {
     assert!(empty_service().tool_definitions().is_empty());
 }
 

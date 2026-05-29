@@ -63,16 +63,21 @@ use crate::{
     },
 };
 use channels::inbound::axum_router::{
-    ApiChannelAttachment, ApiChannelAttachmentsPage, ApiChannelMessage, ApiChannelMessageKind,
+    ApiActivity, ApiAttachmentChannelReference, ApiAttachmentEntityReference,
+    ApiAttachmentGenericReference, ApiChannelAttachment, ApiChannelAttachmentsPage,
+    ApiChannelContextMessage, ApiChannelDetail, ApiChannelMessage, ApiChannelMessageKind,
     ApiChannelMessagesPage, ApiChannelParticipant, ApiCountedReaction, ApiMessageAttachment,
     ApiParticipantRole, ApiResolvedChannelMessage, ApiThreadInfo, ApiThreadReply,
-    ChannelMessageFilters,
+    ChannelMessageFilters, CreateEntityMentionRequest, CreateEntityMentionResponse,
+    DeleteEntityMentionResponse, GetAttachmentReferencesResponse, GetMessageWithContextResponse,
+    PostActivityRequest,
 };
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
     edit_document::EditDocumentResponse, get_branch_name::BranchNameResponse,
     get_short_id::ShortIdResponse,
 };
+use foreign_entity::domain::models::ForeignEntity;
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
     DocumentResponseMetadata,
@@ -114,6 +119,7 @@ use models_soup::email_thread::{
     SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview, SoupLabel,
     SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
 };
+use models_soup::foreign_entity::SoupForeignEntity;
 use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
 use soup::inbound::axum_router::{PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage};
@@ -193,12 +199,34 @@ use utoipa::OpenApi;
         soup::inbound::axum_router::post_soup_ast_handler,
 
         // channels
+        channels::inbound::axum_router::create_channel_handler,
+        channels::inbound::axum_router::get_or_create_dm_handler,
+        channels::inbound::axum_router::get_or_create_private_handler,
+        channels::inbound::axum_router::patch_channel_handler,
+        channels::inbound::axum_router::delete_channel_handler,
+        channels::inbound::axum_router::post_message_handler,
+        channels::inbound::axum_router::patch_message_handler,
+        channels::inbound::axum_router::delete_message_handler,
+        channels::inbound::axum_router::post_reaction_handler,
+        channels::inbound::axum_router::post_typing_handler,
+        channels::inbound::axum_router::add_participants_handler,
+        channels::inbound::axum_router::remove_participants_handler,
+        channels::inbound::axum_router::join_channel_handler,
+        channels::inbound::axum_router::leave_channel_handler,
         channels::inbound::axum_router::get_channel_messages_handler,
         channels::inbound::axum_router::post_channel_messages_handler,
         channels::inbound::axum_router::get_thread_replies_handler,
+        channels::inbound::axum_router::get_message_with_context_handler,
         channels::inbound::axum_router::resolve_channel_message_handler,
         channels::inbound::axum_router::get_channel_attachments_handler,
+        channels::inbound::axum_router::get_channel_handler,
         channels::inbound::axum_router::get_channel_participants_handler,
+        channels::inbound::axum_router::get_batch_channel_preview_handler,
+        channels::inbound::axum_router::create_mention_handler,
+        channels::inbound::axum_router::delete_mention_handler,
+        channels::inbound::axum_router::get_attachment_references_handler,
+        channels::inbound::axum_router::get_activity_handler,
+        channels::inbound::axum_router::post_activity_handler,
 
         // calls
         call::inbound::axum_router::get_or_create_call_handler,
@@ -237,6 +265,9 @@ use utoipa::OpenApi;
 
         entity::get_entity_permission::handler,
 
+        // foreign_entity
+        foreign_entity::inbound::axum_router::get_foreign_entity_handler,
+
         // threads
         threads::edit_thread::edit_thread_handler,
 
@@ -258,6 +289,11 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::set_email_sync::handler,
         crm::inbound::axum_router::set_company_hidden::handler,
         crm::inbound::axum_router::set_contact_hidden::handler,
+        crm::inbound::axum_router::list_company_contacts::handler,
+        crm::inbound::axum_router::comments::list_handler,
+        crm::inbound::axum_router::comments::create_handler,
+        crm::inbound::axum_router::comments::edit_handler,
+        crm::inbound::axum_router::comments::delete_handler,
     ),
     components(
         schemas(
@@ -336,6 +372,8 @@ use utoipa::OpenApi;
             SoupDocument,
             SoupChat,
             SoupProject,
+            SoupForeignEntity,
+            ForeignEntity,
             SoupApiSort,
             SoupPage,
             SoupEnrichedEmailThreadPreview,
@@ -351,6 +389,8 @@ use utoipa::OpenApi;
             // Channels
             ApiChannelMessagesPage,
             ApiChannelMessage,
+            GetMessageWithContextResponse,
+            ApiChannelContextMessage,
             ApiThreadInfo,
             ApiThreadReply,
             ApiChannelMessageKind,
@@ -360,8 +400,44 @@ use utoipa::OpenApi;
             ApiChannelAttachmentsPage,
             ApiChannelAttachment,
             ApiChannelParticipant,
+            ApiChannelDetail,
             ApiParticipantRole,
+            GetAttachmentReferencesResponse,
+            ApiAttachmentEntityReference,
+            ApiAttachmentChannelReference,
+            ApiAttachmentGenericReference,
             ChannelMessageFilters,
+            channels::domain::models::ChannelType,
+            channels::domain::models::GetOrCreateAction,
+            channels::domain::models::TypingAction,
+            channels::domain::models::ReactionAction,
+            channels::domain::models::NewChannelAttachment,
+            channels::domain::models::SimpleMention,
+            channels::domain::models::CreateChannelRequest,
+            channels::domain::models::CreateChannelResponse,
+            channels::domain::models::GetOrCreateDmRequest,
+            channels::domain::models::GetOrCreatePrivateRequest,
+            channels::domain::models::GetOrCreateChannelResponse,
+            channels::domain::models::PatchChannelRequest,
+            channels::domain::models::PostMessageRequest,
+            channels::domain::models::PostMessageResponse,
+            channels::domain::models::PatchMessageRequest,
+            channels::domain::models::DeleteMessageQuery,
+            channels::domain::models::PostReactionRequest,
+            channels::domain::models::PostTypingRequest,
+            channels::domain::models::AddParticipantsRequest,
+            channels::domain::models::RemoveParticipantsRequest,
+            channels::domain::models::GetBatchChannelPreviewRequest,
+            channels::domain::models::GetBatchChannelPreviewResponse,
+            channels::domain::models::ChannelPreview,
+            channels::domain::models::ChannelPreviewData,
+            channels::domain::models::WithChannelId,
+            CreateEntityMentionRequest,
+            CreateEntityMentionResponse,
+            DeleteEntityMentionResponse,
+            channels::domain::models::ActivityType,
+            ApiActivity,
+            PostActivityRequest,
 
             // Calls
             call::domain::models::CallTokenResponse,
@@ -436,6 +512,8 @@ use utoipa::OpenApi;
             BranchNameResponse,
             ShortIdResponse,
             documents_hex::domain::models::GithubPullRequest,
+            documents_hex::domain::models::GithubPullRequestCheckRun,
+            documents_hex::domain::models::GithubPullRequestComment,
             documents_hex::domain::models::GithubPullRequestsResponse,
 
             // Sync service
@@ -446,6 +524,14 @@ use utoipa::OpenApi;
             crm::inbound::axum_router::set_email_sync::SetEmailSyncRequest,
             crm::inbound::axum_router::set_company_hidden::SetCompanyHiddenRequest,
             crm::inbound::axum_router::set_contact_hidden::SetContactHiddenRequest,
+            crm::inbound::axum_router::list_company_contacts::CrmContactResponse,
+            crm::inbound::axum_router::comments::CreateCrmCommentRequest,
+            crm::inbound::axum_router::comments::EditCrmCommentRequest,
+            crm::domain::comment::CrmCommentEntityType,
+            crm::domain::comment::CrmThread,
+            crm::domain::comment::CrmComment,
+            crm::domain::comment::CrmCommentThread,
+            crm::domain::comment::DeleteCrmCommentResult,
         ),
     ),
     tags(

@@ -10,7 +10,7 @@ import { type Accessor, createSignal, onCleanup, type Setter } from 'solid-js';
 import { createEntityDropZone } from '../Channel/create-entity-drop-zone';
 import type { InputHandle, InputSnapshot } from '../Input';
 import { ChannelInput, createInputAttachmentTracker } from '../Input';
-import { buildPostMessageRequest } from '../Input/message-payload';
+import { buildPostMessageSendPayload } from '../Input/message-payload';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { ThreadReplyInputConnector } from './ThreadReplyInputConnector';
 import { replyInputOffsetX } from './utils/thread-rail-geometry';
@@ -22,10 +22,14 @@ type ThreadReplyInputProps = {
   setReplyInputState: Setter<InputSnapshot | undefined>;
   setIsReplying: Setter<boolean>;
   setReplyInputEl?: Setter<HTMLElement | undefined>;
+  setReplyInputHandle?: Setter<InputHandle | undefined>;
 };
 
 export function ThreadReplyInput(props: ThreadReplyInputProps) {
-  onCleanup(() => props.setReplyInputEl?.(undefined));
+  onCleanup(() => {
+    props.setReplyInputEl?.(undefined);
+    props.setReplyInputHandle?.(undefined);
+  });
 
   const userId = useUserId();
   const sendMessageMutation = useSendMessageMutation();
@@ -46,7 +50,16 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
     tracker,
   });
 
-  const [replyInputHandle, setReplyInputHandle] = createSignal<InputHandle>();
+  const [replyInputHandle, setLocalReplyInputHandle] =
+    createSignal<InputHandle>();
+  const setReplyInputHandle = (handle: InputHandle) => {
+    setLocalReplyInputHandle(handle);
+    props.setReplyInputHandle?.(handle);
+
+    const snapshot = props.replyInputState();
+    if (!snapshot) return;
+    requestAnimationFrame(() => handle.restoreSnapshot(snapshot));
+  };
 
   return (
     <div
@@ -101,17 +114,18 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
               onSend={(snapshot) => {
                 const senderId = userId();
                 if (!senderId) return;
+                const payload = buildPostMessageSendPayload({
+                  snapshot,
+                  threadId: props.messageId,
+                  participantIds: participants.ids(),
+                });
 
                 sendMessageMutation.mutate(
                   {
                     channelID: props.channelId,
                     senderId,
                     optimisticId: crypto.randomUUID(),
-                    message: buildPostMessageRequest({
-                      snapshot,
-                      threadId: props.messageId,
-                      participantIds: participants.ids(),
-                    }),
+                    ...payload,
                   },
                   {
                     onSuccess: () => {

@@ -174,7 +174,7 @@ pub(super) fn can_short_circuit(ast: &Expr<EmailLiteral>, resolved: &ResolvedFil
 #[tracing::instrument(skip(pool, ast), err)]
 pub(super) async fn resolve_filters(
     pool: &PgPool,
-    link_id: Uuid,
+    link_ids: &[Uuid],
     team_id: Option<Uuid>,
     ast: &Expr<EmailLiteral>,
 ) -> Result<ResolvedFilters, sqlx::Error> {
@@ -184,9 +184,9 @@ pub(super) async fn resolve_filters(
                 r#"
             SELECT id
             FROM email_labels
-            WHERE link_id = $1 AND name = 'TRASH'
+            WHERE link_id = ANY($1) AND name = 'TRASH'
             "#,
-                link_id,
+                link_ids,
             )
             .fetch_all(pool)
             .await?
@@ -218,9 +218,9 @@ pub(super) async fn resolve_filters(
                 r#"
                 SELECT id, LOWER(email_address) AS "email_lower!"
                 FROM email_contacts
-                WHERE link_id = $1 AND LOWER(email_address) = ANY($2)
+                WHERE link_id = ANY($1) AND LOWER(email_address) = ANY($2)
                 "#,
-                link_id,
+                link_ids,
                 &emails,
             )
             .fetch_all(pool)

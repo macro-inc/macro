@@ -2,7 +2,10 @@
  * @vitest-environment jsdom
  */
 
-import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
+import type {
+  ApiChannelMessage,
+  ApiThreadReply,
+} from '@service-storage/client';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,8 +21,8 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: vi.fn(), success: vi.fn() },
 }));
 
-vi.mock('@service-comms/client', () => ({
-  commsServiceClient: {},
+vi.mock('@service-storage/client', () => ({
+  storageServiceClient: {},
 }));
 
 vi.mock('@macro-entity', () => ({
@@ -40,6 +43,10 @@ import {
   rollbackUpdateChannelMessage,
 } from '../message';
 import {
+  normalizeChannelMessageSender,
+  normalizeThreadReplySender,
+} from '../message-sender';
+import {
   optimisticAddReaction,
   optimisticRemoveReaction,
   rollbackAddReaction,
@@ -52,7 +59,7 @@ function createPaginatedMessage(
   createdAt: string,
   overrides: Partial<ApiChannelMessage> = {}
 ): ApiChannelMessage {
-  return {
+  return normalizeChannelMessageSender({
     id,
     channel_id: 'channel-1',
     sender_id: 'user-1',
@@ -69,7 +76,7 @@ function createPaginatedMessage(
       latest_reply_at: null,
     },
     ...overrides,
-  };
+  });
 }
 
 function createThreadReply(
@@ -77,7 +84,7 @@ function createThreadReply(
   createdAt: string,
   overrides: Partial<ApiThreadReply> = {}
 ): ApiThreadReply {
-  return {
+  return normalizeThreadReplySender({
     id,
     sender_id: 'user-1',
     content: `Reply ${id}`,
@@ -87,7 +94,7 @@ function createThreadReply(
     attachments: [],
     reactions: [],
     ...overrides,
-  };
+  });
 }
 
 function createChannelMessagesData(
@@ -178,6 +185,54 @@ describe('channel optimistic cache regressions', () => {
     expect(getChannelMessagesFromCache('channel-1')?.pages[0].items).toEqual([
       expect.objectContaining({ id: 'existing-msg' }),
     ]);
+  });
+
+  it('keeps local media metadata on optimistic top-level inserts', () => {
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [createPaginatedMessage('existing-msg', '2024-01-03T00:00:00.000Z')],
+      ])
+    );
+
+    optimisticInsertChannelMessage({
+      channelId: 'channel-1',
+      optimisticId: 'optimistic-top-level',
+      senderId: 'user-2',
+      content: 'Top level optimistic message',
+      mentions: [],
+      attachments: [
+        {
+          entity_id: 'static-file-1',
+          entity_type: 'static/image',
+          width: 300,
+          height: 200,
+        },
+      ],
+      optimisticAttachments: [
+        {
+          attachment: {
+            entity_id: 'static-file-1',
+            entity_type: 'static/image',
+            width: 300,
+            height: 200,
+          },
+          previewSrc: 'blob:local-preview',
+        },
+      ],
+    });
+
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].attachments[0]
+    ).toEqual(
+      expect.objectContaining({
+        entity_id: 'static-file-1',
+        entity_type: 'static/image',
+        width: 300,
+        height: 200,
+        previewSrc: 'blob:local-preview',
+      })
+    );
   });
 
   it('rolls back optimistic thread replies when only the new caches are warm', () => {

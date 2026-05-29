@@ -347,3 +347,50 @@ fn full_conversation_with_tool_round_trip() {
     };
     assert_eq!(text.text, "Found 2 cats.");
 }
+
+mod merge_consecutive_parts_tests {
+    use super::*;
+
+    fn part_text(s: &str) -> AssistantMessagePart {
+        AssistantMessagePart::Text { text: s.into() }
+    }
+    fn part_thinking(s: &str) -> AssistantMessagePart {
+        AssistantMessagePart::Thinking { thinking: s.into() }
+    }
+    fn part_call(id: &str) -> AssistantMessagePart {
+        AssistantMessagePart::ToolCall {
+            name: "t".into(),
+            json: json!({}),
+            id: id.into(),
+        }
+    }
+
+    #[test]
+    fn merges_consecutive_text() {
+        let parts = vec![part_text("a"), part_text("b"), part_text("c")];
+        assert_eq!(merge_consecutive_parts(parts), vec![part_text("abc")]);
+    }
+
+    #[test]
+    fn merges_consecutive_thinking() {
+        let parts = vec![part_thinking("a"), part_thinking("b")];
+        assert_eq!(merge_consecutive_parts(parts), vec![part_thinking("ab")]);
+    }
+
+    #[test]
+    fn does_not_merge_across_different_types() {
+        let parts = vec![part_text("a"), part_call("1"), part_text("b")];
+        assert_eq!(merge_consecutive_parts(parts.clone()), parts);
+    }
+
+    #[test]
+    fn thinking_then_text_stays_separate() {
+        let parts = vec![part_thinking("t"), part_text("a")];
+        assert_eq!(merge_consecutive_parts(parts.clone()), parts);
+    }
+
+    #[test]
+    fn empty_input() {
+        assert!(merge_consecutive_parts(vec![]).is_empty());
+    }
+}

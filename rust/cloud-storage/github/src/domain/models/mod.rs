@@ -10,12 +10,12 @@ mod sync;
 pub use link::{GithubAccessToken, GithubExchangeTokenResponse, GithubLink, GithubUserInfo};
 pub use pull_request::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
-    EnrichedGithubPullRequest, GithubPullRequestDetails, GithubPullRequestRef,
-    GithubPullRequestStatus,
+    EnrichedGithubPullRequest, GithubPullRequestCheckRun, GithubPullRequestComment,
+    GithubPullRequestDetails, GithubPullRequestRef, GithubPullRequestStatus,
 };
 pub use sync::{
-    GithubInstallationAccessToken, GithubKey, GithubWebhookEventType, MacroTaskId,
-    TeamTaskReference, ValidatedGithubWebhookEvent,
+    GithubAppInstallationSource, GithubInstallationAccessToken, GithubKey, GithubWebhookEventType,
+    MacroTaskId, TeamTaskReference, ValidatedGithubWebhookEvent,
 };
 /// Errors that can occur during github operations.
 #[derive(Debug, thiserror::Error)]

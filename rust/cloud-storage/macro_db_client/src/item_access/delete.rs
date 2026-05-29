@@ -33,7 +33,12 @@ pub async fn delete_user_entity_access_bulk(
     }
 
     let result = match entity_type {
-        EntityType::User | EntityType::Team | EntityType::Channel | EntityType::StaticFile => {
+        EntityType::User
+        | EntityType::Team
+        | EntityType::Channel
+        | EntityType::StaticFile
+        | EntityType::CrmCompany
+        | EntityType::ForeignEntity => {
             anyhow::bail!("invalid entity type")
         }
         EntityType::Project => {

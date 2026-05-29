@@ -1,4 +1,4 @@
-import { commsServiceClient } from '@service-comms/client';
+import { storageServiceClient } from '@service-storage/client';
 import { useMutation } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
 
@@ -221,7 +221,7 @@ export function usePostTypingUpdateMutation() {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: PostTypingUpdateVars) => {
-      await commsServiceClient.postTypingUpdate({
+      await storageServiceClient.postTypingUpdate({
         channel_id: vars.channelId,
         action: vars.action,
         thread_id: vars.threadId,

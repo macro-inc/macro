@@ -5,6 +5,9 @@ members = [
   "logger",
   "macro_bundle_updater_plugin",
   "navigation_plugin",
+  "pasteboard_plugin",
+  "photo_library_plugin",
+  "staged_upload_constants",
   "src-tauri",
 ]
 package.edition = "2024"

@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO comms_channels (id, name, owner_id, org_id, team_id, channel_type)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Text",
+        "Int8",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "comms_channel_type",
+            "kind": {
+              "Enum": [
+                "public",
+                "organization",
+                "private",
+                "direct_message",
+                "team"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "10843b4044bca618301e755b0b6b5aeca5fd398adc48ed9f755490fa25e7f3f9"
+}

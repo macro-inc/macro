@@ -34,6 +34,7 @@ async fn main() -> anyhow::Result<()> {
             Ok(AuthenticatedToolService::new(
                 tools.toolset,
                 context.tool_context.clone(),
+                context.db.clone(),
             ))
         },
         Arc::new(LocalSessionManager::default()),

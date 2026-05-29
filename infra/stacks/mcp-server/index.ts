@@ -66,6 +66,16 @@ const MACRO_CACHE = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
+const anthropicApiKeySecretName = config.require('anthropic_api_key');
+const ANTHROPIC_API_KEY = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: anthropicApiKeySecretName,
+  })
+  .apply((secret) => secret.secretString);
+const anthropicApiKeyArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: anthropicApiKeySecretName })
+  .apply((secret) => secret.arn);
+
 const MACRO_API_TOKENS = getMacroApiToken();
 
 // ── AI tools infra ───────────────────────────────────────────────────────────
@@ -104,6 +114,7 @@ const mcpServer = new McpServer(`mcp-server-${stack}`, {
     fusionauthApiKeyArn,
     googleClientSecretArn,
     MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
+    anthropicApiKeyArn,
     ...aiTools.secretArns,
   ],
   queueArns: [...aiTools.queueArns],
@@ -180,6 +191,10 @@ const mcpServer = new McpServer(`mcp-server-${stack}`, {
     {
       name: 'MACRO_API_TOKEN_PUBLIC_KEY',
       value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
+    },
+    {
+      name: 'ANTHROPIC_API_KEY',
+      value: pulumi.interpolate`${ANTHROPIC_API_KEY}`,
     },
     // Datadog
     {
