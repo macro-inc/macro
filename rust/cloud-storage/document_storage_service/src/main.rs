@@ -49,6 +49,7 @@ use connection::{
     outbound::connection_gateway_client::ConnectionGatewayImpl,
 };
 use connection_gateway_client::client::ConnectionGatewayClient;
+use document_cognition_service_client::DocumentCognitionServiceClient;
 use documents_hex::domain::models::CloudFrontConfig;
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
@@ -71,6 +72,7 @@ use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use macro_service_urls::EnvExtMacroServiceUrls;
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
@@ -569,21 +571,48 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
     let channels_repo = PgChannelsRepo::new(db.clone());
-    let bots_service = bots::domain::service::BotServiceImpl::new(
-        bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone()),
-    );
+    let bots_repo = bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone());
+    let bots_service = bots::domain::service::BotServiceImpl::new(bots_repo.clone());
 
-    let channels_service = ChannelServiceImpl::with_dependencies(
-        channels_repo,
-        SpawnedChannelEventDispatcher::new(ChannelSideEffectService::new(
-            PgChannelSideEffectContext::new(db.clone()),
-            ConnectionGatewayChannelRealtimePublisher::new(conn_gateway_client.clone()),
-            NotificationChannelSender::new(notification_ingress_service.clone()),
-            SqsChannelSearchIndexer::new(sqs_client.clone()),
-            ContactsChannelDispatcher::new(contacts_ingress.clone()),
-        )),
-        PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
+    let channel_side_effects = ChannelSideEffectService::new(
+        PgChannelSideEffectContext::new(db.clone()),
+        ConnectionGatewayChannelRealtimePublisher::new(conn_gateway_client.clone()),
+        NotificationChannelSender::new(notification_ingress_service.clone()),
+        SqsChannelSearchIndexer::new(sqs_client.clone()),
+        ContactsChannelDispatcher::new(contacts_ingress.clone()),
     );
+    // Late-bound slot for the bot dispatcher; the dispatcher posts back through
+    // the channel service, so it is wired after the service is built.
+    let bot_dispatcher_cell = channel_side_effects.bot_dispatcher_cell();
+
+    let channels_service = Arc::new(ChannelServiceImpl::with_dependencies(
+        channels_repo,
+        SpawnedChannelEventDispatcher::new(channel_side_effects),
+        PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
+    ));
+
+    // Wire Macro AI (and other channel bots) to react to mentions. The dispatcher
+    // resolves mentioned bots and runs their handlers, posting replies through
+    // the channel service we just built.
+    let cognition_service_url = config::CognitionServiceUrl::new()
+        .ok()
+        .map(|v| v.as_ref().to_string())
+        .unwrap_or_else(|| config.environment.cognition_service().to_string());
+    let dcs_client = DocumentCognitionServiceClient::new(
+        cognition_service_url,
+        internal_api_secret.as_ref().to_string(),
+    );
+    let bot_trigger_router = channel_bots::BotTriggerRouter::new(
+        Arc::new(bots_repo),
+        channels_service.clone(),
+        Arc::new(channel_bots::DcsAgentResponder::new(dcs_client)),
+    );
+    if bot_dispatcher_cell
+        .set(Arc::new(bot_trigger_router))
+        .is_err()
+    {
+        tracing::error!("channel bot dispatcher was already set");
+    }
 
     let api_context = ApiContext {
         contacts_ingress: contacts_ingress.clone(),
@@ -633,7 +662,7 @@ async fn main() -> anyhow::Result<()> {
                 documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
             ),
         },
-        channels_state: ChannelsRouterState::new(
+        channels_state: ChannelsRouterState::from_arc(
             channels_service,
             (*entity_access_service).clone(),
         ),

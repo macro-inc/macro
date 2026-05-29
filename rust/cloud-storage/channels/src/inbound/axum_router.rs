@@ -75,6 +75,17 @@ impl<S: ChannelService, Svc: EntityAccessService> ChannelsRouterState<S, Svc> {
             access_service: Arc::new(access_service),
         }
     }
+
+    /// Create a router state from an already-shared channel service.
+    ///
+    /// Used when the channel service must also be shared with other components
+    /// (such as the bot trigger dispatcher) that post messages through it.
+    pub fn from_arc(service: Arc<S>, access_service: Svc) -> Self {
+        Self {
+            service,
+            access_service: Arc::new(access_service),
+        }
+    }
 }
 
 impl<S, Svc> FromRef<ChannelsRouterState<S, Svc>> for Arc<Svc> {

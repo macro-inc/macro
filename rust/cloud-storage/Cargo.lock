@@ -1991,6 +1991,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "channel_bots"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bot_id",
+ "bots",
+ "channels",
+ "document_cognition_service_client",
+ "macro_user_id",
+ "reqwest 0.13.3",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "channels"
 version = "0.1.0"
 dependencies = [
@@ -3441,6 +3460,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "document_cognition_service_client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "reqwest 0.13.3",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
@@ -3459,6 +3490,7 @@ dependencies = [
  "bzip2",
  "cal",
  "call",
+ "channel_bots",
  "channels",
  "chrono",
  "cloudfront_sign",
@@ -3471,6 +3503,7 @@ dependencies = [
  "cool_asserts",
  "cowlike",
  "crm",
+ "document_cognition_service_client",
  "document_sub_type",
  "documents",
  "dynamodb_client",
@@ -3497,6 +3530,7 @@ dependencies = [
  "macro_env_var",
  "macro_middleware",
  "macro_project_utils",
+ "macro_service_urls",
  "macro_sha_count_client",
  "macro_user_id",
  "macro_uuid",

@@ -3,18 +3,49 @@
 use crate::domain::{
     events::ChannelEvent,
     models::{
-        ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction, MutatedAttachment,
-        MutatedMessage, Sender, SimpleMention, TypingAction,
+        BotId, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
+        MutatedAttachment, MutatedMessage, Sender, SimpleMention, TypingAction,
     },
     ports::{
-        ChannelContactsDispatcher, ChannelEventDispatcher, ChannelEventHandler,
-        ChannelNotificationSender, ChannelRealtimePublisher, ChannelSearchIndexer,
-        ChannelSideEffectContext,
+        ChannelBotDispatcher, ChannelContactsDispatcher, ChannelEventDispatcher,
+        ChannelEventHandler, ChannelNotificationSender, ChannelRealtimePublisher,
+        ChannelSearchIndexer, ChannelSideEffectContext,
     },
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::collections::HashSet;
+use std::sync::{Arc, OnceLock};
 use uuid::Uuid;
+
+/// Entity type used by message mentions that target a bot.
+pub const BOT_MENTION_ENTITY_TYPE: &str = "bot";
+
+/// A trigger derived from a channel message that mentions one or more bots.
+#[derive(Debug, Clone)]
+pub struct ChannelBotTrigger {
+    /// Channel containing the triggering message.
+    pub channel_id: Uuid,
+    /// The user-authored message that mentioned the bot(s).
+    pub message: MutatedMessage,
+    /// Bots mentioned in the message.
+    pub bot_ids: Vec<BotId>,
+}
+
+/// Shared, late-bound slot for the channel bot dispatcher.
+///
+/// The dispatcher posts messages back through the channel service, which in turn
+/// owns this side-effect service, so the dependency is wired after construction
+/// to break the cycle.
+pub type SharedBotDispatcher = Arc<OnceLock<Arc<dyn ChannelBotDispatcher>>>;
+
+/// Collect the bot ids mentioned in a message.
+fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
+    mentions
+        .iter()
+        .filter(|mention| mention.entity_type == BOT_MENTION_ENTITY_TYPE)
+        .filter_map(|mention| BotId::parse_uuid_str(&mention.entity_id).ok())
+        .collect()
+}
 
 /// Realtime update requested by the channel domain.
 #[derive(Debug, Clone)]
@@ -202,6 +233,7 @@ pub struct ChannelSideEffectService<C, R, N, S, K> {
     notifications: N,
     search: S,
     contacts: K,
+    bot_dispatcher: SharedBotDispatcher,
 }
 
 struct MessagePostedSideEffects {
@@ -234,6 +266,40 @@ impl<C, R, N, S, K> ChannelSideEffectService<C, R, N, S, K> {
             notifications,
             search,
             contacts,
+            bot_dispatcher: Arc::new(OnceLock::new()),
+        }
+    }
+
+    /// Return a clonable handle to the late-bound bot dispatcher slot.
+    ///
+    /// Callers wire the dispatcher after the channel service is constructed via
+    /// [`OnceLock::set`] on the returned handle.
+    pub fn bot_dispatcher_cell(&self) -> SharedBotDispatcher {
+        self.bot_dispatcher.clone()
+    }
+
+    /// Dispatch bot triggers for any bots mentioned in a user-authored message.
+    fn dispatch_bot_triggers(
+        &self,
+        channel_id: Uuid,
+        message: &MutatedMessage,
+        mentions: &[SimpleMention],
+    ) {
+        // Only user-authored messages can trigger bots; this prevents bots
+        // (including Macro AI) from triggering each other in a loop.
+        if message.sender_id.as_user().is_none() {
+            return;
+        }
+        let bot_ids = bot_mention_ids(mentions);
+        if bot_ids.is_empty() {
+            return;
+        }
+        if let Some(dispatcher) = self.bot_dispatcher.get() {
+            dispatcher.dispatch(ChannelBotTrigger {
+                channel_id,
+                message: message.clone(),
+                bot_ids,
+            });
         }
     }
 }
@@ -458,6 +524,7 @@ where
         }
 
         self.search.index_message(channel_id, message.id).await;
+        self.dispatch_bot_triggers(channel_id, &message, &mentions);
         if message.sender_id.is_bot() {
             return;
         }

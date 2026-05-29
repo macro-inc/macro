@@ -1,0 +1,20 @@
+[package]
+edition = "2024"
+name = "channel_bots"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+bot_id = { path = "../bot_id" }
+bots = { path = "../bots" }
+channels = { path = "../channels", features = ["inbound", "outbound"] }
+document_cognition_service_client = { path = "../document_cognition_service_client" }
+macro_user_id = { path = "../macro_user_id" }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+uuid = { workspace = true }

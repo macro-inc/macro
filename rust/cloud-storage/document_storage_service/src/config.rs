@@ -67,6 +67,12 @@ env_var! {
 }
 
 maybe_env_var! {
+    /// Optional override for the document cognition service base URL. When unset,
+    /// the URL is derived from the environment via `macro_service_urls`.
+    pub struct CognitionServiceUrl;
+}
+
+maybe_env_var! {
     /// Optional name of the LiveKit agent to dispatch for call transcription.
     pub struct LivekitTranscriptionAgentName;
 }

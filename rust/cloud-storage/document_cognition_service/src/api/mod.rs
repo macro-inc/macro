@@ -24,6 +24,7 @@ pub mod utils;
 
 mod attachments;
 mod chats;
+mod internal_agent;
 pub mod structured_completion;
 
 #[tracing::instrument(err, skip(state))]
@@ -114,8 +115,18 @@ fn api_router(api_context: ApiContext) -> Router {
                 )),
         );
 
+    // Service-to-service route authenticated with the internal API key (no user
+    // JWT). Used by the document storage service to run Macro AI in channels.
+    let internal_service_router = Router::new()
+        .route(
+            "/internal/agent/channel-respond",
+            post(internal_agent::channel_respond),
+        )
+        .with_state(api_context.clone());
+
     Router::new()
         .nest("/{version}", internal_router.clone())
         .merge(internal_router)
+        .merge(internal_service_router)
         .merge(mcp_client::inbound::mcp_oauth_callback_router(mcp_state))
 }

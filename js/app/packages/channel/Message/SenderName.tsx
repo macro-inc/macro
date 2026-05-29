@@ -1,12 +1,20 @@
 import { tryMacroId, useDisplayName } from '@core/user';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
+import { MACRO_AI_BOT_ID, MACRO_AI_NAME } from '../macroAi';
 import { useMessage } from './context';
 
 type SenderNameProps = {
   class?: string;
   hidden?: boolean;
 };
+
+/** Resolve a bot sender's display name, or `undefined` for user senders. */
+function botName(senderId: string): string | undefined {
+  if (!senderId.startsWith('bot|')) return undefined;
+  const id = senderId.slice('bot|'.length);
+  return id === MACRO_AI_BOT_ID ? MACRO_AI_NAME : 'Bot';
+}
 
 export function SenderName(props: SenderNameProps) {
   const message = useMessage();
@@ -16,7 +24,7 @@ export function SenderName(props: SenderNameProps) {
   return (
     <Show when={!props.hidden}>
       <span class={cn('text-sm font-medium truncate', props.class)}>
-        {displayName()}
+        {botName(message().sender_id) ?? displayName()}
       </span>
     </Show>
   );

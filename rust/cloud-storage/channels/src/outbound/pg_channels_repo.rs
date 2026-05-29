@@ -1704,6 +1704,21 @@ impl ChannelRepo for PgChannelsRepo {
         .await
         .context("unable to create channel participant for owner")?;
 
+        // Macro AI is a participant in every channel by default.
+        sqlx::query!(
+            r#"
+            INSERT INTO comms_channel_participants (channel_id, role, user_id)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (channel_id, user_id) DO NOTHING
+            "#,
+            channel_id,
+            ParticipantRole::Member as ParticipantRole,
+            bot_id::MACRO_AI_BOT_ID.to_storage_string(),
+        )
+        .execute(&mut *transaction)
+        .await
+        .context("unable to add Macro AI to channel")?;
+
         for participant in req
             .participants
             .into_iter()

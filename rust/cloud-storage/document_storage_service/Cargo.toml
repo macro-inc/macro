@@ -38,6 +38,7 @@ bzip2 = { workspace = true, default-features = false, features = [
 analytics_client = { path = "../analytics_client" }
 cal = { path = "../cal", features = ["axum", "outbound"] }
 call = { path = "../call" }
+channel_bots = { path = "../channel_bots" }
 channels = { path = "../channels", features = ["inbound", "outbound"] }
 chrono = { workspace = true }
 cloudfront_sign = { workspace = true }
@@ -51,6 +52,7 @@ connection = { path = "../connection", default-features = false, features = [
 connection_gateway_client = { path = "../connection_gateway_client" }
 cowlike = { path = "../cowlike" }
 crm = { path = "../crm" }
+document_cognition_service_client = { path = "../document_cognition_service_client" }
 document_sub_type = { path = "../document_sub_type" }
 documents_hex = { path = "../documents", package = "documents" }
 dynamodb_client = { path = "../dynamodb_client" }
@@ -79,6 +81,7 @@ macro_cors = { path = "../macro_cors" }
 macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
+macro_service_urls = { path = "../macro_service_urls" }
 macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
