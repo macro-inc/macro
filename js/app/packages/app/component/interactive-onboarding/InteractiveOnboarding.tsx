@@ -25,10 +25,7 @@ import { LESSONS } from './lessons';
 import { commandKOpen, setCommandKOpen } from './lessons/command-k';
 import MobileWebSignupSent from './MobileWebSignupSent';
 import MobileWebWelcome from './MobileWebWelcome';
-import {
-  OnboardingDesktopLesson,
-  OnboardingMobileLesson,
-} from './OnboardingLesson';
+import { OnboardingModalLayout } from './OnboardingModalLayout';
 import { OnboardingProvider } from './onboarding-context';
 import { resetSandbox } from './sandbox/sandbox-store';
 
@@ -474,11 +471,6 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
     '--onboarding-key': String(lessonKey()),
   });
 
-  const headerStyle = () => ({
-    animation: `onboarding-fade-up 200ms ease-out both`,
-    '--onboarding-key': String(lessonKey()),
-  });
-
   const setContinueButtonRef = (el: HTMLButtonElement) => {
     continueButtonRef = el;
   };
@@ -488,6 +480,7 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
     scopeId,
     testMode,
     readyToContinue,
+    continueLabel,
     setContinueButtonRef,
     handleLessonComplete,
     handleLessonUnready,
@@ -502,7 +495,7 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
     <OnboardingProvider value={contextValue}>
       <div
         ref={shellRef}
-        class="flex items-center justify-center size-full p-6 sm:p-8 overflow-hidden relative"
+        class="flex items-center justify-center size-full p-3 sm:p-4 overflow-hidden relative"
         tabIndex={-1}
       >
         <style>{
@@ -550,23 +543,7 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
             }
           >
             {(lesson) => (
-              <Show
-                when={!isTouch}
-                fallback={
-                  <OnboardingMobileLesson
-                    lesson={lesson()}
-                    bodyStyle={bodyStyle}
-                    continueLabel={continueLabel}
-                  />
-                }
-              >
-                <OnboardingDesktopLesson
-                  lesson={lesson()}
-                  bodyStyle={bodyStyle}
-                  headerStyle={headerStyle}
-                  continueLabel={continueLabel}
-                />
-              </Show>
+              <OnboardingModalLayout lesson={lesson()} bodyStyle={bodyStyle} />
             )}
           </Show>
         </div>

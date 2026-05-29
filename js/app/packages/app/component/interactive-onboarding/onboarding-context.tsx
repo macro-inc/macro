@@ -9,6 +9,7 @@ export interface OnboardingContextValue {
   scopeId: string;
   testMode: boolean;
   readyToContinue: () => boolean;
+  continueLabel: () => string | undefined;
   setContinueButtonRef: (el: HTMLButtonElement) => void;
   handleLessonComplete: LessonContentProps['onComplete'];
   handleLessonUnready: LessonContentProps['onUnready'];
