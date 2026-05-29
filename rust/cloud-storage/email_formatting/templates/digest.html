@@ -125,6 +125,9 @@
                       vertical-align: middle;
                       color: #636363;
                       font-size: 16px;
+                      word-wrap: break-word;
+                      overflow-wrap: break-word;
+                      word-break: break-word;
                     "
                   >
                     {{ notif.title }}
@@ -145,7 +148,7 @@
               </tbody>
             </table>
             <table
-              style="border: none; width: 100%"
+              style="border: none; width: 100%; table-layout: fixed"
               cellpadding="0"
               cellspacing="0"
             >
@@ -159,6 +162,9 @@
                       font-size: 16px;
                       font-family: &quot;Inter&quot;, sans-serif;
                       line-height: 1.4;
+                      word-wrap: break-word;
+                      overflow-wrap: break-word;
+                      word-break: break-word;
                     "
                   >
                     {{ notif.body }}
