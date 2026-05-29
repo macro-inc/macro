@@ -131,6 +131,15 @@ export function RecentSharedSection() {
       call_filters: {
         call_ids: ['00000000-0000-0000-0000-000000000000'],
       },
+      chat_filters: {
+        owners: [userId()],
+      },
+      document_filters: {
+        owners: [userId()],
+      },
+      project_filters: {
+        owners: [userId()],
+      },
     },
   }));
 
