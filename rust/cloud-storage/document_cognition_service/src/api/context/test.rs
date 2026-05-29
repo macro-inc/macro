@@ -111,7 +111,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use comms::domain::service::ChannelServiceImpl;
     use comms::outbound::postgres::comms_repo::PgCommsRepo;
     use comms::outbound::postgres::user_repo::PgUserRepo;
-    use comms_service_client::CommsServiceClient;
     use document_storage_service_client::DocumentStorageServiceClient;
     use email::domain::ports::ReadonlyEmailPreviewAdapter;
     use email::domain::service::EmailServiceImpl;
@@ -145,7 +144,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         "dummy_auth_key".into(),
         "http://localhost".into(),
     ));
-    let comms_service_client = Arc::new(CommsServiceClient::new("http://localhost".into()));
     let search_service_client =
         SearchServiceClient::new("dummy_auth_key".into(), "http://localhost".into());
     let sync_service_client = Arc::new(SyncServiceClient::new(
@@ -346,7 +344,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         db: pool.clone(),
         sqs_client: Arc::new(sqs_client),
         document_storage_client,
-        comms_service_client,
         search_service_client,
         email_service_client_external,
         jwt_args: JwtValidationArgs::new_testing(),

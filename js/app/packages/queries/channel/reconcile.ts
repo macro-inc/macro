@@ -1,12 +1,12 @@
 import type {
-  Attachment as ApiAttachment,
-  CountedReaction,
-} from '@service-comms/generated/models';
-import type {
   ApiChannelMessage,
   ApiThreadReply,
 } from '@service-storage/client';
-import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
+import type { ApiCountedReaction as CountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
+import type {
+  ApiMessageAttachment as ApiAttachment,
+  ApiMessageAttachment,
+} from '@service-storage/generated/schemas/apiMessageAttachment';
 import { queryClient } from '../client';
 import {
   findThreadIdInChannelMessages,

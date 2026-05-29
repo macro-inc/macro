@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 use comms::domain::models::GetChannelsRequest;
 use cool_asserts::assert_matches;
 use email::domain::models::{EnrichedEmailThreadPreview, PreviewView};
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use filter_ast::Expr;
 use foreign_entity::domain::{
     models::{
@@ -85,12 +86,35 @@ impl CallRecordQueryService for NoopCallRecordQueryService {
     }
 }
 
+fn foreign_entity_id_from_receipt(
+    receipt: EntityAccessReceipt<ViewAccessLevel>,
+) -> Result<Uuid, ForeignEntityError> {
+    let entity = receipt.entity();
+    if entity.entity_type != EntityType::ForeignEntity {
+        return Err(ForeignEntityError::BadRequest(format!(
+            "expected ForeignEntity receipt, got {:?}",
+            entity.entity_type
+        )));
+    }
+
+    Uuid::parse_str(&entity.entity_id).map_err(|_| {
+        ForeignEntityError::BadRequest("foreign entity receipt id must be a valid UUID".to_string())
+    })
+}
 use crm::domain::service::NoOpCrmService;
 
 #[derive(Clone)]
 struct NoopForeignEntityService;
 
 impl ForeignEntityService for NoopForeignEntityService {
+    async fn get_foreign_entity(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        let id = foreign_entity_id_from_receipt(receipt)?;
+        self.get_foreign_entity_by_id(id).await
+    }
+
     async fn get_foreign_entity_by_id(
         &self,
         id: Uuid,
@@ -203,6 +227,14 @@ impl RecordingForeignEntityService {
 }
 
 impl ForeignEntityService for RecordingForeignEntityService {
+    async fn get_foreign_entity(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        let id = foreign_entity_id_from_receipt(receipt)?;
+        self.get_foreign_entity_by_id(id).await
+    }
+
     async fn get_foreign_entity_by_id(
         &self,
         id: Uuid,

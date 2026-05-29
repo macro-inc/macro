@@ -2,7 +2,7 @@
 
 use crate::domain::{
     comment::{CrmComment, CrmCommentEntityType, CrmCommentThread, DeleteCrmCommentResult},
-    companies_repo::{CompaniesRepository, CrmCompanyListSort},
+    companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
     company_metadata_resolver::CompanyMetadataResolver,
     generic_email_domains::is_generic_email_domain,
     model::{CrmCompany, CrmCompanyForSoup, CrmContact, CrmError, CrmScopePrecheck},
@@ -186,6 +186,7 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         company_ids: &[uuid::Uuid],
         sort: CrmCompanyListSort,
+        cursor: Option<CrmCompanySoupCursor>,
         limit: i64,
     ) -> impl Future<Output = Result<Vec<CrmCompanyForSoup>, CrmError>> + Send;
 
@@ -493,10 +494,11 @@ where
         team_id: &uuid::Uuid,
         company_ids: &[uuid::Uuid],
         sort: CrmCompanyListSort,
+        cursor: Option<CrmCompanySoupCursor>,
         limit: i64,
     ) -> Result<Vec<CrmCompanyForSoup>, CrmError> {
         self.companies_repository
-            .list_companies_for_soup(team_id, company_ids, sort, limit)
+            .list_companies_for_soup(team_id, company_ids, sort, cursor, limit)
             .await
     }
 
@@ -666,6 +668,7 @@ impl CrmService for NoOpCrmService {
         _team_id: &uuid::Uuid,
         _company_ids: &[uuid::Uuid],
         _sort: CrmCompanyListSort,
+        _cursor: Option<CrmCompanySoupCursor>,
         _limit: i64,
     ) -> Result<Vec<CrmCompanyForSoup>, CrmError> {
         Ok(Vec::new())

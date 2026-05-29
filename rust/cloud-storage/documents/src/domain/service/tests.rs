@@ -231,6 +231,12 @@ fn assert_raw_pull_request(
     assert!(pull_request.status.is_none());
     assert!(pull_request.additions.is_none());
     assert!(pull_request.deletions.is_none());
+    assert!(pull_request.comments.is_none());
+    assert!(pull_request.checks.is_none());
+
+    let pull_request_json = serde_json::to_value(pull_request).unwrap();
+    assert!(pull_request_json.get("comments").is_none());
+    assert!(pull_request_json.get("checks").is_none());
 }
 
 #[tokio::test]

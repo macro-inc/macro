@@ -103,6 +103,50 @@ pub struct TaskBranchName {
     pub branch_name: String,
 }
 
+/// A comment associated with a GitHub pull request.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestComment {
+    /// The unique GitHub identifier for the comment or review.
+    pub id: u64,
+    /// The comment or review body text.
+    pub body: String,
+    /// The GitHub login for the comment author, when available.
+    pub author_login: Option<String>,
+    /// GitHub's relationship label for the author, when available.
+    pub author_association: Option<String>,
+    /// The public GitHub URL for the comment or review, when available.
+    pub url: Option<String>,
+    /// When the comment was created or the review was submitted.
+    pub created_at: Option<DateTime<Utc>>,
+    /// When the comment or review was last updated.
+    pub updated_at: Option<DateTime<Utc>>,
+    /// The GitHub source for the comment, such as `issue_comment` or `review_comment`.
+    pub source: String,
+}
+
+/// A check run associated with a GitHub pull request.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestCheckRun {
+    /// The unique GitHub identifier for the check run.
+    pub id: u64,
+    /// The check run name.
+    pub name: String,
+    /// The raw GitHub check run status.
+    pub status: String,
+    /// The raw GitHub check run conclusion, when the run has completed.
+    pub conclusion: Option<String>,
+    /// The public GitHub URL for the check run, when available.
+    pub url: Option<String>,
+    /// When the check run started, when available.
+    pub started_at: Option<DateTime<Utc>>,
+    /// When the check run completed, when available.
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
 /// Display-ready data for a GitHub pull request associated with a task.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -132,6 +176,12 @@ pub struct GithubPullRequest {
     /// The number of deleted lines in the pull request, when enrichment data is available.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub deletions: Option<u64>,
+    /// Comments collected from the pull request, when enrichment data is available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comments: Option<Vec<GithubPullRequestComment>>,
+    /// Check runs collected from the pull request head commit, when enrichment data is available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checks: Option<Vec<GithubPullRequestCheckRun>>,
 }
 
 impl GithubPullRequest {
@@ -167,6 +217,8 @@ impl GithubPullRequest {
             status: None,
             additions: None,
             deletions: None,
+            comments: None,
+            checks: None,
         })
     }
 }

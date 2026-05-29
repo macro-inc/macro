@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod tests;
 
+use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
 use uuid::Uuid;
 
 use super::models::{
@@ -30,6 +31,28 @@ impl<R> ForeignEntityService for ForeignEntityServiceImpl<R>
 where
     R: ForeignEntityRepository,
 {
+    #[tracing::instrument(err, skip(self))]
+    async fn get_foreign_entity(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        let entity = receipt.entity();
+        if entity.entity_type != EntityType::ForeignEntity {
+            return Err(ForeignEntityError::BadRequest(format!(
+                "expected ForeignEntity receipt, got {:?}",
+                entity.entity_type
+            )));
+        }
+
+        let id = Uuid::parse_str(&entity.entity_id).map_err(|_| {
+            ForeignEntityError::BadRequest(
+                "foreign entity receipt id must be a valid UUID".to_string(),
+            )
+        })?;
+
+        self.get_foreign_entity_by_id(id).await
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_foreign_entity_by_id(
         &self,

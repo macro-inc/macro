@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 /// Identifies an internal source that can grant access to foreign entities.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SourceId {
     /// Internal entity identifier, stored in `foreign_entity.stored_for_id`.
@@ -41,6 +42,7 @@ impl SourceId {
 
 /// A persisted mapping to an entity owned by an external system.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ForeignEntity {
     /// Internal primary key for this foreign entity record.
@@ -63,6 +65,7 @@ pub struct ForeignEntity {
 
 /// Fields required to create a foreign entity record.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CreateForeignEntity {
     /// Identifier assigned by the external system.
@@ -80,6 +83,7 @@ pub struct CreateForeignEntity {
 
 /// Optional fields for patching a foreign entity record.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default, PartialEq)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct PatchForeignEntity {
     /// New external identifier. `None` leaves the current value unchanged.

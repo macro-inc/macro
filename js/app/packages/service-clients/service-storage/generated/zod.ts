@@ -1559,6 +1559,203 @@ export const getBatchChannelPreviewResponse = zod
   .describe('Response for a batched channel preview lookup.');
 
 /**
+ * @summary Handler for `GET /channels/{channel_id}`.
+ */
+export const getChannelParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const getChannelQueryLimitMin = 0;
+
+export const getChannelQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(getChannelQueryLimitMin)
+    .optional()
+    .describe('Recent message page size (1-100, default 50)'),
+});
+
+export const getChannelResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel id.'),
+    channel_name: zod
+      .string()
+      .describe("Resolved display name from the viewer's perspective."),
+    channel_type: zod
+      .enum(['public', 'organization', 'private', 'direct_message', 'team'])
+      .describe('Type of channel.'),
+    messages: zod
+      .array(
+        zod
+          .object({
+            attachments: zod
+              .array(
+                zod
+                  .object({
+                    created_at: zod.iso
+                      .datetime({})
+                      .describe('When the attachment was created.'),
+                    entity_id: zod.string().describe('Entity id.'),
+                    entity_type: zod.string().describe('Type of entity.'),
+                    height: zod
+                      .number()
+                      .nullish()
+                      .describe('Height (for images).'),
+                    id: zod.uuid().describe('Attachment id.'),
+                    width: zod
+                      .number()
+                      .nullish()
+                      .describe('Width (for images).'),
+                  })
+                  .describe('An attachment on a message.')
+              )
+              .describe('Attachments on this message.'),
+            channel_id: zod.uuid().describe('Channel id.'),
+            content: zod.string().describe('Message content.'),
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the message was created.'),
+            deleted_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the message was soft-deleted.'),
+            edited_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the message was edited.'),
+            id: zod.uuid().describe('Message id.'),
+            reactions: zod
+              .array(
+                zod
+                  .object({
+                    emoji: zod.string().describe('The emoji string.'),
+                    users: zod
+                      .array(zod.string())
+                      .describe('User ids who added this reaction.'),
+                  })
+                  .describe('A reaction with emoji and user list.')
+              )
+              .describe('Reactions on this message.'),
+            sender: zod
+              .object({
+                id: zod
+                  .string()
+                  .describe('Sender id without the storage namespace prefix.'),
+                type: zod.enum(['user', 'bot']).describe('Public sender type.'),
+              })
+              .describe('Public sender identity for channel messages.'),
+            sender_id: zod.string().describe('Sender user id.'),
+            thread: zod
+              .object({
+                latest_reply_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe('Timestamp of the latest reply.'),
+                preview: zod
+                  .array(
+                    zod
+                      .object({
+                        attachments: zod
+                          .array(
+                            zod
+                              .object({
+                                created_at: zod.iso
+                                  .datetime({})
+                                  .describe('When the attachment was created.'),
+                                entity_id: zod.string().describe('Entity id.'),
+                                entity_type: zod
+                                  .string()
+                                  .describe('Type of entity.'),
+                                height: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Height (for images).'),
+                                id: zod.uuid().describe('Attachment id.'),
+                                width: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Width (for images).'),
+                              })
+                              .describe('An attachment on a message.')
+                          )
+                          .describe('Attachments on this reply.'),
+                        content: zod.string().describe('Reply content.'),
+                        created_at: zod.iso
+                          .datetime({})
+                          .describe('When the reply was created.'),
+                        edited_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe('When the reply was edited.'),
+                        id: zod.uuid().describe('Reply id.'),
+                        reactions: zod
+                          .array(
+                            zod
+                              .object({
+                                emoji: zod
+                                  .string()
+                                  .describe('The emoji string.'),
+                                users: zod
+                                  .array(zod.string())
+                                  .describe(
+                                    'User ids who added this reaction.'
+                                  ),
+                              })
+                              .describe('A reaction with emoji and user list.')
+                          )
+                          .describe('Reactions on this reply.'),
+                        sender: zod
+                          .object({
+                            id: zod
+                              .string()
+                              .describe(
+                                'Sender id without the storage namespace prefix.'
+                              ),
+                            type: zod
+                              .enum(['user', 'bot'])
+                              .describe('Public sender type.'),
+                          })
+                          .describe(
+                            'Public sender identity for channel messages.'
+                          ),
+                        sender_id: zod.string().describe('Sender user id.'),
+                        updated_at: zod.iso
+                          .datetime({})
+                          .describe('When the reply was last updated.'),
+                      })
+                      .describe('A thread reply shown in preview.')
+                  )
+                  .describe('Last N replies for thread preview.'),
+                reply_count: zod.number().describe('Total reply count.'),
+              })
+              .describe('Thread metadata and preview replies.'),
+            updated_at: zod.iso
+              .datetime({})
+              .describe('When the message was last updated.'),
+          })
+          .describe('A top-level channel message with thread info.')
+      )
+      .describe('Recent messages (newest-first first page).'),
+    participants: zod
+      .array(
+        zod
+          .object({
+            channel_id: zod.uuid().describe('Channel id.'),
+            joined_at: zod.iso.datetime({}).describe('When the user joined.'),
+            role: zod
+              .enum(['owner', 'admin', 'member'])
+              .describe('Participant role in a channel.'),
+            user_id: zod.string().describe('User id.'),
+          })
+          .describe('A channel participant.')
+      )
+      .describe('Active participants.'),
+  })
+  .describe(
+    'Channel detail: metadata, active participants, and a recent page of messages.\n\n`messages` is the newest-first first page (size controlled by `limit`); use the\ndedicated `\/{channel_id}\/messages` endpoint for cursor pagination.'
+  );
+
+/**
  * @summary Handler for `DELETE /channels/{channel_id}`.
  */
 export const deleteChannelParams = zod.object({
@@ -1841,6 +2038,14 @@ export const getChannelMessagesResponse = zod
                   .describe('A reaction with emoji and user list.')
               )
               .describe('Reactions on this message.'),
+            sender: zod
+              .object({
+                id: zod
+                  .string()
+                  .describe('Sender id without the storage namespace prefix.'),
+                type: zod.enum(['user', 'bot']).describe('Public sender type.'),
+              })
+              .describe('Public sender identity for channel messages.'),
             sender_id: zod.string().describe('Sender user id.'),
             thread: zod
               .object({
@@ -1901,6 +2106,20 @@ export const getChannelMessagesResponse = zod
                               .describe('A reaction with emoji and user list.')
                           )
                           .describe('Reactions on this reply.'),
+                        sender: zod
+                          .object({
+                            id: zod
+                              .string()
+                              .describe(
+                                'Sender id without the storage namespace prefix.'
+                              ),
+                            type: zod
+                              .enum(['user', 'bot'])
+                              .describe('Public sender type.'),
+                          })
+                          .describe(
+                            'Public sender identity for channel messages.'
+                          ),
                         sender_id: zod.string().describe('Sender user id.'),
                         updated_at: zod.iso
                           .datetime({})
@@ -2063,6 +2282,14 @@ export const postChannelMessagesResponse = zod
                   .describe('A reaction with emoji and user list.')
               )
               .describe('Reactions on this message.'),
+            sender: zod
+              .object({
+                id: zod
+                  .string()
+                  .describe('Sender id without the storage namespace prefix.'),
+                type: zod.enum(['user', 'bot']).describe('Public sender type.'),
+              })
+              .describe('Public sender identity for channel messages.'),
             sender_id: zod.string().describe('Sender user id.'),
             thread: zod
               .object({
@@ -2123,6 +2350,20 @@ export const postChannelMessagesResponse = zod
                               .describe('A reaction with emoji and user list.')
                           )
                           .describe('Reactions on this reply.'),
+                        sender: zod
+                          .object({
+                            id: zod
+                              .string()
+                              .describe(
+                                'Sender id without the storage namespace prefix.'
+                              ),
+                            type: zod
+                              .enum(['user', 'bot'])
+                              .describe('Public sender type.'),
+                          })
+                          .describe(
+                            'Public sender identity for channel messages.'
+                          ),
                         sender_id: zod.string().describe('Sender user id.'),
                         updated_at: zod.iso
                           .datetime({})
@@ -2191,6 +2432,14 @@ export const getMessageWithContextResponse = zod
               .nullish()
               .describe('When the message was edited.'),
             id: zod.uuid().describe('Message id.'),
+            sender: zod
+              .object({
+                id: zod
+                  .string()
+                  .describe('Sender id without the storage namespace prefix.'),
+                type: zod.enum(['user', 'bot']).describe('Public sender type.'),
+              })
+              .describe('Public sender identity for channel messages.'),
             sender_id: zod.string().describe('Sender user id.'),
             thread_id: zod
               .uuid()
@@ -2255,6 +2504,14 @@ export const getThreadRepliesResponseItem = zod
           .describe('A reaction with emoji and user list.')
       )
       .describe('Reactions on this reply.'),
+    sender: zod
+      .object({
+        id: zod
+          .string()
+          .describe('Sender id without the storage namespace prefix.'),
+        type: zod.enum(['user', 'bot']).describe('Public sender type.'),
+      })
+      .describe('Public sender identity for channel messages.'),
     sender_id: zod.string().describe('Sender user id.'),
     updated_at: zod.iso
       .datetime({})
@@ -4523,6 +4780,10 @@ export const getDocumentGithubPullRequestsParams = zod.object({
 
 export const getDocumentGithubPullRequestsResponsePullRequestsItemAdditionsMin = 0;
 
+export const getDocumentGithubPullRequestsResponsePullRequestsItemChecksItemIdMin = 0;
+
+export const getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemIdMin = 0;
+
 export const getDocumentGithubPullRequestsResponsePullRequestsItemDeletionsMin = 0;
 
 export const getDocumentGithubPullRequestsResponsePullRequestsItemNumberMin = 0;
@@ -4541,6 +4802,108 @@ export const getDocumentGithubPullRequestsResponse = zod
               .nullish()
               .describe(
                 'The number of added lines in the pull request, when enrichment data is available.'
+              ),
+            checks: zod
+              .array(
+                zod
+                  .object({
+                    completedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the check run completed, when available.'
+                      ),
+                    conclusion: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The raw GitHub check run conclusion, when the run has completed.'
+                      ),
+                    id: zod
+                      .number()
+                      .min(
+                        getDocumentGithubPullRequestsResponsePullRequestsItemChecksItemIdMin
+                      )
+                      .describe(
+                        'The unique GitHub identifier for the check run.'
+                      ),
+                    name: zod.string().describe('The check run name.'),
+                    startedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('When the check run started, when available.'),
+                    status: zod
+                      .string()
+                      .describe('The raw GitHub check run status.'),
+                    url: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The public GitHub URL for the check run, when available.'
+                      ),
+                  })
+                  .describe(
+                    'A check run associated with a GitHub pull request.'
+                  )
+              )
+              .nullish()
+              .describe(
+                'Check runs collected from the pull request head commit, when enrichment data is available.'
+              ),
+            comments: zod
+              .array(
+                zod
+                  .object({
+                    authorAssociation: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "GitHub's relationship label for the author, when available."
+                      ),
+                    authorLogin: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The GitHub login for the comment author, when available.'
+                      ),
+                    body: zod
+                      .string()
+                      .describe('The comment or review body text.'),
+                    createdAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the comment was created or the review was submitted.'
+                      ),
+                    id: zod
+                      .number()
+                      .min(
+                        getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemIdMin
+                      )
+                      .describe(
+                        'The unique GitHub identifier for the comment or review.'
+                      ),
+                    source: zod
+                      .string()
+                      .describe(
+                        'The GitHub source for the comment, such as `issue_comment` or `review_comment`.'
+                      ),
+                    updatedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('When the comment or review was last updated.'),
+                    url: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The public GitHub URL for the comment or review, when available.'
+                      ),
+                  })
+                  .describe('A comment associated with a GitHub pull request.')
+              )
+              .nullish()
+              .describe(
+                'Comments collected from the pull request, when enrichment data is available.'
               ),
             deletions: zod
               .number()
@@ -5190,6 +5553,46 @@ export const getEntityPermissionResponse = zod
     }),
   ])
   .describe('API response envelope for entity permissions.');
+
+/**
+ * @summary Get a visible foreign entity by its internal ID.
+ */
+export const getForeignEntityParams = zod.object({
+  id: zod.uuid().describe('Foreign entity ID'),
+});
+
+export const getForeignEntityResponse = zod
+  .object({
+    createdAt: zod.iso
+      .datetime({})
+      .describe('Timestamp when the record was created.'),
+    foreignEntityId: zod
+      .string()
+      .describe('Identifier assigned by the external system.'),
+    foreignEntitySource: zod
+      .string()
+      .describe('Source system that owns the external identifier.'),
+    id: zod
+      .uuid()
+      .describe('Internal primary key for this foreign entity record.'),
+    metadata: zod
+      .unknown()
+      .describe('Arbitrary metadata stored with the mapping.'),
+    storedForAuthEntity: zod
+      .string()
+      .describe(
+        'Internal auth entity namespace this foreign entity is stored for.'
+      ),
+    storedForId: zod
+      .string()
+      .describe(
+        'Internal entity identifier this foreign entity is stored for.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Timestamp when the record was last updated.'),
+  })
+  .describe('A persisted mapping to an entity owned by an external system.');
 
 /**
  * @summary Gets the users history

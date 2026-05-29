@@ -2,13 +2,14 @@ use super::*;
 use crate::domain::{
     events::ChannelEvent,
     models::{
-        Activity, ActivityType, ChannelAttachment, ChannelAttachmentType, ChannelContextMessage,
-        ChannelInfo, ChannelMessageFilters, ChannelMetadata, ChannelParticipant, ChannelType,
-        CountedReaction, CreateEntityMentionOptions, EntityMention, MessageAttachment,
-        MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
-        ParticipantRole, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
-        PostReactionRequest, ReactionAction, ReferencedShareItem, ReferencedShareItemType,
-        ResolvedChannelMessage, SimpleMention, ThreadData, ThreadReplyRow, TopLevelMessageRow,
+        Activity, ActivityType, BotId, ChannelAttachment, ChannelAttachmentType,
+        ChannelContextMessage, ChannelInfo, ChannelMessageFilters, ChannelMetadata,
+        ChannelParticipant, ChannelType, CountedReaction, CreateEntityMentionOptions,
+        EntityMention, MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
+        NewChannelAttachment, ParticipantRole, PatchChannelRequest, PatchMessageRequest,
+        PostMessageRequest, PostReactionRequest, ReactionAction, ReferencedShareItem,
+        ReferencedShareItemType, ResolvedChannelMessage, Sender, SimpleMention, ThreadData,
+        ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{
         ChannelEventDispatcher, ChannelReferenceSharePermissions, ChannelRepo, MockChannelRepo,
@@ -203,7 +204,7 @@ impl FakeMutationRepo {
             id: Uuid::new_v4(),
             channel_id,
             thread_id: None,
-            sender_id: MacroUserIdStr::try_from(sender.to_string()).unwrap(),
+            sender_id: Sender::parse_storage_str(sender).unwrap(),
             content: "hello".to_string(),
             created_at: now,
             updated_at: now,
@@ -453,7 +454,7 @@ impl ChannelRepo for FakeMutationRepo {
     ) -> Result<MutatedMessage, Self::Err> {
         let mut state = self.state.lock().unwrap();
         state.message.channel_id = channel_id;
-        state.message.sender_id = MacroUserIdStr::try_from(sender_id).unwrap();
+        state.message.sender_id = Sender::parse_storage_str(&sender_id).unwrap();
         state.message.content = content;
         state.message.thread_id = thread_id;
         Ok(state.message.clone())
@@ -693,6 +694,10 @@ fn macro_id(user_id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(user_id.to_string()).unwrap()
 }
 
+fn sender(user_id: &str) -> Sender {
+    Sender::User(macro_id(user_id))
+}
+
 #[tokio::test]
 async fn post_message_emits_message_posted_event_and_updates_share_permissions() {
     let channel_id = Uuid::new_v4();
@@ -703,7 +708,7 @@ async fn post_message_emits_message_posted_event_and_updates_share_permissions()
 
     let res = svc
         .post_message(
-            macro_id("macro|sender@test.com"),
+            sender("macro|sender@test.com"),
             channel_id,
             PostMessageRequest {
                 content: "hello world".to_string(),
@@ -762,6 +767,52 @@ async fn post_message_emits_message_posted_event_and_updates_share_permissions()
 }
 
 #[tokio::test]
+async fn bot_post_message_persists_bot_sender_and_skips_user_only_effects() {
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let actor = Sender::Bot(bot_id);
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let events = FakeEvents::default();
+    let share = FakeReferenceSharing::default();
+    let svc = mutation_service(repo.clone(), events.clone(), share.clone());
+
+    svc.post_message(
+        actor.clone(),
+        channel_id,
+        PostMessageRequest {
+            content: "bot update".to_string(),
+            mentions: vec![SimpleMention {
+                entity_type: "document".to_string(),
+                entity_id: "doc-1".to_string(),
+            }],
+            thread_id: None,
+            attachments: vec![NewChannelAttachment {
+                entity_type: "chat".to_string(),
+                entity_id: "chat-1".to_string(),
+                width: None,
+                height: None,
+            }],
+            nonce: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(repo.state.lock().unwrap().message.sender_id.clone(), actor);
+    assert_eq!(repo.state.lock().unwrap().activity_upserts, 0);
+    assert!(share.items.lock().unwrap().is_empty());
+
+    let emitted = events.events.lock().unwrap();
+    let ChannelEvent::MessagePosted { message, .. } = &emitted[0] else {
+        panic!("expected MessagePosted event, got {:?}", emitted[0]);
+    };
+    assert_eq!(
+        message.sender_id.to_storage_string(),
+        bot_id.to_storage_string()
+    );
+}
+
+#[tokio::test]
 async fn patch_message_content_emits_message_changed_event_to_thread_participants() {
     let channel_id = Uuid::new_v4();
     let thread_id = Uuid::new_v4();
@@ -776,7 +827,7 @@ async fn patch_message_content_emits_message_changed_event_to_thread_participant
     );
 
     svc.patch_message(
-        macro_id("macro|sender@test.com"),
+        sender("macro|sender@test.com"),
         ParticipantRole::Member,
         channel_id,
         message_id,
@@ -798,6 +849,7 @@ async fn patch_message_content_emits_message_changed_event_to_thread_participant
         message,
         recipients,
         nonce,
+        ..
     } = &emitted[0]
     else {
         panic!("expected MessageChanged event, got {:?}", emitted[0]);
@@ -819,7 +871,7 @@ async fn reaction_mutation_emits_grouped_reaction_event() {
     let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
 
     svc.post_reaction(
-        macro_id("macro|sender@test.com"),
+        sender("macro|sender@test.com"),
         channel_id,
         PostReactionRequest {
             emoji: "👍".to_string(),

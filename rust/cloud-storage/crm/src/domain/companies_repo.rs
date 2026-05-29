@@ -19,6 +19,18 @@ pub enum CrmCompanyListSort {
     CreatedAt,
 }
 
+/// Keyset cursor for [`CompaniesRepository::list_companies_for_soup`].
+/// Carries the sort timestamp + id of the previous soup page's last row
+/// so the next page seeks strictly past it. `None` = first page.
+#[derive(Debug, Clone, Copy)]
+pub struct CrmCompanySoupCursor {
+    /// Sort timestamp of the previous page's last row —
+    /// `first_interaction`/`last_interaction` per [`CrmCompanyListSort`].
+    pub last_sort_ts: DateTime<Utc>,
+    /// Id of the previous page's last row; tiebreaks equal timestamps.
+    pub last_id: uuid::Uuid,
+}
+
 /// The CompaniesRepository defines persistence operations for CRM
 /// companies and their associated domains.
 pub trait CompaniesRepository: Clone + Send + Sync + 'static {
@@ -289,12 +301,14 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// team-level killswitch (missing or `crm_enabled = false` →
     /// empty) and excludes `hidden = true` rows. Empty `company_ids`
     /// = all non-hidden companies; non-empty = whitelist. Both sort
-    /// orders tiebreak on `id DESC`.
+    /// orders tiebreak on `id DESC`. `cursor` seeks strictly past the
+    /// previous soup page's last row (`None` = first page).
     fn list_companies_for_soup(
         &self,
         team_id: &uuid::Uuid,
         company_ids: &[uuid::Uuid],
         sort: CrmCompanyListSort,
+        cursor: Option<CrmCompanySoupCursor>,
         limit: i64,
     ) -> impl Future<Output = Result<Vec<CrmCompanyForSoup>, CrmError>> + Send;
 

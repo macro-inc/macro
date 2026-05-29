@@ -1007,6 +1007,8 @@ async fn test_get_github_pull_request_keys_orders_and_parses(pool: Pool<Postgres
                 status: None,
                 additions: None,
                 deletions: None,
+                comments: None,
+                checks: None,
             },
             GithubPullRequest {
                 github_key: "macro/macro/pull/10".to_string(),
@@ -1019,6 +1021,8 @@ async fn test_get_github_pull_request_keys_orders_and_parses(pool: Pool<Postgres
                 status: None,
                 additions: None,
                 deletions: None,
+                comments: None,
+                checks: None,
             },
             GithubPullRequest {
                 github_key: "macro/macro/pull/20".to_string(),
@@ -1031,6 +1035,8 @@ async fn test_get_github_pull_request_keys_orders_and_parses(pool: Pool<Postgres
                 status: None,
                 additions: None,
                 deletions: None,
+                comments: None,
+                checks: None,
             },
         ]
     );

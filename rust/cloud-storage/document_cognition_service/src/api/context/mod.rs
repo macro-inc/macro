@@ -67,7 +67,6 @@ pub struct ApiContext {
     pub db: PgPool,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub document_storage_client: Arc<DocumentStorageServiceClient>,
-    pub comms_service_client: Arc<comms_service_client::CommsServiceClient>,
     pub search_service_client: Arc<SearchServiceClient>,
     pub email_service_client_external: Arc<email_service_client::EmailServiceClientExternal>,
     pub jwt_args: JwtValidationArgs,

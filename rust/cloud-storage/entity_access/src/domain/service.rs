@@ -240,15 +240,11 @@ where
                 let channel_uuid = Uuid::from_str(entity_id)
                     .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
 
-                match self
+                let result = self
                     .repo
                     .get_channel_role(&channel_uuid, user_id, user_org_id)
-                    .await?
-                {
-                    ChannelRoleResult::Role(role) => Ok(EntityPermission::ChannelRole { role }),
-                    ChannelRoleResult::NoAccess => Err(AccessError::Unauthorized),
-                    ChannelRoleResult::NotFound => Err(AccessError::NotFound("Channel not found")),
-                }
+                    .await?;
+                channel_role_result_to_permission(result)
             }
             _ => Err(AccessError::BadRequest("Unsupported entity type")),
         }
@@ -310,6 +306,16 @@ where
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         self.repo.get_user_team(user_id).await
+    }
+}
+
+fn channel_role_result_to_permission(
+    result: ChannelRoleResult,
+) -> Result<EntityPermission, AccessError> {
+    match result {
+        ChannelRoleResult::Role(role) => Ok(EntityPermission::ChannelRole { role }),
+        ChannelRoleResult::NoAccess => Err(AccessError::Unauthorized),
+        ChannelRoleResult::NotFound => Err(AccessError::NotFound("Channel not found")),
     }
 }
 

@@ -4,7 +4,7 @@ import {
   useAddReactionMutation,
   useRemoveReactionMutation,
 } from '@queries/channel/reaction';
-import type { ApiChannelMessage } from '@service-comms/client';
+import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import { createSignal, Show } from 'solid-js';
 import { createChannelMessageActions } from '../Channel/create-channel-message-actions';
 import type { InputHandle, InputSnapshot } from '../Input';

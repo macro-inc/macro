@@ -6,16 +6,26 @@ version = "0.1.0"
 
 [features]
 default = ["outbound", "ports", "service"]
+inbound = [
+  "dep:axum",
+  "dep:model-error-response",
+  "dep:utoipa",
+  "entity_access/inbound",
+  "ports",
+]
 outbound = ["dep:filter_ast", "dep:sqlx", "ports"]
-ports = ["dep:item_filters", "dep:models_pagination", "dep:tokio"]
+ports = ["dep:entity_access", "dep:item_filters", "dep:models_pagination", "dep:tokio"]
 service = ["ports"]
 
 [dependencies]
 anyhow = { workspace = true }
+axum = { workspace = true, optional = true }
 chrono = { workspace = true }
+entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
 filter_ast = { path = "../filter_ast", optional = true }
 item_filters = { path = "../item_filters", optional = true }
 macro_uuid = { path = "../macro_uuid" }
+model-error-response = { path = "../model-error-response", optional = true }
 models_pagination = { path = "../models_pagination", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -23,8 +33,12 @@ sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
+macro_user_id = { path = "../macro_user_id" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }

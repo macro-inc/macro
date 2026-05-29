@@ -412,12 +412,13 @@ where
             team_id,
             company_ids,
             sort,
+            cursor,
             limit,
         } = req;
 
         Ok(Either::Right(
             self.crm_service
-                .list_companies_for_soup(&team_id, &company_ids, sort, limit)
+                .list_companies_for_soup(&team_id, &company_ids, sort, cursor, limit)
                 .await
                 .map_err(|_| SoupErr::CrmErr)?
                 .into_iter()

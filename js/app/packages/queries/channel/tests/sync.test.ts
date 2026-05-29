@@ -2,11 +2,11 @@
  * @vitest-environment jsdom
  */
 
-import type { Attachment as ApiAttachment } from '@service-comms/generated/models';
 import type {
   ApiChannelMessage,
   ApiThreadReply,
 } from '@service-storage/client';
+import type { ApiMessageAttachment as ApiAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -25,6 +25,10 @@ vi.mock('@service-storage/client', () => ({
 import type { ChannelMessagesData } from '../channel-messages';
 import { getChannelMessagesQueryKey } from '../channel-messages';
 import {
+  normalizeChannelMessageSender,
+  normalizeThreadReplySender,
+} from '../message-sender';
+import {
   handleCommsAttachment,
   handleCommsMessage,
   handleCommsReaction,
@@ -36,7 +40,7 @@ function createPaginatedMessage(
   createdAt: string,
   overrides: Partial<ApiChannelMessage> = {}
 ): ApiChannelMessage {
-  return {
+  return normalizeChannelMessageSender({
     id,
     channel_id: 'channel-1',
     sender_id: 'user-1',
@@ -53,7 +57,7 @@ function createPaginatedMessage(
       latest_reply_at: null,
     },
     ...overrides,
-  };
+  });
 }
 
 function createThreadReply(
@@ -61,7 +65,7 @@ function createThreadReply(
   createdAt: string,
   overrides: Partial<ApiThreadReply> = {}
 ): ApiThreadReply {
-  return {
+  return normalizeThreadReplySender({
     id,
     sender_id: 'user-1',
     content: `Reply ${id}`,
@@ -71,7 +75,7 @@ function createThreadReply(
     attachments: [],
     reactions: [],
     ...overrides,
-  };
+  });
 }
 
 function createAttachment(id: string, messageId: string): ApiAttachment {

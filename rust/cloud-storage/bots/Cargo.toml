@@ -1,0 +1,51 @@
+[package]
+edition = "2024"
+name = "bots"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["inbound", "outbound", "ports"]
+inbound = [
+  "dep:axum",
+  "dep:entity_access",
+  "entity_access/inbound",
+  "entity_access/ports",
+  "dep:model-error-response",
+  "dep:model_user",
+  "dep:utoipa",
+  "ports",
+]
+outbound = ["dep:sqlx", "dep:macro_uuid", "ports"]
+ports = ["dep:tokio"]
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true, optional = true }
+bot_id = { path = "../bot_id", features = ["schema"] }
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", optional = true, default-features = false }
+hex = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid", optional = true }
+model-error-response = { path = "../model-error-response", optional = true }
+model_user = { path = "../model_user", optional = true, features = ["axum"] }
+rand = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+entity_access = { path = "../entity_access", default-features = false, features = [
+  "outbound",
+  "ports",
+] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }
