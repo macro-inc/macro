@@ -9,7 +9,10 @@ import { openEmailAuthPopup } from '@core/auth/email';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { emailClient } from '@service-email/client';
-import type { ListLinksResponse } from '@service-email/generated/schemas';
+import type {
+  ListLinksResponse,
+  ResyncResponse,
+} from '@service-email/generated/schemas';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { err, okAsync, ResultAsync } from 'neverthrow';
 import { createMemo, createSignal } from 'solid-js';
@@ -114,6 +117,36 @@ function disconnectEmail(): ResultAsync<void, 'failed-to-disconnect'> {
 }
 
 /**
+ * Removes a linked inbox. For an owned inbox the backend cascades the full
+ * teardown; for a delegated inbox it only drops the delegation edge.
+ *
+ * @returns ok if the inbox was removed, err if it failed
+ */
+function removeInbox(linkId: string): ResultAsync<void, 'failed-to-remove'> {
+  return ResultAsync.fromSafePromise(
+    emailClient.deleteLink({ linkId })
+  ).andThen((response) =>
+    response.isErr() ? err('failed-to-remove') : okAsync(void 0)
+  );
+}
+
+/**
+ * Enqueues a fresh backfill for a linked inbox. Idempotent on the backend: a
+ * no-op when a backfill is already in progress.
+ *
+ * @returns ok with the resync response, err if it failed
+ */
+function resyncInbox(
+  linkId: string
+): ResultAsync<ResyncResponse, 'failed-to-resync'> {
+  return ResultAsync.fromSafePromise(
+    emailClient.resyncLink({ linkId })
+  ).andThen((response) =>
+    response.isErr() ? err('failed-to-resync') : okAsync(response.value)
+  );
+}
+
+/**
  * Connects to the email service and authenticates with email permissions.
  *
  * @returns A promise that resolves when the auth success message is received.
@@ -164,6 +197,9 @@ export function useEmailLinks() {
         .map(startEmailPolling)
         .andTee(invalidations),
     disconnect: () => disconnectEmail().andTee(invalidations),
+    removeInbox: (linkId: string) => removeInbox(linkId).andTee(invalidations),
+    resyncInbox: (linkId: string) =>
+      resyncInbox(linkId).andTee(() => invalidateEmailLinks()),
     invalidate: () => invalidateEmailLinks(),
     refetchInterval: emailRefetchInterval,
   };

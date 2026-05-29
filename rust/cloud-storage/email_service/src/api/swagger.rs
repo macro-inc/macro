@@ -16,6 +16,7 @@ use crate::api::email::init::InitResponse;
 use crate::api::email::labels::create::CreateLabelRequest;
 use crate::api::email::labels::create::CreateLabelResponse;
 use crate::api::email::links::list::ListLinksResponse;
+use crate::api::email::links::resync::ResyncResponse;
 use crate::api::email::messages::labels::{UpdateLabelBatchRequest, UpdateLabelBatchResponse};
 use crate::api::email::settings::patch::{PatchSettingsRequest, PatchSettingsResponse};
 use crate::api::email::threads::archived::ArchiveThreadRequest;
@@ -39,6 +40,7 @@ use ::email::inbound::axum::thread_project_router::{
     UpdateThreadProjectRequest, UpdateThreadProjectResponse,
 };
 use model::response::EmptyResponse;
+use models_email::api::link::SyncStatus;
 use models_email::api::settings::Settings;
 use models_email::email::service;
 use models_email::email::service::address::ContactInfoWithInteraction;
@@ -84,6 +86,8 @@ use utoipa::OpenApi;
         inbound::axum::get_thread_router::get_thread_handler,
         inbound::axum::thread_project_router::update_thread_project_handler,
         email::links::list::list_links_handler,
+        email::links::delete::delete_link_handler,
+        email::links::resync::resync_link_handler,
         email::labels::create::handler,
         email::labels::delete::handler,
         inbound::axum::list_labels_router::list_labels_handler,
@@ -148,6 +152,8 @@ use utoipa::OpenApi;
             // Link types
             ListLinksResponse,
             Link,
+            SyncStatus,
+            ResyncResponse,
             Settings,
             // Contact types
             ListContactsResponse,

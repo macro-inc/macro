@@ -52,6 +52,32 @@ pub async fn delete_edge(
     Ok(())
 }
 
+/// Returns whether the edge `(primary, child)` exists. Used to authorize a
+/// primary macro user acting on an inbox delegated to them.
+#[tracing::instrument(skip(db), err)]
+pub async fn edge_exists(
+    db: &Pool<Postgres>,
+    primary_macro_id: &str,
+    child_macro_id: &str,
+) -> anyhow::Result<bool> {
+    let exists = sqlx::query_scalar!(
+        r#"
+            SELECT EXISTS(
+                SELECT 1
+                FROM macro_user_links
+                WHERE primary_macro_id = $1
+                  AND child_macro_id = $2
+            ) AS "exists!"
+        "#,
+        primary_macro_id,
+        child_macro_id,
+    )
+    .fetch_one(db)
+    .await?;
+
+    Ok(exists)
+}
+
 /// Returns the `child_macro_id`s the given primary delegates from.
 /// Used by email-service to union linked inboxes with the user's own.
 #[tracing::instrument(skip(db), err)]
