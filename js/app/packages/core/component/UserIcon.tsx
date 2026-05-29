@@ -1,4 +1,4 @@
-import MacroLogoBadge from '@icon/macro-logo-badge.svg';
+import MacroLogo from '@icon/macro-logo.svg';
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
 import { isMacroAgentId } from '@core/constant/macroAgent';
 import { staticFileSizedUrl } from '@core/constant/servers';
@@ -173,8 +173,8 @@ export function UserIcon(props: UserIconProps) {
     <Switch>
       <Match when={isMacroAgentId(props.id)}>
         <Avatar size={size()} class={props.class}>
-          <Avatar.Fallback class="bg-accent text-white">
-            <MacroLogoBadge class="size-[68%]" />
+          <Avatar.Fallback class="bg-accent/10 text-accent">
+            <MacroLogo class="size-[62%]" />
           </Avatar.Fallback>
         </Avatar>
       </Match>

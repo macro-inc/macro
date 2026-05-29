@@ -20,11 +20,19 @@ export function SenderName(props: SenderNameProps) {
   const message = useMessage();
   const macroId = () => tryMacroId(message().sender_id);
   const [displayName] = useDisplayName(macroId());
+  const agentName = () => botName(message().sender_id);
 
   return (
     <Show when={!props.hidden}>
-      <span class={cn('text-sm font-medium truncate', props.class)}>
-        {botName(message().sender_id) ?? displayName()}
+      <span
+        class={cn(
+          'text-sm font-medium truncate',
+          // Accent the name for bots so it's clear the sender is an agent.
+          agentName() && 'text-accent',
+          props.class
+        )}
+      >
+        {agentName() ?? displayName()}
       </span>
     </Show>
   );
