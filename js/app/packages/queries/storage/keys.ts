@@ -40,6 +40,15 @@ export const documentGithubPullRequestsKeys = createQueryKeys(
   }
 );
 
+export const attachmentReferencesKeys = createQueryKeys(
+  'attachmentReferences',
+  {
+    list: (entityType: string, entityId: string) => ({
+      queryKey: [entityType, entityId],
+    }),
+  }
+);
+
 // Scoped under `entity` so `invalidateQueries({ queryKey: ['entity'] })`
 // (fired from the move/rename mutations) refreshes every key below.
 export const entityKeys = createQueryKeys('entity', {

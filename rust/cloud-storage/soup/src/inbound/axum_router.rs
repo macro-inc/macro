@@ -25,7 +25,7 @@ use email::{
 };
 use entity_access::{
     domain::{
-        models::{EntityAccessReceipt, MemberTeamRole},
+        models::{AdminTeamRole, EntityAccessReceipt, MemberTeamRole},
         ports::EntityAccessService,
     },
     inbound::axum_extractors::OptionalMacroUserTeamExtractor,
@@ -324,7 +324,7 @@ where
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
     where
         SoupRequest<R>: IntoSoupReqAst,
-        R: Clone + Serialize + Send + RequestsCrmScope,
+        R: Clone + Serialize + Send + RequestsCrmScope + RequestsCrmAdmin,
     {
         let create_fallback = move || -> SoupQuery<R> {
             let params_sort = params
@@ -355,6 +355,7 @@ where
         // miss CRM scope on follow-up pages.
         let team_receipt =
             resolve_crm_team_receipt(cursor.filter().requests_crm_scope(), team_receipt_option)?;
+        require_crm_admin_role(cursor.filter().requests_crm_admin(), &team_receipt)?;
 
         let res = self
             .service
@@ -464,6 +465,45 @@ impl RequestsCrmScope for ApiEntityFilterAst {
     }
 }
 
+/// Filter bodies that may opt into admin-only CRM data (currently:
+/// hidden CRM companies) implement this so the soup handler can gate
+/// the request on an admin/owner team role.
+pub trait RequestsCrmAdmin {
+    /// True when this filter asks for data only admin/owner team
+    /// members may see — e.g. `crm_company_filters.hidden = Some(true)`.
+    fn requests_crm_admin(&self) -> bool;
+}
+
+impl RequestsCrmAdmin for EntityFilters {
+    fn requests_crm_admin(&self) -> bool {
+        matches!(self.crm_company_filters.hidden, Some(true))
+    }
+}
+
+impl RequestsCrmAdmin for ApiEntityFilterAst {
+    fn requests_crm_admin(&self) -> bool {
+        self.crm_company_filter
+            .as_deref()
+            .is_some_and(ast_requests_crm_admin)
+    }
+}
+
+/// Walks a `CrmCompanyLiteral` AST checking for any `Hidden(true)`
+/// literal. Mirrors the conservative shape the request-time extractor
+/// in `models::extract_crm_company_filter` allows: `And`/`Or` recurse;
+/// `Not` would invert and fail closed downstream, but for the *role
+/// gate* we still must inspect under `Not` to avoid a `Not(Hidden(false))`
+/// sneaking past — treat any path reaching a `Hidden(true)` literal as
+/// admin-required.
+fn ast_requests_crm_admin(expr: &Expr<CrmCompanyLiteral>) -> bool {
+    match expr {
+        Expr::Literal(CrmCompanyLiteral::Hidden(true)) => true,
+        Expr::Literal(_) => false,
+        Expr::And(a, b) | Expr::Or(a, b) => ast_requests_crm_admin(a) || ast_requests_crm_admin(b),
+        Expr::Not(a) => ast_requests_crm_admin(a),
+    }
+}
+
 pub fn soup_router<T, U, EAS, S>(state: SoupRouterState<T, U, EAS>) -> Router<S>
 where
     T: SoupService,
@@ -513,6 +553,8 @@ pub enum SoupHandlerErr {
     Expand,
     #[error("CRM-scoped queries require team membership")]
     CrmScopeForbidden,
+    #[error("Querying hidden CRM companies requires admin/owner team role")]
+    CrmAdminRequired,
 }
 
 impl From<SoupErr> for SoupHandlerErr {
@@ -528,7 +570,9 @@ impl IntoResponse for SoupHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {
             SoupHandlerErr::ExpandErr(_) | SoupHandlerErr::Expand => StatusCode::BAD_REQUEST,
-            SoupHandlerErr::CrmScopeForbidden => StatusCode::FORBIDDEN,
+            SoupHandlerErr::CrmScopeForbidden | SoupHandlerErr::CrmAdminRequired => {
+                StatusCode::FORBIDDEN
+            }
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -552,6 +596,7 @@ impl IntoResponse for SoupHandlerErr {
     ),
     responses(
             (status = 200, body=SoupPage),
+            (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
 )]
@@ -625,6 +670,7 @@ type SoupCursor<R> = axum_extra::either::Either<
     ),
     responses(
             (status = 200, body=SoupPage),
+            (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
 )]
@@ -693,6 +739,7 @@ pub struct PostSoupAstRequest {
     request_body = PostSoupAstRequest,
     responses(
         (status = 200, body=SoupPage),
+        (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
         (status = 500, body=ErrorResponse),
     )
 )]
@@ -760,6 +807,7 @@ pub struct PostGroupedSoupAstRequest {
     request_body = PostGroupedSoupAstRequest,
     responses(
         (status = 200, body=GroupedSoupPage),
+        (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
         (status = 500, body=ErrorResponse),
     )
 )]
@@ -817,6 +865,28 @@ fn resolve_crm_team_receipt(
         return Err(SoupHandlerErr::CrmScopeForbidden);
     }
     Ok(receipt)
+}
+
+/// Companion to [`resolve_crm_team_receipt`] for the admin-only CRM
+/// data path (currently: hidden CRM companies). `admin_requested` is
+/// the result of [`RequestsCrmAdmin::requests_crm_admin`] on the
+/// effective filter. Returns `Err(CrmAdminRequired)` when the request
+/// asks for admin-only data but the receipt is missing or the user's
+/// actual team role doesn't satisfy [`AdminTeamRole`].
+fn require_crm_admin_role(
+    admin_requested: bool,
+    receipt: &Option<EntityAccessReceipt<MemberTeamRole>>,
+) -> Result<(), SoupHandlerErr> {
+    if !admin_requested {
+        return Ok(());
+    }
+    let Some(receipt) = receipt else {
+        return Err(SoupHandlerErr::CrmAdminRequired);
+    };
+    if !receipt.entity_permission().satisfies::<AdminTeamRole>() {
+        return Err(SoupHandlerErr::CrmAdminRequired);
+    }
+    Ok(())
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, ToSchema)]

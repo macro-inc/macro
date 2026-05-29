@@ -7,7 +7,7 @@ use crate::domain::{
     comment::{
         CrmComment, CrmCommentEntityType, CrmCommentThread, CrmThread, DeleteCrmCommentResult,
     },
-    companies_repo::{CompaniesRepository, CrmCompanyListSort},
+    companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
     model::{
         CrmAddressStatus, CrmCompany, CrmCompanyForSoup, CrmContact, CrmDomain, CrmDomainStatus,
         CrmError, CrmScopePrecheck, DomainMetadata,
@@ -975,13 +975,20 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         &self,
         team_id: &uuid::Uuid,
         company_ids: &[uuid::Uuid],
+        hidden: Option<bool>,
         sort: CrmCompanyListSort,
+        cursor: Option<CrmCompanySoupCursor>,
         limit: i64,
     ) -> Result<Vec<CrmCompanyForSoup>, CrmError> {
         let sort_method_str = match sort {
             CrmCompanyListSort::UpdatedAt => "updated_at",
             CrmCompanyListSort::CreatedAt => "created_at",
         };
+        // Keyset seek past the previous soup page's last row. Compared as
+        // (sort_ts, id::text) to match the main soup query's tiebreak in
+        // pg_soup_repo/expanded/by_cursor.rs. NULL = first page.
+        let cursor_ts = cursor.map(|c| c.last_sort_ts);
+        let cursor_id = cursor.map(|c| c.last_id.to_string());
 
         // CTE limits companies before the domain/directory joins; the
         // outer ORDER BY repeats the CTE's sort + `d.created_at ASC`
@@ -989,6 +996,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // domain first. Sort columns are `first_interaction` /
         // `last_interaction` from populate_contact (both NOT NULL —
         // see the `crm_interaction_timestamps` migration).
+        //
+        // `$5` (`hidden`) defaults to visible-only when `NULL`; the
+        // admin/owner role check for `Some(true)` is enforced upstream
+        // in soup's axum router.
         let rows = sqlx::query!(
             r#"
             WITH limited_companies AS (
@@ -1001,12 +1012,24 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                     c.last_interaction
                 FROM crm_companies c
                 WHERE c.team_id = $1
-                  AND c.hidden = FALSE
+                  AND c.hidden = COALESCE($5::bool, FALSE)
                   AND EXISTS (
                       SELECT 1 FROM team_crm_settings tcs
                       WHERE tcs.team_id = $1 AND tcs.crm_enabled
                   )
                   AND (cardinality($2::uuid[]) = 0 OR c.id = ANY($2::uuid[]))
+                  -- Keyset seek (NULL = first page): keep only rows that
+                  -- sort strictly after the cursor.
+                  AND (
+                      $6::timestamptz IS NULL
+                      OR (
+                          CASE $4
+                              WHEN 'created_at' THEN c.first_interaction
+                              ELSE c.last_interaction
+                          END,
+                          c.id::text
+                      ) < ($6, $7)
+                  )
                 ORDER BY
                     CASE $4
                         WHEN 'created_at' THEN c.first_interaction
@@ -1043,6 +1066,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             company_ids,
             limit,
             sort_method_str,
+            hidden,
+            cursor_ts,
+            cursor_id,
         )
         .fetch_all(&self.pool)
         .await

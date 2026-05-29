@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CrmCompanyFiltersHidden } from './crmCompanyFiltersHidden';
 
 /**
  * The crm company filters used to narrow which CRM companies appear in soup.
@@ -12,4 +13,9 @@ export interface CrmCompanyFilters {
   /** CRM company ids to filter by. Examples: ['11111111-...']. Empty to
 include all of the team's visible CRM companies. */
   company_ids?: string[];
+  /** Optional `crm_companies.hidden` filter. `None` = visible only
+(default for back-compat with non-admin callers). `Some(false)` =
+visible only (explicit). `Some(true)` = hidden only — requires
+admin/owner team role; enforced upstream in soup's axum router. */
+  hidden?: CrmCompanyFiltersHidden;
 }

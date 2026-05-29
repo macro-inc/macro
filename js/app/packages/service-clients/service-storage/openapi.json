@@ -6417,6 +6417,16 @@
               }
             }
           },
+          "403": {
+            "description": "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -6461,6 +6471,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SoupPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -6511,6 +6531,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SoupPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -10833,6 +10863,10 @@
               "type": "string"
             },
             "description": "CRM company ids to filter by. Examples: ['11111111-...']. Empty to\ninclude all of the team's visible CRM companies."
+          },
+          "hidden": {
+            "type": ["boolean", "null"],
+            "description": "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin/owner team role; enforced upstream in soup's axum router."
           }
         }
       },

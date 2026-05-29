@@ -1,5 +1,7 @@
 use logger::Logger;
-use macro_bundle_updater_plugin::inbound::plugin::{PluginService, apply_completed_update};
+use macro_bundle_updater_plugin::inbound::plugin::{
+    PluginService, allow_update_reload_retry, apply_completed_update, retry_waiting_for_wifi,
+};
 use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
 use reqwest::cookie::CookieStore;
@@ -188,6 +190,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
+            macro_bundle_updater_plugin::inbound::plugin::ack_bundle_update_reload,
             macro_bundle_updater_plugin::inbound::plugin::check_for_update,
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
             macro_bundle_updater_plugin::inbound::plugin::clear_bundle,
@@ -228,24 +231,47 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app_handle, event| {
-            #[cfg(feature = "auto_apply_update")]
-            {
-                if let RunEvent::Resumed = event {
+        .run(move |app_handle, event| match &event {
+            RunEvent::Ready => {
+                #[cfg(feature = "auto_apply_update")]
+                {
                     let app = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
                         match apply_completed_update(&app).await {
-                            Ok(true) => {
-                                tracing::info!("auto-applied pending bundle update on foreground");
-                            }
-                            Ok(false) => {}
+                            Ok(_) => {}
                             Err(e) => {
-                                tracing::error!("failed to auto-apply bundle update: {e}");
+                                tracing::error!("Failed to auto-apply bundle update on ready: {e}");
                             }
                         }
                     });
                 }
             }
+            RunEvent::Resumed => {
+                let app = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = retry_waiting_for_wifi(&app).await {
+                        tracing::warn!("Failed to retry bundle update Wi-Fi wait on resume: {e}");
+                    }
+                });
+                #[cfg(feature = "auto_apply_update")]
+                {
+                    let app = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) = allow_update_reload_retry(&app).await {
+                            tracing::warn!(
+                                "Failed to allow bundle update reload retry on resume: {e}"
+                            );
+                        }
+                        match apply_completed_update(&app).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                tracing::error!("Failed to auto-apply bundle update: {e}");
+                            }
+                        }
+                    });
+                }
+            }
+            _ => {}
         });
 }
 

@@ -7314,6 +7314,12 @@ export const postItemsSoupBody = zod
           .describe(
             "CRM company ids to filter by. Examples: ['11111111-...']. Empty to\ninclude all of the team's visible CRM companies."
           ),
+        hidden: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin\/owner team role; enforced upstream in soup's axum router."
+          ),
       })
       .optional()
       .describe(

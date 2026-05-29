@@ -37,13 +37,11 @@ import { useEntityProperties, usePropertyEntityDisplay } from '@property/hooks';
 import type { Property, PropertyApiValues } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { useDocumentGithubPullRequestsQuery } from '@queries/storage/github-pull-requests';
 import type { EntityType as PropertiesEntityType } from '@service-properties/generated/schemas/entityType';
-import {
-  blockNameToItemType,
-  storageServiceClient,
-} from '@service-storage/client';
+import { blockNameToItemType } from '@service-storage/client';
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
@@ -51,12 +49,12 @@ import { cn } from '@ui/utils/classname';
 import {
   createEffect,
   createMemo,
-  createResource,
   createSignal,
   For,
   Match,
   onCleanup,
   Show,
+  Suspense,
   Switch,
 } from 'solid-js';
 import { mdStore } from '../../signal/markdownBlockData';
@@ -900,24 +898,12 @@ function NotificationsSectionConditional(props: { entity: Entity }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ReferencesSectionConditional(props: { documentId: string }) {
-  const [references] = createResource(
+  const references = useAttachmentReferencesQuery(
     () => props.documentId,
-    async (id) => {
-      const response = await storageServiceClient.attachmentReferences({
-        entity_type: 'document',
-        entity_id: id,
-      });
-
-      if (response.isErr()) {
-        console.error(response);
-        return [];
-      }
-
-      return response.value.references;
-    }
+    () => 'document'
   );
 
-  const count = createMemo(() => references()?.length ?? 0);
+  const count = createMemo(() => references.data?.length ?? 0);
 
   return (
     <Show when={count() > 0}>
@@ -926,9 +912,11 @@ function ReferencesSectionConditional(props: { documentId: string }) {
         title={<SidePanel.CountTitle label="References" count={count()} />}
         order={50}
       >
-        <div class="text-xs">
-          <References documentId={props.documentId} />
-        </div>
+        <Suspense fallback={<SidePanel.Loading />}>
+          <div class="text-xs">
+            <References documentId={props.documentId} />
+          </div>
+        </Suspense>
       </SidePanel.Section>
     </Show>
   );

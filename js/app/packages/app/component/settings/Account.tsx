@@ -678,17 +678,19 @@ function NotificationNotSupported() {
 
 function bundleUpdateAction(
   status: BundleUpdateStatus,
-  cancelWifiWait: () => void,
 ): { label: string; action: () => void } | null {
+  const grantBundleUpdate = () =>
+    invoke('grant_bundle_update', { approved: true }).catch(console.error);
+
   switch (status.status) {
     case 'Idle':
       return { label: 'Check for Update', action: () => invoke('check_for_update') };
     case 'Error':
       return { label: 'Retry', action: () => invoke('check_for_update') };
     case 'UpdateFound':
-      return { label: 'Download', action: () => invoke('grant_bundle_update', { approved: true }).catch(console.error) };
+      return { label: 'Download', action: grantBundleUpdate };
     case 'WaitingForWifi':
-      return { label: 'Download anyway', action: cancelWifiWait };
+      return { label: 'Download anyway', action: grantBundleUpdate };
     case 'Completed':
       return { label: 'Update', action: () => invoke('perform_update') };
     default:
@@ -702,7 +704,7 @@ function BundleUpdateRow() {
     <Show when={tauri}>
       {(ctx) => {
         const status = () => ctx().bundleUpdateStatus();
-        const action = () => bundleUpdateAction(status(), ctx().cancelWifiWait);
+        const action = () => bundleUpdateAction(status());
         return (
           <Row label="App Update">
             <div class="flex items-center gap-3">

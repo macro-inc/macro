@@ -1260,9 +1260,10 @@ impl ChannelRepo for PgChannelsRepo {
         entity_id: &str,
         user_id: &str,
     ) -> Result<Vec<AttachmentEntityReference>, Self::Err> {
-        let attachment_references = sqlx::query_as!(
-            AttachmentChannelReference,
-            r#"
+        let attachment_references_fut = async {
+            sqlx::query_as!(
+                AttachmentChannelReference,
+                r#"
                 SELECT
                     a.channel_id                     AS "channel_id: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
@@ -1283,17 +1284,19 @@ impl ChannelRepo for PgChannelsRepo {
                   AND m.deleted_at IS NULL
                 ORDER BY a.created_at DESC
                 "#,
-            entity_type,
-            entity_id,
-            user_id,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .context("failed to get attachment references")?;
+                entity_type,
+                entity_id,
+                user_id,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .context("failed to get attachment references")
+        };
 
-        let mention_references = sqlx::query_as!(
-            AttachmentChannelReference,
-            r#"
+        let mention_references_fut = async {
+            sqlx::query_as!(
+                AttachmentChannelReference,
+                r#"
                 SELECT
                     m.channel_id                     AS "channel_id: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
@@ -1314,16 +1317,18 @@ impl ChannelRepo for PgChannelsRepo {
                   AND m.deleted_at IS NULL
                 ORDER BY em.created_at DESC
                 "#,
-            entity_type,
-            entity_id,
-            user_id,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .context("failed to get mention references")?;
+                entity_type,
+                entity_id,
+                user_id,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .context("failed to get mention references")
+        };
 
-        let generic_references = sqlx::query!(
-            r#"
+        let generic_references_fut = async {
+            sqlx::query!(
+                r#"
                 SELECT
                     em.source_entity_type,
                     em.source_entity_id,
@@ -1337,22 +1342,31 @@ impl ChannelRepo for PgChannelsRepo {
                   AND em.source_entity_type != 'message'
                 ORDER BY em.created_at DESC
                 "#,
-            entity_type,
-            entity_id,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .context("failed to get generic entity references")?
-        .into_iter()
-        .map(|row| AttachmentGenericReference {
-            source_entity_type: row.source_entity_type,
-            source_entity_id: row.source_entity_id,
-            entity_type: row.entity_type,
-            entity_id: row.entity_id,
-            user_id: row.user_id,
-            created_at: row.created_at,
-        })
-        .collect::<Vec<_>>();
+                entity_type,
+                entity_id,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .context("failed to get generic entity references")
+        };
+
+        let (attachment_references, mention_references, generic_rows) = tokio::try_join!(
+            attachment_references_fut,
+            mention_references_fut,
+            generic_references_fut,
+        )?;
+
+        let generic_references = generic_rows
+            .into_iter()
+            .map(|row| AttachmentGenericReference {
+                source_entity_type: row.source_entity_type,
+                source_entity_id: row.source_entity_id,
+                entity_type: row.entity_type,
+                entity_id: row.entity_id,
+                user_id: row.user_id,
+                created_at: row.created_at,
+            })
+            .collect::<Vec<_>>();
 
         let mut references: Vec<AttachmentEntityReference> = attachment_references
             .into_iter()

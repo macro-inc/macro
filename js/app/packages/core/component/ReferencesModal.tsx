@@ -2,9 +2,10 @@ import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer'
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import clickOutside from '@core/directive/clickOutside';
 import Quotes from '@phosphor/quotes.svg';
-import { type ItemType, storageServiceClient } from '@service-storage/client';
+import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
+import type { ItemType } from '@service-storage/client';
 import { Button, Tooltip } from '@ui';
-import { createResource, Suspense } from 'solid-js';
+import { Suspense } from 'solid-js';
 import { References } from './References';
 
 false && clickOutside;
@@ -81,23 +82,11 @@ type ReferencesModalProps = {
 
 function _ReferencesModal(props: ReferencesModalProps) {
   const drawerControl = useDrawerControl(REFERENCES_DRAWER_ID);
-  const [referenceCount] = createResource(
+  const references = useAttachmentReferencesQuery(
     () => props.documentId,
-    async (id) => {
-      const entityType = props.entityType ?? 'document';
-      const response = await storageServiceClient.attachmentReferences({
-        entity_type: entityType,
-        entity_id: id,
-      });
-
-      if (response.isErr()) {
-        console.error(response);
-        return 0;
-      }
-
-      return response.value.references.length;
-    }
+    () => props.entityType ?? 'document'
   );
+  const referenceCount = () => references.data?.length ?? 0;
 
   const title = () => {
     if (!props.documentName) return 'References';
@@ -122,7 +111,7 @@ function _ReferencesModal(props: ReferencesModalProps) {
         >
           <Quotes class="size-4 text-ink" />
           <Suspense fallback={<div class="text-xs">0</div>}>
-            <span class="text-xs">{referenceCount() ?? ''}</span>
+            <span class="text-xs">{referenceCount()}</span>
           </Suspense>
         </div>
       </Tooltip>
