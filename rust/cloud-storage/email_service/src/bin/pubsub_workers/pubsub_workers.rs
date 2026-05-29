@@ -239,37 +239,46 @@ async fn main() -> anyhow::Result<()> {
     // The CRM crate's company-metadata resolver is consulted by
     // `crm_service.populate_contact` only on `crm_domain_directory` misses.
     // `USE_APOLLO_CRM_ENRICHMENT` selects Apollo.io vs. the unfurl-backed
-    // resolver. The resolver is cheap to clone.
+    // resolver; we also fall back to unfurl when the Apollo key can't be
+    // loaded. The resolver is cheap to clone.
+    let build_unfurl = || -> anyhow::Result<CrmMetadataResolver> {
+        // Wrap the SSRF-safe reqwest fetcher in an `UnfurlServiceImpl`,
+        // then the `UnfurlCompanyMetadataResolver`.
+        let unfurl_service = Arc::new(unfurl::domain::service::UnfurlServiceImpl::new(
+            unfurl::outbound::ReqwestUnfurlFetcher::new()
+                .context("failed to build ReqwestUnfurlFetcher")?,
+        ));
+        Ok(CrmMetadataResolver::Unfurl(
+            crm::outbound::unfurl_resolver::UnfurlCompanyMetadataResolver::new(unfurl_service),
+        ))
+    };
+
     let metadata_resolver = if config.use_apollo_crm_enrichment {
         // Apollo key: `config.apollo_api_key` is the key itself locally, or
         // the name of the Secrets Manager secret holding it in deployed envs
-        // (resolved here). Best-effort — a missing/unreadable secret yields
-        // an empty key and the resolver no-ops, rather than taking down the
-        // worker fleet, since email processing must keep running regardless.
+        // (resolved here).
         let apollo_api_key = match config.environment {
             Environment::Local => config.apollo_api_key.clone(),
             _ => secretsmanager_client
                 .get_secret_value(config.apollo_api_key.clone())
                 .await
-                .inspect_err(|e| {
-                    tracing::error!(error=?e, "failed to load apollo api key secret; CRM enrichment disabled")
-                })
+                .inspect_err(|e| tracing::error!(error=?e, "failed to load apollo api key secret"))
                 .map(|k| k.to_string())
                 .unwrap_or_default(),
         };
-        CrmMetadataResolver::Apollo(
-            crm::outbound::apollo_resolver::ApolloCompanyMetadataResolver::new(apollo_api_key),
-        )
+        // No usable key (missing/unreadable secret, or unset locally): fall
+        // back to unfurl rather than running Apollo with an empty key, which
+        // would no-op and pollute the directory with negative-cache rows.
+        if apollo_api_key.is_empty() {
+            tracing::warn!("apollo api key unavailable; falling back to unfurl CRM enrichment");
+            build_unfurl()?
+        } else {
+            CrmMetadataResolver::Apollo(
+                crm::outbound::apollo_resolver::ApolloCompanyMetadataResolver::new(apollo_api_key),
+            )
+        }
     } else {
-        // Unfurl fallback: wrap the SSRF-safe reqwest fetcher in an
-        // `UnfurlServiceImpl`, then the `UnfurlCompanyMetadataResolver`.
-        let unfurl_service = Arc::new(unfurl::domain::service::UnfurlServiceImpl::new(
-            unfurl::outbound::ReqwestUnfurlFetcher::new()
-                .context("failed to build ReqwestUnfurlFetcher")?,
-        ));
-        CrmMetadataResolver::Unfurl(
-            crm::outbound::unfurl_resolver::UnfurlCompanyMetadataResolver::new(unfurl_service),
-        )
+        build_unfurl()?
     };
 
     let crm_service = crm::domain::service::CrmServiceImpl::new(
