@@ -307,8 +307,8 @@ export function InteractiveOnboardingModal(
       position="center"
       // Let the shell keep the focus it grabs in onMount (keeps its scope active).
       onOpenAutoFocus={(e) => e.preventDefault()}
-      // Auto-opened on login, so Kobalte has nothing to restore to: hand focus
-      // to the app body (owns the global hotkey scope) so the app stays usable.
+      // Auto-opened on login: hand focus to the app body (global hotkey scope)
+      // on close since Kobalte has nothing to restore to.
       onCloseAutoFocus={(e) => {
         e.preventDefault();
         document.body.focus();

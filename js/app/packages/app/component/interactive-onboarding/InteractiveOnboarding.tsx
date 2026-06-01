@@ -240,11 +240,8 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
       shellRef.addEventListener('keydown', stopKeyboardPropagation);
       shellRef.addEventListener('keyup', stopKeyboardPropagation);
 
-      // Keep focus in the shell so the detached scope stays active. A null
-      // relatedTarget means focus was dropped to <body> (e.g. the Continue
-      // button being disabled on advance) rather than moved to a real element
-      // like the command-k portal, so reclaim it — unless the shell is
-      // detaching, where grabbing focus would fight the modal's close restore.
+      // Reclaim focus when it's dropped to <body> (null relatedTarget) so the
+      // scope stays active, but not while detaching — that's the close restore.
       const reclaimLostFocus = (event: FocusEvent) => {
         if (event.relatedTarget || commandKOpen() || !shellRef?.isConnected) {
           return;
