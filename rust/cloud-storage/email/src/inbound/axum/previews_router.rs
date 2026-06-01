@@ -17,7 +17,7 @@ use crate::{
     inbound::axum::{
         api_types::ApiPaginatedThreadCursor,
         axum_impls::{
-            EmailLinkExtractor, GetPreviewsCursorError, GetPreviewsCursorParams,
+            GetPreviewsCursorError, GetPreviewsCursorParams, MultiEmailLinkExtractor,
             PreviewViewPathExtractor,
         },
     },
@@ -79,11 +79,11 @@ where
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(link, macro_user, service), fields(user_id=macro_user.macro_user_id.as_ref(), fusionauth_user_id=macro_user.user_context.fusion_user_id))]
+#[tracing::instrument(skip(links, macro_user, service), fields(user_id=macro_user.macro_user_id.as_ref(), fusionauth_user_id=macro_user.user_context.fusion_user_id))]
 async fn cursor_handler<T: EmailService>(
     State(service): State<EmailRouterState<T>>,
     Cached(macro_user): Cached<MacroUserExtractor>,
-    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T>>,
+    Cached(MultiEmailLinkExtractor(links, _)): Cached<MultiEmailLinkExtractor<T>>,
     PreviewViewPathExtractor(preview_view): PreviewViewPathExtractor,
     extract::Query(params): extract::Query<GetPreviewsCursorParams>,
     cursor: Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, ()>>,
@@ -93,7 +93,7 @@ async fn cursor_handler<T: EmailService>(
             .inner
             .get_email_thread_previews(GetEmailsRequest {
                 view: preview_view,
-                link_ids: vec![link.id],
+                link_ids: links.iter().map(|link| link.id).collect(),
                 macro_id: macro_user.macro_user_id,
                 limit: params.limit,
                 query: cursor
