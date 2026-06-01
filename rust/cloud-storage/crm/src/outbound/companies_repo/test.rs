@@ -2166,7 +2166,7 @@ async fn list_contacts_returns_visible_ordered_alphabetically(pool: PgPool) -> a
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let contacts = repo
-        .list_contacts_for_company(&team_id, &company_id)
+        .list_contacts_for_company(&team_id, &company_id, false)
         .await?;
     let ids: Vec<Uuid> = contacts.iter().map(|c| c.id).collect();
     // "anna smith" (carol) < "mike@acme.com" (mike) < "zoe adams" (zoe)
@@ -2190,7 +2190,7 @@ async fn list_contacts_excludes_hidden(pool: PgPool) -> anyhow::Result<()> {
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let contacts = repo
-        .list_contacts_for_company(&team_id, &company_id)
+        .list_contacts_for_company(&team_id, &company_id, false)
         .await?;
     let ids: Vec<Uuid> = contacts.iter().map(|c| c.id).collect();
     assert_eq!(ids, vec![visible]);
@@ -2207,7 +2207,7 @@ async fn list_contacts_owned_company_with_no_contacts_returns_empty(
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let contacts = repo
-        .list_contacts_for_company(&team_id, &company_id)
+        .list_contacts_for_company(&team_id, &company_id, false)
         .await?;
     assert!(contacts.is_empty());
     Ok(())
@@ -2220,7 +2220,7 @@ async fn list_contacts_unknown_company_returns_not_found(pool: PgPool) -> anyhow
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let result = repo
-        .list_contacts_for_company(&team_id, &Uuid::now_v7())
+        .list_contacts_for_company(&team_id, &Uuid::now_v7(), false)
         .await;
     assert!(matches!(
         result,
@@ -2241,7 +2241,9 @@ async fn list_contacts_does_not_leak_across_teams(pool: PgPool) -> anyhow::Resul
 
     // Team B asking for team A's company must 404, not see an empty list.
     let repo = CompaniesRepositoryImpl::new(pool);
-    let result = repo.list_contacts_for_company(&team_b, &company_a).await;
+    let result = repo
+        .list_contacts_for_company(&team_b, &company_a, false)
+        .await;
     assert!(matches!(
         result,
         Err(crate::domain::model::CrmError::CompanyNotFoundForTeam)
@@ -2265,7 +2267,7 @@ async fn get_contact_returns_owned_visible_contact(pool: PgPool) -> anyhow::Resu
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let contact = repo
-        .get_contact_for_team(&team_id, &contact_id)
+        .get_contact_for_team(&team_id, &contact_id, false)
         .await?
         .expect("contact should be returned");
 
@@ -2282,7 +2284,9 @@ async fn get_contact_returns_none_for_unknown_id(pool: PgPool) -> anyhow::Result
     seed_team(&pool, team_id, "macro|owner@test.com").await?;
 
     let repo = CompaniesRepositoryImpl::new(pool);
-    let result = repo.get_contact_for_team(&team_id, &Uuid::now_v7()).await?;
+    let result = repo
+        .get_contact_for_team(&team_id, &Uuid::now_v7(), false)
+        .await?;
     assert!(result.is_none());
     Ok(())
 }
@@ -2299,7 +2303,9 @@ async fn get_contact_does_not_leak_across_teams(pool: PgPool) -> anyhow::Result<
 
     // Team B fetching team A's contact must get None, not the row.
     let repo = CompaniesRepositoryImpl::new(pool);
-    let result = repo.get_contact_for_team(&team_b, &contact_a).await?;
+    let result = repo
+        .get_contact_for_team(&team_b, &contact_a, false)
+        .await?;
     assert!(result.is_none());
     Ok(())
 }
@@ -2319,7 +2325,9 @@ async fn get_contact_returns_none_for_hidden_contact(pool: PgPool) -> anyhow::Re
         .await?;
 
     let repo = CompaniesRepositoryImpl::new(pool);
-    let result = repo.get_contact_for_team(&team_id, &contact_id).await?;
+    let result = repo
+        .get_contact_for_team(&team_id, &contact_id, false)
+        .await?;
     assert!(result.is_none());
     Ok(())
 }
@@ -2346,8 +2354,148 @@ async fn get_contact_returns_none_when_parent_company_is_hidden(
         .await?;
 
     let repo = CompaniesRepositoryImpl::new(pool);
-    let result = repo.get_contact_for_team(&team_id, &contact_id).await?;
+    let result = repo
+        .get_contact_for_team(&team_id, &contact_id, false)
+        .await?;
     assert!(result.is_none());
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Admin-visibility: include_hidden = true reveals hidden contacts /
+// hidden parent companies. Mirrors what the read handlers do when the
+// user's resolved team role is Admin or Owner.
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_contacts_admin_sees_hidden_contacts(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+    let visible = insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+    let hidden = insert_contact_with_source(&pool, company_id, "bob@acme.com", link_id).await?;
+    sqlx::query(r#"UPDATE crm_contacts SET hidden = TRUE WHERE id = $1"#)
+        .bind(hidden)
+        .execute(&pool)
+        .await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+
+    // Member: only the visible contact.
+    let member = repo
+        .list_contacts_for_company(&team_id, &company_id, false)
+        .await?;
+    let member_ids: Vec<Uuid> = member.iter().map(|c| c.id).collect();
+    assert_eq!(member_ids, vec![visible]);
+
+    // Admin: both contacts; the response carries the hidden flag so the
+    // admin UI can render the right toggle state.
+    let admin = repo
+        .list_contacts_for_company(&team_id, &company_id, true)
+        .await?;
+    let admin_ids: Vec<Uuid> = admin.iter().map(|c| c.id).collect();
+    assert_eq!(admin_ids.len(), 2);
+    assert!(admin_ids.contains(&visible));
+    assert!(admin_ids.contains(&hidden));
+    let hidden_contact = admin.iter().find(|c| c.id == hidden).expect("hidden");
+    assert!(hidden_contact.hidden);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_contacts_admin_reaches_hidden_company(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+    insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+    sqlx::query(r#"UPDATE crm_companies SET hidden = TRUE WHERE id = $1"#)
+        .bind(company_id)
+        .execute(&pool)
+        .await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+
+    // Member: hidden parent → 404 (CompanyNotFoundForTeam).
+    let member = repo
+        .list_contacts_for_company(&team_id, &company_id, false)
+        .await;
+    assert!(matches!(
+        member,
+        Err(crate::domain::model::CrmError::CompanyNotFoundForTeam)
+    ));
+
+    // Admin: the hidden company is reachable.
+    let admin = repo
+        .list_contacts_for_company(&team_id, &company_id, true)
+        .await?;
+    assert_eq!(admin.len(), 1);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_contact_admin_sees_hidden_contact(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+    let contact_id =
+        insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+    sqlx::query(r#"UPDATE crm_contacts SET hidden = TRUE WHERE id = $1"#)
+        .bind(contact_id)
+        .execute(&pool)
+        .await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+
+    // Member: hidden contact → None (404).
+    assert!(
+        repo.get_contact_for_team(&team_id, &contact_id, false)
+            .await?
+            .is_none()
+    );
+
+    // Admin: contact is reachable; response carries hidden=true.
+    let admin = repo
+        .get_contact_for_team(&team_id, &contact_id, true)
+        .await?
+        .expect("admin should see hidden contact");
+    assert_eq!(admin.id, contact_id);
+    assert!(admin.hidden);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_contact_admin_reaches_contact_under_hidden_company(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+    let contact_id =
+        insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+    sqlx::query(r#"UPDATE crm_companies SET hidden = TRUE WHERE id = $1"#)
+        .bind(company_id)
+        .execute(&pool)
+        .await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    assert!(
+        repo.get_contact_for_team(&team_id, &contact_id, false)
+            .await?
+            .is_none()
+    );
+    let admin = repo
+        .get_contact_for_team(&team_id, &contact_id, true)
+        .await?
+        .expect("admin should reach a contact under a hidden company");
+    assert_eq!(admin.id, contact_id);
     Ok(())
 }
 
@@ -2398,6 +2546,7 @@ async fn create_crm_comment_opens_thread_on_company(pool: PgPool) -> anyhow::Res
             None,
             "first comment",
             None,
+            false,
         )
         .await?;
 
@@ -2430,6 +2579,7 @@ async fn create_crm_comment_opens_thread_on_contact(pool: PgPool) -> anyhow::Res
             None,
             "hi alice",
             None,
+            false,
         )
         .await?;
 
@@ -2457,6 +2607,7 @@ async fn create_crm_comment_reply_appends_to_thread(pool: PgPool) -> anyhow::Res
             None,
             "root",
             None,
+            false,
         )
         .await?;
     let thread_id = root.thread.thread_id;
@@ -2470,12 +2621,18 @@ async fn create_crm_comment_reply_appends_to_thread(pool: PgPool) -> anyhow::Res
         None,
         "reply",
         None,
+        false,
     )
     .await?;
 
     // One thread, two comments, oldest-first.
     let threads = repo
-        .get_crm_comment_threads(&team_id, CrmCommentEntityType::CrmCompany, &company_id)
+        .get_crm_comment_threads(
+            &team_id,
+            CrmCommentEntityType::CrmCompany,
+            &company_id,
+            false,
+        )
         .await?;
     assert_eq!(threads.len(), 1);
     assert_eq!(threads[0].thread.thread_id, thread_id);
@@ -2502,6 +2659,7 @@ async fn create_crm_comment_unknown_company_404(pool: PgPool) -> anyhow::Result<
             None,
             "x",
             None,
+            false,
         )
         .await;
     assert!(matches!(
@@ -2531,6 +2689,7 @@ async fn create_crm_comment_cross_team_404(pool: PgPool) -> anyhow::Result<()> {
             None,
             "x",
             None,
+            false,
         )
         .await;
     assert!(matches!(
@@ -2559,6 +2718,7 @@ async fn create_crm_comment_reply_to_foreign_thread_404(pool: PgPool) -> anyhow:
             None,
             "root",
             None,
+            false,
         )
         .await?;
 
@@ -2573,6 +2733,7 @@ async fn create_crm_comment_reply_to_foreign_thread_404(pool: PgPool) -> anyhow:
             None,
             "reply",
             None,
+            false,
         )
         .await;
     assert!(matches!(
@@ -2590,7 +2751,12 @@ async fn get_crm_comment_threads_empty_for_owned_company(pool: PgPool) -> anyhow
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let threads = repo
-        .get_crm_comment_threads(&team_id, CrmCommentEntityType::CrmCompany, &company_id)
+        .get_crm_comment_threads(
+            &team_id,
+            CrmCommentEntityType::CrmCompany,
+            &company_id,
+            false,
+        )
         .await?;
     assert!(threads.is_empty());
     Ok(())
@@ -2603,7 +2769,12 @@ async fn get_crm_comment_threads_unknown_company_404(pool: PgPool) -> anyhow::Re
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let result = repo
-        .get_crm_comment_threads(&team_id, CrmCommentEntityType::CrmCompany, &Uuid::now_v7())
+        .get_crm_comment_threads(
+            &team_id,
+            CrmCommentEntityType::CrmCompany,
+            &Uuid::now_v7(),
+            false,
+        )
         .await;
     assert!(matches!(
         result,
@@ -2630,17 +2801,23 @@ async fn edit_crm_comment_updates_text(pool: PgPool) -> anyhow::Result<()> {
             None,
             "before",
             None,
+            false,
         )
         .await?;
     let comment_id = ct.comments[0].comment_id;
 
     let updated = repo
-        .edit_crm_comment(&team_id, &comment_id, "after")
+        .edit_crm_comment(&team_id, &comment_id, "after", false)
         .await?;
     assert_eq!(updated.text, "after");
 
     let threads = repo
-        .get_crm_comment_threads(&team_id, CrmCommentEntityType::CrmCompany, &company_id)
+        .get_crm_comment_threads(
+            &team_id,
+            CrmCommentEntityType::CrmCompany,
+            &company_id,
+            false,
+        )
         .await?;
     assert_eq!(threads[0].comments[0].text, "after");
     Ok(())
@@ -2665,11 +2842,12 @@ async fn edit_crm_comment_cross_team_404(pool: PgPool) -> anyhow::Result<()> {
             None,
             "secret",
             None,
+            false,
         )
         .await?;
 
     let result = repo
-        .edit_crm_comment(&team_b, &ct.comments[0].comment_id, "hacked")
+        .edit_crm_comment(&team_b, &ct.comments[0].comment_id, "hacked", false)
         .await;
     assert!(matches!(
         result,
@@ -2696,18 +2874,24 @@ async fn delete_crm_comment_removes_empty_thread(pool: PgPool) -> anyhow::Result
             None,
             "only comment",
             None,
+            false,
         )
         .await?;
 
     let result = repo
-        .delete_crm_comment(&team_id, &ct.comments[0].comment_id)
+        .delete_crm_comment(&team_id, &ct.comments[0].comment_id, false)
         .await?;
     assert!(result.thread_deleted);
     assert_eq!(result.thread_id, ct.thread.thread_id);
     assert_eq!(count_threads(&pool).await?, 0);
 
     let threads = repo
-        .get_crm_comment_threads(&team_id, CrmCommentEntityType::CrmCompany, &company_id)
+        .get_crm_comment_threads(
+            &team_id,
+            CrmCommentEntityType::CrmCompany,
+            &company_id,
+            false,
+        )
         .await?;
     assert!(threads.is_empty());
     Ok(())
@@ -2731,6 +2915,7 @@ async fn delete_crm_comment_keeps_thread_with_remaining(pool: PgPool) -> anyhow:
             None,
             "root",
             None,
+            false,
         )
         .await?;
     repo.create_crm_comment(
@@ -2742,17 +2927,23 @@ async fn delete_crm_comment_keeps_thread_with_remaining(pool: PgPool) -> anyhow:
         None,
         "reply",
         None,
+        false,
     )
     .await?;
 
     // Deleting the root leaves the thread alive with the reply.
     let result = repo
-        .delete_crm_comment(&team_id, &root.comments[0].comment_id)
+        .delete_crm_comment(&team_id, &root.comments[0].comment_id, false)
         .await?;
     assert!(!result.thread_deleted);
 
     let threads = repo
-        .get_crm_comment_threads(&team_id, CrmCommentEntityType::CrmCompany, &company_id)
+        .get_crm_comment_threads(
+            &team_id,
+            CrmCommentEntityType::CrmCompany,
+            &company_id,
+            false,
+        )
         .await?;
     assert_eq!(threads.len(), 1);
     assert_eq!(threads[0].comments.len(), 1);
@@ -2779,11 +2970,12 @@ async fn delete_crm_comment_cross_team_404(pool: PgPool) -> anyhow::Result<()> {
             None,
             "secret",
             None,
+            false,
         )
         .await?;
 
     let result = repo
-        .delete_crm_comment(&team_b, &ct.comments[0].comment_id)
+        .delete_crm_comment(&team_b, &ct.comments[0].comment_id, false)
         .await;
     assert!(matches!(
         result,
@@ -2809,6 +3001,7 @@ async fn deleting_company_cascades_to_threads(pool: PgPool) -> anyhow::Result<()
         None,
         "doomed",
         None,
+        false,
     )
     .await?;
     assert_eq!(count_threads(&pool).await?, 1);
@@ -2819,5 +3012,165 @@ async fn deleting_company_cascades_to_threads(pool: PgPool) -> anyhow::Result<()
         .execute(&pool)
         .await?;
     assert_eq!(count_threads(&pool).await?, 0);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Comments: admin-visibility on hidden parent entities
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_crm_comment_threads_admin_sees_hidden_company(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    // Seed a thread while the company is visible.
+    repo.create_crm_comment(
+        &team_id,
+        CrmCommentEntityType::CrmCompany,
+        &company_id,
+        owner,
+        None,
+        None,
+        "hi",
+        None,
+        false,
+    )
+    .await?;
+
+    // Hide the company.
+    sqlx::query(r#"UPDATE crm_companies SET hidden = TRUE WHERE id = $1"#)
+        .bind(company_id)
+        .execute(&pool)
+        .await?;
+
+    // Member: 404 — hidden parent treated as not found.
+    let member = repo
+        .get_crm_comment_threads(
+            &team_id,
+            CrmCommentEntityType::CrmCompany,
+            &company_id,
+            false,
+        )
+        .await;
+    assert!(matches!(
+        member,
+        Err(crate::domain::model::CrmError::CompanyNotFoundForTeam)
+    ));
+
+    // Admin: thread is reachable.
+    let admin = repo
+        .get_crm_comment_threads(
+            &team_id,
+            CrmCommentEntityType::CrmCompany,
+            &company_id,
+            true,
+        )
+        .await?;
+    assert_eq!(admin.len(), 1);
+    assert_eq!(admin[0].comments.len(), 1);
+    assert_eq!(admin[0].comments[0].text, "hi");
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_crm_comment_blocks_member_on_hidden_entity(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    sqlx::query(r#"UPDATE crm_companies SET hidden = TRUE WHERE id = $1"#)
+        .bind(company_id)
+        .execute(&pool)
+        .await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    // Member: can't write to a hidden parent.
+    let member = repo
+        .create_crm_comment(
+            &team_id,
+            CrmCommentEntityType::CrmCompany,
+            &company_id,
+            owner,
+            None,
+            None,
+            "blocked",
+            None,
+            false,
+        )
+        .await;
+    assert!(matches!(
+        member,
+        Err(crate::domain::model::CrmError::CompanyNotFoundForTeam)
+    ));
+
+    // Admin: write succeeds.
+    let admin = repo
+        .create_crm_comment(
+            &team_id,
+            CrmCommentEntityType::CrmCompany,
+            &company_id,
+            owner,
+            None,
+            None,
+            "ok",
+            None,
+            true,
+        )
+        .await?;
+    assert_eq!(admin.comments.len(), 1);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn edit_delete_crm_comment_block_member_on_hidden_entity(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let thread = repo
+        .create_crm_comment(
+            &team_id,
+            CrmCommentEntityType::CrmCompany,
+            &company_id,
+            owner,
+            None,
+            None,
+            "first",
+            None,
+            false,
+        )
+        .await?;
+    let comment_id = thread.comments[0].comment_id;
+
+    // Hide the company AFTER the comment was created (so a hidden-parent
+    // edit/delete is the only thing under test).
+    sqlx::query(r#"UPDATE crm_companies SET hidden = TRUE WHERE id = $1"#)
+        .bind(company_id)
+        .execute(&pool)
+        .await?;
+
+    // Member: edit and delete both 404 because the parent is hidden.
+    assert!(matches!(
+        repo.edit_crm_comment(&team_id, &comment_id, "edited", false)
+            .await,
+        Err(crate::domain::model::CrmError::CommentNotFound)
+    ));
+    assert!(matches!(
+        repo.delete_crm_comment(&team_id, &comment_id, false).await,
+        Err(crate::domain::model::CrmError::CommentNotFound)
+    ));
+
+    // Admin: edit succeeds, then delete succeeds.
+    let edited = repo
+        .edit_crm_comment(&team_id, &comment_id, "edited by admin", true)
+        .await?;
+    assert_eq!(edited.text, "edited by admin");
+    repo.delete_crm_comment(&team_id, &comment_id, true).await?;
     Ok(())
 }

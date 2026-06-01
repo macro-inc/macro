@@ -195,27 +195,38 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         limit: i64,
     ) -> impl Future<Output = Result<Vec<CrmCompanyForSoup>, CrmError>> + Send;
 
-    /// List a company's non-hidden contacts, scoped to `team_id`. See
+    /// List a company's contacts, scoped to `team_id`. `include_hidden`
+    /// reflects the caller's role: non-admin viewers pass `false`
+    /// (hidden contacts filtered out, hidden parent companies 404);
+    /// admin/owner pass `true` (every owned contact returned, hidden
+    /// parent companies reachable). See
     /// [`CompaniesRepository::list_contacts_for_company`].
     fn list_contacts_for_company(
         &self,
         team_id: &uuid::Uuid,
         company_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
 
-    /// Fetch a single non-hidden CRM contact by id, scoped to `team_id`.
-    /// See [`CompaniesRepository::get_contact_for_team`].
+    /// Fetch a single CRM contact by id, scoped to `team_id`.
+    /// `include_hidden = false` hides contacts whose own `hidden` flag
+    /// or whose parent company's `hidden` is set; `true` (admin/owner)
+    /// reveals every owned contact. See
+    /// [`CompaniesRepository::get_contact_for_team`].
     fn get_contact_for_team(
         &self,
         team_id: &uuid::Uuid,
         contact_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
 
     /// Create a comment on a CRM company or contact, optionally as a reply
     /// to an existing thread. See
     /// [`CompaniesRepository::create_crm_comment`]. Authorization (team
     /// membership) is the caller's responsibility; the entity-ownership
-    /// scoping is enforced in the repository.
+    /// scoping is enforced in the repository. `include_hidden` mirrors
+    /// the read side: non-admin callers can't comment on a hidden
+    /// entity (`false`); admin/owner can (`true`).
     #[allow(clippy::too_many_arguments)]
     fn create_crm_comment(
         &self,
@@ -227,32 +238,40 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         thread_metadata: Option<Value>,
         text: &str,
         metadata: Option<Value>,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<CrmCommentThread, CrmError>> + Send;
 
-    /// List a CRM entity's comment threads. See
+    /// List a CRM entity's comment threads. `include_hidden` controls
+    /// whether hidden parent entities 404 (non-admin) or are
+    /// reachable (admin/owner). See
     /// [`CompaniesRepository::get_crm_comment_threads`].
     fn get_crm_comment_threads(
         &self,
         team_id: &uuid::Uuid,
         entity_type: CrmCommentEntityType,
         entity_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<Vec<CrmCommentThread>, CrmError>> + Send;
 
-    /// Edit a CRM comment's text, scoped to `team_id`. See
-    /// [`CompaniesRepository::edit_crm_comment`].
+    /// Edit a CRM comment's text, scoped to `team_id`. `include_hidden
+    /// = false` (non-admin) treats comments on hidden entities as not
+    /// found. See [`CompaniesRepository::edit_crm_comment`].
     fn edit_crm_comment(
         &self,
         team_id: &uuid::Uuid,
         comment_id: &uuid::Uuid,
         text: &str,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<CrmComment, CrmError>> + Send;
 
-    /// Soft-delete a CRM comment, scoped to `team_id`. See
-    /// [`CompaniesRepository::delete_crm_comment`].
+    /// Soft-delete a CRM comment, scoped to `team_id`. `include_hidden
+    /// = false` (non-admin) treats comments on hidden entities as not
+    /// found. See [`CompaniesRepository::delete_crm_comment`].
     fn delete_crm_comment(
         &self,
         team_id: &uuid::Uuid,
         comment_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<DeleteCrmCommentResult, CrmError>> + Send;
 }
 
@@ -521,9 +540,10 @@ where
         &self,
         team_id: &uuid::Uuid,
         company_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> Result<Vec<CrmContact>, CrmError> {
         self.companies_repository
-            .list_contacts_for_company(team_id, company_id)
+            .list_contacts_for_company(team_id, company_id, include_hidden)
             .await
     }
 
@@ -532,9 +552,10 @@ where
         &self,
         team_id: &uuid::Uuid,
         contact_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> Result<Option<CrmContact>, CrmError> {
         self.companies_repository
-            .get_contact_for_team(team_id, contact_id)
+            .get_contact_for_team(team_id, contact_id, include_hidden)
             .await
     }
 
@@ -550,6 +571,7 @@ where
         thread_metadata: Option<Value>,
         text: &str,
         metadata: Option<Value>,
+        include_hidden: bool,
     ) -> Result<CrmCommentThread, CrmError> {
         self.companies_repository
             .create_crm_comment(
@@ -561,6 +583,7 @@ where
                 thread_metadata,
                 text,
                 metadata,
+                include_hidden,
             )
             .await
     }
@@ -571,9 +594,10 @@ where
         team_id: &uuid::Uuid,
         entity_type: CrmCommentEntityType,
         entity_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> Result<Vec<CrmCommentThread>, CrmError> {
         self.companies_repository
-            .get_crm_comment_threads(team_id, entity_type, entity_id)
+            .get_crm_comment_threads(team_id, entity_type, entity_id, include_hidden)
             .await
     }
 
@@ -583,9 +607,10 @@ where
         team_id: &uuid::Uuid,
         comment_id: &uuid::Uuid,
         text: &str,
+        include_hidden: bool,
     ) -> Result<CrmComment, CrmError> {
         self.companies_repository
-            .edit_crm_comment(team_id, comment_id, text)
+            .edit_crm_comment(team_id, comment_id, text, include_hidden)
             .await
     }
 
@@ -594,9 +619,10 @@ where
         &self,
         team_id: &uuid::Uuid,
         comment_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> Result<DeleteCrmCommentResult, CrmError> {
         self.companies_repository
-            .delete_crm_comment(team_id, comment_id)
+            .delete_crm_comment(team_id, comment_id, include_hidden)
             .await
     }
 }
@@ -704,6 +730,7 @@ impl CrmService for NoOpCrmService {
         &self,
         _team_id: &uuid::Uuid,
         _company_id: &uuid::Uuid,
+        _include_hidden: bool,
     ) -> Result<Vec<CrmContact>, CrmError> {
         Ok(Vec::new())
     }
@@ -712,6 +739,7 @@ impl CrmService for NoOpCrmService {
         &self,
         _team_id: &uuid::Uuid,
         _contact_id: &uuid::Uuid,
+        _include_hidden: bool,
     ) -> Result<Option<CrmContact>, CrmError> {
         Ok(None)
     }
@@ -727,6 +755,7 @@ impl CrmService for NoOpCrmService {
         _thread_metadata: Option<Value>,
         _text: &str,
         _metadata: Option<Value>,
+        _include_hidden: bool,
     ) -> Result<CrmCommentThread, CrmError> {
         unimplemented!("NoOpCrmService.create_crm_comment")
     }
@@ -736,6 +765,7 @@ impl CrmService for NoOpCrmService {
         _team_id: &uuid::Uuid,
         _entity_type: CrmCommentEntityType,
         _entity_id: &uuid::Uuid,
+        _include_hidden: bool,
     ) -> Result<Vec<CrmCommentThread>, CrmError> {
         Ok(Vec::new())
     }
@@ -745,6 +775,7 @@ impl CrmService for NoOpCrmService {
         _team_id: &uuid::Uuid,
         _comment_id: &uuid::Uuid,
         _text: &str,
+        _include_hidden: bool,
     ) -> Result<CrmComment, CrmError> {
         unimplemented!("NoOpCrmService.edit_crm_comment")
     }
@@ -753,6 +784,7 @@ impl CrmService for NoOpCrmService {
         &self,
         _team_id: &uuid::Uuid,
         _comment_id: &uuid::Uuid,
+        _include_hidden: bool,
     ) -> Result<DeleteCrmCommentResult, CrmError> {
         unimplemented!("NoOpCrmService.delete_crm_comment")
     }

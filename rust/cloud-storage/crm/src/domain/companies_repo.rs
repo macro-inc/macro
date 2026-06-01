@@ -338,30 +338,36 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         limit: i64,
     ) -> impl Future<Output = Result<Vec<CrmCompanyForSoup>, CrmError>> + Send;
 
-    /// Lists the non-hidden contacts of `company_id`, scoped to
-    /// `team_id` via the contact's company. Returns
+    /// Lists the contacts of `company_id`, scoped to `team_id` via the
+    /// contact's company. Returns
     /// [`CrmError::CompanyNotFoundForTeam`] when the company doesn't
-    /// exist or isn't owned by the team (so existence doesn't leak
-    /// across teams); an owned company with no visible contacts
-    /// returns `Ok(vec![])`. Ordered alphabetically (case-insensitive)
-    /// by display name, falling back to email when the contact has no
-    /// name; ties break on `id DESC`.
+    /// exist, isn't owned by the team, or — for non-admin viewers
+    /// (`include_hidden = false`) — is hidden. With `include_hidden =
+    /// false` hidden contacts are filtered out and hidden parent
+    /// companies 404; with `include_hidden = true` (admin/owner) every
+    /// owned contact is returned and hidden parent companies are
+    /// reachable. Ordered alphabetically (case-insensitive) by display
+    /// name, falling back to email when the contact has no name; ties
+    /// break on `id DESC`.
     fn list_contacts_for_company(
         &self,
         team_id: &uuid::Uuid,
         company_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
 
-    /// Fetches a single non-hidden CRM contact by id, scoped to
-    /// `team_id` via the contact's company. Returns `Ok(None)` when the
-    /// contact doesn't exist, belongs to a different team, or is
-    /// hidden — so existence (and hidden-state) doesn't leak across
-    /// teams or to non-admin viewers. The handler converts `None` into
-    /// a 404 [`CrmError::ContactNotFoundForTeam`].
+    /// Fetches a single CRM contact by id, scoped to `team_id` via the
+    /// contact's company. Returns `Ok(None)` when the contact doesn't
+    /// exist, belongs to a different team, or — for non-admin viewers
+    /// (`include_hidden = false`) — the contact or its parent company
+    /// is hidden. With `include_hidden = true` (admin/owner) every
+    /// owned contact is reachable. The handler converts `None` into a
+    /// 404 [`CrmError::ContactNotFoundForTeam`].
     fn get_contact_for_team(
         &self,
         team_id: &uuid::Uuid,
         contact_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
 
     /// Create a CRM comment. With `thread_id = None` a new thread is opened
@@ -373,6 +379,9 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// the team, or [`CrmError::ThreadNotFound`] when a supplied `thread_id`
     /// is deleted or doesn't belong to that entity. Returns the full thread
     /// (with all its comments) after the insert.
+    /// `include_hidden` mirrors the read endpoints: non-admin callers
+    /// pass `false` (cannot comment on a hidden entity); admin/owner
+    /// callers pass `true` (can comment regardless of visibility).
     #[allow(clippy::too_many_arguments)]
     fn create_crm_comment(
         &self,
@@ -384,6 +393,7 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         thread_metadata: Option<Value>,
         text: &str,
         metadata: Option<Value>,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<CrmCommentThread, CrmError>> + Send;
 
     /// List the non-deleted comment threads on `(entity_type, entity_id)`,
@@ -392,23 +402,28 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// company — returns [`CrmError::CompanyNotFoundForTeam`] /
     /// [`CrmError::ContactNotFoundForTeam`] when the entity isn't owned by
     /// the team (so existence doesn't leak across teams); an owned entity
-    /// with no threads returns `Ok(vec![])`.
+    /// with no threads returns `Ok(vec![])`. Hidden entities 404 for
+    /// non-admin viewers (`include_hidden = false`); admins/owners can
+    /// see threads on hidden entities (`include_hidden = true`).
     fn get_crm_comment_threads(
         &self,
         team_id: &uuid::Uuid,
         entity_type: CrmCommentEntityType,
         entity_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<Vec<CrmCommentThread>, CrmError>> + Send;
 
     /// Edit a CRM comment's `text`, scoped to `team_id` via the comment's
     /// thread → entity → company. Returns the updated comment, or
     /// [`CrmError::CommentNotFound`] when it doesn't exist or isn't owned by
-    /// the team.
+    /// the team. `include_hidden = false` (non-admin) additionally
+    /// returns `CommentNotFound` when the parent entity is hidden.
     fn edit_crm_comment(
         &self,
         team_id: &uuid::Uuid,
         comment_id: &uuid::Uuid,
         text: &str,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<CrmComment, CrmError>> + Send;
 
     /// Soft-delete a CRM comment (sets `deleted_at`), scoped to `team_id`.
@@ -416,10 +431,13 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// soft-deleted too (reported via
     /// [`DeleteCrmCommentResult::thread_deleted`]). Returns
     /// [`CrmError::CommentNotFound`] when the comment doesn't exist, is
-    /// already deleted, or isn't owned by the team.
+    /// already deleted, or isn't owned by the team. `include_hidden =
+    /// false` (non-admin) additionally returns `CommentNotFound` when
+    /// the parent entity is hidden.
     fn delete_crm_comment(
         &self,
         team_id: &uuid::Uuid,
         comment_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<DeleteCrmCommentResult, CrmError>> + Send;
 }

@@ -4,7 +4,10 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use entity_access::{
-    domain::{models::MemberTeamRole, ports::EntityAccessService},
+    domain::{
+        models::{MemberTeamRole, TeamRole},
+        ports::EntityAccessService,
+    },
     inbound::axum_extractors::MacroUserTeamExtractor,
 };
 use model_error_response::ErrorResponse;
@@ -31,6 +34,11 @@ pub struct CrmContactResponse {
     pub email: String,
     /// Display name observed for the contact, if any.
     pub name: Option<String>,
+    /// Whether the contact is hidden from CRM listings for the
+    /// requesting team. Non-admin viewers never see `hidden = true`
+    /// rows (the endpoint filters them out); admin/owner callers see
+    /// hidden contacts so they can render the right toggle state.
+    pub hidden: bool,
     /// Earliest known interaction with this contact.
     pub first_interaction: DateTime<Utc>,
     /// Most recent known interaction with this contact.
@@ -48,6 +56,7 @@ impl From<CrmContact> for CrmContactResponse {
             company_id: c.company_id,
             email: c.email,
             name: c.name,
+            hidden: c.hidden,
             first_interaction: c.first_interaction,
             last_interaction: c.last_interaction,
             created_at: c.created_at,
@@ -56,10 +65,12 @@ impl From<CrmContact> for CrmContactResponse {
     }
 }
 
-/// List the non-hidden contacts of a CRM company, scoped to the
-/// requesting user's team. Returns 404 when the company isn't owned by
-/// the team (so existence doesn't leak across teams); an owned company
-/// with no visible contacts returns `200 []`.
+/// List the contacts of a CRM company, scoped to the requesting user's
+/// team. Returns 404 when the company isn't owned by the team (so
+/// existence doesn't leak across teams). Non-admin viewers also 404 on
+/// hidden companies and see only non-hidden contacts; admin/owner
+/// viewers reach hidden companies and see every owned contact
+/// regardless of `hidden` so they can render the right unhide UI.
 #[utoipa::path(
     get,
     path = "/crm/companies/{company_id}/contacts",
@@ -82,10 +93,14 @@ pub async fn handler<C: CrmService, Eas: EntityAccessService>(
 ) -> Result<Json<Vec<CrmContactResponse>>, CrmError> {
     let team_id = macro_uuid::string_to_uuid(&access.entity_access_receipt.entity().entity_id)
         .map_err(|_| CrmError::InvalidTeamId)?;
+    let include_hidden = access
+        .entity_access_receipt
+        .entity_permission()
+        .allows_team_role(TeamRole::Admin);
 
     let contacts = state
         .service
-        .list_contacts_for_company(&team_id, &company_id)
+        .list_contacts_for_company(&team_id, &company_id, include_hidden)
         .await?;
 
     Ok(Json(contacts.into_iter().map(Into::into).collect()))

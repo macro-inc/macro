@@ -1213,24 +1213,27 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         &self,
         team_id: &uuid::Uuid,
         company_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> Result<Vec<CrmContact>, CrmError> {
         // Authorize first: a company id that isn't the team's must be
         // indistinguishable from one that doesn't exist, so we 404
         // rather than returning an empty list (which would confirm the
-        // id belongs to another team). Hidden companies are also
-        // treated as not-found here — their contacts all carry
-        // hidden=true via the hide cascade anyway, but the
-        // company-level guard matches `get_contact_for_team` and keeps
-        // the invariant readable.
+        // id belongs to another team). `include_hidden = false` (the
+        // member-role default) also treats hidden companies as not
+        // found; `include_hidden = true` (admin/owner) makes hidden
+        // companies reachable so admins can manage their contacts.
         let visible = sqlx::query_scalar!(
             r#"
             SELECT EXISTS (
                 SELECT 1 FROM crm_companies
-                WHERE id = $1 AND team_id = $2 AND hidden = FALSE
+                WHERE id = $1
+                  AND team_id = $2
+                  AND ($3 OR hidden = FALSE)
             ) AS "exists!"
             "#,
             company_id,
             team_id,
+            include_hidden,
         )
         .fetch_one(&self.pool)
         .await
@@ -1247,16 +1250,18 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 company_id,
                 email,
                 name,
+                hidden,
                 first_interaction,
                 last_interaction,
                 created_at,
                 updated_at
             FROM crm_contacts
             WHERE company_id = $1
-              AND hidden = FALSE
+              AND ($2 OR hidden = FALSE)
             ORDER BY LOWER(COALESCE(name, email)) ASC, id DESC
             "#,
             company_id,
+            include_hidden,
         )
         .fetch_all(&self.pool)
         .await
@@ -1269,6 +1274,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 company_id: row.company_id,
                 email: row.email,
                 name: row.name,
+                hidden: row.hidden,
                 first_interaction: row.first_interaction,
                 last_interaction: row.last_interaction,
                 created_at: row.created_at,
@@ -1282,16 +1288,14 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         &self,
         team_id: &uuid::Uuid,
         contact_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> Result<Option<CrmContact>, CrmError> {
         // Team scope is enforced via the company join (same pattern as
-        // set_contact_hidden). A hidden contact OR a hidden parent
-        // company is treated as "not found" so non-admins can't probe
-        // for existence. The dual `hidden = FALSE` guards are
-        // defensive — `set_company_hidden` cascades `hidden = TRUE`
-        // onto all child contacts, so either filter alone would
-        // suffice under the invariant — but the query enforces the
-        // parent-company-visibility invariant directly so a future
-        // cascade-bypass bug can't leak rows.
+        // set_contact_hidden). For non-admins (`include_hidden =
+        // false`), a hidden contact OR a hidden parent company is
+        // treated as "not found" so existence doesn't leak. For
+        // admin/owner (`include_hidden = true`) every owned contact is
+        // reachable so the admin can see and unhide it.
         let row = sqlx::query!(
             r#"
             SELECT
@@ -1299,6 +1303,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 ct.company_id,
                 ct.email,
                 ct.name,
+                ct.hidden,
                 ct.first_interaction,
                 ct.last_interaction,
                 ct.created_at,
@@ -1307,11 +1312,11 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             JOIN crm_companies co ON co.id = ct.company_id
             WHERE ct.id = $1
               AND co.team_id = $2
-              AND ct.hidden = FALSE
-              AND co.hidden = FALSE
+              AND ($3 OR (ct.hidden = FALSE AND co.hidden = FALSE))
             "#,
             contact_id,
             team_id,
+            include_hidden,
         )
         .fetch_optional(&self.pool)
         .await
@@ -1322,6 +1327,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             company_id: row.company_id,
             email: row.email,
             name: row.name,
+            hidden: row.hidden,
             first_interaction: row.first_interaction,
             last_interaction: row.last_interaction,
             created_at: row.created_at,
@@ -1330,6 +1336,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self, thread_metadata, text, metadata), err, fields(entity_id = %entity_id))]
+    #[allow(clippy::too_many_arguments)]
     async fn create_crm_comment(
         &self,
         team_id: &uuid::Uuid,
@@ -1340,6 +1347,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         thread_metadata: Option<Value>,
         text: &str,
         metadata: Option<Value>,
+        include_hidden: bool,
     ) -> Result<CrmCommentThread, CrmError> {
         // Exactly one parent column is set; the CHECK constraint enforces it.
         let (company_id, contact_id) = match entity_type {
@@ -1353,9 +1361,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // Authorize: the entity must belong to the requesting team. Done
-        // in-tx so a concurrent teardown can't slip a delete past us.
-        if !entity_owned_by_team(&mut *tx, team_id, entity_type, entity_id).await? {
+        // Authorize: the entity must belong to the requesting team and
+        // be reachable (visible for non-admins; any for admin/owner).
+        // Done in-tx so a concurrent teardown can't slip past us.
+        if !entity_owned_by_team(&mut *tx, team_id, entity_type, entity_id, include_hidden).await? {
             return Err(entity_not_found_err(entity_type));
         }
 
@@ -1466,8 +1475,11 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         team_id: &uuid::Uuid,
         entity_type: CrmCommentEntityType,
         entity_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> Result<Vec<CrmCommentThread>, CrmError> {
-        if !entity_owned_by_team(&self.pool, team_id, entity_type, entity_id).await? {
+        if !entity_owned_by_team(&self.pool, team_id, entity_type, entity_id, include_hidden)
+            .await?
+        {
             return Err(entity_not_found_err(entity_type));
         }
 
@@ -1532,9 +1544,12 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         team_id: &uuid::Uuid,
         comment_id: &uuid::Uuid,
         text: &str,
+        include_hidden: bool,
     ) -> Result<CrmComment, CrmError> {
         // Update only when the comment's thread resolves to a company or
-        // contact owned by the team, so cross-team edits 404.
+        // contact owned by the team, so cross-team edits 404. For
+        // non-admins (`include_hidden = false`) the parent must also
+        // be visible (matches the visibility rule on the read side).
         let row = sqlx::query!(
             r#"
             UPDATE crm_comment c
@@ -1546,12 +1561,16 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
               AND (
                 EXISTS (
                     SELECT 1 FROM crm_companies co
-                    WHERE co.id = t.company_id AND co.team_id = $2
+                    WHERE co.id = t.company_id
+                      AND co.team_id = $2
+                      AND ($4 OR co.hidden = FALSE)
                 )
                 OR EXISTS (
                     SELECT 1 FROM crm_contacts ct
                     JOIN crm_companies co2 ON co2.id = ct.company_id
-                    WHERE ct.id = t.contact_id AND co2.team_id = $2
+                    WHERE ct.id = t.contact_id
+                      AND co2.team_id = $2
+                      AND ($4 OR (ct.hidden = FALSE AND co2.hidden = FALSE))
                 )
               )
             RETURNING c.id, c.thread_id, c."order", c.owner, c.sender, c.text,
@@ -1560,6 +1579,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             comment_id,
             team_id,
             text,
+            include_hidden,
         )
         .fetch_optional(&self.pool)
         .await
@@ -1587,6 +1607,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         &self,
         team_id: &uuid::Uuid,
         comment_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> Result<DeleteCrmCommentResult, CrmError> {
         let mut tx = self
             .pool
@@ -1595,7 +1616,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         // Resolve the thread and authorize in one shot; absent / cross-team
-        // comments are reported as not found.
+        // / (for non-admins) hidden-parent comments are reported as not
+        // found.
         let thread_id = sqlx::query_scalar!(
             r#"
             SELECT t.id
@@ -1606,17 +1628,22 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
               AND (
                 EXISTS (
                     SELECT 1 FROM crm_companies co
-                    WHERE co.id = t.company_id AND co.team_id = $2
+                    WHERE co.id = t.company_id
+                      AND co.team_id = $2
+                      AND ($3 OR co.hidden = FALSE)
                 )
                 OR EXISTS (
                     SELECT 1 FROM crm_contacts ct
                     JOIN crm_companies co2 ON co2.id = ct.company_id
-                    WHERE ct.id = t.contact_id AND co2.team_id = $2
+                    WHERE ct.id = t.contact_id
+                      AND co2.team_id = $2
+                      AND ($3 OR (ct.hidden = FALSE AND co2.hidden = FALSE))
                 )
               )
             "#,
             comment_id,
             team_id,
+            include_hidden,
         )
         .fetch_optional(&mut *tx)
         .await
@@ -1680,14 +1707,19 @@ fn entity_not_found_err(entity_type: CrmCommentEntityType) -> CrmError {
     }
 }
 
-/// Returns whether `(entity_type, entity_id)` is owned by `team_id` — for a
-/// contact, ownership is resolved through its company. Generic over the
-/// executor so callers can check inside or outside a transaction.
+/// Returns whether `(entity_type, entity_id)` is reachable to the caller —
+/// always requires team ownership; `include_hidden = false` (non-admin)
+/// additionally rejects hidden entities (for a contact, both the
+/// contact's own `hidden` AND its parent company's `hidden` must be
+/// false). `include_hidden = true` (admin/owner) requires only team
+/// ownership. Generic over the executor so callers can check inside or
+/// outside a transaction.
 async fn entity_owned_by_team<'e, E>(
     executor: E,
     team_id: &uuid::Uuid,
     entity_type: CrmCommentEntityType,
     entity_id: &uuid::Uuid,
+    include_hidden: bool,
 ) -> Result<bool, CrmError>
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
@@ -1697,11 +1729,15 @@ where
             sqlx::query_scalar!(
                 r#"
             SELECT EXISTS (
-                SELECT 1 FROM crm_companies WHERE id = $1 AND team_id = $2
+                SELECT 1 FROM crm_companies
+                WHERE id = $1
+                  AND team_id = $2
+                  AND ($3 OR hidden = FALSE)
             ) AS "exists!"
             "#,
                 entity_id,
                 team_id,
+                include_hidden,
             )
             .fetch_one(executor)
             .await
@@ -1712,11 +1748,14 @@ where
             SELECT EXISTS (
                 SELECT 1 FROM crm_contacts c
                 JOIN crm_companies co ON co.id = c.company_id
-                WHERE c.id = $1 AND co.team_id = $2
+                WHERE c.id = $1
+                  AND co.team_id = $2
+                  AND ($3 OR (c.hidden = FALSE AND co.hidden = FALSE))
             ) AS "exists!"
             "#,
                 entity_id,
                 team_id,
+                include_hidden,
             )
             .fetch_one(executor)
             .await
