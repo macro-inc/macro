@@ -240,17 +240,11 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
       shellRef.addEventListener('keydown', stopKeyboardPropagation);
       shellRef.addEventListener('keyup', stopKeyboardPropagation);
 
-      // Keep focus inside the shell so the detached `onboarding-shell` scope
-      // stays the active hotkey scope. Whenever a lesson advances the Continue
-      // button is disabled (and lesson elements unmount), which drops focus to
-      // <body> — deactivating the scope and silently breaking lesson hotkeys
-      // like the `g` then `e` sidebar-nav leader until the user clicks back in.
-      // A null relatedTarget means focus was lost rather than moved to a real
-      // element, so reclaim it. Focus intentionally handed to the sandbox
-      // command-k dialog (a portal outside the shell) has a non-null
-      // relatedTarget and is left alone — that flow restores focus on close.
-      // Skip once the shell is detaching (modal closing): there's nothing to
-      // hold focus in, and grabbing it would fight the modal's focus restore.
+      // Keep focus in the shell so the detached scope stays active. A null
+      // relatedTarget means focus was dropped to <body> (e.g. the Continue
+      // button being disabled on advance) rather than moved to a real element
+      // like the command-k portal, so reclaim it — unless the shell is
+      // detaching, where grabbing focus would fight the modal's close restore.
       const reclaimLostFocus = (event: FocusEvent) => {
         if (event.relatedTarget || commandKOpen() || !shellRef?.isConnected) {
           return;
